@@ -2133,8 +2133,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -2452,8 +2451,7 @@ pub unsafe extern "C" fn tv_list_free_contents(l: *mut list_T) {
         } else {
             __assert_fail(
                 b"l->lv_watch == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 282 as ::core::ffi::c_uint,
                 b"void tv_list_free_contents(list_T *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2832,7 +2830,7 @@ pub unsafe extern "C" fn tv_list_assign_range(
             } else {
                 __assert_fail(
                     b"dest_li != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0"
+                    b"src/nvim/eval/typval.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     710 as ::core::ffi::c_uint,
                     b"int tv_list_assign_range(list_T *const, list_T *const, const int, const int, const _Bool, const char *const, const char *const)\0"
@@ -3912,8 +3910,7 @@ pub unsafe extern "C" fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: boo
         } else {
             __assert_fail(
                 b"item1 == NULL && item2 == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1568 as ::core::ffi::c_uint,
                 b"_Bool tv_list_equal(list_T *const, list_T *const, const _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3985,8 +3982,7 @@ pub unsafe extern "C" fn tv_list_find(
         } else {
             __assert_fail(
                 b"idx == n\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1661 as ::core::ffi::c_uint,
                 b"listitem_T *tv_list_find(list_T *const, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4455,8 +4451,7 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
         } else {
             __assert_fail(
                 b"d->dv_hashtab.ht_locked > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2163 as ::core::ffi::c_uint,
                 b"void tv_dict_free_contents(dict_T *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4616,8 +4611,7 @@ pub unsafe extern "C" fn tv_dict_to_env(mut denv: *mut dict_T) -> *mut *mut ::co
                 } else {
                     __assert_fail(
                         b"str\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2339 as ::core::ffi::c_uint,
                         b"char **tv_dict_to_env(dict_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -4909,8 +4903,7 @@ pub unsafe extern "C" fn tv_dict_clear(d: *mut dict_T) {
         } else {
             __assert_fail(
                 b"d->dv_hashtab.ht_locked > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2698 as ::core::ffi::c_uint,
                 b"void tv_dict_clear(dict_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5800,8 +5793,7 @@ unsafe extern "C" fn _nothing_conv_func_end(tv: *mut typval_T, copyID: ::core::f
                 __assert_fail(
                     b"pt->pt_dict == NULL || pt->pt_dict->dv_copyID == copyID\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3488 as ::core::ffi::c_uint,
                     b"void _nothing_conv_func_end(typval_T *const, const int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5815,8 +5807,7 @@ unsafe extern "C" fn _nothing_conv_func_end(tv: *mut typval_T, copyID: ::core::f
             } else {
                 __assert_fail(
                     b"pt->pt_refcount <= 1\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3492 as ::core::ffi::c_uint,
                     b"void _nothing_conv_func_end(typval_T *const, const int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5832,8 +5823,7 @@ unsafe extern "C" fn _nothing_conv_func_end(tv: *mut typval_T, copyID: ::core::f
             } else {
                 __assert_fail(
                     b"tv->v_lock == VAR_UNLOCKED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3495 as ::core::ffi::c_uint,
                     b"void _nothing_conv_func_end(typval_T *const, const int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5860,8 +5850,7 @@ unsafe extern "C" fn _nothing_conv_real_list_after_start(
         } else {
             __assert_fail(
                 b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3526 as ::core::ffi::c_uint,
                 b"int _nothing_conv_real_list_after_start(typval_T *const, MPConvStackVal *const)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -5889,8 +5878,7 @@ unsafe extern "C" fn _nothing_conv_list_end(tv: *mut typval_T) {
         } else {
             __assert_fail(
                 b"tv->v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3553 as ::core::ffi::c_uint,
                 b"void _nothing_conv_list_end(typval_T *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5950,8 +5938,7 @@ pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
         } else {
             __assert_fail(
                 b"evn_ret == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3663 as ::core::ffi::c_uint,
                 b"void tv_clear(typval_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6253,8 +6240,7 @@ pub unsafe extern "C" fn value_check_lock(
         } else {
             __assert_fail(
                 b"error_message != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3926 as ::core::ffi::c_uint,
                 b"_Bool value_check_lock(VarLockStatus, const char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7266,7 +7252,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/typval.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7398,7 +7384,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             __assert_fail(
                                 b"(void *)&(tv->vval.v_dict) != (void *)&TYPVAL_ENCODE_NODICT_VAR\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/typval.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 416 as ::core::ffi::c_uint,
                                 b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7620,7 +7606,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/typval.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7783,7 +7769,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                         __assert_fail(
                                                             b"(void *)&(_typval_encode_nothing_nodict_var) != (void *)&TYPVAL_ENCODE_NODICT_VAR\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/typval.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             552 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7845,7 +7831,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/typval.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -8072,7 +8058,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/typval.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_nothing_convert_one_value(const void *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -8456,7 +8442,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                             __assert_fail(
                                                 b"(void *)&(pt->pt_dict) != (void *)&TYPVAL_ENCODE_NODICT_VAR\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                b"src/nvim/eval/typval.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 772 as ::core::ffi::c_uint,
                                                 b"int encode_vim_to_nothing(const void *const, typval_T *const, const char *const)\0"
@@ -8496,7 +8482,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                 __assert_fail(
                                                     b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                    b"src/nvim/eval/typval.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     789 as ::core::ffi::c_uint,
                                                     b"int encode_vim_to_nothing(const void *const, typval_T *const, const char *const)\0"
@@ -8689,7 +8675,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/eval/typval.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_nothing(const void *const, typval_T *const, const char *const)\0"

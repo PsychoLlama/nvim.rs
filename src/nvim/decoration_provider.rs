@@ -1899,7 +1899,7 @@ unsafe extern "C" fn decor_provider_invoke(
                     __assert_fail(
                         b"ret.type == kObjectTypeArray\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/decoration_provider.c\0"
+                        b"src/nvim/decoration_provider.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         50 as ::core::ffi::c_uint,
                         b"_Bool decor_provider_invoke(int, const char *, LuaRef, Array, _Bool, Array *)\0"
@@ -2126,7 +2126,7 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
             __assert_fail(
                 b"decor_state.current_end == 0 && decor_state.future_begin == (int)kv_size(decor_state.ranges_i)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration_provider.c\0"
+                b"src/nvim/decoration_provider.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 139 as ::core::ffi::c_uint,
                 b"void decor_providers_invoke_win(win_T *)\0".as_ptr()
@@ -2489,8 +2489,7 @@ pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *
         } else {
             __assert_fail(
                 b"ns_id > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration_provider.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/decoration_provider.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 305 as ::core::ffi::c_uint,
                 b"DecorProvider *get_decor_provider(NS, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

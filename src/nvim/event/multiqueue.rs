@@ -113,8 +113,7 @@ pub unsafe extern "C" fn multiqueue_new_child(mut parent: *mut MultiQueue) -> *m
         } else {
             __assert_fail(
                 b"!parent->parent\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 95 as ::core::ffi::c_uint,
                 b"MultiQueue *multiqueue_new_child(MultiQueue *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -144,8 +143,7 @@ pub unsafe extern "C" fn multiqueue_free(mut self_0: *mut MultiQueue) {
         } else {
             __assert_fail(
                 b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 113 as ::core::ffi::c_uint,
                 b"void multiqueue_free(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -181,8 +179,7 @@ pub unsafe extern "C" fn multiqueue_put_event(mut self_0: *mut MultiQueue, mut e
         } else {
             __assert_fail(
                 b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 136 as ::core::ffi::c_uint,
                 b"void multiqueue_put_event(MultiQueue *, Event)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -213,8 +210,7 @@ pub unsafe extern "C" fn multiqueue_process_events(mut self_0: *mut MultiQueue) 
         } else {
             __assert_fail(
                 b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 155 as ::core::ffi::c_uint,
                 b"void multiqueue_process_events(MultiQueue *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -237,8 +233,7 @@ pub unsafe extern "C" fn multiqueue_purge_events(mut self_0: *mut MultiQueue) {
         } else {
             __assert_fail(
                 b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 167 as ::core::ffi::c_uint,
                 b"void multiqueue_purge_events(MultiQueue *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -256,8 +251,7 @@ pub unsafe extern "C" fn multiqueue_empty(mut self_0: *mut MultiQueue) -> bool {
         } else {
             __assert_fail(
                 b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 175 as ::core::ffi::c_uint,
                 b"_Bool multiqueue_empty(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -275,8 +269,7 @@ pub unsafe extern "C" fn multiqueue_replace_parent(
         } else {
             __assert_fail(
                 b"multiqueue_empty(self)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 181 as ::core::ffi::c_uint,
                 b"void multiqueue_replace_parent(MultiQueue *, MultiQueue *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -298,8 +291,7 @@ unsafe extern "C" fn multiqueueitem_get_event(
         } else {
             __assert_fail(
                 b"item != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 196 as ::core::ffi::c_uint,
                 b"Event multiqueueitem_get_event(MultiQueueItem *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -317,8 +309,7 @@ unsafe extern "C" fn multiqueueitem_get_event(
             } else {
                 __assert_fail(
                     b"!multiqueue_empty(linked)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     201 as ::core::ffi::c_uint,
                     b"Event multiqueueitem_get_event(MultiQueueItem *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -348,8 +339,7 @@ unsafe extern "C" fn multiqueue_remove(mut self_0: *mut MultiQueue) -> Event {
         } else {
             __assert_fail(
                 b"!multiqueue_empty(self)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 224 as ::core::ffi::c_uint,
                 b"Event multiqueue_remove(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -363,8 +353,7 @@ unsafe extern "C" fn multiqueue_remove(mut self_0: *mut MultiQueue) -> Event {
         } else {
             __assert_fail(
                 b"!item->link || !self->parent\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/multiqueue.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 228 as ::core::ffi::c_uint,
                 b"Event multiqueue_remove(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

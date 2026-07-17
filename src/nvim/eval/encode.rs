@@ -586,7 +586,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_msgpack_convert_one_value(PackerBuffer *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -943,7 +943,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_msgpack_convert_one_value(PackerBuffer *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -1151,7 +1151,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/encode.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_msgpack_convert_one_value(PackerBuffer *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -1383,7 +1383,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_msgpack_convert_one_value(PackerBuffer *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -1780,7 +1780,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                                                 __assert_fail(
                                                     b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                    b"src/nvim/eval/encode.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     789 as ::core::ffi::c_uint,
                                                     b"int encode_vim_to_msgpack(PackerBuffer *const, typval_T *const, const char *const)\0"
@@ -1954,7 +1954,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/eval/encode.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_msgpack(PackerBuffer *const, typval_T *const, const char *const)\0"
@@ -2502,7 +2502,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_echo_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -2999,7 +2999,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_echo_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -3209,7 +3209,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/encode.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_echo_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -3436,7 +3436,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_echo_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -3917,7 +3917,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         789 as ::core::ffi::c_uint,
                                                         b"int encode_vim_to_echo(garray_T *const, typval_T *const, const char *const)\0"
@@ -4108,7 +4108,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/eval/encode.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_echo(garray_T *const, typval_T *const, const char *const)\0"
@@ -4646,7 +4646,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_string_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -5143,7 +5143,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_string_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -5353,7 +5353,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/encode.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_string_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -5581,7 +5581,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_string_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -6061,7 +6061,7 @@ unsafe extern "C" fn encode_vim_to_string(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         789 as ::core::ffi::c_uint,
                                                         b"int encode_vim_to_string(garray_T *const, typval_T *const, const char *const)\0"
@@ -6252,7 +6252,7 @@ unsafe extern "C" fn encode_vim_to_string(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/eval/encode.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_string(garray_T *const, typval_T *const, const char *const)\0"
@@ -6504,7 +6504,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_json_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -6971,7 +6971,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_json_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7181,7 +7181,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/eval/encode.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_json_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7413,7 +7413,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_json_convert_one_value(garray_T *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -7883,7 +7883,7 @@ unsafe extern "C" fn encode_vim_to_json(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/eval/encode.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         789 as ::core::ffi::c_uint,
                                                         b"int encode_vim_to_json(garray_T *const, typval_T *const, const char *const)\0"
@@ -8074,7 +8074,7 @@ unsafe extern "C" fn encode_vim_to_json(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/eval/encode.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_json(garray_T *const, typval_T *const, const char *const)\0"
@@ -8306,7 +8306,7 @@ unsafe extern "C" fn conv_error(
                         } else {
                             __assert_fail(
                                 b"li != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 165 as ::core::ffi::c_uint,
                                 b"int conv_error(const char *const, const MPConvStack *const, const char *const)\0"
@@ -8321,7 +8321,7 @@ unsafe extern "C" fn conv_error(
                             __assert_fail(
                                 b"first_item != NULL\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                                b"src/nvim/eval/encode.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 168 as ::core::ffi::c_uint,
                                 b"int conv_error(const char *const, const MPConvStack *const, const char *const)\0"
@@ -8425,8 +8425,7 @@ pub unsafe extern "C" fn encode_vim_list_to_buf(
         } else {
             __assert_fail(
                 b"len == read_bytes\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/encode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 240 as ::core::ffi::c_uint,
                 b"_Bool encode_vim_list_to_buf(const list_T *const, size_t *const, char **const)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -8452,7 +8451,7 @@ pub unsafe extern "C" fn encode_read_from_list(
                 __assert_fail(
                     b"state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                    b"src/nvim/eval/encode.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     265 as ::core::ffi::c_uint,
                     b"int encode_read_from_list(ListReaderState *const, char *const, const size_t, size_t *const)\0"
@@ -8468,7 +8467,7 @@ pub unsafe extern "C" fn encode_read_from_list(
                     __assert_fail(
                         b"TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                        b"src/nvim/eval/encode.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         267 as ::core::ffi::c_uint,
                         b"int encode_read_from_list(ListReaderState *const, char *const, const size_t, size_t *const)\0"
@@ -8655,7 +8654,7 @@ unsafe extern "C" fn convert_to_json_string(
                 } else {
                     __assert_fail(
                         b"shift > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                        b"src/nvim/eval/encode.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         643 as ::core::ffi::c_uint,
                         b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
@@ -8728,7 +8727,7 @@ unsafe extern "C" fn convert_to_json_string(
                 } else {
                     __assert_fail(
                         b"shift > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                        b"src/nvim/eval/encode.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         683 as ::core::ffi::c_uint,
                         b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
@@ -8744,7 +8743,7 @@ unsafe extern "C" fn convert_to_json_string(
                     __assert_fail(
                         b"ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0"
+                        b"src/nvim/eval/encode.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         685 as ::core::ffi::c_uint,
                         b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
@@ -8932,8 +8931,7 @@ pub unsafe extern "C" fn encode_tv2string(
         } else {
             __assert_fail(
                 b"evs_ret == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/encode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 877 as ::core::ffi::c_uint,
                 b"char *encode_tv2string(typval_T *, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8983,8 +8981,7 @@ pub unsafe extern "C" fn encode_tv2echo(
             } else {
                 __assert_fail(
                     b"eve_ret == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/encode.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/encode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     905 as ::core::ffi::c_uint,
                     b"char *encode_tv2echo(typval_T *, size_t *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9093,8 +9090,7 @@ unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
         } else {
             __assert_fail(
                 b"tv->v_type == VAR_STRING\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.h\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/encode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 77 as ::core::ffi::c_uint,
                 b"size_t tv_strlen(const typval_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );

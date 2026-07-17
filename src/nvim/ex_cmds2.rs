@@ -3541,8 +3541,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                 } else {
                     __assert_fail(
                         b"eap->line1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds2.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         550 as ::core::ffi::c_uint,
                         b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -3560,9 +3559,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                         } else {
                             __assert_fail(
                                 b"qf_size < MAXLNUM\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds2.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 560 as ::core::ffi::c_uint,
                                 b"void ex_listdo(exarg_T *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -3597,8 +3594,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     } else {
                         __assert_fail(
                             b"wp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds2.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             591 as ::core::ffi::c_uint,
                             b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
@@ -3622,8 +3618,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     } else {
                         __assert_fail(
                             b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds2.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             605 as ::core::ffi::c_uint,
                             b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
@@ -3689,8 +3684,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     } else {
                         __assert_fail(
                             b"i >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds2.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             655 as ::core::ffi::c_uint,
                             b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                         );

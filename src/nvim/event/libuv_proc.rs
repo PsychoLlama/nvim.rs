@@ -778,8 +778,7 @@ pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core:
             } else {
                 __assert_fail(
                     b"UI_CLIENT_STDIN_FD == 3\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/libuv_proc.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/event/libuv_proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     106 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

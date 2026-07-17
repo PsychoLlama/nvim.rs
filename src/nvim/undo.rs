@@ -4551,7 +4551,7 @@ pub unsafe extern "C" fn u_read_undo(
                                                             } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
+                                                                    b"src/nvim/undo.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     1613 as ::core::ffi::c_uint,
                                                                     b"void u_read_undo(char *, const uint8_t *, const char *)\0"
@@ -4571,7 +4571,7 @@ pub unsafe extern "C" fn u_read_undo(
                                                             } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
+                                                                    b"src/nvim/undo.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     1618 as ::core::ffi::c_uint,
                                                                     b"void u_read_undo(char *, const uint8_t *, const char *)\0"
@@ -4591,7 +4591,7 @@ pub unsafe extern "C" fn u_read_undo(
                                                             } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
+                                                                    b"src/nvim/undo.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     1623 as ::core::ffi::c_uint,
                                                                     b"void u_read_undo(char *, const uint8_t *, const char *)\0"
@@ -4701,8 +4701,7 @@ unsafe extern "C" fn undo_write_bytes(
         } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/undo.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1707 as ::core::ffi::c_uint,
                 b"_Bool undo_write_bytes(bufinfo_T *, uintmax_t, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4725,8 +4724,7 @@ unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_head
         } else {
             __assert_fail(
                 b"uhp == NULL || uhp->uh_seq >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/undo.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1722 as ::core::ffi::c_uint,
                 b"void put_header_ptr(bufinfo_T *, u_header_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5999,8 +5997,7 @@ pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
                 __assert_fail(
                     b"buf->b_u_oldhead != previous_oldhead\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/undo.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3006 as ::core::ffi::c_uint,
                     b"void u_blockfree(buf_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

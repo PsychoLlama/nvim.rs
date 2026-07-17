@@ -2088,7 +2088,7 @@ unsafe extern "C" fn fuzzy_match_in_list(
                     __assert_fail(
                         b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fuzzy.c\0"
+                        b"src/nvim/fuzzy.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         293 as ::core::ffi::c_uint,
                         b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
@@ -2113,7 +2113,7 @@ unsafe extern "C" fn fuzzy_match_in_list(
                     __assert_fail(
                         b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fuzzy.c\0"
+                        b"src/nvim/fuzzy.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         307 as ::core::ffi::c_uint,
                         b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
@@ -2130,7 +2130,7 @@ unsafe extern "C" fn fuzzy_match_in_list(
                         __assert_fail(
                             b"items[i].lmatchpos != NULL\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/fuzzy.c\0"
+                            b"src/nvim/fuzzy.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             311 as ::core::ffi::c_uint,
                             b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
@@ -2149,7 +2149,7 @@ unsafe extern "C" fn fuzzy_match_in_list(
                     __assert_fail(
                         b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fuzzy.c\0"
+                        b"src/nvim/fuzzy.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         318 as ::core::ffi::c_uint,
                         b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
@@ -2176,7 +2176,7 @@ unsafe extern "C" fn fuzzy_match_in_list(
                 __assert_fail(
                     b"items[i].lmatchpos == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/fuzzy.c\0".as_ptr()
+                    b"src/nvim/fuzzy.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     330 as ::core::ffi::c_uint,
                     b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"

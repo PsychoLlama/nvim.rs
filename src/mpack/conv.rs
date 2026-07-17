@@ -207,8 +207,7 @@ pub unsafe extern "C" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpac
             __assert_fail(
                 b"v <= 9007199254740991. && v >= -9007199254740991.\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/conv.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 113 as ::core::ffi::c_uint,
                 b"mpack_token_t mpack_pack_number(double)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -363,8 +362,7 @@ pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintma
         } else {
             __assert_fail(
                 b"t.length <= sizeof(mpack_sintmax_t)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/conv.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 210 as ::core::ffi::c_uint,
                 b"mpack_sintmax_t mpack_unpack_sint(mpack_token_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -491,8 +489,7 @@ pub unsafe extern "C" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ff
             __assert_fail(
                 b"t.type == MPACK_TOKEN_UINT || t.type == MPACK_TOKEN_SINT\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/conv.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 292 as ::core::ffi::c_uint,
                 b"double mpack_unpack_number(mpack_token_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -510,8 +507,7 @@ pub unsafe extern "C" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ff
                 } else {
                     __assert_fail(
                         b"t.length <= 4\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/mpack/conv.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         300 as ::core::ffi::c_uint,
                         b"double mpack_unpack_number(mpack_token_t)\0".as_ptr()
                             as *const ::core::ffi::c_char,

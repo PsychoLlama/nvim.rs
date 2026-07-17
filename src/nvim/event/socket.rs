@@ -1384,8 +1384,7 @@ pub unsafe extern "C" fn socket_watcher_start(
         } else {
             __assert_fail(
                 b"result <= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/socket.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/socket.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 212 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

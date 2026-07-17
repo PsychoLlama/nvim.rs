@@ -1114,8 +1114,7 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
         } else {
             __assert_fail(
                 b"list_tv.v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 257 as ::core::ffi::c_uint,
                 b"String array_to_string(Array, Error *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1140,8 +1139,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
         } else {
             __assert_fail(
                 b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 275 as ::core::ffi::c_uint,
                 b"Dict ctx_to_dict(Context *, Arena *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1216,8 +1214,7 @@ pub unsafe extern "C" fn ctx_from_dict(
         } else {
             __assert_fail(
                 b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 298 as ::core::ffi::c_uint,
                 b"int ctx_from_dict(Dict, Context *, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

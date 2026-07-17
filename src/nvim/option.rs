@@ -5704,8 +5704,7 @@ unsafe extern "C" fn set_string_default(
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 546 as ::core::ffi::c_uint,
                 b"void set_string_default(OptIndex, char *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6663,7 +6662,7 @@ unsafe extern "C" fn get_option_newval(
         } else {
             __assert_fail(
                 b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
+                b"src/nvim/option.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1322 as ::core::ffi::c_uint,
                 b"OptVal get_option_newval(OptIndex, int, set_prefix_T, char **, int, set_op_T, uint32_t, void *, char *, const size_t, const char **)\0"
@@ -6844,7 +6843,7 @@ unsafe extern "C" fn do_one_set_option(
             } else {
                 __assert_fail(
                     b"option_end >= arg\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
+                    b"src/nvim/option.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1448 as ::core::ffi::c_uint,
                     b"void do_one_set_option(int, char **, _Bool *, char *, size_t, const char **)\0"
@@ -7092,9 +7091,7 @@ pub unsafe extern "C" fn do_set(
                             } else {
                                 __assert_fail(
                                     b"arg >= startarg\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     1620 as ::core::ffi::c_uint,
                                     b"int do_set(char *, int)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -7355,8 +7352,7 @@ pub unsafe extern "C" fn was_set_insecurely(
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1855 as ::core::ffi::c_uint,
                 b"int was_set_insecurely(win_T *const, OptIndex, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7379,8 +7375,7 @@ pub unsafe extern "C" fn insecure_flag(
             } else {
                 __assert_fail(
                     b"wp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1868 as ::core::ffi::c_uint,
                     b"uint32_t *insecure_flag(win_T *const, OptIndex, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7530,8 +7525,7 @@ pub unsafe extern "C" fn get_option_sctx(mut opt_idx: OptIndex) -> *mut sctx_T {
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2008 as ::core::ffi::c_uint,
                 b"sctx_T *get_option_sctx(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7886,8 +7880,7 @@ unsafe extern "C" fn did_set_lines_or_columns(
                         __assert_fail(
                             b"p_ch >= 0 && new_row <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             2359 as ::core::ffi::c_uint,
                             b"const char *did_set_lines_or_columns(optset_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -8873,8 +8866,7 @@ unsafe extern "C" fn set_option_varp(
         } else {
             __assert_fail(
                 b"option_has_type(opt_idx, value.type)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3401 as ::core::ffi::c_uint,
                 b"void set_option_varp(OptIndex, void *, OptVal, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9058,8 +9050,7 @@ pub unsafe extern "C" fn option_has_scope(mut opt_idx: OptIndex, mut scope: OptS
             __assert_fail(
                 b"scope >= kOptScopeGlobal && scope < kOptScopeSize\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3512 as ::core::ffi::c_uint,
                 b"_Bool option_has_scope(OptIndex, OptScope)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9125,8 +9116,7 @@ pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3580 as ::core::ffi::c_uint,
                 b"vimoption_T *get_option(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9140,8 +9130,7 @@ unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3593 as ::core::ffi::c_uint,
                 b"OptVal get_option_unset_value(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9427,7 +9416,7 @@ unsafe extern "C" fn set_option(
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
+                b"src/nvim/option.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3871 as ::core::ffi::c_uint,
                 b"const char *set_option(const OptIndex, OptVal, int, scid_T, const _Bool, const _Bool, char *, size_t)\0"
@@ -9550,8 +9539,7 @@ pub unsafe extern "C" fn set_option_direct(
         } else {
             __assert_fail(
                 b"errmsg == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3975 as ::core::ffi::c_uint,
                 b"void set_option_direct(OptIndex, OptVal, int, scid_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9595,8 +9583,7 @@ pub unsafe extern "C" fn set_option_value(
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4025 as ::core::ffi::c_uint,
                 b"const char *set_option_value(const OptIndex, const OptVal, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9628,8 +9615,7 @@ unsafe extern "C" fn unset_option_local_value(opt_idx: OptIndex) -> *const ::cor
         } else {
             __assert_fail(
                 b"option_is_global_local(opt_idx)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4045 as ::core::ffi::c_uint,
                 b"const char *unset_option_local_value(const OptIndex)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9920,7 +9906,7 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                     __assert_fail(
                         b"Columns <= INT_MAX - GAP && Columns + GAP >= INT_MIN + 3 && (Columns + GAP - 3) / INC >= INT_MIN && (Columns + GAP - 3) / INC <= INT_MAX\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0"
+                        b"src/nvim/option.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         4288 as ::core::ffi::c_uint,
                         b"void showoptions(_Bool, int)\0".as_ptr()
@@ -10224,8 +10210,7 @@ unsafe extern "C" fn put_set(
                 } else {
                     __assert_fail(
                         b"value.data.boolean != kNone\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4544 as ::core::ffi::c_uint,
                         b"int put_set(FILE *, char *, OptIndex, void *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -12133,8 +12118,7 @@ unsafe extern "C" fn option_value2string(
         } else {
             __assert_fail(
                 b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6126 as ::core::ffi::c_uint,
                 b"void option_value2string(vimoption_T *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -12236,8 +12220,7 @@ pub unsafe extern "C" fn option_was_set(mut opt_idx: OptIndex) -> bool {
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6204 as ::core::ffi::c_uint,
                 b"_Bool option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -12252,8 +12235,7 @@ pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
         } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6213 as ::core::ffi::c_uint,
                 b"void reset_option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );

@@ -4722,8 +4722,7 @@ pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::
         } else {
             __assert_fail(
                 b"STRICMP(name, \"end\") != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 400 as ::core::ffi::c_uint,
                 b"int augroup_add(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4736,8 +4735,7 @@ pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::
             } else {
                 __assert_fail(
                     b"existing_id != AUGROUP_DELETED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     404 as ::core::ffi::c_uint,
                     b"int augroup_add(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -4840,8 +4838,7 @@ pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::c
         } else {
             __assert_fail(
                 b"group != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 496 as ::core::ffi::c_uint,
                 b"char *augroup_name(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5202,8 +5199,7 @@ pub unsafe extern "C" fn do_autocmd(
                 } else {
                     __assert_fail(
                         b"event < NUM_EVENTS\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         860 as ::core::ffi::c_uint,
                         b"void do_autocmd(exarg_T *, char *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5244,8 +5240,7 @@ pub unsafe extern "C" fn do_autocmd(
                 } else {
                     __assert_fail(
                         b"event < NUM_EVENTS\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         873 as ::core::ffi::c_uint,
                         b"void do_autocmd(exarg_T *, char *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5305,7 +5300,7 @@ pub unsafe extern "C" fn do_autocmd_event(
         } else {
             __assert_fail(
                 b"*pat != NUL || del\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
+                b"src/nvim/autocmd.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 908 as ::core::ffi::c_uint,
                 b"int do_autocmd_event(event_T, const char *, _Bool, int, const char *, _Bool, int)\0"
@@ -5347,7 +5342,7 @@ pub unsafe extern "C" fn do_autocmd_event(
                 } else {
                     __assert_fail(
                         b"*pat != NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0"
+                        b"src/nvim/autocmd.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         939 as ::core::ffi::c_uint,
                         b"int do_autocmd_event(event_T, const char *, _Bool, int, const char *, _Bool, int)\0"
@@ -5414,7 +5409,7 @@ pub unsafe extern "C" fn autocmd_register(
         } else {
             __assert_fail(
                 b"group != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
+                b"src/nvim/autocmd.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 984 as ::core::ffi::c_uint,
                 b"int autocmd_register(int64_t, event_T, const char *, int, int, _Bool, _Bool, char *, const char *, Callback *)\0"
@@ -6809,8 +6804,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
         } else {
             __assert_fail(
                 b"apc->ausize <= kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2077 as ::core::ffi::c_uint,
                 b"void aucmd_next(AutoPatCmd *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7058,8 +7052,7 @@ pub unsafe extern "C" fn getnextac(
         } else {
             __assert_fail(
                 b"apc->auidx < kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2193 as ::core::ffi::c_uint,
                 b"char *getnextac(int, void *, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7072,8 +7065,7 @@ pub unsafe extern "C" fn getnextac(
         } else {
             __assert_fail(
                 b"ac->pat != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2195 as ::core::ffi::c_uint,
                 b"char *getnextac(int, void *, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7366,8 +7358,7 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
         } else {
             __assert_fail(
                 b"aupat_is_buflocal(pat, patlen)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2514 as ::core::ffi::c_uint,
                 b"int aupat_get_buflocal_nr(const char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7414,8 +7405,7 @@ pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
         } else {
             __assert_fail(
                 b"aupat_is_buflocal(pat, patlen)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2539 as ::core::ffi::c_uint,
                 b"void aupat_normalize_buflocal_pat(char *, const char *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7455,8 +7445,7 @@ pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
         } else {
             __assert_fail(
                 b"id > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2560 as ::core::ffi::c_uint,
                 b"_Bool autocmd_delete_id(int64_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7665,8 +7654,7 @@ pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: 
         } else {
             __assert_fail(
                 b"chanid < VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2697 as ::core::ffi::c_uint,
                 b"void do_autocmd_uienter(uint64_t, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

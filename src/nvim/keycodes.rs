@@ -1054,8 +1054,7 @@ pub unsafe extern "C" fn special_to_buf(
                 __assert_fail(
                     b"after >= dst && (uintmax_t)(after - dst) <= UINT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/keycodes.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/keycodes.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     399 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

@@ -2371,7 +2371,7 @@ pub unsafe extern "C" fn mf_open(
                 __assert_fail(
                     b"sizeof(off_T) <= sizeof(blocknr_T) && mfp->mf_page_size > 0 && mfp->mf_page_size - 1 <= INT64_MAX - size\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/memfile.c\0"
+                    b"src/nvim/memfile.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     133 as ::core::ffi::c_uint,
                     b"memfile_T *mf_open(char *, int)\0".as_ptr()
@@ -2757,8 +2757,7 @@ unsafe extern "C" fn mf_read(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) -> ::
             __assert_fail(
                 b"hp->bh_page_count <= UINT_MAX / page_size\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memfile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 545 as ::core::ffi::c_uint,
                 b"int mf_read(memfile_T *, bhdr_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2956,8 +2955,7 @@ unsafe extern "C" fn mf_do_open(
         } else {
             __assert_fail(
                 b"mfp->mf_fname != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memfile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 763 as ::core::ffi::c_uint,
                 b"_Bool mf_do_open(memfile_T *, char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,

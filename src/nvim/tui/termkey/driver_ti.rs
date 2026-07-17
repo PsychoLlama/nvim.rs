@@ -712,8 +712,8 @@ unsafe extern "C" fn try_load_terminfo_key(
                 } else {
                     __assert_fail(
                         b"!shift\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tui/termkey/driver-ti.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/tui/termkey/driver_ti.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         220 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );

@@ -1601,8 +1601,7 @@ pub unsafe extern "C" fn profile_setlimit(mut msec: int64_t) -> proftime_T {
         } else {
             __assert_fail(
                 b"msec <= (INT64_MAX / 1000000LL) - 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/profile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/profile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 92 as ::core::ffi::c_uint,
                 b"proftime_T profile_setlimit(int64_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2619,8 +2618,7 @@ pub unsafe extern "C" fn time_finish() {
         } else {
             __assert_fail(
                 b"startuptime_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/profile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/profile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 978 as ::core::ffi::c_uint,
                 b"void time_finish(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );

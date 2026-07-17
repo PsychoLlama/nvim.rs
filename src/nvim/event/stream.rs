@@ -889,8 +889,7 @@ pub unsafe extern "C" fn stream_init(
             __assert_fail(
                 b"uvstream == NULL ? fd >= 0 && loop != NULL : fd < 0 && loop == NULL\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/stream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/stream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 47 as ::core::ffi::c_uint,
                 b"void stream_init(Loop *, Stream *, int, uv_stream_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -915,8 +914,7 @@ pub unsafe extern "C" fn stream_init(
                     __assert_fail(
                         b"type == UV_NAMED_PIPE || type == UV_TTY\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/event/stream.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/event/stream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         72 as ::core::ffi::c_uint,
                         b"void stream_init(Loop *, Stream *, int, uv_stream_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -991,8 +989,7 @@ pub unsafe extern "C" fn stream_close_handle(mut stream: *mut Stream) {
         } else {
             __assert_fail(
                 b"handle != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/stream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/stream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 131 as ::core::ffi::c_uint,
                 b"void stream_close_handle(Stream *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

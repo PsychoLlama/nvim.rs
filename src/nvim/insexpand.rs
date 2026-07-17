@@ -4201,8 +4201,7 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
                 } else {
                     __assert_fail(
                         b"gap.ga_data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         771 as ::core::ffi::c_uint,
                         b"char *ins_compl_infercase_gettext(const char *, int, int, int, char **)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4524,8 +4523,7 @@ unsafe extern "C" fn ins_compl_insert_bytes(
         } else {
             __assert_fail(
                 b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1089 as ::core::ffi::c_uint,
                 b"void ins_compl_insert_bytes(char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5208,8 +5206,7 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"compl_match_arraysize >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1663 as ::core::ffi::c_uint,
                 b"int ins_compl_build_pum(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6069,8 +6066,7 @@ pub unsafe extern "C" fn ins_compl_addfrommatch() {
         } else {
             __assert_fail(
                 b"compl_shown_match != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2421 as ::core::ffi::c_uint,
                 b"void ins_compl_addfrommatch(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6463,8 +6459,7 @@ unsafe extern "C" fn ins_compl_next_buf(
             } else {
                 __assert_fail(
                     b"wp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2872 as ::core::ffi::c_uint,
                     b"buf_T *ins_compl_next_buf(buf_T *, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -6848,8 +6843,7 @@ unsafe extern "C" fn expand_by_function(
         } else {
             __assert_fail(
                 b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3189 as ::core::ffi::c_uint,
                 b"void expand_by_function(int, char *, Callback *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7293,8 +7287,7 @@ unsafe extern "C" fn ins_compl_update_sequence_numbers() {
             } else {
                 __assert_fail(
                     b"compl_direction == BACKWARD\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3532 as ::core::ffi::c_uint,
                     b"void ins_compl_update_sequence_numbers(void)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8280,8 +8273,7 @@ unsafe extern "C" fn get_next_default_completion(
         } else {
             __assert_fail(
                 b"st->ins_buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4275 as ::core::ffi::c_uint,
                 b"int get_next_default_completion(ins_compl_next_state_T *, pos_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8786,8 +8778,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
         } else {
             __assert_fail(
                 b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4690 as ::core::ffi::c_uint,
                 b"int ins_compl_get_exp(pos_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -8837,8 +8828,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
         } else {
             __assert_fail(
                 b"st.ins_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4718 as ::core::ffi::c_uint,
                 b"int ins_compl_get_exp(pos_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -8946,8 +8936,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
                     } else {
                         __assert_fail(
                             b"st.ins_buf\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             4812 as ::core::ffi::c_uint,
                             b"int ins_compl_get_exp(pos_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -9228,8 +9217,7 @@ unsafe extern "C" fn find_common_prefix(
             } else {
                 __assert_fail(
                     b"first != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     5085 as ::core::ffi::c_uint,
                     b"char *find_common_prefix(size_t *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9550,8 +9538,7 @@ unsafe extern "C" fn ins_compl_next(
                 } else {
                     __assert_fail(
                         b"compl_leader.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         5406 as ::core::ffi::c_uint,
                         b"int ins_compl_next(_Bool, int, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -10071,8 +10058,7 @@ unsafe extern "C" fn get_spell_compl_info(
             } else {
                 __assert_fail(
                     b"spell_bad_len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     5875 as ::core::ffi::c_uint,
                     b"int get_spell_compl_info(int, colnr_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,

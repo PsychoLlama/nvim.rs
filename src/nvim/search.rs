@@ -4212,8 +4212,7 @@ pub unsafe extern "C" fn search_for_exact_line(
                 } else {
                     __assert_fail(
                         b"compl_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/search.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/search.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1519 as ::core::ffi::c_uint,
                         b"int search_for_exact_line(buf_T *, pos_T *, Direction, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6119,7 +6118,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                 } else {
                     __assert_fail(
                         b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/search.c\0"
+                        b"src/nvim/search.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2966 as ::core::ffi::c_uint,
                         b"void find_pattern_in_path(char *, Direction, size_t, _Bool, _Bool, int, int, int, linenr_T, linenr_T, _Bool, _Bool)\0"

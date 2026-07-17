@@ -5556,8 +5556,7 @@ unsafe extern "C" fn init_ccline(mut firstc: ::core::ffi::c_int, mut indent: ::c
         } else {
             __assert_fail(
                 b"indent >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 691 as ::core::ffi::c_uint,
                 b"void init_ccline(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5777,8 +5776,7 @@ unsafe extern "C" fn command_line_enter(
             } else {
                 __assert_fail(
                     b"clear_ccline\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     756 as ::core::ffi::c_uint,
                     b"uint8_t *command_line_enter(int, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5804,8 +5802,7 @@ unsafe extern "C" fn command_line_enter(
         } else {
             __assert_fail(
                 b"ccline.cmdbuff != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 771 as ::core::ffi::c_uint,
                 b"uint8_t *command_line_enter(int, int, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9017,8 +9014,7 @@ unsafe extern "C" fn color_expr_cmdline(
             } else {
                 __assert_fail(
                     b"chunk.start.col < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3313 as ::core::ffi::c_uint,
                     b"void color_expr_cmdline(const CmdlineInfo *const, ColoredCmdline *const)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -9030,8 +9026,7 @@ unsafe extern "C" fn color_expr_cmdline(
             } else {
                 __assert_fail(
                     b"chunk.end_col < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3314 as ::core::ffi::c_uint,
                     b"void color_expr_cmdline(const CmdlineInfo *const, ColoredCmdline *const)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -9190,8 +9185,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                 } else {
                     __assert_fail(
                         b"colored_ccline->input_fn\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3408 as ::core::ffi::c_uint,
                         b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9602,8 +9596,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
             } else {
                 __assert_fail(
                     b"printed_errmsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3557 as ::core::ffi::c_uint,
                     b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -9619,8 +9612,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
         } else {
             __assert_fail(
                 b"!ERROR_SET(&err)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3538 as ::core::ffi::c_uint,
                 b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9767,8 +9759,7 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
                 } else {
                     __assert_fail(
                         b"chunk.end >= chunk.start\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_getln.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3627 as ::core::ffi::c_uint,
                         b"void ui_ext_cmdline_show(CmdlineInfo *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

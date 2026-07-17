@@ -3762,8 +3762,7 @@ pub unsafe extern "C" fn find_help_tags(
         } else {
             __assert_fail(
                 b"res.type == kObjectTypeString\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/help.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/help.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 353 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

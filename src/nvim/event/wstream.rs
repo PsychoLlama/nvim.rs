@@ -751,8 +751,7 @@ pub unsafe extern "C" fn wstream_write(
         } else {
             __assert_fail(
                 b"stream->maxmem\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/wstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 70 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -763,8 +762,7 @@ pub unsafe extern "C" fn wstream_write(
         } else {
             __assert_fail(
                 b"!stream->closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/wstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 72 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -859,8 +857,7 @@ pub unsafe extern "C" fn wstream_write(
             } else {
                 __assert_fail(
                     b"stream->write_cb == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/event/wstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     89 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -904,8 +901,7 @@ pub unsafe extern "C" fn wstream_write(
                 } else {
                     __assert_fail(
                         b"err == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/event/wstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         113 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -920,8 +916,7 @@ pub unsafe extern "C" fn wstream_write(
         } else {
             __assert_fail(
                 b"err != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/wstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 118 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

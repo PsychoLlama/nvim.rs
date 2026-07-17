@@ -990,8 +990,7 @@ pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ff
         } else {
             __assert_fail(
                 b"proc->err.s.closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/pty_proc_unix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 181 as ::core::ffi::c_uint,
                 b"int pty_proc_spawn(PtyProc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1189,8 +1188,7 @@ unsafe extern "C" fn init_child(mut ptyproc: *mut PtyProc) -> ! {
         } else {
             __assert_fail(
                 b"proc->env\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/pty_proc_unix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 324 as ::core::ffi::c_uint,
                 b"void init_child(PtyProc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

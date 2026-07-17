@@ -5575,8 +5575,7 @@ pub unsafe extern "C" fn spell_move_to(
             } else {
                 __assert_fail(
                     b"buf && buflen >= len + MAXWLEN + 2\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/spell.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/spell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1340 as ::core::ffi::c_uint,
                     b"size_t spell_move_to(win_T *, int, smt_T, _Bool, hlf_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5689,7 +5688,7 @@ pub unsafe extern "C" fn spell_move_to(
                                         } else {
                                             __assert_fail(
                                                 b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/spell.c\0"
+                                                b"src/nvim/spell.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 1438 as ::core::ffi::c_uint,
                                                 b"size_t spell_move_to(win_T *, int, smt_T, _Bool, hlf_T *)\0"
@@ -5713,8 +5712,7 @@ pub unsafe extern "C" fn spell_move_to(
                 } else {
                     __assert_fail(
                         b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spell.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/spell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1451 as ::core::ffi::c_uint,
                         b"size_t spell_move_to(win_T *, int, smt_T, _Bool, hlf_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -12739,7 +12737,7 @@ pub unsafe extern "C" fn spell_dump_compl(
                                     } else {
                                         __assert_fail(
                                             b"depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/spell.c\0"
+                                            b"src/nvim/spell.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             3396 as ::core::ffi::c_uint,
                                             b"void spell_dump_compl(char *, int, Direction *, int)\0"

@@ -127,8 +127,7 @@ pub unsafe extern "C" fn ugrid_scroll(
             } else {
                 __assert_fail(
                     b"right >= left && left >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/ugrid.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/ugrid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     66 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

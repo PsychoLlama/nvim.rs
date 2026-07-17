@@ -2299,8 +2299,7 @@ pub unsafe extern "C" fn decor_sh_from_inline(
         } else {
             __assert_fail(
                 b"!(item.flags & kSHIsSign)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 166 as ::core::ffi::c_uint,
                 b"DecorSignHighlight decor_sh_from_inline(DecorHighlightInline)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2511,8 +2510,7 @@ pub unsafe extern "C" fn decor_check_to_be_deleted() {
         } else {
             __assert_fail(
                 b"!decor_state.running_decor_provider\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 330 as ::core::ffi::c_uint,
                 b"void decor_check_to_be_deleted(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3758,8 +3756,7 @@ pub unsafe extern "C" fn buf_signcols_count_range(
                     __assert_fail(
                         b"buf->b_signcols.count[prevwidth - 1] >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1078 as ::core::ffi::c_uint,
                         b"void buf_signcols_count_range(buf_T *, int, int, int, TriState)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -3873,8 +3870,7 @@ pub unsafe extern "C" fn decor_virt_lines(
         } else {
             __assert_fail(
                 b"start_row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1138 as ::core::ffi::c_uint,
                 b"int decor_virt_lines(win_T *, int, int, int *, VirtLines *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3945,7 +3941,7 @@ pub unsafe extern "C" fn decor_virt_lines(
                                     } else {
                                         __assert_fail(
                                             b"(*lines).items\0".as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0"
+                                            b"src/nvim/decoration.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             1155 as ::core::ffi::c_uint,
                                             b"int decor_virt_lines(win_T *, int, int, int *, VirtLines *, _Bool)\0"

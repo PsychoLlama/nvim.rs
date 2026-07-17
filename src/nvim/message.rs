@@ -4524,7 +4524,7 @@ pub unsafe extern "C" fn msg_multihl(
                 __assert_fail(
                     b"!ui_has(kUIMessages) || kind == NULL || msg_ext_kind == kind\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0"
+                    b"src/nvim/message.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     416 as ::core::ffi::c_uint,
                     b"Object msg_multihl(Object, HlMessage, const char *, _Bool, _Bool, MessageData *, _Bool *)\0"
@@ -5807,8 +5807,7 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"messages_history_new >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1322 as ::core::ffi::c_uint,
                 b"int messagesopt_changed(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5822,8 +5821,7 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"messages_wait_new >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1328 as ::core::ffi::c_uint,
                 b"int messagesopt_changed(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6967,8 +6965,7 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                     } else {
                         __assert_fail(
                             b"p_extra != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             2209 as ::core::ffi::c_uint,
                             b"void msg_prt_line(const char *, _Bool)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -7223,8 +7220,7 @@ pub unsafe extern "C" fn msg_puts_len(
             __assert_fail(
                 b"len < 0 || memchr(str, 0, (size_t)len) == NULL\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2367 as ::core::ffi::c_uint,
                 b"void msg_puts_len(const char *const, const ptrdiff_t, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7674,8 +7670,7 @@ pub unsafe extern "C" fn msg_scroll_flush() {
             } else {
                 __assert_fail(
                     b"pos_delta >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2689 as ::core::ffi::c_uint,
                     b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7696,8 +7691,7 @@ pub unsafe extern "C" fn msg_scroll_flush() {
             } else {
                 __assert_fail(
                     b"to_scroll >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2697 as ::core::ffi::c_uint,
                     b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7737,8 +7731,7 @@ pub unsafe extern "C" fn msg_scroll_flush() {
                 } else {
                     __assert_fail(
                         b"row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2707 as ::core::ffi::c_uint,
                         b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -8232,8 +8225,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
             } else {
                 __assert_fail(
                     b"(toscroll == 0) || !to_redraw\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/message.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3168 as ::core::ffi::c_uint,
                     b"_Bool do_more_prompt(int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

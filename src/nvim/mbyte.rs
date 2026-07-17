@@ -3691,8 +3691,7 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
             } else {
                 __assert_fail(
                     b"c <= 0xFFFF\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     462 as ::core::ffi::c_uint,
                     b"int utf_char2cells(int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -4391,8 +4390,7 @@ unsafe extern "C" fn intable(
         } else {
             __assert_fail(
                 b"n_items > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1177 as ::core::ffi::c_uint,
                 b"_Bool intable(const struct interval *, size_t, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4407,8 +4405,7 @@ unsafe extern "C" fn intable(
         } else {
             __assert_fail(
                 b"n_items <= SIZE_MAX / 2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1183 as ::core::ffi::c_uint,
                 b"_Bool intable(const struct interval *, size_t, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5167,8 +5164,7 @@ pub unsafe extern "C" fn show_utf8() {
             } else {
                 __assert_fail(
                     b"IOSIZE > rlen\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1726 as ::core::ffi::c_uint,
                     b"void show_utf8(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -5308,8 +5304,7 @@ pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
         } else {
             __assert_fail(
                 b"*next >= 0x80\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1855 as ::core::ffi::c_uint,
                 b"StrCharInfo utfc_next_impl(StrCharInfo)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5520,8 +5515,7 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
         } else {
             __assert_fail(
                 b"base <= p_in && p_len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mbyte.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2053 as ::core::ffi::c_uint,
                 b"CharBoundsOff utf_cp_bounds_len(const char *, const char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,

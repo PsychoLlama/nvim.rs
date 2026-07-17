@@ -185,8 +185,7 @@ pub unsafe extern "C" fn mh_put_glyph(
                 __assert_fail(
                     b"equal_String(cstr_as_string(&set->keys[pos]), key)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/map_glyph_cache.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/map_glyph_cache.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     106 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

@@ -3173,8 +3173,7 @@ unsafe extern "C" fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEnt
             } else {
                 __assert_fail(
                     b"hmll->free_entry == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     449 as ::core::ffi::c_uint,
                     b"void hmll_remove(HMLList *const, HMLListEntry *const)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3193,8 +3192,7 @@ unsafe extern "C" fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEnt
         } else {
             __assert_fail(
                 b"val\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 454 as ::core::ffi::c_uint,
                 b"void hmll_remove(HMLList *const, HMLListEntry *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3229,8 +3227,7 @@ unsafe extern "C" fn hmll_insert(
             } else {
                 __assert_fail(
                     b"hmll->first != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     484 as ::core::ffi::c_uint,
                     b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3248,8 +3245,7 @@ unsafe extern "C" fn hmll_insert(
                 __assert_fail(
                     b"(size_t)(hmll->last_free_entry - hmll->entries) == hmll->num_entries\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     490 as ::core::ffi::c_uint,
                     b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3269,8 +3265,7 @@ unsafe extern "C" fn hmll_insert(
                 __assert_fail(
                     b"(size_t)(hmll->last_free_entry - hmll->entries) - 1 == hmll->num_entries\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     494 as ::core::ffi::c_uint,
                     b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3341,8 +3336,7 @@ unsafe extern "C" fn sd_reader_skip(
             } else {
                 __assert_fail(
                     b"skip_bytes < (ptrdiff_t)offset\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     548 as ::core::ffi::c_uint,
                     b"ShaDaReadResult sd_reader_skip(FileDescriptor *const, const size_t)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -4953,7 +4947,7 @@ unsafe extern "C" fn shada_pack_entry(
                         __assert_fail(
                             b"entry.type == kSDItemJump || entry.type == kSDItemChange ? CHECK_DEFAULT(entry, filemark.name) : true\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0"
+                            b"src/nvim/shada.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             1471 as ::core::ffi::c_uint,
                             b"ShaDaWriteResult shada_pack_entry(PackerBuffer *const, ShadaEntry, const size_t)\0"
@@ -6420,7 +6414,7 @@ unsafe extern "C" fn shada_write(
                                     __assert_fail(
                                         b"fm.fname != NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0"
+                                        b"src/nvim/shada.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2441 as ::core::ffi::c_uint,
                                         b"ShaDaWriteResult shada_write(FileDescriptor *const, FileDescriptor *const)\0"
@@ -7126,8 +7120,7 @@ pub unsafe extern "C" fn shada_write_file(
         } else {
             __assert_fail(
                 b"sw_ret != kSDWriteIgnError\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2802 as ::core::ffi::c_uint,
                 b"int shada_write_file(const char *const, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

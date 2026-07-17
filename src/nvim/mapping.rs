@@ -5186,8 +5186,7 @@ pub unsafe extern "C" fn do_map(
                     __assert_fail(
                         b"false && \"Unknown return code from str_to_mapargs!\"\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         968 as ::core::ffi::c_uint,
                         b"int do_map(int, char *, int, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -7312,9 +7311,7 @@ pub unsafe extern "C" fn f_maplist(
                         } else {
                             __assert_fail(
                                 b"d.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 2431 as ::core::ffi::c_uint,
                                 b"void f_maplist(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -7385,8 +7382,7 @@ unsafe extern "C" fn langmap_set_entry(mut from: ::core::ffi::c_int, mut to: ::c
         } else {
             __assert_fail(
                 b"langmap_mapga.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2496 as ::core::ffi::c_uint,
                 b"void langmap_set_entry(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7679,8 +7675,7 @@ unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::
                     __assert_fail(
                         b"false && \"Unknown return code from str_to_mapargs!\"\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2669 as ::core::ffi::c_uint,
                         b"void do_exmap(exarg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -7812,7 +7807,7 @@ pub unsafe extern "C" fn modify_keymap(
                     } else {
                         __assert_fail(
                             b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
+                            b"src/nvim/mapping.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             2794 as ::core::ffi::c_uint,
                             b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
@@ -7852,7 +7847,7 @@ pub unsafe extern "C" fn modify_keymap(
                         __assert_fail(
                             b"!(is_unmap && is_noremap)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
+                            b"src/nvim/mapping.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             2812 as ::core::ffi::c_uint,
                             b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
@@ -7958,7 +7953,7 @@ pub unsafe extern "C" fn modify_keymap(
                                 __assert_fail(
                                     b"false && \"Unrecognized return code!\"\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
+                                    b"src/nvim/mapping.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2860 as ::core::ffi::c_uint,
                                     b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
@@ -8016,8 +8011,7 @@ pub unsafe extern "C" fn keymap_array(
             } else {
                 __assert_fail(
                     b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2888 as ::core::ffi::c_uint,
                     b"Array keymap_array(String, buf_T *, Arena *)\0".as_ptr()
                         as *const ::core::ffi::c_char,

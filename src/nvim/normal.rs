@@ -5319,8 +5319,7 @@ pub unsafe extern "C" fn init_normal_cmds() {
         } else {
             __assert_fail(
                 b"NV_CMDS_SIZE <= SHRT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 390 as ::core::ffi::c_uint,
                 b"void init_normal_cmds(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5373,8 +5372,7 @@ unsafe extern "C" fn find_command(mut cmdchar: ::core::ffi::c_int) -> ::core::ff
         } else {
             __assert_fail(
                 b"nv_max_linear < (int)NV_CMDS_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 428 as ::core::ffi::c_uint,
                 b"int find_command(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5799,9 +5797,7 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
                         } else {
                             __assert_fail(
                                 b"s->idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 827 as ::core::ffi::c_uint,
                                 b"void normal_get_additional_char(NormalState *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -6234,9 +6230,7 @@ unsafe extern "C" fn normal_execute(
                         } else {
                             __assert_fail(
                                 b"s->idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1239 as ::core::ffi::c_uint,
                                 b"int normal_execute(VimState *, int)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -6710,8 +6704,7 @@ pub unsafe extern "C" fn find_ident_at_pos(
         } else {
             __assert_fail(
                 b"col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1748 as ::core::ffi::c_uint,
                 b"size_t find_ident_at_pos(win_T *, linenr_T, colnr_T, char **, int *, int)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -7477,8 +7470,7 @@ pub unsafe extern "C" fn find_decl(
         } else {
             __assert_fail(
                 b"patsize <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2387 as ::core::ffi::c_uint,
                 b"_Bool find_decl(char *, size_t, _Bool, _Bool, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7700,9 +7692,7 @@ pub unsafe extern "C" fn nv_screengo(
                                 __assert_fail(
                                     b"w <= 0 || curwin->w_curswant <= INT_MAX - w\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     2570 as ::core::ffi::c_uint,
                                     b"_Bool nv_screengo(oparg_T *, int, int, _Bool)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -7930,8 +7920,7 @@ unsafe extern "C" fn nv_zg_zw(
         } else {
             __assert_fail(
                 b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2754 as ::core::ffi::c_uint,
                 b"int nv_zg_zw(cmdarg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9890,8 +9879,7 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
             } else {
                 __assert_fail(
                     b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4311 as ::core::ffi::c_uint,
                     b"void nv_brackets(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -10184,8 +10172,7 @@ unsafe extern "C" fn nv_replace(mut cap: *mut cmdarg_T) {
                 } else {
                     __assert_fail(
                         b"cap->count1 <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4553 as ::core::ffi::c_uint,
                         b"void nv_replace(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -10732,8 +10719,7 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
                         __assert_fail(
                             b"cap->count0 >= INT_MIN && cap->count0 <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             5057 as ::core::ffi::c_uint,
                             b"void nv_visual(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
@@ -10763,8 +10749,7 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
                     __assert_fail(
                         b"cap->count0 >= INT_MIN && cap->count0 <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         5075 as ::core::ffi::c_uint,
                         b"void nv_visual(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -11537,8 +11522,7 @@ unsafe extern "C" fn set_op_var(mut optype: ::core::ffi::c_int) {
                 __assert_fail(
                     b"opchar0 >= 0 && opchar0 <= UCHAR_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     5876 as ::core::ffi::c_uint,
                     b"void set_op_var(int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -11555,8 +11539,7 @@ unsafe extern "C" fn set_op_var(mut optype: ::core::ffi::c_int) {
                 __assert_fail(
                     b"opchar1 >= 0 && opchar1 <= UCHAR_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     5880 as ::core::ffi::c_uint,
                     b"void set_op_var(int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -12165,8 +12148,7 @@ unsafe extern "C" fn nv_put_opt(mut cap: *mut cmdarg_T, mut fix_indent: bool) {
                 } else {
                     __assert_fail(
                         b"cap->opcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         6502 as ::core::ffi::c_uint,
                         b"void nv_put_opt(cmdarg_T *, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -12310,8 +12292,7 @@ unsafe extern "C" fn nv_open(mut cap: *mut cmdarg_T) {
             } else {
                 __assert_fail(
                     b"cap->opcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/normal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     6645 as ::core::ffi::c_uint,
                     b"void nv_open(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

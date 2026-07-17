@@ -2694,8 +2694,7 @@ unsafe extern "C" fn line_putchar(
         } else {
             __assert_fail(
                 b"dest[0] != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 235 as ::core::ffi::c_uint,
                 b"int line_putchar(buf_T *, const char **, schar_T *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2710,8 +2709,7 @@ unsafe extern "C" fn line_putchar(
         } else {
             __assert_fail(
                 b"maxcells > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 240 as ::core::ffi::c_uint,
                 b"int line_putchar(buf_T *, const char **, schar_T *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2772,8 +2770,7 @@ unsafe extern "C" fn draw_virt_text(
                     } else {
                         __assert_fail(
                             b"item->data.vt\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             293 as ::core::ffi::c_uint,
                             b"void draw_virt_text(win_T *, buf_T *, int, int *, int)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -2813,7 +2810,7 @@ unsafe extern "C" fn draw_virt_text(
                                             __assert_fail(
                                                 b"lookaheadItem->data.vt\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                                b"src/nvim/drawline.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 317 as ::core::ffi::c_uint,
                                                 b"void draw_virt_text(win_T *, buf_T *, int, int *, int)\0"
@@ -2973,8 +2970,7 @@ unsafe extern "C" fn draw_virt_text_item(
             } else {
                 __assert_fail(
                     b"skip_cells <= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     407 as ::core::ffi::c_uint,
                     b"int draw_virt_text_item(buf_T *, int, VirtText, HlMode, int, int, int)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -3013,8 +3009,7 @@ unsafe extern "C" fn draw_virt_text_item(
                 } else {
                     __assert_fail(
                         b"col > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         422 as ::core::ffi::c_uint,
                         b"int draw_virt_text_item(buf_T *, int, VirtText, HlMode, int, int, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -3276,8 +3271,7 @@ unsafe extern "C" fn draw_sign(
             } else {
                 __assert_fail(
                     b"sign_pos >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     580 as ::core::ffi::c_uint,
                     b"void draw_sign(_Bool, win_T *, winlinevars_T *, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3293,8 +3287,7 @@ unsafe extern "C" fn draw_sign(
             } else {
                 __assert_fail(
                     b"!nrcol\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     584 as ::core::ffi::c_uint,
                     b"void draw_sign(_Bool, win_T *, winlinevars_T *, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3870,7 +3863,7 @@ unsafe extern "C" fn handle_inline_virtual_text(
                 } else {
                     __assert_fail(
                         b"wlv->n_extra > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                        b"src/nvim/drawline.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1017 as ::core::ffi::c_uint,
                         b"void handle_inline_virtual_text(win_T *, winlinevars_T *, ptrdiff_t, _Bool)\0"
@@ -4007,7 +4000,7 @@ pub unsafe extern "C" fn win_line(
         } else {
             __assert_fail(
                 b"startrow < endrow\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
+                b"src/nvim/drawline.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1168 as ::core::ffi::c_uint,
                 b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -4616,7 +4609,7 @@ pub unsafe extern "C" fn win_line(
                     } else {
                         __assert_fail(
                             b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                            b"src/nvim/drawline.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             1617 as ::core::ffi::c_uint,
                             b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -4761,7 +4754,7 @@ pub unsafe extern "C" fn win_line(
                     } else {
                         __assert_fail(
                             b"wlv.off == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                            b"src/nvim/drawline.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             1726 as ::core::ffi::c_uint,
                             b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -4788,7 +4781,7 @@ pub unsafe extern "C" fn win_line(
                                 __assert_fail(
                                     b"virt_line_index >= 0\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                    b"src/nvim/drawline.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     1737 as ::core::ffi::c_uint,
                                     b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5169,7 +5162,7 @@ pub unsafe extern "C" fn win_line(
                                 __assert_fail(
                                     b"foldtext_free == NULL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                    b"src/nvim/drawline.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2012 as ::core::ffi::c_uint,
                                     b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5225,7 +5218,7 @@ pub unsafe extern "C" fn win_line(
                                 __assert_fail(
                                     b"wlv.p_extra != NULL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                    b"src/nvim/drawline.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2055 as ::core::ffi::c_uint,
                                     b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5304,7 +5297,7 @@ pub unsafe extern "C" fn win_line(
                                     __assert_fail(
                                         b"wlv.sc_extra != NUL || wlv.sc_final != NUL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                        b"src/nvim/drawline.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2121 as ::core::ffi::c_uint,
                                         b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5318,7 +5311,7 @@ pub unsafe extern "C" fn win_line(
                                     __assert_fail(
                                         b"wlv.p_extra != NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                        b"src/nvim/drawline.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2122 as ::core::ffi::c_uint,
                                         b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5337,7 +5330,7 @@ pub unsafe extern "C" fn win_line(
                                     __assert_fail(
                                         b"extra_attr_next >= 0\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                        b"src/nvim/drawline.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2130 as ::core::ffi::c_uint,
                                         b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -5521,7 +5514,7 @@ pub unsafe extern "C" fn win_line(
                                         __assert_fail(
                                             b"tmplen <= INT_MAX\0".as_ptr()
                                                 as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                            b"src/nvim/drawline.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             2290 as ::core::ffi::c_uint,
                                             b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -6125,7 +6118,7 @@ pub unsafe extern "C" fn win_line(
                                     __assert_fail(
                                         b"wlv.p_extra != NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0"
+                                        b"src/nvim/drawline.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2749 as ::core::ffi::c_uint,
                                         b"int win_line(win_T *, linenr_T, int, int, int, _Bool, spellvars_T *, foldinfo_T)\0"
@@ -6720,8 +6713,7 @@ unsafe extern "C" fn wlv_put_linebuf(
         } else {
             __assert_fail(
                 b"!(flags & SLF_RIGHTLEFT)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3253 as ::core::ffi::c_uint,
                 b"void wlv_put_linebuf(win_T *, const winlinevars_T *, int, _Bool, int, int)\0"
                     .as_ptr() as *const ::core::ffi::c_char,

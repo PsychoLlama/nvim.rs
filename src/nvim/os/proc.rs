@@ -175,8 +175,7 @@ pub unsafe extern "C" fn os_proc_tree_kill(
         } else {
             __assert_fail(
                 b"sig == SIGTERM || sig == SIGKILL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/proc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 98 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

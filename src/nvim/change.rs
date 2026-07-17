@@ -3263,8 +3263,7 @@ pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size
         } else {
             __assert_fail(
                 b"bytes >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/change.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/change.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 836 as ::core::ffi::c_uint,
                 b"void ins_str(char *, size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3869,8 +3868,7 @@ pub unsafe extern "C" fn open_line(
                 } else {
                     __assert_fail(
                         b"bytes >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/change.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/change.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1386 as ::core::ffi::c_uint,
                         b"_Bool open_line(int, int, int, _Bool *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

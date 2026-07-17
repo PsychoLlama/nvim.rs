@@ -2930,8 +2930,7 @@ unsafe extern "C" fn on_signal(
         } else {
             __assert_fail(
                 b"signum >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/signal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/signal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 210 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

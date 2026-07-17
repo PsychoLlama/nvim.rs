@@ -3671,8 +3671,7 @@ pub unsafe extern "C" fn comp_col() {
             __assert_fail(
                 b"sc_col >= 0 && INT_MIN + sc_col <= Columns\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawscreen.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawscreen.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1128 as ::core::ffi::c_uint,
                 b"void comp_col(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3687,8 +3686,7 @@ pub unsafe extern "C" fn comp_col() {
             __assert_fail(
                 b"ru_col >= 0 && INT_MIN + ru_col <= Columns\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawscreen.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawscreen.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1131 as ::core::ffi::c_uint,
                 b"void comp_col(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5426,8 +5424,7 @@ pub unsafe extern "C" fn win_draw_end(
         } else {
             __assert_fail(
                 b"hl >= 0 && hl < HLF_COUNT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawscreen.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawscreen.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2513 as ::core::ffi::c_uint,
                 b"void win_draw_end(win_T *, schar_T, _Bool, int, int, hlf_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5557,8 +5554,7 @@ pub unsafe extern "C" fn redraw_later(mut wp: *mut win_T, mut type_0: ::core::ff
         } else {
             __assert_fail(
                 b"wp != NULL || exiting\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/drawscreen.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/drawscreen.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2623 as ::core::ffi::c_uint,
                 b"void redraw_later(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5801,8 +5797,7 @@ pub unsafe extern "C" fn win_redraw_last_status(mut frp: *const frame_T) {
             } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/drawscreen.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/drawscreen.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2806 as ::core::ffi::c_uint,
                     b"void win_redraw_last_status(const frame_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,

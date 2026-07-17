@@ -1731,8 +1731,7 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
             } else {
                 __assert_fail(
                     b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/lua/spell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     60 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -1766,8 +1765,7 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
                 } else {
                     __assert_fail(
                         b"result != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/lua/spell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         74 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );

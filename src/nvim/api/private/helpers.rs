@@ -2063,8 +2063,7 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
         } else {
             __assert_fail(
                 b"trylevel > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/private/helpers.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 82 as ::core::ffi::c_uint,
                 b"void try_leave(const TryState *const, Error *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2657,8 +2656,7 @@ pub unsafe extern "C" fn normalize_index(
         } else {
             __assert_fail(
                 b"buf->b_ml.ml_line_count > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/private/helpers.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 452 as ::core::ffi::c_uint,
                 b"int64_t normalize_index(buf_T *, int64_t, _Bool, _Bool *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3016,8 +3014,7 @@ pub unsafe extern "C" fn api_set_error(
         } else {
             __assert_fail(
                 b"kErrorTypeNone != errType\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/private/helpers.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 689 as ::core::ffi::c_uint,
                 b"void api_set_error(Error *, ErrorType, const char *, ...)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3039,8 +3036,7 @@ pub unsafe extern "C" fn api_set_error(
         } else {
             __assert_fail(
                 b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/private/helpers.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 696 as ::core::ffi::c_uint,
                 b"void api_set_error(Error *, ErrorType, const char *, ...)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3609,8 +3605,7 @@ pub unsafe extern "C" fn set_mark(
         } else {
             __assert_fail(
                 b"INT32_MIN <= line && line <= INT32_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/private/helpers.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1018 as ::core::ffi::c_uint,
                 b"_Bool set_mark(buf_T *, String, Integer, Integer, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

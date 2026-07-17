@@ -2044,8 +2044,7 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                         } else {
                             __assert_fail(
                                 b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 338 as ::core::ffi::c_uint,
                                 b"void update_topline(win_T *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -2091,8 +2090,7 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
             } else {
                 __assert_fail(
                     b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     376 as ::core::ffi::c_uint,
                     b"void update_topline(win_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -2630,8 +2628,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
                         } else {
                             __assert_fail(
                                 b"p_ss <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 903 as ::core::ffi::c_uint,
                                 b"void curs_columns(win_T *, int)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -2699,8 +2696,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
                 } else {
                     __assert_fail(
                         b"wp->w_wrow + so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         964 as ::core::ffi::c_uint,
                         b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -2737,8 +2733,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
                 } else {
                     __assert_fail(
                         b"so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         989 as ::core::ffi::c_uint,
                         b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -2851,7 +2846,7 @@ pub unsafe extern "C" fn textpos2screenpos(
                 } else {
                     __assert_fail(
                         b"lnum == pos->lnum\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
+                        b"src/nvim/move.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1087 as ::core::ffi::c_uint,
                         b"void textpos2screenpos(win_T *, pos_T *, int *, int *, int *, int *, _Bool)\0"
@@ -3635,8 +3630,7 @@ unsafe extern "C" fn botline_forw(mut wp: *mut win_T, mut lp: *mut lineoff_T) {
             } else {
                 __assert_fail(
                     b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1768 as ::core::ffi::c_uint,
                     b"void botline_forw(win_T *, lineoff_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3934,8 +3928,7 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             } else {
                 __assert_fail(
                     b"boff.height != MAXCOL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2067 as ::core::ffi::c_uint,
                     b"void scroll_cursor_bot(win_T *, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,

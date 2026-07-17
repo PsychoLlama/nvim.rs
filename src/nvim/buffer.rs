@@ -4348,8 +4348,7 @@ pub unsafe extern "C" fn buf_close_terminal(mut buf: *mut buf_T) {
         } else {
             __assert_fail(
                 b"buf->terminal\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 521 as ::core::ffi::c_uint,
                 b"void buf_close_terminal(buf_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4834,8 +4833,7 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
         } else {
             __assert_fail(
                 b"changedtick_hi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1000 as ::core::ffi::c_uint,
                 b"void free_buffer_stuff(buf_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5991,8 +5989,7 @@ pub unsafe extern "C" fn buflist_new(
             } else {
                 __assert_fail(
                     b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1998 as ::core::ffi::c_uint,
                     b"buf_T *buflist_new(char *, char *, linenr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8701,8 +8698,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
         } else {
             __assert_fail(
                 b"changedtick_di != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4260 as ::core::ffi::c_uint,
                 b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8717,8 +8713,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
             __assert_fail(
                 b"changedtick_di->di_tv.v_type == VAR_NUMBER\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4261 as ::core::ffi::c_uint,
                 b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8733,8 +8728,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
             __assert_fail(
                 b"changedtick_di->di_tv.v_lock == VAR_FIXED\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4262 as ::core::ffi::c_uint,
                 b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8749,8 +8743,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
             __assert_fail(
                 b"changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4265 as ::core::ffi::c_uint,
                 b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8763,8 +8756,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
             __assert_fail(
                 b"changedtick_di == (dictitem_T *)&buf->changedtick_di\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4267 as ::core::ffi::c_uint,
                 b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8795,8 +8787,7 @@ pub unsafe extern "C" fn read_buffer_into(
         } else {
             __assert_fail(
                 b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4285 as ::core::ffi::c_uint,
                 b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8808,8 +8799,7 @@ pub unsafe extern "C" fn read_buffer_into(
         } else {
             __assert_fail(
                 b"sb\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4286 as ::core::ffi::c_uint,
                 b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8872,8 +8862,7 @@ pub unsafe extern "C" fn read_buffer_into(
                     } else {
                         __assert_fail(
                             b"(*sb).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/buffer.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             4308 as ::core::ffi::c_uint,
                             b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,

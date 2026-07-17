@@ -265,8 +265,7 @@ pub unsafe extern "C" fn strchrsub(
         } else {
             __assert_fail(
                 b"c != NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memory.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 305 as ::core::ffi::c_uint,
                 b"void strchrsub(char *, char, char)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -315,8 +314,7 @@ pub unsafe extern "C" fn strcnt(
         } else {
             __assert_fail(
                 b"c != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memory.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 337 as ::core::ffi::c_uint,
                 b"size_t strcnt(const char *, char)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -432,8 +430,7 @@ pub unsafe extern "C" fn xstrlcat(
         } else {
             __assert_fail(
                 b"dsize > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memory.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 460 as ::core::ffi::c_uint,
                 b"size_t xstrlcat(char *const, const char *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -446,8 +443,7 @@ pub unsafe extern "C" fn xstrlcat(
         } else {
             __assert_fail(
                 b"dlen < dsize\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memory.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 462 as ::core::ffi::c_uint,
                 b"size_t xstrlcat(char *const, const char *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,

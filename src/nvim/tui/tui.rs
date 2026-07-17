@@ -1644,8 +1644,7 @@ unsafe extern "C" fn tui_request_term_mode(mut tui: *mut TUIData, mut mode: Term
         } else {
             __assert_fail(
                 b"(len > 0) && (len < (int)sizeof(buf))\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 200 as ::core::ffi::c_uint,
                 b"void tui_request_term_mode(TUIData *, TermMode)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1674,8 +1673,7 @@ unsafe extern "C" fn tui_set_term_mode(mut tui: *mut TUIData, mut mode: TermMode
         } else {
             __assert_fail(
                 b"(len > 0) && (len < (int)sizeof(buf))\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 210 as ::core::ffi::c_uint,
                 b"void tui_set_term_mode(TUIData *, TermMode, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1863,8 +1861,7 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
         } else {
             __assert_fail(
                 b"tui->term == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 384 as ::core::ffi::c_uint,
                 b"void terminfo_start(TUIData *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3117,8 +3114,7 @@ pub unsafe extern "C" fn tui_mode_info_set(
         } else {
             __assert_fail(
                 b"args.size\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1327 as ::core::ffi::c_uint,
                 b"void tui_mode_info_set(TUIData *, _Bool, Array)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3135,8 +3131,7 @@ pub unsafe extern "C" fn tui_mode_info_set(
                 __assert_fail(
                     b"args.items[i].type == kObjectTypeDict\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1331 as ::core::ffi::c_uint,
                     b"void tui_mode_info_set(TUIData *, _Bool, Array)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3587,8 +3582,7 @@ pub unsafe extern "C" fn tui_flush(mut tui: *mut TUIData) {
                 __assert_fail(
                     b"r.bot <= grid->height && r.right <= grid->width\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1609 as ::core::ffi::c_uint,
                     b"void tui_flush(TUIData *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -4043,7 +4037,7 @@ pub unsafe extern "C" fn tui_raw_line(
                 __assert_fail(
                     b"(size_t)attrs[c - startcol] < kv_size(tui->attrs)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0"
+                    b"src/nvim/tui/tui.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1810 as ::core::ffi::c_uint,
                     b"void tui_raw_line(TUIData *, Integer, Integer, Integer, Integer, Integer, Integer, LineFlags, const schar_T *, const sattr_T *)\0"
@@ -4275,8 +4269,7 @@ pub unsafe extern "C" fn out_printf(
         } else {
             __assert_fail(
                 b"limit <= sizeof(tui->buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/tui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1951 as ::core::ffi::c_uint,
                 b"void out_printf(TUIData *, size_t, const char *, ...)\0".as_ptr()
                     as *const ::core::ffi::c_char,

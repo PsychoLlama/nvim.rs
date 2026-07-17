@@ -3205,8 +3205,7 @@ pub unsafe extern "C" fn os_expand_wildcards(
                     __assert_fail(
                         b"buffer[len] == NUL || buffer[len] == '\\n'\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/os/shell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         487 as ::core::ffi::c_uint,
                         b"int os_expand_wildcards(int, char **, int *, char ***, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3351,8 +3350,7 @@ pub unsafe extern "C" fn shell_build_argv(
         } else {
             __assert_fail(
                 b"rv[0]\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/shell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 596 as ::core::ffi::c_uint,
                 b"char **shell_build_argv(const char *, const char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3731,7 +3729,7 @@ unsafe extern "C" fn do_os_system(
                     } else {
                         __assert_fail(
                             b"nread\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0"
+                            b"src/nvim/os/shell.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             971 as ::core::ffi::c_uint,
                             b"int do_os_system(char **, const char *, size_t, char **, size_t *, _Bool, _Bool)\0"
@@ -3773,7 +3771,7 @@ unsafe extern "C" fn do_os_system(
                     __assert_fail(
                         b"multiqueue_empty(events)\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0"
+                        b"src/nvim/os/shell.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         985 as ::core::ffi::c_uint,
                         b"int do_os_system(char **, const char *, size_t, char **, size_t *, _Bool, _Bool)\0"
@@ -3815,8 +3813,7 @@ unsafe extern "C" fn system_data_cb(
             } else {
                 __assert_fail(
                     b"(*dbuf).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/shell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1002 as ::core::ffi::c_uint,
                     b"size_t system_data_cb(RStream *, const char *, size_t, void *, _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -3905,8 +3902,7 @@ unsafe extern "C" fn out_data_ring(mut output: *const ::core::ffi::c_char, mut s
             __assert_fail(
                 b"output != NULL || (size == 0 || size == SIZE_MAX)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/shell.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/shell.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1092 as ::core::ffi::c_uint,
                 b"void out_data_ring(const char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,

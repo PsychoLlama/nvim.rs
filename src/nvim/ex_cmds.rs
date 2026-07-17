@@ -7064,7 +7064,7 @@ pub unsafe extern "C" fn do_ecmd(
                                 __assert_fail(
                                     b"cmdwin_buf == NULL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds.c\0"
+                                    b"src/nvim/ex_cmds.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2549 as ::core::ffi::c_uint,
                                     b"int do_ecmd(int, char *, char *, exarg_T *, linenr_T, int, win_T *)\0"
@@ -8267,8 +8267,7 @@ unsafe extern "C" fn do_sub(
         } else {
             __assert_fail(
                 b"sub != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3738 as ::core::ffi::c_uint,
                 b"int do_sub(exarg_T *, const proftime_T, const int, const handle_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9652,8 +9651,7 @@ unsafe extern "C" fn show_sub(
             } else {
                 __assert_fail(
                     b"cmdpreview_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4886 as ::core::ffi::c_uint,
                     b"int show_sub(exarg_T *, pos_T, PreviewLines *, int, int, handle_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9678,8 +9676,7 @@ unsafe extern "C" fn show_sub(
                 } else {
                     __assert_fail(
                         b"highest_lnum > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_cmds.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4892 as ::core::ffi::c_uint,
                         b"int show_sub(exarg_T *, pos_T, PreviewLines *, int, int, handle_T)\0"
                             .as_ptr() as *const ::core::ffi::c_char,

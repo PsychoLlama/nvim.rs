@@ -2135,8 +2135,7 @@ unsafe extern "C" fn report_pending(
         } else {
             __assert_fail(
                 b"value || !(pending & CSTP_THROW)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 723 as ::core::ffi::c_uint,
                 b"void report_pending(int, int, void *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2490,8 +2489,7 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1069 as ::core::ffi::c_uint,
                     b"void ex_continue(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -2909,8 +2907,7 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
                     __assert_fail(
                         b"pending >= CHAR_MIN && pending <= CHAR_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1535 as ::core::ffi::c_uint,
                         b"void ex_finally(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );

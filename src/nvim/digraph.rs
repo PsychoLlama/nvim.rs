@@ -9913,8 +9913,7 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
         } else {
             __assert_fail(
                 b"p >= buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/digraph.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/digraph.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1877 as ::core::ffi::c_uint,
                 b"void printdigraph(const digr_T *, result_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

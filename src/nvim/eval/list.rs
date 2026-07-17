@@ -1190,8 +1190,7 @@ unsafe extern "C" fn filter_map(
             } else {
                 __assert_fail(
                     b"argvars[0].v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     393 as ::core::ffi::c_uint,
                     b"void filter_map(typval_T *, typval_T *, filtermap_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1482,8 +1481,7 @@ unsafe extern "C" fn extend_dict(
             } else {
                 __assert_fail(
                     b"locked == true\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     584 as ::core::ffi::c_uint,
                     b"void extend_dict(typval_T *, const char *, _Bool, typval_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1924,8 +1922,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,

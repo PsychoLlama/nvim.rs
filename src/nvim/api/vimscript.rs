@@ -3547,8 +3547,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 } else {
                     __assert_fail(
                         b"kv_size(ast_conv_stack) == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/vimscript.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/vimscript.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         511 as ::core::ffi::c_uint,
                         b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4097,7 +4096,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         __assert_fail(
                             b"cur_item.ret_node_p->data.dict.size == cur_item.ret_node_p->data.dict.capacity\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/vimscript.c\0"
+                            b"src/nvim/api/vimscript.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             640 as ::core::ffi::c_uint,
                             b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0"
@@ -4128,8 +4127,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         } else {
             __assert_fail(
                 b"ret.size == ret.capacity\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/vimscript.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/vimscript.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 649 as ::core::ffi::c_uint,
                 b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

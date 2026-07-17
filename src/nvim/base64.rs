@@ -320,8 +320,7 @@ pub unsafe extern "C" fn base64_encode(
         } else {
             __assert_fail(
                 b"src != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/base64.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/base64.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 71 as ::core::ffi::c_uint,
                 b"char *base64_encode(const char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -451,8 +450,7 @@ pub unsafe extern "C" fn base64_decode(
         } else {
             __assert_fail(
                 b"src != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/base64.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/base64.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 147 as ::core::ffi::c_uint,
                 b"char *base64_decode(const char *, size_t, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -464,8 +462,7 @@ pub unsafe extern "C" fn base64_decode(
         } else {
             __assert_fail(
                 b"out_lenp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/base64.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/base64.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 148 as ::core::ffi::c_uint,
                 b"char *base64_decode(const char *, size_t, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

@@ -217,7 +217,7 @@ pub unsafe extern "C" fn file_open(
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
+                    b"src/nvim/os/fileio.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     59 as ::core::ffi::c_uint,
                     b"int file_open(FileDescriptor *const, const char *const, const int, const int)\0"
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn file_open(
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
+                    b"src/nvim/os/fileio.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     61 as ::core::ffi::c_uint,
                     b"int file_open(FileDescriptor *const, const char *const, const int, const int)\0"
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn file_open(
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
+                    b"src/nvim/os/fileio.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     63 as ::core::ffi::c_uint,
                     b"int file_open(FileDescriptor *const, const char *const, const int, const int)\0"
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn file_open(
             } else {
                 __assert_fail(
                     b"wr != kTrue\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
+                    b"src/nvim/os/fileio.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     64 as ::core::ffi::c_uint,
                     b"int file_open(FileDescriptor *const, const char *const, const int, const int)\0"
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn file_open(
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
+                    b"src/nvim/os/fileio.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     67 as ::core::ffi::c_uint,
                     b"int file_open(FileDescriptor *const, const char *const, const int, const int)\0"
@@ -347,8 +347,7 @@ pub unsafe extern "C" fn file_open_fd(
         } else {
             __assert_fail(
                 b"!ret_fp->wr || !ret_fp->non_blocking\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 113 as ::core::ffi::c_uint,
                 b"int file_open_fd(FileDescriptor *const, const int, const int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -470,8 +469,7 @@ pub unsafe extern "C" fn file_read(
         } else {
             __assert_fail(
                 b"!fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 230 as ::core::ffi::c_uint,
                 b"ptrdiff_t file_read(FileDescriptor *const, char *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -576,8 +574,7 @@ pub unsafe extern "C" fn file_write(
         } else {
             __assert_fail(
                 b"fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 333 as ::core::ffi::c_uint,
                 b"ptrdiff_t file_write(FileDescriptor *const, const char *const, const size_t)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -620,8 +617,7 @@ pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptr
         } else {
             __assert_fail(
                 b"!fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 365 as ::core::ffi::c_uint,
                 b"ptrdiff_t file_skip(FileDescriptor *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,

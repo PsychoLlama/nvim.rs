@@ -2311,8 +2311,7 @@ unsafe extern "C" fn tslua_inspect_lang(mut L: *mut lua_State) -> ::core::ffi::c
         } else {
             __assert_fail(
                 b"nsymbols < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/treesitter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/treesitter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 276 as ::core::ffi::c_uint,
                 b"int tslua_inspect_lang(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3556,8 +3555,7 @@ unsafe extern "C" fn push_node(
         } else {
             __assert_fail(
                 b"uindex > 0 || uindex < -LUA_MINSTACK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/treesitter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/treesitter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 941 as ::core::ffi::c_uint,
                 b"void push_node(lua_State *, TSNode, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,

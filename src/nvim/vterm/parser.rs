@@ -1034,8 +1034,8 @@ pub unsafe extern "C" fn vterm_input_write(
                                 } else {
                                     __assert_fail(
                                         b"string_len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/parser.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/vterm/parser.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         215 as ::core::ffi::c_uint,
                                         __ASSERT_FUNCTION.as_ptr(),
                                     );

@@ -3147,8 +3147,7 @@ pub unsafe extern "C" fn ui_line(
         } else {
             __assert_fail(
                 b"0 <= row && row < grid->rows\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 471 as ::core::ffi::c_uint,
                 b"void ui_line(ScreenGrid *, int, _Bool, int, int, int, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3239,8 +3238,7 @@ pub unsafe extern "C" fn ui_flush() {
         } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 542 as ::core::ffi::c_uint,
                 b"void ui_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );

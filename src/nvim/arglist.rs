@@ -2982,8 +2982,7 @@ unsafe extern "C" fn do_arglist(
                 } else {
                     __assert_fail(
                         b"what == AL_SET\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/arglist.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/arglist.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         471 as ::core::ffi::c_uint,
                         b"int do_arglist(char *, int, int, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3745,8 +3744,7 @@ unsafe extern "C" fn do_arg_all(
         } else {
             __assert_fail(
                 b"firstwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/arglist.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/arglist.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1068 as ::core::ffi::c_uint,
                 b"void do_arg_all(int, int, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );

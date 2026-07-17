@@ -396,8 +396,7 @@ pub unsafe extern "C" fn linematch_nbuffers(
         } else {
             __assert_fail(
                 b"ndiffs <= LN_MAX_BUFS\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/linematch.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/linematch.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 332 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -412,8 +411,7 @@ pub unsafe extern "C" fn linematch_nbuffers(
             } else {
                 __assert_fail(
                     b"diff_len[i] >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/linematch.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/linematch.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     337 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

@@ -2781,7 +2781,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                         __assert_fail(
                             b"!walker || walker - helper >= 0\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                            b"src/nvim/file_search.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             359 as ::core::ffi::c_uint,
                             b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -2837,7 +2837,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                 } else {
                     __assert_fail(
                         b"wc_part - path >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                        b"src/nvim/file_search.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         390 as ::core::ffi::c_uint,
                         b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -2958,7 +2958,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                     __assert_fail(
                         b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                        b"src/nvim/file_search.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         458 as ::core::ffi::c_uint,
                         b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -3005,7 +3005,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                             __assert_fail(
                                 b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                b"src/nvim/file_search.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 478 as ::core::ffi::c_uint,
                                 b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -3064,7 +3064,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                                 __assert_fail(
                                     b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                    b"src/nvim/file_search.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     501 as ::core::ffi::c_uint,
                                     b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -3096,7 +3096,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                             __assert_fail(
                                 b"search_ctx->ffsc_wc_path.size < tempsize\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                b"src/nvim/file_search.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 513 as ::core::ffi::c_uint,
                                 b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
@@ -3174,9 +3174,7 @@ pub unsafe extern "C" fn vim_findfile_stopdir(
                         } else {
                             __assert_fail(
                                 b"dst < buf\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/file_search.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 561 as ::core::ffi::c_uint,
                                 b"char *vim_findfile_stopdir(char *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -3534,7 +3532,7 @@ pub unsafe extern "C" fn vim_findfile(
                                                             } else {
                                                                 __assert_fail(
                                                                     b"i < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                                                    b"src/nvim/file_search.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     875 as ::core::ffi::c_uint,
                                                                     b"char *vim_findfile(void *)\0".as_ptr()
@@ -3589,12 +3587,15 @@ pub unsafe extern "C" fn vim_findfile(
                                                         if 4096 as size_t >= file_path.size {
                                                         } else {
                                                             __assert_fail(
-                                                                b"MAXPATHL >= file_path.size\0".as_ptr()
+                                                                b"MAXPATHL >= file_path.size\0"
+                                                                    .as_ptr()
                                                                     as *const ::core::ffi::c_char,
-                                                                b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
-                                                                    .as_ptr() as *const ::core::ffi::c_char,
+                                                                b"src/nvim/file_search.rs\0"
+                                                                    .as_ptr()
+                                                                    as *const ::core::ffi::c_char,
                                                                 907 as ::core::ffi::c_uint,
-                                                                b"char *vim_findfile(void *)\0".as_ptr()
+                                                                b"char *vim_findfile(void *)\0"
+                                                                    .as_ptr()
                                                                     as *const ::core::ffi::c_char,
                                                             );
                                                         }
@@ -4243,7 +4244,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                     } else {
                                         __assert_fail(
                                             b"l < MAXPATHL\0".as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                            b"src/nvim/file_search.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             1499 as ::core::ffi::c_uint,
                                             b"char *find_file_in_path_option(char *, size_t, int, int, char *, int, char *, char *, char **, char **)\0"
@@ -4288,7 +4289,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                         } else {
                                             __assert_fail(
                                                 b"MAXPATHL >= l\0".as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/file_search.c\0"
+                                                b"src/nvim/file_search.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 1518 as ::core::ffi::c_uint,
                                                 b"char *find_file_in_path_option(char *, size_t, int, int, char *, int, char *, char *, char **, char **)\0"

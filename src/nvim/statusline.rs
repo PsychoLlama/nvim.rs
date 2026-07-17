@@ -2845,7 +2845,7 @@ pub unsafe extern "C" fn stl_fill_click_defs(
             } else {
                 __assert_fail(
                     b"len <= width\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/statusline.c\0"
+                    b"src/nvim/statusline.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     187 as ::core::ffi::c_uint,
                     b"void stl_fill_click_defs(StlClickDefinition *, StlClickRecord *, const char *, int, _Bool)\0"
@@ -3455,8 +3455,7 @@ pub unsafe extern "C" fn redraw_ruler() {
             } else {
                 __assert_fail(
                     b"attr == HL_ATTR(HLF_MSG)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/statusline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/statusline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     546 as ::core::ffi::c_uint,
                     b"void redraw_ruler(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3658,8 +3657,7 @@ pub unsafe extern "C" fn draw_tabline() {
             __assert_fail(
                 b"tab_page_click_defs_size >= (size_t)Columns\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/statusline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/statusline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 672 as ::core::ffi::c_uint,
                 b"void draw_tabline(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5318,7 +5316,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     __assert_fail(
                                         b"out_end_p >= out_p\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/statusline.c\0"
+                                        b"src/nvim/statusline.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         1856 as ::core::ffi::c_uint,
                                         b"int build_stl_str_hl(win_T *, char *, size_t, char *, OptIndex, int, schar_T, int, stl_hlrec_t **, size_t *, StlClickRecord **, statuscol_T *)\0"

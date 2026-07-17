@@ -7040,8 +7040,7 @@ unsafe extern "C" fn flag_in_afflist(
                     } else {
                         __assert_fail(
                             b"digits >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             2954 as ::core::ffi::c_uint,
                             b"_Bool flag_in_afflist(int, char *, unsigned int)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -8122,8 +8121,7 @@ unsafe extern "C" fn getroom(
         } else {
             __assert_fail(
                 b"len <= SBLOCKSIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3771 as ::core::ffi::c_uint,
                 b"void *getroom(spellinfo_T *, size_t, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8801,9 +8799,7 @@ unsafe extern "C" fn write_vim_spell(
                         } else {
                             __assert_fail(
                                 b"gap->ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 4420 as ::core::ffi::c_uint,
                                 b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -8854,8 +8850,8 @@ unsafe extern "C" fn write_vim_spell(
                                 } else {
                                     __assert_fail(
                                         b"l < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/spellfile.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         4453 as ::core::ffi::c_uint,
                                         b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -8975,8 +8971,7 @@ unsafe extern "C" fn write_vim_spell(
                 } else {
                     __assert_fail(
                         b"spin->si_comppat.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4562 as ::core::ffi::c_uint,
                         b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9015,8 +9010,7 @@ unsafe extern "C" fn write_vim_spell(
                     } else {
                         __assert_fail(
                             b"strlen(p) < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             4576 as ::core::ffi::c_uint,
                             b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -9089,8 +9083,7 @@ unsafe extern "C" fn write_vim_spell(
                     __assert_fail(
                         b"nodecount + nodecount * sizeof(int) < INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4630 as ::core::ffi::c_uint,
                         b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9590,8 +9583,7 @@ unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::cor
                     __assert_fail(
                         b"nodecount + nodecount * sizeof(int) < INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         5135 as ::core::ffi::c_uint,
                         b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9614,8 +9606,7 @@ unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::cor
                 } else {
                     __assert_fail(
                         b"wcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         5143 as ::core::ffi::c_uint,
                         b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -10530,8 +10521,7 @@ unsafe extern "C" fn write_spell_prefcond(
         } else {
             __assert_fail(
                 b"gap->ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5698 as ::core::ffi::c_uint,
                 b"int write_spell_prefcond(FILE *, garray_T *, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -10554,8 +10544,7 @@ unsafe extern "C" fn write_spell_prefcond(
                     } else {
                         __assert_fail(
                             b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             5710 as ::core::ffi::c_uint,
                             b"int write_spell_prefcond(FILE *, garray_T *, size_t *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -10578,8 +10567,7 @@ unsafe extern "C" fn write_spell_prefcond(
         } else {
             __assert_fail(
                 b"totlen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5720 as ::core::ffi::c_uint,
                 b"int write_spell_prefcond(FILE *, garray_T *, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

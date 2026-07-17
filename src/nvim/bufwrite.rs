@@ -3832,8 +3832,7 @@ unsafe extern "C" fn buf_write_make_backup(
                 } else {
                     __assert_fail(
                         b"dirlen < MAXPATHL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/bufwrite.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/bufwrite.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         743 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );

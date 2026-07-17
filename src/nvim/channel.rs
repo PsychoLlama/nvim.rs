@@ -3181,8 +3181,7 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
         } else {
             __assert_fail(
                 b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 230 as ::core::ffi::c_uint,
                 b"Channel *channel_alloc(ChannelStreamType)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3212,8 +3211,7 @@ pub unsafe extern "C" fn channel_create_event(
         } else {
             __assert_fail(
                 b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 249 as ::core::ffi::c_uint,
                 b"void channel_create_event(Channel *, const char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3241,8 +3239,7 @@ pub unsafe extern "C" fn channel_create_event(
         } else {
             __assert_fail(
                 b"tv.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 256 as ::core::ffi::c_uint,
                 b"void channel_create_event(Channel *, const char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4214,8 +4211,7 @@ unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
         } else {
             __assert_fail(
                 b"retval.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 978 as ::core::ffi::c_uint,
                 b"void set_info_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
             );

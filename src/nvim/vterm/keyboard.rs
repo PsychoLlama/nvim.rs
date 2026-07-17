@@ -856,8 +856,7 @@ unsafe extern "C" fn vterm_state_get_key_encoding_flags(
         } else {
             __assert_fail(
                 b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/keyboard.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/vterm/keyboard.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 15 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

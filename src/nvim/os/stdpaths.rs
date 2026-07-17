@@ -292,8 +292,7 @@ pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_ch
             __assert_fail(
                 b"appname_len < (IOSIZE - sizeof(\"-data\"))\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/stdpaths.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/stdpaths.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 206 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

@@ -2602,8 +2602,7 @@ unsafe extern "C" fn do_ft_buf(
         } else {
             __assert_fail(
                 b"ftbuf->b_ml.ml_mfp->mf_fd < 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/options.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/options.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 134 as ::core::ffi::c_uint,
                 b"buf_T *do_ft_buf(const char *, aco_save_T *, _Bool *, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2731,8 +2730,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
             } else {
                 __assert_fail(
                     b"!from\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/api/options.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/api/options.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     230 as ::core::ffi::c_uint,
                     b"Object nvim_get_option_value(String, KeyDict_option *, Error *)\0".as_ptr()
                         as *const ::core::ffi::c_char,

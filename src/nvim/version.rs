@@ -2529,7 +2529,7 @@ pub static mut longVersion: *mut ::core::ffi::c_char =
 pub static mut version_buildtype: *mut ::core::ffi::c_char =
     b"Build type: Debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
-pub static mut version_cflags: *mut ::core::ffi::c_char = b"Compilation: /nix/store/vr15iyyykg9zai6fpgvhcgyw7gckl78w-gcc-wrapper-14.3.0/bin/gcc -g  -Wall -Wextra -pedantic -Wno-unused-parameter -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla -Wdouble-promotion -Wmissing-noreturn -Wmissing-format-attribute -Wmissing-prototypes -Wno-unused-function -fsigned-char -fstack-protector-strong -Wno-conversion -fno-common -Wimplicit-fallthrough -fdiagnostics-color=always -Wno-free-nonheap-object -DHAVE_UNIBILIUM -DNVIM_LOG_DEBUG -DUNIT_TESTING -D_GNU_SOURCE -DUTF8PROC_STATIC -I/home/overlord/projects/neovim/neovim/.deps/usr/include/luajit-2.1 -I/home/overlord/projects/neovim/neovim/.deps/usr/include -I/home/overlord/projects/neovim/neovim/build/src/nvim/auto -I/home/overlord/projects/neovim/neovim/build/include -I/home/overlord/projects/neovim/neovim/build/cmake.config -I/home/overlord/projects/neovim/neovim/src -I/nix/store/l1fi677mcxsa175gf0zvpk68kf1calbn-glibc-iconv-2.40/include -I/nix/store/gi4cz4ir3zlwhf1azqfgxqdnczfrwsr7-glibc-2.40-66-dev/include \0"
+pub static mut version_cflags: *mut ::core::ffi::c_char = b"Compilation: /nix/store/vr15iyyykg9zai6fpgvhcgyw7gckl78w-gcc-wrapper-14.3.0/bin/gcc -g  -Wall -Wextra -pedantic -Wno-unused-parameter -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla -Wdouble-promotion -Wmissing-noreturn -Wmissing-format-attribute -Wmissing-prototypes -Wno-unused-function -fsigned-char -fstack-protector-strong -Wno-conversion -fno-common -Wimplicit-fallthrough -fdiagnostics-color=always -Wno-free-nonheap-object -DHAVE_UNIBILIUM -DNVIM_LOG_DEBUG -DUNIT_TESTING -D_GNU_SOURCE -DUTF8PROC_STATIC -I.deps/usr/include/luajit-2.1 -I.deps/usr/include -Ibuild/src/nvim/auto -Ibuild/include -Ibuild/cmake.config -Isrc -I/nix/store/l1fi677mcxsa175gf0zvpk68kf1calbn-glibc-iconv-2.40/include -I/nix/store/gi4cz4ir3zlwhf1azqfgxqdnczfrwsr7-glibc-2.40-66-dev/include \0"
     .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 static mut vim_versions: [::core::ffi::c_int; 5] = [
     801 as ::core::ffi::c_int,
@@ -3350,8 +3350,7 @@ pub unsafe extern "C" fn list_lua_version() {
         } else {
             __assert_fail(
                 b"!ERROR_SET(&err)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/version.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/version.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4159 as ::core::ffi::c_uint,
                 b"void list_lua_version(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3364,8 +3363,7 @@ pub unsafe extern "C" fn list_lua_version() {
         } else {
             __assert_fail(
                 b"ret.type == kObjectTypeString\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/version.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/version.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4160 as ::core::ffi::c_uint,
                 b"void list_lua_version(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3497,8 +3495,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
         } else {
             __assert_fail(
                 b"lines_size <= LONG_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/version.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/version.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4258 as ::core::ffi::c_uint,
                 b"void intro_message(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3542,8 +3539,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
                     } else {
                         __assert_fail(
                             b"mesg_size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/version.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/version.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             4284 as ::core::ffi::c_uint,
                             b"void intro_message(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
@@ -3680,8 +3676,7 @@ unsafe extern "C" fn do_intro_line(
             } else {
                 __assert_fail(
                     b"row <= INT_MAX && col <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/version.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/version.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4374 as ::core::ffi::c_uint,
                     b"void do_intro_line(int, char *, _Bool, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,

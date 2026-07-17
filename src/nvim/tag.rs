@@ -4197,8 +4197,7 @@ pub unsafe extern "C" fn do_tag(
         } else {
             __assert_fail(
                 b"tag != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tag.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tag.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 349 as ::core::ffi::c_uint,
                 b"void do_tag(char *, int, int, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6156,7 +6155,7 @@ unsafe extern "C" fn findtags_parse_line(
                 } else {
                     __assert_fail(
                         b"cmplen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tag.c\0"
+                        b"src/nvim/tag.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1797 as ::core::ffi::c_uint,
                         b"tagmatch_status_T findtags_parse_line(findtags_state_T *, tagptrs_T *, findtags_match_args_T *, tagsearch_info_T *)\0"
@@ -6180,7 +6179,7 @@ unsafe extern "C" fn findtags_parse_line(
                 } else {
                     __assert_fail(
                         b"cmplen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tag.c\0"
+                        b"src/nvim/tag.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1807 as ::core::ffi::c_uint,
                         b"tagmatch_status_T findtags_parse_line(findtags_state_T *, tagptrs_T *, findtags_match_args_T *, tagsearch_info_T *)\0"
@@ -6203,7 +6202,7 @@ unsafe extern "C" fn findtags_parse_line(
                 } else {
                     __assert_fail(
                         b"cmplen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tag.c\0"
+                        b"src/nvim/tag.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1815 as ::core::ffi::c_uint,
                         b"tagmatch_status_T findtags_parse_line(findtags_state_T *, tagptrs_T *, findtags_match_args_T *, tagsearch_info_T *)\0"
@@ -6266,7 +6265,7 @@ unsafe extern "C" fn findtags_match_tag(
             } else {
                 __assert_fail(
                     b"cmplen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tag.c\0".as_ptr()
+                    b"src/nvim/tag.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1869 as ::core::ffi::c_uint,
                     b"_Bool findtags_match_tag(findtags_state_T *, tagptrs_T *, findtags_match_args_T *)\0"

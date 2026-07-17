@@ -3628,8 +3628,7 @@ pub unsafe extern "C" fn tabstop_fromto(
         } else {
             __assert_fail(
                 b"ts != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 223 as ::core::ffi::c_uint,
                 b"void tabstop_fromto(colnr_T, colnr_T, int, const colnr_T *, int *, int *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -3839,8 +3838,7 @@ pub unsafe extern "C" fn indent_size_ts(
         } else {
             __assert_fail(
                 b"char2cells(' ') == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 414 as ::core::ffi::c_uint,
                 b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3867,8 +3865,7 @@ pub unsafe extern "C" fn indent_size_ts(
                 } else {
                     __assert_fail(
                         b"cur_vcol < vcol\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         430 as ::core::ffi::c_uint,
                         b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3900,8 +3897,7 @@ pub unsafe extern "C" fn indent_size_ts(
         } else {
             __assert_fail(
                 b"tabstop_width != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 448 as ::core::ffi::c_uint,
                 b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4076,8 +4072,7 @@ pub unsafe extern "C" fn set_indent(
             } else {
                 __assert_fail(
                     b"newline_size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     601 as ::core::ffi::c_uint,
                     b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -4107,8 +4102,7 @@ pub unsafe extern "C" fn set_indent(
             } else {
                 __assert_fail(
                     b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     624 as ::core::ffi::c_uint,
                     b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -5018,8 +5012,7 @@ pub unsafe extern "C" fn copy_indent(
                 } else {
                     __assert_fail(
                         b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1441 as ::core::ffi::c_uint,
                         b"_Bool copy_indent(int, char *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );

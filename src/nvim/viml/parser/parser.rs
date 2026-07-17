@@ -168,8 +168,7 @@ pub unsafe extern "C" fn viml_parser_get_remaining_line(
             __assert_fail(
                 b"pstate->pos.line == kv_size(pstate->reader.lines) - 1\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/viml/parser/parser.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 30 as ::core::ffi::c_uint,
                 b"_Bool viml_parser_get_remaining_line(ParserState *const, ParserLine *const)\0"
                     .as_ptr() as *const ::core::ffi::c_char,

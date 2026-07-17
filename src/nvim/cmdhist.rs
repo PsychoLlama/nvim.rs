@@ -1215,8 +1215,7 @@ pub unsafe extern "C" fn init_history() {
         } else {
             __assert_fail(
                 b"p_hi >= 0 && p_hi <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdhist.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 130 as ::core::ffi::c_uint,
                 b"void init_history(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1431,8 +1430,7 @@ pub unsafe extern "C" fn add_to_history(
         } else {
             __assert_fail(
                 b"histype != HIST_DEFAULT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdhist.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 306 as ::core::ffi::c_uint,
                 b"void add_to_history(int, const char *, size_t, _Bool, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1870,8 +1868,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"history_names[histype1] != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/cmdhist.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     641 as ::core::ffi::c_uint,
                     b"void ex_history(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

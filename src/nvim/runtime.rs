@@ -4333,8 +4333,7 @@ pub unsafe extern "C" fn ex_runtime(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"arg != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 345 as ::core::ffi::c_uint,
                 b"void ex_runtime(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4530,7 +4529,7 @@ pub unsafe extern "C" fn do_in_path(
                         __assert_fail(
                             b"MAXPATHL >= (tail - buf)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0"
+                            b"src/nvim/runtime.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             482 as ::core::ffi::c_uint,
                             b"int do_in_path(const char *, const char *, char *, int, DoInRuntimepathCB, void *)\0"
@@ -4727,9 +4726,7 @@ unsafe extern "C" fn do_in_cached_path(
                             __assert_fail(
                                 b"MAXPATHL >= (tail - buf)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 606 as ::core::ffi::c_uint,
                                 b"int do_in_cached_path(char *, int, DoInRuntimepathCB, void *)\0"
                                     .as_ptr()
@@ -5747,8 +5744,7 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
                 } else {
                     __assert_fail(
                         b"!runtime_search_path_valid\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1174 as ::core::ffi::c_uint,
                         b"int add_pack_dir_to_rtp(char *, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6443,8 +6439,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                 } else {
                     __assert_fail(
                         b"(e - s) + 1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1515 as ::core::ffi::c_uint,
                         b"void ExpandRTDir_int(char *, size_t, int, _Bool, garray_T *, char **)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -6807,7 +6802,7 @@ unsafe extern "C" fn add_dir(
                 __assert_fail(
                     b"appname_len < (IOSIZE - sizeof(\"-data\"))\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0"
+                    b"src/nvim/runtime.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1773 as ::core::ffi::c_uint,
                     b"char *add_dir(char *, const char *const, const size_t, const XDGVarType, const char *const, const size_t, const char *const, const size_t)\0"
@@ -7091,8 +7086,7 @@ pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core
             } else {
                 __assert_fail(
                     b"(size_t)(rtp_cur - rtp) == rtp_size\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1908 as ::core::ffi::c_uint,
                     b"char *runtimepath_default(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7446,7 +7440,7 @@ unsafe extern "C" fn do_source_ext(
                 } else {
                     __assert_fail(
                         b"str == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0"
+                        b"src/nvim/runtime.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2184 as ::core::ffi::c_uint,
                         b"int do_source_ext(char *const, const _Bool, const int, int *const, const exarg_T *const, const _Bool, const char *const)\0"
@@ -7646,7 +7640,7 @@ unsafe extern "C" fn do_source_ext(
                         __assert_fail(
                             b"(si != NULL) == (str == NULL)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0"
+                            b"src/nvim/runtime.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             2332 as ::core::ffi::c_uint,
                             b"int do_source_ext(char *const, const _Bool, const int, int *const, const exarg_T *const, const _Bool, const char *const)\0"
@@ -7956,8 +7950,7 @@ pub unsafe extern "C" fn find_script_by_name(
         } else {
             __assert_fail(
                 b"script_items.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/runtime.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2498 as ::core::ffi::c_uint,
                 b"int find_script_by_name(char *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

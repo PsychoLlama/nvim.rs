@@ -3248,7 +3248,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                         __assert_fail(
                                                             b"j < AUCMD_MAX_PATTERNS\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/autocmd.c\0"
+                                                            b"src/nvim/api/autocmd.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             256 as ::core::ffi::c_uint,
                                                             b"Array nvim_get_autocmds(KeyDict_get_autocmds *, Arena *, Error *)\0"
@@ -3262,7 +3262,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                         __assert_fail(
                                                             b"pattern_filters[j]\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/autocmd.c\0"
+                                                            b"src/nvim/api/autocmd.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             257 as ::core::ffi::c_uint,
                                                             b"Array nvim_get_autocmds(KeyDict_get_autocmds *, Arena *, Error *)\0"

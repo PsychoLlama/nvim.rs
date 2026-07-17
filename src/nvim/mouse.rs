@@ -3018,7 +3018,7 @@ pub unsafe extern "C" fn do_mouse(
                             __assert_fail(
                                 b"false && \"winbar, statusline and statuscolumn only support %@ for clicks\"\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mouse.c\0"
+                                b"src/nvim/mouse.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 716 as ::core::ffi::c_uint,
                                 b"_Bool do_mouse(oparg_T *, int, int, int, _Bool)\0"

@@ -1212,8 +1212,7 @@ pub unsafe extern "C" fn os_fopen(
             __assert_fail(
                 b"flags != NULL && strlen(flags) > 0 && strlen(flags) <= 2\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 439 as ::core::ffi::c_uint,
                 b"FILE *os_fopen(const char *, const char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1247,8 +1246,7 @@ pub unsafe extern "C" fn os_fopen(
             } else {
                 __assert_fail(
                     b"flags[1] == '+'\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     464 as ::core::ffi::c_uint,
                     b"FILE *os_fopen(const char *, const char *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1433,7 +1431,7 @@ pub unsafe extern "C" fn os_read(
             } else {
                 __assert_fail(
                     b"size == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
+                    b"src/nvim/os/fs.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     588 as ::core::ffi::c_uint,
                     b"ptrdiff_t os_read(const int, _Bool *const, char *const, const size_t, const _Bool)\0"
@@ -1450,7 +1448,7 @@ pub unsafe extern "C" fn os_read(
             } else {
                 __assert_fail(
                     b"size >= read_bytes\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
+                    b"src/nvim/os/fs.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     593 as ::core::ffi::c_uint,
                     b"ptrdiff_t os_read(const int, _Bool *const, char *const, const size_t, const _Bool)\0"
@@ -1507,7 +1505,7 @@ pub unsafe extern "C" fn os_readv(
                 __assert_fail(
                     b"toread <= SIZE_MAX - iov[i].iov_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
+                    b"src/nvim/os/fs.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     642 as ::core::ffi::c_uint,
                     b"ptrdiff_t os_readv(const int, _Bool *const, struct iovec *, size_t, const _Bool)\0"
@@ -1569,8 +1567,7 @@ pub unsafe extern "C" fn os_write(
             } else {
                 __assert_fail(
                     b"size == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     691 as ::core::ffi::c_uint,
                     b"ptrdiff_t os_write(const int, const char *const, const size_t, const _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -1586,8 +1583,7 @@ pub unsafe extern "C" fn os_write(
             } else {
                 __assert_fail(
                     b"size >= written_bytes\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     696 as ::core::ffi::c_uint,
                     b"ptrdiff_t os_write(const int, const char *const, const size_t, const _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,

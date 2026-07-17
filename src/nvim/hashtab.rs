@@ -242,8 +242,7 @@ unsafe extern "C" fn hash_may_resize(mut ht: *mut hashtab_T, mut minitems: size_
             } else {
                 __assert_fail(
                     b"newsize != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/hashtab.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/hashtab.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     328 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

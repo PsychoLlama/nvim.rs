@@ -3794,8 +3794,7 @@ unsafe extern "C" fn find_menu(
         } else {
             __assert_fail(
                 b"*path_name\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/menu.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 760 as ::core::ffi::c_uint,
                 b"vimmenu_T *find_menu(vimmenu_T *, const char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3842,8 +3841,7 @@ unsafe extern "C" fn find_menu(
                 } else {
                     __assert_fail(
                         b"*name\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/menu.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         792 as ::core::ffi::c_uint,
                         b"vimmenu_T *find_menu(vimmenu_T *, const char *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -4425,8 +4423,7 @@ unsafe extern "C" fn popup_mode_name(
         } else {
             __assert_fail(
                 b"len >= 4\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/menu.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1296 as ::core::ffi::c_uint,
                 b"char *popup_mode_name(char *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4465,8 +4462,7 @@ unsafe extern "C" fn menu_text(
             } else {
                 __assert_fail(
                     b"p >= str\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/menu.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1332 as ::core::ffi::c_uint,
                     b"char *menu_text(const char *, int *, char **)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4976,8 +4972,7 @@ pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
                 } else {
                     __assert_fail(
                         b"arg >= to\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/menu.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1754 as ::core::ffi::c_uint,
                         b"void ex_menutranslate(exarg_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

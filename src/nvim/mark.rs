@@ -3388,8 +3388,7 @@ pub unsafe extern "C" fn mark_get_global(
         '_c2rust_label: {
             __assert_fail(
                 b"false\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 453 as ::core::ffi::c_uint,
                 b"xfmark_T *mark_get_global(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3930,8 +3929,7 @@ unsafe extern "C" fn mark_line(
         } else {
             __assert_fail(
                 b"Columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 896 as ::core::ffi::c_uint,
                 b"char *mark_line(pos_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4934,8 +4932,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1499 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4964,8 +4961,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                         __assert_fail(
                             b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1501 as ::core::ffi::c_uint,
                             b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -4999,8 +4995,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                         __assert_fail(
                             b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1506 as ::core::ffi::c_uint,
                             b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -5029,8 +5024,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1511 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5056,8 +5050,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1514 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5084,8 +5077,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1517 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5115,8 +5107,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1522 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5144,8 +5135,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1526 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5171,8 +5161,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1527 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5198,8 +5187,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1530 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5225,8 +5213,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1533 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5252,8 +5239,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1536 as ::core::ffi::c_uint,
                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5291,8 +5277,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                             __assert_fail(
                                 b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1543 as ::core::ffi::c_uint,
                                 b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                     .as_ptr()
@@ -5331,7 +5316,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                                 __assert_fail(
                                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
+                                    b"src/nvim/mark.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     1551 as ::core::ffi::c_uint,
                                     b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
@@ -5363,8 +5348,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                             __assert_fail(
                                 b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/mark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1557 as ::core::ffi::c_uint,
                                 b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                     .as_ptr()

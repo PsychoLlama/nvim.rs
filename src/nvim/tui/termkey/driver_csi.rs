@@ -1081,8 +1081,8 @@ pub unsafe extern "C" fn termkey_interpret_csi_param(
                 } else {
                     __assert_fail(
                         b"c >= '0' && c <= '9'\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tui/termkey/driver-csi.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/tui/termkey/driver_csi.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         578 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );

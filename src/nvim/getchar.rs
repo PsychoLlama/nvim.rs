@@ -4122,8 +4122,7 @@ pub unsafe extern "C" fn ins_typebuf(
             } else {
                 __assert_fail(
                     b"bytes > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     978 as ::core::ffi::c_uint,
                     b"int ins_typebuf(char *, int, int, _Bool, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4222,8 +4221,7 @@ pub unsafe extern "C" fn ins_char_typebuf(
         } else {
             __assert_fail(
                 b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1056 as ::core::ffi::c_uint,
                 b"int ins_char_typebuf(int, int, _Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4294,8 +4292,7 @@ pub unsafe extern "C" fn del_typebuf(mut len: ::core::ffi::c_int, mut offset: ::
             } else {
                 __assert_fail(
                     b"bytes > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1122 as ::core::ffi::c_uint,
                     b"void del_typebuf(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -4514,8 +4511,7 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                     } else {
                         __assert_fail(
                             b"(on_key_buf).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1230 as ::core::ffi::c_uint,
                             b"void gotchars(const uint8_t *, size_t)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -4641,8 +4637,7 @@ unsafe extern "C" fn save_typebuf() {
         } else {
             __assert_fail(
                 b"curscript >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1330 as ::core::ffi::c_uint,
                 b"void save_typebuf(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4785,8 +4780,7 @@ unsafe extern "C" fn closescript() {
         } else {
             __assert_fail(
                 b"curscript >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1450 as ::core::ffi::c_uint,
                 b"void closescript(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4807,8 +4801,7 @@ pub unsafe extern "C" fn open_scriptin(mut scriptin_name: *mut ::core::ffi::c_ch
         } else {
             __assert_fail(
                 b"curscript == -1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1471 as ::core::ffi::c_uint,
                 b"_Bool open_scriptin(char *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5499,8 +5492,7 @@ unsafe extern "C" fn getchar_common(
             } else {
                 __assert_fail(
                     b"i < 10\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2021 as ::core::ffi::c_uint,
                     b"void getchar_common(typval_T *, typval_T *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5947,8 +5939,7 @@ unsafe extern "C" fn handle_mapping(
                 } else {
                     __assert_fail(
                         b"keylen == KEYLEN_PART_KEY\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2385 as ::core::ffi::c_uint,
                         b"int handle_mapping(int *, const _Bool *, int *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5961,8 +5952,7 @@ unsafe extern "C" fn handle_mapping(
                 } else {
                     __assert_fail(
                         b"mp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/getchar.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2387 as ::core::ffi::c_uint,
                         b"int handle_mapping(int *, const _Bool *, int *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

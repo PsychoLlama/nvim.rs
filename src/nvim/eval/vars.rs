@@ -3577,8 +3577,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7096,8 +7095,7 @@ pub unsafe extern "C" fn evalvars_init() {
                 __assert_fail(
                     b"strlen(p->vv_name) <= VIMVAR_KEY_LEN\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     268 as ::core::ffi::c_uint,
                     b"void evalvars_init(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -8011,8 +8009,7 @@ pub unsafe extern "C" fn ex_let_vars(
         } else {
             __assert_fail(
                 b"l != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1043 as ::core::ffi::c_uint,
                 b"int ex_let_vars(char *, typval_T *, int, int, int, int, char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8334,7 +8331,7 @@ unsafe extern "C" fn list_arg_vars(
                                     __assert_fail(
                                         b"used_name != NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0"
+                                        b"src/nvim/eval/vars.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         1266 as ::core::ffi::c_uint,
                                         b"const char *list_arg_vars(exarg_T *, const char *, int *)\0"
@@ -8502,7 +8499,7 @@ unsafe extern "C" fn ex_let_option(
                     __assert_fail(
                         b"curval.type == newval.type\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0"
+                        b"src/nvim/eval/vars.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1383 as ::core::ffi::c_uint,
                         b"char *ex_let_option(char *, typval_T *const, const _Bool, const char *const, const char *const)\0"
@@ -8823,8 +8820,7 @@ unsafe extern "C" fn ex_unletlock(
                 } else {
                     __assert_fail(
                         b"*lv.ll_name == '$'\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1570 as ::core::ffi::c_uint,
                         b"void ex_unletlock(exarg_T *, char *, int, int, ex_unletlock_callback)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -8937,8 +8933,7 @@ unsafe extern "C" fn do_unlet_var(
             } else {
                 __assert_fail(
                     b"d != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1652 as ::core::ffi::c_uint,
                     b"int do_unlet_var(lval_T *, char *, exarg_T *, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8978,7 +8973,7 @@ unsafe extern "C" fn tv_list_unlet_range(
         } else {
             __assert_fail(
                 b"l != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
+                b"src/nvim/eval/vars.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1681 as ::core::ffi::c_uint,
                 b"void tv_list_unlet_range(list_T *const, listitem_T *const, const int, const _Bool, const int)\0"
@@ -9621,8 +9616,7 @@ pub unsafe extern "C" fn set_cmdarg(
                     } else {
                         __assert_fail(
                             b"xlen <= newval_len\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             2297 as ::core::ffi::c_uint,
                             b"char *set_cmdarg(exarg_T *, char *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -10231,7 +10225,7 @@ pub unsafe extern "C" fn set_var_const(
             } else {
                 __assert_fail(
                     b"dict != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/vars.c\0"
+                    b"src/nvim/eval/vars.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     2883 as ::core::ffi::c_uint,
                     b"void set_var_const(const char *, const size_t, typval_T *const, const _Bool, const _Bool)\0"

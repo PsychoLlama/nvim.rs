@@ -3423,8 +3423,7 @@ pub unsafe extern "C" fn f_getmatches(
                     } else {
                         __assert_fail(
                             b"(size_t)len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/match.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/match.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             898 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );

@@ -3758,8 +3758,7 @@ unsafe extern "C" fn match_with_backref(
             } else {
                 __assert_fail(
                     b"p\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1618 as ::core::ffi::c_uint,
                     b"int match_with_backref(linenr_T, colnr_T, linenr_T, colnr_T, int *)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -6386,8 +6385,7 @@ unsafe extern "C" fn reginsert_nr(
             __assert_fail(
                 b"val >= 0 && (uintmax_t)val <= UINT32_MAX\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4182 as ::core::ffi::c_uint,
                 b"void reginsert_nr(int, int64_t, uint8_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6433,8 +6431,7 @@ unsafe extern "C" fn reginsert_limits(
             __assert_fail(
                 b"minval >= 0 && (uintmax_t)minval <= UINT32_MAX\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4211 as ::core::ffi::c_uint,
                 b"void reginsert_limits(int, int64_t, int64_t, uint8_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6448,8 +6445,7 @@ unsafe extern "C" fn reginsert_limits(
             __assert_fail(
                 b"maxval >= 0 && (uintmax_t)maxval <= UINT32_MAX\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4213 as ::core::ffi::c_uint,
                 b"void reginsert_limits(int, int64_t, int64_t, uint8_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8836,7 +8832,7 @@ unsafe extern "C" fn regmatch(
                                         __assert_fail(
                                             b"rex.lnum + rex.reg_firstlnum >= 0 && (uintmax_t)(rex.lnum + rex.reg_firstlnum) <= UINT32_MAX\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                            b"src/nvim/regexp.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             6288 as ::core::ffi::c_uint,
                                             b"_Bool regmatch(uint8_t *, const proftime_T *, int *)\0"
@@ -8862,7 +8858,7 @@ unsafe extern "C" fn regmatch(
                                         __assert_fail(
                                             b"rex.input - rex.line + 1 >= 0 && (uintmax_t)(rex.input - rex.line + 1) <= UINT32_MAX\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                            b"src/nvim/regexp.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             6297 as ::core::ffi::c_uint,
                                             b"_Bool regmatch(uint8_t *, const proftime_T *, int *)\0"
@@ -9458,7 +9454,7 @@ unsafe extern "C" fn regmatch(
                                         __assert_fail(
                                             b"status != RA_FAIL\0".as_ptr()
                                                 as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                            b"src/nvim/regexp.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             6708 as ::core::ffi::c_uint,
                                             b"_Bool regmatch(uint8_t *, const proftime_T *, int *)\0"
@@ -10623,8 +10619,7 @@ unsafe extern "C" fn bt_regexec_nl(
         } else {
             __assert_fail(
                 b"r <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7779 as ::core::ffi::c_uint,
                 b"int bt_regexec_nl(regmatch_T *, uint8_t *, colnr_T, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -24217,7 +24212,7 @@ unsafe extern "C" fn nfa_regmatch(
                                             __assert_fail(
                                                 b"t->state->val >= 0 && !((rex.reg_firstlnum > 0 && rex.lnum > LONG_MAX - rex.reg_firstlnum) || (rex.reg_firstlnum < 0 && rex.lnum < LONG_MIN + rex.reg_firstlnum)) && rex.lnum + rex.reg_firstlnum >= 0\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                                b"src/nvim/regexp.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 15131 as ::core::ffi::c_uint,
                                                 b"int nfa_regmatch(nfa_regprog_T *, nfa_state_T *, regsubs_T *, regsubs_T *)\0"
@@ -24252,7 +24247,7 @@ unsafe extern "C" fn nfa_regmatch(
                                             __assert_fail(
                                                 b"t->state->val >= 0 && rex.input >= rex.line && (uintmax_t)(rex.input - rex.line) <= UINTMAX_MAX - 1\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                                b"src/nvim/regexp.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 15147 as ::core::ffi::c_uint,
                                                 b"int nfa_regmatch(nfa_regprog_T *, nfa_state_T *, regsubs_T *, regsubs_T *)\0"
@@ -24323,7 +24318,7 @@ unsafe extern "C" fn nfa_regmatch(
                                                     __assert_fail(
                                                         b"t->state->val >= 0\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/regexp.c\0"
+                                                        b"src/nvim/regexp.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         15187 as ::core::ffi::c_uint,
                                                         b"int nfa_regmatch(nfa_regprog_T *, nfa_state_T *, regsubs_T *, regsubs_T *)\0"

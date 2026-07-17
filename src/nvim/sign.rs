@@ -3223,8 +3223,7 @@ unsafe extern "C" fn sign_row_cmp(
         } else {
             __assert_fail(
                 b"sh1 && sh2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/sign.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/sign.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 178 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

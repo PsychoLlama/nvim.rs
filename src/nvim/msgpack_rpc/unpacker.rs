@@ -527,11 +527,11 @@ unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: 
                         __assert_fail(
                             b"node->tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             75 as ::core::ffi::c_uint,
-                            b"void api_parse_enter(mpack_parser_t *, mpack_node_t *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"void api_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                     }
                 };
@@ -612,8 +612,8 @@ unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: 
                 } else {
                     __assert_fail(
                         b"parent\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         120 as ::core::ffi::c_uint,
                         b"void api_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -776,8 +776,7 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
         } else {
             __assert_fail(
                 b"!ERROR_SET(&p->unpack_error)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 207 as ::core::ffi::c_uint,
                 b"_Bool unpacker_parse_header(Unpacker *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -875,10 +874,12 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
                                                     __assert_fail(
                                                         b"tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                                                            .as_ptr() as *const ::core::ffi::c_char,
+                                                        b"src/nvim/msgpack_rpc/unpacker.rs\0"
+                                                            .as_ptr()
+                                                            as *const ::core::ffi::c_char,
                                                         249 as ::core::ffi::c_uint,
-                                                        b"_Bool unpacker_parse_header(Unpacker *)\0".as_ptr()
+                                                        b"_Bool unpacker_parse_header(Unpacker *)\0"
+                                                            .as_ptr()
                                                             as *const ::core::ffi::c_char,
                                                     );
                                                 }
@@ -931,8 +932,7 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
         } else {
             __assert_fail(
                 b"p->state >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 308 as ::core::ffi::c_uint,
                 b"_Bool unpacker_advance(Unpacker *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -978,8 +978,8 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
                     } else {
                         __assert_fail(
                             b"p->state == 12\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             333 as ::core::ffi::c_uint,
                             b"_Bool unpacker_advance(Unpacker *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -1259,8 +1259,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 } else {
                     __assert_fail(
                         b"g->icell < g->ncells\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         461 as ::core::ffi::c_uint,
                         b"_Bool unpacker_parse_redraw(Unpacker *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1590,7 +1590,7 @@ pub unsafe extern "C" fn push_additional_data(
                 } else {
                     __assert_fail(
                         b"(*ad).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
+                        b"src/nvim/msgpack_rpc/unpacker.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         605 as ::core::ffi::c_uint,
                         b"void push_additional_data(AdditionalDataBuilder *, const char *, size_t)\0"
@@ -1633,8 +1633,7 @@ pub unsafe extern "C" fn push_additional_data(
             } else {
                 __assert_fail(
                     b"(*ad).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"src/nvim/msgpack_rpc/unpacker.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     610 as ::core::ffi::c_uint,
                     b"void push_additional_data(AdditionalDataBuilder *, const char *, size_t)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -1711,7 +1710,7 @@ pub unsafe extern "C" fn unpack_keydict(
                     __assert_fail(
                         b"field->opt_index >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
+                        b"src/nvim/msgpack_rpc/unpacker.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         653 as ::core::ffi::c_uint,
                         b"_Bool unpack_keydict(void *, FieldHashfn, AdditionalDataBuilder *, const char **, size_t *restrict, char **)\0"

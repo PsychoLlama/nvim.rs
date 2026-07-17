@@ -5848,9 +5848,7 @@ pub unsafe extern "C" fn in_cinkeys(
                             __assert_fail(
                                 b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/indent_c.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/indent_c.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 3933 as ::core::ffi::c_uint,
                                 __ASSERT_FUNCTION.as_ptr(),
                             );
@@ -5884,9 +5882,7 @@ pub unsafe extern "C" fn in_cinkeys(
                             __assert_fail(
                                 b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/indent_c.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/indent_c.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 3946 as ::core::ffi::c_uint,
                                 __ASSERT_FUNCTION.as_ptr(),
                             );

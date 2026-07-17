@@ -3606,8 +3606,7 @@ pub unsafe extern "C" fn gen_expand_wildcards(
                         } else {
                             __assert_fail(
                                 b"tmp_add_pat <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1375 as ::core::ffi::c_uint,
                                 b"int gen_expand_wildcards(int, char **, int *, char ***, int)\0"
                                     .as_ptr()
@@ -4542,8 +4541,7 @@ pub unsafe extern "C" fn path_shorten_fname(
         } else {
             __assert_fail(
                 b"dir_name != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2108 as ::core::ffi::c_uint,
                 b"char *path_shorten_fname(char *, char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4651,8 +4649,7 @@ pub unsafe extern "C" fn expand_wildcards(
             } else {
                 __assert_fail(
                     b"*num_files == 0 || *files != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2221 as ::core::ffi::c_uint,
                     b"int expand_wildcards(int, char **, int *, char ***, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4668,8 +4665,7 @@ pub unsafe extern "C" fn expand_wildcards(
                 } else {
                     __assert_fail(
                         b"(*files)[i] != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2224 as ::core::ffi::c_uint,
                         b"int expand_wildcards(int, char **, int *, char ***, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -4681,8 +4677,7 @@ pub unsafe extern "C" fn expand_wildcards(
                 } else {
                     __assert_fail(
                         b"ffname != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2225 as ::core::ffi::c_uint,
                         b"int expand_wildcards(int, char **, int *, char ***, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -4709,8 +4704,7 @@ pub unsafe extern "C" fn expand_wildcards(
         } else {
             __assert_fail(
                 b"*num_files == 0 || *files != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2241 as ::core::ffi::c_uint,
                 b"int expand_wildcards(int, char **, int *, char ***, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4897,8 +4891,7 @@ unsafe extern "C" fn path_to_absolute(
                 } else {
                     __assert_fail(
                         b"p >= fname\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/path.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/path.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2403 as ::core::ffi::c_uint,
                         b"int path_to_absolute(const char *, char *, size_t, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,

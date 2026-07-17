@@ -6347,8 +6347,7 @@ unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 364 as ::core::ffi::c_uint,
                 b"int do_cmdline_start(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6368,8 +6367,7 @@ unsafe extern "C" fn do_cmdline_end() {
         } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 380 as ::core::ffi::c_uint,
                 b"void do_cmdline_end(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7308,8 +7306,7 @@ pub unsafe extern "C" fn handle_did_throw() {
         } else {
             __assert_fail(
                 b"current_exception != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 974 as ::core::ffi::c_uint,
                 b"void handle_did_throw(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7774,8 +7771,7 @@ unsafe extern "C" fn parse_count(
                     __assert_fail(
                         b"eap->argc > 0 && eap->arg >= eap->args[0]\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1467 as ::core::ffi::c_uint,
                         b"int parse_count(exarg_T *, const char **, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -8040,8 +8036,7 @@ unsafe extern "C" fn shift_cmd_args(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"eap->args != NULL && eap->argc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1708 as ::core::ffi::c_uint,
                 b"void shift_cmd_args(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -8516,7 +8511,7 @@ unsafe extern "C" fn do_one_cmd(
                                     __assert_fail(
                                         b"errormsg == NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
+                                        b"src/nvim/ex_docmd.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2156 as ::core::ffi::c_uint,
                                         b"char *do_one_cmd(char **, int, cstack_T *, LineGetter, void *)\0"
@@ -9674,11 +9669,12 @@ pub unsafe extern "C" fn parse_cmd_address(
                                 } else {
                                     __assert_fail(
                                         b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/ex_docmd.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         3027 as ::core::ffi::c_uint,
                                         b"int parse_cmd_address(exarg_T *, const char **, _Bool)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -9692,11 +9688,12 @@ pub unsafe extern "C" fn parse_cmd_address(
                                 } else {
                                     __assert_fail(
                                         b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/ex_docmd.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         3033 as ::core::ffi::c_uint,
                                         b"int parse_cmd_address(exarg_T *, const char **, _Bool)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -9981,8 +9978,7 @@ pub unsafe extern "C" fn find_ex_command(
             } else {
                 __assert_fail(
                     b"eap->cmdidx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3236 as ::core::ffi::c_uint,
                     b"char *find_ex_command(exarg_T *, int *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -10618,7 +10614,7 @@ pub unsafe extern "C" fn get_address(
                             } else {
                                 __assert_fail(
                                     b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
+                                    b"src/nvim/ex_docmd.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     3618 as ::core::ffi::c_uint,
                                     b"linenr_T get_address(exarg_T *, char **, cmd_addr_T, _Bool, _Bool, int, int, const char **)\0"
@@ -10977,8 +10973,7 @@ pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ff
                     } else {
                         __assert_fail(
                             b"eap->line2 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             3906 as ::core::ffi::c_uint,
                             b"char *invalid_range(exarg_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -12911,8 +12906,7 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     5361 as ::core::ffi::c_uint,
                     b"void ex_tabonly(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -15581,8 +15575,7 @@ pub unsafe extern "C" fn find_cmdline_var(
                 } else {
                     __assert_fail(
                         b"i <= SSIZE_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         7692 as ::core::ffi::c_uint,
                         b"ssize_t find_cmdline_var(const char *, size_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -16334,8 +16327,7 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"mods_len < sizeof(mods)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     8263 as ::core::ffi::c_uint,
                     b"void ex_checkhealth(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -16414,8 +16406,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"len < sizeof(ex_cmd)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     8298 as ::core::ffi::c_uint,
                     b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -16431,8 +16422,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"result > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     8300 as ::core::ffi::c_uint,
                     b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -16455,8 +16445,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"result > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     8304 as ::core::ffi::c_uint,
                     b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -16469,8 +16458,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"len < sizeof(ex_cmd)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 8308 as ::core::ffi::c_uint,
                 b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

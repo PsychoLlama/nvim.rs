@@ -5200,8 +5200,7 @@ unsafe extern "C" fn on_osc(
             } else {
                 __assert_fail(
                     b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     366 as ::core::ffi::c_uint,
                     b"int on_osc(int, VTermStringFragment, void *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5314,8 +5313,7 @@ unsafe extern "C" fn on_dcs(
             } else {
                 __assert_fail(
                     b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     401 as ::core::ffi::c_uint,
                     b"int on_dcs(const char *, size_t, VTermStringFragment, void *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5389,8 +5387,7 @@ unsafe extern "C" fn on_apc(
             } else {
                 __assert_fail(
                     b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     424 as ::core::ffi::c_uint,
                     b"int on_apc(VTermStringFragment, void *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5588,8 +5585,7 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
         } else {
             __assert_fail(
                 b"term != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 588 as ::core::ffi::c_uint,
                 b"void terminal_open(Terminal **, buf_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5620,8 +5616,7 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
             } else {
                 __assert_fail(
                     b"term->invalid_start >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     598 as ::core::ffi::c_uint,
                     b"void terminal_open(Terminal **, buf_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5930,8 +5925,7 @@ unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
         } else {
             __assert_fail(
                 b"s->save_curwin_handle == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 812 as ::core::ffi::c_uint,
                 b"void set_terminal_winopts(TerminalState *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5982,8 +5976,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
         } else {
             __assert_fail(
                 b"s->save_curwin_handle != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 848 as ::core::ffi::c_uint,
                 b"void unset_terminal_winopts(TerminalState *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6056,8 +6049,7 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
         } else {
             __assert_fail(
                 b"buf->terminal\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 903 as ::core::ffi::c_uint,
                 b"_Bool terminal_enter(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6274,8 +6266,7 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
             __assert_fail(
                 b"!s->close || (s->term->buf_handle == 0 && s->term != curbuf->terminal)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1053 as ::core::ffi::c_uint,
                 b"int terminal_check(VimState *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6498,8 +6489,7 @@ unsafe extern "C" fn terminal_send(
                 } else {
                     __assert_fail(
                         b"(*term->pending.send).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1249 as ::core::ffi::c_uint,
                         b"void terminal_send(Terminal *, const char *, size_t)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6776,8 +6766,7 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
         } else {
             __assert_fail(
                 b"linenr\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1448 as ::core::ffi::c_uint,
                 b"void terminal_get_line_attributes(Terminal *, win_T *, int, int *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6951,8 +6940,7 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
         } else {
             __assert_fail(
                 b"ret > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1539 as ::core::ffi::c_uint,
                 b"void terminal_notify_theme(Terminal *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6964,8 +6952,7 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
         } else {
             __assert_fail(
                 b"(size_t)ret <= sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1540 as ::core::ffi::c_uint,
                 b"void terminal_notify_theme(Terminal *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7172,8 +7159,7 @@ unsafe extern "C" fn term_sb_push(
         } else {
             __assert_fail(
                 b"term->sb_size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1705 as ::core::ffi::c_uint,
                 b"int term_sb_push(int, const VTermScreenCell *, void *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7372,8 +7358,7 @@ unsafe extern "C" fn term_selection_set(
             } else {
                 __assert_fail(
                     b"(term->selection).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1851 as ::core::ffi::c_uint,
                     b"int term_selection_set(VTermSelectionMask, VTermStringFragment, void *)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -8223,8 +8208,7 @@ unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut bu
         } else {
             __assert_fail(
                 b"term->sb_current < SIZE_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2528 as ::core::ffi::c_uint,
                 b"void adjust_scrollback(Terminal *, buf_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

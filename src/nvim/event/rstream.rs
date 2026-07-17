@@ -946,8 +946,7 @@ unsafe extern "C" fn read_event(mut argv: *mut *mut ::core::ffi::c_void) {
             } else {
                 __assert_fail(
                     b"consumed <= available\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/event/rstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     182 as ::core::ffi::c_uint,
                     b"void read_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -989,8 +988,7 @@ pub unsafe extern "C" fn rstream_consume(mut stream: *mut RStream, mut consumed:
             } else {
                 __assert_fail(
                     b"stream->read_cb\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/event/rstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     210 as ::core::ffi::c_uint,
                     b"void rstream_consume(RStream *, size_t)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1045,8 +1043,7 @@ unsafe extern "C" fn rstream_close_cb(mut s: *mut Stream, mut data: *mut ::core:
         } else {
             __assert_fail(
                 b"stream && s == &stream->s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/rstream.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 239 as ::core::ffi::c_uint,
                 b"void rstream_close_cb(Stream *, void *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

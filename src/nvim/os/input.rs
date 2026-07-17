@@ -2619,8 +2619,7 @@ unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
             __assert_fail(
                 b"!events_enabled || multiqueue_empty(main_loop.events)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 83 as ::core::ffi::c_uint,
                 b"void create_cursorhold_event(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2669,8 +2668,7 @@ pub unsafe extern "C" fn input_get(
             } else {
                 __assert_fail(
                     b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     129 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2693,8 +2691,7 @@ pub unsafe extern "C" fn input_get(
             } else {
                 __assert_fail(
                     b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     129 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2751,8 +2748,7 @@ pub unsafe extern "C" fn input_get(
             } else {
                 __assert_fail(
                     b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     168 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2775,8 +2771,7 @@ pub unsafe extern "C" fn input_get(
             } else {
                 __assert_fail(
                     b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     168 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3224,8 +3219,7 @@ unsafe extern "C" fn input_read_cb(
         } else {
             __assert_fail(
                 b"input_space() >= c\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 534 as ::core::ffi::c_uint,
                 b"size_t input_read_cb(RStream *, const char *, size_t, void *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

@@ -668,8 +668,7 @@ unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
         } else {
             __assert_fail(
                 b"tv->v_type == VAR_STRING\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.h\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 77 as ::core::ffi::c_uint,
                 b"size_t tv_strlen(const typval_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -776,8 +775,7 @@ unsafe extern "C" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
             } else {
                 __assert_fail(
                     b"tsize > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     124 as ::core::ffi::c_uint,
                     b"LuaTableProps nlua_traverse_table(lua_State *const)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -965,8 +963,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                             __assert_fail(
                                 b"cur.tv->v_type == (cur.special ? VAR_LIST : VAR_DICT)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
-                                    .as_ptr()
+                                b"src/nvim/lua/converter.rs\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                                 207 as ::core::ffi::c_uint,
                                 b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
@@ -1208,8 +1205,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                             __assert_fail(
                                 b"cur.tv->v_type == VAR_LIST\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
-                                    .as_ptr()
+                                b"src/nvim/lua/converter.rs\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                                 245 as ::core::ffi::c_uint,
                                 b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
@@ -1327,8 +1323,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                 } else {
                     __assert_fail(
                         b"!cur.container\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         260 as ::core::ffi::c_uint,
                         b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1522,7 +1517,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 __assert_fail(
                                                     b"cur.tv->v_type == VAR_DICT\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
+                                                    b"src/nvim/lua/converter.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     335 as ::core::ffi::c_uint,
                                                     b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
@@ -1542,7 +1537,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             } else {
                                                 __assert_fail(
                                                     b"val_di != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
+                                                    b"src/nvim/lua/converter.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     338 as ::core::ffi::c_uint,
                                                     b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
@@ -1561,7 +1556,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 __assert_fail(
                                                     b"cur.tv->v_type == VAR_LIST\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
+                                                    b"src/nvim/lua/converter.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     341 as ::core::ffi::c_uint,
                                                     b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
@@ -1752,8 +1747,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
         } else {
             __assert_fail(
                 b"lua_gettop(lstate) == initial_size - 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 412 as ::core::ffi::c_uint,
                 b"_Bool nlua_pop_typval(lua_State *, typval_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1794,8 +1788,7 @@ pub unsafe extern "C" fn nlua_push_typval(
         } else {
             __assert_fail(
                 b"lua_gettop(lstate) == initial_size + 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 607 as ::core::ffi::c_uint,
                 b"_Bool nlua_push_typval(lua_State *, typval_T *const, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2016,8 +2009,7 @@ pub unsafe extern "C" fn nlua_pop_String(
         } else {
             __assert_fail(
                 b"ret.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 797 as ::core::ffi::c_uint,
                 b"String nlua_pop_String(lua_State *, Arena *, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2607,8 +2599,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
             } else {
                 __assert_fail(
                     b"!cur.container\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1114 as ::core::ffi::c_uint,
                     b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -2694,7 +2685,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                         __assert_fail(
                                             b"kv_size(stack) < SIZE_MAX\0".as_ptr()
                                                 as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
+                                            b"src/nvim/lua/converter.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             1147 as ::core::ffi::c_uint,
                                             b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
@@ -2811,7 +2802,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                         __assert_fail(
                                             b"kv_size(stack) < SIZE_MAX\0".as_ptr()
                                                 as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0"
+                                            b"src/nvim/lua/converter.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             1156 as ::core::ffi::c_uint,
                                             b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
@@ -2999,8 +2990,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
         } else {
             __assert_fail(
                 b"lua_gettop(lstate) == initial_size - 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/converter.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1211 as ::core::ffi::c_uint,
                 b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3412,7 +3402,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/lua/converter.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 383 as ::core::ffi::c_uint,
                                 b"int _typval_encode_lua_convert_one_value(lua_State *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -3789,7 +3779,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                     __assert_fail(
                                                         b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                        b"src/nvim/lua/converter.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         532 as ::core::ffi::c_uint,
                                                         b"int _typval_encode_lua_convert_one_value(lua_State *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -4033,7 +4023,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                         __assert_fail(
                                                             b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                            b"src/nvim/lua/converter.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             566 as ::core::ffi::c_uint,
                                                             b"int _typval_encode_lua_convert_one_value(lua_State *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -4280,7 +4270,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                             __assert_fail(
                                 b"saved_copyID != copyID\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                b"src/nvim/lua/converter.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 614 as ::core::ffi::c_uint,
                                 b"int _typval_encode_lua_convert_one_value(lua_State *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
@@ -4733,7 +4723,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                 __assert_fail(
                                                     b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                                                    b"src/nvim/lua/converter.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     789 as ::core::ffi::c_uint,
                                                     b"int encode_vim_to_lua(lua_State *const, typval_T *const, const char *const)\0"
@@ -4916,7 +4906,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                     } else {
                         __assert_fail(
                             b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval_encode.c.h\0"
+                            b"src/nvim/lua/converter.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             829 as ::core::ffi::c_uint,
                             b"int encode_vim_to_lua(lua_State *const, typval_T *const, const char *const)\0"

@@ -455,8 +455,7 @@ pub unsafe extern "C" fn mpack_handle(
             } else {
                 __assert_fail(
                     b"handle >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/packer.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"src/nvim/msgpack_rpc/packer.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     163 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

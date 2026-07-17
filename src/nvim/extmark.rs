@@ -1924,7 +1924,7 @@ pub unsafe extern "C" fn extmark_set(
                             __assert_fail(
                                 b"marktree_itr_valid(itr)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0"
+                                b"src/nvim/extmark.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 70 as ::core::ffi::c_uint,
                                 b"void extmark_set(buf_T *, uint32_t, uint32_t *, int, colnr_T, int, colnr_T, DecorInline, uint16_t, _Bool, _Bool, _Bool, _Bool, Error *)\0"
@@ -2232,8 +2232,7 @@ pub unsafe extern "C" fn extmark_del(
         } else {
             __assert_fail(
                 b"key.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 167 as ::core::ffi::c_uint,
                 b"void extmark_del(buf_T *, MarkTreeIter *, MTKey, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2253,8 +2252,7 @@ pub unsafe extern "C" fn extmark_del(
             } else {
                 __assert_fail(
                     b"key2.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     173 as ::core::ffi::c_uint,
                     b"void extmark_del(buf_T *, MarkTreeIter *, MTKey, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2555,8 +2553,7 @@ pub unsafe extern "C" fn extmark_from_id(
         } else {
             __assert_fail(
                 b"mark.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 328 as ::core::ffi::c_uint,
                 b"MTPair extmark_from_id(buf_T *, uint32_t, uint32_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2895,7 +2892,7 @@ pub unsafe extern "C" fn extmark_adjust(
             } else {
                 __assert_fail(
                     b"line2 == MAXLNUM\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0"
+                    b"src/nvim/extmark.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     500 as ::core::ffi::c_uint,
                     b"void extmark_adjust(buf_T *, linenr_T, linenr_T, linenr_T, linenr_T, ExtmarkOp)\0"

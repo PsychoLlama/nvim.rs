@@ -2454,8 +2454,7 @@ pub unsafe extern "C" fn ns_hl_def(
             } else {
                 __assert_fail(
                     b"dict\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/highlight.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     161 as ::core::ffi::c_uint,
                     b"void ns_hl_def(NS, int, HlAttrs, int, KeyDict_highlight *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3005,8 +3004,7 @@ pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::
         } else {
             __assert_fail(
                 b"urls.keys\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/highlight.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 535 as ::core::ffi::c_uint,
                 b"const char *hl_get_url(uint32_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3533,8 +3531,7 @@ pub unsafe extern "C" fn hlattrs2dict(
         } else {
             __assert_fail(
                 b"hl->capacity >= HLATTRS_DICT_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/highlight.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 919 as ::core::ffi::c_uint,
                 b"void hlattrs2dict(Dict *, Dict *, HlAttrs, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3546,8 +3543,7 @@ pub unsafe extern "C" fn hlattrs2dict(
         } else {
             __assert_fail(
                 b"hl_attrs->capacity >= HLATTRS_DICT_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/highlight.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 920 as ::core::ffi::c_uint,
                 b"void hlattrs2dict(Dict *, Dict *, HlAttrs, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

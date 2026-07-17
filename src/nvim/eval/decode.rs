@@ -583,7 +583,7 @@ unsafe extern "C" fn json_decoder_pop(
                 __assert_fail(
                     b"last_container.special_val == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                    b"src/nvim/eval/decode.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     133 as ::core::ffi::c_uint,
                     b"int json_decoder_pop(ValuesStackItem, ValuesStack *const, ContainerStack *const, const char **const, _Bool *const, _Bool *const, _Bool *const)\0"
@@ -615,7 +615,7 @@ unsafe extern "C" fn json_decoder_pop(
                     __assert_fail(
                         b"!(key.is_special_string || key.val.vval.v_string == NULL)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                        b"src/nvim/eval/decode.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         145 as ::core::ffi::c_uint,
                         b"int json_decoder_pop(ValuesStackItem, ValuesStack *const, ContainerStack *const, const char **const, _Bool *const, _Bool *const, _Bool *const)\0"
@@ -730,8 +730,7 @@ pub unsafe extern "C" fn decode_string(
         } else {
             __assert_fail(
                 b"s != NULL || len == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/decode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 261 as ::core::ffi::c_uint,
                 b"typval_T decode_string(const char *const, const size_t, _Bool, const _Bool)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -919,7 +918,7 @@ unsafe extern "C" fn parse_json_string(
                                     __assert_fail(
                                         b"ch_len == (size_t)(ch ? utf_ptr2len(p) : 1)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                                        b"src/nvim/eval/decode.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         380 as ::core::ffi::c_uint,
                                         b"int parse_json_string(const char *const, const size_t, const char **const, ValuesStack *const, ContainerStack *const, _Bool *const, _Bool *const, _Bool *const)\0"
@@ -1432,7 +1431,7 @@ pub unsafe extern "C" fn json_decode_string(
                                 __assert_fail(
                                     b"*p == '{' || next_map_special == false\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                                    b"src/nvim/eval/decode.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     640 as ::core::ffi::c_uint,
                                     b"int json_decode_string(const char *const, const size_t, typval_T *const)\0"
@@ -1515,7 +1514,7 @@ pub unsafe extern "C" fn json_decode_string(
                                                 __assert_fail(
                                                     b"last_container.stack_index < kv_size(stack) - 1\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                                                    b"src/nvim/eval/decode.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     663 as ::core::ffi::c_uint,
                                                     b"int json_decode_string(const char *const, const size_t, typval_T *const)\0"
@@ -1554,7 +1553,7 @@ pub unsafe extern "C" fn json_decode_string(
                                                 __assert_fail(
                                                     b"!next_map_special\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
+                                                    b"src/nvim/eval/decode.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     677 as ::core::ffi::c_uint,
                                                     b"int json_decode_string(const char *const, const size_t, typval_T *const)\0"
@@ -2157,8 +2156,7 @@ unsafe extern "C" fn typval_parse_enter(
                         __assert_fail(
                             b"node->tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/eval/decode.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             932 as ::core::ffi::c_uint,
                             b"void typval_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,

@@ -3656,9 +3656,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             } else {
                                 __assert_fail(
                                     b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/usercmd.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     563 as ::core::ffi::c_uint,
                                     b"void uc_list(char *, size_t)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -3682,9 +3680,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             } else {
                                 __assert_fail(
                                     b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/usercmd.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     570 as ::core::ffi::c_uint,
                                     b"void uc_list(char *, size_t)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -3726,9 +3722,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             } else {
                                 __assert_fail(
                                     b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/usercmd.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     586 as ::core::ffi::c_uint,
                                     b"void uc_list(char *, size_t)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -3762,9 +3756,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         } else {
                             __assert_fail(
                                 b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/usercmd.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 600 as ::core::ffi::c_uint,
                                 b"void uc_list(char *, size_t)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -5364,8 +5356,7 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
             } else {
                 __assert_fail(
                     b"cmd->uc_preview_luaref > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/usercmd.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1663 as ::core::ffi::c_uint,
                     b"int do_ucmd(exarg_T *, _Bool)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

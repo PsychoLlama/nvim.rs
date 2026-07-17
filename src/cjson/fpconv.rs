@@ -189,8 +189,7 @@ unsafe extern "C" fn set_number_format(
         } else {
             __assert_fail(
                 b"1 <= precision && precision <= 16\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/cjson/fpconv.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/cjson/fpconv.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 163 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

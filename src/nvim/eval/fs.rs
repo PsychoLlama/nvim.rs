@@ -2483,7 +2483,7 @@ pub unsafe extern "C" fn modify_fname(
                             } else {
                                 __assert_fail(
                                     b"s != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0"
+                                    b"src/nvim/eval/fs.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     195 as ::core::ffi::c_uint,
                                     b"int modify_fname(char *, _Bool, size_t *, char **, char **, size_t *)\0"
@@ -3150,9 +3150,7 @@ pub unsafe extern "C" fn f_getcwd(
                             } else {
                                 __assert_fail(
                                     b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     701 as ::core::ffi::c_uint,
                                     b"void f_getcwd(typval_T *, typval_T *, EvalFuncData)\0"
                                         .as_ptr()
@@ -3181,8 +3179,7 @@ pub unsafe extern "C" fn f_getcwd(
                     } else {
                         __assert_fail(
                             b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             708 as ::core::ffi::c_uint,
                             b"void f_getcwd(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -3699,8 +3696,7 @@ pub unsafe extern "C" fn f_haslocaldir(
                 } else {
                     __assert_fail(
                         b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1021 as ::core::ffi::c_uint,
                         b"void f_haslocaldir(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3719,8 +3715,7 @@ pub unsafe extern "C" fn f_haslocaldir(
                 } else {
                     __assert_fail(
                         b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1025 as ::core::ffi::c_uint,
                         b"void f_haslocaldir(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -4205,9 +4200,7 @@ unsafe extern "C" fn read_file_or_blob(
                         } else {
                             __assert_fail(
                                 b"len < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1349 as ::core::ffi::c_uint,
                                 b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -4251,9 +4244,7 @@ unsafe extern "C" fn read_file_or_blob(
                                 __assert_fail(
                                     b"tv_list_len(l) == 1 + (-maxline)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                     1371 as ::core::ffi::c_uint,
                                     b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0"
                                         .as_ptr()
@@ -4270,9 +4261,7 @@ unsafe extern "C" fn read_file_or_blob(
                             __assert_fail(
                                 b"tv_list_len(l) == maxline\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/fs.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 1375 as ::core::ffi::c_uint,
                                 b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0".as_ptr()
                                     as *const ::core::ffi::c_char,

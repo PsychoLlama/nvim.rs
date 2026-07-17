@@ -3155,8 +3155,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3787,8 +3786,7 @@ pub unsafe extern "C" fn update_yankreg_width(mut reg: *mut yankreg_T) {
             } else {
                 __assert_fail(
                     b"maxlen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     295 as ::core::ffi::c_uint,
                     b"void update_yankreg_width(yankreg_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4116,8 +4114,7 @@ unsafe extern "C" fn execreg_line_continuation(
         } else {
             __assert_fail(
                 b"cmd_start > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 575 as ::core::ffi::c_uint,
                 b"char *execreg_line_continuation(String *, size_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4629,8 +4626,7 @@ unsafe extern "C" fn yank_copy_line(
         } else {
             __assert_fail(
                 b"size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 985 as ::core::ffi::c_uint,
                 b"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4919,8 +4915,7 @@ pub unsafe extern "C" fn format_reg_type(
         } else {
             __assert_fail(
                 b"buf_len > 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1176 as ::core::ffi::c_uint,
                 b"void format_reg_type(MotionType, colnr_T, char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5663,8 +5658,8 @@ pub unsafe extern "C" fn do_put(
                                 } else {
                                     __assert_fail(
                                         b"columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/register.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         1731 as ::core::ffi::c_uint,
                                         b"void do_put(int, yankreg_T *, int, int, int)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -6649,7 +6644,7 @@ unsafe extern "C" fn str_to_reg(
                     __assert_fail(
                         b"line_end - start >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0"
+                        b"src/nvim/register.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2491 as ::core::ffi::c_uint,
                         b"void str_to_reg(yankreg_T *, MotionType, const char *, size_t, colnr_T, _Bool)\0"

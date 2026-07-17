@@ -2858,8 +2858,7 @@ pub unsafe extern "C" fn nvim_open_win(
         } else {
             __assert_fail(
                 b"curwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/win_config.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 229 as ::core::ffi::c_uint,
                 b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2954,7 +2953,7 @@ pub unsafe extern "C" fn nvim_open_win(
                         } else {
                             __assert_fail(
                                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                                b"src/nvim/api/win_config.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 264 as ::core::ffi::c_uint,
                                 b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0"
@@ -3028,7 +3027,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     } else {
                         __assert_fail(
                             b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                            b"src/nvim/api/win_config.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             311 as ::core::ffi::c_uint,
                             b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0"
@@ -3319,7 +3318,7 @@ unsafe extern "C" fn win_config_split(
                         } else {
                             __assert_fail(
                                 b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                                b"src/nvim/api/win_config.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 492 as ::core::ffi::c_uint,
                                 b"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)\0"
@@ -3492,7 +3491,7 @@ unsafe extern "C" fn win_config_split(
                         } else {
                             __assert_fail(
                                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                                b"src/nvim/api/win_config.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 594 as ::core::ffi::c_uint,
                                 b"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)\0"
@@ -3604,7 +3603,7 @@ unsafe extern "C" fn win_config_float_tp(
                 } else {
                     __assert_fail(
                         b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                        b"src/nvim/api/win_config.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         671 as ::core::ffi::c_uint,
                         b"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)\0"
@@ -3643,7 +3642,7 @@ unsafe extern "C" fn win_config_float_tp(
                         } else {
                             __assert_fail(
                                 b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
+                                b"src/nvim/api/win_config.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 696 as ::core::ffi::c_uint,
                                 b"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)\0"

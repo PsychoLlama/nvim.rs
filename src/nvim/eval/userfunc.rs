@@ -3512,8 +3512,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4044,8 +4043,7 @@ pub unsafe extern "C" fn get_lambda_tv(
         } else {
             __assert_fail(
                 b"fp == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 418 as ::core::ffi::c_uint,
                 b"int get_lambda_tv(char **, typval_T *, evalarg_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4204,7 +4202,7 @@ pub unsafe extern "C" fn get_func_tv(
         } else {
             __assert_fail(
                 b"ret == OK || ret == FAIL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0"
+                b"src/nvim/eval/userfunc.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 565 as ::core::ffi::c_uint,
                 b"int get_func_tv(const char *, int, typval_T *, char **, evalarg_T *const, funcexe_T *)\0"
@@ -4394,8 +4392,7 @@ unsafe extern "C" fn cat_func_name(
         } else {
             __assert_fail(
                 b"uflen > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 736 as ::core::ffi::c_uint,
                 b"int cat_func_name(char *, size_t, const ufunc_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4423,8 +4420,7 @@ unsafe extern "C" fn cat_func_name(
         } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 744 as ::core::ffi::c_uint,
                 b"int cat_func_name(char *, size_t, const ufunc_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6446,7 +6442,7 @@ unsafe extern "C" fn get_function_body(
                         } else {
                             __assert_fail(
                                 b"indent >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0"
+                                b"src/nvim/eval/userfunc.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 2419 as ::core::ffi::c_uint,
                                 b"int get_function_body(exarg_T *, garray_T *, char *, char **, _Bool)\0"
@@ -7577,8 +7573,7 @@ pub unsafe extern "C" fn get_user_func_name(
         } else {
             __assert_fail(
                 b"hi\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3083 as ::core::ffi::c_uint,
                 b"char *get_user_func_name(expand_T *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8251,8 +8246,7 @@ pub unsafe extern "C" fn do_return(
                     } else {
                         __assert_fail(
                             b"current_funccal->fc_rettv\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/userfunc.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             3664 as ::core::ffi::c_uint,
                             b"_Bool do_return(exarg_T *, _Bool, _Bool, void *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,

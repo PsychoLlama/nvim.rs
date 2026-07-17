@@ -516,8 +516,7 @@ unsafe extern "C" fn lmpack_objlen(
         } else {
             __assert_fail(
                 b"top\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 210 as ::core::ffi::c_uint,
                 b"mpack_uint32_t lmpack_objlen(lua_State *, int *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -561,8 +560,7 @@ unsafe extern "C" fn lmpack_objlen(
         } else {
             __assert_fail(
                 b"top == lua_gettop(L)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 249 as ::core::ffi::c_uint,
                 b"mpack_uint32_t lmpack_objlen(lua_State *, int *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -653,8 +651,7 @@ unsafe extern "C" fn lmpack_parse_enter(
                 } else {
                     __assert_fail(
                         b"unpacker->string_buffer\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         321 as ::core::ffi::c_uint,
                         b"void lmpack_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -774,8 +771,7 @@ unsafe extern "C" fn lmpack_parse_exit(
                     __assert_fail(
                         b"parent->tok.type == MPACK_TOKEN_MAP\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         410 as ::core::ffi::c_uint,
                         b"void lmpack_parse_exit(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -912,8 +908,7 @@ unsafe extern "C" fn lmpack_unpacker_unpack(mut L: *mut lua_State) -> ::core::ff
         } else {
             __assert_fail(
                 b"lua_gettop(L) == argc + 2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 493 as ::core::ffi::c_uint,
                 b"int lmpack_unpacker_unpack(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1058,8 +1053,7 @@ unsafe extern "C" fn lmpack_unparse_enter(
                 } else {
                     __assert_fail(
                         b"result\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         594 as ::core::ffi::c_uint,
                         b"void lmpack_unparse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1332,8 +1326,7 @@ unsafe extern "C" fn lmpack_packer_pack(mut L: *mut lua_State) -> ::core::ffi::c
         } else {
             __assert_fail(
                 b"lua_gettop(L) == argc\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 816 as ::core::ffi::c_uint,
                 b"int lmpack_packer_pack(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1557,8 +1550,7 @@ unsafe extern "C" fn lmpack_session_request(mut L: *mut lua_State) -> ::core::ff
         } else {
             __assert_fail(
                 b"result == MPACK_OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 991 as ::core::ffi::c_uint,
                 b"int lmpack_session_request(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1605,8 +1597,7 @@ unsafe extern "C" fn lmpack_session_reply(mut L: *mut lua_State) -> ::core::ffi:
         } else {
             __assert_fail(
                 b"result == MPACK_OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1012 as ::core::ffi::c_uint,
                 b"int lmpack_session_reply(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1638,8 +1629,7 @@ unsafe extern "C" fn lmpack_session_notify(mut L: *mut lua_State) -> ::core::ffi
         } else {
             __assert_fail(
                 b"result == MPACK_OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1030 as ::core::ffi::c_uint,
                 b"int lmpack_session_notify(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1765,8 +1755,7 @@ unsafe extern "C" fn lmpack_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int 
         } else {
             __assert_fail(
                 b"result == MPACK_OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/lmpack.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/lmpack.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1082 as ::core::ffi::c_uint,
                 b"int lmpack_unpack(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

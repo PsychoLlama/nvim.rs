@@ -2107,8 +2107,7 @@ unsafe extern "C" fn request_key_encoding_flags(mut state: *mut VTermState) {
         } else {
             __assert_fail(
                 b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/vterm/state.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 952 as ::core::ffi::c_uint,
                 b"void request_key_encoding_flags(VTermState *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2195,8 +2194,7 @@ unsafe extern "C" fn set_key_encoding_flags(
         } else {
             __assert_fail(
                 b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/vterm/state.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1018 as ::core::ffi::c_uint,
                 b"void set_key_encoding_flags(VTermState *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2231,8 +2229,7 @@ unsafe extern "C" fn push_key_encoding_flags(
         } else {
             __assert_fail(
                 b"stack->size <= ARRAY_SIZE(stack->items)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/vterm/state.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1026 as ::core::ffi::c_uint,
                 b"void push_key_encoding_flags(VTermState *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,

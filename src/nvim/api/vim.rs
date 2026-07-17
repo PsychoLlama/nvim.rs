@@ -5604,8 +5604,7 @@ pub unsafe extern "C" fn nvim_create_buf(
                 } else {
                     __assert_fail(
                         b"buf->b_ml.ml_mfp->mf_fd < 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/vim.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1077 as ::core::ffi::c_uint,
                         b"Buffer nvim_create_buf(Boolean, Boolean, Error *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6320,8 +6319,7 @@ pub unsafe extern "C" fn nvim_get_api_info(
         } else {
             __assert_fail(
                 b"channel_id <= INT64_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/vim.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1658 as ::core::ffi::c_uint,
                 b"Array nvim_get_api_info(uint64_t, Arena *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6495,8 +6493,7 @@ pub unsafe extern "C" fn nvim_get_chan_info(
             } else {
                 __assert_fail(
                     b"channel_id <= INT64_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/api/vim.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1800 as ::core::ffi::c_uint,
                     b"Dict nvim_get_chan_info(uint64_t, Integer, Arena *, Error *)\0".as_ptr()
                         as *const ::core::ffi::c_char,

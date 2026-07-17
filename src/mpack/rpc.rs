@@ -221,7 +221,7 @@ pub unsafe extern "C" fn mpack_rpc_receive_tok(
                 __assert_fail(
                     b"session->receive.index == 2\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
+                    b"src/mpack/rpc.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     73 as ::core::ffi::c_uint,
                     b"int mpack_rpc_receive_tok(mpack_rpc_session_t *, mpack_token_t, mpack_rpc_message_t *)\0"
@@ -302,8 +302,7 @@ pub unsafe extern "C" fn mpack_rpc_request_tok(
         } else {
             __assert_fail(
                 b"session->send.index == 2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/rpc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 120 as ::core::ffi::c_uint,
                 b"int mpack_rpc_request_tok(mpack_rpc_session_t *, mpack_token_t *, mpack_data_t)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -345,8 +344,7 @@ pub unsafe extern "C" fn mpack_rpc_reply_tok(
         } else {
             __assert_fail(
                 b"session->send.index == 2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/rpc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 145 as ::core::ffi::c_uint,
                 b"int mpack_rpc_reply_tok(mpack_rpc_session_t *, mpack_token_t *, mpack_uint32_t)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -373,8 +371,7 @@ pub unsafe extern "C" fn mpack_rpc_notify_tok(
         } else {
             __assert_fail(
                 b"session->send.index == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/rpc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 161 as ::core::ffi::c_uint,
                 b"int mpack_rpc_notify_tok(mpack_rpc_session_t *, mpack_token_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -516,8 +513,7 @@ pub unsafe extern "C" fn mpack_rpc_session_copy(
         } else {
             __assert_fail(
                 b"src->capacity <= dst_capacity\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/rpc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 243 as ::core::ffi::c_uint,
                 b"void mpack_rpc_session_copy(mpack_rpc_session_t *, mpack_rpc_session_t *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,

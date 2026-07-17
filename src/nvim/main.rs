@@ -6483,8 +6483,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9126,8 +9125,7 @@ unsafe fn main_0(
             __assert_fail(
                 b"!ui_client_channel_id && !use_builtin_ui\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 369 as ::core::ffi::c_uint,
                 b"int main(int, char **)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9165,8 +9163,7 @@ unsafe fn main_0(
             __assert_fail(
                 b"p_ch >= 0 && Rows >= p_ch && Rows - p_ch <= INT_MAX\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 414 as ::core::ffi::c_uint,
                 b"int main(int, char **)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9544,8 +9541,7 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
         } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 750 as ::core::ffi::c_uint,
                 b"void getout(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -15924,8 +15920,7 @@ unsafe extern "C" fn do_exrc_initialization() {
         } else {
             __assert_fail(
                 b"L\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2207 as ::core::ffi::c_uint,
                 b"void do_exrc_initialization(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );

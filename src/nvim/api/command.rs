@@ -4807,8 +4807,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         852 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -4852,8 +4851,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         854 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -4898,8 +4896,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         858 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -4951,8 +4948,7 @@ unsafe extern "C" fn build_cmdline_str(
                     } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             863 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );
@@ -5000,8 +4996,7 @@ unsafe extern "C" fn build_cmdline_str(
                     } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             866 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );
@@ -5049,8 +5044,7 @@ unsafe extern "C" fn build_cmdline_str(
                     } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             869 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );
@@ -5097,8 +5091,7 @@ unsafe extern "C" fn build_cmdline_str(
                     } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             872 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );
@@ -5147,8 +5140,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         885 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5193,8 +5185,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         886 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5241,8 +5232,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         887 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5287,8 +5277,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         888 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5335,8 +5324,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         889 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5381,8 +5369,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         890 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5427,8 +5414,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         891 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5473,8 +5459,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         892 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5519,8 +5504,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         893 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5567,8 +5551,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         894 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5615,8 +5598,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         895 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5663,8 +5645,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         896 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5711,8 +5692,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         897 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5770,8 +5750,7 @@ unsafe extern "C" fn build_cmdline_str(
             } else {
                 __assert_fail(
                     b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     912 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -5812,8 +5791,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         916 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5875,8 +5853,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         930 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5913,8 +5890,7 @@ unsafe extern "C" fn build_cmdline_str(
                 } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         931 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );

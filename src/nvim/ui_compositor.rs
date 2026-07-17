@@ -2096,8 +2096,7 @@ pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
         } else {
             __assert_fail(
                 b"grid != &default_grid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 217 as ::core::ffi::c_uint,
                 b"void ui_comp_remove_grid(ScreenGrid *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2365,8 +2364,7 @@ unsafe extern "C" fn compose_line(
             } else {
                 __assert_fail(
                     b"grid != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     408 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2378,8 +2376,7 @@ unsafe extern "C" fn compose_line(
             } else {
                 __assert_fail(
                     b"until > col\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     409 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2391,8 +2388,7 @@ unsafe extern "C" fn compose_line(
             } else {
                 __assert_fail(
                     b"until <= default_grid.cols\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     410 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2504,8 +2500,7 @@ unsafe extern "C" fn compose_line(
         } else {
             __assert_fail(
                 b"endcol <= chk_width\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 477 as ::core::ffi::c_uint,
                 b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2517,8 +2512,7 @@ unsafe extern "C" fn compose_line(
         } else {
             __assert_fail(
                 b"row < chk_height\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 478 as ::core::ffi::c_uint,
                 b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2695,7 +2689,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         } else {
             __assert_fail(
                 b"endcol <= clearcol\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
+                b"src/nvim/ui_compositor.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 574 as ::core::ffi::c_uint,
                 b"void ui_comp_raw_line(Integer, Integer, Integer, Integer, Integer, Integer, LineFlags, const schar_T *, const sattr_T *)\0"
@@ -2772,7 +2766,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
                 } else {
                     __assert_fail(
                         b"attrs[i] >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
+                        b"src/nvim/ui_compositor.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         604 as ::core::ffi::c_uint,
                         b"void ui_comp_raw_line(Integer, Integer, Integer, Integer, Integer, Integer, LineFlags, const schar_T *, const sattr_T *)\0"

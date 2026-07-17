@@ -1883,8 +1883,7 @@ pub unsafe extern "C" fn schar_from_buf(
         } else {
             __assert_fail(
                 b"len < MAX_SCHAR_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 85 as ::core::ffi::c_uint,
                 b"schar_T schar_from_buf(const char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1911,8 +1910,7 @@ pub unsafe extern "C" fn schar_from_buf(
             } else {
                 __assert_fail(
                     b"idx < 0xFFFFFF\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     95 as ::core::ffi::c_uint,
                     b"schar_T schar_from_buf(const char *, size_t)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1964,8 +1962,7 @@ pub unsafe extern "C" fn schar_get_adv(
             } else {
                 __assert_fail(
                     b"idx < glyph_cache.h.n_keys\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     163 as ::core::ffi::c_uint,
                     b"size_t schar_get_adv(char **, schar_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1998,8 +1995,7 @@ pub unsafe extern "C" fn schar_len(mut sc: schar_T) -> size_t {
             } else {
                 __assert_fail(
                     b"idx < glyph_cache.h.n_keys\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     178 as ::core::ffi::c_uint,
                     b"size_t schar_len(schar_T)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -2028,8 +2024,7 @@ unsafe extern "C" fn schar_get_first_byte(mut sc: schar_T) -> ::core::ffi::c_cha
             __assert_fail(
                 b"!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 206 as ::core::ffi::c_uint,
                 b"char schar_get_first_byte(schar_T)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2264,8 +2259,7 @@ pub unsafe extern "C" fn screengrid_line_start(
         } else {
             __assert_fail(
                 b"grid_line_grid == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 373 as ::core::ffi::c_uint,
                 b"void screengrid_line_start(ScreenGrid *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2292,8 +2286,7 @@ pub unsafe extern "C" fn screengrid_line_start(
             __assert_fail(
                 b"(size_t)grid_line_maxcol <= linebuf_size\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 385 as ::core::ffi::c_uint,
                 b"void screengrid_line_start(ScreenGrid *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2308,8 +2301,7 @@ pub unsafe extern "C" fn screengrid_line_start(
             } else {
                 __assert_fail(
                     b"linebuf_char\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     388 as ::core::ffi::c_uint,
                     b"void screengrid_line_start(ScreenGrid *, int, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2356,8 +2348,7 @@ pub unsafe extern "C" fn grid_line_put_schar(
         } else {
             __assert_fail(
                 b"grid_line_grid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 418 as ::core::ffi::c_uint,
                 b"void grid_line_put_schar(int, schar_T, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2395,8 +2386,7 @@ pub unsafe extern "C" fn grid_line_puts(
         } else {
             __assert_fail(
                 b"grid_line_grid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 444 as ::core::ffi::c_uint,
                 b"int grid_line_puts(int, const char *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2608,8 +2598,7 @@ pub unsafe extern "C" fn grid_line_flush() {
         } else {
             __assert_fail(
                 b"grid_line_clear_to <= grid_line_maxcol\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 595 as ::core::ffi::c_uint,
                 b"void grid_line_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2708,7 +2697,7 @@ pub unsafe extern "C" fn grid_put_linebuf(
         } else {
             __assert_fail(
                 b"0 <= row && row < grid->rows\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
+                b"src/nvim/grid.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 672 as ::core::ffi::c_uint,
                 b"void grid_put_linebuf(ScreenGrid *, int, int, int, int, int, int, int, colnr_T, int)\0"
@@ -2941,8 +2930,7 @@ pub unsafe extern "C" fn grid_alloc(
         } else {
             __assert_fail(
                 b"rows >= 0 && columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/grid.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 846 as ::core::ffi::c_uint,
                 b"void grid_alloc(ScreenGrid *, int, int, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,

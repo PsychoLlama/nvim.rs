@@ -645,8 +645,7 @@ pub unsafe extern "C" fn restore_batch_count(mut save_count: ::core::ffi::c_int)
         } else {
             __assert_fail(
                 b"batch_change_count == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/clipboard.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/clipboard.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 281 as ::core::ffi::c_uint,
                 b"void restore_batch_count(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );

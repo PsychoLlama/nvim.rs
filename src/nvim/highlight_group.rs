@@ -5314,8 +5314,7 @@ unsafe extern "C" fn hlgroup2dict(
                 __assert_fail(
                     b"1 <= link && link <= highlight_ga.ga_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/highlight_group.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/highlight_group.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1661 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

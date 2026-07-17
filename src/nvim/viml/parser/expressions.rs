@@ -640,7 +640,7 @@ unsafe extern "C" fn scale_number(
         } else {
             __assert_fail(
                 b"base\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                b"src/nvim/viml/parser/expressions.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 150 as ::core::ffi::c_uint,
                 b"float_T scale_number(const float_T, const uint8_t, const uvarnumber_T, const _Bool)\0"
@@ -2087,8 +2087,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                     __assert_fail(
                         b"*kv_A(ast_stack, i) != *cur_node\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1035 as ::core::ffi::c_uint,
                         b"void viml_pexpr_free_ast(ExprAST)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2102,10 +2102,9 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 if ast_stack.size == 1 as size_t {
                 } else {
                     __assert_fail(
-                        b"kv_size(ast_stack) == 1\0".as_ptr()
+                        b"kv_size(ast_stack) == 1\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         1039 as ::core::ffi::c_uint,
                         b"void viml_pexpr_free_ast(ExprAST)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2120,8 +2119,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 } else {
                     __assert_fail(
                         b"maxchildren > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1044 as ::core::ffi::c_uint,
                         b"void viml_pexpr_free_ast(ExprAST)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2133,8 +2132,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 } else {
                     __assert_fail(
                         b"maxchildren <= 2\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1045 as ::core::ffi::c_uint,
                         b"void viml_pexpr_free_ast(ExprAST)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2154,7 +2153,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                     __assert_fail(
                         b"maxchildren == 1 ? (*cur_node)->children->next == NULL : ((*cur_node)->children->next == NULL || (*cur_node)->children->next->next == NULL)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                        b"src/nvim/viml/parser/expressions.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1049 as ::core::ffi::c_uint,
                         b"void viml_pexpr_free_ast(ExprAST)\0".as_ptr()
@@ -2519,7 +2518,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
         } else {
             __assert_fail(
                 b"kv_size(*ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                b"src/nvim/viml/parser/expressions.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 1260 as ::core::ffi::c_uint,
                 b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -2549,7 +2548,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
             } else {
                 __assert_fail(
                     b"new_top_node != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                    b"src/nvim/viml/parser/expressions.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1268 as ::core::ffi::c_uint,
                     b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -2594,7 +2593,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                 __assert_fail(
                     b"bop_node->children->next == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                    b"src/nvim/viml/parser/expressions.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1296 as ::core::ffi::c_uint,
                     b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -2754,7 +2753,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                 __assert_fail(
                     b"top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                    b"src/nvim/viml/parser/expressions.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1300 as ::core::ffi::c_uint,
                     b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -2768,7 +2767,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                 __assert_fail(
                     b"top_node->children != NULL && top_node->children->next != NULL\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                    b"src/nvim/viml/parser/expressions.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1301 as ::core::ffi::c_uint,
                     b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -2784,7 +2783,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                 __assert_fail(
                     b"bop_node->children->next == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                    b"src/nvim/viml/parser/expressions.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1312 as ::core::ffi::c_uint,
                     b"_Bool viml_pexpr_handle_bop(const ParserState *const, ExprASTStack *const, ExprASTNode *const, ExprASTWantedNode *const, ExprASTError *const)\0"
@@ -4168,11 +4167,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     __assert_fail(
                                         b"kv_size(ast_stack) >= 1\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         1988 as ::core::ffi::c_uint,
                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -4187,11 +4187,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     __assert_fail(
                                         b"want_value == (*top_node_p == NULL)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         1992 as ::core::ffi::c_uint,
                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -4203,11 +4204,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     __assert_fail(
                                         b"kv_A(ast_stack, 0) == &ast.root\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         1993 as ::core::ffi::c_uint,
                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -4255,7 +4257,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         __assert_fail(
                                             b"(&(*kv_A(ast_stack, i))->children == kv_A(ast_stack, i + 1) && (item_null ? (*kv_A(ast_stack, i))->children == NULL : (*kv_A(ast_stack, i))->children->next == NULL)) || ((&(*kv_A(ast_stack, i))->children->next == kv_A(ast_stack, i + 1)) && (item_null ? (*kv_A(ast_stack, i))->children->next == NULL : (*kv_A(ast_stack, i))->children->next->next == NULL))\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
-                                            b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                            b"src/nvim/viml/parser/expressions.rs\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
                                             2005 as ::core::ffi::c_uint,
                                             b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -4453,7 +4455,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"kv_size(pt_stack)\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2107 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -4470,11 +4472,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     __assert_fail(
                                         b"kv_size(pt_stack)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         2110 as ::core::ffi::c_uint,
                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -4494,12 +4497,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 } else {
                                     __assert_fail(
                                         b"lambda_node == NULL || cur_pt == kEPTLambdaArguments\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
+                                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                            as *const ::core::ffi::c_char,
                                         2112 as ::core::ffi::c_uint,
                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     );
                                 }
                             };
@@ -4533,7 +4538,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2141 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5261,7 +5266,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2182 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5332,7 +5337,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"cur_token.len == 1 || (cur_token.len == 3 && pline.data[cur_token.start.col + 2] == ':')\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2188 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5450,7 +5455,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2218 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5564,7 +5569,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2235 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5886,7 +5891,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"!(want_node == kENodeValue && cur_pt == kEPTLambdaArguments)\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2266 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5932,7 +5937,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"lambda_node != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2277 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5946,7 +5951,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"lambda_node->data.fig.type_guesses.allow_lambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2278 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -5967,7 +5972,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2279 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6025,7 +6030,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 __assert_fail(
                                                                     b"cur_pt == kEPTLambdaArguments && want_node == kENodeOperator\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     2291 as ::core::ffi::c_uint,
                                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6221,7 +6226,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"(*eastnode_p)->children != NULL\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2342 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6238,7 +6243,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"(*eastnode_p)->children->next == NULL\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2343 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6372,7 +6377,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2347 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6423,7 +6428,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     } else {
                                                                         __assert_fail(
                                                                             b"!is_ternary\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                            b"src/nvim/viml/parser/expressions.rs\0"
                                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                                             2354 as ::core::ffi::c_uint,
                                                                             b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6475,7 +6480,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 __assert_fail(
                                                                     b"kv_size(ast_stack) > 1\0".as_ptr()
                                                                         as *const ::core::ffi::c_char,
-                                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                                     2370 as ::core::ffi::c_uint,
                                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -6853,7 +6858,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"!kv_size(ast_stack)\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2458 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7028,7 +7033,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"kv_size(ast_stack) == asgn_level\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2466 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7046,7 +7051,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     } else {
                                                         __assert_fail(
                                                             b"ast.err.msg\0".as_ptr() as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                            b"src/nvim/viml/parser/expressions.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             2469 as ::core::ffi::c_uint,
                                                             b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7406,7 +7411,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2499 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7488,7 +7493,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"want_node == kENodeValue\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2505 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7746,7 +7751,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"want_node == kENodeValue\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2558 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7765,7 +7770,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"new_top_node->data.fig.type_guesses.allow_dict\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2559 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7791,7 +7796,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2560 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7851,7 +7856,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     __assert_fail(
                                                                         b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeCurlyBracesIdentifier\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
-                                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                                         2564 as ::core::ffi::c_uint,
                                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -7996,7 +8001,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"!kv_size(ast_stack)\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2592 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -8171,7 +8176,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"kv_size(ast_stack) == asgn_level\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2600 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -8639,7 +8644,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"want_node == kENodeOperator\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2652 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -8662,7 +8667,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"*top_node_p != NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2652 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -8871,7 +8876,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             __assert_fail(
                                                                 b"*new_top_node_p == NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
-                                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                                 2652 as ::core::ffi::c_uint,
                                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9205,7 +9210,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             __assert_fail(
                                                                 b"*top_node_p != NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
-                                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                                 2652 as ::core::ffi::c_uint,
                                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9265,7 +9270,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"kv_size(pt_stack)\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2665 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9286,7 +9291,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"kv_size(ast_stack) >= 1\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2671 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9333,7 +9338,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"(*kv_last(ast_stack)) == lambda_node\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2676 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9354,7 +9359,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2677 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9396,7 +9401,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"want_node == kENodeValue\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2680 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9545,7 +9550,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"lambda_node->children->next == NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2684 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -9953,7 +9958,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 } else {
                                                     __assert_fail(
                                                         b"!node_is_key\0".as_ptr() as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2717 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10021,7 +10026,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"want_node == kENodeOperator\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2739 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10044,7 +10049,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"*top_node_p != NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2739 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10253,7 +10258,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             __assert_fail(
                                                                 b"*new_top_node_p == NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
-                                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                                 2739 as ::core::ffi::c_uint,
                                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10309,7 +10314,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             __assert_fail(
                                                                 b"*top_node_p != NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
-                                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                                 2739 as ::core::ffi::c_uint,
                                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10367,7 +10372,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2742 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10422,7 +10427,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2749 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -10818,7 +10823,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     __assert_fail(
                                                         b"cur_node->next == NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
-                                                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                        b"src/nvim/viml/parser/expressions.rs\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
                                                         2841 as ::core::ffi::c_uint,
                                                         b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11165,7 +11170,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         __assert_fail(
                                                             b"*top_node_p != NULL\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
-                                                            b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                            b"src/nvim/viml/parser/expressions.rs\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
                                                             2863 as ::core::ffi::c_uint,
                                                             b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11294,7 +11299,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"cur_node->children != NULL\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2882 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11308,7 +11313,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"cur_node->children->next == NULL\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2883 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11329,7 +11334,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"kv_last(ast_stack) == &cur_node->children->next\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2884 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11498,7 +11503,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
-                                                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                    b"src/nvim/viml/parser/expressions.rs\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
                                                     2901 as ::core::ffi::c_uint,
                                                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11604,7 +11609,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"kv_size(pt_stack)\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2922 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11627,7 +11632,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             __assert_fail(
                                                 b"kv_last(pt_stack) == kEPTExpr\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
+                                                b"src/nvim/viml/parser/expressions.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2923 as ::core::ffi::c_uint,
                                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
@@ -11800,11 +11805,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             __assert_fail(
                                 b"want_node == kENodeValue\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 2657 as ::core::ffi::c_uint,
                                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                         }
                     };
@@ -11823,8 +11829,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         } else {
             __assert_fail(
                 b"kv_size(pt_stack)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"src/nvim/viml/parser/expressions.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2945 as ::core::ffi::c_uint,
                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -11836,8 +11841,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         } else {
             __assert_fail(
                 b"kv_size(ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"src/nvim/viml/parser/expressions.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2946 as ::core::ffi::c_uint,
                 b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -11865,8 +11869,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             } else {
                 __assert_fail(
                     b"kv_size(ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"src/nvim/viml/parser/expressions.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2958 as ::core::ffi::c_uint,
                     b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -11882,11 +11885,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 } else {
                     __assert_fail(
                         b"cur_node != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"src/nvim/viml/parser/expressions.rs\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         2965 as ::core::ffi::c_uint,
-                        b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"ExprAST viml_pexpr_parse(ParserState *const, const int)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -11991,8 +11994,7 @@ unsafe extern "C" fn viml_parser_advance(pstate: *mut ParserState, len: size_t) 
             __assert_fail(
                 b"pstate->pos.line == kv_size(pstate->reader.lines) - 1\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.h\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/viml/parser/expressions.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 48 as ::core::ffi::c_uint,
                 b"void viml_parser_advance(ParserState *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -12048,7 +12050,7 @@ unsafe extern "C" fn viml_parser_highlight(
             __assert_fail(
                 b"kv_size(*pstate->colors) == 0 || kv_Z(*pstate->colors, 0).start.line < start.line || kv_Z(*pstate->colors, 0).end_col <= start.col\0"
                     .as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.h\0"
+                b"src/nvim/viml/parser/expressions.rs\0"
                     .as_ptr() as *const ::core::ffi::c_char,
                 73 as ::core::ffi::c_uint,
                 b"void viml_parser_highlight(ParserState *const, const ParserPosition, const size_t, const char *const)\0"

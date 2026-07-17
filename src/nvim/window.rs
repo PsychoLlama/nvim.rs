@@ -6159,8 +6159,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
                 } else {
                     __assert_fail(
                         b"frp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2008 as ::core::ffi::c_uint,
                         b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -6174,8 +6173,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
                 } else {
                     __assert_fail(
                         b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2012 as ::core::ffi::c_uint,
                         b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -6201,8 +6199,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
                 } else {
                     __assert_fail(
                         b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2028 as ::core::ffi::c_uint,
                         b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -6263,8 +6260,7 @@ pub unsafe extern "C" fn win_splitmove(
             } else {
                 __assert_fail(
                     b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2083 as ::core::ffi::c_uint,
                     b"int win_splitmove(win_T *, int, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -6282,8 +6278,7 @@ pub unsafe extern "C" fn win_splitmove(
                 } else {
                     __assert_fail(
                         b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2092 as ::core::ffi::c_uint,
                         b"int win_splitmove(win_T *, int, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6859,8 +6854,7 @@ pub unsafe extern "C" fn one_window(mut win: *mut win_T, mut tp: *mut tabpage_T)
             __assert_fail(
                 b"(!tp || tp != curtab) && !first->w_floating\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2665 as ::core::ffi::c_uint,
                 b"_Bool one_window(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6876,8 +6870,7 @@ unsafe extern "C" fn can_close_floating_windows(mut tp: *mut tabpage_T) -> bool 
             __assert_fail(
                 b"tp != curtab && (tp || !is_aucmd_win(lastwin))\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2676 as ::core::ffi::c_uint,
                 b"_Bool can_close_floating_windows(tabpage_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7220,8 +7213,7 @@ pub unsafe extern "C" fn win_close(
             } else {
                 __assert_fail(
                     b"first_tabpage != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2999 as ::core::ffi::c_uint,
                     b"int win_close(win_T *, _Bool, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7455,8 +7447,7 @@ pub unsafe extern "C" fn win_close_othertab(
         } else {
             __assert_fail(
                 b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3194 as ::core::ffi::c_uint,
                 b"_Bool win_close_othertab(win_T *, int, tabpage_T *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7671,8 +7662,7 @@ pub unsafe extern "C" fn winframe_remove(
             } else {
                 __assert_fail(
                     b"*dirp == 'h'\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3457 as ::core::ffi::c_uint,
                     b"win_T *winframe_remove(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7709,8 +7699,7 @@ pub unsafe extern "C" fn winframe_find_altwin(
         } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3492 as ::core::ffi::c_uint,
                 b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7783,8 +7772,7 @@ pub unsafe extern "C" fn winframe_find_altwin(
         } else {
             __assert_fail(
                 b"wp != win && frp2 != frp_close\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3561 as ::core::ffi::c_uint,
                 b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7829,8 +7817,7 @@ unsafe extern "C" fn frame_flatten(mut frp: *mut frame_T) {
             } else {
                 __assert_fail(
                     b"frp2->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3604 as ::core::ffi::c_uint,
                     b"void frame_flatten(frame_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7917,8 +7904,7 @@ unsafe extern "C" fn win_altframe(mut win: *mut win_T, mut tp: *mut tabpage_T) -
         } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3690 as ::core::ffi::c_uint,
                 b"frame_T *win_altframe(win_T *, tabpage_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8215,8 +8201,7 @@ unsafe extern "C" fn frame_add_statusline(mut frp: *mut frame_T) {
             } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3986 as ::core::ffi::c_uint,
                     b"void frame_add_statusline(frame_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8356,8 +8341,7 @@ unsafe extern "C" fn frame_set_vsep(mut frp: *const frame_T, mut add: bool) {
             } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_ROW\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4112 as ::core::ffi::c_uint,
                     b"void frame_set_vsep(const frame_T *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8387,8 +8371,7 @@ unsafe extern "C" fn frame_add_hsep(mut frp: *const frame_T) {
             } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4136 as ::core::ffi::c_uint,
                     b"void frame_add_hsep(const frame_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8783,8 +8766,7 @@ pub unsafe extern "C" fn win_new_tabpage(
         } else {
             __assert_fail(
                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4520 as ::core::ffi::c_uint,
                 b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8871,8 +8853,7 @@ pub unsafe extern "C" fn win_new_tabpage(
             } else {
                 __assert_fail(
                     b"sw_result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4582 as ::core::ffi::c_uint,
                     b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9001,8 +8982,7 @@ pub unsafe extern "C" fn close_tabpage(mut tab: *mut tabpage_T) {
             } else {
                 __assert_fail(
                     b"ptp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4684 as ::core::ffi::c_uint,
                     b"void close_tabpage(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -9304,8 +9284,7 @@ pub unsafe extern "C" fn tabpage_move(mut nr: ::core::ffi::c_int) {
         } else {
             __assert_fail(
                 b"curtab != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4971 as ::core::ffi::c_uint,
                 b"void tabpage_move(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -10063,8 +10042,7 @@ pub unsafe extern "C" fn win_append(
         } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5674 as ::core::ffi::c_uint,
                 b"void win_append(win_T *, win_T *, tabpage_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -10106,8 +10084,7 @@ pub unsafe extern "C" fn win_remove(mut wp: *mut win_T, mut tp: *mut tabpage_T) 
         } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5702 as ::core::ffi::c_uint,
                 b"void win_remove(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -10362,7 +10339,7 @@ unsafe extern "C" fn check_window_scroll_resize(
                             __assert_fail(
                                 b"first_size_win != NULL && first_scroll_win != NULL\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
+                                b"src/nvim/window.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 5942 as ::core::ffi::c_uint,
                                 b"void check_window_scroll_resize(int *, win_T **, win_T **, list_T *, dict_T *)\0"
@@ -11883,8 +11860,7 @@ pub unsafe extern "C" fn tabline_height() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7349 as ::core::ffi::c_uint,
                 b"int tabline_height(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -12305,7 +12281,7 @@ pub unsafe extern "C" fn check_colorcolumn(
                             __assert_fail(
                                 b"(col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN) || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX)\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
+                                b"src/nvim/window.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 7748 as ::core::ffi::c_uint,
                                 b"const char *check_colorcolumn(char *, win_T *)\0".as_ptr()
@@ -12460,8 +12436,7 @@ pub unsafe extern "C" fn lastwin_nofloating(mut tp: *mut tabpage_T) -> *mut win_
         } else {
             __assert_fail(
                 b"tp != curtab || !tp\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7858 as ::core::ffi::c_uint,
                 b"win_T *lastwin_nofloating(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

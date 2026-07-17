@@ -7778,8 +7778,7 @@ unsafe extern "C" fn f_environ(
             } else {
                 __assert_fail(
                     b"end != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1177 as ::core::ffi::c_uint,
                     b"void f_environ(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7792,8 +7791,7 @@ unsafe extern "C" fn f_environ(
             } else {
                 __assert_fail(
                     b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1179 as ::core::ffi::c_uint,
                     b"void f_environ(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8854,8 +8852,7 @@ unsafe extern "C" fn f_get(
                     } else {
                         __assert_fail(
                             b"name != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1889 as ::core::ffi::c_uint,
                             b"void f_get(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -9631,8 +9628,7 @@ unsafe extern "C" fn f_getregion(
             } else {
                 __assert_fail(
                     b"akt.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2344 as ::core::ffi::c_uint,
                     b"void f_getregion(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -10425,8 +10421,7 @@ unsafe extern "C" fn has_wsl() -> bool {
             } else {
                 __assert_fail(
                     b"!ERROR_SET(&err)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2886 as ::core::ffi::c_uint,
                     b"_Bool has_wsl(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -10562,8 +10557,7 @@ unsafe extern "C" fn f_index(
                 } else {
                     __assert_fail(
                         b"item != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         2971 as ::core::ffi::c_uint,
                         b"void f_index(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -10687,8 +10681,7 @@ unsafe extern "C" fn indexof_list(
                 } else {
                     __assert_fail(
                         b"item != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3068 as ::core::ffi::c_uint,
                         b"varnumber_T indexof_list(list_T *, varnumber_T, typval_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -11504,8 +11497,7 @@ pub unsafe extern "C" fn f_jobstart(
             } else {
                 __assert_fail(
                     b"!rpc\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3606 as ::core::ffi::c_uint,
                     b"void f_jobstart(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -11908,8 +11900,7 @@ unsafe extern "C" fn f_json_decode(
                 } else {
                     __assert_fail(
                         b"len == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3859 as ::core::ffi::c_uint,
                         b"void f_json_decode(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -11945,8 +11936,7 @@ unsafe extern "C" fn f_json_decode(
         } else {
             __assert_fail(
                 b"rettv->v_type != VAR_UNKNOWN\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3875 as ::core::ffi::c_uint,
                 b"void f_json_decode(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -15160,7 +15150,7 @@ pub unsafe extern "C" fn do_searchpair(
         } else {
             __assert_fail(
                 b"pat3len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
+                b"src/nvim/eval/funcs.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 6178 as ::core::ffi::c_uint,
                 b"int do_searchpair(const char *, const char *, const char *, int, const typval_T *, int, pos_T *, linenr_T, int64_t)\0"
@@ -16316,8 +16306,7 @@ unsafe extern "C" fn f_spellbadword(
         } else {
             __assert_fail(
                 b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/funcs.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6973 as ::core::ffi::c_uint,
                 b"void f_spellbadword(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -17675,8 +17664,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,

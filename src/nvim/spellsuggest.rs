@@ -2704,8 +2704,8 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                                 __assert_fail(
                                     b"sug.su_badptr != NULL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/spellsuggest.c\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
+                                    b"src/nvim/spellsuggest.rs\0".as_ptr()
+                                        as *const ::core::ffi::c_char,
                                     552 as ::core::ffi::c_uint,
                                     b"void spell_suggest(int)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -3009,8 +3009,7 @@ unsafe extern "C" fn spell_find_suggest(
             } else {
                 __assert_fail(
                     b"tmplen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/spellsuggest.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/spellsuggest.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     715 as ::core::ffi::c_uint,
                     b"void spell_find_suggest(char *, int, suginfo_T *, int, _Bool, _Bool, _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,

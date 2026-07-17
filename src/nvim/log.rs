@@ -8996,8 +8996,7 @@ pub unsafe extern "C" fn log_callstack_to_file(
         } else {
             __assert_fail(
                 b"24 + exepathlen < IOSIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/log.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/log.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 251 as ::core::ffi::c_uint,
                 b"void log_callstack_to_file(FILE *, const char *const, const int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9045,8 +9044,7 @@ pub unsafe extern "C" fn log_callstack_to_file(
         } else {
             __assert_fail(
                 b"fp\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/log.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/log.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 265 as ::core::ffi::c_uint,
                 b"void log_callstack_to_file(FILE *, const char *const, const int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9164,7 +9162,7 @@ unsafe extern "C" fn v_do_log_to_file(
             __assert_fail(
                 b"log_level >= LOGLVL_DBG && log_level <= LOGLVL_ERR\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/log.c\0".as_ptr()
+                b"src/nvim/log.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 313 as ::core::ffi::c_uint,
                 b"_Bool v_do_log_to_file(FILE *, int, const char *, const char *, int, _Bool, const char *, struct __va_list_tag *)\0"

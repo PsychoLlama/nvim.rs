@@ -417,8 +417,7 @@ unsafe extern "C" fn relative(mut base: MTPos, mut val: *mut MTPos) {
         } else {
             __assert_fail(
                 b"pos_leq(base, *val)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 83 as ::core::ffi::c_uint,
                 b"void relative(MTPos, MTPos *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -827,8 +826,7 @@ pub unsafe extern "C" fn marktree_put(
             __assert_fail(
                 b"!(key.flags & ~(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY))\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 299 as ::core::ffi::c_uint,
                 b"void marktree_put(MarkTree *, MTKey, int, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -913,8 +911,7 @@ unsafe extern "C" fn intersect_node(mut _b: *mut MarkTree, mut x: *mut MTNode, m
         } else {
             __assert_fail(
                 b"!(id & MARKTREE_END_FLAG)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 337 as ::core::ffi::c_uint,
                 b"void intersect_node(MarkTree *, MTNode *, uint64_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1007,8 +1004,7 @@ unsafe extern "C" fn unintersect_node(
         } else {
             __assert_fail(
                 b"!(id & MARKTREE_END_FLAG)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 352 as ::core::ffi::c_uint,
                 b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1035,8 +1031,7 @@ unsafe extern "C" fn unintersect_node(
             } else {
                 __assert_fail(
                     b"seen\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     371 as ::core::ffi::c_uint,
                     b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1361,8 +1356,7 @@ pub unsafe extern "C" fn marktree_del_itr(
         } else {
             __assert_fail(
                 b"x->level == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 577 as ::core::ffi::c_uint,
                 b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1407,8 +1401,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                 } else {
                     __assert_fail(
                         b"p->ptr[i] == lnode\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         609 as ::core::ffi::c_uint,
                         b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1517,8 +1510,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             } else {
                 __assert_fail(
                     b"b->meta_root[m] >= meta_inc[m]\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     671 as ::core::ffi::c_uint,
                     b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1539,8 +1531,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             } else {
                 __assert_fail(
                     b"rlvl >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     681 as ::core::ffi::c_uint,
                     b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1557,8 +1548,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             } else {
                 __assert_fail(
                     b"p->ptr[pi] == x\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     688 as ::core::ffi::c_uint,
                     b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1600,8 +1590,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                     } else {
                         __assert_fail(
                             b"p->ptr[pi - 1]->n == T - 1\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             706 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1627,8 +1616,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                         __assert_fail(
                             b"pi < p->n && p->ptr[pi + 1]->n == T - 1\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             717 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1670,8 +1658,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                         __assert_fail(
                             b"b->meta_root[m] == oldroot->meta[0][m]\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             736 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1698,8 +1685,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             } else {
                 __assert_fail(
                     b"itr->x->level == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     767 as ::core::ffi::c_uint,
                     b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2125,7 +2111,7 @@ unsafe extern "C" fn intersect_mov(
                         } else {
                             __assert_fail(
                                 b"wn < wi\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                                b"src/nvim/marktree.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 882 as ::core::ffi::c_uint,
                                 b"void intersect_mov(Intersection *restrict, Intersection *restrict, Intersection *restrict, Intersection *restrict)\0"
@@ -3243,8 +3229,7 @@ pub unsafe extern "C" fn marktree_clear(mut b: *mut MarkTree) {
         } else {
             __assert_fail(
                 b"b->n_nodes == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1293 as ::core::ffi::c_uint,
                 b"void marktree_clear(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3570,8 +3555,7 @@ pub unsafe extern "C" fn marktree_itr_last(
             } else {
                 __assert_fail(
                     b"itr->i > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1490 as ::core::ffi::c_uint,
                     b"int marktree_itr_last(MarkTree *, MarkTreeIter *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3672,7 +3656,7 @@ unsafe extern "C" fn marktree_itr_next_skip(
                     __assert_fail(
                         b"itr->x->ptr[itr->i]->parent == itr->x\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                        b"src/nvim/marktree.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1552 as ::core::ffi::c_uint,
                         b"_Bool marktree_itr_next_skip(MarkTree *, MarkTreeIter *, _Bool, _Bool, MTPos *, MetaFilter)\0"
@@ -3874,8 +3858,7 @@ pub unsafe extern "C" fn marktree_itr_prev(
                     __assert_fail(
                         b"itr->x->ptr[itr->i]->parent == itr->x\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1690 as ::core::ffi::c_uint,
                         b"_Bool marktree_itr_prev(MarkTree *, MarkTreeIter *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -4053,8 +4036,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
         } else {
             __assert_fail(
                 b"itr->i >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1845 as ::core::ffi::c_uint,
                 b"_Bool marktree_itr_step_overlap(MarkTree *, MarkTreeIter *, MTPair *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -4090,8 +4072,7 @@ unsafe extern "C" fn check_damage(
         } else {
             __assert_fail(
                 b"me->new == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1859 as ::core::ffi::c_uint,
                 b"void check_damage(MarkTree *, MTDamageMap *, MarkTreeIter *, MarkTreeIter *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -4298,8 +4279,7 @@ pub unsafe extern "C" fn marktree_splice(
                 } else {
                     __assert_fail(
                         b"enditr->x\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1943 as ::core::ffi::c_uint,
                         b"_Bool marktree_splice(MarkTree *, int32_t, int, int, int, int, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4489,8 +4469,7 @@ pub unsafe extern "C" fn marktree_splice(
             } else {
                 __assert_fail(
                     b"realrow >= old_extent.row\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2044 as ::core::ffi::c_uint,
                     b"_Bool marktree_splice(MarkTree *, int32_t, int, int, int, int, int)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -4848,8 +4827,7 @@ unsafe extern "C" fn pseudo_index_for_id(
             } else {
                 __assert_fail(
                     b"i < n->n\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2184 as ::core::ffi::c_uint,
                     b"uint64_t pseudo_index_for_id(MarkTree *, uint64_t, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4906,8 +4884,7 @@ pub unsafe extern "C" fn marktree_itr_set_node(
             } else {
                 __assert_fail(
                     b"p->ptr[i] == n\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2224 as ::core::ffi::c_uint,
                     b"MTKey marktree_itr_set_node(MarkTree *, MarkTreeIter *, MTNode *, int)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -4974,8 +4951,7 @@ unsafe extern "C" fn marktree_itr_fix_pos(mut b: *mut MarkTree, mut itr: *mut Ma
             } else {
                 __assert_fail(
                     b"x->level\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2261 as ::core::ffi::c_uint,
                     b"void marktree_itr_fix_pos(MarkTree *, MarkTreeIter *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4990,8 +4966,7 @@ unsafe extern "C" fn marktree_itr_fix_pos(mut b: *mut MarkTree, mut itr: *mut Ma
         } else {
             __assert_fail(
                 b"x == itr->x\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2264 as ::core::ffi::c_uint,
                 b"void marktree_itr_fix_pos(MarkTree *, MarkTreeIter *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5060,8 +5035,7 @@ pub unsafe extern "C" fn marktree_del_pair_test(
         } else {
             __assert_fail(
                 b"other\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2292 as ::core::ffi::c_uint,
                 b"void marktree_del_pair_test(MarkTree *, uint32_t, uint32_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5079,8 +5053,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
             } else {
                 __assert_fail(
                     b"b->n_keys == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2301 as ::core::ffi::c_uint,
                     b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -5091,8 +5064,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
             } else {
                 __assert_fail(
                     b"b->n_nodes == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2302 as ::core::ffi::c_uint,
                     b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -5110,8 +5082,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
                 __assert_fail(
                     b"b->id2node == NULL || map_size(b->id2node) == 0\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2303 as ::core::ffi::c_uint,
                     b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -5133,8 +5104,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
         } else {
             __assert_fail(
                 b"b->n_keys == nkeys\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2311 as ::core::ffi::c_uint,
                 b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5150,8 +5120,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
         } else {
             __assert_fail(
                 b"b->n_keys == map_size(b->id2node)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2312 as ::core::ffi::c_uint,
                 b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5172,7 +5141,7 @@ pub unsafe extern "C" fn marktree_check_node(
         } else {
             __assert_fail(
                 b"x->n <= 2 * T - 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                b"src/nvim/marktree.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2322 as ::core::ffi::c_uint,
                 b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5192,7 +5161,7 @@ pub unsafe extern "C" fn marktree_check_node(
             __assert_fail(
                 b"x->n >= (x != b->root ? T - 1 : 0)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                b"src/nvim/marktree.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2324 as ::core::ffi::c_uint,
                 b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5228,7 +5197,7 @@ pub unsafe extern "C" fn marktree_check_node(
                 __assert_fail(
                     b"pos_leq(*last, x->key[i].pos)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                    b"src/nvim/marktree.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     2336 as ::core::ffi::c_uint,
                     b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5245,7 +5214,7 @@ pub unsafe extern "C" fn marktree_check_node(
                     __assert_fail(
                         b"!*last_right || mt_right(x->key[i])\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                        b"src/nvim/marktree.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2338 as ::core::ffi::c_uint,
                         b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5260,7 +5229,7 @@ pub unsafe extern "C" fn marktree_check_node(
             } else {
                 __assert_fail(
                     b"x->key[i].pos.col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                    b"src/nvim/marktree.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     2341 as ::core::ffi::c_uint,
                     b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5278,7 +5247,7 @@ pub unsafe extern "C" fn marktree_check_node(
                 __assert_fail(
                     b"pmap_get(uint64_t)(b->id2node, mt_lookup_key(x->key[i])) == x\0"
                         .as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                    b"src/nvim/marktree.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     2342 as ::core::ffi::c_uint,
                     b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5307,7 +5276,7 @@ pub unsafe extern "C" fn marktree_check_node(
                     __assert_fail(
                         b"x->ptr[i]->parent == x\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                        b"src/nvim/marktree.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2350 as ::core::ffi::c_uint,
                         b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5324,7 +5293,7 @@ pub unsafe extern "C" fn marktree_check_node(
                     __assert_fail(
                         b"x->ptr[i]->p_idx == i\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                        b"src/nvim/marktree.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2351 as ::core::ffi::c_uint,
                         b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5341,7 +5310,7 @@ pub unsafe extern "C" fn marktree_check_node(
                     __assert_fail(
                         b"x->ptr[i]->level == x->level - 1\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                        b"src/nvim/marktree.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         2352 as ::core::ffi::c_uint,
                         b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5359,7 +5328,7 @@ pub unsafe extern "C" fn marktree_check_node(
                         __assert_fail(
                             b"x->ptr[i] != x->ptr[j]\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                            b"src/nvim/marktree.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             2355 as ::core::ffi::c_uint,
                             b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"
@@ -5384,7 +5353,7 @@ pub unsafe extern "C" fn marktree_check_node(
                 __assert_fail(
                     b"meta_node_ref[m] == meta_node[m]\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
+                    b"src/nvim/marktree.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     2365 as ::core::ffi::c_uint,
                     b"size_t marktree_check_node(MarkTree *, MTNode *, MTPos *, _Bool *, const uint32_t *)\0"

@@ -2224,8 +2224,7 @@ pub unsafe extern "C" fn os_env_exists(
         } else {
             __assert_fail(
                 b"r != UV_EINVAL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 165 as ::core::ffi::c_uint,
                 b"_Bool os_env_exists(const char *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2270,8 +2269,7 @@ pub unsafe extern "C" fn os_setenv(
         } else {
             __assert_fail(
                 b"r != UV_EINVAL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 204 as ::core::ffi::c_uint,
                 b"int os_setenv(const char *, const char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2383,8 +2381,7 @@ pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::cor
         } else {
             __assert_fail(
                 b"str != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 375 as ::core::ffi::c_uint,
                 b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2396,8 +2393,7 @@ pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::cor
         } else {
             __assert_fail(
                 b"end != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 377 as ::core::ffi::c_uint,
                 b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2409,8 +2405,7 @@ pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::cor
         } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 379 as ::core::ffi::c_uint,
                 b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2924,8 +2919,7 @@ pub unsafe extern "C" fn vim_getenv(
         } else {
             __assert_fail(
                 b"get_vim_var_str(VV_PROGPATH)[0] != NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 956 as ::core::ffi::c_uint,
                 b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2995,8 +2989,7 @@ pub unsafe extern "C" fn vim_getenv(
                 } else {
                     __assert_fail(
                         b"vim_path_end >= vim_path\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1027 as ::core::ffi::c_uint,
                         b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -3016,8 +3009,7 @@ pub unsafe extern "C" fn vim_getenv(
             } else {
                 __assert_fail(
                     b"vim_path != exe_name\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1035 as ::core::ffi::c_uint,
                     b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3108,7 +3100,7 @@ pub unsafe extern "C" fn home_replace(
                 __assert_fail(
                     b"homedir_env_mod != homedir_env\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
+                    b"src/nvim/os/env.rs\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1123 as ::core::ffi::c_uint,
                     b"size_t home_replace(const buf_T *const, const char *, char *const, size_t, const _Bool)\0"
@@ -3228,8 +3220,7 @@ pub unsafe extern "C" fn get_env_name(
         } else {
             __assert_fail(
                 b"idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1216 as ::core::ffi::c_uint,
                 b"char *get_env_name(expand_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -3265,8 +3256,7 @@ pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_
             __assert_fail(
                 b"tail >= fname && dirlen + 1 < sizeof(os_buf)\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/os/env.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1247 as ::core::ffi::c_uint,
                 b"_Bool os_setenv_append_path(const char *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

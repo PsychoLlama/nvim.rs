@@ -2187,8 +2187,7 @@ pub unsafe extern "C" fn win_new_float(
                 } else {
                     __assert_fail(
                         b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         50 as ::core::ffi::c_uint,
                         b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2230,8 +2229,7 @@ pub unsafe extern "C" fn win_new_float(
             } else {
                 __assert_fail(
                     b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     74 as ::core::ffi::c_uint,
                     b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2243,8 +2241,7 @@ pub unsafe extern "C" fn win_new_float(
             } else {
                 __assert_fail(
                     b"!wp->w_floating\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     75 as ::core::ffi::c_uint,
                     b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2257,8 +2254,7 @@ pub unsafe extern "C" fn win_new_float(
             } else {
                 __assert_fail(
                     b"win_tp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     77 as ::core::ffi::c_uint,
                     b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2746,8 +2742,7 @@ pub unsafe extern "C" fn win_float_find_altwin(
         } else {
             __assert_fail(
                 b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 402 as ::core::ffi::c_uint,
                 b"win_T *win_float_find_altwin(const win_T *, const tabpage_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

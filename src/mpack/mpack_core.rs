@@ -86,8 +86,7 @@ pub unsafe extern "C" fn mpack_read(
         } else {
             __assert_fail(
                 b"*buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 50 as ::core::ffi::c_uint,
                 b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -131,7 +130,7 @@ pub unsafe extern "C" fn mpack_read(
                 } else {
                     __assert_fail(
                         b"!tokbuf->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
+                        b"src/mpack/mpack_core.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         85 as ::core::ffi::c_uint,
                         b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
@@ -146,7 +145,7 @@ pub unsafe extern "C" fn mpack_read(
                     __assert_fail(
                         b"tokbuf->plen <= sizeof(tokbuf->pending)\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
+                        b"src/mpack/mpack_core.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         90 as ::core::ffi::c_uint,
                         b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
@@ -161,7 +160,7 @@ pub unsafe extern "C" fn mpack_read(
                 } else {
                     __assert_fail(
                         b"!status\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
+                        b"src/mpack/mpack_core.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         93 as ::core::ffi::c_uint,
                         b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
@@ -204,8 +203,7 @@ pub unsafe extern "C" fn mpack_write(
         } else {
             __assert_fail(
                 b"*buf && *buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 117 as ::core::ffi::c_uint,
                 b"int mpack_write(mpack_tokbuf_t *, char **, size_t *, const mpack_token_t *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -275,7 +273,7 @@ pub unsafe extern "C" fn mpack_write(
                 } else {
                     __assert_fail(
                         b"!*buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
+                        b"src/mpack/mpack_core.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         157 as ::core::ffi::c_uint,
                         b"int mpack_write(mpack_tokbuf_t *, char **, size_t *, const mpack_token_t *)\0"
@@ -476,8 +474,7 @@ unsafe extern "C" fn mpack_rpending(
         } else {
             __assert_fail(
                 b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 255 as ::core::ffi::c_uint,
                 b"int mpack_rpending(const char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -635,8 +632,7 @@ unsafe extern "C" fn mpack_wpending(
         } else {
             __assert_fail(
                 b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 361 as ::core::ffi::c_uint,
                 b"int mpack_wpending(char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -775,8 +771,7 @@ unsafe extern "C" fn mpack_wext(
         } else {
             __assert_fail(
                 b"type >= 0 && type < 0x80\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 478 as ::core::ffi::c_uint,
                 b"int mpack_wext(char **, size_t *, int, mpack_uint32_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,

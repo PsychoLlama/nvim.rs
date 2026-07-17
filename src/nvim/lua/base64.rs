@@ -69,8 +69,7 @@ unsafe extern "C" fn nlua_base64_encode(mut L: *mut lua_State) -> ::core::ffi::c
         } else {
             __assert_fail(
                 b"ret != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/base64.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/base64.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 26 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

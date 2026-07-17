@@ -1531,8 +1531,7 @@ pub unsafe extern "C" fn tinput_init(
         } else {
             __assert_fail(
                 b"input->loop == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 128 as ::core::ffi::c_uint,
                 b"void tinput_init(TermInput *, Loop *, TerminfoEntry *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1742,8 +1741,7 @@ unsafe extern "C" fn handle_termkey_modifiers(
         } else {
             __assert_fail(
                 b"len < buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 240 as ::core::ffi::c_uint,
                 b"size_t handle_termkey_modifiers(TermKeyKey *, char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1777,8 +1775,7 @@ unsafe extern "C" fn handle_more_modifiers(
         } else {
             __assert_fail(
                 b"len < buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 272 as ::core::ffi::c_uint,
                 b"size_t handle_more_modifiers(TermKeyKey *, char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1821,8 +1818,7 @@ unsafe extern "C" fn handle_kitty_key_protocol(
             } else {
                 __assert_fail(
                     b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     286 as ::core::ffi::c_uint,
                     b"void handle_kitty_key_protocol(TermInput *, TermKeyKey *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1860,8 +1856,7 @@ unsafe extern "C" fn forward_simple_utf8(mut input: *mut TermInput, mut key: *mu
             } else {
                 __assert_fail(
                     b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     308 as ::core::ffi::c_uint,
                     b"void forward_simple_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1898,8 +1893,7 @@ unsafe extern "C" fn forward_modified_utf8(mut input: *mut TermInput, mut key: *
             } else {
                 __assert_fail(
                     b"key->modifiers\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     326 as ::core::ffi::c_uint,
                     b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1934,8 +1928,7 @@ unsafe extern "C" fn forward_modified_utf8(mut input: *mut TermInput, mut key: *
                 } else {
                     __assert_fail(
                         b"len + 2 < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         339 as ::core::ffi::c_uint,
                         b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1966,8 +1959,7 @@ unsafe extern "C" fn forward_modified_utf8(mut input: *mut TermInput, mut key: *
             } else {
                 __assert_fail(
                     b"len + more_len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     351 as ::core::ffi::c_uint,
                     b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1995,8 +1987,7 @@ unsafe extern "C" fn forward_modified_utf8(mut input: *mut TermInput, mut key: *
         } else {
             __assert_fail(
                 b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 357 as ::core::ffi::c_uint,
                 b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2153,8 +2144,7 @@ unsafe extern "C" fn forward_mouse_event(mut input: *mut TermInput, mut key: *mu
         } else {
             __assert_fail(
                 b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 430 as ::core::ffi::c_uint,
                 b"void forward_mouse_event(TermInput *, TermKeyKey *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2366,8 +2356,7 @@ unsafe extern "C" fn handle_term_response(mut input: *mut TermInput, mut key: *c
             } else {
                 __assert_fail(
                     b"str != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     579 as ::core::ffi::c_uint,
                     b"void handle_term_response(TermInput *, const TermKeyKey *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2528,8 +2517,7 @@ unsafe extern "C" fn handle_primary_device_attr(
             } else {
                 __assert_fail(
                     b"(response).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     637 as ::core::ffi::c_uint,
                     b"void handle_primary_device_attr(TermInput *, TermKeyCsiParam *, size_t)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -2834,7 +2822,7 @@ unsafe extern "C" fn handle_raw_buffer(
                             } else {
                                 __assert_fail(
                                     b"consumed == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                                    b"src/nvim/tui/input.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     799 as ::core::ffi::c_uint,
                                     b"size_t handle_raw_buffer(TermInput *, _Bool, const char *, size_t)\0"
@@ -2891,8 +2879,7 @@ unsafe extern "C" fn handle_raw_buffer(
                     } else {
                         __assert_fail(
                             b"consumed <= to_use\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/tui/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             849 as ::core::ffi::c_uint,
                             b"size_t handle_raw_buffer(TermInput *, _Bool, const char *, size_t)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,

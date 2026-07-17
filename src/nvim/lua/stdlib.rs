@@ -2508,8 +2508,7 @@ unsafe extern "C" fn nlua_stricmp(lstate: *mut lua_State) -> ::core::ffi::c_int 
         } else {
             __assert_fail(
                 b"s1[s1_len] == NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/stdlib.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 481 as ::core::ffi::c_uint,
                 b"int nlua_stricmp(lua_State *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2520,8 +2519,7 @@ unsafe extern "C" fn nlua_stricmp(lstate: *mut lua_State) -> ::core::ffi::c_int 
         } else {
             __assert_fail(
                 b"s2[s2_len] == NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/lua/stdlib.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 482 as ::core::ffi::c_uint,
                 b"int nlua_stricmp(lua_State *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2549,8 +2547,7 @@ unsafe extern "C" fn nlua_stricmp(lstate: *mut lua_State) -> ::core::ffi::c_int 
                 } else {
                     __assert_fail(
                         b"nul2 != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/lua/stdlib.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         494 as ::core::ffi::c_uint,
                         b"int nlua_stricmp(lua_State *const)\0".as_ptr()
                             as *const ::core::ffi::c_char,

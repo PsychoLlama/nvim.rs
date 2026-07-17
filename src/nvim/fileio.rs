@@ -5591,7 +5591,7 @@ pub unsafe extern "C" fn readfile(
                                         } else {
                                             __assert_fail(
                                                 b"u8c <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0"
+                                                b"src/nvim/fileio.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 1328 as ::core::ffi::c_uint,
                                                 b"int readfile(char *, char *, linenr_T, linenr_T, linenr_T, exarg_T *, int, _Bool)\0"
@@ -6923,8 +6923,7 @@ pub unsafe extern "C" fn vim_fgets(
         } else {
             __assert_fail(
                 b"size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2504 as ::core::ffi::c_uint,
                 b"_Bool vim_fgets(char *, int, FILE *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -7066,8 +7065,7 @@ pub unsafe extern "C" fn put_bytes(
         } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2638 as ::core::ffi::c_uint,
                 b"_Bool put_bytes(FILE *, uintmax_t, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -8067,8 +8065,7 @@ unsafe extern "C" fn vim_mktempdir() {
                     } else {
                         __assert_fail(
                             b"tmplen < sizeof(tmp)\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             3334 as ::core::ffi::c_uint,
                             b"void vim_mktempdir(void)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
@@ -8086,8 +8083,7 @@ unsafe extern "C" fn vim_mktempdir() {
                 } else {
                     __assert_fail(
                         b"tmplen < sizeof(tmp)\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3338 as ::core::ffi::c_uint,
                         b"void vim_mktempdir(void)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -8117,9 +8113,7 @@ unsafe extern "C" fn vim_mktempdir() {
                         } else {
                             __assert_fail(
                                 b"tmplen < sizeof(tmp)\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 3351 as ::core::ffi::c_uint,
                                 b"void vim_mktempdir(void)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -8178,8 +8172,7 @@ unsafe extern "C" fn vim_mktempdir() {
                 } else {
                     __assert_fail(
                         b"tmplen < sizeof(tmp)\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fileio.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/fileio.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3373 as ::core::ffi::c_uint,
                         b"void vim_mktempdir(void)\0".as_ptr() as *const ::core::ffi::c_char,
                     );

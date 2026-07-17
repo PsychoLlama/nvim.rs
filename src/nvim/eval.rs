@@ -6855,7 +6855,7 @@ pub unsafe extern "C" fn set_var_lval(
                             __assert_fail(
                                 b"lp->ll_newkey != NULL\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0"
+                                b"src/nvim/eval.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 1418 as ::core::ffi::c_uint,
                                 b"void set_var_lval(lval_T *, char *, typval_T *, _Bool, const _Bool, const char *)\0"
@@ -6877,7 +6877,7 @@ pub unsafe extern "C" fn set_var_lval(
                             __assert_fail(
                                 b"di_->di_key != NULL\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0"
+                                b"src/nvim/eval.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 1422 as ::core::ffi::c_uint,
                                 b"void set_var_lval(lval_T *, char *, typval_T *, _Bool, const _Bool, const char *)\0"
@@ -9101,8 +9101,7 @@ pub unsafe extern "C" fn eval_option(
             } else {
                 __assert_fail(
                     b"value.type != kOptValTypeNil\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3409 as ::core::ffi::c_uint,
                     b"int eval_option(const char **const, typval_T *const, const _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -10715,8 +10714,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
             } else {
                 __assert_fail(
                     b"input == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4731 as ::core::ffi::c_uint,
                     b"void get_system_output_as_rettv(typval_T *, typval_T *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -11315,8 +11313,7 @@ pub unsafe extern "C" fn save_tv_as_string(
         } else {
             __assert_fail(
                 b"tv->v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5197 as ::core::ffi::c_uint,
                 b"char *save_tv_as_string(typval_T *, ptrdiff_t *const, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -12969,8 +12966,7 @@ pub unsafe extern "C" fn eval_call_provider(
         } else {
             __assert_fail(
                 b"provider_call_nesting >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6585 as ::core::ffi::c_uint,
                 b"typval_T eval_call_provider(char *, char *, list_T *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -13580,8 +13576,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
             } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
                     b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
                         as *const ::core::ffi::c_char,

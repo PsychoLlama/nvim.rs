@@ -1820,8 +1820,7 @@ pub unsafe extern "C" fn ui_client_attach(
         } else {
             __assert_fail(
                 b"m.data.dict.size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_client.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ui_client.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 123 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

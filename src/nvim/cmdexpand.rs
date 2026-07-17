@@ -3603,8 +3603,7 @@ pub unsafe extern "C" fn nextwild(
         } else {
             __assert_fail(
                 b"ccline->cmdpos >= i\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 288 as ::core::ffi::c_uint,
                 b"int nextwild(expand_T *, int, int, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3704,8 +3703,7 @@ pub unsafe extern "C" fn nextwild(
             } else {
                 __assert_fail(
                     b"ccline->cmdpos <= ccline->cmdlen\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     355 as ::core::ffi::c_uint,
                     b"int nextwild(expand_T *, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3765,8 +3763,7 @@ unsafe extern "C" fn cmdline_pum_create(
         } else {
             __assert_fail(
                 b"numMatches >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 389 as ::core::ffi::c_uint,
                 b"void cmdline_pum_create(CmdlineInfo *, expand_T *, char **, int, _Bool, _Bool)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -4189,8 +4186,7 @@ unsafe extern "C" fn get_next_or_prev_match(
             } else {
                 __assert_fail(
                     b"pum_want.active\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     739 as ::core::ffi::c_uint,
                     b"char *get_next_or_prev_match(int, expand_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4471,8 +4467,7 @@ pub unsafe extern "C" fn ExpandOne(
                 } else {
                     __assert_fail(
                         b"ssp < ss + ss_size\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         995 as ::core::ffi::c_uint,
                         b"char *ExpandOne(expand_T *, char *, char *, int, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6167,8 +6162,7 @@ pub unsafe extern "C" fn expand_cmdline(
         } else {
             __assert_fail(
                 b"(str + col) - xp->xp_pattern >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2632 as ::core::ffi::c_uint,
                 b"int expand_cmdline(expand_T *, const char *, int, int *, char ***)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7934,8 +7928,7 @@ unsafe extern "C" fn cmdline_del(mut cclp: *mut CmdlineInfo, mut from: ::core::f
         } else {
             __assert_fail(
                 b"cclp->cmdpos <= cclp->cmdlen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cmdexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3650 as ::core::ffi::c_uint,
                 b"void cmdline_del(CmdlineInfo *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );

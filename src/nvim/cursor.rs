@@ -1826,8 +1826,7 @@ unsafe extern "C" fn coladvance2(
         } else {
             __assert_fail(
                 b"wp == curwin || !addspaces\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/cursor.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/cursor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 95 as ::core::ffi::c_uint,
                 b"int coladvance2(win_T *, pos_T *, _Bool, _Bool, colnr_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2188,8 +2187,7 @@ pub unsafe extern "C" fn check_cursor_col(mut win: *mut win_T) {
                     } else {
                         __assert_fail(
                             b"win->w_cursor.coladd > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/cursor.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/cursor.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             372 as ::core::ffi::c_uint,
                             b"void check_cursor_col(win_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,

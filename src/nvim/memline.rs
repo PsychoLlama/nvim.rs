@@ -3766,8 +3766,7 @@ pub unsafe extern "C" fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
                 } else {
                     __assert_fail(
                         b"hp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         359 as ::core::ffi::c_uint,
                         b"int ml_open(buf_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -5770,8 +5769,7 @@ unsafe extern "C" fn swapfile_info(
         } else {
             __assert_fail(
                 b"fname != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1545 as ::core::ffi::c_uint,
                 b"time_t swapfile_info(char *, StringBuilder *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6317,8 +6315,7 @@ pub unsafe extern "C" fn ml_get_buf_len(mut buf: *mut buf_T, mut lnum: linenr_T)
         } else {
             __assert_fail(
                 b"buf->b_ml.ml_line_textlen > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1899 as ::core::ffi::c_uint,
                 b"colnr_T ml_get_buf_len(buf_T *, linenr_T)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7114,8 +7111,7 @@ pub unsafe extern "C" fn ml_replace_buf_len(
             } else {
                 __assert_fail(
                     b"!noalloc\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2583 as ::core::ffi::c_uint,
                     b"int ml_replace_buf_len(buf_T *, linenr_T, char *, size_t, _Bool, _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -7225,8 +7221,7 @@ unsafe extern "C" fn ml_delete_int(
         } else {
             __assert_fail(
                 b"line_size >= 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2687 as ::core::ffi::c_uint,
                 b"int ml_delete_int(buf_T *, linenr_T, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7556,8 +7551,7 @@ unsafe extern "C" fn ml_flush_line(mut buf: *mut buf_T, mut noalloc: bool) {
             } else {
                 __assert_fail(
                     b"!noalloc\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2969 as ::core::ffi::c_uint,
                     b"void ml_flush_line(buf_T *, _Bool)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7579,8 +7573,7 @@ unsafe extern "C" fn ml_new_data(
         } else {
             __assert_fail(
                 b"page_count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2981 as ::core::ffi::c_uint,
                 b"bhdr_T *ml_new_data(memfile_T *, _Bool, int64_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7975,8 +7968,7 @@ unsafe extern "C" fn attention_message(
         } else {
             __assert_fail(
                 b"buf->b_fname != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/memline.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/memline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3379 as ::core::ffi::c_uint,
                 b"void attention_message(buf_T *, char *, char *, StringBuilder *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

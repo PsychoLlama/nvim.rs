@@ -2016,7 +2016,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         __assert_fail(
                             b"n <= SIZE_MAX - str_l\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                            b"src/nvim/strings.rs\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             1486 as ::core::ffi::c_uint,
                             b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -2648,7 +2648,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                             __assert_fail(
                                                 b"PRIuMAX[sizeof(PRIuMAX) - 1 - 1] == 'u'\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
-                                                b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                                b"src/nvim/strings.rs\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
                                                 2001 as ::core::ffi::c_uint,
                                                 b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -2674,7 +2674,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     __assert_fail(
                                         b"str_arg_l < sizeof(tmp)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                        b"src/nvim/strings.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2008 as ::core::ffi::c_uint,
                                         b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -2863,7 +2863,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     __assert_fail(
                                         b"l + 1 < sizeof(format)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                        b"src/nvim/strings.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2119 as ::core::ffi::c_uint,
                                         b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -2892,7 +2892,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     __assert_fail(
                                         b"str_arg_l < sizeof(tmp)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
-                                        b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                        b"src/nvim/strings.rs\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
                                         2124 as ::core::ffi::c_uint,
                                         b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3057,7 +3057,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             __assert_fail(
                                 b"str_arg_l <= SIZE_MAX - number_of_zeros_to_pad\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                b"src/nvim/strings.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 2204 as ::core::ffi::c_uint,
                                 b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3087,7 +3087,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 __assert_fail(
                                     b"pn <= SIZE_MAX - str_l\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                    b"src/nvim/strings.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2213 as ::core::ffi::c_uint,
                                     b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3118,7 +3118,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 __assert_fail(
                                     b"zn <= SIZE_MAX - str_l\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                    b"src/nvim/strings.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2233 as ::core::ffi::c_uint,
                                     b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3144,7 +3144,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             __assert_fail(
                                 b"zn <= SIZE_MAX - str_l\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                b"src/nvim/strings.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 2244 as ::core::ffi::c_uint,
                                 b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3172,7 +3172,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             __assert_fail(
                                 b"sn <= SIZE_MAX - str_l\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                b"src/nvim/strings.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 2259 as ::core::ffi::c_uint,
                                 b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3191,7 +3191,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             __assert_fail(
                                 b"str_arg_l <= SIZE_MAX - number_of_zeros_to_pad\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                b"src/nvim/strings.rs\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
                                 2265 as ::core::ffi::c_uint,
                                 b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3217,7 +3217,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 __assert_fail(
                                     b"pn <= SIZE_MAX - str_l\0".as_ptr()
                                         as *const ::core::ffi::c_char,
-                                    b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0"
+                                    b"src/nvim/strings.rs\0"
                                         .as_ptr() as *const ::core::ffi::c_char,
                                     2274 as ::core::ffi::c_uint,
                                     b"int vim_vsnprintf_typval(char *, size_t, const char *, struct __va_list_tag *, typval_T *const)\0"
@@ -3311,8 +3311,7 @@ pub unsafe extern "C" fn kv_do_printf(
             } else {
                 __assert_fail(
                     b"str->items != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/strings.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/strings.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     2321 as ::core::ffi::c_uint,
                     b"int kv_do_printf(StringBuilder *, const char *, ...)\0".as_ptr()
                         as *const ::core::ffi::c_char,

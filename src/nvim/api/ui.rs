@@ -1398,8 +1398,7 @@ unsafe extern "C" fn mpack_str_small(
         } else {
             __assert_fail(
                 b"len < 0x20\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/ui.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/ui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 71 as ::core::ffi::c_uint,
                 b"void mpack_str_small(char **, const char *, size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2086,8 +2085,7 @@ unsafe extern "C" fn prepare_call(mut ui: *mut RemoteUI, mut name: *const ::core
                 } else {
                     __assert_fail(
                         b"ui->cur_event == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/ui.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/api/ui.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         549 as ::core::ffi::c_uint,
                         b"void prepare_call(RemoteUI *, const char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

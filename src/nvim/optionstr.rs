@@ -5370,8 +5370,7 @@ unsafe extern "C" fn opt_strings_flags(
                     } else {
                         __assert_fail(
                             b"i < sizeof(new_flags) * 8\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/optionstr.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/optionstr.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             2192 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );

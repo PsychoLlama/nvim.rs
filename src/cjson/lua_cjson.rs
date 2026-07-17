@@ -1891,8 +1891,7 @@ unsafe extern "C" fn json_next_string_token(
         } else {
             __assert_fail(
                 b"*json->ptr == '\"'\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/cjson/lua_cjson.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/cjson/lua_cjson.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1445 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

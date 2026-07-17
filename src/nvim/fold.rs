@@ -3764,8 +3764,7 @@ unsafe extern "C" fn foldDelMarker(
                     } else {
                         __assert_fail(
                             b"p >= line\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/fold.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/fold.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1670 as ::core::ffi::c_uint,
                             b"void foldDelMarker(buf_T *, linenr_T, char *, size_t)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -4612,7 +4611,7 @@ unsafe extern "C" fn foldSplit(
         } else {
             __assert_fail(
                 b"fp[1].fd_top > bot\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/fold.c\0".as_ptr()
+                b"src/nvim/fold.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2553 as ::core::ffi::c_uint,
                 b"void foldSplit(buf_T *, garray_T *const, const int, const linenr_T, const linenr_T)\0"
@@ -5372,8 +5371,7 @@ pub unsafe extern "C" fn f_foldtextresult(
                 } else {
                     __assert_fail(
                         b"*text == NUL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/fold.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/fold.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         3284 as ::core::ffi::c_uint,
                         b"void f_foldtextresult(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
                             as *const ::core::ffi::c_char,

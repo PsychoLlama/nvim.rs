@@ -5208,8 +5208,7 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
             __assert_fail(
                 b"diff_foldcolumn >= 0 && diff_foldcolumn <= 9\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/diff.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/diff.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1573 as ::core::ffi::c_uint,
                 b"void diff_win_options(win_T *, _Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -5404,8 +5403,7 @@ unsafe extern "C" fn extract_hunk(
                 } else {
                     __assert_fail(
                         b"*diffstyle == DIFF_UNIFIED\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/diff.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/diff.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         1726 as ::core::ffi::c_uint,
                         b"_Bool extract_hunk(FILE *, diffhunk_T *, diffstyle_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,

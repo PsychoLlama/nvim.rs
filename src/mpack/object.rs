@@ -332,8 +332,7 @@ pub unsafe extern "C" fn mpack_parser_copy(mut d: *mut mpack_parser_t, mut s: *m
         } else {
             __assert_fail(
                 b"src->capacity <= dst_capacity\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/object.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 135 as ::core::ffi::c_uint,
                 b"void mpack_parser_copy(mpack_parser_t *, mpack_parser_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -365,8 +364,7 @@ unsafe extern "C" fn mpack_parser_push(mut p: *mut mpack_parser_t) -> *mut mpack
         } else {
             __assert_fail(
                 b"parser->size < parser->capacity\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/object.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 155 as ::core::ffi::c_uint,
                 b"mpack_node_t *mpack_parser_push(mpack_parser_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -392,8 +390,7 @@ unsafe extern "C" fn mpack_parser_pop(mut p: *mut mpack_parser_t) -> *mut mpack_
         } else {
             __assert_fail(
                 b"parser->size\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/mpack/object.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 170 as ::core::ffi::c_uint,
                 b"mpack_node_t *mpack_parser_pop(mpack_parser_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,

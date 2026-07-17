@@ -2084,8 +2084,7 @@ unsafe extern "C" fn handle_request(
             __assert_fail(
                 b"p->type == kMessageTypeRequest || p->type == kMessageTypeNotification\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/msgpack_rpc/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 311 as ::core::ffi::c_uint,
                 b"void handle_request(Channel *, Unpacker *, Array)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2459,8 +2458,7 @@ unsafe extern "C" fn rpc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
         } else {
             __assert_fail(
                 b"channel\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/msgpack_rpc/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 493 as ::core::ffi::c_uint,
                 b"void rpc_close_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
             );

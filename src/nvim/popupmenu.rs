@@ -4052,8 +4052,7 @@ pub unsafe extern "C" fn pum_redraw() {
             } else {
                 __assert_fail(
                     b"!(State & MODE_CMDLINE)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/popupmenu.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/popupmenu.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     584 as ::core::ffi::c_uint,
                     b"void pum_redraw(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );

@@ -2063,7 +2063,7 @@ pub unsafe extern "C" fn transstr_buf(
         } else {
             __assert_fail(
                 b"buf_p <= buf_e\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
+                b"src/nvim/charset.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 395 as ::core::ffi::c_uint,
                 b"size_t transstr_buf(const char *const, const ssize_t, char *const, const size_t, _Bool)\0"
@@ -2317,8 +2317,7 @@ pub unsafe extern "C" fn transchar_nonprint(
         } else {
             __assert_fail(
                 b"c <= 0xff\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/charset.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 613 as ::core::ffi::c_uint,
                 b"void transchar_nonprint(const buf_T *, char *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2455,8 +2454,7 @@ pub unsafe extern "C" fn vim_strnsize(
         } else {
             __assert_fail(
                 b"s != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/charset.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 766 as ::core::ffi::c_uint,
                 b"int vim_strnsize(const char *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -2698,8 +2696,7 @@ pub unsafe extern "C" fn getdigits_int(
                 __assert_fail(
                     b"number >= INT_MIN && number <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/charset.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1134 as ::core::ffi::c_uint,
                     b"int getdigits_int(char **, _Bool, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2736,8 +2733,7 @@ pub unsafe extern "C" fn getdigits_int32(
                 __assert_fail(
                     b"number >= INT32_MIN && number <= INT32_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/charset.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     1166 as ::core::ffi::c_uint,
                     b"int32_t getdigits_int32(char **, _Bool, int32_t)\0".as_ptr()
                         as *const ::core::ffi::c_char,

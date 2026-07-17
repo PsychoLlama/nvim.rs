@@ -3819,8 +3819,7 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
         } else {
             __assert_fail(
                 b"p != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/extmark.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/api/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1083 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );

@@ -784,8 +784,7 @@ pub unsafe extern "C" fn proc_spawn(
         } else {
             __assert_fail(
                 b"!(err && proc->fwd_err)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/proc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 46 as ::core::ffi::c_uint,
                 b"int proc_spawn(Proc *, _Bool, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1190,8 +1189,7 @@ unsafe extern "C" fn decref(mut proc: *mut Proc) {
         } else {
             __assert_fail(
                 b"i < kv_size(loop->children)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/proc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 305 as ::core::ffi::c_uint,
                 b"void decref(Proc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1254,8 +1252,7 @@ unsafe extern "C" fn proc_close(mut proc: *mut Proc) {
         } else {
             __assert_fail(
                 b"!proc->closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/proc.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 321 as ::core::ffi::c_uint,
                 b"void proc_close(Proc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1380,8 +1377,7 @@ unsafe extern "C" fn exit_event(mut argv: *mut *mut ::core::ffi::c_void) {
                 } else {
                     __assert_fail(
                         b"status == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/event/proc.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         431 as ::core::ffi::c_uint,
                         b"void exit_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
                     );

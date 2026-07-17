@@ -3718,8 +3718,7 @@ unsafe extern "C" fn syn_stack_alloc() {
             } else {
                 __assert_fail(
                     b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/syntax.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/syntax.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     926 as ::core::ffi::c_uint,
                     b"void syn_stack_alloc(void)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -7722,9 +7721,7 @@ unsafe extern "C" fn syn_cmd_region(mut eap: *mut exarg_T, mut syncing: ::core::
                             __assert_fail(
                                 b"item == ITEM_SKIP || item == ITEM_END\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/syntax.c\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"src/nvim/syntax.rs\0".as_ptr() as *const ::core::ffi::c_char,
                                 4333 as ::core::ffi::c_uint,
                                 b"void syn_cmd_region(exarg_T *, int)\0".as_ptr()
                                     as *const ::core::ffi::c_char,

@@ -4276,7 +4276,7 @@ pub unsafe extern "C" fn qf_init(
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
+                b"src/nvim/quickfix.rs\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 390 as ::core::ffi::c_uint,
                 b"int qf_init(win_T *, const char *restrict, char *restrict, int, const char *restrict, char *restrict)\0"
@@ -6021,8 +6021,7 @@ pub unsafe extern "C" fn qf_stack_get_bufnr() -> ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1770 as ::core::ffi::c_uint,
                 b"int qf_stack_get_bufnr(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6202,7 +6201,7 @@ unsafe extern "C" fn qf_add_entry(
             } else {
                 __assert_fail(
                     b"*lastp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0"
+                    b"src/nvim/quickfix.rs\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     1998 as ::core::ffi::c_uint,
                     b"int qf_add_entry(qf_list_T *, char *, char *, char *, int, char *, linenr_T, linenr_T, int, int, char, char *, int, char, typval_T *, char)\0"
@@ -6230,8 +6229,7 @@ pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2018 as ::core::ffi::c_uint,
                 b"void qf_resize_stack(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -6348,8 +6346,7 @@ unsafe extern "C" fn qf_cmd_get_stack(
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 2156 as ::core::ffi::c_uint,
                 b"qf_info_T *qf_cmd_get_stack(exarg_T *, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7385,8 +7382,7 @@ unsafe extern "C" fn qf_jump_newwin(
             } else {
                 __assert_fail(
                     b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     3240 as ::core::ffi::c_uint,
                     b"void qf_jump_newwin(qf_info_T *, int, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7946,8 +7942,7 @@ pub unsafe extern "C" fn qf_mark_adjust(
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3686 as ::core::ffi::c_uint,
                 b"_Bool qf_mark_adjust(buf_T *, win_T *, linenr_T, linenr_T, linenr_T, linenr_T)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -8044,8 +8039,7 @@ pub unsafe extern "C" fn qf_view_result(mut split: bool) {
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3776 as ::core::ffi::c_uint,
                 b"void qf_view_result(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -8371,8 +8365,7 @@ pub unsafe extern "C" fn qf_current_entry(mut wp: *mut win_T) -> linenr_T {
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4056 as ::core::ffi::c_uint,
                 b"linenr_T qf_current_entry(win_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9106,8 +9099,7 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4655 as ::core::ffi::c_uint,
                 b"void ex_make(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9258,8 +9250,7 @@ pub unsafe extern "C" fn qf_get_valid_size(mut eap: *mut exarg_T) -> size_t {
         } else {
             __assert_fail(
                 b"qf_get_curlist(qi)->qf_count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4760 as ::core::ffi::c_uint,
                 b"size_t qf_get_valid_size(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9296,8 +9287,7 @@ pub unsafe extern "C" fn qf_get_cur_idx(mut eap: *mut exarg_T) -> size_t {
         } else {
             __assert_fail(
                 b"qf_get_curlist(qi)->qf_index >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4791 as ::core::ffi::c_uint,
                 b"size_t qf_get_cur_idx(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9325,8 +9315,7 @@ pub unsafe extern "C" fn qf_get_cur_valid_idx(mut eap: *mut exarg_T) -> ::core::
         } else {
             __assert_fail(
                 b"qfl->qf_index >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4818 as ::core::ffi::c_uint,
                 b"int qf_get_cur_valid_idx(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -9373,8 +9362,7 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
         } else {
             __assert_fail(
                 b"qfl->qf_count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 4857 as ::core::ffi::c_uint,
                 b"size_t qf_get_nth_valid_entry(qf_list_T *, size_t, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9441,8 +9429,7 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
                 } else {
                     __assert_fail(
                         b"eap->line1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         4917 as ::core::ffi::c_uint,
                         b"void ex_cc(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -9463,8 +9450,7 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
             } else {
                 __assert_fail(
                     b"valid_entry <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     4924 as ::core::ffi::c_uint,
                     b"void ex_cc(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -9843,8 +9829,7 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 5343 as ::core::ffi::c_uint,
                 b"void ex_cfile(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -11423,8 +11408,7 @@ unsafe extern "C" fn qf_get_properties(
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 6512 as ::core::ffi::c_uint,
                 b"int qf_get_properties(win_T *, dict_T *, dict_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -12186,8 +12170,7 @@ pub unsafe extern "C" fn set_errorlist(
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7120 as ::core::ffi::c_uint,
                 b"int set_errorlist(win_T *, list_T *, int, char *, dict_T *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -12304,8 +12287,7 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7196 as ::core::ffi::c_uint,
                 b"_Bool set_ref_in_quickfix(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -12779,8 +12761,7 @@ pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
         } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 7575 as ::core::ffi::c_uint,
                 b"void ex_helpgrep(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );

@@ -3592,8 +3592,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
                 __assert_fail(
                     b"newlen - oldlen == new_line_len - old_line_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     497 as ::core::ffi::c_uint,
                     b"void shift_block(oparg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3682,8 +3681,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
                 __assert_fail(
                     b"destination_col - verbatim_copy_width >= 0\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     561 as ::core::ffi::c_uint,
                     b"void shift_block(oparg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3696,8 +3694,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
             } else {
                 __assert_fail(
                     b"verbatim_copy_end - oldp >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     565 as ::core::ffi::c_uint,
                     b"void shift_block(oparg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3734,8 +3731,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
                 __assert_fail(
                     b"newlen - oldlen == new_line_len - old_line_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                     582 as ::core::ffi::c_uint,
                     b"void shift_block(oparg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -3820,7 +3816,7 @@ unsafe extern "C" fn block_insert(
                 } else {
                     __assert_fail(
                         b"count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0"
+                        b"src/nvim/ops.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         647 as ::core::ffi::c_uint,
                         b"void block_insert(oparg_T *, const char *, size_t, _Bool, struct block_def *)\0"
@@ -4272,8 +4268,7 @@ unsafe extern "C" fn pbyte(mut lp: pos_T, mut c: ::core::ffi::c_int) {
         } else {
             __assert_fail(
                 b"c <= UCHAR_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1054 as ::core::ffi::c_uint,
                 b"void pbyte(pos_T, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -4439,8 +4434,7 @@ unsafe extern "C" fn op_replace(
                     } else {
                         __assert_fail(
                             b"col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                             1179 as ::core::ffi::c_uint,
                             b"int op_replace(oparg_T *, int)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -5240,8 +5234,7 @@ pub unsafe extern "C" fn do_join(
         } else {
             __assert_fail(
                 b"count >= 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ops.c\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 1899 as ::core::ffi::c_uint,
                 b"int do_join(size_t, _Bool, _Bool, _Bool, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
