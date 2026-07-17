@@ -19,6 +19,7 @@ repository.
 Below are stated the contribution made in the past to netrw.
 
 Changes made to `autoload/netrw.vim`:
+
 - 2023 Nov 21 by Vim Project: ignore wildignore when expanding $COMSPEC (v173a)
 - 2023 Nov 22 by Vim Project: fix handling of very long filename on longlist style (v173a)
 - 2024 Feb 19 by Vim Project: (announce adoption)
