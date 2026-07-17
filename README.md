@@ -16,6 +16,16 @@ Two goals:
 - No compatibility. Features may break or get removed according to my inscrutable whims.
 - Continued development is dependent on me not getting bored.
 
+## Usage
+
+**Nix**
+
+```bash
+nix run 'github:PsychoLlama/nvim.rs#'
+```
+
+Only supported on Linux. Binary releases coming... someday.
+
 ## License
 
 [Inherited from Neovim](https://github.com/neovim/neovim/blob/v0.12.4/README.md?plain=1#L94-L99):
