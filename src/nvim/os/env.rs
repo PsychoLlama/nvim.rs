@@ -2072,10 +2072,12 @@ pub static mut default_vim_dir: *mut ::core::ffi::c_char =
     b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
 pub static mut default_vimruntime_dir: *mut ::core::ffi::c_char =
-    b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr() as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char;
 #[no_mangle]
 pub static mut default_lib_dir: *mut ::core::ffi::c_char =
-    b"/usr/local/lib64/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_ptr() as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char;
 #[no_mangle]
 pub unsafe extern "C" fn env_init() {
     nvim_testing = os_env_exists(

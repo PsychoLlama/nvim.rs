@@ -73,6 +73,20 @@ fn main() {
     // dlopened C modules (e.g. libnlua0) resolve symbols back into nvim.
     println!("cargo:rustc-link-arg=-Wl,--export-dynamic");
 
+    // Bake the compiled-in default paths (neovim's generated `pathdef.c`) so
+    // the dev binary finds its runtime and bundled tree-sitter parsers with no
+    // env vars. Both are `os_isdir`-guarded at resolution time, so an installed
+    // binary falls through to the exe-relative layout unless the baked dir
+    // exists. Override each var for a prod build to point at the install prefix.
+    for (var, rel) in [
+        ("NVIM_DEFAULT_VIMRUNTIME_DIR", "runtime"),
+        ("NVIM_DEFAULT_LIB_DIR", ".deps/usr/lib/nvim"),
+    ] {
+        let val = std::env::var(var).unwrap_or_else(|_| manifest.join(rel).display().to_string());
+        println!("cargo:rustc-env={var}={val}");
+        println!("cargo:rerun-if-env-changed={var}");
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
 }
 
