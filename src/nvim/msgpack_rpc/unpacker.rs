@@ -735,7 +735,11 @@ unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: 
         _ => {}
     };
 }
-unsafe extern "C" fn api_parse_exit(mut _parser: *mut mpack_parser_t, mut _node: *mut mpack_node_t) {}
+unsafe extern "C" fn api_parse_exit(
+    mut _parser: *mut mpack_parser_t,
+    mut _node: *mut mpack_node_t,
+) {
+}
 #[no_mangle]
 pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
     mpack_parser_init(&raw mut (*p).parser, 0 as mpack_uint32_t);

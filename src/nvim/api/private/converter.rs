@@ -1082,8 +1082,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
                         } else {
@@ -1098,8 +1097,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                             )
                         }
                     } else {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
                                 xmalloc(
@@ -1162,8 +1160,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
                         } else {
@@ -1178,8 +1175,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                             )
                         }
                     } else {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
                                 xmalloc(
@@ -1246,8 +1242,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
                         } else {
@@ -1262,8 +1257,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                             )
                         }
                     } else {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
                                 xmalloc(
@@ -1332,8 +1326,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
                         } else {
@@ -1348,8 +1341,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                             )
                         }
                     } else {
-                        if (*edata).stack.items
-                            == &raw mut (*edata).stack.init_array as *mut Object
+                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
                                 xmalloc(
@@ -2423,9 +2415,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = if (*edata)
-                                                    .stack
-                                                    .capacity
+                                                (*edata).stack.capacity = if (*edata).stack.capacity
                                                     << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[Object; 2]>()
                                                         .wrapping_div(
@@ -2808,9 +2798,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = if (*edata)
-                                                    .stack
-                                                    .capacity
+                                                (*edata).stack.capacity = if (*edata).stack.capacity
                                                     << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[Object; 2]>()
                                                         .wrapping_div(

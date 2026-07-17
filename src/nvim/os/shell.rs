@@ -3322,13 +3322,11 @@ pub unsafe extern "C" fn shell_build_argv(
     mut extra_args: *const ::core::ffi::c_char,
 ) -> *mut *mut ::core::ffi::c_char {
     let mut argc: size_t = tokenize(p_sh, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-        .wrapping_add(
-            if !cmd.is_null() {
-                tokenize(p_shcf, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-            } else {
-                0 as size_t
-            },
-        );
+        .wrapping_add(if !cmd.is_null() {
+            tokenize(p_shcf, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
+        } else {
+            0 as size_t
+        });
     let mut rv: *mut *mut ::core::ffi::c_char = xmalloc(
         argc.wrapping_add(4 as size_t)
             .wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),

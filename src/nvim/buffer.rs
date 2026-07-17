@@ -6342,8 +6342,7 @@ pub unsafe extern "C" fn buflist_getfile(
                 tabpage_new();
             } else if win_split(
                 0 as ::core::ffi::c_int,
-                if swb_flags & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-                {
+                if swb_flags & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
                     WSP_VERT as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int

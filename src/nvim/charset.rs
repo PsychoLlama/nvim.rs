@@ -2417,17 +2417,15 @@ pub unsafe extern "C" fn byte2cells(mut b: ::core::ffi::c_int) -> ::core::ffi::c
 #[no_mangle]
 pub unsafe extern "C" fn char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c < 0 as ::core::ffi::c_int {
-        return char2cells(
-            if c == K_SPECIAL {
-                KS_SPECIAL
+        return char2cells(if c == K_SPECIAL {
+            KS_SPECIAL
+        } else {
+            if c == NUL {
+                KS_ZERO
             } else {
-                if c == NUL {
-                    KS_ZERO
-                } else {
-                    -c & 0xff as ::core::ffi::c_int
-                }
-            },
-        ) + 2 as ::core::ffi::c_int;
+                -c & 0xff as ::core::ffi::c_int
+            }
+        }) + 2 as ::core::ffi::c_int;
     }
     if c >= 0x80 as ::core::ffi::c_int {
         return utf_char2cells(c);

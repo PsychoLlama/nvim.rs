@@ -4562,7 +4562,9 @@ pub unsafe extern "C" fn did_set_messagesopt(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_mkspellmem(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_mkspellmem(
+    mut _args: *mut optset_T,
+) -> *const ::core::ffi::c_char {
     if spell_check_msm() != OK {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }

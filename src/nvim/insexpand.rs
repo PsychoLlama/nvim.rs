@@ -4562,13 +4562,11 @@ pub unsafe extern "C" fn ins_compl_col_range_attr(
         || !compl_hi_on_autocompl_longest
             && ins_compl_preinsert_longest() as ::core::ffi::c_int != 0
         || {
-            attr = syn_name2attr(
-                if has_preinsert as ::core::ffi::c_int != 0 {
-                    b"PreInsert\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"ComplMatchIns\0".as_ptr() as *const ::core::ffi::c_char
-                },
-            );
+            attr = syn_name2attr(if has_preinsert as ::core::ffi::c_int != 0 {
+                b"PreInsert\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b"ComplMatchIns\0".as_ptr() as *const ::core::ffi::c_char
+            });
             attr == 0 as ::core::ffi::c_int
         }
     {

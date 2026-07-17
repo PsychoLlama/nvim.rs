@@ -1267,8 +1267,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             as ::core::ffi::c_int
                                             as usize,
                                     ) {
-                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
-                                {
+                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
                                     stack.items as *mut ::core::ffi::c_void
                                 } else {
                                     _memcpy_free(
@@ -1281,8 +1280,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                     )
                                 }
                             } else {
-                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
-                                {
+                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
                                     memcpy(
                                         xmalloc(
                                             stack

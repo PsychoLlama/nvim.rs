@@ -7686,13 +7686,11 @@ unsafe extern "C" fn command_line_handle_key(mut s: *mut CommandLineState) -> ::
         }
         if (*s).do_abbr as ::core::ffi::c_int != 0
             && ((*s).c < 0 as ::core::ffi::c_int || !vim_iswordc((*s).c))
-            && (ccheck_abbr(
-                if (*s).c >= 0x100 as ::core::ffi::c_int {
-                    (*s).c + ABBR_OFF
-                } else {
-                    (*s).c
-                },
-            ) != 0
+            && (ccheck_abbr(if (*s).c >= 0x100 as ::core::ffi::c_int {
+                (*s).c + ABBR_OFF
+            } else {
+                (*s).c
+            }) != 0
                 || (*s).c == Ctrl_RSB)
         {
             return command_line_changed(s);

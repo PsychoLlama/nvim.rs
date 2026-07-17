@@ -9045,8 +9045,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         &raw mut (*cur_node).children;
                                                     if pt_is_assignment(cur_pt) {
                                                         if pt_stack.size == pt_stack.capacity {
-                                                            pt_stack.capacity = if pt_stack
-                                                                .capacity
+                                                            pt_stack.capacity = if pt_stack.capacity
                                                                 << 1 as ::core::ffi::c_int
                                                                 > ::core::mem::size_of::<
                                                                     [ExprASTParseType; 4],

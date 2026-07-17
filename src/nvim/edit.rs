@@ -4170,13 +4170,11 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
             }
         }
         if vim_iswordc((*s).c) as ::core::ffi::c_int != 0
-            || !echeck_abbr(
-                if (*s).c >= 0x100 as ::core::ffi::c_int {
-                    (*s).c + ABBR_OFF
-                } else {
-                    (*s).c
-                },
-            ) && (*s).c != Ctrl_RSB
+            || !echeck_abbr(if (*s).c >= 0x100 as ::core::ffi::c_int {
+                (*s).c + ABBR_OFF
+            } else {
+                (*s).c
+            }) && (*s).c != Ctrl_RSB
         {
             insert_special((*s).c, false_0, false_0);
             revins_legal += 1;

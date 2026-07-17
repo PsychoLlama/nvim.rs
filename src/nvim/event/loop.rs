@@ -853,7 +853,10 @@ pub unsafe extern "C" fn loop_on_put(
         uv_stop(&raw mut (*loop_0).uv);
     }
 }
-unsafe extern "C" fn loop_walk_cb(mut handle: *mut uv_handle_t, mut _arg: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn loop_walk_cb(
+    mut handle: *mut uv_handle_t,
+    mut _arg: *mut ::core::ffi::c_void,
+) {
     if uv_is_closing(handle) == 0 {
         uv_close(handle, None);
     }

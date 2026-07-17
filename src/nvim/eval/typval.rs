@@ -7186,8 +7186,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        if (*mpstack).items
-                            == &raw mut (*mpstack).init_array as *mut MPConvStackVal
+                        if (*mpstack).items == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                         {
                             (*mpstack).items as *mut ::core::ffi::c_void
                         } else {
@@ -7201,8 +7200,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             )
                         }
                     } else {
-                        if (*mpstack).items
-                            == &raw mut (*mpstack).init_array as *mut MPConvStackVal
+                        if (*mpstack).items == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                         {
                             memcpy(
                                 xmalloc(
