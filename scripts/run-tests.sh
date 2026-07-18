@@ -58,7 +58,12 @@ build_fixture printenv-test printenv-test.c
 # (Upstream instead deleted it after every run.)
 build_dir=$root/target/testrun
 xdg=$build_dir/Xtest_xdg
-tmpdir=$build_dir/Xtest_tmpdir
+# TMPDIR must be SHORT: nvim puts its server sockets under $TMPDIR when
+# $XDG_RUNTIME_DIR is unset (the in-test env), and unix sockets cap the path
+# at ~107 bytes (sun_path). libuv silently truncates longer paths, which then
+# collide ("--listen: address already in use"). A repo-relative Xtest_tmpdir
+# exceeds the cap; upstream CI paths only pass because they are shorter.
+tmpdir=${XDG_RUNTIME_DIR:-/tmp}/nvim.rs-Xtest-$(cksum <<<"$root" | cut -d' ' -f1)
 chmod -R u+rwX "$xdg" "$tmpdir" 2>/dev/null || true
 rm -rf "$xdg" "$tmpdir" "$build_dir/Xtest_rplugin_manifest"
 mkdir -p "$xdg" "$tmpdir"
