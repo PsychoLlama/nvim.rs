@@ -753,6 +753,13 @@ describe('fs.c', function()
       end)
 
       itp('returns NODE_WRITABLE for /dev/stderr', function()
+        -- When the test run itself is redirected to a log file (the usual way
+        -- to run these suites), /dev/stderr is a regular file and the
+        -- assertion cannot hold.
+        local stderr = vim.uv.fs_stat('/dev/stderr')
+        if stderr and stderr.type == 'file' then
+          return
+        end
         eq(NODE_WRITABLE, fs.os_nodetype(to_cstr('/dev/stderr')))
       end)
     end)

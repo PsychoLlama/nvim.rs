@@ -21,14 +21,16 @@ oldtest *args: build
   scripts/prep-test-tree.sh
   make -C test/old/testdir NVIM_PRG={{ justfile_directory() }}/target/debug/nvim {{ args }}
 
+# Run unit tests. Args: same shape as functionaltest. The upstream v0.12.4 C
+# headers (reconstructed under target/upstream on first run) are preprocessed
+# into LuaJIT FFI declarations, and the tests call the transpiled symbols
+# exported by the nvim binary itself.
+unittest *args: build
+  scripts/run-tests.sh unit {{ args }}
+
 # Run benchmarks. Args: same shape as functionaltest.
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
-
-# NOTE: upstream's unit tests (test/unit) cannot run: they FFI into the C
-# internals by preprocessing src/nvim/*.h headers, which the c2rust port no
-# longer has. Internal coverage now comes from `cargo test` as Rust tests
-# accumulate.
 
 # Run the full test suite. This is slow! Prefer running specific tests.
 check: fmt-check build

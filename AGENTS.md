@@ -9,5 +9,6 @@
 - `just functionaltest [paths...] [--filter=pat]` — RPC-driven tests from `test/functional`. Pass spec files/dirs to run a subset.
 - `just oldtest [test_name]` — legacy Vim tests from `test/old/testdir`, e.g. `just oldtest test_arglist`.
 - `just benchmark [paths...]` — benchmarks from `test/benchmark`.
-- Upstream's unit tests (`test/unit`) are defunct: they FFI'd into C headers that the port no longer generates.
+- `just unittest [paths...]` — unit tests from `test/unit`. They preprocess the upstream v0.12.4 C headers (reconstructed under `target/upstream` on first run) and FFI into the transpiled symbols the nvim binary exports.
 - Test runs are verbose; redirect to a log file and grep the summary.
+- Run one suite at a time: the harnesses share `target/` scaffolding and interfere when run concurrently.

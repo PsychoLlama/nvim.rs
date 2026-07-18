@@ -3,7 +3,7 @@
 # build. Replaces the deleted cmake/RunTests.cmake: same environment sandbox,
 # same `nvim -ll test/runner.lua` invocation.
 #
-# Usage: run-tests.sh <functional|benchmark> [harness args...] [spec paths...]
+# Usage: run-tests.sh <functional|unit|benchmark> [harness args...] [spec paths...]
 #
 # Positional args are spec files/dirs (repo-relative or absolute). Flags are
 # passed through to the harness; use the --flag=value form (e.g.
@@ -15,9 +15,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 
 test_type=${1:-}
 case "$test_type" in
-  functional|benchmark) shift ;;
+  functional|unit|benchmark) shift ;;
   *)
-    echo "usage: $0 <functional|benchmark> [harness args...] [spec paths...]" >&2
+    echo "usage: $0 <functional|unit|benchmark> [harness args...] [spec paths...]" >&2
     exit 64
     ;;
 esac
@@ -45,12 +45,33 @@ build_fixture() {
     cc -O2 -o "$out" "$src" "$@"
   fi
 }
-build_fixture tty-test tty-test.c "${uv_flags[@]}"
-build_fixture streams-test streams-test.c "${uv_flags[@]}"
-build_fixture shell-test shell-test.c
-build_fixture pwsh-test shell-test.c # fake pwsh for make_filter_cmd() tests
-build_fixture printargs-test printargs-test.c
-build_fixture printenv-test printenv-test.c
+if [[ $test_type != unit ]]; then
+  build_fixture tty-test tty-test.c "${uv_flags[@]}"
+  build_fixture streams-test streams-test.c "${uv_flags[@]}"
+  build_fixture shell-test shell-test.c
+  build_fixture pwsh-test shell-test.c # fake pwsh for make_filter_cmd() tests
+  build_fixture printargs-test printargs-test.c
+  build_fixture printenv-test printenv-test.c
+else
+  # Unit tests preprocess the upstream C headers; reconstruct them if needed.
+  "$root/scripts/prep-unit-headers.sh"
+  # Upstream compiled these helpers into the test build of libnvim. Build them
+  # as a shared library instead; test/unit/preload.lua loads it RTLD_GLOBAL so
+  # ffi.C sees the symbols, and its nvim references resolve from the binary
+  # (linked with --export-dynamic).
+  up=$root/target/upstream
+  unit_fixtures=$root/test/unit/fixtures
+  fixture_so=$bin_dir/unit-fixtures.so
+  if [[ ! -e $fixture_so || $unit_fixtures/multiqueue.c -nt $fixture_so ||
+    $unit_fixtures/vterm_test.c -nt $fixture_so ]]; then
+    echo "compiling test fixture: unit-fixtures.so" >&2
+    cc -shared -fPIC -O2 -o "$fixture_so" \
+      "$unit_fixtures/multiqueue.c" "$unit_fixtures/vterm_test.c" \
+      -I"$unit_fixtures" -I"$up/src/src" -I"$up/build/src/nvim/auto" \
+      -I"$up/build/include" -I"$up/build/cmake.config" \
+      -I"$NVIM_DEPS_PREFIX/include"
+  fi
+fi
 
 # Scratch area (upstream's $BUILD_DIR): XDG sandbox, TMPDIR, logs. Start each
 # run from a fresh sandbox — tests deliberately break it (bad tempdir perms,
