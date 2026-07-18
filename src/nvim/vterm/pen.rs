@@ -109,7 +109,7 @@ pub struct VTermScreenCell {
     pub uri: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
-#[repr(C)]
+#[repr(C, align(4))] // align(4): C declares these as `unsigned` bitfields (4-byte-aligned storage unit); c2rust emitted an align-1 byte array, shifting fg/bg/uri offsets in VTermScreenCell vs the C ABI.
 pub struct VTermScreenCellAttrs {
     #[bitfield(name = "bold", ty = "::core::ffi::c_uint", bits = "0..=0")]
     #[bitfield(name = "underline", ty = "::core::ffi::c_uint", bits = "1..=2")]
