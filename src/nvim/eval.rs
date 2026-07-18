@@ -8143,7 +8143,8 @@ unsafe extern "C" fn eval_multdiv_number(
         (*tv1).vval.v_float = f1;
     } else {
         if op == '*' as ::core::ffi::c_int {
-            n1 = n1 * n2;
+            // Vimscript arithmetic wraps on overflow (C two's-complement).
+            n1 = n1.wrapping_mul(n2);
         } else if op == '/' as ::core::ffi::c_int {
             n1 = num_divide(n1, n2);
         } else {
