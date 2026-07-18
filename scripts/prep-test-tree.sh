@@ -17,6 +17,9 @@ ln -sfn "$NVIM_DEPS_PREFIX/lib/nvim" "$root/target/lib/nvim"
 if [[ -L $root/target/runtime ]]; then rm "$root/target/runtime"; fi
 mkdir -p "$root/target/runtime"
 ln -sfn ../../runtime/doc "$root/target/runtime/doc"
+# Upstream's build runtime also carried the generated vimscript syntax
+# tables; only specs that opt in via add_builddir_to_rtp() see them.
+"$root/scripts/gen-vimvim.sh"
 # A few specs (e.g. functional/harness) locate nvim at $BUILD_DIR/bin/nvim
 # rather than honoring $NVIM_PRG. A real directory (not a bin -> debug
 # symlink): fs_spec's upward find() expects `bin` to stat as a directory.
