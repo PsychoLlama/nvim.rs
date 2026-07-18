@@ -6494,8 +6494,11 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     }
     (*l).lv_lock = lock;
 }
+// TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
+// left 0, which is a valid pointer-sentinel value and would corrupt any
+// caller comparing against it (the unit tests do, via FFI).
 #[no_mangle]
-pub static mut kTVCstring: size_t = 0;
+pub static mut kTVCstring: size_t = 18446744073709551614;
 #[no_mangle]
 pub static mut kTVTranslate: size_t = 18446744073709551615 as size_t;
 #[no_mangle]
