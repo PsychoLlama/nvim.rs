@@ -670,18 +670,13 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
     flags: ::core::ffi::c_int,
 ) -> LexExprToken {
     let mut schar: uint8_t = 0;
-    let mut ret: LexExprToken = LexExprToken {
-        start: (*pstate).pos,
-        len: 0,
-        type_0: kExprLexInvalid,
-        data: C2Rust_Unnamed_7 {
-            cmp: C2Rust_Unnamed_19 {
-                type_0: kExprCmpEqual,
-                ccs: kCCStrategyUseOption,
-                inv: false,
-            },
-        },
-    };
+    // The C partial initializer (`LexExprToken ret = { .type = ..., .start =
+    // ... }`) zeroes the entire union; initializing only the `cmp` variant
+    // leaves the tail of larger variants (e.g. `opt.scope`) as stack garbage,
+    // which the parser later reads through for invalid option tokens.
+    let mut ret: LexExprToken = ::core::mem::zeroed();
+    ret.start = (*pstate).pos;
+    ret.type_0 = kExprLexInvalid;
     let mut pline: ParserLine = ParserLine {
         data: ::core::ptr::null::<::core::ffi::c_char>(),
         size: 0,
