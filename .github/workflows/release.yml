@@ -1,0 +1,71 @@
+name: Release
+
+# Manual, Linux-only CalVer releases. The version is the build date plus the
+# short commit sha, e.g. `2026.07.18-a1b2c3d4e`.
+on:
+  workflow_dispatch:
+
+# Needed to push the tag and publish the GitHub Release.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Build inside the devshell for the pinned toolchain and $NVIM_DEPS_PREFIX,
+    # exactly as ci.yml does — but compile with cargo (`just package`), not the
+    # nix package derivation.
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/magic-nix-cache-action@v14
+        with:
+          use-flakehub: false
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      # `2000.01.15-<short-sha>`. Date is UTC build date; the sha pins the exact
+      # source. Both the tag and the tarball name derive from this.
+      - name: Compute version
+        id: version
+        run: |
+          version="$(date -u +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "Release version: $version"
+
+      # Cargo release build, then assemble the relocatable tarball under
+      # target/dist (bin/ + runtime + tree-sitter parsers).
+      - name: Build and package
+        id: package
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          just package "$version"
+          echo "tarball=target/dist/nvim-$version-x86_64-linux.tar.gz" >>"$GITHUB_OUTPUT"
+
+      # Create the tag at this commit and publish the Release with the tarball.
+      # Runs in the runner's plain shell (not the devshell) for the preinstalled
+      # gh CLI. Fails loudly if the tag already exists (e.g. re-dispatched on the
+      # same commit) rather than clobbering a published release.
+      - name: Publish GitHub Release
+        shell: bash -euo pipefail {0}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          gh release create "$version" \
+            --target "$GITHUB_SHA" \
+            --title "$version" \
+            --notes "Automated release built from \`$GITHUB_SHA\` (Linux, x86_64)." \
+            '${{ steps.package.outputs.tarball }}'
