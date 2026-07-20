@@ -15,3 +15,9 @@ includes = ["*.md"]
 command = "stylua"
 options = ["--respect-ignores"]
 includes = ["*.lua"]
+
+[formatter.just]
+command = "just"
+options = ["--fmt", "--justfile"]
+includes = ["justfile", "**/justfile", "*.just"]
+no-positional-arg-support = true

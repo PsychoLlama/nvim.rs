@@ -1,3 +1,6 @@
+set indentation := "  "
+set default-list
+
 # AddressSanitizer builds (the phase-1 safety net from the migration plan).
 # All heap allocation flows through libc malloc, so ASan's interposer catches
 # use-after-free/double-free/out-of-bounds across the whole binary even though
@@ -11,10 +14,6 @@ bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 # harness owns). Leak checking stays off until the corruption classes are
 # triaged. Callers may override by exporting ASAN_OPTIONS.
 options := "detect_leaks=0:log_path=" + justfile_directory() / "target/asan/asan.log"
-
-# List available recipes.
-_:
-  @just --list asan
 
 # Stack-redzone checking is off (-asan-stack=0): this nightly's C-ABI lowering
 # over-reads by-value aggregates whose size is not a multiple of 8 (e.g. the

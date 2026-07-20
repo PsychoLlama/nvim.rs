@@ -1,9 +1,8 @@
 # AddressSanitizer builds and test runs, e.g. `just asan functionaltest`.
 mod asan
 
-# List available recipes.
-_:
-  @just --list
+set indentation := "  "
+set default-list
 
 # Compile the nvim binary.
 build:
