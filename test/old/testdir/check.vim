@@ -229,7 +229,10 @@ endfunc
 " Command to check for not running under ASAN
 command CheckNotAsan call CheckNotAsan()
 func CheckNotAsan()
-  if execute('verbose version') =~# '-fsanitize=[a-z,]*\<address\>'
+  " The cargo ASan build carries no -fsanitize flag in :version; the *-asan
+  " just recipes export NVIM_TEST_ASAN=1 instead.
+  if $NVIM_TEST_ASAN == '1'
+        \ || execute('verbose version') =~# '-fsanitize=[a-z,]*\<address\>'
     throw 'Skipped: does not work with ASAN'
   endif
 endfunc

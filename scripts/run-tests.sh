@@ -22,14 +22,18 @@ case "$test_type" in
     ;;
 esac
 
-NVIM_PRG=${NVIM_PRG:-$root/target/debug/nvim}
+# Prep before the -x check: prep-test-tree.sh is what (re)creates the
+# target/bin/nvim hard link the default NVIM_PRG points at. Tests run that
+# link, not target/debug/nvim directly: specs like fs_spec assert nvim lives
+# at $BUILD_DIR/bin/nvim, and $NVIM_BIN swaps in other builds (ASan recipes).
+"$root/scripts/prep-test-tree.sh"
+
+NVIM_PRG=${NVIM_PRG:-$root/target/bin/nvim}
 if [[ ! -x $NVIM_PRG ]]; then
   echo "$0: $NVIM_PRG not found; run \`just build\` first" >&2
   exit 66
 fi
 bin_dir=$(dirname "$NVIM_PRG")
-
-"$root/scripts/prep-test-tree.sh"
 
 # Compile the C test-fixture programs (upstream: test/functional/fixtures/
 # CMakeLists.txt) next to the nvim binary, where testnvim.lua's testprg()

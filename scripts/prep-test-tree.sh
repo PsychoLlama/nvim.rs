@@ -20,9 +20,18 @@ ln -sfn ../../runtime/doc "$root/target/runtime/doc"
 # Upstream's build runtime also carried the generated vimscript syntax
 # tables; only specs that opt in via add_builddir_to_rtp() see them.
 "$root/scripts/gen-vimvim.sh"
-# A few specs (e.g. functional/harness) locate nvim at $BUILD_DIR/bin/nvim
-# rather than honoring $NVIM_PRG. A real directory (not a bin -> debug
-# symlink): fs_spec's upward find() expects `bin` to stat as a directory.
+# Specs resolve nvim through $BUILD_DIR/bin/nvim (and fs_spec asserts that
+# layout), so the tested binary is exposed here; $NVIM_BIN overrides the
+# default cargo build (e.g. the ASan recipes point it at target/asan). A real
+# directory and a hard link, not symlinks: fs_spec's upward find() expects
+# `bin` to stat as a directory, and vim.fs.dir()/find() report an unfollowed
+# symlink as type 'link' where the specs expect 'file'. Refreshed every run,
+# so a cargo rebuild (new inode) can't leave it stale.
 if [[ -L $root/target/bin ]]; then rm "$root/target/bin"; fi
 mkdir -p "$root/target/bin"
-ln -sfn ../debug/nvim "$root/target/bin/nvim"
+nvim_bin=${NVIM_BIN:-$root/target/debug/nvim}
+# Missing binary is not an error here; the harness reports it with a better
+# message ("run `just build` first") when it checks $NVIM_PRG.
+if [[ -e $nvim_bin ]]; then
+  ln -f "$nvim_bin" "$root/target/bin/nvim"
+fi

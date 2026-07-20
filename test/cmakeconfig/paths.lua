@@ -37,7 +37,9 @@ table.insert(M.include_paths, upstream .. '/src')
 M.apple_sysroot = ''
 
 M.translations_enabled = false
-M.is_asan = false
+-- Exported by the `*-asan` just recipes; some specs (e.g. memory_usage_spec)
+-- must skip under ASan because redzones/quarantine distort their measurements.
+M.is_asan = os.getenv('NVIM_TEST_ASAN') == '1'
 M.is_zig_build = false
 -- Must match VTERM_TEST_FILE in the upstream build's auto/config.h; the
 -- vterm fixture (unit-fixtures.so) writes there.
