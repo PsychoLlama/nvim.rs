@@ -115,6 +115,10 @@
                 ${pkgs.neovim}/bin/nvim --headless -u NONE \
                   -c 'helptags runtime/doc' -c 'qa!'
               fi
+
+              # Set up git hooks.
+              git config set extensions.worktreeConfig true
+              git config set --worktree include.path "$(git rev-parse --show-toplevel)/.gitconfig"
             '';
 
             packages = [
