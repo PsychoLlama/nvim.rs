@@ -67,6 +67,13 @@ benchmark *args: build
 abi-ledger *args:
   scripts/abi-ledger.py {{ args }}
 
+# Regenerate the ratchet baseline (docs/ratchet.json): per-file unsafe /
+# static mut / #[no_mangle] counts, file sizes (1k-line cap, current
+# offenders grandfathered), and the ledger's internal-export count may only
+# shrink. `--check` compares against the committed baseline instead.
+ratchet *args:
+  scripts/ratchet.py {{ args }}
+
 # This is the gate CI runs on every push. It deliberately runs no tests: the
 # suites are slow and worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...).
