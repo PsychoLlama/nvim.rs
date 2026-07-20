@@ -6,5 +6,8 @@
 //! the library crate into a runnable `nvim` executable without touching
 //! the generated sources.
 fn main() {
+    // Arm the GlobalCell debug main-thread assertion before any editor code
+    // touches a global.
+    c2rust_neovim::src::nvim::global_cell::init_main_thread();
     c2rust_neovim::src::nvim::main::main();
 }

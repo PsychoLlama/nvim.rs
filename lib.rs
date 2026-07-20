@@ -117,6 +117,7 @@ pub mod src {
         pub mod fuzzy;
         pub mod garray;
         pub mod getchar;
+        pub mod global_cell;
         pub mod grid;
         pub mod hashtab;
         pub mod help;
