@@ -1,6 +1,10 @@
 set indentation := "  "
 set default-list
 
+# Recipes run from the module file's directory by default; the `scripts/...`
+# and `test/...` paths below are relative to the project root.
+set working-directory := ".."
+
 # AddressSanitizer builds (the phase-1 safety net from the migration plan).
 # All heap allocation flows through libc malloc, so ASan's interposer catches
 # use-after-free/double-free/out-of-bounds across the whole binary even though

@@ -1,5 +1,5 @@
 # AddressSanitizer builds and test runs, e.g. `just asan functionaltest`.
-mod asan
+mod asan 'just/asan.just'
 
 set indentation := "  "
 set default-list

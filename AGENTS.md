@@ -15,4 +15,4 @@
 - `just benchmark [paths...]` — benchmarks from `test/benchmark`.
 - `just unittest [paths...]` — unit tests from `test/unit`. They preprocess the upstream v0.12.4 C headers (reconstructed under `target/upstream` on first run) and FFI into the transpiled symbols the nvim binary exports.
 - Run one suite at a time: the harnesses share `target/` scaffolding and interfere when run concurrently.
-- `just asan <recipe>` — AddressSanitizer equivalents (`build`, `functionaltest`, `oldtest`), defined in `asan.just`. Reports land in `target/asan/asan.log.<pid>`.
+- `just asan <recipe>` — AddressSanitizer equivalents (`build`, `functionaltest`, `oldtest`), defined in `just/asan.just`. Reports land in `target/asan/asan.log.<pid>`.
