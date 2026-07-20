@@ -61,6 +61,12 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Regenerate the ABI ledger (docs/abi-ledger.jsonl): classifies every
+# #[no_mangle] export by who resolves it by name. `--check` diffs against the
+# committed ledger instead of writing.
+abi-ledger *args:
+  scripts/abi-ledger.py {{ args }}
+
 # This is the gate CI runs on every push. It deliberately runs no tests: the
 # suites are slow and worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...).
