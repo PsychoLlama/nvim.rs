@@ -66,8 +66,7 @@ def measure():
 def internal_exports():
     if not LEDGER.exists():
         sys.exit(
-            f"ratchet: {LEDGER.relative_to(ROOT)} is missing; "
-            "run `just abi-ledger`"
+            f"ratchet: {LEDGER.relative_to(ROOT)} is missing; run `just abi-ledger`"
         )
     return sum(
         json.loads(line)["class"] == "internal"
@@ -87,16 +86,11 @@ def render(stats, internal):
             if n > (LINE_CAP if name == "lines" else 0)
         }
         if kept:
-            entries.append(f"    {json.dumps(file)}: {json.dumps(kept, sort_keys=True)}")
+            entries.append(
+                f"    {json.dumps(file)}: {json.dumps(kept, sort_keys=True)}"
+            )
     body = ",\n".join(entries)
-    return (
-        "{\n"
-        f'  "internal_exports": {internal},\n'
-        '  "files": {\n'
-        f"{body}\n"
-        "  }\n"
-        "}\n"
-    )
+    return f'{{\n  "internal_exports": {internal},\n  "files": {{\n{body}\n  }}\n}}\n'
 
 
 def violations(stats, internal, baseline):
@@ -140,8 +134,7 @@ def main():
     if "--check" in args:
         if committed is None:
             sys.exit(
-                f"ratchet: {BASELINE.relative_to(ROOT)} is missing; "
-                "run `just ratchet`"
+                f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just ratchet`"
             )
         if grew := violations(stats, internal, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)

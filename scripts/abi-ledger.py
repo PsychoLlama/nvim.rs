@@ -74,8 +74,7 @@ def collect_exports():
             rel = str(path.relative_to(ROOT))
             if name in exports:
                 sys.exit(
-                    f"abi-ledger: duplicate export {name}: "
-                    f"{exports[name][1]} and {rel}"
+                    f"abi-ledger: duplicate export {name}: {exports[name][1]} and {rel}"
                 )
             exports[name] = (kind, rel)
     return exports
@@ -104,10 +103,7 @@ def deps_libraries():
     any Lua C modules."""
     prefix = os.environ.get("NVIM_DEPS_PREFIX")
     if not prefix:
-        sys.exit(
-            "abi-ledger: NVIM_DEPS_PREFIX must be set "
-            "(enter the flake dev shell)"
-        )
+        sys.exit("abi-ledger: NVIM_DEPS_PREFIX must be set (enter the flake dev shell)")
     prefix = Path(prefix)
     libs = [
         *prefix.glob("lib/*.a"),
