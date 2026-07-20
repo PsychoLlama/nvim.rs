@@ -24,8 +24,9 @@ Spec references are found by intersecting export names with every
 identifier-shaped token in test/unit/**/*.lua. That over-approximates (a
 symbol named in a comment counts), which errs in the safe direction: a
 symbol is only ever misclassified toward "keep exported", never toward
-"safe to change". Dynamically constructed names ('os_' .. name) would be
-missed, but the suite has none. NB: user Lua could in principle ffi.C into
+"safe to change". Dynamically constructed names ('mem_' .. name) are
+invisible to the scan and must be listed in DYNAMIC_SPEC_REFS by hand.
+NB: user Lua could in principle ffi.C into
 any export (--export-dynamic exposes them all); the project makes no compat
 guarantees, so that surface is deliberately not part of the contract.
 
@@ -116,8 +117,15 @@ def deps_libraries():
     return sorted(libs)
 
 
+# Spec references built with string concatenation, which the token scan
+# cannot see. testutil.lua's alloc_log_new rebinds the allocator seam at
+# runtime via self.lib['mem_' .. funcname] — deleting these exports breaks
+# every spec that asserts on allocation logs.
+DYNAMIC_SPEC_REFS = {"mem_malloc", "mem_free", "mem_calloc", "mem_realloc"}
+
+
 def spec_tokens():
-    tokens = set()
+    tokens = set(DYNAMIC_SPEC_REFS)
     for spec in ROOT.glob("test/unit/**/*.lua"):
         tokens.update(TOKEN_RE.findall(spec.read_text()))
     return tokens

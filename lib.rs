@@ -52,6 +52,7 @@ pub mod src {
             pub mod win_config;
             pub mod window;
         } // mod api
+        pub mod allocator;
         pub mod arabic;
         pub mod arglist;
         pub mod autocmd;

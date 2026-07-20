@@ -1,5 +1,5 @@
 {
-  "internal_exports": 5608,
+  "internal_exports": 5604,
   "files": {
     "src/cjson/fpconv.rs": {"no_mangle": 3, "static_mut": 2, "unsafe": 8},
     "src/cjson/lua_cjson.rs": {"lines": 2746, "no_mangle": 3, "static_mut": 4, "unsafe": 60},
@@ -9,6 +9,7 @@
     "src/mpack/mpack_core.rs": {"no_mangle": 4, "unsafe": 23},
     "src/mpack/object.rs": {"no_mangle": 6, "unsafe": 10},
     "src/mpack/rpc.rs": {"no_mangle": 10, "unsafe": 16},
+    "src/nvim/allocator.rs": {"unsafe": 5},
     "src/nvim/api/autocmd.rs": {"lines": 4794, "no_mangle": 8, "static_mut": 3, "unsafe": 14},
     "src/nvim/api/buffer.rs": {"lines": 3855, "no_mangle": 27, "static_mut": 11, "unsafe": 34},
     "src/nvim/api/command.rs": {"lines": 6510, "no_mangle": 9, "static_mut": 7, "unsafe": 19},

@@ -2949,10 +2949,10 @@
 {"symbol":"mb_unescape","kind":"fn","file":"src/nvim/mbyte.rs","class":"internal","refs":[]}
 {"symbol":"mb_utf_index_to_bytes","kind":"fn","file":"src/nvim/mbyte.rs","class":"internal","refs":[]}
 {"symbol":"mb_utflen","kind":"fn","file":"src/nvim/mbyte.rs","class":"internal","refs":[]}
-{"symbol":"mem_calloc","kind":"static","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"mem_free","kind":"static","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"mem_malloc","kind":"static","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"mem_realloc","kind":"static","file":"src/nvim/memory.rs","class":"internal","refs":[]}
+{"symbol":"mem_calloc","kind":"static","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"mem_free","kind":"static","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"mem_malloc","kind":"static","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"mem_realloc","kind":"static","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"memchrsub","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"memcnt","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"menu_find","kind":"fn","file":"src/nvim/menu.rs","class":"internal","refs":[]}
