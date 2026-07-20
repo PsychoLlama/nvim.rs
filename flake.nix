@@ -129,6 +129,7 @@
               pkgs.pkg-config
               pkgs.nixfmt
               pkgs.prettier
+              pkgs.ruff
               pkgs.stylua
               pkgs.treefmt
               pkgs.luaPackages.luacheck

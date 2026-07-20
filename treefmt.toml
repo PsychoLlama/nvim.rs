@@ -16,6 +16,11 @@ command = "stylua"
 options = ["--respect-ignores"]
 includes = ["*.lua"]
 
+[formatter.ruff]
+command = "ruff"
+options = ["format"]
+includes = ["*.py"]
+
 [formatter.just]
 command = "just"
 options = ["--fmt", "--justfile"]
