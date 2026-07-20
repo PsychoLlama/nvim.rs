@@ -232,14 +232,19 @@ pub unsafe extern "C" fn hash_clear(ht: *mut hashtab_T) {
 #[no_mangle]
 pub unsafe extern "C" fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
     let mut todo = (*ht).ht_used;
-    let items = slice::from_raw_parts((*ht).ht_array, (*ht).ht_mask as usize + 1);
-    for hi in items {
-        if todo == 0 {
-            break;
-        }
-        if hi.is_kept() {
-            xfree(hi.hi_key.sub(off as usize) as *mut c_void);
-            todo -= 1;
+    // Error paths free zeroed, never-initialized tables whose ht_array is
+    // still null; like the C loop, don't touch the array unless a live
+    // item needs freeing.
+    if todo > 0 {
+        let items = slice::from_raw_parts((*ht).ht_array, (*ht).ht_mask as usize + 1);
+        for hi in items {
+            if todo == 0 {
+                break;
+            }
+            if hi.is_kept() {
+                xfree(hi.hi_key.sub(off as usize) as *mut c_void);
+                todo -= 1;
+            }
         }
     }
     hash_clear(ht);
