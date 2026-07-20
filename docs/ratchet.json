@@ -120,7 +120,7 @@
     "src/nvim/mbyte.rs": {"lines": 6876, "no_mangle": 77, "static_mut": 27, "unsafe": 103},
     "src/nvim/memfile.rs": {"lines": 3020, "no_mangle": 17, "static_mut": 6, "unsafe": 47},
     "src/nvim/memline.rs": {"lines": 9125, "no_mangle": 50, "static_mut": 43, "unsafe": 89},
-    "src/nvim/memory.rs": {"no_mangle": 41, "static_mut": 10, "unsafe": 52},
+    "src/nvim/memory.rs": {"no_mangle": 41, "static_mut": 10, "unsafe": 48},
     "src/nvim/menu.rs": {"lines": 5280, "no_mangle": 17, "static_mut": 30, "unsafe": 50},
     "src/nvim/message.rs": {"lines": 9243, "no_mangle": 106, "static_mut": 146, "unsafe": 160},
     "src/nvim/mouse.rs": {"lines": 4411, "no_mangle": 15, "static_mut": 54, "unsafe": 40},
