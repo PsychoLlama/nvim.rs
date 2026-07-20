@@ -37,7 +37,7 @@ package version: build-release
 
 # Check formatting without writing changes; fails if anything is unformatted.
 fmt-check:
-  treefmt --ci
+  treefmt --fail-on-change
 
 # Run functional tests. Args: spec paths and/or harness flags, e.g.
 # `just functionaltest test/functional/core --filter='startup'`.

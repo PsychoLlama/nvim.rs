@@ -28,3 +28,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       - run: just smoke-test
+        env:
+          TREEFMT_CI: true
