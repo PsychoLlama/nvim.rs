@@ -1,0 +1,16 @@
+# Dev-time rewriter for phase 3a: static mut -> GlobalCell. Not part of the
+# nvim crate (detached workspace): it needs a modern rustc/syn to parse the
+# `&raw mut` syntax the crate's pinned 2023 nightly predates. Build with e.g.
+#   nix shell nixpkgs#rustc nixpkgs#cargo -c cargo run --release -- --help
+[package]
+name = "globalize"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "extra-traits"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
