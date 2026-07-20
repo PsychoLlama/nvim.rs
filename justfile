@@ -61,5 +61,9 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
-# Run the full test suite. This is slow! Prefer running specific tests.
-check: fmt-check build
+# This is the gate CI runs on every push. It deliberately runs no tests: the
+# suites are slow and worth invoking directly (`just functionaltest`,
+# `just oldtest`, ...).
+#
+# Check that the tree is formatted and still compiles.
+smoke-test: fmt-check build
