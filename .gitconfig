@@ -4,3 +4,7 @@
 [hook "fmt-check"]
   event = pre-commit
   command = just fmt-check
+
+[hook "abi-ledger"]
+  event = pre-commit
+  command = just abi-ledger --check
