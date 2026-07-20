@@ -78,5 +78,6 @@ ratchet *args:
 # suites are slow and worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...).
 #
-# Check that the tree is formatted and still compiles.
-smoke-test: fmt-check build
+# Check that the tree is formatted, the ratchet and ABI ledger hold, and the
+# crate still compiles.
+smoke-test: fmt-check (ratchet "--check") (abi-ledger "--check") build

@@ -8,3 +8,7 @@
 [hook "abi-ledger"]
   event = pre-commit
   command = just abi-ledger --check
+
+[hook "ratchet"]
+  event = pre-commit
+  command = just ratchet --check
