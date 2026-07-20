@@ -63,6 +63,12 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Run the Rust-side tests of the safe cores (#[cfg(test)] modules). These
+# test pure logic below the C-ABI shims; the unit suite covers the same
+# functions from the other side of the FFI.
+rusttest *args:
+  cargo test --lib {{ args }}
+
 # Regenerate the ABI ledger (docs/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.

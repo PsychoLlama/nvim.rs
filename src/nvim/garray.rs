@@ -1,250 +1,313 @@
+//! Growable array of items (`garray_T`): safe core + C-ABI shims.
+//!
+//! The struct layout is frozen: call sites all over the crate (and the unit
+//! suite, via FFI) poke the fields directly and `xfree` the data pointer.
+//! Every heap byte stays on the `xmalloc` family so the unit suite's
+//! allocator seam observes the same allocation sequence as before. The
+//! `extern "C"` shims keep the raw-pointer plumbing; the growth policy and
+//! joining logic live in safe code below them.
+
+use core::ffi::{c_char, c_int, c_void, CStr};
+use core::ptr;
+use core::slice;
+
 extern "C" {
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstpcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
+    fn xfree(ptr: *mut c_void);
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    fn xmallocz(size: usize) -> *mut c_void;
+    fn xstrdup(str: *const c_char) -> *mut c_char;
     fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
+        log_level: c_int,
+        context: *const c_char,
+        func_name: *const c_char,
+        line_num: c_int,
         eol: bool,
-        fmt: *const ::core::ffi::c_char,
+        fmt: *const c_char,
         ...
     ) -> bool;
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn sort_strings(files: *mut *mut ::core::ffi::c_char, count: ::core::ffi::c_int);
+    fn path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int;
+    fn sort_strings(files: *mut *mut c_char, count: c_int);
 }
-pub type uint8_t = u8;
-pub type size_t = usize;
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct garray_T {
-    pub ga_len: ::core::ffi::c_int,
-    pub ga_maxlen: ::core::ffi::c_int,
-    pub ga_itemsize: ::core::ffi::c_int,
-    pub ga_growsize: ::core::ffi::c_int,
-    pub ga_data: *mut ::core::ffi::c_void,
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+
+const LOGLVL_WRN: c_int = 3;
+
+/// A reallocation the growth policy decided on: realloc `ga_data` to
+/// `new_size` bytes and zero the tail starting at `old_size`.
+struct GrowPlan {
+    new_maxlen: c_int,
+    old_size: usize,
+    new_size: usize,
+}
+
+/// The C growth policy, verbatim: nothing to do while `n` more items fit;
+/// otherwise grow by at least `ga_growsize` items and at least half the
+/// current length.
+fn grow_plan(ga: &garray_T, n: c_int) -> Option<GrowPlan> {
+    if ga.ga_maxlen - ga.ga_len >= n {
+        return None;
+    }
+    let n = n.max(ga.ga_growsize).max(ga.ga_len / 2);
+    let new_maxlen = ga.ga_len + n;
+    let itemsize = ga.ga_itemsize as usize;
+    Some(GrowPlan {
+        new_maxlen,
+        old_size: itemsize.wrapping_mul(ga.ga_maxlen as usize),
+        new_size: itemsize.wrapping_mul(new_maxlen as usize),
+    })
+}
+
+/// Length of `parts` joined by a `sep_len`-byte separator. `parts` must be
+/// non-empty (the empty case never reaches the join).
+fn joined_len(parts: &[&[u8]], sep_len: usize) -> usize {
+    let payload: usize = parts.iter().map(|p| p.len()).sum();
+    payload.wrapping_add((parts.len() - 1).wrapping_mul(sep_len))
+}
+
+/// Write `parts` joined by `sep` into `dst`, which is exactly
+/// `joined_len(parts, sep.len())` bytes.
+fn join_into(dst: &mut [u8], parts: &[&[u8]], sep: &[u8]) {
+    let mut off = 0;
+    for (i, part) in parts.iter().enumerate() {
+        if i > 0 {
+            dst[off..off + sep.len()].copy_from_slice(sep);
+            off += sep.len();
+        }
+        dst[off..off + part.len()].copy_from_slice(part);
+        off += part.len();
+    }
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_clear(mut gap: *mut garray_T) {
+pub unsafe extern "C" fn ga_clear(gap: *mut garray_T) {
     xfree((*gap).ga_data);
-    (*gap).ga_data = NULL;
-    (*gap).ga_maxlen = 0 as ::core::ffi::c_int;
-    (*gap).ga_len = 0 as ::core::ffi::c_int;
+    (*gap).ga_data = ptr::null_mut();
+    (*gap).ga_maxlen = 0;
+    (*gap).ga_len = 0;
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_clear_strings(mut gap: *mut garray_T) {
-    let mut _gap: *mut garray_T = gap;
-    if !(*_gap).ga_data.is_null() {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*_gap).ga_len {
-            let mut _item: *mut *mut ::core::ffi::c_void =
-                ((*_gap).ga_data as *mut *mut ::core::ffi::c_void).offset(i as isize);
-            xfree(*_item);
-            i += 1;
+pub unsafe extern "C" fn ga_clear_strings(gap: *mut garray_T) {
+    if !(*gap).ga_data.is_null() {
+        let items =
+            slice::from_raw_parts((*gap).ga_data as *const *mut c_void, (*gap).ga_len as usize);
+        for &item in items {
+            xfree(item);
         }
     }
-    ga_clear(_gap);
+    ga_clear(gap);
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_init(
-    mut gap: *mut garray_T,
-    mut itemsize: ::core::ffi::c_int,
-    mut growsize: ::core::ffi::c_int,
-) {
-    (*gap).ga_data = NULL;
-    (*gap).ga_maxlen = 0 as ::core::ffi::c_int;
-    (*gap).ga_len = 0 as ::core::ffi::c_int;
+pub unsafe extern "C" fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
+    (*gap).ga_data = ptr::null_mut();
+    (*gap).ga_maxlen = 0;
+    (*gap).ga_len = 0;
     (*gap).ga_itemsize = itemsize;
     ga_set_growsize(gap, growsize);
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_set_growsize(mut gap: *mut garray_T, mut growsize: ::core::ffi::c_int) {
-    if growsize < 1 as ::core::ffi::c_int {
+pub unsafe extern "C" fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
+    if growsize < 1 {
         logmsg(
             LOGLVL_WRN,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ga_set_growsize\0".as_ptr() as *const ::core::ffi::c_char,
-            57 as ::core::ffi::c_int,
-            true_0 != 0,
-            b"trying to set an invalid ga_growsize: %d\0".as_ptr() as *const ::core::ffi::c_char,
+            ptr::null(),
+            b"ga_set_growsize\0".as_ptr() as *const c_char,
+            57,
+            true,
+            b"trying to set an invalid ga_growsize: %d\0".as_ptr() as *const c_char,
             growsize,
         );
-        (*gap).ga_growsize = 1 as ::core::ffi::c_int;
+        (*gap).ga_growsize = 1;
     } else {
         (*gap).ga_growsize = growsize;
-    };
-}
-#[no_mangle]
-pub unsafe extern "C" fn ga_grow(mut gap: *mut garray_T, mut n: ::core::ffi::c_int) {
-    if (*gap).ga_maxlen - (*gap).ga_len >= n {
-        return;
     }
-    if (*gap).ga_growsize < 1 as ::core::ffi::c_int {
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ga_grow(gap: *mut garray_T, n: c_int) {
+    let Some(plan) = grow_plan(&*gap, n) else {
+        return;
+    };
+    if (*gap).ga_growsize < 1 {
         logmsg(
             LOGLVL_WRN,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ga_grow\0".as_ptr() as *const ::core::ffi::c_char,
-            76 as ::core::ffi::c_int,
-            true_0 != 0,
-            b"ga_growsize(%d) is less than 1\0".as_ptr() as *const ::core::ffi::c_char,
+            ptr::null(),
+            b"ga_grow\0".as_ptr() as *const c_char,
+            76,
+            true,
+            b"ga_growsize(%d) is less than 1\0".as_ptr() as *const c_char,
             (*gap).ga_growsize,
         );
     }
-    n = if n > (*gap).ga_growsize {
-        n
-    } else {
-        (*gap).ga_growsize
-    };
-    n = if n > (*gap).ga_len / 2 as ::core::ffi::c_int {
-        n
-    } else {
-        (*gap).ga_len / 2 as ::core::ffi::c_int
-    };
-    let mut new_maxlen: ::core::ffi::c_int = (*gap).ga_len + n;
-    let mut new_size: size_t = ((*gap).ga_itemsize as size_t).wrapping_mul(new_maxlen as size_t);
-    let mut old_size: size_t =
-        ((*gap).ga_itemsize as size_t).wrapping_mul((*gap).ga_maxlen as size_t);
-    let mut pp: *mut ::core::ffi::c_char =
-        xrealloc((*gap).ga_data, new_size) as *mut ::core::ffi::c_char;
-    memset(
-        pp.offset(old_size as isize) as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        new_size.wrapping_sub(old_size),
-    );
-    (*gap).ga_maxlen = new_maxlen;
-    (*gap).ga_data = pp as *mut ::core::ffi::c_void;
+    let data = xrealloc((*gap).ga_data, plan.new_size) as *mut u8;
+    slice::from_raw_parts_mut(
+        data.add(plan.old_size),
+        plan.new_size.wrapping_sub(plan.old_size),
+    )
+    .fill(0);
+    (*gap).ga_maxlen = plan.new_maxlen;
+    (*gap).ga_data = data as *mut c_void;
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_remove_duplicate_strings(mut gap: *mut garray_T) {
-    let mut fnames: *mut *mut ::core::ffi::c_char = (*gap).ga_data as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn ga_remove_duplicate_strings(gap: *mut garray_T) {
+    let fnames = (*gap).ga_data as *mut *mut c_char;
     sort_strings(fnames, (*gap).ga_len);
-    let mut i: ::core::ffi::c_int = (*gap).ga_len - 1 as ::core::ffi::c_int;
-    while i > 0 as ::core::ffi::c_int {
-        if path_fnamecmp(
-            *fnames.offset((i - 1 as ::core::ffi::c_int) as isize),
-            *fnames.offset(i as isize),
-        ) == 0 as ::core::ffi::c_int
-        {
-            xfree(*fnames.offset(i as isize) as *mut ::core::ffi::c_void);
-            let mut j: ::core::ffi::c_int = i + 1 as ::core::ffi::c_int;
-            while j < (*gap).ga_len {
-                *fnames.offset((j - 1 as ::core::ffi::c_int) as isize) = *fnames.offset(j as isize);
-                j += 1;
-            }
+    let mut i = (*gap).ga_len - 1;
+    while i > 0 {
+        let names = slice::from_raw_parts_mut(fnames, (*gap).ga_len as usize);
+        let (prev, cur) = (i as usize - 1, i as usize);
+        if path_fnamecmp(names[prev], names[cur]) == 0 {
+            xfree(names[cur] as *mut c_void);
+            names.copy_within(cur + 1.., cur);
             (*gap).ga_len -= 1;
         }
         i -= 1;
     }
 }
+
 #[no_mangle]
 pub unsafe extern "C" fn ga_concat_strings(
-    mut gap: *const garray_T,
-    mut sep: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let nelem: size_t = (*gap).ga_len as size_t;
-    let mut strings: *mut *const ::core::ffi::c_char =
-        (*gap).ga_data as *mut *const ::core::ffi::c_char;
-    if nelem == 0 as size_t {
-        return xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+    gap: *const garray_T,
+    sep: *const c_char,
+) -> *mut c_char {
+    if (*gap).ga_len == 0 {
+        return xstrdup(b"\0".as_ptr() as *const c_char);
     }
-    let mut len: size_t = 0 as size_t;
-    let mut i: size_t = 0 as size_t;
-    while i < nelem {
-        len = len.wrapping_add(strlen(*strings.offset(i as isize)));
-        i = i.wrapping_add(1);
-    }
-    len = len.wrapping_add(nelem.wrapping_sub(1 as size_t).wrapping_mul(strlen(sep)));
-    let ret: *mut ::core::ffi::c_char = xmallocz(len) as *mut ::core::ffi::c_char;
-    let mut s: *mut ::core::ffi::c_char = ret;
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < nelem.wrapping_sub(1 as size_t) {
-        s = xstpcpy(s, *strings.offset(i_0 as isize));
-        s = xstpcpy(s, sep);
-        i_0 = i_0.wrapping_add(1);
-    }
-    strcpy(s, *strings.offset(nelem.wrapping_sub(1 as size_t) as isize));
-    return ret;
+    let strings = slice::from_raw_parts(
+        (*gap).ga_data as *const *const c_char,
+        (*gap).ga_len as usize,
+    );
+    let parts: Vec<&[u8]> = strings
+        .iter()
+        .map(|&s| CStr::from_ptr(s).to_bytes())
+        .collect();
+    let sep = CStr::from_ptr(sep).to_bytes();
+    let len = joined_len(&parts, sep.len());
+    let ret = xmallocz(len) as *mut u8;
+    join_into(slice::from_raw_parts_mut(ret, len), &parts, sep);
+    ret as *mut c_char
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_concat(mut gap: *mut garray_T, mut s: *const ::core::ffi::c_char) {
+pub unsafe extern "C" fn ga_concat(gap: *mut garray_T, s: *const c_char) {
     if s.is_null() {
         return;
     }
-    ga_concat_len(gap, s, strlen(s));
+    ga_concat_len(gap, s, CStr::from_ptr(s).to_bytes().len());
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_concat_len(
-    gap: *mut garray_T,
-    mut s: *const ::core::ffi::c_char,
-    len: size_t,
-) {
-    if len == 0 as size_t {
+pub unsafe extern "C" fn ga_concat_len(gap: *mut garray_T, s: *const c_char, len: usize) {
+    if len == 0 {
         return;
     }
-    ga_grow(gap, len as ::core::ffi::c_int);
-    let mut data: *mut ::core::ffi::c_char = (*gap).ga_data as *mut ::core::ffi::c_char;
-    memcpy(
-        data.offset((*gap).ga_len as isize) as *mut ::core::ffi::c_void,
-        s as *const ::core::ffi::c_void,
-        len,
-    );
-    (*gap).ga_len += len as ::core::ffi::c_int;
+    ga_grow(gap, len as c_int);
+    let src = slice::from_raw_parts(s as *const u8, len);
+    let dst =
+        slice::from_raw_parts_mut(((*gap).ga_data as *mut u8).add((*gap).ga_len as usize), len);
+    dst.copy_from_slice(src);
+    (*gap).ga_len += len as c_int;
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_append(mut gap: *mut garray_T, mut c: uint8_t) {
-    ga_grow(gap, 1 as ::core::ffi::c_int);
-    *((*gap).ga_data as *mut uint8_t).offset((*gap).ga_len as isize) = c;
+pub unsafe extern "C" fn ga_append(gap: *mut garray_T, c: u8) {
+    ga_grow(gap, 1);
+    *((*gap).ga_data as *mut u8).add((*gap).ga_len as usize) = c;
     (*gap).ga_len += 1;
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn ga_append_via_ptr(
-    mut gap: *mut garray_T,
-    mut item_size: size_t,
-) -> *mut ::core::ffi::c_void {
-    if item_size as ::core::ffi::c_int != (*gap).ga_itemsize {
+pub unsafe extern "C" fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_void {
+    if item_size as c_int != (*gap).ga_itemsize {
         logmsg(
             LOGLVL_WRN,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ga_append_via_ptr\0".as_ptr() as *const ::core::ffi::c_char,
-            209 as ::core::ffi::c_int,
-            true_0 != 0,
-            b"wrong item size (%zu), should be %d\0".as_ptr() as *const ::core::ffi::c_char,
+            ptr::null(),
+            b"ga_append_via_ptr\0".as_ptr() as *const c_char,
+            209,
+            true,
+            b"wrong item size (%zu), should be %d\0".as_ptr() as *const c_char,
             item_size,
             (*gap).ga_itemsize,
         );
     }
-    ga_grow(gap, 1 as ::core::ffi::c_int);
-    let c2rust_fresh0 = (*gap).ga_len;
-    (*gap).ga_len = (*gap).ga_len + 1;
-    return ((*gap).ga_data as *mut ::core::ffi::c_char)
-        .offset(item_size.wrapping_mul(c2rust_fresh0 as size_t) as isize)
-        as *mut ::core::ffi::c_void;
+    ga_grow(gap, 1);
+    let idx = (*gap).ga_len;
+    (*gap).ga_len += 1;
+    ((*gap).ga_data as *mut u8).add(item_size.wrapping_mul(idx as usize)) as *mut c_void
 }
-pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ga(len: c_int, maxlen: c_int, itemsize: c_int, growsize: c_int) -> garray_T {
+        garray_T {
+            ga_len: len,
+            ga_maxlen: maxlen,
+            ga_itemsize: itemsize,
+            ga_growsize: growsize,
+            ga_data: ptr::null_mut(),
+        }
+    }
+
+    #[test]
+    fn grow_plan_noop_while_capacity_lasts() {
+        assert!(grow_plan(&ga(2, 6, 16, 4), 4).is_none());
+        assert!(grow_plan(&ga(0, 0, 16, 4), 0).is_none());
+    }
+
+    #[test]
+    fn grow_plan_grows_by_growsize_when_request_is_smaller() {
+        let plan = grow_plan(&ga(0, 0, 16, 4), 3).unwrap();
+        assert_eq!(plan.new_maxlen, 4);
+        assert_eq!(plan.old_size, 0);
+        assert_eq!(plan.new_size, 64);
+    }
+
+    #[test]
+    fn grow_plan_grows_by_request_when_larger_than_growsize() {
+        let plan = grow_plan(&ga(0, 0, 16, 4), 5).unwrap();
+        assert_eq!(plan.new_maxlen, 5);
+        assert_eq!(plan.new_size, 80);
+    }
+
+    #[test]
+    fn grow_plan_grows_by_at_least_half_the_length() {
+        let plan = grow_plan(&ga(100, 100, 1, 1), 1).unwrap();
+        assert_eq!(plan.new_maxlen, 150);
+        assert_eq!(plan.old_size, 100);
+        assert_eq!(plan.new_size, 150);
+    }
+
+    #[test]
+    fn join_produces_separated_concatenation() {
+        let parts: &[&[u8]] = &[b"oh", b"my", b"neovim"];
+        let len = joined_len(parts, 1);
+        assert_eq!(len, 12);
+        let mut dst = vec![0; len];
+        join_into(&mut dst, parts, b",");
+        assert_eq!(dst, b"oh,my,neovim");
+    }
+
+    #[test]
+    fn join_of_single_part_has_no_separator() {
+        let parts: &[&[u8]] = &[b"solo"];
+        let len = joined_len(parts, 3);
+        assert_eq!(len, 4);
+        let mut dst = vec![0; len];
+        join_into(&mut dst, parts, b"---");
+        assert_eq!(dst, b"solo");
+    }
+}
