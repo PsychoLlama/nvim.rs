@@ -57,24 +57,9 @@ if [[ $test_type != unit ]]; then
   build_fixture printargs-test printargs-test.c
   build_fixture printenv-test printenv-test.c
 else
-  # Unit tests preprocess the upstream C headers; reconstruct them if needed.
-  "$root/scripts/prep-unit-headers.sh"
-  # Upstream compiled these helpers into the test build of libnvim. Build them
-  # as a shared library instead; test/unit/preload.lua loads it RTLD_GLOBAL so
-  # ffi.C sees the symbols, and its nvim references resolve from the binary
-  # (linked with --export-dynamic).
-  up=$root/target/upstream
-  unit_fixtures=$root/test/unit/fixtures
-  fixture_so=$bin_dir/unit-fixtures.so
-  if [[ ! -e $fixture_so || $unit_fixtures/multiqueue.c -nt $fixture_so ||
-    $unit_fixtures/vterm_test.c -nt $fixture_so ]]; then
-    echo "compiling test fixture: unit-fixtures.so" >&2
-    cc -shared -fPIC -O2 -o "$fixture_so" \
-      "$unit_fixtures/multiqueue.c" "$unit_fixtures/vterm_test.c" \
-      -I"$unit_fixtures" -I"$up/src/src" -I"$up/build/src/nvim/auto" \
-      -I"$up/build/include" -I"$up/build/cmake.config" \
-      -I"$NVIM_DEPS_PREFIX/include"
-  fi
+  # The unit-test helper library; see build-unit-fixtures.sh (shared with the
+  # ABI ledger, which reads its undefined-symbol list).
+  "$root/scripts/build-unit-fixtures.sh" "$bin_dir/unit-fixtures.so"
 fi
 
 # Scratch area (upstream's $BUILD_DIR): XDG sandbox, TMPDIR, logs. Start each
