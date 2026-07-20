@@ -63,10 +63,10 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
-# Run the Rust-side tests of the safe cores (#[cfg(test)] modules). These
-# test pure logic below the C-ABI shims; the unit suite covers the same
-# functions from the other side of the FFI.
-rusttest *args:
+# Run the crate's Rust tests (`cargo test --lib`, i.e. #[cfg(test)]
+# modules). Today these cover the safe cores' pure logic below the C-ABI
+# shims, but the suite is general and will grow beyond that.
+cargo-test *args:
   cargo test --lib {{ args }}
 
 # Regenerate the ABI ledger (docs/abi-ledger.jsonl): classifies every
@@ -82,10 +82,10 @@ abi-ledger *args:
 ratchet *args:
   @scripts/ratchet.py {{ args }}
 
-# This is the gate CI runs on every push. It deliberately runs no tests: the
-# suites are slow and worth invoking directly (`just functionaltest`,
-# `just oldtest`, ...).
+# This is the gate CI runs on every push. It deliberately skips the slow
+# suites, which are worth invoking directly (`just functionaltest`,
+# `just oldtest`, ...); only the fast Rust-side tests run here.
 #
-# Check that the tree is formatted, the ratchet and ABI ledger hold, and the
-# crate still compiles.
-smoke-test: fmt-check (ratchet "--check") (abi-ledger "--check") build
+# Check that the tree is formatted, the ratchet and ABI ledger hold, the
+# crate still compiles, and the safe-core tests pass.
+minimal-ci: fmt-check (ratchet "--check") (abi-ledger "--check") build cargo-test
