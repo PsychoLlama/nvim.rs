@@ -65,7 +65,10 @@ def measure():
 
 def internal_exports():
     if not LEDGER.exists():
-        sys.exit(f"{LEDGER.relative_to(ROOT)} is missing; run `just abi-ledger`")
+        sys.exit(
+            f"ratchet: {LEDGER.relative_to(ROOT)} is missing; "
+            "run `just abi-ledger`"
+        )
     return sum(
         json.loads(line)["class"] == "internal"
         for line in LEDGER.read_text().splitlines()
@@ -127,7 +130,7 @@ def summary(stats, internal):
 def main():
     args = set(sys.argv[1:])
     if unknown := args - {"--check", "--allow-growth"}:
-        sys.exit(f"unknown argument(s): {' '.join(sorted(unknown))}")
+        sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     stats = measure()
     internal = internal_exports()
@@ -136,7 +139,10 @@ def main():
 
     if "--check" in args:
         if committed is None:
-            sys.exit(f"{BASELINE.relative_to(ROOT)} is missing; run `just ratchet`")
+            sys.exit(
+                f"ratchet: {BASELINE.relative_to(ROOT)} is missing; "
+                "run `just ratchet`"
+            )
         if grew := violations(stats, internal, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
@@ -146,10 +152,9 @@ def main():
             )
         if committed != content:
             sys.exit(
-                f"{BASELINE.relative_to(ROOT)} is stale (progress to lock "
-                "in); run `just ratchet` and commit the result"
+                f"ratchet: {BASELINE.relative_to(ROOT)} is stale (progress "
+                "to lock in); run `just ratchet` and commit the result"
             )
-        print("ratchet: up to date")
         return
 
     if committed is not None and "--allow-growth" not in args:

@@ -65,15 +65,18 @@ def collect_exports():
             m = EXPORT_RE.match(decl)
             if not m:
                 sys.exit(
-                    f"{path}:{i + 2}: unrecognized declaration after "
-                    f"#[no_mangle]: {decl!r}\n"
+                    f"abi-ledger: {path}:{i + 2}: unrecognized declaration "
+                    f"after #[no_mangle]: {decl!r}\n"
                     "(teach abi-ledger.py the new shape)"
                 )
             name = m.group(2)
             kind = "fn" if m.group(1).endswith("fn") else "static"
             rel = str(path.relative_to(ROOT))
             if name in exports:
-                sys.exit(f"duplicate export {name}: {exports[name][1]} and {rel}")
+                sys.exit(
+                    f"abi-ledger: duplicate export {name}: "
+                    f"{exports[name][1]} and {rel}"
+                )
             exports[name] = (kind, rel)
     return exports
 
@@ -101,7 +104,10 @@ def deps_libraries():
     any Lua C modules."""
     prefix = os.environ.get("NVIM_DEPS_PREFIX")
     if not prefix:
-        sys.exit("NVIM_DEPS_PREFIX must be set (enter the flake dev shell)")
+        sys.exit(
+            "abi-ledger: NVIM_DEPS_PREFIX must be set "
+            "(enter the flake dev shell)"
+        )
     prefix = Path(prefix)
     libs = [
         *prefix.glob("lib/*.a"),
@@ -110,7 +116,7 @@ def deps_libraries():
         *prefix.glob("lib/lua/**/*.so"),
     ]
     if not libs:
-        sys.exit(f"no libraries found under {prefix}")
+        sys.exit(f"abi-ledger: no libraries found under {prefix}")
     return sorted(libs)
 
 
@@ -163,10 +169,9 @@ def main():
         committed = LEDGER.read_text() if LEDGER.exists() else ""
         if committed != content:
             sys.exit(
-                f"{LEDGER.relative_to(ROOT)} is stale; run `just abi-ledger` "
-                "and commit the result"
+                f"abi-ledger: {LEDGER.relative_to(ROOT)} is stale; "
+                "run `just abi-ledger` and commit the result"
             )
-        print("abi-ledger: up to date")
         return
     LEDGER.parent.mkdir(exist_ok=True)
     LEDGER.write_text(content)

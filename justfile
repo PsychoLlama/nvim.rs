@@ -36,8 +36,10 @@ package version: build-release
   echo "Wrote $stage.tar.gz"
 
 # Check formatting without writing changes; fails if anything is unformatted.
+# `--quiet` keeps success silent (pre-commit hooks only speak up on failure);
+# the offending paths are still reported on failure.
 fmt-check:
-  treefmt --fail-on-change
+  @treefmt --fail-on-change --quiet
 
 # Run functional tests. Args: spec paths and/or harness flags, e.g.
 # `just functionaltest test/functional/core --filter='startup'`.
@@ -65,14 +67,14 @@ benchmark *args: build
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.
 abi-ledger *args:
-  scripts/abi-ledger.py {{ args }}
+  @scripts/abi-ledger.py {{ args }}
 
 # Regenerate the ratchet baseline (docs/ratchet.json): per-file unsafe /
 # static mut / #[no_mangle] counts, file sizes (1k-line cap, current
 # offenders grandfathered), and the ledger's internal-export count may only
 # shrink. `--check` compares against the committed baseline instead.
 ratchet *args:
-  scripts/ratchet.py {{ args }}
+  @scripts/ratchet.py {{ args }}
 
 # This is the gate CI runs on every push. It deliberately runs no tests: the
 # suites are slow and worth invoking directly (`just functionaltest`,
