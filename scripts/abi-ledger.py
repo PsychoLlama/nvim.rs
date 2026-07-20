@@ -50,7 +50,12 @@ ROOT = Path(__file__).resolve().parent.parent
 LEDGER = ROOT / "docs" / "abi-ledger.jsonl"
 FIXTURE_SO = ROOT / "target" / "bin" / "unit-fixtures.so"
 
-EXPORT_RE = re.compile(r'^pub (unsafe extern "C" fn|static mut) ([A-Za-z0-9_]+)')
+# Order matters: "static mut" must precede "static" or the name group would
+# swallow "mut". Safe `pub extern "C" fn` and non-mut `pub static` appear as
+# phase-2b rewrites shed unneeded unsafety without changing the symbol.
+EXPORT_RE = re.compile(
+    r'^pub (unsafe extern "C" fn|extern "C" fn|static mut|static) ([A-Za-z0-9_]+)'
+)
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 

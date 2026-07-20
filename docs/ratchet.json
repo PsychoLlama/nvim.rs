@@ -89,7 +89,7 @@
     "src/nvim/garray.rs": {"no_mangle": 11, "unsafe": 11},
     "src/nvim/getchar.rs": {"lines": 7212, "no_mangle": 59, "static_mut": 113, "unsafe": 123},
     "src/nvim/grid.rs": {"lines": 3539, "no_mangle": 39, "static_mut": 27, "unsafe": 47},
-    "src/nvim/hashtab.rs": {"no_mangle": 16, "static_mut": 1, "unsafe": 17},
+    "src/nvim/hashtab.rs": {"no_mangle": 16, "unsafe": 14},
     "src/nvim/help.rs": {"lines": 4662, "no_mangle": 11, "static_mut": 16, "unsafe": 24},
     "src/nvim/highlight.rs": {"lines": 4817, "no_mangle": 28, "static_mut": 32, "unsafe": 48},
     "src/nvim/highlight_group.rs": {"lines": 10876, "no_mangle": 35, "static_mut": 53, "unsafe": 53},
