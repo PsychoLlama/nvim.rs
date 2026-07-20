@@ -1,3 +1,6 @@
+use core::ffi::{c_char, c_int, CStr};
+use core::ptr;
+use core::slice;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
     fn __assert_fail(
@@ -525,12 +528,12 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
+fn ascii_iswhite(c: ::core::ffi::c_int) -> bool {
+    c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int
 }
 #[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
+fn ascii_isdigit(c: ::core::ffi::c_int) -> bool {
+    c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
 }
 static mut e_cannot_mix_positional_and_non_positional_str: [::core::ffi::c_char; 62] = unsafe {
     ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
@@ -597,537 +600,458 @@ static mut typename_string: [::core::ffi::c_char; 7] =
     unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"string\0") };
 static mut typename_float: [::core::ffi::c_char; 6] =
     unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"float\0") };
-#[no_mangle]
-pub unsafe extern "C" fn xstrnsave(
-    mut string: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> *mut ::core::ffi::c_char {
-    return strncpy(xmallocz(len) as *mut ::core::ffi::c_char, string, len);
+// ── The vim_str* family: safe cores + C-ABI shims ─────────────────────────
+//
+// Byte-level logic (unquoting, ASCII case mapping, comparison, scanning)
+// lives in safe functions; the shims confine the raw-pointer plumbing.
+// Multibyte-aware functions (vim_strsave_escaped_ext, shellescape,
+// strcase_save, vim_strchr) still call the transpiled mbyte/ex_docmd
+// machinery through raw pointers and remain shims throughout. Results are
+// allocated with the xmalloc family so ownership crosses the C ABI as
+// before.
+
+/// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
+unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
+    let mut n = 0;
+    while n < maxlen && *s.add(n) != 0 {
+        n += 1;
+    }
+    n
 }
+
+/// ASCII-uppercase `s` in place (bytes ≥ 0x80 untouched).
+fn ascii_upcase(s: &mut [u8]) {
+    for b in s {
+        if b.is_ascii_lowercase() {
+            *b -= 0x20;
+        }
+    }
+}
+
+/// Any byte outside 7-bit ASCII?
+fn any_non_ascii(s: &[u8]) -> bool {
+    s.iter().any(|&b| b >= 0x80)
+}
+
+/// Walk `src` as `vim_strnsave_unquoted` reads it, feeding kept bytes to
+/// `emit`: unescaped double quotes toggle quote mode and vanish; inside
+/// quotes `\\` and `\"` collapse to the escaped byte; everything else
+/// (including other backslash sequences) passes through untouched.
+fn unquote(src: &[u8], emit: &mut impl FnMut(u8)) {
+    let mut inquote = false;
+    let mut i = 0;
+    while i < src.len() {
+        let b = src[i];
+        if b == b'"' {
+            inquote = !inquote;
+        } else if b == b'\\' && inquote && i + 1 < src.len() && matches!(src[i + 1], b'\\' | b'"') {
+            i += 1;
+            emit(src[i]);
+        } else {
+            emit(b);
+        }
+        i += 1;
+    }
+}
+
+/// Index where removable trailing whitespace starts: spaces/tabs not
+/// preceded by a backslash or Ctrl-V, never including the first byte.
+fn trailing_spaces_start(s: &[u8]) -> usize {
+    let mut end = s.len();
+    while end > 1
+        && matches!(s[end - 1], b' ' | b'\t')
+        && s[end - 2] != b'\\'
+        && s[end - 2] != Ctrl_V as u8
+    {
+        end -= 1;
+    }
+    end
+}
+
+/// ASCII-case-insensitive `strncmp`. Bytes fold exactly as the C code's
+/// signed chars did: only A–Z map (down) to lowercase, and bytes ≥ 0x80
+/// compare negative.
+fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
+    let fold = |c: u8| -> c_int {
+        let c = c as i8 as c_int;
+        if !('A' as c_int..='Z' as c_int).contains(&c) {
+            c
+        } else {
+            c + 0x20
+        }
+    };
+    let mut diff = 0;
+    for k in 0..len {
+        let ca = a.get(k).copied().unwrap_or(0);
+        let cb = b.get(k).copied().unwrap_or(0);
+        diff = fold(ca) - fold(cb);
+        if diff != 0 || ca == 0 {
+            break;
+        }
+    }
+    diff
+}
+
+/// Copy at most `len` bytes of `string` into a fresh NUL-terminated
+/// buffer, zero-filling the remainder (strncpy semantics).
+#[no_mangle]
+pub unsafe extern "C" fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
+    let n = strnlen(string, len);
+    let ret = xmallocz(len) as *mut c_char;
+    let out = slice::from_raw_parts_mut(ret as *mut u8, len);
+    if n != 0 {
+        out[..n].copy_from_slice(slice::from_raw_parts(string as *const u8, n));
+    }
+    out[n..].fill(0);
+    ret
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn vim_strsave_escaped(
-    mut string: *const ::core::ffi::c_char,
-    mut esc_chars: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    return vim_strsave_escaped_ext(string, esc_chars, '\\' as ::core::ffi::c_char, false_0 != 0);
+    string: *const c_char,
+    esc_chars: *const c_char,
+) -> *mut c_char {
+    vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, false)
 }
+
+/// Copy `string`, prefixing `cc` to every byte in `esc_chars` (and, with
+/// `bsl`, to the backslashes `rem_backslash` flags). Multibyte characters
+/// are copied whole and never escaped.
 #[no_mangle]
 pub unsafe extern "C" fn vim_strsave_escaped_ext(
-    mut string: *const ::core::ffi::c_char,
-    mut esc_chars: *const ::core::ffi::c_char,
-    mut cc: ::core::ffi::c_char,
-    mut bsl: bool,
-) -> *mut ::core::ffi::c_char {
-    let mut length: size_t = 1 as size_t;
-    let mut p: *const ::core::ffi::c_char = string;
+    string: *const c_char,
+    esc_chars: *const c_char,
+    cc: c_char,
+    bsl: bool,
+) -> *mut c_char {
+    // First pass: measure (1 for the terminating NUL).
+    let mut length: size_t = 1;
+    let mut p = string;
     while *p != 0 {
-        let l: size_t = utfc_ptr2len(p) as size_t;
-        if l > 1 as size_t {
+        let l = utfc_ptr2len(p) as size_t;
+        if l > 1 {
             length = length.wrapping_add(l);
-            p = p.offset(l.wrapping_sub(1 as size_t) as isize);
-        } else {
-            if !vim_strchr(esc_chars, *p as uint8_t as ::core::ffi::c_int).is_null()
-                || bsl as ::core::ffi::c_int != 0 && rem_backslash(p) as ::core::ffi::c_int != 0
-            {
-                length = length.wrapping_add(1);
-            }
+            p = p.add(l);
+            continue;
+        }
+        if !vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rem_backslash(p)) {
             length = length.wrapping_add(1);
         }
-        p = p.offset(1);
+        length = length.wrapping_add(1);
+        p = p.add(1);
     }
-    let mut escaped_string: *mut ::core::ffi::c_char = xmalloc(length) as *mut ::core::ffi::c_char;
-    let mut p2: *mut ::core::ffi::c_char = escaped_string;
-    let mut p_0: *const ::core::ffi::c_char = string;
-    while *p_0 != 0 {
-        let l_0: size_t = utfc_ptr2len(p_0) as size_t;
-        if l_0 > 1 as size_t {
-            memcpy(
-                p2 as *mut ::core::ffi::c_void,
-                p_0 as *const ::core::ffi::c_void,
-                l_0,
-            );
-            p2 = p2.offset(l_0 as isize);
-            p_0 = p_0.offset(l_0.wrapping_sub(1 as size_t) as isize);
-        } else {
-            if !vim_strchr(esc_chars, *p_0 as uint8_t as ::core::ffi::c_int).is_null()
-                || bsl as ::core::ffi::c_int != 0 && rem_backslash(p_0) as ::core::ffi::c_int != 0
-            {
-                let c2rust_fresh0 = p2;
-                p2 = p2.offset(1);
-                *c2rust_fresh0 = cc;
-            }
-            let c2rust_fresh1 = p2;
-            p2 = p2.offset(1);
-            *c2rust_fresh1 = *p_0;
+
+    let escaped_string = xmalloc(length) as *mut c_char;
+    let mut p2 = escaped_string;
+    let mut p = string;
+    while *p != 0 {
+        let l = utfc_ptr2len(p) as size_t;
+        if l > 1 {
+            ptr::copy_nonoverlapping(p, p2, l);
+            p2 = p2.add(l);
+            p = p.add(l);
+            continue;
         }
-        p_0 = p_0.offset(1);
+        if !vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rem_backslash(p)) {
+            *p2 = cc;
+            p2 = p2.add(1);
+        }
+        *p2 = *p;
+        p2 = p2.add(1);
+        p = p.add(1);
     }
-    *p2 = NUL as ::core::ffi::c_char;
-    return escaped_string;
+    *p2 = 0;
+    escaped_string
 }
+
+/// Copy `length` bytes of `string` with shell-style double-quoting
+/// resolved (see `unquote`), NUL-terminated.
 #[no_mangle]
 pub unsafe extern "C" fn vim_strnsave_unquoted(
-    string: *const ::core::ffi::c_char,
+    string: *const c_char,
     length: size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut ret_length: size_t = 0 as size_t;
-    let mut inquote: bool = false_0 != 0;
-    let string_end: *const ::core::ffi::c_char = string.offset(length as isize);
-    let mut p: *const ::core::ffi::c_char = string;
-    while p < string_end {
-        if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-            inquote = !inquote;
-        } else if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && inquote as ::core::ffi::c_int != 0
-            && p.offset(1 as ::core::ffi::c_int as isize) < string_end
-            && (*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\\' as ::core::ffi::c_int
-                || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '"' as ::core::ffi::c_int)
-        {
-            ret_length = ret_length.wrapping_add(1);
-            p = p.offset(1);
-        } else {
-            ret_length = ret_length.wrapping_add(1);
-        }
-        p = p.offset(1);
+) -> *mut c_char {
+    if length == 0 {
+        return xmallocz(0) as *mut c_char;
     }
-    let ret: *mut ::core::ffi::c_char = xmallocz(ret_length) as *mut ::core::ffi::c_char;
-    let mut rp: *mut ::core::ffi::c_char = ret;
-    inquote = false_0 != 0;
-    let mut p_0: *const ::core::ffi::c_char = string;
-    while p_0 < string_end {
-        if *p_0 as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-            inquote = !inquote;
-        } else if *p_0 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && inquote as ::core::ffi::c_int != 0
-            && p_0.offset(1 as ::core::ffi::c_int as isize) < string_end
-            && (*p_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\\' as ::core::ffi::c_int
-                || *p_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '"' as ::core::ffi::c_int)
-        {
-            p_0 = p_0.offset(1);
-            let c2rust_fresh2 = rp;
-            rp = rp.offset(1);
-            *c2rust_fresh2 = *p_0;
-        } else {
-            let c2rust_fresh3 = rp;
-            rp = rp.offset(1);
-            *c2rust_fresh3 = *p_0;
-        }
-        p_0 = p_0.offset(1);
-    }
-    return ret;
+    let src = slice::from_raw_parts(string as *const u8, length);
+    let mut n: size_t = 0;
+    unquote(src, &mut |_| n += 1);
+    let ret = xmallocz(n) as *mut c_char;
+    let out = slice::from_raw_parts_mut(ret as *mut u8, n);
+    let mut o = 0;
+    unquote(src, &mut |b| {
+        out[o] = b;
+        o += 1;
+    });
+    ret
 }
+
+/// Single-quote `string` for the shell, doubling embedded quotes
+/// (`'` → `'\''`) and — depending on the shell flavor and flags — escaping
+/// newlines, `!`, `\`, and `%`/`#` cmdline specials.
 #[no_mangle]
 pub unsafe extern "C" fn vim_strsave_shellescape(
-    mut string: *const ::core::ffi::c_char,
-    mut do_special: bool,
-    mut do_newline: bool,
-) -> *mut ::core::ffi::c_char {
+    string: *const c_char,
+    do_special: bool,
+    do_newline: bool,
+) -> *mut c_char {
+    let csh_like = csh_like_shell() != 0;
+    let fish_like = fish_like_shell();
     let mut l: size_t = 0;
-    let mut csh_like: ::core::ffi::c_int = csh_like_shell();
-    let mut fish_like: bool = fish_like_shell();
-    let mut length: size_t = strlen(string).wrapping_add(3 as size_t);
-    let mut p: *const ::core::ffi::c_char = string;
-    while *p as ::core::ffi::c_int != NUL {
-        if *p as ::core::ffi::c_int == '\'' as ::core::ffi::c_int {
-            length = length.wrapping_add(3 as size_t);
+
+    // First pass: measure (3 = the surrounding quotes plus NUL).
+    let mut length: size_t = strlen(string).wrapping_add(3);
+    let mut p = string;
+    while *p != 0 {
+        if *p == b'\'' as c_char {
+            length = length.wrapping_add(3);
         }
-        if *p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-            && (csh_like != 0 || do_newline as ::core::ffi::c_int != 0)
-            || *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int
-                && (csh_like != 0 || do_special as ::core::ffi::c_int != 0)
+        if (*p == b'\n' as c_char && (csh_like || do_newline))
+            || (*p == b'!' as c_char && (csh_like || do_special))
         {
             length = length.wrapping_add(1);
-            if csh_like != 0 && do_special as ::core::ffi::c_int != 0 {
+            if csh_like && do_special {
                 length = length.wrapping_add(1);
             }
         }
-        if do_special as ::core::ffi::c_int != 0 && find_cmdline_var(p, &raw mut l) >= 0 as ssize_t
-        {
-            length = length.wrapping_add(1);
-            p = p.offset(l.wrapping_sub(1 as size_t) as isize);
+        if do_special && find_cmdline_var(p, &mut l) >= 0 {
+            length = length.wrapping_add(1); // insert backslash
+            p = p.add(l.wrapping_sub(1));
         }
-        if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && fish_like as ::core::ffi::c_int != 0
-        {
+        if *p == b'\\' as c_char && fish_like {
             length = length.wrapping_add(1);
         }
-        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
+        p = p.add(utfc_ptr2len(p) as usize);
     }
-    let mut escaped_string: *mut ::core::ffi::c_char = xmalloc(length) as *mut ::core::ffi::c_char;
-    let mut d: *mut ::core::ffi::c_char = escaped_string;
-    let c2rust_fresh4 = d;
-    d = d.offset(1);
-    *c2rust_fresh4 = '\'' as ::core::ffi::c_char;
-    let mut p_0: *const ::core::ffi::c_char = string;
-    while *p_0 as ::core::ffi::c_int != NUL {
-        if *p_0 as ::core::ffi::c_int == '\'' as ::core::ffi::c_int {
-            let c2rust_fresh5 = d;
-            d = d.offset(1);
-            *c2rust_fresh5 = '\'' as ::core::ffi::c_char;
-            let c2rust_fresh6 = d;
-            d = d.offset(1);
-            *c2rust_fresh6 = '\\' as ::core::ffi::c_char;
-            let c2rust_fresh7 = d;
-            d = d.offset(1);
-            *c2rust_fresh7 = '\'' as ::core::ffi::c_char;
-            let c2rust_fresh8 = d;
-            d = d.offset(1);
-            *c2rust_fresh8 = '\'' as ::core::ffi::c_char;
-            p_0 = p_0.offset(1);
-        } else if *p_0 as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-            && (csh_like != 0 || do_newline as ::core::ffi::c_int != 0)
-            || *p_0 as ::core::ffi::c_int == '!' as ::core::ffi::c_int
-                && (csh_like != 0 || do_special as ::core::ffi::c_int != 0)
-        {
-            let c2rust_fresh9 = d;
-            d = d.offset(1);
-            *c2rust_fresh9 = '\\' as ::core::ffi::c_char;
-            if csh_like != 0 && do_special as ::core::ffi::c_int != 0 {
-                let c2rust_fresh10 = d;
-                d = d.offset(1);
-                *c2rust_fresh10 = '\\' as ::core::ffi::c_char;
+
+    let escaped_string = xmalloc(length) as *mut c_char;
+    let mut d = escaped_string;
+    *d = b'\'' as c_char;
+    d = d.add(1);
+    let mut p = string;
+    while *p != 0 {
+        if *p == b'\'' as c_char {
+            // A single-quoted string cannot contain a quote: close it,
+            // emit an escaped quote, and reopen.
+            for &b in b"'\\''" {
+                *d = b as c_char;
+                d = d.add(1);
             }
-            let c2rust_fresh11 = p_0;
-            p_0 = p_0.offset(1);
-            let c2rust_fresh12 = d;
-            d = d.offset(1);
-            *c2rust_fresh12 = *c2rust_fresh11;
-        } else if do_special as ::core::ffi::c_int != 0
-            && find_cmdline_var(p_0, &raw mut l) >= 0 as ssize_t
-        {
-            let c2rust_fresh13 = d;
-            d = d.offset(1);
-            *c2rust_fresh13 = '\\' as ::core::ffi::c_char;
-            memcpy(
-                d as *mut ::core::ffi::c_void,
-                p_0 as *const ::core::ffi::c_void,
-                l,
-            );
-            d = d.offset(l as isize);
-            p_0 = p_0.offset(l as isize);
-        } else if *p_0 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && fish_like as ::core::ffi::c_int != 0
-        {
-            let c2rust_fresh14 = d;
-            d = d.offset(1);
-            *c2rust_fresh14 = '\\' as ::core::ffi::c_char;
-            let c2rust_fresh15 = p_0;
-            p_0 = p_0.offset(1);
-            let c2rust_fresh16 = d;
-            d = d.offset(1);
-            *c2rust_fresh16 = *c2rust_fresh15;
-        } else {
-            mb_copy_char(&raw mut p_0, &raw mut d);
+            p = p.add(1);
+            continue;
         }
+        if (*p == b'\n' as c_char && (csh_like || do_newline))
+            || (*p == b'!' as c_char && (csh_like || do_special))
+        {
+            *d = b'\\' as c_char;
+            d = d.add(1);
+            if csh_like && do_special {
+                *d = b'\\' as c_char;
+                d = d.add(1);
+            }
+            *d = *p;
+            d = d.add(1);
+            p = p.add(1);
+            continue;
+        }
+        if do_special && find_cmdline_var(p, &mut l) >= 0 {
+            *d = b'\\' as c_char; // insert backslash
+            d = d.add(1);
+            ptr::copy_nonoverlapping(p, d, l); // copy the var
+            d = d.add(l);
+            p = p.add(l);
+            continue;
+        }
+        if *p == b'\\' as c_char && fish_like {
+            *d = b'\\' as c_char;
+            d = d.add(1);
+            *d = *p;
+            d = d.add(1);
+            p = p.add(1);
+            continue;
+        }
+        mb_copy_char(&mut p, &mut d);
     }
-    let c2rust_fresh17 = d;
-    d = d.offset(1);
-    *c2rust_fresh17 = '\'' as ::core::ffi::c_char;
-    *d = NUL as ::core::ffi::c_char;
-    return escaped_string;
+    *d = b'\'' as c_char;
+    d = d.add(1);
+    *d = 0;
+    escaped_string
 }
+
+/// ASCII-uppercased copy of `string`.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strsave_up(
-    mut string: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let mut p1: *mut ::core::ffi::c_char =
-        xmalloc(strlen(string).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn vim_strsave_up(string: *const c_char) -> *mut c_char {
+    let p1 = xmalloc(strlen(string).wrapping_add(1)) as *mut c_char;
     vim_strcpy_up(p1, string);
-    return p1;
+    p1
 }
+
+/// ASCII-uppercased copy of at most `len` bytes of `string`.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strnsave_up(
-    mut string: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut p1: *mut ::core::ffi::c_char =
-        xmalloc(len.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char {
+    let p1 = xmalloc(len.wrapping_add(1)) as *mut c_char;
     vim_strncpy_up(p1, string, len);
-    return p1;
+    p1
 }
+
+/// ASCII-uppercase the C string in place.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strup(mut p: *mut ::core::ffi::c_char) {
-    let mut c: uint8_t = 0;
-    loop {
-        c = *p as uint8_t;
-        if c as ::core::ffi::c_int == NUL {
-            break;
-        }
-        let c2rust_fresh23 = p;
-        p = p.offset(1);
-        *c2rust_fresh23 = (if (c as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-            || c as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-        {
-            c as ::core::ffi::c_int
-        } else {
-            c as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int
-        }) as uint8_t as ::core::ffi::c_char;
+pub unsafe extern "C" fn vim_strup(p: *mut c_char) {
+    let len = CStr::from_ptr(p).to_bytes().len();
+    ascii_upcase(slice::from_raw_parts_mut(p as *mut u8, len));
+}
+
+/// `strcpy` that ASCII-uppercases while copying.
+#[no_mangle]
+pub unsafe extern "C" fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
+    let bytes = CStr::from_ptr(src).to_bytes_with_nul();
+    let out = slice::from_raw_parts_mut(dst as *mut u8, bytes.len());
+    out.copy_from_slice(bytes);
+    ascii_upcase(&mut out[..bytes.len() - 1]);
+}
+
+/// Like `vim_strcpy_up` but copies at most `n` bytes; always terminates.
+#[no_mangle]
+pub unsafe extern "C" fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
+    let len = strnlen(src, n);
+    let out = slice::from_raw_parts_mut(dst as *mut u8, len + 1);
+    if len != 0 {
+        out[..len].copy_from_slice(slice::from_raw_parts(src as *const u8, len));
+        ascii_upcase(&mut out[..len]);
     }
+    out[len] = 0;
 }
+
+/// `memcpy` that ASCII-uppercases while copying: exactly `n` bytes, no
+/// terminator.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strcpy_up(
-    mut dst: *mut ::core::ffi::c_char,
-    mut src: *const ::core::ffi::c_char,
-) {
-    let mut c: uint8_t = 0;
-    loop {
-        let c2rust_fresh18 = src;
-        src = src.offset(1);
-        c = *c2rust_fresh18 as uint8_t;
-        if c as ::core::ffi::c_int == NUL {
-            break;
-        }
-        let c2rust_fresh19 = dst;
-        dst = dst.offset(1);
-        *c2rust_fresh19 = (if (c as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-            || c as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-        {
-            c as ::core::ffi::c_int
-        } else {
-            c as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int
-        }) as uint8_t as ::core::ffi::c_char;
+pub unsafe extern "C" fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
+    if n == 0 {
+        return;
     }
-    *dst = NUL as ::core::ffi::c_char;
+    let out = slice::from_raw_parts_mut(dst as *mut u8, n);
+    out.copy_from_slice(slice::from_raw_parts(src as *const u8, n));
+    ascii_upcase(out);
 }
+
+/// Case-fold `orig` per character (multibyte-aware), growing the result
+/// when a folded character encodes longer than its original.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strncpy_up(
-    mut dst: *mut ::core::ffi::c_char,
-    mut src: *const ::core::ffi::c_char,
-    mut n: size_t,
-) {
-    let mut c: uint8_t = 0;
-    loop {
-        let c2rust_fresh20 = n;
-        n = n.wrapping_sub(1);
-        if !(c2rust_fresh20 != 0 && {
-            let c2rust_fresh21 = src;
-            src = src.offset(1);
-            c = *c2rust_fresh21 as uint8_t;
-            c as ::core::ffi::c_int != NUL
-        }) {
-            break;
-        }
-        let c2rust_fresh22 = dst;
-        dst = dst.offset(1);
-        *c2rust_fresh22 = (if (c as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-            || c as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-        {
-            c as ::core::ffi::c_int
+pub unsafe extern "C" fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
+    let mut orig_len = strlen(orig);
+    let mut res = xmalloc(orig_len.wrapping_add(1)) as *mut c_char;
+    let mut res_index: size_t = 0;
+    let mut p = orig;
+    while *p != 0 {
+        let char_info = utf_ptr2CharInfo(p);
+        let c = if char_info.value < 0 {
+            *p as u8 as c_int
         } else {
-            c as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int
-        }) as uint8_t as ::core::ffi::c_char;
-    }
-    *dst = NUL as ::core::ffi::c_char;
-}
-#[no_mangle]
-pub unsafe extern "C" fn vim_memcpy_up(
-    mut dst: *mut ::core::ffi::c_char,
-    mut src: *const ::core::ffi::c_char,
-    mut n: size_t,
-) {
-    let mut c: uint8_t = 0;
-    loop {
-        let c2rust_fresh24 = n;
-        n = n.wrapping_sub(1);
-        if c2rust_fresh24 == 0 {
-            break;
-        }
-        let c2rust_fresh25 = src;
-        src = src.offset(1);
-        c = *c2rust_fresh25 as uint8_t;
-        let c2rust_fresh26 = dst;
-        dst = dst.offset(1);
-        *c2rust_fresh26 = (if (c as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-            || c as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-        {
-            c as ::core::ffi::c_int
-        } else {
-            c as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int
-        }) as uint8_t as ::core::ffi::c_char;
-    }
-}
-#[no_mangle]
-pub unsafe extern "C" fn strcase_save(
-    orig: *const ::core::ffi::c_char,
-    mut upper: bool,
-) -> *mut ::core::ffi::c_char {
-    let mut orig_len: size_t = strlen(orig);
-    let mut res: *mut ::core::ffi::c_char =
-        xmalloc(orig_len.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-    let mut res_index: size_t = 0 as size_t;
-    let mut p: *const ::core::ffi::c_char = orig;
-    while *p as ::core::ffi::c_int != NUL {
-        let mut char_info: CharInfo = utf_ptr2CharInfo(p);
-        let mut c: ::core::ffi::c_int = if char_info.value < 0 as int32_t {
-            *p as uint8_t as ::core::ffi::c_int
-        } else {
-            char_info.value as ::core::ffi::c_int
+            char_info.value as c_int
         };
-        let mut newc: ::core::ffi::c_int = if upper as ::core::ffi::c_int != 0 {
-            mb_toupper(c)
-        } else {
-            mb_tolower(c)
-        };
-        let mut newl: size_t = utf_char2len(newc) as size_t;
+        let newc = if upper { mb_toupper(c) } else { mb_tolower(c) };
+        let newl = utf_char2len(newc) as size_t;
         if res_index.wrapping_add(newl) > orig_len {
-            let mut new_size: size_t = res_index.wrapping_add(newl).wrapping_add(1 as size_t);
-            res = xrealloc(res as *mut ::core::ffi::c_void, new_size) as *mut ::core::ffi::c_char;
-            orig_len = new_size.wrapping_sub(1 as size_t);
+            let new_size = res_index.wrapping_add(newl).wrapping_add(1);
+            res = xrealloc(res as *mut ::core::ffi::c_void, new_size) as *mut c_char;
+            orig_len = new_size.wrapping_sub(1);
         }
-        utf_char2bytes(newc, res.offset(res_index as isize));
+        utf_char2bytes(newc, res.add(res_index));
         res_index = res_index.wrapping_add(newl);
-        p = p.offset(char_info.len as isize);
+        p = p.add(char_info.len as usize);
     }
-    *res.offset(res_index as isize) = NUL as ::core::ffi::c_char;
-    return res;
+    *res.add(res_index) = 0;
+    res
 }
+
+/// Truncate unescaped trailing spaces and tabs in place.
 #[no_mangle]
-pub unsafe extern "C" fn del_trailing_spaces(mut ptr: *mut ::core::ffi::c_char) {
-    let mut q: *mut ::core::ffi::c_char = ptr.offset(strlen(ptr) as isize);
-    loop {
-        q = q.offset(-1);
-        if !(q > ptr
-            && ascii_iswhite(*q.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-            && *q.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != '\\' as ::core::ffi::c_int
-            && *q.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != Ctrl_V)
-        {
-            break;
-        }
-        *q = NUL as ::core::ffi::c_char;
-    }
+pub unsafe extern "C" fn del_trailing_spaces(ptr: *mut c_char) {
+    let len = CStr::from_ptr(ptr).to_bytes().len();
+    let s = slice::from_raw_parts_mut(ptr as *mut u8, len);
+    let end = trailing_spaces_start(s);
+    s[end..].fill(0);
 }
+
+/// Case-insensitive `strcmp` equality where NULL only equals NULL.
+/// strcasecmp is locale-aware, so the libc call stays.
 #[no_mangle]
-pub unsafe extern "C" fn striequal(
-    mut a: *const ::core::ffi::c_char,
-    mut b: *const ::core::ffi::c_char,
-) -> bool {
-    return a.is_null() && b.is_null()
-        || !a.is_null()
-            && !b.is_null()
-            && strcasecmp(a as *mut ::core::ffi::c_char, b as *mut ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int;
+pub unsafe extern "C" fn striequal(a: *const c_char, b: *const c_char) -> bool {
+    (a.is_null() && b.is_null()) || (!a.is_null() && !b.is_null() && strcasecmp(a, b) == 0)
 }
+
 #[no_mangle]
 pub unsafe extern "C" fn vim_strnicmp_asc(
-    mut s1: *const ::core::ffi::c_char,
-    mut s2: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while len > 0 as size_t {
-        i = (if (*s1 as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
-            || *s1 as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
-        {
-            *s1 as ::core::ffi::c_int
-        } else {
-            *s1 as ::core::ffi::c_int + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) - (if (*s2 as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
-            || *s2 as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
-        {
-            *s2 as ::core::ffi::c_int
-        } else {
-            *s2 as ::core::ffi::c_int + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        });
-        if i != 0 as ::core::ffi::c_int {
-            break;
-        }
-        if *s1 as ::core::ffi::c_int == NUL {
-            break;
-        }
-        s1 = s1.offset(1);
-        s2 = s2.offset(1);
-        len = len.wrapping_sub(1);
-    }
-    return i;
+    s1: *const c_char,
+    s2: *const c_char,
+    len: size_t,
+) -> c_int {
+    strnicmp_asc(
+        CStr::from_ptr(s1).to_bytes(),
+        CStr::from_ptr(s2).to_bytes(),
+        len,
+    )
 }
+
+/// Find character `c` (a codepoint, not a byte) in `string`.
 #[no_mangle]
-pub unsafe extern "C" fn vim_strchr(
-    string: *const ::core::ffi::c_char,
-    c: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    if c <= 0 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    } else if c < 0x80 as ::core::ffi::c_int {
-        return strchr(string, c);
+pub unsafe extern "C" fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+    if c <= 0 {
+        ptr::null_mut()
+    } else if c < 0x80 {
+        strchr(string, c)
     } else {
-        let mut u8char: [::core::ffi::c_char; 22] = [0; 22];
-        let len: ::core::ffi::c_int =
-            utf_char2bytes(c, &raw mut u8char as *mut ::core::ffi::c_char);
-        u8char[len as usize] = NUL as ::core::ffi::c_char;
-        return strstr(string, &raw mut u8char as *mut ::core::ffi::c_char);
-    };
+        let mut u8char = [0 as c_char; 22];
+        let len = utf_char2bytes(c, u8char.as_mut_ptr());
+        u8char[len as usize] = 0;
+        strstr(string, u8char.as_ptr())
+    }
 }
+
 unsafe extern "C" fn sort_compare(
-    mut s1: *const ::core::ffi::c_void,
-    mut s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    return strcmp(
-        *(s1 as *mut *mut ::core::ffi::c_char),
-        *(s2 as *mut *mut ::core::ffi::c_char),
-    );
+    s1: *const ::core::ffi::c_void,
+    s2: *const ::core::ffi::c_void,
+) -> c_int {
+    strcmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char))
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn sort_strings(
-    mut files: *mut *mut ::core::ffi::c_char,
-    mut count: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
     qsort(
         files as *mut ::core::ffi::c_void,
         count as size_t,
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
+        ::core::mem::size_of::<*mut c_char>(),
         Some(
             sort_compare
                 as unsafe extern "C" fn(
                     *const ::core::ffi::c_void,
                     *const ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
+                ) -> c_int,
         ),
     );
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn has_non_ascii(mut s: *const ::core::ffi::c_char) -> bool {
-    if !s.is_null() {
-        let mut p: *const ::core::ffi::c_char = s;
-        while *p as ::core::ffi::c_int != NUL {
-            if *p as uint8_t as ::core::ffi::c_int >= 128 as ::core::ffi::c_int {
-                return true_0 != 0;
-            }
-            p = p.offset(1);
-        }
-    }
-    return false_0 != 0;
+pub unsafe extern "C" fn has_non_ascii(s: *const c_char) -> bool {
+    !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes())
 }
+
 #[no_mangle]
-pub unsafe extern "C" fn has_non_ascii_len(s: *const ::core::ffi::c_char, len: size_t) -> bool {
-    if !s.is_null() {
-        let mut i: size_t = 0 as size_t;
-        while i < len {
-            if *s.offset(i as isize) as uint8_t as ::core::ffi::c_int >= 128 as ::core::ffi::c_int {
-                return true_0 != 0;
-            }
-            i = i.wrapping_add(1);
-        }
-    }
-    return false_0 != 0;
+pub unsafe extern "C" fn has_non_ascii_len(s: *const c_char, len: size_t) -> bool {
+    !s.is_null() && len != 0 && any_non_ascii(slice::from_raw_parts(s as *const u8, len))
 }
+
+/// Freshly allocated `str1 ++ str2`, NUL-terminated.
 #[no_mangle]
-pub unsafe extern "C" fn concat_str(
-    mut str1: *const ::core::ffi::c_char,
-    mut str2: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let mut l: size_t = strlen(str1);
-    let mut dest: *mut ::core::ffi::c_char =
-        xmalloc(l.wrapping_add(strlen(str2)).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-    strcpy(dest, str1 as *mut ::core::ffi::c_char);
-    strcpy(dest.offset(l as isize), str2 as *mut ::core::ffi::c_char);
-    return dest;
+pub unsafe extern "C" fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
+    let a = CStr::from_ptr(str1).to_bytes();
+    let b = CStr::from_ptr(str2).to_bytes_with_nul();
+    let dest = xmalloc(a.len() + b.len()) as *mut c_char;
+    let out = slice::from_raw_parts_mut(dest as *mut u8, a.len() + b.len());
+    out[..a.len()].copy_from_slice(a);
+    out[a.len()..].copy_from_slice(b);
+    dest
 }
 static mut e_printf: *const ::core::ffi::c_char =
     b"E766: Insufficient arguments for printf()\0".as_ptr() as *const ::core::ffi::c_char;
@@ -4555,3 +4479,57 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+#[cfg(test)]
+mod tests {
+    use super::{any_non_ascii, ascii_upcase, strnicmp_asc, trailing_spaces_start, unquote};
+
+    fn unquote_all(src: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        unquote(src, &mut |b| out.push(b));
+        out
+    }
+
+    #[test]
+    fn unquote_mirrors_the_unit_spec_cases() {
+        assert_eq!(unquote_all(b"abc"), b"abc"); // unquoted copies as-is
+        assert_eq!(unquote_all(br#""abc""#), b"abc"); // fully quoted word
+        assert_eq!(unquote_all(br#"a"b"c"#), b"abc"); // partially quoted
+        assert_eq!(unquote_all(br#"a""b"#), b"ab"); // removes ""
+        assert_eq!(unquote_all(br#""a\"b""#), br#"a"b"#); // unescapes \"
+        assert_eq!(unquote_all(br#""a\\b""#), br#"a\b"#); // unescapes doubled backslash
+        assert_eq!(unquote_all(br#"a\\b"#), br#"a\\b"#); // but not outside quotes
+        assert_eq!(unquote_all(br#""a\nb""#), br#"a\nb"#); // \n is not unescaped
+        assert_eq!(unquote_all(br#""abc"#), b"abc"); // unpaired quote stripped
+        assert_eq!(unquote_all(br#"a\"#), br#"a\"#); // may end with one backslash
+    }
+
+    #[test]
+    fn strnicmp_folds_only_ascii_and_stops_at_len_diff_or_nul() {
+        assert_eq!(strnicmp_asc(b"abc", b"ABC", 3), 0);
+        assert!(strnicmp_asc(b"abc", b"abd", 3) < 0);
+        assert_eq!(strnicmp_asc(b"abX", b"abY", 2), 0); // len clamps the compare
+        assert!(strnicmp_asc(b"ab", b"abc", 5) < 0); // terminator vs 'c'
+        assert_eq!(strnicmp_asc(b"", b"", 4), 0);
+        // Bytes >= 0x80 compare as signed chars, exactly like the C code.
+        assert!(strnicmp_asc(b"\x80", b"\x7f", 1) < 0);
+    }
+
+    #[test]
+    fn trailing_spaces_respect_escapes_and_never_take_byte_zero() {
+        assert_eq!(trailing_spaces_start(b"ab  "), 2);
+        assert_eq!(trailing_spaces_start(b"ab\t "), 2);
+        assert_eq!(trailing_spaces_start(b"ab\\  "), 4); // escaped space stays
+        assert_eq!(trailing_spaces_start(&[b'a', 22, b' ']), 3); // Ctrl-V escapes
+        assert_eq!(trailing_spaces_start(b" "), 1); // first byte never stripped
+        assert_eq!(trailing_spaces_start(b""), 0);
+    }
+
+    #[test]
+    fn upcase_and_ascii_scan() {
+        let mut buf = *b"aZ9\x80!";
+        ascii_upcase(&mut buf);
+        assert_eq!(&buf, b"AZ9\x80!");
+        assert!(any_non_ascii(b"caf\xc3\xa9"));
+        assert!(!any_non_ascii(b"cafe"));
+    }
+}

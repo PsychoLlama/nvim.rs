@@ -13,7 +13,7 @@
 //! the terminator, because the C originals never read past it and the
 //! allocation may end there.
 
-use core::ffi::{c_char, c_int, c_long, c_uint, c_void, CStr};
+use core::ffi::{c_char, c_int, c_long, c_void, CStr};
 use core::ptr;
 use core::slice;
 

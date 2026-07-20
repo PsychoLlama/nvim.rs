@@ -164,7 +164,7 @@
     "src/nvim/spellsuggest.rs": {"lines": 7530, "no_mangle": 3, "static_mut": 25, "unsafe": 41},
     "src/nvim/state.rs": {"lines": 2955, "no_mangle": 9, "static_mut": 21, "unsafe": 31},
     "src/nvim/statusline.rs": {"lines": 5663, "no_mangle": 13, "static_mut": 57, "unsafe": 17},
-    "src/nvim/strings.rs": {"lines": 4557, "no_mangle": 56, "static_mut": 23, "unsafe": 121},
+    "src/nvim/strings.rs": {"lines": 4535, "no_mangle": 56, "static_mut": 23, "unsafe": 120},
     "src/nvim/syntax.rs": {"lines": 9593, "no_mangle": 25, "static_mut": 75, "unsafe": 153},
     "src/nvim/tag.rs": {"lines": 8387, "no_mangle": 14, "static_mut": 63, "unsafe": 67},
     "src/nvim/terminal.rs": {"lines": 8645, "no_mangle": 19, "static_mut": 36, "unsafe": 150},
