@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -105,7 +106,7 @@ extern "C" {
     static e_stray_closing_curly_str: [::core::ffi::c_char; 0];
     static e_missing_close_curly_str: [::core::ffi::c_char; 0];
     static e_unknown_option2: [::core::ffi::c_char; 0];
-    static mut eval_lavars_used: *mut bool;
+    static eval_lavars_used: GlobalCell<*mut bool>;
     static mut EVALARG_EVALUATE: evalarg_T;
     fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
     fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
@@ -360,7 +361,7 @@ extern "C" {
         len: ssize_t,
         must_append: ::core::ffi::c_int,
     );
-    static mut script_items: garray_T;
+    static script_items: GlobalCell<garray_T>;
     fn new_script_item(name: *mut ::core::ffi::c_char, sid_out: *mut scid_T) -> *mut scriptitem_T;
     fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
     fn set_search_direction(cdir: ::core::ffi::c_int);
@@ -3634,29 +3635,32 @@ unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-static mut e_letunexp: *const ::core::ffi::c_char =
-    b"E18: Unexpected characters in :let\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_double_semicolon_in_list_of_variables: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E452: Double ; in list of variables\0",
-    )
-};
-static mut e_lock_unlock: *const ::core::ffi::c_char =
-    b"E940: Cannot lock or unlock variable %s\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_setting_v_str_to_value_with_wrong_type: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E963: Setting v:%s to value with wrong type\0",
-    )
-};
-static mut e_missing_end_marker_str: [::core::ffi::c_char; 30] = unsafe {
+static e_letunexp: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E18: Unexpected characters in :let\0".as_ptr() as *const ::core::ffi::c_char);
+static e_double_semicolon_in_list_of_variables: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E452: Double ; in list of variables\0",
+        )
+    });
+static e_lock_unlock: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+    b"E940: Cannot lock or unlock variable %s\0".as_ptr() as *const ::core::ffi::c_char,
+);
+static e_setting_v_str_to_value_with_wrong_type: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E963: Setting v:%s to value with wrong type\0",
+        )
+    });
+static e_missing_end_marker_str: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E990: Missing end marker '%s'\0",
     )
-};
-static mut e_cannot_use_heredoc_here: [::core::ffi::c_char; 26] = unsafe {
+});
+static e_cannot_use_heredoc_here: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E991: Cannot use =<< here\0")
-};
-static mut globvars_var: ScopeDictDictItem = ScopeDictDictItem {
+});
+static globvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(ScopeDictDictItem {
     di_tv: typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -3664,8 +3668,8 @@ static mut globvars_var: ScopeDictDictItem = ScopeDictDictItem {
     },
     di_flags: 0,
     di_key: [0; 1],
-};
-static mut globvardict: dict_T = dict_T {
+});
+static globvardict: GlobalCell<dict_T> = GlobalCell::new(dict_T {
     dv_lock: VAR_UNLOCKED,
     dv_scope: VAR_NO_SCOPE,
     dv_refcount: 0,
@@ -3690,8 +3694,8 @@ static mut globvardict: dict_T = dict_T {
         prev: ::core::ptr::null_mut::<queue>(),
     },
     lua_table_ref: 0,
-};
-static mut compat_hashtab: hashtab_T = hashtab_T {
+});
+static compat_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
     ht_mask: 0,
     ht_used: 0,
     ht_filled: 0,
@@ -3702,11 +3706,11 @@ static mut compat_hashtab: hashtab_T = hashtab_T {
         hi_hash: 0,
         hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     }; 16],
-};
+});
 pub const VV_COMPAT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const VV_RO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const VV_RO_SBX: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-static mut vimvars: [vimvar; 106] = [
+static vimvars: GlobalCell<[vimvar; 106]> = GlobalCell::new([
     vimvar {
         vv_name: b"count\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         vv_di: C2Rust_Unnamed_22 {
@@ -7016,8 +7020,8 @@ static mut vimvars: [vimvar; 106] = [
         },
         vv_flags: 2 as ::core::ffi::c_char,
     },
-];
-static mut vimvars_var: ScopeDictDictItem = ScopeDictDictItem {
+]);
+static vimvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(ScopeDictDictItem {
     di_tv: typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -7025,8 +7029,8 @@ static mut vimvars_var: ScopeDictDictItem = ScopeDictDictItem {
     },
     di_flags: 0,
     di_key: [0; 1],
-};
-static mut vimvardict: dict_T = dict_T {
+});
+static vimvardict: GlobalCell<dict_T> = GlobalCell::new(dict_T {
     dv_lock: VAR_UNLOCKED,
     dv_scope: VAR_NO_SCOPE,
     dv_refcount: 0,
@@ -7051,8 +7055,8 @@ static mut vimvardict: dict_T = dict_T {
         prev: ::core::ptr::null_mut::<queue>(),
     },
     lua_table_ref: 0,
-};
-static mut msgpack_type_names: [*const ::core::ffi::c_char; 8] = [
+});
+static msgpack_type_names: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"nil\0".as_ptr() as *const ::core::ffi::c_char,
     b"boolean\0".as_ptr() as *const ::core::ffi::c_char,
     b"integer\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7061,9 +7065,9 @@ static mut msgpack_type_names: [*const ::core::ffi::c_char; 8] = [
     b"array\0".as_ptr() as *const ::core::ffi::c_char,
     b"map\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut eval_msgpack_type_lists: [*const list_T; 8] = [
+pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> = GlobalCell::new([
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
@@ -7072,13 +7076,13 @@ pub static mut eval_msgpack_type_lists: [*const list_T; 8] = [
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn evalvars_init() {
-    init_var_dict(get_globvar_dict(), &raw mut globvars_var, VAR_DEF_SCOPE);
-    init_var_dict(&raw mut vimvardict, &raw mut vimvars_var, VAR_SCOPE);
-    vimvardict.dv_lock = VAR_FIXED;
-    hash_init(&raw mut compat_hashtab);
+    init_var_dict(get_globvar_dict(), globvars_var.ptr(), VAR_DEF_SCOPE);
+    init_var_dict(vimvardict.ptr(), vimvars_var.ptr(), VAR_SCOPE);
+    (*vimvardict.ptr()).dv_lock = VAR_FIXED;
+    hash_init(compat_hashtab.ptr());
     let mut i: size_t = 0 as size_t;
     while i < ::core::mem::size_of::<[vimvar; 106]>()
         .wrapping_div(::core::mem::size_of::<vimvar>())
@@ -7087,8 +7091,7 @@ pub unsafe extern "C" fn evalvars_init() {
                 == 0) as ::core::ffi::c_int as usize,
         )
     {
-        let mut p: *mut vimvar =
-            (&raw mut vimvars as *mut vimvar).offset(i as isize) as *mut vimvar;
+        let mut p: *mut vimvar = (vimvars.ptr() as *mut vimvar).offset(i as isize) as *mut vimvar;
         '_c2rust_label: {
             if strlen((*p).vv_name) <= 16 as size_t {
             } else {
@@ -7118,13 +7121,13 @@ pub unsafe extern "C" fn evalvars_init() {
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             hash_add(
-                &raw mut vimvardict.dv_hashtab,
+                &raw mut (*vimvardict.ptr()).dv_hashtab,
                 &raw mut (*p).vv_di.di_key as *mut ::core::ffi::c_char,
             );
         }
         if (*p).vv_flags as ::core::ffi::c_int & VV_COMPAT != 0 {
             hash_add(
-                &raw mut compat_hashtab,
+                compat_hashtab.ptr(),
                 &raw mut (*p).vv_di.di_key as *mut ::core::ffi::c_char,
             );
         }
@@ -7150,7 +7153,7 @@ pub unsafe extern "C" fn evalvars_init() {
         let type_list: *mut list_T = tv_list_alloc(0 as ptrdiff_t);
         tv_list_set_lock(type_list, VAR_FIXED);
         tv_list_ref(type_list);
-        let di: *mut dictitem_T = tv_dict_item_alloc(msgpack_type_names[i_0 as usize]);
+        let di: *mut dictitem_T = tv_dict_item_alloc((*msgpack_type_names.ptr())[i_0 as usize]);
         (*di).di_flags = ((*di).di_flags as ::core::ffi::c_int
             | (DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int))
             as uint8_t;
@@ -7159,7 +7162,7 @@ pub unsafe extern "C" fn evalvars_init() {
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_list: type_list },
         };
-        eval_msgpack_type_lists[i_0 as usize] = type_list;
+        (*eval_msgpack_type_lists.ptr())[i_0 as usize] = type_list;
         if tv_dict_add(msgpack_types_dict, di) == FAIL {
             abort();
         }
@@ -7236,7 +7239,7 @@ pub unsafe extern "C" fn garbage_collect_globvars(
     mut copyID: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     return set_ref_in_ht(
-        &raw mut globvardict.dv_hashtab,
+        &raw mut (*globvardict.ptr()).dv_hashtab,
         copyID,
         ::core::ptr::null_mut::<*mut list_stack_T>(),
     ) as ::core::ffi::c_int;
@@ -7244,7 +7247,7 @@ pub unsafe extern "C" fn garbage_collect_globvars(
 #[no_mangle]
 pub unsafe extern "C" fn garbage_collect_vimvars(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_ht(
-        &raw mut vimvardict.dv_hashtab,
+        &raw mut (*vimvardict.ptr()).dv_hashtab,
         copyID,
         ::core::ptr::null_mut::<*mut list_stack_T>(),
     );
@@ -7253,10 +7256,10 @@ pub unsafe extern "C" fn garbage_collect_vimvars(mut copyID: ::core::ffi::c_int)
 pub unsafe extern "C" fn garbage_collect_scriptvars(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort_0: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while i <= script_items.ga_len {
+    while i <= (*script_items.ptr()).ga_len {
         abort_0 = abort_0 as ::core::ffi::c_int != 0
             || set_ref_in_ht(
-                &raw mut (*(**(script_items.ga_data as *mut *mut scriptitem_T)
+                &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
                     .offset((i - 1 as ::core::ffi::c_int) as isize))
                 .sn_vars)
                     .sv_dict
@@ -7473,15 +7476,15 @@ pub unsafe extern "C" fn get_spellword(
 }
 #[no_mangle]
 pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
-    *save_tv = vimvars[idx as usize].vv_di.di_tv;
-    vimvars[idx as usize].vv_di.di_tv.vval.v_string =
+    *save_tv = (*vimvars.ptr())[idx as usize].vv_di.di_tv;
+    (*vimvars.ptr())[idx as usize].vv_di.di_tv.vval.v_string =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if vimvars[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
+    if (*vimvars.ptr())[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         hash_add(
-            &raw mut vimvardict.dv_hashtab,
-            &raw mut (*(&raw mut vimvars as *mut vimvar).offset(idx as isize))
+            &raw mut (*vimvardict.ptr()).dv_hashtab,
+            &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
                 .vv_di
                 .di_key as *mut ::core::ffi::c_char,
         );
@@ -7489,36 +7492,38 @@ pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
-    vimvars[idx as usize].vv_di.di_tv = *save_tv;
-    if vimvars[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
+    (*vimvars.ptr())[idx as usize].vv_di.di_tv = *save_tv;
+    if (*vimvars.ptr())[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return;
     }
     let mut hi: *mut hashitem_T = hash_find(
-        &raw mut vimvardict.dv_hashtab,
-        &raw mut (*(&raw mut vimvars as *mut vimvar).offset(idx as isize))
+        &raw mut (*vimvardict.ptr()).dv_hashtab,
+        &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
             .vv_di
             .di_key as *mut ::core::ffi::c_char,
     );
     if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
         internal_error(b"restore_vimvar()\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
-        hash_remove(&raw mut vimvardict.dv_hashtab, hi);
+        hash_remove(&raw mut (*vimvardict.ptr()).dv_hashtab, hi);
     };
 }
 unsafe extern "C" fn list_vim_vars(mut first: *mut ::core::ffi::c_int) {
     list_hashtable_vars(
-        &raw mut vimvardict.dv_hashtab,
+        &raw mut (*vimvardict.ptr()).dv_hashtab,
         b"v:\0".as_ptr() as *const ::core::ffi::c_char,
         false_0,
         first,
     );
 }
 unsafe extern "C" fn list_script_vars(mut first: *mut ::core::ffi::c_int) {
-    if current_sctx.sc_sid > 0 as ::core::ffi::c_int && current_sctx.sc_sid <= script_items.ga_len {
+    if current_sctx.sc_sid > 0 as ::core::ffi::c_int
+        && current_sctx.sc_sid <= (*script_items.ptr()).ga_len
+    {
         list_hashtable_vars(
-            &raw mut (*(**(script_items.ga_data as *mut *mut scriptitem_T).offset(
+            &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
                 (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
             ))
             .sn_vars)
@@ -7647,7 +7652,7 @@ pub unsafe extern "C" fn heredoc_get(
         *nl_ptr = NUL as ::core::ffi::c_char;
     } else if (*eap).ea_getline.is_none() {
         emsg(gettext(
-            &raw const e_cannot_use_heredoc_here as *const ::core::ffi::c_char,
+            (e_cannot_use_heredoc_here.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return ::core::ptr::null_mut::<list_T>();
     }
@@ -7735,7 +7740,10 @@ pub unsafe extern "C" fn heredoc_get(
             if *line_arg as ::core::ffi::c_int == NUL {
                 if !script_get {
                     semsg(
-                        gettext(&raw const e_missing_end_marker_str as *const ::core::ffi::c_char),
+                        gettext(
+                            (e_missing_end_marker_str.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
+                        ),
                         marker,
                     );
                 }
@@ -7762,7 +7770,10 @@ pub unsafe extern "C" fn heredoc_get(
             if theline.is_null() {
                 if !script_get {
                     semsg(
-                        gettext(&raw const e_missing_end_marker_str as *const ::core::ffi::c_char),
+                        gettext(
+                            (e_missing_end_marker_str.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
+                        ),
                         marker,
                     );
                 }
@@ -8097,7 +8108,7 @@ pub unsafe extern "C" fn skip_var_list(
                 if *semicolon == 1 as ::core::ffi::c_int {
                     if !silent {
                         emsg(gettext(
-                            &raw const e_double_semicolon_in_list_of_variables
+                            (e_double_semicolon_in_list_of_variables.ptr() as *const _)
                                 as *const ::core::ffi::c_char,
                         ));
                     }
@@ -8181,7 +8192,7 @@ pub unsafe extern "C" fn list_hashtable_vars(
 }
 unsafe extern "C" fn list_glob_vars(mut first: *mut ::core::ffi::c_int) {
     list_hashtable_vars(
-        &raw mut globvardict.dv_hashtab,
+        &raw mut (*globvardict.ptr()).dv_hashtab,
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         true_0,
         first,
@@ -8405,7 +8416,7 @@ unsafe extern "C" fn ex_let_env(
     } else if !endchars.is_null()
         && vim_strchr(endchars, *skipwhite(arg) as uint8_t as ::core::ffi::c_int).is_null()
     {
-        emsg(gettext(e_letunexp));
+        emsg(gettext(e_letunexp.get()));
     } else if !check_secure() {
         let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let c1: ::core::ffi::c_char = *name.offset(len as isize);
@@ -8457,7 +8468,7 @@ unsafe extern "C" fn ex_let_option(
         || !endchars.is_null()
             && vim_strchr(endchars, *skipwhite(p) as uint8_t as ::core::ffi::c_int).is_null()
     {
-        emsg(gettext(e_letunexp));
+        emsg(gettext(e_letunexp.get()));
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let c1: ::core::ffi::c_char = *p;
@@ -8629,7 +8640,7 @@ unsafe extern "C" fn ex_let_register(
         )
         .is_null()
     {
-        emsg(gettext(e_letunexp));
+        emsg(gettext(e_letunexp.get()));
     } else {
         let mut ptofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut p: *const ::core::ffi::c_char = tv_get_string_chk(tv);
@@ -8712,7 +8723,7 @@ unsafe extern "C" fn ex_let_one(
             if !endchars.is_null()
                 && vim_strchr(endchars, *skipwhite(p) as uint8_t as ::core::ffi::c_int).is_null()
             {
-                emsg(gettext(e_letunexp));
+                emsg(gettext(e_letunexp.get()));
             } else {
                 set_var_lval(&raw mut lv, p, tv, copy, is_const, op);
                 arg_end = p;
@@ -9005,10 +9016,10 @@ pub unsafe extern "C" fn do_unlet(
     if !ht.is_null() && *varname as ::core::ffi::c_int != NUL {
         let mut d: *mut dict_T = get_current_funccal_dict(ht);
         if d.is_null() {
-            if ht == &raw mut globvardict.dv_hashtab {
-                d = &raw mut globvardict;
-            } else if ht == &raw mut compat_hashtab {
-                d = &raw mut vimvardict;
+            if ht == &raw mut (*globvardict.ptr()).dv_hashtab {
+                d = globvardict.ptr();
+            } else if ht == compat_hashtab.ptr() {
+                d = vimvardict.ptr();
             } else {
                 let di: *mut dictitem_T = find_var_in_ht(
                     ht,
@@ -9092,7 +9103,7 @@ unsafe extern "C" fn do_lock_var(
     let mut ret: ::core::ffi::c_int = OK;
     if (*lp).ll_tv.is_null() {
         if *(*lp).ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-            semsg(gettext(e_lock_unlock), (*lp).ll_name);
+            semsg(gettext(e_lock_unlock.get()), (*lp).ll_name);
             ret = FAIL;
         } else {
             let di: *mut dictitem_T = find_var(
@@ -9109,7 +9120,7 @@ unsafe extern "C" fn do_lock_var(
                 && (*di).di_tv.v_type as ::core::ffi::c_uint
                     != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                semsg(gettext(e_lock_unlock), (*lp).ll_name);
+                semsg(gettext(e_lock_unlock.get()), (*lp).ll_name);
                 ret = FAIL;
             } else {
                 if lock {
@@ -9146,8 +9157,8 @@ unsafe extern "C" fn do_lock_var(
 }
 #[no_mangle]
 pub unsafe extern "C" fn del_menutrans_vars() {
-    hash_lock(&raw mut globvardict.dv_hashtab);
-    let hiht_: *mut hashtab_T = &raw mut globvardict.dv_hashtab;
+    hash_lock(&raw mut (*globvardict.ptr()).dv_hashtab);
+    let hiht_: *mut hashtab_T = &raw mut (*globvardict.ptr()).dv_hashtab;
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
@@ -9159,24 +9170,24 @@ pub unsafe extern "C" fn del_menutrans_vars() {
                 10 as size_t,
             ) == 0 as ::core::ffi::c_int
             {
-                delete_var(&raw mut globvardict.dv_hashtab, hi);
+                delete_var(&raw mut (*globvardict.ptr()).dv_hashtab, hi);
             }
         }
         hi = hi.offset(1);
     }
-    hash_unlock(&raw mut globvardict.dv_hashtab);
+    hash_unlock(&raw mut (*globvardict.ptr()).dv_hashtab);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_globvar_dict() -> *mut dict_T {
-    return &raw mut globvardict;
+    return globvardict.ptr();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_globvar_ht() -> *mut hashtab_T {
-    return &raw mut globvardict.dv_hashtab;
+    return &raw mut (*globvardict.ptr()).dv_hashtab;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_vimvar_dict() -> *mut dict_T {
-    return &raw mut vimvardict;
+    return vimvardict.ptr();
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
@@ -9186,11 +9197,11 @@ pub unsafe extern "C" fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_vim_var_name(idx: VimVarIndex) -> *mut ::core::ffi::c_char {
-    return vimvars[idx as usize].vv_name;
+    return (*vimvars.ptr())[idx as usize].vv_name;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
-    return &raw mut (*(&raw mut vimvars as *mut vimvar).offset(idx as isize))
+    return &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
         .vv_di
         .di_tv;
 }
@@ -9218,56 +9229,57 @@ pub unsafe extern "C" fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     return (*tv).vval.v_partial;
 }
-static mut varnamebuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut varnamebuflen: size_t = 0 as size_t;
+static varnamebuf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 #[no_mangle]
 pub unsafe extern "C" fn cat_prefix_varname(
     mut prefix: ::core::ffi::c_int,
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut len: size_t = strlen(name).wrapping_add(3 as size_t);
-    if len > varnamebuflen {
-        xfree(varnamebuf as *mut ::core::ffi::c_void);
+    if len > varnamebuflen.get() {
+        xfree(varnamebuf.get() as *mut ::core::ffi::c_void);
         len = len.wrapping_add(10 as size_t);
-        varnamebuf = xmalloc(len) as *mut ::core::ffi::c_char;
-        varnamebuflen = len;
+        varnamebuf.set(xmalloc(len) as *mut ::core::ffi::c_char);
+        varnamebuflen.set(len);
     }
-    *varnamebuf = prefix as ::core::ffi::c_char;
-    *varnamebuf.offset(1 as ::core::ffi::c_int as isize) = ':' as ::core::ffi::c_char;
+    *varnamebuf.get() = prefix as ::core::ffi::c_char;
+    *(*varnamebuf.ptr()).offset(1 as ::core::ffi::c_int as isize) = ':' as ::core::ffi::c_char;
     strcpy(
-        varnamebuf.offset(2 as ::core::ffi::c_int as isize),
+        (*varnamebuf.ptr()).offset(2 as ::core::ffi::c_int as isize),
         name as *mut ::core::ffi::c_char,
     );
-    return varnamebuf;
+    return varnamebuf.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_var_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut gdone: size_t = 0;
-    static mut bdone: size_t = 0;
-    static mut wdone: size_t = 0;
-    static mut tdone: size_t = 0;
-    static mut vidx: size_t = 0;
-    static mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
+    static gdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static bdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static wdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static tdone: GlobalCell<size_t> = GlobalCell::new(0);
+    static vidx: GlobalCell<size_t> = GlobalCell::new(0);
+    static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(::core::ptr::null_mut::<hashitem_T>());
     if idx == 0 as ::core::ffi::c_int {
-        vidx = 0 as size_t;
-        wdone = vidx;
-        bdone = wdone;
-        gdone = bdone;
-        tdone = 0 as size_t;
+        vidx.set(0 as size_t);
+        wdone.set(vidx.get());
+        bdone.set(wdone.get());
+        gdone.set(bdone.get());
+        tdone.set(0 as size_t);
     }
-    if gdone < globvardict.dv_hashtab.ht_used {
-        let c2rust_fresh0 = gdone;
-        gdone = gdone.wrapping_add(1);
+    if gdone.get() < (*globvardict.ptr()).dv_hashtab.ht_used {
+        let c2rust_fresh0 = gdone.get();
+        gdone.set((*gdone.ptr()).wrapping_add(1));
         if c2rust_fresh0 == 0 as size_t {
-            hi = globvardict.dv_hashtab.ht_array;
+            hi.set((*globvardict.ptr()).dv_hashtab.ht_array);
         } else {
-            hi = hi.offset(1);
+            hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
-            hi = hi.offset(1);
+        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+            hi.set((*hi.ptr()).offset(1));
         }
         if strncmp(
             b"g:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -9275,57 +9287,57 @@ pub unsafe extern "C" fn get_user_var_name(
             2 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
-            return cat_prefix_varname('g' as ::core::ffi::c_int, (*hi).hi_key);
+            return cat_prefix_varname('g' as ::core::ffi::c_int, (*hi.get()).hi_key);
         }
-        return (*hi).hi_key;
+        return (*hi.get()).hi_key;
     }
     let mut ht: *const hashtab_T =
         &raw mut (*(*(*(prevwin_curwin as unsafe extern "C" fn() -> *mut win_T)()).w_buffer)
             .b_vars)
             .dv_hashtab;
-    if bdone < (*ht).ht_used {
-        let c2rust_fresh1 = bdone;
-        bdone = bdone.wrapping_add(1);
+    if bdone.get() < (*ht).ht_used {
+        let c2rust_fresh1 = bdone.get();
+        bdone.set((*bdone.ptr()).wrapping_add(1));
         if c2rust_fresh1 == 0 as size_t {
-            hi = (*ht).ht_array;
+            hi.set((*ht).ht_array);
         } else {
-            hi = hi.offset(1);
+            hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
-            hi = hi.offset(1);
+        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+            hi.set((*hi.ptr()).offset(1));
         }
-        return cat_prefix_varname('b' as ::core::ffi::c_int, (*hi).hi_key);
+        return cat_prefix_varname('b' as ::core::ffi::c_int, (*hi.get()).hi_key);
     }
     ht =
         &raw mut (*(*(prevwin_curwin as unsafe extern "C" fn() -> *mut win_T)()).w_vars).dv_hashtab;
-    if wdone < (*ht).ht_used {
-        let c2rust_fresh2 = wdone;
-        wdone = wdone.wrapping_add(1);
+    if wdone.get() < (*ht).ht_used {
+        let c2rust_fresh2 = wdone.get();
+        wdone.set((*wdone.ptr()).wrapping_add(1));
         if c2rust_fresh2 == 0 as size_t {
-            hi = (*ht).ht_array;
+            hi.set((*ht).ht_array);
         } else {
-            hi = hi.offset(1);
+            hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
-            hi = hi.offset(1);
+        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+            hi.set((*hi.ptr()).offset(1));
         }
-        return cat_prefix_varname('w' as ::core::ffi::c_int, (*hi).hi_key);
+        return cat_prefix_varname('w' as ::core::ffi::c_int, (*hi.get()).hi_key);
     }
     ht = &raw mut (*(*curtab).tp_vars).dv_hashtab;
-    if tdone < (*ht).ht_used {
-        let c2rust_fresh3 = tdone;
-        tdone = tdone.wrapping_add(1);
+    if tdone.get() < (*ht).ht_used {
+        let c2rust_fresh3 = tdone.get();
+        tdone.set((*tdone.ptr()).wrapping_add(1));
         if c2rust_fresh3 == 0 as size_t {
-            hi = (*ht).ht_array;
+            hi.set((*ht).ht_array);
         } else {
-            hi = hi.offset(1);
+            hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
-            hi = hi.offset(1);
+        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+            hi.set((*hi.ptr()).offset(1));
         }
-        return cat_prefix_varname('t' as ::core::ffi::c_int, (*hi).hi_key);
+        return cat_prefix_varname('t' as ::core::ffi::c_int, (*hi.get()).hi_key);
     }
-    if vidx
+    if vidx.get()
         < ::core::mem::size_of::<[vimvar; 106]>()
             .wrapping_div(::core::mem::size_of::<vimvar>())
             .wrapping_div(
@@ -9334,19 +9346,18 @@ pub unsafe extern "C" fn get_user_var_name(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let c2rust_fresh4 = vidx;
-        vidx = vidx.wrapping_add(1);
+        let c2rust_fresh4 = vidx.get();
+        vidx.set((*vidx.ptr()).wrapping_add(1));
         return cat_prefix_varname(
             'v' as ::core::ffi::c_int,
             get_vim_var_name(c2rust_fresh4 as VimVarIndex),
         );
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut varnamebuf as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = varnamebuf.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
-    varnamebuflen = 0 as size_t;
+    varnamebuflen.set(0 as size_t);
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
@@ -9695,14 +9706,14 @@ pub unsafe extern "C" fn eval_variable(
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_vars(mut name: *const ::core::ffi::c_char, mut len: size_t) {
-    if eval_lavars_used.is_null() {
+    if (*eval_lavars_used.ptr()).is_null() {
         return;
     }
     let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut ht: *mut hashtab_T = find_var_ht(name, len, &raw mut varname);
     if ht == get_funccal_local_ht() || ht == get_funccal_args_ht() {
         if !find_var(name, len, ::core::ptr::null_mut::<*mut hashtab_T>(), true_0).is_null() {
-            *eval_lavars_used = true_0 != 0;
+            *eval_lavars_used.get() = true_0 != 0;
         }
     }
 }
@@ -9748,14 +9759,16 @@ pub unsafe extern "C" fn find_var_in_ht(
     if varname_len == 0 as size_t {
         match htname {
             115 => {
-                return &raw mut (*(**(script_items.ga_data as *mut *mut scriptitem_T).offset(
-                    (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
-                ))
+                return &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
+                    .offset(
+                        (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                            as isize,
+                    ))
                 .sn_vars)
                     .sv_var as *mut dictitem_T;
             }
-            103 => return &raw mut globvars_var as *mut dictitem_T,
-            118 => return &raw mut vimvars_var as *mut dictitem_T,
+            103 => return globvars_var.ptr() as *mut dictitem_T,
+            118 => return vimvars_var.ptr() as *mut dictitem_T,
             98 => return &raw mut (*curbuf).b_bufvar as *mut dictitem_T,
             119 => return &raw mut (*curwin).w_winvar as *mut dictitem_T,
             116 => return &raw mut (*curtab).tp_winvar as *mut dictitem_T,
@@ -9802,9 +9815,9 @@ unsafe extern "C" fn find_var_ht_dict(
             return ::core::ptr::null_mut::<hashtab_T>();
         }
         *varname = name;
-        let mut hi: *mut hashitem_T = hash_find_len(&raw mut compat_hashtab, name, name_len);
+        let mut hi: *mut hashitem_T = hash_find_len(compat_hashtab.ptr(), name, name_len);
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
-            return &raw mut compat_hashtab;
+            return compat_hashtab.ptr();
         }
         *d = get_funccal_local_dict();
         if (*d).is_null() {
@@ -9846,7 +9859,7 @@ unsafe extern "C" fn find_var_ht_dict(
             && (current_sctx.sc_sid > 0 as ::core::ffi::c_int
                 || current_sctx.sc_sid == SID_STR
                 || current_sctx.sc_sid == SID_LUA)
-            && current_sctx.sc_sid <= script_items.ga_len
+            && current_sctx.sc_sid <= (*script_items.ptr()).ga_len
         {
             nlua_set_sctx(&raw mut current_sctx);
             if current_sctx.sc_sid == SID_STR || current_sctx.sc_sid == SID_LUA {
@@ -9855,7 +9868,7 @@ unsafe extern "C" fn find_var_ht_dict(
                     &raw mut current_sctx.sc_sid,
                 );
             }
-            *d = &raw mut (*(**(script_items.ga_data as *mut *mut scriptitem_T).offset(
+            *d = &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
                 (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
             ))
             .sn_vars)
@@ -9898,7 +9911,7 @@ pub unsafe extern "C" fn new_script_vars(mut id: scid_T) {
     let mut sv: *mut scriptvar_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<scriptvar_T>()) as *mut scriptvar_T;
     init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE);
-    (**(script_items.ga_data as *mut *mut scriptitem_T)
+    (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
         .offset((id as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize))
     .sn_vars = sv;
 }
@@ -10076,7 +10089,7 @@ pub unsafe extern "C" fn before_set_vvar(
         }
         if watched {
             tv_dict_watcher_notify(
-                &raw mut vimvardict,
+                vimvardict.ptr(),
                 varname,
                 &raw mut (*di).di_tv,
                 &raw mut oldtv,
@@ -10116,7 +10129,7 @@ pub unsafe extern "C" fn before_set_vvar(
         }
         if watched {
             tv_dict_watcher_notify(
-                &raw mut vimvardict,
+                vimvardict.ptr(),
                 varname,
                 &raw mut (*di).di_tv,
                 &raw mut oldtv_0,
@@ -10191,13 +10204,13 @@ pub unsafe extern "C" fn set_var_const(
             return;
         }
         let mut type_error: bool = false_0 != 0;
-        if ht == &raw mut vimvardict.dv_hashtab
+        if ht == &raw mut (*vimvardict.ptr()).dv_hashtab
             && !before_set_vvar(varname, di, tv, copy, watched, &raw mut type_error)
         {
             if type_error {
                 semsg(
                     gettext(
-                        &raw const e_setting_v_str_to_value_with_wrong_type
+                        (e_setting_v_str_to_value_with_wrong_type.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     ),
                     varname,
@@ -10210,7 +10223,7 @@ pub unsafe extern "C" fn set_var_const(
         }
         tv_clear(&raw mut (*di).di_tv);
     } else {
-        if ht == &raw mut vimvardict.dv_hashtab || ht == get_funccal_args_ht() {
+        if ht == &raw mut (*vimvardict.ptr()).dv_hashtab || ht == get_funccal_args_ht() {
             semsg(
                 gettext(&raw const e_illvar as *const ::core::ffi::c_char),
                 name,
@@ -10855,16 +10868,18 @@ pub unsafe extern "C" fn var_exists(mut var: *const ::core::ffi::c_char) -> bool
     xfree(tofree as *mut ::core::ffi::c_void);
     return n;
 }
-static mut redir_lval: *mut lval_T = ::core::ptr::null_mut::<lval_T>();
-static mut redir_ga: garray_T = garray_T {
+static redir_lval: GlobalCell<*mut lval_T> = GlobalCell::new(::core::ptr::null_mut::<lval_T>());
+static redir_ga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,
     ga_growsize: 0,
     ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-};
-static mut redir_endp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut redir_varname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+});
+static redir_endp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static redir_varname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub unsafe extern "C" fn var_redir_start(
     mut name: *mut ::core::ffi::c_char,
@@ -10874,31 +10889,31 @@ pub unsafe extern "C" fn var_redir_start(
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         return FAIL;
     }
-    redir_varname = xstrdup(name);
-    redir_lval = xcalloc(1 as size_t, ::core::mem::size_of::<lval_T>()) as *mut lval_T;
+    redir_varname.set(xstrdup(name));
+    redir_lval.set(xcalloc(1 as size_t, ::core::mem::size_of::<lval_T>()) as *mut lval_T);
     ga_init(
-        &raw mut redir_ga,
+        redir_ga.ptr(),
         ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
         500 as ::core::ffi::c_int,
     );
-    redir_endp = get_lval(
-        redir_varname,
+    redir_endp.set(get_lval(
+        redir_varname.get(),
         ::core::ptr::null_mut::<typval_T>(),
-        redir_lval,
+        redir_lval.get(),
         false_0 != 0,
         false_0 != 0,
         0 as ::core::ffi::c_int,
         FNE_CHECK_START,
-    );
-    if redir_endp.is_null()
-        || (*redir_lval).ll_name.is_null()
-        || *redir_endp as ::core::ffi::c_int != NUL
+    ));
+    if (*redir_endp.ptr()).is_null()
+        || (*redir_lval.get()).ll_name.is_null()
+        || *redir_endp.get() as ::core::ffi::c_int != NUL
     {
-        clear_lval(redir_lval);
-        if !redir_endp.is_null() && *redir_endp as ::core::ffi::c_int != NUL {
+        clear_lval(redir_lval.get());
+        if !(*redir_endp.ptr()).is_null() && *redir_endp.get() as ::core::ffi::c_int != NUL {
             semsg(
                 gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
-                redir_endp,
+                redir_endp.get(),
             );
         } else {
             semsg(
@@ -10906,7 +10921,7 @@ pub unsafe extern "C" fn var_redir_start(
                 name,
             );
         }
-        redir_endp = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        redir_endp.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         var_redir_stop();
         return FAIL;
     }
@@ -10921,8 +10936,8 @@ pub unsafe extern "C" fn var_redir_start(
     tv.vval.v_string = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     if append {
         set_var_lval(
-            redir_lval,
-            redir_endp,
+            redir_lval.get(),
+            redir_endp.get(),
             &raw mut tv,
             true_0 != 0,
             false_0 != 0,
@@ -10930,17 +10945,17 @@ pub unsafe extern "C" fn var_redir_start(
         );
     } else {
         set_var_lval(
-            redir_lval,
-            redir_endp,
+            redir_lval.get(),
+            redir_endp.get(),
             &raw mut tv,
             true_0 != 0,
             false_0 != 0,
             b"=\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
-    clear_lval(redir_lval);
+    clear_lval(redir_lval.get());
     if called_emsg > called_emsg_before {
-        redir_endp = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        redir_endp.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         var_redir_stop();
         return FAIL;
     }
@@ -10951,7 +10966,7 @@ pub unsafe extern "C" fn var_redir_str(
     mut value: *const ::core::ffi::c_char,
     mut value_len: ::core::ffi::c_int,
 ) {
-    if redir_lval.is_null() {
+    if (*redir_lval.ptr()).is_null() {
         return;
     }
     let mut len: ::core::ffi::c_int = 0;
@@ -10960,60 +10975,60 @@ pub unsafe extern "C" fn var_redir_str(
     } else {
         len = value_len;
     }
-    ga_grow(&raw mut redir_ga, len);
+    ga_grow(redir_ga.ptr(), len);
     memmove(
-        (redir_ga.ga_data as *mut ::core::ffi::c_char).offset(redir_ga.ga_len as isize)
-            as *mut ::core::ffi::c_void,
+        ((*redir_ga.ptr()).ga_data as *mut ::core::ffi::c_char)
+            .offset((*redir_ga.ptr()).ga_len as isize) as *mut ::core::ffi::c_void,
         value as *const ::core::ffi::c_void,
         len as size_t,
     );
-    redir_ga.ga_len += len;
+    (*redir_ga.ptr()).ga_len += len;
 }
 #[no_mangle]
 pub unsafe extern "C" fn var_redir_stop() {
-    if !redir_lval.is_null() {
-        if !redir_endp.is_null() {
-            ga_append(&raw mut redir_ga, NUL as uint8_t);
+    if !(*redir_lval.ptr()).is_null() {
+        if !(*redir_endp.ptr()).is_null() {
+            ga_append(redir_ga.ptr(), NUL as uint8_t);
             let mut tv: typval_T = typval_T {
                 v_type: VAR_UNKNOWN,
                 v_lock: VAR_UNLOCKED,
                 vval: typval_vval_union { v_number: 0 },
             };
             tv.v_type = VAR_STRING;
-            tv.vval.v_string = redir_ga.ga_data as *mut ::core::ffi::c_char;
-            redir_endp = get_lval(
-                redir_varname,
+            tv.vval.v_string = (*redir_ga.ptr()).ga_data as *mut ::core::ffi::c_char;
+            redir_endp.set(get_lval(
+                redir_varname.get(),
                 ::core::ptr::null_mut::<typval_T>(),
-                redir_lval,
+                redir_lval.get(),
                 false_0 != 0,
                 false_0 != 0,
                 0 as ::core::ffi::c_int,
                 FNE_CHECK_START,
-            );
-            if !redir_endp.is_null() && !(*redir_lval).ll_name.is_null() {
+            ));
+            if !(*redir_endp.ptr()).is_null() && !(*redir_lval.get()).ll_name.is_null() {
                 set_var_lval(
-                    redir_lval,
-                    redir_endp,
+                    redir_lval.get(),
+                    redir_endp.get(),
                     &raw mut tv,
                     false_0 != 0,
                     false_0 != 0,
                     b".\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
-            clear_lval(redir_lval);
+            clear_lval(redir_lval.get());
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut redir_ga.ga_data;
+        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*redir_ga.ptr()).ga_data;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut redir_lval as *mut *mut ::core::ffi::c_void;
+            redir_lval.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
     }
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
-        &raw mut redir_varname as *mut *mut ::core::ffi::c_void;
+        redir_varname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
     *ptr__1;

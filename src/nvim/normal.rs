@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -4076,15 +4077,16 @@ pub const K_SELECT: ::core::ffi::c_int =
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut VIsual_mode_orig: ::core::ffi::c_int = NUL;
-static mut e_changelist_is_empty: [::core::ffi::c_char; 26] = unsafe {
+static VIsual_mode_orig: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
+static e_changelist_is_empty: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E664: Changelist is empty\0")
-};
-static mut e_cmdline_window_already_open: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-        *b"E1292: Command-line window is already open\0",
-    )
-};
+});
+static e_cmdline_window_already_open: GlobalCell<[::core::ffi::c_char; 43]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+            *b"E1292: Command-line window is already open\0",
+        )
+    });
 #[inline]
 unsafe extern "C" fn normal_state_init(mut s: *mut NormalState) {
     memset(
@@ -4110,7 +4112,7 @@ pub const NV_STS: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const NV_RL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const NV_KEEPREG: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const NV_NCW: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;
-static mut nv_cmds: [nv_cmd; 188] = [
+static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
     nv_cmd {
         cmd_char: NUL,
         cmd_func: Some(nv_error as unsafe extern "C" fn(*mut cmdarg_T) -> ()),
@@ -5275,21 +5277,21 @@ static mut nv_cmds: [nv_cmd; 188] = [
         cmd_flags: 0 as uint16_t,
         cmd_arg: 0 as int16_t,
     },
-];
+]);
 pub const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
     .wrapping_div(::core::mem::size_of::<nv_cmd>())
     .wrapping_div(
         (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())
             == 0) as ::core::ffi::c_int as usize,
     );
-static mut nv_cmd_idx: [int16_t; 188] = [0; 188];
-static mut nv_max_linear: ::core::ffi::c_int = 0;
+static nv_cmd_idx: GlobalCell<[int16_t; 188]> = GlobalCell::new([0; 188]);
+static nv_max_linear: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn nv_compare(
     mut s1: *const ::core::ffi::c_void,
     mut s2: *const ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
-    let mut c1: ::core::ffi::c_int = nv_cmds[*(s1 as *const int16_t) as usize].cmd_char;
-    let mut c2: ::core::ffi::c_int = nv_cmds[*(s2 as *const int16_t) as usize].cmd_char;
+    let mut c1: ::core::ffi::c_int = (*nv_cmds.ptr())[*(s1 as *const int16_t) as usize].cmd_char;
+    let mut c2: ::core::ffi::c_int = (*nv_cmds.ptr())[*(s2 as *const int16_t) as usize].cmd_char;
     if c1 < 0 as ::core::ffi::c_int {
         c1 = -c1;
     }
@@ -5327,11 +5329,11 @@ pub unsafe extern "C" fn init_normal_cmds() {
     };
     let mut i: int16_t = 0 as int16_t;
     while (i as ::core::ffi::c_int) < NV_CMDS_SIZE as int16_t as ::core::ffi::c_int {
-        nv_cmd_idx[i as usize] = i;
+        (*nv_cmd_idx.ptr())[i as usize] = i;
         i += 1;
     }
     qsort(
-        &raw mut nv_cmd_idx as *mut ::core::ffi::c_void,
+        nv_cmd_idx.ptr() as *mut ::core::ffi::c_void,
         NV_CMDS_SIZE,
         ::core::mem::size_of::<int16_t>(),
         Some(
@@ -5345,12 +5347,14 @@ pub unsafe extern "C" fn init_normal_cmds() {
     let mut i_0: int16_t = 0;
     i_0 = 0 as int16_t;
     while (i_0 as ::core::ffi::c_int) < NV_CMDS_SIZE as int16_t as ::core::ffi::c_int {
-        if i_0 as ::core::ffi::c_int != nv_cmds[nv_cmd_idx[i_0 as usize] as usize].cmd_char {
+        if i_0 as ::core::ffi::c_int
+            != (*nv_cmds.ptr())[(*nv_cmd_idx.ptr())[i_0 as usize] as usize].cmd_char
+        {
             break;
         }
         i_0 += 1;
     }
-    nv_max_linear = i_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+    nv_max_linear.set(i_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn find_command(mut cmdchar: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if cmdchar >= 0x100 as ::core::ffi::c_int {
@@ -5360,7 +5364,7 @@ unsafe extern "C" fn find_command(mut cmdchar: ::core::ffi::c_int) -> ::core::ff
         cmdchar = -cmdchar;
     }
     '_c2rust_label: {
-        if nv_max_linear
+        if nv_max_linear.get()
             < ::core::mem::size_of::<[nv_cmd; 188]>()
                 .wrapping_div(::core::mem::size_of::<nv_cmd>())
                 .wrapping_div(
@@ -5378,20 +5382,21 @@ unsafe extern "C" fn find_command(mut cmdchar: ::core::ffi::c_int) -> ::core::ff
             );
         }
     };
-    if cmdchar <= nv_max_linear {
-        return nv_cmd_idx[cmdchar as usize] as ::core::ffi::c_int;
+    if cmdchar <= nv_max_linear.get() {
+        return (*nv_cmd_idx.ptr())[cmdchar as usize] as ::core::ffi::c_int;
     }
-    let mut bot: ::core::ffi::c_int = nv_max_linear + 1 as ::core::ffi::c_int;
+    let mut bot: ::core::ffi::c_int = nv_max_linear.get() + 1 as ::core::ffi::c_int;
     let mut top: ::core::ffi::c_int = NV_CMDS_SIZE.wrapping_sub(1 as usize) as ::core::ffi::c_int;
     let mut idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     while bot <= top {
         let mut i: ::core::ffi::c_int = (top + bot) / 2 as ::core::ffi::c_int;
-        let mut c: ::core::ffi::c_int = nv_cmds[nv_cmd_idx[i as usize] as usize].cmd_char;
+        let mut c: ::core::ffi::c_int =
+            (*nv_cmds.ptr())[(*nv_cmd_idx.ptr())[i as usize] as usize].cmd_char;
         if c < 0 as ::core::ffi::c_int {
             c = -c;
         }
         if cmdchar == c {
-            idx = nv_cmd_idx[i as usize] as ::core::ffi::c_int;
+            idx = (*nv_cmd_idx.ptr())[i as usize] as ::core::ffi::c_int;
             break;
         } else if cmdchar > c {
             bot = i + 1 as ::core::ffi::c_int;
@@ -5424,15 +5429,15 @@ pub unsafe extern "C" fn check_text_or_curbuf_locked(mut oap: *mut oparg_T) -> b
     }
     return true_0 != 0;
 }
-static mut current_oap: *mut oparg_T = ::core::ptr::null_mut::<oparg_T>();
+static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null_mut::<oparg_T>());
 #[no_mangle]
 pub unsafe extern "C" fn op_pending() -> bool {
-    return !(!current_oap.is_null()
+    return !(!(*current_oap.ptr()).is_null()
         && !finish_op
-        && (*current_oap).prev_opcount == 0 as ::core::ffi::c_int
-        && (*current_oap).prev_count0 == 0 as ::core::ffi::c_int
-        && (*current_oap).op_type == OP_NOP as ::core::ffi::c_int
-        && (*current_oap).regname == NUL);
+        && (*current_oap.get()).prev_opcount == 0 as ::core::ffi::c_int
+        && (*current_oap.get()).prev_count0 == 0 as ::core::ffi::c_int
+        && (*current_oap.get()).op_type == OP_NOP as ::core::ffi::c_int
+        && (*current_oap.get()).regname == NUL);
 }
 #[no_mangle]
 pub unsafe extern "C" fn normal_enter(mut cmdwin: bool, mut noexmode: bool) {
@@ -5508,13 +5513,13 @@ pub unsafe extern "C" fn normal_enter(mut cmdwin: bool, mut noexmode: bool) {
         },
     };
     normal_state_init(&raw mut state);
-    let mut prev_oap: *mut oparg_T = current_oap;
-    current_oap = &raw mut state.oa;
+    let mut prev_oap: *mut oparg_T = current_oap.get();
+    current_oap.set(&raw mut state.oa);
     state.cmdwin = cmdwin;
     state.noexmode = noexmode;
     state.toplevel = (!cmdwin || cmdwin_result == 0 as ::core::ffi::c_int) && !noexmode;
     state_enter(&raw mut state.state);
-    current_oap = prev_oap;
+    current_oap.set(prev_oap);
 }
 unsafe extern "C" fn normal_prepare(mut s: *mut NormalState) {
     memset(
@@ -5551,21 +5556,21 @@ unsafe extern "C" fn normal_prepare(mut s: *mut NormalState) {
 }
 unsafe extern "C" fn normal_handle_special_visual_command(mut s: *mut NormalState) -> bool {
     if km_stopsel as ::core::ffi::c_int != 0
-        && nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_STS != 0
+        && (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_STS != 0
         && mod_mask & MOD_MASK_SHIFT == 0
     {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
     }
     if km_startsel {
-        if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS != 0 {
+        if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS != 0 {
             unshift_special(&raw mut (*s).ca);
             (*s).idx = find_command((*s).ca.cmdchar);
             if (*s).idx < 0 as ::core::ffi::c_int {
                 clearopbeep(&raw mut (*s).oa);
                 return true_0 != 0;
             }
-        } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS != 0
+        } else if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS != 0
             && mod_mask & MOD_MASK_SHIFT != 0
         {
             mod_mask &= !MOD_MASK_SHIFT;
@@ -5574,7 +5579,8 @@ unsafe extern "C" fn normal_handle_special_visual_command(mut s: *mut NormalStat
     return false_0 != 0;
 }
 unsafe extern "C" fn normal_need_additional_char(mut s: *mut NormalState) -> bool {
-    let mut flags: ::core::ffi::c_int = nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int;
+    let mut flags: ::core::ffi::c_int =
+        (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int;
     let mut pending_op: bool = (*s).oa.op_type != OP_NOP as ::core::ffi::c_int;
     let mut cmdchar: ::core::ffi::c_int = (*s).ca.cmdchar;
     return flags & NV_NCH != 0
@@ -5692,7 +5698,7 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
         cp = &raw mut (*s).ca.nchar;
     }
     lang = repl as ::core::ffi::c_int != 0
-        || nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG != 0;
+        || (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG != 0;
     if !cp.is_null() {
         let mut langmap_active: bool = false_0 != 0;
         if repl {
@@ -5720,7 +5726,8 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
             != 0;
         if !lit {
             if *cp == Ctrl_K
-                && (nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG != 0
+                && ((*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG
+                    != 0
                     || cp == &raw mut (*s).ca.extra_char)
                 && vim_strchr(p_cpo, CPO_DIGRAPH).is_null()
             {
@@ -5990,7 +5997,8 @@ unsafe extern "C" fn normal_finish_command(mut s: *mut NormalState) {
         if !finish_op
             && (*s).oa.op_type == 0
             && ((*s).idx < 0 as ::core::ffi::c_int
-                || nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_KEEPREG == 0)
+                || (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_KEEPREG
+                    == 0)
         {
             clearop(&raw mut (*s).oa);
             set_reg_var(get_default_register_name());
@@ -6176,7 +6184,7 @@ unsafe extern "C" fn normal_execute(
     if (*s).idx < 0 as ::core::ffi::c_int {
         clearopbeep(&raw mut (*s).oa);
         (*s).command_finished = true_0 != 0;
-    } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_NCW != 0
+    } else if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_NCW != 0
         && check_text_or_curbuf_locked(&raw mut (*s).oa) as ::core::ffi::c_int != 0
     {
         (*s).command_finished = true_0 != 0;
@@ -6188,7 +6196,7 @@ unsafe extern "C" fn normal_execute(
         if (*curwin).w_onebuf_opt.wo_rl != 0
             && KeyTyped as ::core::ffi::c_int != 0
             && KeyStuffed == 0
-            && nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_RL != 0
+            && (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_RL != 0
         {
             normal_invert_horizontal(s);
         }
@@ -6221,7 +6229,8 @@ unsafe extern "C" fn normal_execute(
             }
             (*s).old_pos = (*curwin).w_cursor;
             if !VIsual_active && km_startsel as ::core::ffi::c_int != 0 {
-                if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS != 0 {
+                if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS != 0
+                {
                     start_selection();
                     unshift_special(&raw mut (*s).ca);
                     (*s).idx = find_command((*s).ca.cmdchar);
@@ -6237,15 +6246,17 @@ unsafe extern "C" fn normal_execute(
                             );
                         }
                     };
-                } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS != 0
+                } else if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as ::core::ffi::c_int
+                    & NV_SSS
+                    != 0
                     && mod_mask & MOD_MASK_SHIFT != 0
                 {
                     start_selection();
                     mod_mask &= !MOD_MASK_SHIFT;
                 }
             }
-            (*s).ca.arg = nv_cmds[(*s).idx as usize].cmd_arg as ::core::ffi::c_int;
-            nv_cmds[(*s).idx as usize]
+            (*s).ca.arg = (*nv_cmds.ptr())[(*s).idx as usize].cmd_arg as ::core::ffi::c_int;
+            (*nv_cmds.ptr())[(*s).idx as usize]
                 .cmd_func
                 .expect("non-null function pointer")(&raw mut (*s).ca);
         }
@@ -6498,9 +6509,9 @@ pub unsafe extern "C" fn reset_VIsual() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_visual_mode() {
-    if VIsual_mode_orig != NUL {
-        (*curbuf).b_visual.vi_mode = VIsual_mode_orig;
-        VIsual_mode_orig = NUL;
+    if VIsual_mode_orig.get() != NUL {
+        (*curbuf).b_visual.vi_mode = VIsual_mode_orig.get();
+        VIsual_mode_orig.set(NUL);
     }
 }
 unsafe extern "C" fn find_is_eval_item(
@@ -6847,9 +6858,9 @@ pub unsafe extern "C" fn may_clear_cmdline() {
         clear_showcmd();
     };
 }
-static mut old_showcmd_buf: [::core::ffi::c_char; 41] = [0; 41];
-static mut showcmd_is_clear: bool = true_0 != 0;
-static mut showcmd_visual: bool = false_0 != 0;
+static old_showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new([0; 41]);
+static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
+static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn clear_showcmd() {
     if p_sc == 0 {
@@ -6964,11 +6975,11 @@ pub unsafe extern "C" fn clear_showcmd() {
             SHOWCMD_COLS as ::core::ffi::c_int
         };
         showcmd_buf[limit as usize] = NUL as ::core::ffi::c_char;
-        showcmd_visual = true_0 != 0;
+        showcmd_visual.set(true_0 != 0);
     } else {
         showcmd_buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        showcmd_visual = false_0 != 0;
-        if showcmd_is_clear {
+        showcmd_visual.set(false_0 != 0);
+        if showcmd_is_clear.get() {
             return;
         }
     }
@@ -6976,7 +6987,7 @@ pub unsafe extern "C" fn clear_showcmd() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn add_to_showcmd(mut c: ::core::ffi::c_int) -> bool {
-    static mut ignore: [::core::ffi::c_int; 23] = [
+    static ignore: GlobalCell<[::core::ffi::c_int; 23]> = GlobalCell::new([
         -(253 as ::core::ffi::c_int
             + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         -(253 as ::core::ffi::c_int
@@ -7022,18 +7033,18 @@ pub unsafe extern "C" fn add_to_showcmd(mut c: ::core::ffi::c_int) -> bool {
         -(253 as ::core::ffi::c_int
             + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         0 as ::core::ffi::c_int,
-    ];
+    ]);
     if p_sc == 0 || msg_silent != 0 as ::core::ffi::c_int || ex_normal_busy != 0 {
         return false_0 != 0;
     }
-    if showcmd_visual {
+    if showcmd_visual.get() {
         showcmd_buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        showcmd_visual = false_0 != 0;
+        showcmd_visual.set(false_0 != 0);
     }
     if c < 0 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while ignore[i as usize] != 0 as ::core::ffi::c_int {
-            if ignore[i as usize] == c {
+        while (*ignore.ptr())[i as usize] != 0 as ::core::ffi::c_int {
+            if (*ignore.ptr())[i as usize] == c {
                 return false_0 != 0;
             }
             i += 1;
@@ -7098,7 +7109,7 @@ unsafe extern "C" fn del_from_showcmd(mut len: ::core::ffi::c_int) {
 pub unsafe extern "C" fn push_showcmd() {
     if p_sc != 0 {
         strcpy(
-            &raw mut old_showcmd_buf as *mut ::core::ffi::c_char,
+            old_showcmd_buf.ptr() as *mut ::core::ffi::c_char,
             &raw mut showcmd_buf as *mut ::core::ffi::c_char,
         );
     }
@@ -7110,14 +7121,15 @@ pub unsafe extern "C" fn pop_showcmd() {
     }
     strcpy(
         &raw mut showcmd_buf as *mut ::core::ffi::c_char,
-        &raw mut old_showcmd_buf as *mut ::core::ffi::c_char,
+        old_showcmd_buf.ptr() as *mut ::core::ffi::c_char,
     );
     display_showcmd();
 }
 unsafe extern "C" fn display_showcmd() {
-    showcmd_is_clear = showcmd_buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL;
+    showcmd_is_clear
+        .set(showcmd_buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL);
     if *p_sloc as ::core::ffi::c_int == 's' as ::core::ffi::c_int {
-        if showcmd_is_clear {
+        if showcmd_is_clear.get() {
             (*curwin).w_redr_status = true_0 != 0;
         } else {
             win_redr_status(curwin);
@@ -7126,7 +7138,7 @@ unsafe extern "C" fn display_showcmd() {
         return;
     }
     if *p_sloc as ::core::ffi::c_int == 't' as ::core::ffi::c_int {
-        if showcmd_is_clear {
+        if showcmd_is_clear.get() {
             redraw_tabline = true_0 != 0;
         } else {
             draw_tabline();
@@ -7149,7 +7161,7 @@ unsafe extern "C" fn display_showcmd() {
         }; 3];
         chunk.capacity = 3 as size_t;
         chunk.items = &raw mut chunk__items as *mut Object;
-        if !showcmd_is_clear {
+        if !showcmd_is_clear.get() {
             let c2rust_fresh6 = chunk.size;
             chunk.size = chunk.size.wrapping_add(1);
             *chunk.items.offset(c2rust_fresh6 as isize) = object {
@@ -7191,7 +7203,7 @@ unsafe extern "C" fn display_showcmd() {
     let mut showcmd_row: ::core::ffi::c_int = Rows - 1 as ::core::ffi::c_int;
     grid_line_start(&raw mut msg_grid_adj, showcmd_row);
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if !showcmd_is_clear {
+    if !showcmd_is_clear.get() {
         len = grid_line_puts(
             sc_col,
             &raw mut showcmd_buf as *mut ::core::ffi::c_char,
@@ -7214,21 +7226,23 @@ pub unsafe extern "C" fn get_vtopline(mut wp: *mut win_T) -> ::core::ffi::c_int 
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_check_scrollbind(mut check: bool) {
-    static mut old_curwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    static mut old_vtopline: linenr_T = 0 as linenr_T;
-    static mut old_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    static mut old_leftcol: colnr_T = 0 as colnr_T;
+    static old_curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+    static old_vtopline: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+    static old_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+    static old_leftcol: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
     let mut vtopline: ::core::ffi::c_int = get_vtopline(curwin);
     if check as ::core::ffi::c_int != 0 && (*curwin).w_onebuf_opt.wo_scb != 0 {
         if did_syncbind {
             did_syncbind = false_0 != 0;
-        } else if curwin == old_curwin {
-            if ((*curwin).w_buffer == old_buf || (*curwin).w_onebuf_opt.wo_diff != 0)
-                && (vtopline as linenr_T != old_vtopline || (*curwin).w_leftcol != old_leftcol)
+        } else if curwin == old_curwin.get() {
+            if ((*curwin).w_buffer == old_buf.get() || (*curwin).w_onebuf_opt.wo_diff != 0)
+                && (vtopline as linenr_T != old_vtopline.get()
+                    || (*curwin).w_leftcol != old_leftcol.get())
             {
                 check_scrollbind(
-                    vtopline as linenr_T - old_vtopline,
-                    (*curwin).w_leftcol as ::core::ffi::c_int - old_leftcol as ::core::ffi::c_int,
+                    vtopline as linenr_T - old_vtopline.get(),
+                    (*curwin).w_leftcol as ::core::ffi::c_int
+                        - old_leftcol.get() as ::core::ffi::c_int,
                 );
             }
         } else if !vim_strchr(p_sbo, 'j' as ::core::ffi::c_int).is_null() {
@@ -7239,10 +7253,10 @@ pub unsafe extern "C" fn do_check_scrollbind(mut check: bool) {
         }
         (*curwin).w_scbind_pos = vtopline;
     }
-    old_curwin = curwin;
-    old_vtopline = vtopline as linenr_T;
-    old_buf = (*curwin).w_buffer;
-    old_leftcol = (*curwin).w_leftcol;
+    old_curwin.set(curwin);
+    old_vtopline.set(vtopline as linenr_T);
+    old_buf.set((*curwin).w_buffer);
+    old_leftcol.set((*curwin).w_leftcol);
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_scrollbind(
@@ -10312,7 +10326,7 @@ unsafe extern "C" fn nv_Replace(mut cap: *mut cmdarg_T) {
     if VIsual_active {
         (*cap).cmdchar = 'c' as ::core::ffi::c_int;
         (*cap).nchar = NUL;
-        VIsual_mode_orig = VIsual_mode;
+        VIsual_mode_orig.set(VIsual_mode);
         VIsual_mode = 'V' as ::core::ffi::c_int;
         nv_operator(cap);
         return;
@@ -10453,15 +10467,15 @@ unsafe extern "C" fn nv_mark_move_to(
     return res;
 }
 unsafe extern "C" fn v_visop(mut cap: *mut cmdarg_T) {
-    static mut trans: [::core::ffi::c_char; 17] = unsafe {
+    static trans: GlobalCell<[::core::ffi::c_char; 17]> = GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"YyDdCcxdXdAAIIrr\0")
-    };
+    });
     if *(*__ctype_b_loc()).offset((*cap).cmdchar as isize) as ::core::ffi::c_int
         & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
         != 0
     {
         if VIsual_mode != Ctrl_V {
-            VIsual_mode_orig = VIsual_mode;
+            VIsual_mode_orig.set(VIsual_mode);
             VIsual_mode = 'V' as ::core::ffi::c_int;
         } else if (*cap).cmdchar == 'C' as ::core::ffi::c_int
             || (*cap).cmdchar == 'D' as ::core::ffi::c_int
@@ -10469,7 +10483,7 @@ unsafe extern "C" fn v_visop(mut cap: *mut cmdarg_T) {
             (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
         }
     }
-    (*cap).cmdchar = *vim_strchr(&raw mut trans as *mut ::core::ffi::c_char, (*cap).cmdchar)
+    (*cap).cmdchar = *vim_strchr(trans.ptr() as *mut ::core::ffi::c_char, (*cap).cmdchar)
         .offset(1 as ::core::ffi::c_int as isize) as uint8_t
         as ::core::ffi::c_int;
     nv_operator(cap);
@@ -10481,7 +10495,7 @@ unsafe extern "C" fn nv_subst(mut cap: *mut cmdarg_T) {
     }
     if VIsual_active {
         if (*cap).cmdchar == 'S' as ::core::ffi::c_int {
-            VIsual_mode_orig = VIsual_mode;
+            VIsual_mode_orig.set(VIsual_mode);
             VIsual_mode = 'V' as ::core::ffi::c_int;
         }
         (*cap).cmdchar = 'c' as ::core::ffi::c_int;
@@ -10505,7 +10519,7 @@ unsafe extern "C" fn nv_abbrev(mut cap: *mut cmdarg_T) {
     };
 }
 unsafe extern "C" fn nv_optrans(mut cap: *mut cmdarg_T) {
-    static mut ar: [*const ::core::ffi::c_char; 8] = [
+    static ar: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
         b"dl\0".as_ptr() as *const ::core::ffi::c_char,
         b"dh\0".as_ptr() as *const ::core::ffi::c_char,
         b"d$\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10514,19 +10528,19 @@ unsafe extern "C" fn nv_optrans(mut cap: *mut cmdarg_T) {
         b"cc\0".as_ptr() as *const ::core::ffi::c_char,
         b"yy\0".as_ptr() as *const ::core::ffi::c_char,
         b":s\r\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
-    static mut str: *const ::core::ffi::c_char =
-        b"xXDCsSY&\0".as_ptr() as *const ::core::ffi::c_char;
+    ]);
+    static str: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"xXDCsSY&\0".as_ptr() as *const ::core::ffi::c_char);
     if !checkclearopq((*cap).oap) {
         if (*cap).count0 != 0 {
             stuffnumReadbuff((*cap).count0);
         }
         stuffReadbuff(
-            ar[strchr(
-                str,
+            (*ar.ptr())[strchr(
+                str.get(),
                 (*cap).cmdchar as ::core::ffi::c_char as ::core::ffi::c_int,
             )
-            .offset_from(str) as usize] as *const ::core::ffi::c_char,
+            .offset_from(str.get()) as usize] as *const ::core::ffi::c_char,
         );
     }
     (*cap).opcount = 0 as ::core::ffi::c_int;
@@ -10626,7 +10640,7 @@ unsafe extern "C" fn nv_pcmark(mut cap: *mut cmdarg_T) {
     } else if (*cap).cmdchar == 'g' as ::core::ffi::c_int {
         if (*curbuf).b_changelistlen == 0 as ::core::ffi::c_int {
             emsg(gettext(
-                &raw const e_changelist_is_empty as *const ::core::ffi::c_char,
+                (e_changelist_is_empty.ptr() as *const _) as *const ::core::ffi::c_char,
             ));
         } else if (*cap).count1 < 0 as ::core::ffi::c_int {
             emsg(gettext(
@@ -12039,7 +12053,7 @@ unsafe extern "C" fn nv_record(mut cap: *mut cmdarg_T) {
     {
         if cmdwin_type != 0 as ::core::ffi::c_int {
             emsg(gettext(
-                &raw const e_cmdline_window_already_open as *const ::core::ffi::c_char,
+                (e_cmdline_window_already_open.ptr() as *const _) as *const ::core::ffi::c_char,
             ));
             return;
         }

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::SharedCell;
 extern "C" {
     pub type lua_State;
     fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
@@ -1877,7 +1878,7 @@ unsafe extern "C" fn lmpack_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     luaL_pushresult(&raw mut buffer);
     return 1 as ::core::ffi::c_int;
 }
-static mut unpacker_methods: [luaL_Reg; 3] = [
+static unpacker_methods: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
     luaL_Reg {
         name: b"__call\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
@@ -1894,8 +1895,8 @@ static mut unpacker_methods: [luaL_Reg; 3] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
-static mut packer_methods: [luaL_Reg; 3] = [
+]);
+static packer_methods: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
     luaL_Reg {
         name: b"__call\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
@@ -1912,8 +1913,8 @@ static mut packer_methods: [luaL_Reg; 3] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
-static mut session_methods: [luaL_Reg; 6] = [
+]);
+static session_methods: SharedCell<[luaL_Reg; 6]> = SharedCell::new([
     luaL_Reg {
         name: b"receive\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
@@ -1948,8 +1949,8 @@ static mut session_methods: [luaL_Reg; 6] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
-static mut mpack_functions: [luaL_Reg; 6] = [
+]);
+static mpack_functions: SharedCell<[luaL_Reg; 6]> = SharedCell::new([
     luaL_Reg {
         name: b"Unpacker\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
@@ -1978,7 +1979,7 @@ static mut mpack_functions: [luaL_Reg; 6] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     luaL_newmetatable(L, UNPACKER_META_NAME.as_ptr());
@@ -1991,7 +1992,7 @@ pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const unpacker_methods as *const luaL_Reg,
+        (unpacker_methods.ptr() as *const _) as *const luaL_Reg,
     );
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     luaL_newmetatable(L, PACKER_META_NAME.as_ptr());
@@ -2004,7 +2005,7 @@ pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const packer_methods as *const luaL_Reg,
+        (packer_methods.ptr() as *const _) as *const luaL_Reg,
     );
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     luaL_newmetatable(L, SESSION_META_NAME.as_ptr());
@@ -2017,7 +2018,7 @@ pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const session_methods as *const luaL_Reg,
+        (session_methods.ptr() as *const _) as *const luaL_Reg,
     );
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     lua_getfield(L, LUA_REGISTRYINDEX, NIL_NAME.as_ptr());
@@ -2039,7 +2040,7 @@ pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const mpack_functions as *const luaL_Reg,
+        (mpack_functions.ptr() as *const _) as *const luaL_Reg,
     );
     lua_getfield(L, LUA_REGISTRYINDEX, NIL_NAME.as_ptr());
     lua_setfield(

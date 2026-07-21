@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -926,7 +927,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn runtimepath_default(clean_arg: bool) -> *mut ::core::ffi::c_char;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn parse_spelllang(wp: *mut win_T) -> *mut ::core::ffi::c_char;
     fn init_spell_chartab();
     fn did_set_spell_option() -> *const ::core::ffi::c_char;
@@ -7543,8 +7544,8 @@ pub unsafe extern "C" fn set_option_sctx(
         & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
         == 0 as ::core::ffi::c_int;
     if opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0 {
-        script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum;
     }
     nlua_set_sctx(&raw mut script_ctx);

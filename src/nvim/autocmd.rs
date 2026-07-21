@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -271,7 +272,7 @@ extern "C" {
         fname2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -4288,8 +4289,8 @@ pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
 };
-static mut value_init_int: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut value_init_String: String_0 = STRING_INIT;
+static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static value_init_String: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -4335,7 +4336,7 @@ unsafe extern "C" fn map_get_String_int(
 ) -> ::core::ffi::c_int {
     let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_int
+        value_init_int.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -4361,41 +4362,45 @@ unsafe extern "C" fn map_get_int_String(
 ) -> String_0 {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_String
+        value_init_String.get()
     } else {
         *(*map).values.offset(k as isize)
     };
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut e_autocommand_nesting_too_deep: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E218: Autocommand nesting too deep\0",
-    )
-};
-static mut active_apc_list: *mut AutoPatCmd = ::core::ptr::null_mut::<AutoPatCmd>();
-static mut next_augroup_id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static mut deleted_augroup: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-static mut current_augroup: ::core::ffi::c_int = AUGROUP_DEFAULT as ::core::ffi::c_int;
-static mut au_need_clean: bool = false_0 != 0;
-static mut autocmd_blocked: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut autocmd_nested: bool = false_0 != 0;
-static mut autocmd_include_groups: bool = false_0 != 0;
-static mut termresponse_changed: bool = false_0 != 0;
-static mut map_augroup_name_to_id: Map_String_int = Map_String_int {
+static e_autocommand_nesting_too_deep: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E218: Autocommand nesting too deep\0",
+        )
+    });
+static active_apc_list: GlobalCell<*mut AutoPatCmd> =
+    GlobalCell::new(::core::ptr::null_mut::<AutoPatCmd>());
+static next_augroup_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
+static deleted_augroup: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+static current_augroup: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(AUGROUP_DEFAULT as ::core::ffi::c_int);
+static au_need_clean: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static autocmd_blocked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static autocmd_nested: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static autocmd_include_groups: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static termresponse_changed: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static map_augroup_name_to_id: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<String_0>(),
     },
     values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-};
-static mut map_augroup_id_to_name: Map_int_String = Map_int_String {
+});
+static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_int_String {
     set: Set_int {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     },
     values: ::core::ptr::null_mut::<String_0>(),
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn autocmd_init() {
     deferred_events = multiqueue_new_child(main_loop.events);
@@ -4410,7 +4415,7 @@ unsafe extern "C" fn augroup_map_del(
             size: 0,
         };
         map_del_String_int(
-            &raw mut map_augroup_name_to_id,
+            map_augroup_name_to_id.ptr(),
             cstr_as_string(name),
             &raw mut key,
         );
@@ -4418,7 +4423,7 @@ unsafe extern "C" fn augroup_map_del(
     }
     if id > 0 as ::core::ffi::c_int {
         let mut mapped: String_0 = map_del_int_String(
-            &raw mut map_augroup_id_to_name,
+            map_augroup_id_to_name.ptr(),
             id,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
         );
@@ -4427,10 +4432,12 @@ unsafe extern "C" fn augroup_map_del(
 }
 #[inline(always)]
 unsafe extern "C" fn get_deleted_augroup() -> *const ::core::ffi::c_char {
-    if deleted_augroup.is_null() {
-        deleted_augroup = gettext(b"--Deleted--\0".as_ptr() as *const ::core::ffi::c_char);
+    if (*deleted_augroup.ptr()).is_null() {
+        deleted_augroup.set(gettext(
+            b"--Deleted--\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     }
-    return deleted_augroup;
+    return deleted_augroup.get();
 }
 unsafe extern "C" fn au_show_for_all_events(
     mut group: ::core::ffi::c_int,
@@ -4448,7 +4455,7 @@ unsafe extern "C" fn au_show_for_event(
     mut pat: *const ::core::ffi::c_char,
 ) {
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     if (*acs).size == 0 as size_t {
         return;
     }
@@ -4620,7 +4627,7 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
     *ptr__1;
-    au_need_clean = true_0 != 0;
+    au_need_clean.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn aucmd_del_for_event_and_group(
@@ -4628,7 +4635,7 @@ pub unsafe extern "C" fn aucmd_del_for_event_and_group(
     mut group: ::core::ffi::c_int,
 ) {
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: size_t = 0 as size_t;
     while i < (*acs).size {
         let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -4640,13 +4647,13 @@ pub unsafe extern "C" fn aucmd_del_for_event_and_group(
     au_cleanup();
 }
 unsafe extern "C" fn au_cleanup() {
-    if autocmd_busy as ::core::ffi::c_int != 0 || !au_need_clean {
+    if autocmd_busy as ::core::ffi::c_int != 0 || !au_need_clean.get() {
         return;
     }
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
         let acs: *mut AutoCmdVec =
-            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+            (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut nsize: size_t = 0 as size_t;
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
@@ -4669,15 +4676,15 @@ unsafe extern "C" fn au_cleanup() {
         }
         event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
     }
-    au_need_clean = false_0 != 0;
+    au_need_clean.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn au_get_autocmds_for_event(mut event: event_T) -> *mut AutoCmdVec {
-    return (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+    return (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
-    let mut apc: *mut AutoPatCmd = active_apc_list;
+    let mut apc: *mut AutoPatCmd = active_apc_list.get();
     while !apc.is_null() {
         if (*buf).handle == (*apc).arg_bufnr {
             (*apc).arg_bufnr = 0 as ::core::ffi::c_int;
@@ -4687,7 +4694,7 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
         let acs: *mut AutoCmdVec =
-            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+            (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -4746,13 +4753,13 @@ pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::
     if existing_id == AUGROUP_DELETED as ::core::ffi::c_int {
         augroup_map_del(existing_id, name);
     }
-    let c2rust_fresh0 = next_augroup_id;
-    next_augroup_id = next_augroup_id + 1;
+    let c2rust_fresh0 = next_augroup_id.get();
+    next_augroup_id.set(next_augroup_id.get() + 1);
     let mut next_id: ::core::ffi::c_int = c2rust_fresh0;
     let mut name_key: String_0 = cstr_to_string(name);
     let mut name_val: String_0 = cstr_to_string(name);
-    map_put_String_int(&raw mut map_augroup_name_to_id, name_key, next_id);
-    map_put_int_String(&raw mut map_augroup_id_to_name, next_id, name_val);
+    map_put_String_int(map_augroup_name_to_id.ptr(), name_key, next_id);
+    map_put_int_String(map_augroup_id_to_name.ptr(), next_id, name_val);
     return next_id;
 }
 #[no_mangle]
@@ -4767,7 +4774,7 @@ pub unsafe extern "C" fn augroup_del(
             name,
         );
         return;
-    } else if group == current_augroup {
+    } else if group == current_augroup.get() {
         emsg(gettext(
             b"E936: Cannot delete the current group\0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -4777,7 +4784,7 @@ pub unsafe extern "C" fn augroup_del(
         let mut event: event_T = EVENT_BUFADD;
         while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
             let acs: *mut AutoCmdVec =
-                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+                (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             let mut i: size_t = 0 as size_t;
             while i < (*acs).size {
                 let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
@@ -4789,7 +4796,7 @@ pub unsafe extern "C" fn augroup_del(
                         true_0 != 0,
                     );
                     map_put_String_int(
-                        &raw mut map_augroup_name_to_id,
+                        map_augroup_name_to_id.ptr(),
                         cstr_as_string(name),
                         AUGROUP_DELETED as ::core::ffi::c_int,
                     );
@@ -4803,8 +4810,8 @@ pub unsafe extern "C" fn augroup_del(
     } else {
         let mut event_0: event_T = EVENT_BUFADD;
         while (event_0 as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-            let acs_0: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-                .offset(event_0 as ::core::ffi::c_int as isize);
+            let acs_0: *mut AutoCmdVec =
+                (autocmds.ptr() as *mut AutoCmdVec).offset(event_0 as ::core::ffi::c_int as isize);
             let mut i_0: size_t = 0 as size_t;
             while i_0 < (*acs_0).size {
                 let ac: *mut AutoCmd = (*acs_0).items.offset(i_0 as isize);
@@ -4822,7 +4829,7 @@ pub unsafe extern "C" fn augroup_del(
 #[no_mangle]
 pub unsafe extern "C" fn augroup_find(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut existing_id: ::core::ffi::c_int =
-        map_get_String_int(&raw mut map_augroup_name_to_id, cstr_as_string(name));
+        map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
     if existing_id == AUGROUP_DELETED as ::core::ffi::c_int {
         return existing_id;
     }
@@ -4848,15 +4855,15 @@ pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::c
         return get_deleted_augroup() as *mut ::core::ffi::c_char;
     }
     if group == AUGROUP_ALL as ::core::ffi::c_int {
-        group = current_augroup;
+        group = current_augroup.get();
     }
-    if group == next_augroup_id {
+    if group == next_augroup_id.get() {
         return b"END\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
-    if group > next_augroup_id {
+    if group > next_augroup_id.get() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut key: String_0 = map_get_int_String(&raw mut map_augroup_id_to_name, group);
+    let mut key: String_0 = map_get_int_String(map_augroup_id_to_name.ptr(), group);
     if !key.data.is_null() {
         return key.data;
     }
@@ -4879,9 +4886,9 @@ pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_g
         b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
-        current_augroup = AUGROUP_DEFAULT as ::core::ffi::c_int;
+        current_augroup.set(AUGROUP_DEFAULT as ::core::ffi::c_int);
     } else if *arg != 0 {
-        current_augroup = augroup_add(arg);
+        current_augroup.set(augroup_add(arg));
     } else {
         msg_start();
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
@@ -4892,9 +4899,12 @@ pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_g
         let mut value: ::core::ffi::c_int = 0;
         let mut __i: uint32_t = 0;
         __i = 0 as uint32_t;
-        while __i < map_augroup_name_to_id.set.h.n_keys {
-            name = *map_augroup_name_to_id.set.keys.offset(__i as isize);
-            value = *map_augroup_name_to_id.values.offset(__i as isize);
+        while __i < (*map_augroup_name_to_id.ptr()).set.h.n_keys {
+            name = *(*map_augroup_name_to_id.ptr())
+                .set
+                .keys
+                .offset(__i as isize);
+            value = *(*map_augroup_name_to_id.ptr()).values.offset(__i as isize);
             if value > 0 as ::core::ffi::c_int {
                 msg_puts(name.data);
             } else {
@@ -4943,7 +4953,8 @@ pub unsafe extern "C" fn event_name2nr(
     if hash_idx < 0 as ::core::ffi::c_int {
         return NUM_EVENTS;
     }
-    return abs(event_names[event_hash[hash_idx as usize] as usize].event) as event_T;
+    return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
+        as event_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
@@ -4951,14 +4962,15 @@ pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
     if hash_idx < 0 as ::core::ffi::c_int {
         return NUM_EVENTS;
     }
-    return abs(event_names[event_hash[hash_idx as usize] as usize].event) as event_T;
+    return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
+        as event_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn event_nr2name(mut event: event_T) -> *const ::core::ffi::c_char {
     return if event as ::core::ffi::c_uint >= 0 as ::core::ffi::c_uint
         && (event as ::core::ffi::c_uint) < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        event_names[event as usize].name as *const ::core::ffi::c_char
+        (*event_names.ptr())[event as usize].name as *const ::core::ffi::c_char
     } else {
         b"Unknown\0".as_ptr() as *const ::core::ffi::c_char
     };
@@ -4981,7 +4993,8 @@ pub unsafe extern "C" fn event_ignored(
                 || *ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ',' as ::core::ffi::c_int)
         {
-            ignored = ei == p_ei || event_names[event as usize].event <= 0 as ::core::ffi::c_int;
+            ignored =
+                ei == p_ei || (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int;
             ei = ei.offset(
                 (3 as ::core::ffi::c_int
                     + (*ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5027,7 +5040,7 @@ pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::f
             if event as ::core::ffi::c_uint
                 == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
                 || win as ::core::ffi::c_int != 0
-                    && event_names[event as usize].event > 0 as ::core::ffi::c_int
+                    && (*event_names.ptr())[event as usize].event > 0 as ::core::ffi::c_int
             {
                 return FAIL;
             }
@@ -5311,7 +5324,7 @@ pub unsafe extern "C" fn do_autocmd_event(
     let mut buflocal_pat: [::core::ffi::c_char; 25] = [0; 25];
     let mut is_adding_cmd: bool = *cmd as ::core::ffi::c_int != NUL;
     let findgroup: ::core::ffi::c_int = if group == AUGROUP_ALL as ::core::ffi::c_int {
-        current_augroup
+        current_augroup.get()
     } else {
         group
     };
@@ -5351,7 +5364,7 @@ pub unsafe extern "C" fn do_autocmd_event(
                 }
             };
             let acs: *mut AutoCmdVec =
-                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+                (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             let mut i: size_t = 0 as size_t;
             while i < (*acs).size {
                 let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -5421,7 +5434,7 @@ pub unsafe extern "C" fn autocmd_register(
         return FAIL;
     }
     let findgroup: ::core::ffi::c_int = if group == AUGROUP_ALL as ::core::ffi::c_int {
-        current_augroup
+        current_augroup.get()
     } else {
         group
     };
@@ -5441,7 +5454,7 @@ pub unsafe extern "C" fn autocmd_register(
     }
     let mut ap: *mut AutoPat = ::core::ptr::null_mut::<AutoPat>();
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: ptrdiff_t = (*acs).size as ptrdiff_t - 1 as ptrdiff_t;
     while i >= 0 as ptrdiff_t {
         ap = (*(*acs).items.offset(i as isize)).pat;
@@ -5528,34 +5541,36 @@ pub unsafe extern "C" fn autocmd_register(
             use_tabpage(save_curtab);
         }
         (*ap).group = if group == AUGROUP_ALL as ::core::ffi::c_int {
-            current_augroup
+            current_augroup.get()
         } else {
             group
         };
     }
     (*ap).refcount = (*ap).refcount.wrapping_add(1);
-    if autocmds[event as ::core::ffi::c_int as usize].size
-        == autocmds[event as ::core::ffi::c_int as usize].capacity
+    if (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size
+        == (*autocmds.ptr())[event as ::core::ffi::c_int as usize].capacity
     {
-        autocmds[event as ::core::ffi::c_int as usize].capacity =
-            if autocmds[event as ::core::ffi::c_int as usize].capacity != 0 {
-                autocmds[event as ::core::ffi::c_int as usize].capacity << 1 as ::core::ffi::c_int
+        (*autocmds.ptr())[event as ::core::ffi::c_int as usize].capacity =
+            if (*autocmds.ptr())[event as ::core::ffi::c_int as usize].capacity != 0 {
+                (*autocmds.ptr())[event as ::core::ffi::c_int as usize].capacity
+                    << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
             };
-        autocmds[event as ::core::ffi::c_int as usize].items = xrealloc(
-            autocmds[event as ::core::ffi::c_int as usize].items as *mut ::core::ffi::c_void,
+        (*autocmds.ptr())[event as ::core::ffi::c_int as usize].items = xrealloc(
+            (*autocmds.ptr())[event as ::core::ffi::c_int as usize].items
+                as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<AutoCmd>()
-                .wrapping_mul(autocmds[event as ::core::ffi::c_int as usize].capacity),
+                .wrapping_mul((*autocmds.ptr())[event as ::core::ffi::c_int as usize].capacity),
         ) as *mut AutoCmd;
     } else {
     };
-    let c2rust_fresh2 = autocmds[event as ::core::ffi::c_int as usize].size;
-    autocmds[event as ::core::ffi::c_int as usize].size = autocmds
+    let c2rust_fresh2 = (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size;
+    (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size = (*autocmds.ptr())
         [event as ::core::ffi::c_int as usize]
         .size
         .wrapping_add(1);
-    let mut ac: *mut AutoCmd = autocmds[event as ::core::ffi::c_int as usize]
+    let mut ac: *mut AutoCmd = (*autocmds.ptr())[event as ::core::ffi::c_int as usize]
         .items
         .offset(c2rust_fresh2 as isize);
     (*ac).pat = ap;
@@ -5567,8 +5582,8 @@ pub unsafe extern "C" fn autocmd_register(
         callback_copy(&raw mut (*ac).handler_fn, handler_fn);
     }
     (*ac).script_ctx = current_sctx;
-    (*ac).script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    (*ac).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
     nlua_set_sctx(&raw mut (*ac).script_ctx);
     (*ac).once = once;
@@ -6164,7 +6179,7 @@ pub unsafe extern "C" fn apply_autocmds_retval(
 }
 #[no_mangle]
 pub unsafe extern "C" fn has_event(mut event: event_T) -> bool {
-    return autocmds[event as ::core::ffi::c_int as usize].size != 0 as size_t;
+    return (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size != 0 as size_t;
 }
 unsafe extern "C" fn has_cursorhold() -> bool {
     return has_event(
@@ -6248,9 +6263,9 @@ pub unsafe extern "C" fn apply_autocmds_group(
     };
     let mut sfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: bool = false_0 != 0;
-    static mut nesting: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut save_cmdarg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut filechangeshell_busy: bool = false_0 != 0;
+    static filechangeshell_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut wait_time: proftime_T = 0;
     let mut did_save_redobuff: bool = false_0 != 0;
     let mut save_redo: save_redo_T = save_redo_T {
@@ -6279,14 +6294,15 @@ pub unsafe extern "C" fn apply_autocmds_group(
     };
     let save_KeyTyped: bool = KeyTyped;
     if !(event as ::core::ffi::c_uint == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
-        || autocmds[event as ::core::ffi::c_int as usize].size == 0 as size_t
+        || (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size == 0 as size_t
         || is_autocmd_blocked() as ::core::ffi::c_int != 0)
     {
         if !(autocmd_busy as ::core::ffi::c_int != 0
-            && !(force as ::core::ffi::c_int != 0 || autocmd_nested as ::core::ffi::c_int != 0))
+            && !(force as ::core::ffi::c_int != 0
+                || autocmd_nested.get() as ::core::ffi::c_int != 0))
         {
             if !aborting() {
-                if !(filechangeshell_busy as ::core::ffi::c_int != 0
+                if !(filechangeshell_busy.get() as ::core::ffi::c_int != 0
                     && (event as ::core::ffi::c_uint
                         == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int as ::core::ffi::c_uint
                         || event as ::core::ffi::c_uint
@@ -6296,11 +6312,11 @@ pub unsafe extern "C" fn apply_autocmds_group(
                     if !event_ignored(event, p_ei) {
                         win_ignore = false_0 != 0;
                         if buf == curbuf
-                            && event_names[event as usize].event <= 0 as ::core::ffi::c_int
+                            && (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int
                         {
                             win_ignore = event_ignored(event, (*curwin).w_onebuf_opt.wo_eiw);
                         } else if !buf.is_null()
-                            && event_names[event as usize].event <= 0 as ::core::ffi::c_int
+                            && (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int
                             && (*buf).b_nwindows > 0 as ::core::ffi::c_int
                         {
                             win_ignore = true_0 != 0;
@@ -6325,9 +6341,9 @@ pub unsafe extern "C" fn apply_autocmds_group(
                             }
                         }
                         if !win_ignore {
-                            if nesting == 10 as ::core::ffi::c_int {
+                            if nesting.get() == 10 as ::core::ffi::c_int {
                                 emsg(gettext(
-                                    &raw const e_autocommand_nesting_too_deep
+                                    (e_autocommand_nesting_too_deep.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ));
                             } else if !(autocmd_no_enter != 0
@@ -6349,7 +6365,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                 save_autocmd_bufnr = autocmd_bufnr;
                                 save_autocmd_match = autocmd_match;
                                 save_autocmd_busy = autocmd_busy as ::core::ffi::c_int;
-                                save_autocmd_nested = autocmd_nested as ::core::ffi::c_int;
+                                save_autocmd_nested = autocmd_nested.get() as ::core::ffi::c_int;
                                 save_changed = (*curbuf).b_changed != 0;
                                 old_curbuf = curbuf;
                                 if fname_io.is_null() {
@@ -6546,10 +6562,12 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         (*curbuf).b_did_filetype = (*curbuf).b_keep_filetype;
                                     }
                                     autocmd_busy = true_0 != 0;
-                                    filechangeshell_busy = event as ::core::ffi::c_uint
-                                        == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint;
-                                    nesting += 1;
+                                    filechangeshell_busy.set(
+                                        event as ::core::ffi::c_uint
+                                            == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint,
+                                    );
+                                    (*nesting.ptr()) += 1;
                                     if event as ::core::ffi::c_uint
                                         == EVENT_FILETYPE as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
@@ -6560,7 +6578,9 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     patcmd = AutoPatCmd_S {
                                         lastpat: ::core::ptr::null_mut::<AutoPat>(),
                                         auidx: 0 as size_t,
-                                        ausize: autocmds[event as ::core::ffi::c_int as usize].size,
+                                        ausize: (*autocmds.ptr())
+                                            [event as ::core::ffi::c_int as usize]
+                                            .size,
                                         afile_orig: afile_orig,
                                         fname: fname,
                                         sfname: sfname,
@@ -6579,8 +6599,8 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     };
                                     aucmd_next(&raw mut patcmd);
                                     if !patcmd.lastpat.is_null() {
-                                        patcmd.next = active_apc_list;
-                                        active_apc_list = &raw mut patcmd;
+                                        patcmd.next = active_apc_list.get();
+                                        active_apc_list.set(&raw mut patcmd);
                                         patcmd.data = data;
                                         let mut save_cmdbang: varnumber_T =
                                             get_vim_var_nr(VV_CMDBANG);
@@ -6598,7 +6618,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                                 ::core::ptr::null_mut::<::core::ffi::c_char>();
                                         }
                                         retval = true_0 != 0;
-                                        if nesting == 1 as ::core::ffi::c_int {
+                                        if nesting.get() == 1 as ::core::ffi::c_int {
                                             check_lnums(true_0 != 0);
                                         } else {
                                             check_lnums_nested(true_0 != 0);
@@ -6623,7 +6643,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         );
                                         did_emsg += save_did_emsg;
                                         set_pressedreturn(save_ex_pressedreturn);
-                                        if nesting == 1 as ::core::ffi::c_int {
+                                        if nesting.get() == 1 as ::core::ffi::c_int {
                                             reset_lnums();
                                         }
                                         if !eap.is_null() {
@@ -6633,17 +6653,18 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             );
                                             set_vim_var_nr(VV_CMDBANG, save_cmdbang);
                                         }
-                                        if active_apc_list == &raw mut patcmd {
-                                            active_apc_list = patcmd.next;
+                                        if active_apc_list.get() == &raw mut patcmd {
+                                            active_apc_list.set(patcmd.next);
                                         }
                                     }
                                     RedrawingDisabled -= 1;
                                     autocmd_busy = save_autocmd_busy != 0;
-                                    filechangeshell_busy = false_0 != 0;
-                                    autocmd_nested = save_autocmd_nested != 0;
+                                    filechangeshell_busy.set(false_0 != 0);
+                                    autocmd_nested.set(save_autocmd_nested != 0);
                                     xfree(
-                                        (*(exestack.ga_data as *mut estack_T).offset(
-                                            (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
+                                        (*((*exestack.ptr()).ga_data as *mut estack_T).offset(
+                                            ((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int)
+                                                as isize,
                                         ))
                                         .es_name
                                             as *mut ::core::ffi::c_void,
@@ -6663,7 +6684,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     KeyTyped = save_KeyTyped;
                                     xfree(fname as *mut ::core::ffi::c_void);
                                     xfree(sfname as *mut ::core::ffi::c_void);
-                                    nesting -= 1;
+                                    (*nesting.ptr()) -= 1;
                                     if !autocmd_busy {
                                         restore_search_patterns();
                                         if did_save_redobuff {
@@ -6768,20 +6789,20 @@ pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
         ::core::ptr::null_mut::<exarg_T>(),
         &raw mut c2rust_lvalue,
     );
-    termresponse_changed = true_0 != 0;
+    termresponse_changed.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn block_autocmds() {
     if !is_autocmd_blocked() {
-        termresponse_changed = false_0 != 0;
+        termresponse_changed.set(false_0 != 0);
     }
-    autocmd_blocked += 1;
+    (*autocmd_blocked.ptr()) += 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn unblock_autocmds() {
-    autocmd_blocked -= 1;
+    (*autocmd_blocked.ptr()) -= 1;
     if !is_autocmd_blocked()
-        && termresponse_changed as ::core::ffi::c_int != 0
+        && termresponse_changed.get() as ::core::ffi::c_int != 0
         && has_event(EVENT_TERMRESPONSE) as ::core::ffi::c_int != 0
     {
         let sequence: String_0 = cstr_to_string(get_vim_var_str(VV_TERMRESPONSE));
@@ -6791,14 +6812,14 @@ pub unsafe extern "C" fn unblock_autocmds() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn is_autocmd_blocked() -> bool {
-    return autocmd_blocked != 0 as ::core::ffi::c_int;
+    return autocmd_blocked.get() != 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
-    let entry: *mut estack_T = (exestack.ga_data as *mut estack_T)
-        .offset(exestack.ga_len as isize)
+    let entry: *mut estack_T = ((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset((*exestack.ptr()).ga_len as isize)
         .offset(-(1 as ::core::ffi::c_int as isize));
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
     '_c2rust_label: {
         if (*apc).ausize <= (*acs).size {
         } else {
@@ -7042,7 +7063,7 @@ pub unsafe extern "C" fn getnextac(
 ) -> *mut ::core::ffi::c_char {
     let apc: *mut AutoPatCmd = cookie as *mut AutoPatCmd;
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
     aucmd_next(apc);
     if (*apc).lastpat.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7089,7 +7110,7 @@ pub unsafe extern "C" fn getnextac(
         *ptr_;
         verbose_leave_scroll();
     }
-    autocmd_nested = (*ac).nested;
+    autocmd_nested.set((*ac).nested);
     current_sctx = (*ac).script_ctx;
     (*apc).script_ctx = current_sctx;
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7132,7 +7153,7 @@ pub unsafe extern "C" fn has_autocmd(
         return false_0 != 0;
     }
     let acs: *mut AutoCmdVec =
-        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+        (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: size_t = 0 as size_t;
     while i < (*acs).size {
         let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
@@ -7172,7 +7193,7 @@ pub unsafe extern "C" fn set_context_in_autocmd(
     mut arg: *mut ::core::ffi::c_char,
     mut doautocmd: bool,
 ) -> *mut ::core::ffi::c_char {
-    autocmd_include_groups = false_0 != 0;
+    autocmd_include_groups.set(false_0 != 0);
     let mut p: *mut ::core::ffi::c_char = arg;
     let mut group: ::core::ffi::c_int = arg_augroup_get(&raw mut arg);
     if *arg as ::core::ffi::c_int == NUL
@@ -7191,7 +7212,7 @@ pub unsafe extern "C" fn set_context_in_autocmd(
     }
     if *p as ::core::ffi::c_int == NUL {
         if group == AUGROUP_ALL as ::core::ffi::c_int {
-            autocmd_include_groups = true_0 != 0;
+            autocmd_include_groups.set(true_0 != 0);
         }
         (*xp).xp_context = EXPAND_EVENTS as ::core::ffi::c_int;
         (*xp).xp_pattern = arg;
@@ -7222,16 +7243,18 @@ pub unsafe extern "C" fn expand_get_event_name(
 ) -> *mut ::core::ffi::c_char {
     let mut name: *mut ::core::ffi::c_char = augroup_name(idx + 1 as ::core::ffi::c_int);
     if !name.is_null() {
-        if !autocmd_include_groups || name == get_deleted_augroup() as *mut ::core::ffi::c_char {
+        if !autocmd_include_groups.get()
+            || name == get_deleted_augroup() as *mut ::core::ffi::c_char
+        {
             return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         return name;
     }
-    let mut i: ::core::ffi::c_int = idx - next_augroup_id;
+    let mut i: ::core::ffi::c_int = idx - next_augroup_id.get();
     if i < 0 as ::core::ffi::c_int || i >= NUM_EVENTS as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return event_names[i as usize].name;
+    return (*event_names.ptr())[i as usize].name;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_event_name_no_group(
@@ -7243,14 +7266,15 @@ pub unsafe extern "C" fn get_event_name_no_group(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if !win {
-        return event_names[idx as usize].name;
+        return (*event_names.ptr())[idx as usize].name;
     }
     let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NUM_EVENTS as ::core::ffi::c_int {
-        j += (event_names[i as usize].event <= 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
+        j += ((*event_names.ptr())[i as usize].event <= 0 as ::core::ffi::c_int)
+            as ::core::ffi::c_int;
         if j == idx + 1 as ::core::ffi::c_int {
-            return event_names[i as usize].name;
+            return (*event_names.ptr())[i as usize].name;
         }
         i += 1;
     }
@@ -7297,8 +7321,7 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
         pattern = p;
         event = event_name2nr(event_name, &raw mut p);
         if event as ::core::ffi::c_uint != NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint {
-            acs =
-                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+            acs = (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             if (*acs).size != 0 as size_t {
                 if !pattern.is_null()
                     && strcasecmp(
@@ -7455,7 +7478,7 @@ pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
         let acs: *mut AutoCmdVec =
-            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
+            (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -7574,7 +7597,7 @@ unsafe extern "C" fn arg_autocmd_flag_get(
     }
     return false_0 != 0;
 }
-static mut pending_vimresume: TriState = kFalse;
+static pending_vimresume: GlobalCell<TriState> = GlobalCell::new(kFalse);
 unsafe extern "C" fn vimresume_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     apply_autocmds(
         EVENT_VIMRESUME,
@@ -7583,14 +7606,14 @@ unsafe extern "C" fn vimresume_event(mut _argv: *mut *mut ::core::ffi::c_void) {
         false_0 != 0,
         ::core::ptr::null_mut::<buf_T>(),
     );
-    pending_vimresume = kFalse;
+    pending_vimresume.set(kFalse);
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
     if suspend as ::core::ffi::c_int != 0
-        && pending_vimresume as ::core::ffi::c_int == kFalse as ::core::ffi::c_int
+        && pending_vimresume.get() as ::core::ffi::c_int == kFalse as ::core::ffi::c_int
     {
-        pending_vimresume = kNone;
+        pending_vimresume.set(kNone);
         apply_autocmds(
             EVENT_VIMSUSPEND,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -7598,9 +7621,11 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
             false_0 != 0,
             ::core::ptr::null_mut::<buf_T>(),
         );
-        pending_vimresume = kTrue;
-    } else if !suspend && pending_vimresume as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
-        pending_vimresume = kNone;
+        pending_vimresume.set(kTrue);
+    } else if !suspend
+        && pending_vimresume.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int
+    {
+        pending_vimresume.set(kNone);
         multiqueue_put_event(
             main_loop.events,
             Event {
@@ -7625,14 +7650,14 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: bool) {
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if starting == NO_SCREEN {
         return;
     }
-    if recursive {
+    if recursive.get() {
         return;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut save_v_event: save_v_event_T = save_v_event_T {
         sve_did_save: false,
         sve_hashtab: hashtab_T {
@@ -7680,16 +7705,16 @@ pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: 
         curbuf,
     );
     restore_v_event(dict, &raw mut save_v_event);
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
-    static mut recursive: bool = false_0 != 0;
-    static mut last_time: Timestamp = 0 as Timestamp;
-    if recursive {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
+    if recursive.get() {
         return;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     apply_autocmds(
         (if gained as ::core::ffi::c_int != 0 {
             EVENT_FOCUSGAINED as ::core::ffi::c_int
@@ -7702,31 +7727,31 @@ pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
         curbuf,
     );
     if gained as ::core::ffi::c_int != 0
-        && last_time.wrapping_add(2000 as ::core::ffi::c_int as Timestamp) < os_now()
+        && (*last_time.ptr()).wrapping_add(2000 as ::core::ffi::c_int as Timestamp) < os_now()
     {
         check_timestamps(true_0);
-        last_time = os_now() as Timestamp;
+        last_time.set(os_now() as Timestamp);
     }
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: bool) -> bool {
-    static mut ft_recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if ft_recursive > 0 as ::core::ffi::c_int && !force {
+    static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if ft_recursive.get() > 0 as ::core::ffi::c_int && !force {
         return false_0 != 0;
     }
     let mut secure_save: ::core::ffi::c_int = secure;
     secure = 0 as ::core::ffi::c_int;
-    ft_recursive += 1;
+    (*ft_recursive.ptr()) += 1;
     (*buf).b_did_filetype = true_0 != 0;
     let mut ret: bool = apply_autocmds(
         EVENT_FILETYPE,
         (*buf).b_p_ft,
         (*buf).b_fname,
-        force as ::core::ffi::c_int != 0 || ft_recursive == 1 as ::core::ffi::c_int,
+        force as ::core::ffi::c_int != 0 || ft_recursive.get() == 1 as ::core::ffi::c_int,
         buf,
     );
-    ft_recursive -= 1;
+    (*ft_recursive.ptr()) -= 1;
     secure = secure_save;
     return ret;
 }
@@ -7738,7 +7763,7 @@ unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-static mut event_names: [event_name; 145] = [
+static event_names: GlobalCell<[event_name; 145]> = GlobalCell::new([
     event_name {
         len: 6 as size_t,
         name: b"BufAdd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -8490,8 +8515,8 @@ static mut event_names: [event_name; 145] = [
         name: b"WinScrolled\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINSCROLLED as ::core::ffi::c_int),
     },
-];
-static mut autocmds: [AutoCmdVec; 145] = [
+]);
+static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([
     AutoCmdVec {
         size: 0 as size_t,
         capacity: 0,
@@ -9217,8 +9242,8 @@ static mut autocmds: [AutoCmdVec; 145] = [
         capacity: 0,
         items: ::core::ptr::null_mut::<AutoCmd>(),
     },
-];
-static mut event_hash: [event_T; 145] = [
+]);
+static event_hash: GlobalCell<[event_T; 145]> = GlobalCell::new([
     EVENT_USER,
     EVENT_BUFADD,
     EVENT_BUFNEW,
@@ -9364,7 +9389,7 @@ static mut event_hash: [event_T; 145] = [
     EVENT_SPELLFILEMISSING,
     EVENT_DIAGNOSTICCHANGED,
     EVENT_FILECHANGEDSHELLPOST,
-];
+]);
 unsafe extern "C" fn event_name2nr_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -9761,7 +9786,12 @@ unsafe extern "C" fn event_name2nr_hash(
     }
     let mut i: ::core::ffi::c_int = low;
     while i < high {
-        if vim_strnicmp_asc(str, event_names[event_hash[i as usize] as usize].name, len) == 0 {
+        if vim_strnicmp_asc(
+            str,
+            (*event_names.ptr())[(*event_hash.ptr())[i as usize] as usize].name,
+            len,
+        ) == 0
+        {
             return i;
         }
         i += 1;

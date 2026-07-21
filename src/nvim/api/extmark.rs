@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -26,7 +27,7 @@ extern "C" {
     static mut namespace_ids: Map_String_int;
     static mut namespace_localscope: Set_uint32_t;
     static mut next_namespace_id: handle_T;
-    static mut set_extmark_table: [KeySetLink; 36];
+    static set_extmark_table: GlobalCell<[KeySetLink; 36]>;
     fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
     fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
     fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
@@ -2230,7 +2231,7 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-static mut value_init_int: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -2303,7 +2304,7 @@ unsafe extern "C" fn map_get_String_int(
 ) -> ::core::ffi::c_int {
     let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_int
+        value_init_int.get()
     } else {
         *(*map).values.offset(k as isize)
     };

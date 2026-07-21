@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -78,7 +79,7 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> size_t;
-    static mut eval_msgpack_type_lists: [*const list_T; 8];
+    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
 }
 pub type int8_t = i8;
 pub type int32_t = i32;
@@ -455,7 +456,8 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut _typval_encode_msgpack_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_msgpack_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_msgpack_check_self_reference(
     _packer: *mut PackerBuffer,
@@ -747,7 +749,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -1994,7 +1996,8 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
     return FAIL;
 }
 #[no_mangle]
-pub static mut _typval_encode_echo_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_echo_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_echo_check_self_reference(
     gap: *mut garray_T,
@@ -2683,7 +2686,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -4148,7 +4151,8 @@ pub unsafe extern "C" fn encode_vim_to_echo(
     return FAIL;
 }
 #[no_mangle]
-pub static mut _typval_encode_string_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_string_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_string_check_self_reference(
     gap: *mut garray_T,
@@ -4160,8 +4164,8 @@ unsafe extern "C" fn _typval_encode_string_check_self_reference(
     _objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if *val_copyID == copyID {
-        if !did_echo_string_emsg {
-            did_echo_string_emsg = true_0 != 0;
+        if !did_echo_string_emsg.get() {
+            did_echo_string_emsg.set(true_0 != 0);
             emsg(gettext(
                 b"E724: unable to correctly dump variable with self-referencing container\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -4827,7 +4831,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -6292,7 +6296,8 @@ unsafe extern "C" fn encode_vim_to_string(
     return FAIL;
 }
 #[no_mangle]
-pub static mut _typval_encode_json_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_json_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_json_check_self_reference(
     _gap: *mut garray_T,
@@ -6304,8 +6309,8 @@ unsafe extern "C" fn _typval_encode_json_check_self_reference(
     _objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if *val_copyID == copyID {
-        if !did_echo_string_emsg {
-            did_echo_string_emsg = true_0 != 0;
+        if !did_echo_string_emsg.get() {
+            did_echo_string_emsg.set(true_0 != 0);
             emsg(gettext(
                 b"E724: unable to correctly dump variable with self-referencing container\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -6685,7 +6690,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -8119,13 +8124,13 @@ pub const SURROGATE_LO_START: ::core::ffi::c_int = 0xdc00 as ::core::ffi::c_int;
 pub const SURROGATE_LO_END: ::core::ffi::c_int = 0xdfff as ::core::ffi::c_int;
 pub const SURROGATE_FIRST_CHAR: ::core::ffi::c_int = 0x10000 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut encode_bool_var_names: [*const ::core::ffi::c_char; 2] = [
+pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"v:false\0".as_ptr() as *const ::core::ffi::c_char,
     b"v:true\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut encode_special_var_names: [*const ::core::ffi::c_char; 1] =
-    [b"v:null\0".as_ptr() as *const ::core::ffi::c_char];
+pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
+    GlobalCell::new([b"v:null\0".as_ptr() as *const ::core::ffi::c_char]);
 #[no_mangle]
 pub unsafe extern "C" fn encode_blob_write(
     data: *mut ::core::ffi::c_void,
@@ -8208,7 +8213,7 @@ pub unsafe extern "C" fn encode_list_write(
         tv_list_append_allocated_string(list, ::core::ptr::null_mut::<::core::ffi::c_char>());
     }
 }
-static mut did_echo_string_emsg: bool = false_0 != 0;
+static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn conv_error(
     msg: *const ::core::ffi::c_char,
     mpstack: *const MPConvStack,
@@ -8524,7 +8529,7 @@ pub unsafe extern "C" fn encode_read_from_list(
 }
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = false_0;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS_1: ::core::ffi::c_int = true_0;
-static mut escapes: [[::core::ffi::c_char; 3]; 93] = unsafe {
+static escapes: GlobalCell<[[::core::ffi::c_char; 3]; 93]> = GlobalCell::new(unsafe {
     [
         [0; 3],
         [0; 3],
@@ -8620,10 +8625,10 @@ static mut escapes: [[::core::ffi::c_char; 3]; 93] = unsafe {
         [0; 3],
         ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\\\\0"),
     ]
-};
-static mut xdigits: [::core::ffi::c_char; 17] = unsafe {
+});
+static xdigits: GlobalCell<[::core::ffi::c_char; 17]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"0123456789ABCDEF\0")
-};
+});
 #[inline(always)]
 unsafe extern "C" fn convert_to_json_string(
     gap: *mut garray_T,
@@ -8755,7 +8760,7 @@ unsafe extern "C" fn convert_to_json_string(
                 BS | TAB | NL | FF | CAR | 34 | 92 => {
                     ga_concat_len(
                         gap,
-                        &raw const *(&raw const escapes as *const [::core::ffi::c_char; 3])
+                        &raw const *((escapes.ptr() as *const _) as *const [::core::ffi::c_char; 3])
                             .offset(ch_0 as isize)
                             as *const ::core::ffi::c_char,
                         2 as size_t,
@@ -8770,16 +8775,20 @@ unsafe extern "C" fn convert_to_json_string(
                         let c2rust_lvalue: [::core::ffi::c_char; 6] = [
                             '\\' as ::core::ffi::c_char,
                             'u' as ::core::ffi::c_char,
-                            xdigits[(ch_0 >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(ch_0
+                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(ch_0 >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(ch_0
+                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(ch_0 >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(ch_0
+                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(ch_0 >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(ch_0
+                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
                         ];
@@ -8802,30 +8811,38 @@ unsafe extern "C" fn convert_to_json_string(
                         let c2rust_lvalue_0: [::core::ffi::c_char; 12] = [
                             '\\' as ::core::ffi::c_char,
                             'u' as ::core::ffi::c_char,
-                            xdigits[(hi >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(hi
+                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(hi >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(hi
+                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(hi >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(hi
+                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(hi >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(hi
+                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
                             '\\' as ::core::ffi::c_char,
                             'u' as ::core::ffi::c_char,
-                            xdigits[(lo >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(lo
+                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(lo >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(lo
+                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(lo >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(lo
+                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
-                            xdigits[(lo >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
+                            (*xdigits.ptr())[(lo
+                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
                                 & 0xf as ::core::ffi::c_int)
                                 as usize],
                         ];
@@ -8872,7 +8889,8 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
         || (*type_di).di_tv.v_type as ::core::ffi::c_uint
             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
         || (*type_di).di_tv.vval.v_list
-            != eval_msgpack_type_lists[kMPString as ::core::ffi::c_int as usize] as *mut list_T
+            != (*eval_msgpack_type_lists.ptr())[kMPString as ::core::ffi::c_int as usize]
+                as *mut list_T
         || {
             val_di = tv_dict_find(
                 spdict,
@@ -8938,7 +8956,7 @@ pub unsafe extern "C" fn encode_tv2string(
             );
         }
     };
-    did_echo_string_emsg = false_0 != 0;
+    did_echo_string_emsg.set(false_0 != 0);
     if !len.is_null() {
         *len = ga.ga_len as size_t;
     }
@@ -9020,7 +9038,7 @@ pub unsafe extern "C" fn encode_tv2json(
     if evj_ret == 0 {
         ga_clear(&raw mut ga);
     }
-    did_echo_string_emsg = false_0 != 0;
+    did_echo_string_emsg.set(false_0 != 0);
     if !len.is_null() {
         *len = ga.ga_len as size_t;
     }

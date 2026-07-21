@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     static e_invarg: [::core::ffi::c_char; 0];
     static e_invarg2: [::core::ffi::c_char; 0];
@@ -602,16 +603,19 @@ pub const FILTERMAP_MAP: filtermap_T = 1;
 pub const FILTERMAP_FILTER: filtermap_T = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static mut e_argument_of_str_must_be_list_string_or_dictionary: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-        *b"E706: Argument of %s must be a List, String or Dictionary\0",
-    )
-};
-static mut e_argument_of_str_must_be_list_string_dictionary_or_blob: [::core::ffi::c_char; 65] = unsafe {
+static e_argument_of_str_must_be_list_string_or_dictionary: GlobalCell<[::core::ffi::c_char; 58]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
+            *b"E706: Argument of %s must be a List, String or Dictionary\0",
+        )
+    });
+static e_argument_of_str_must_be_list_string_dictionary_or_blob: GlobalCell<
+    [::core::ffi::c_char; 65],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0",
     )
-};
+});
 unsafe extern "C" fn filter_map_one(
     mut tv: *mut typval_T,
     mut expr: *mut typval_T,
@@ -1122,7 +1126,7 @@ unsafe extern "C" fn filter_map(
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            &raw const e_argument_of_str_must_be_list_string_dictionary_or_blob
+            (e_argument_of_str_must_be_list_string_dictionary_or_blob.ptr() as *const _)
                 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             func_name,
         );
@@ -1458,7 +1462,7 @@ pub unsafe extern "C" fn f_count(
         }
     } else if !error {
         semsg(
-            &raw const e_argument_of_str_must_be_list_string_or_dictionary
+            (e_argument_of_str_must_be_list_string_or_dictionary.ptr() as *const _)
                 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"count()\0".as_ptr() as *const ::core::ffi::c_char,
         );

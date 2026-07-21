@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -334,7 +335,7 @@ unsafe extern "C" fn _memcpy_free(
     *ptr_;
     return dest;
 }
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -363,7 +364,7 @@ unsafe extern "C" fn map_put_ptr_t_ptr_t(
 unsafe extern "C" fn map_get_ptr_t_ptr_t(mut map: *mut Map_ptr_t_ptr_t, mut key: ptr_t) -> ptr_t {
     let mut k: uint32_t = mh_get_ptr_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -389,7 +390,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -3769,13 +3770,13 @@ pub unsafe extern "C" fn marktree_itr_next_filter(
     return marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter);
 }
 #[no_mangle]
-pub static mut meta_map: [uint32_t; 5] = [
+pub static meta_map: GlobalCell<[uint32_t; 5]> = GlobalCell::new([
     MT_FLAG_DECOR_VIRT_TEXT_INLINE as uint32_t,
     MT_FLAG_DECOR_VIRT_LINES as uint32_t,
     MT_FLAG_DECOR_SIGNHL as uint32_t,
     MT_FLAG_DECOR_SIGNTEXT as uint32_t,
     MT_FLAG_DECOR_CONCEAL_LINES as uint32_t,
-];
+]);
 unsafe extern "C" fn marktree_itr_check_filter(
     mut b: *mut MarkTree,
     mut itr: *mut MarkTreeIter,
@@ -3790,7 +3791,7 @@ unsafe extern "C" fn marktree_itr_check_filter(
     let mut key_filter: uint32_t = 0 as uint32_t;
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        key_filter |= meta_map[m as usize] & *meta_filter.offset(m as isize);
+        key_filter |= (*meta_map.ptr())[m as usize] & *meta_filter.offset(m as isize);
         m += 1;
     }
     loop {
@@ -5652,7 +5653,7 @@ unsafe extern "C" fn mt_inspect_node(
     mut n: *mut MTNode,
     mut off: MTPos,
 ) {
-    static mut buf: [::core::ffi::c_char; 1024] = [0; 1024];
+    static buf: GlobalCell<[::core::ffi::c_char; 1024]> = GlobalCell::new([0; 1024]);
     ga_concat(
         ga,
         b"[\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5669,12 +5670,12 @@ unsafe extern "C" fn mt_inspect_node(
                 }) as *mut ::core::ffi::c_char,
             );
             snprintf(
-                &raw mut buf as *mut ::core::ffi::c_char,
+                buf.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
                 b"%lu\0".as_ptr() as *const ::core::ffi::c_char,
                 mt_dbg_id(*(*n).intersect.items.offset(i as isize)),
             );
-            ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+            ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
             i = i.wrapping_add(1);
         }
         ga_concat(
@@ -5696,13 +5697,13 @@ unsafe extern "C" fn mt_inspect_node(
         let mut p: MTPos = (*n).key[i_0 as usize].pos;
         unrelative(off, &raw mut p);
         snprintf(
-            &raw mut buf as *mut ::core::ffi::c_char,
+            buf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
             b"%d/%d\0".as_ptr() as *const ::core::ffi::c_char,
             p.row,
             p.col,
         );
-        ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+        ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
         if keys {
             let mut key: MTKey = (*n).key[i_0 as usize];
             ga_concat(
@@ -5716,12 +5717,12 @@ unsafe extern "C" fn mt_inspect_node(
                 );
             }
             snprintf(
-                &raw mut buf as *mut ::core::ffi::c_char,
+                buf.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
                 b"%u\0".as_ptr() as *const ::core::ffi::c_char,
                 key.id,
             );
-            ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+            ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
             if mt_end(key) {
                 ga_concat(
                     ga,
@@ -5752,7 +5753,7 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
     mut off: MTPos,
     mut parent: *mut ::core::ffi::c_char,
 ) {
-    static mut buf: [::core::ffi::c_char; 1024] = [0; 1024];
+    static buf: GlobalCell<[::core::ffi::c_char; 1024]> = GlobalCell::new([0; 1024]);
     let mut namebuf: [::core::ffi::c_char; 64] = [0; 64];
     if !parent.is_null() {
         snprintf(
@@ -5771,12 +5772,12 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
         );
     }
     snprintf(
-        &raw mut buf as *mut ::core::ffi::c_char,
+        buf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
         b"  %s[shape=plaintext, label=<\n\0".as_ptr() as *const ::core::ffi::c_char,
         &raw mut namebuf as *mut ::core::ffi::c_char,
     );
-    ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+    ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
     ga_concat(
         ga,
         b"    <table border='0' cellborder='1' cellspacing='0'>\n\0".as_ptr()
@@ -5796,12 +5797,12 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
                 );
             }
             snprintf(
-                &raw mut buf as *mut ::core::ffi::c_char,
+                buf.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
                 b"%lu\0".as_ptr() as *const ::core::ffi::c_char,
                 mt_dbg_id(*(*n).intersect.items.offset(i as isize)),
             );
-            ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+            ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
             i = i.wrapping_add(1);
         }
         ga_concat(
@@ -5823,12 +5824,12 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
             );
         }
         snprintf(
-            &raw mut buf as *mut ::core::ffi::c_char,
+            buf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
             b"%d\0".as_ptr() as *const ::core::ffi::c_char,
             k.id,
         );
-        ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+        ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
         if mt_paired(k) {
             ga_concat(
                 ga,
@@ -5855,13 +5856,13 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
     );
     if !parent.is_null() {
         snprintf(
-            &raw mut buf as *mut ::core::ffi::c_char,
+            buf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
             b"  %s -> %s\n\0".as_ptr() as *const ::core::ffi::c_char,
             parent,
             &raw mut namebuf as *mut ::core::ffi::c_char,
         );
-        ga_concat(ga, &raw mut buf as *mut ::core::ffi::c_char);
+        ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
     }
     if (*n).level != 0 {
         mt_inspect_dotfile_node(

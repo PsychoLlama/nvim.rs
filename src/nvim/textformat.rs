@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2461,7 +2462,7 @@ pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
-static mut did_add_space: bool = false_0 != 0;
+static did_add_space: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn has_format_option(mut x: ::core::ffi::c_int) -> bool {
     if p_paste != 0 {
@@ -3107,7 +3108,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
             *plinep.offset((len as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize) =
                 NUL as ::core::ffi::c_char;
             ml_replace((*curwin).w_cursor.lnum, plinep, false_0 != 0);
-            did_add_space = true_0 != 0;
+            did_add_space.set(true_0 != 0);
         } else {
             check_auto_format(false_0 != 0);
         }
@@ -3116,7 +3117,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
-    if !did_add_space {
+    if !did_add_space.get() {
         return;
     }
     let mut cc: ::core::ffi::c_int = gchar_cursor();
@@ -3125,7 +3126,7 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
             get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
         )))
     {
-        did_add_space = false_0 != 0;
+        did_add_space.set(false_0 != 0);
     } else {
         let mut c: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
         if !end_insert {
@@ -3135,7 +3136,7 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
         }
         if c != NUL {
             del_char(false_0 != 0);
-            did_add_space = false_0 != 0;
+            did_add_space.set(false_0 != 0);
         }
     };
 }

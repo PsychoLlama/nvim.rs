@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
@@ -2355,7 +2356,7 @@ pub const ABDAY_4: C2Rust_Unnamed_23 = 131075;
 pub const ABDAY_3: C2Rust_Unnamed_23 = 131074;
 pub const ABDAY_2: C2Rust_Unnamed_23 = 131073;
 pub const ABDAY_1: C2Rust_Unnamed_23 = 131072;
-static mut corrections: [uint32_t; 7] = [0; 7];
+static corrections: GlobalCell<[uint32_t; 7]> = GlobalCell::new([0; 7]);
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LC_CTYPE: ::core::ffi::c_int = __LC_CTYPE;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
@@ -2400,38 +2401,44 @@ pub const DBCS_DEBUG: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-static mut e_list_item_nr_is_not_list: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E1109: List item %d is not a List\0",
-    )
-};
-static mut e_list_item_nr_does_not_contain_3_numbers: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-        *b"E1110: List item %d does not contain 3 numbers\0",
-    )
-};
-static mut e_list_item_nr_range_invalid: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E1111: List item %d range invalid\0",
-    )
-};
-static mut e_list_item_nr_cell_width_invalid: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E1112: List item %d cell width invalid\0",
-    )
-};
-static mut e_overlapping_ranges_for_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E1113: Overlapping ranges for 0x%lx\0",
-    )
-};
-static mut e_only_values_of_0x80_and_higher_supported: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E1114: Only values of 0x80 and higher supported\0",
-    )
-};
+static e_list_item_nr_is_not_list: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E1109: List item %d is not a List\0",
+        )
+    });
+static e_list_item_nr_does_not_contain_3_numbers: GlobalCell<[::core::ffi::c_char; 47]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+            *b"E1110: List item %d does not contain 3 numbers\0",
+        )
+    });
+static e_list_item_nr_range_invalid: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E1111: List item %d range invalid\0",
+        )
+    });
+static e_list_item_nr_cell_width_invalid: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E1112: List item %d cell width invalid\0",
+        )
+    });
+static e_overlapping_ranges_for_nr: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E1113: Overlapping ranges for 0x%lx\0",
+        )
+    });
+static e_only_values_of_0x80_and_higher_supported: GlobalCell<[::core::ffi::c_char; 48]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+            *b"E1114: Only values of 0x80 and higher supported\0",
+        )
+    });
 #[no_mangle]
-pub static mut utf8len_tab: [uint8_t; 256] = [
+pub static utf8len_tab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     1 as uint8_t,
     1 as uint8_t,
     1 as uint8_t,
@@ -2688,9 +2695,9 @@ pub static mut utf8len_tab: [uint8_t; 256] = [
     6 as uint8_t,
     1 as uint8_t,
     1 as uint8_t,
-];
+]);
 #[no_mangle]
-pub static mut utf8len_tab_zero: [uint8_t; 256] = [
+pub static utf8len_tab_zero: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     1 as uint8_t,
     1 as uint8_t,
     1 as uint8_t,
@@ -2947,8 +2954,8 @@ pub static mut utf8len_tab_zero: [uint8_t; 256] = [
     6 as uint8_t,
     0 as uint8_t,
     0 as uint8_t,
-];
-static mut enc_canon_table: [C2Rust_Unnamed_21; 59] = [
+]);
+static enc_canon_table: GlobalCell<[C2Rust_Unnamed_21; 59]> = GlobalCell::new([
     C2Rust_Unnamed_21 {
         name: b"latin1\0".as_ptr() as *const ::core::ffi::c_char,
         prop: ENC_8BIT as ::core::ffi::c_int + ENC_LATIN1 as ::core::ffi::c_int,
@@ -3256,7 +3263,7 @@ static mut enc_canon_table: [C2Rust_Unnamed_21; 59] = [
         prop: ENC_8BIT as ::core::ffi::c_int,
         codepage: 0 as ::core::ffi::c_int,
     },
-];
+]);
 pub const IDX_LATIN_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const IDX_ISO_2: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const IDX_ISO_3: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -3290,7 +3297,7 @@ pub const IDX_CP949: ::core::ffi::c_int = 47 as ::core::ffi::c_int;
 pub const IDX_CP950: ::core::ffi::c_int = 48 as ::core::ffi::c_int;
 pub const IDX_MACROMAN: ::core::ffi::c_int = 57 as ::core::ffi::c_int;
 pub const IDX_COUNT: ::core::ffi::c_int = 59 as ::core::ffi::c_int;
-static mut enc_alias_table: [C2Rust_Unnamed_22; 64] = [
+static enc_alias_table: GlobalCell<[C2Rust_Unnamed_22; 64]> = GlobalCell::new([
     C2Rust_Unnamed_22 {
         name: b"ansi\0".as_ptr() as *const ::core::ffi::c_char,
         canon: IDX_LATIN_1,
@@ -3547,11 +3554,11 @@ static mut enc_alias_table: [C2Rust_Unnamed_22; 64] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         canon: 0 as ::core::ffi::c_int,
     },
-];
+]);
 unsafe extern "C" fn enc_canon_search(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < IDX_COUNT {
-        if strcmp(name, enc_canon_table[i as usize].name) == 0 as ::core::ffi::c_int {
+        if strcmp(name, (*enc_canon_table.ptr())[i as usize].name) == 0 as ::core::ffi::c_int {
             return i;
         }
         i += 1;
@@ -3564,7 +3571,7 @@ pub unsafe extern "C" fn enc_canon_props(
 ) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = enc_canon_search(name);
     if i >= 0 as ::core::ffi::c_int {
-        return enc_canon_table[i as usize].prop;
+        return (*enc_canon_table.ptr())[i as usize].prop;
     } else if strncmp(
         name,
         b"2byte-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3653,7 +3660,7 @@ pub unsafe extern "C" fn mb_get_class_tab(
     mut p: *const ::core::ffi::c_char,
     chartab: *const uint64_t,
 ) -> ::core::ffi::c_int {
-    if utf8len_tab[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
+    if (*utf8len_tab.ptr())[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
         as ::core::ffi::c_int
         == 1 as ::core::ffi::c_int
     {
@@ -3729,7 +3736,7 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
 pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *const uint8_t = p_in as *const uint8_t;
     if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
-        let mut len: ::core::ffi::c_int = utf8len_tab[*p as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = (*utf8len_tab.ptr())[*p as usize] as ::core::ffi::c_int;
         let mut c: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if c <= 0 as int32_t {
             return 4 as ::core::ffi::c_int;
@@ -3754,7 +3761,7 @@ pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> 
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_ptr2CharInfo_impl(mut p: *const uint8_t, len: uintptr_t) -> int32_t {
-    let corr: uint32_t = corrections[len as usize];
+    let corr: uint32_t = (*corrections.ptr())[len as usize];
     let mut cur: uint8_t = 0;
     cur = *p.offset(1 as ::core::ffi::c_int as isize);
     let mut code_point: uint32_t = ((*p.offset(0 as ::core::ffi::c_int as isize) as uint32_t)
@@ -3826,7 +3833,7 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
         && *p as uint8_t as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
     {
         let mut len: ::core::ffi::c_int = utf_ptr2len_len(p, size);
-        if len < utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int {
+        if len < (*utf8len_tab.ptr())[*p as uint8_t as usize] as ::core::ffi::c_int {
             return 1 as ::core::ffi::c_int;
         }
         let mut c: ::core::ffi::c_int = utf_ptr2char(p);
@@ -3843,7 +3850,8 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
             && prop_is_emojilike(utf8proc_get_property(c as utf8proc_int32_t)) as ::core::ffi::c_int
                 != 0
             && utf_ptr2len_len(p.offset(len as isize), size - len)
-                == utf8len_tab[*p.offset(len as isize) as uint8_t as usize] as ::core::ffi::c_int
+                == (*utf8len_tab.ptr())[*p.offset(len as isize) as uint8_t as usize]
+                    as ::core::ffi::c_int
         {
             let mut c2: ::core::ffi::c_int = utf_ptr2char(p.offset(len as isize));
             if c2 == 0xfe0f as ::core::ffi::c_int {
@@ -3890,7 +3898,7 @@ pub unsafe extern "C" fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::cor
     if (v0 < 0x80 as uint32_t) as ::core::ffi::c_int as ::core::ffi::c_long != 0 {
         return v0 as ::core::ffi::c_int;
     }
-    let len: uint8_t = utf8len_tab[v0 as usize];
+    let len: uint8_t = (*utf8len_tab.ptr())[v0 as usize];
     if ((len as ::core::ffi::c_int) < 2 as ::core::ffi::c_int) as ::core::ffi::c_int
         as ::core::ffi::c_long
         != 0
@@ -4016,7 +4024,7 @@ unsafe extern "C" fn utf_safe_read_char_adv(
     if *n == 0 as size_t {
         return 0 as ::core::ffi::c_int;
     }
-    let mut k: uint8_t = utf8len_tab_zero[**s as uint8_t as usize];
+    let mut k: uint8_t = (*utf8len_tab_zero.ptr())[**s as uint8_t as usize];
     if k as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
         *n = (*n).wrapping_sub(1);
         let c2rust_fresh0 = *s;
@@ -4157,7 +4165,7 @@ pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core
     if *p as ::core::ffi::c_int == NUL {
         return 0 as ::core::ffi::c_int;
     }
-    let len: ::core::ffi::c_int = utf8len_tab[*p as usize] as ::core::ffi::c_int;
+    let len: ::core::ffi::c_int = (*utf8len_tab.ptr())[*p as usize] as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i < len {
         if *p.offset(i as isize) as ::core::ffi::c_int & 0xc0 as ::core::ffi::c_int
@@ -4171,7 +4179,7 @@ pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_byte2len(mut b: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return utf8len_tab[b as usize] as ::core::ffi::c_int;
+    return (*utf8len_tab.ptr())[b as usize] as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_ptr2len_len(
@@ -4179,7 +4187,8 @@ pub unsafe extern "C" fn utf_ptr2len_len(
     mut size: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut m: ::core::ffi::c_int = 0;
-    let mut len: ::core::ffi::c_int = utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int;
+    let mut len: ::core::ffi::c_int =
+        (*utf8len_tab.ptr())[*p as uint8_t as usize] as ::core::ffi::c_int;
     if len == 1 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
     }
@@ -4431,7 +4440,7 @@ unsafe extern "C" fn intable(
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_printable(mut c: ::core::ffi::c_int) -> bool {
-    static mut nonprint: [interval; 9] = [
+    static nonprint: GlobalCell<[interval; 9]> = GlobalCell::new([
         interval {
             first: 0x70f as ::core::ffi::c_int,
             last: 0x70f as ::core::ffi::c_int,
@@ -4468,9 +4477,9 @@ pub unsafe extern "C" fn utf_printable(mut c: ::core::ffi::c_int) -> bool {
             first: 0xfffe as ::core::ffi::c_int,
             last: 0xffff as ::core::ffi::c_int,
         },
-    ];
+    ]);
     return !intable(
-        &raw const nonprint as *const interval,
+        (nonprint.ptr() as *const _) as *const interval,
         ::core::mem::size_of::<[interval; 9]>()
             .wrapping_div(::core::mem::size_of::<interval>())
             .wrapping_div(
@@ -4490,7 +4499,7 @@ pub unsafe extern "C" fn utf_class_tab(
     c: ::core::ffi::c_int,
     chartab: *const uint64_t,
 ) -> ::core::ffi::c_int {
-    static mut classes: [clinterval; 71] = [
+    static classes: GlobalCell<[clinterval; 71]> = GlobalCell::new([
         clinterval {
             first: 0x37e as ::core::ffi::c_uint,
             last: 0x37e as ::core::ffi::c_uint,
@@ -4846,7 +4855,7 @@ pub unsafe extern "C" fn utf_class_tab(
             last: 0x2fa1f as ::core::ffi::c_int as ::core::ffi::c_uint,
             cls: 0x4e00 as ::core::ffi::c_uint,
         },
-    ];
+    ]);
     let mut bot: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut top: ::core::ffi::c_int = ::core::mem::size_of::<[clinterval; 71]>()
         .wrapping_div(::core::mem::size_of::<clinterval>())
@@ -4875,12 +4884,12 @@ pub unsafe extern "C" fn utf_class_tab(
     }
     while top >= bot {
         let mut mid: ::core::ffi::c_int = (bot + top) / 2 as ::core::ffi::c_int;
-        if classes[mid as usize].last < c as ::core::ffi::c_uint {
+        if (*classes.ptr())[mid as usize].last < c as ::core::ffi::c_uint {
             bot = mid + 1 as ::core::ffi::c_int;
-        } else if classes[mid as usize].first > c as ::core::ffi::c_uint {
+        } else if (*classes.ptr())[mid as usize].first > c as ::core::ffi::c_uint {
             top = mid - 1 as ::core::ffi::c_int;
         } else {
-            return classes[mid as usize].cls as ::core::ffi::c_int;
+            return (*classes.ptr())[mid as usize].cls as ::core::ffi::c_int;
         }
     }
     return 2 as ::core::ffi::c_int;
@@ -5226,7 +5235,7 @@ pub unsafe extern "C" fn utf_head_off(
     {
         start = start.offset(-1);
     }
-    let last_len: uint8_t = utf8len_tab[*start as usize];
+    let last_len: uint8_t = (*utf8len_tab.ptr())[*start as usize];
     let mut cur_code: int32_t = utf_ptr2CharInfo_impl(start, last_len as uintptr_t);
     if cur_code < 0 as int32_t || p.offset_from(start) >= last_len as isize {
         return 0 as ::core::ffi::c_int;
@@ -5251,7 +5260,8 @@ pub unsafe extern "C" fn utf_head_off(
         {
             start = start.offset(-1);
         }
-        let mut prev_len: ::core::ffi::c_int = utf8len_tab[*start as usize] as ::core::ffi::c_int;
+        let mut prev_len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[*start as usize] as ::core::ffi::c_int;
         let mut prev_code: int32_t = utf_ptr2CharInfo_impl(start, prev_len as uintptr_t);
         if prev_code < 0 as int32_t || (prev_len as isize) < cur_pos.offset_from(start) {
             start = cur_pos;
@@ -5311,7 +5321,7 @@ pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
         }
     };
     loop {
-        let next_len: uint8_t = utf8len_tab[*next as usize];
+        let next_len: uint8_t = (*utf8len_tab.ptr())[*next as usize];
         let next_code: int32_t = utf_ptr2CharInfo_impl(next, next_len as uintptr_t);
         if !utf_iscomposing(
             prev_code as ::core::ffi::c_int,
@@ -5358,7 +5368,7 @@ pub unsafe extern "C" fn utf_eat_space(mut cc: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_allow_break_before(mut cc: ::core::ffi::c_int) -> bool {
-    static mut BOL_prohibition_punct: [::core::ffi::c_int; 43] = [
+    static BOL_prohibition_punct: GlobalCell<[::core::ffi::c_int; 43]> = GlobalCell::new([
         '!' as ::core::ffi::c_int,
         '%' as ::core::ffi::c_int,
         ')' as ::core::ffi::c_int,
@@ -5402,7 +5412,7 @@ pub unsafe extern "C" fn utf_allow_break_before(mut cc: ::core::ffi::c_int) -> b
         0xff1f as ::core::ffi::c_int,
         0xff3d as ::core::ffi::c_int,
         0xff5d as ::core::ffi::c_int,
-    ];
+    ]);
     let mut first: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut last: ::core::ffi::c_int = ::core::mem::size_of::<[::core::ffi::c_int; 43]>()
         .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
@@ -5414,19 +5424,19 @@ pub unsafe extern "C" fn utf_allow_break_before(mut cc: ::core::ffi::c_int) -> b
         .wrapping_sub(1 as usize) as ::core::ffi::c_int;
     while first < last {
         let mid: ::core::ffi::c_int = (first + last) / 2 as ::core::ffi::c_int;
-        if cc == BOL_prohibition_punct[mid as usize] {
+        if cc == (*BOL_prohibition_punct.ptr())[mid as usize] {
             return false_0 != 0;
-        } else if cc > BOL_prohibition_punct[mid as usize] {
+        } else if cc > (*BOL_prohibition_punct.ptr())[mid as usize] {
             first = mid + 1 as ::core::ffi::c_int;
         } else {
             last = mid - 1 as ::core::ffi::c_int;
         }
     }
-    return cc != BOL_prohibition_punct[first as usize];
+    return cc != (*BOL_prohibition_punct.ptr())[first as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_allow_break_after(mut cc: ::core::ffi::c_int) -> bool {
-    static mut EOL_prohibition_punct: [::core::ffi::c_int; 19] = [
+    static EOL_prohibition_punct: GlobalCell<[::core::ffi::c_int; 19]> = GlobalCell::new([
         '(' as ::core::ffi::c_int,
         '<' as ::core::ffi::c_int,
         '[' as ::core::ffi::c_int,
@@ -5446,7 +5456,7 @@ pub unsafe extern "C" fn utf_allow_break_after(mut cc: ::core::ffi::c_int) -> bo
         0xff08 as ::core::ffi::c_int,
         0xff3b as ::core::ffi::c_int,
         0xff5b as ::core::ffi::c_int,
-    ];
+    ]);
     let mut first: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut last: ::core::ffi::c_int = ::core::mem::size_of::<[::core::ffi::c_int; 19]>()
         .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
@@ -5458,15 +5468,15 @@ pub unsafe extern "C" fn utf_allow_break_after(mut cc: ::core::ffi::c_int) -> bo
         .wrapping_sub(1 as usize) as ::core::ffi::c_int;
     while first < last {
         let mid: ::core::ffi::c_int = (first + last) / 2 as ::core::ffi::c_int;
-        if cc == EOL_prohibition_punct[mid as usize] {
+        if cc == (*EOL_prohibition_punct.ptr())[mid as usize] {
             return false_0 != 0;
-        } else if cc > EOL_prohibition_punct[mid as usize] {
+        } else if cc > (*EOL_prohibition_punct.ptr())[mid as usize] {
             first = mid + 1 as ::core::ffi::c_int;
         } else {
             last = mid - 1 as ::core::ffi::c_int;
         }
     }
-    return cc != EOL_prohibition_punct[first as usize];
+    return cc != (*EOL_prohibition_punct.ptr())[first as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_allow_break(
@@ -5548,7 +5558,8 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
         first_off -= 1;
     }
     let max_end_off: ::core::ffi::c_int =
-        utf8len_tab[*p.offset(first_off as isize) as usize] as ::core::ffi::c_int + first_off;
+        (*utf8len_tab.ptr())[*p.offset(first_off as isize) as usize] as ::core::ffi::c_int
+            + first_off;
     if max_end_off <= 0 as ::core::ffi::c_int || max_end_off > p_len {
         return CharBoundsOff {
             begin_off: 0 as int8_t,
@@ -5657,7 +5668,8 @@ pub unsafe extern "C" fn utf_valid_string(
         (p < end as *mut uint8_t as *const uint8_t) as ::core::ffi::c_int
     } != 0
     {
-        let mut l: ::core::ffi::c_int = utf8len_tab_zero[*p as usize] as ::core::ffi::c_int;
+        let mut l: ::core::ffi::c_int =
+            (*utf8len_tab_zero.ptr())[*p as usize] as ::core::ffi::c_int;
         if l == 0 as ::core::ffi::c_int {
             return false_0 != 0;
         }
@@ -5757,7 +5769,7 @@ pub unsafe extern "C" fn mb_charlen_len(
 pub unsafe extern "C" fn mb_unescape(
     pp: *mut *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
-    static mut buf: [::core::ffi::c_char; 6] = [0; 6];
+    static buf: GlobalCell<[::core::ffi::c_char; 6]> = GlobalCell::new([0; 6]);
     let mut buf_idx: size_t = 0 as size_t;
     let mut str: *mut uint8_t = *pp as *mut uint8_t;
     let mut str_idx: size_t = 0 as size_t;
@@ -5770,7 +5782,7 @@ pub unsafe extern "C" fn mb_unescape(
         {
             let c2rust_fresh13 = buf_idx;
             buf_idx = buf_idx.wrapping_add(1);
-            buf[c2rust_fresh13 as usize] = K_SPECIAL as ::core::ffi::c_char;
+            (*buf.ptr())[c2rust_fresh13 as usize] = K_SPECIAL as ::core::ffi::c_char;
             str_idx = str_idx.wrapping_add(2 as size_t);
         } else {
             if *str.offset(str_idx as isize) as ::core::ffi::c_int == K_SPECIAL {
@@ -5778,16 +5790,17 @@ pub unsafe extern "C" fn mb_unescape(
             }
             let c2rust_fresh14 = buf_idx;
             buf_idx = buf_idx.wrapping_add(1);
-            buf[c2rust_fresh14 as usize] = *str.offset(str_idx as isize) as ::core::ffi::c_char;
+            (*buf.ptr())[c2rust_fresh14 as usize] =
+                *str.offset(str_idx as isize) as ::core::ffi::c_char;
         }
-        buf[buf_idx as usize] = NUL as ::core::ffi::c_char;
-        if utf_ptr2len(&raw mut buf as *mut ::core::ffi::c_char) > 1 as ::core::ffi::c_int {
+        (*buf.ptr())[buf_idx as usize] = NUL as ::core::ffi::c_char;
+        if utf_ptr2len(buf.ptr() as *mut ::core::ffi::c_char) > 1 as ::core::ffi::c_int {
             *pp = (str as *const ::core::ffi::c_char)
                 .offset(str_idx as isize)
                 .offset(1 as ::core::ffi::c_int as isize);
-            return &raw mut buf as *mut ::core::ffi::c_char;
+            return buf.ptr() as *mut ::core::ffi::c_char;
         }
-        if (buf[0 as ::core::ffi::c_int as usize] as uint8_t as ::core::ffi::c_int)
+        if ((*buf.ptr())[0 as ::core::ffi::c_int as usize] as uint8_t as ::core::ffi::c_int)
             < 128 as ::core::ffi::c_int
         {
             break;
@@ -5912,16 +5925,16 @@ pub unsafe extern "C" fn enc_canonize(
         i = enc_alias_search(p);
         if i >= 0 as ::core::ffi::c_int {
             xfree(r as *mut ::core::ffi::c_void);
-            r = xstrdup(enc_canon_table[i as usize].name);
+            r = xstrdup((*enc_canon_table.ptr())[i as usize].name);
         }
     }
     return r;
 }
 unsafe extern "C" fn enc_alias_search(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while !enc_alias_table[i as usize].name.is_null() {
-        if strcmp(name, enc_alias_table[i as usize].name) == 0 as ::core::ffi::c_int {
-            return enc_alias_table[i as usize].canon;
+    while !(*enc_alias_table.ptr())[i as usize].name.is_null() {
+        if strcmp(name, (*enc_alias_table.ptr())[i as usize].name) == 0 as ::core::ffi::c_int {
+            return (*enc_alias_table.ptr())[i as usize].canon;
         }
         i += 1;
     }
@@ -6078,8 +6091,9 @@ pub unsafe extern "C" fn my_iconv_open(
     mut from: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_void {
     let mut tobuf: [::core::ffi::c_char; 400] = [0; 400];
-    static mut iconv_working: WorkingStatus = kUnknown;
-    if iconv_working as ::core::ffi::c_uint == kBroken as ::core::ffi::c_int as ::core::ffi::c_uint
+    static iconv_working: GlobalCell<WorkingStatus> = GlobalCell::new(kUnknown);
+    if iconv_working.get() as ::core::ffi::c_uint
+        == kBroken as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
             -1 as ::core::ffi::c_int as usize,
@@ -6090,7 +6104,7 @@ pub unsafe extern "C" fn my_iconv_open(
         != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
             -1 as ::core::ffi::c_int as usize,
         )
-        && iconv_working as ::core::ffi::c_uint
+        && iconv_working.get() as ::core::ffi::c_uint
             == kUnknown as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut p: *mut ::core::ffi::c_char = &raw mut tobuf as *mut ::core::ffi::c_char;
@@ -6103,13 +6117,13 @@ pub unsafe extern "C" fn my_iconv_open(
             &raw mut tolen,
         );
         if p.is_null() {
-            iconv_working = kBroken;
+            iconv_working.set(kBroken);
             iconv_close(fd);
             fd = ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                 -1 as ::core::ffi::c_int as usize,
             );
         } else {
-            iconv_working = kWorking;
+            iconv_working.set(kWorking);
         }
     }
     return fd;
@@ -6446,7 +6460,7 @@ pub unsafe extern "C" fn string_convert_ext(
                     *c2rust_fresh5 = NUL as uint8_t;
                 } else if l == 1 as ::core::ffi::c_int {
                     let mut l_w: uint8_t =
-                        utf8len_tab_zero[*ptr.offset(i_1 as isize) as uint8_t as usize];
+                        (*utf8len_tab_zero.ptr())[*ptr.offset(i_1 as isize) as uint8_t as usize];
                     if l_w as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                         xfree(retval as *mut ::core::ffi::c_void);
                         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6528,25 +6542,27 @@ pub unsafe extern "C" fn string_convert_ext(
     }
     return retval as *mut ::core::ffi::c_char;
 }
-static mut cw_table: *mut cw_interval_T = ::core::ptr::null_mut::<cw_interval_T>();
-static mut cw_table_size: size_t = 0 as size_t;
+static cw_table: GlobalCell<*mut cw_interval_T> =
+    GlobalCell::new(::core::ptr::null_mut::<cw_interval_T>());
+static cw_table_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 unsafe extern "C" fn cw_value(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if cw_table.is_null() {
+    if (*cw_table.ptr()).is_null() {
         return 0 as ::core::ffi::c_int;
     }
-    if (c as int64_t) < (*cw_table.offset(0 as ::core::ffi::c_int as isize)).first {
+    if (c as int64_t) < (*(*cw_table.ptr()).offset(0 as ::core::ffi::c_int as isize)).first {
         return 0 as ::core::ffi::c_int;
     }
     let mut bot: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut top: ::core::ffi::c_int = cw_table_size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+    let mut top: ::core::ffi::c_int =
+        cw_table_size.get() as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     while top >= bot {
         let mut mid: ::core::ffi::c_int = (bot + top) / 2 as ::core::ffi::c_int;
-        if (*cw_table.offset(mid as isize)).last < c as int64_t {
+        if (*(*cw_table.ptr()).offset(mid as isize)).last < c as int64_t {
             bot = mid + 1 as ::core::ffi::c_int;
-        } else if (*cw_table.offset(mid as isize)).first > c as int64_t {
+        } else if (*(*cw_table.ptr()).offset(mid as isize)).first > c as int64_t {
             top = mid - 1 as ::core::ffi::c_int;
         } else {
-            return (*cw_table.offset(mid as isize)).width as ::core::ffi::c_int;
+            return (*(*cw_table.ptr()).offset(mid as isize)).width as ::core::ffi::c_int;
         }
     }
     return 0 as ::core::ffi::c_int;
@@ -6605,7 +6621,8 @@ pub unsafe extern "C" fn f_setcellwidths(
                 {
                     semsg(
                         gettext(
-                            &raw const e_list_item_nr_is_not_list as *const ::core::ffi::c_char,
+                            (e_list_item_nr_is_not_list.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
                         ),
                         item,
                     );
@@ -6629,7 +6646,7 @@ pub unsafe extern "C" fn f_setcellwidths(
                         n1 = (*lili_tv).vval.v_number;
                         if n1 < 0x80 as varnumber_T {
                             emsg(gettext(
-                                &raw const e_only_values_of_0x80_and_higher_supported
+                                (e_only_values_of_0x80_and_higher_supported.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ));
                             xfree(ptrs as *mut ::core::ffi::c_void);
@@ -6638,7 +6655,7 @@ pub unsafe extern "C" fn f_setcellwidths(
                     } else if i == 1 as ::core::ffi::c_int && (*lili_tv).vval.v_number < n1 {
                         semsg(
                             gettext(
-                                &raw const e_list_item_nr_range_invalid
+                                (e_list_item_nr_range_invalid.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             item,
@@ -6651,7 +6668,7 @@ pub unsafe extern "C" fn f_setcellwidths(
                     {
                         semsg(
                             gettext(
-                                &raw const e_list_item_nr_cell_width_invalid
+                                (e_list_item_nr_cell_width_invalid.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             item,
@@ -6665,7 +6682,7 @@ pub unsafe extern "C" fn f_setcellwidths(
                 if i != 3 as ::core::ffi::c_int {
                     semsg(
                         gettext(
-                            &raw const e_list_item_nr_does_not_contain_3_numbers
+                            (e_list_item_nr_does_not_contain_3_numbers.ptr() as *const _)
                                 as *const ::core::ffi::c_char,
                         ),
                         item,
@@ -6700,7 +6717,10 @@ pub unsafe extern "C" fn f_setcellwidths(
                 && n1_0 <= (*table.offset((item - 1 as ::core::ffi::c_int) as isize)).last
             {
                 semsg(
-                    gettext(&raw const e_overlapping_ranges_for_nr as *const ::core::ffi::c_char),
+                    gettext(
+                        (e_overlapping_ranges_for_nr.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
+                    ),
                     n1_0 as size_t,
                 );
                 xfree(ptrs as *mut ::core::ffi::c_void);
@@ -6717,15 +6737,15 @@ pub unsafe extern "C" fn f_setcellwidths(
         }
         xfree(ptrs as *mut ::core::ffi::c_void);
     }
-    let cw_table_save: *mut cw_interval_T = cw_table;
-    let cw_table_size_save: size_t = cw_table_size;
-    cw_table = table;
-    cw_table_size = table_size;
+    let cw_table_save: *mut cw_interval_T = cw_table.get();
+    let cw_table_size_save: size_t = cw_table_size.get();
+    cw_table.set(table);
+    cw_table_size.set(table_size);
     let error: *const ::core::ffi::c_char = check_chars_options();
     if !error.is_null() {
         emsg(gettext(error));
-        cw_table = cw_table_save;
-        cw_table_size = cw_table_size_save;
+        cw_table.set(cw_table_save);
+        cw_table_size.set(cw_table_size_save);
         xfree(table as *mut ::core::ffi::c_void);
         return;
     }
@@ -6739,13 +6759,16 @@ pub unsafe extern "C" fn f_getcellwidths(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    tv_list_alloc_ret(rettv, cw_table_size as ptrdiff_t);
+    tv_list_alloc_ret(rettv, cw_table_size.get() as ptrdiff_t);
     let mut i: size_t = 0 as size_t;
-    while i < cw_table_size {
+    while i < cw_table_size.get() {
         let mut entry: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-        tv_list_append_number(entry, (*cw_table.offset(i as isize)).first);
-        tv_list_append_number(entry, (*cw_table.offset(i as isize)).last);
-        tv_list_append_number(entry, (*cw_table.offset(i as isize)).width as varnumber_T);
+        tv_list_append_number(entry, (*(*cw_table.ptr()).offset(i as isize)).first);
+        tv_list_append_number(entry, (*(*cw_table.ptr()).offset(i as isize)).last);
+        tv_list_append_number(
+            entry,
+            (*(*cw_table.ptr()).offset(i as isize)).width as varnumber_T,
+        );
         tv_list_append_list((*rettv).vval.v_list, entry);
         i = i.wrapping_add(1);
     }
@@ -6786,7 +6809,7 @@ pub unsafe extern "C" fn get_encoding_name(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return enc_canon_table[idx as usize].name as *mut ::core::ffi::c_char;
+    return (*enc_canon_table.ptr())[idx as usize].name as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn mb_strcmp_ic(
@@ -6817,7 +6840,8 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
             len: 1 as ::core::ffi::c_int,
         };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -6840,7 +6864,7 @@ pub const ICONV_EILSEQ: ::core::ffi::c_int = EILSEQ;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const EILSEQ: ::core::ffi::c_int = 84 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    corrections = [
+    corrections.set([
         (1 as uint32_t) << 31 as ::core::ffi::c_int,
         (1 as uint32_t) << 31 as ::core::ffi::c_int,
         (0x80 as uint32_t)
@@ -6867,7 +6891,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             .wrapping_add((0x80 as uint32_t) << 18 as ::core::ffi::c_int)
             .wrapping_add((0x80 as uint32_t) << 24 as ::core::ffi::c_int)
             .wrapping_neg(),
-    ];
+    ]);
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

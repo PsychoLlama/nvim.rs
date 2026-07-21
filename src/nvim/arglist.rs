@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
     pub type terminal;
@@ -2540,14 +2541,15 @@ pub const WSP_HOR: C2Rust_Unnamed_17 = 4;
 pub const WSP_VERT: C2Rust_Unnamed_17 = 2;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static mut e_window_layout_changed_unexpectedly: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E249: Window layout changed unexpectedly\0",
-    )
-};
-static mut arglist_locked: bool = false_0 != 0;
+static e_window_layout_changed_unexpectedly: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E249: Window layout changed unexpectedly\0",
+        )
+    });
+static arglist_locked: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn check_arglist_locked() -> ::core::ffi::c_int {
-    if arglist_locked {
+    if arglist_locked.get() {
         emsg(gettext(
             &raw const e_cannot_change_arglist_recursively as *const ::core::ffi::c_char,
         ));
@@ -2622,9 +2624,9 @@ pub unsafe extern "C" fn alist_set(
             break;
         } else {
             if !fnum_list.is_null() && i < fnum_len {
-                arglist_locked = true_0 != 0;
+                arglist_locked.set(true_0 != 0);
                 buf_set_name(*fnum_list.offset(i as isize), *files.offset(i as isize));
-                arglist_locked = false_0 != 0;
+                arglist_locked.set(false_0 != 0);
             }
             alist_add(
                 al,
@@ -2657,7 +2659,7 @@ pub unsafe extern "C" fn alist_add(
     if check_arglist_locked() == FAIL {
         return;
     }
-    arglist_locked = true_0 != 0;
+    arglist_locked.set(true_0 != 0);
     (*wp).w_locked = true_0 != 0;
     (*((*al).al_ga.ga_data as *mut aentry_T).offset((*al).al_ga.ga_len as isize)).ae_fname = fname;
     if set_fnum > 0 as ::core::ffi::c_int {
@@ -2673,7 +2675,7 @@ pub unsafe extern "C" fn alist_add(
             );
     }
     (*al).al_ga.ga_len += 1;
-    arglist_locked = false_0 != 0;
+    arglist_locked.set(false_0 != 0);
     (*wp).w_locked = false_0 != 0;
 }
 unsafe extern "C" fn do_one_arg(mut str: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
@@ -2818,7 +2820,7 @@ unsafe extern "C" fn alist_add_list(
                     .wrapping_mul(::core::mem::size_of::<aentry_T>()),
             );
         }
-        arglist_locked = true_0 != 0;
+        arglist_locked.set(true_0 != 0);
         (*wp).w_locked = true_0 != 0;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < count {
@@ -2834,7 +2836,7 @@ unsafe extern "C" fn alist_add_list(
                 .ae_fnum = buflist_add(*files.offset(i as isize), flags);
             i += 1;
         }
-        arglist_locked = false_0 != 0;
+        arglist_locked.set(false_0 != 0);
         (*wp).w_locked = false_0 != 0;
         (*(*wp).w_alist).al_ga.ga_len += count;
         if old_argcount > 0 as ::core::ffi::c_int && (*wp).w_arg_idx >= after {
@@ -3654,7 +3656,7 @@ unsafe extern "C" fn arg_all_open_windows(
                                 }
                                 if (*(*wp).w_frame).fr_parent != (*(*curwin).w_frame).fr_parent {
                                     emsg(gettext(
-                                        &raw const e_window_layout_changed_unexpectedly
+                                        (e_window_layout_changed_unexpectedly.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ));
                                     i = count;
@@ -3738,7 +3740,7 @@ unsafe extern "C" fn do_arg_all(
 ) {
     let mut last_curwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut last_curtab: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-    let mut prev_arglist_locked: bool = arglist_locked;
+    let mut prev_arglist_locked: bool = arglist_locked.get();
     '_c2rust_label: {
         if !firstwin.is_null() {
         } else {
@@ -3771,7 +3773,7 @@ unsafe extern "C" fn do_arg_all(
     };
     aall.alist = (*curwin).w_alist;
     (*aall.alist).al_refcount += 1;
-    arglist_locked = true_0 != 0;
+    arglist_locked.set(true_0 != 0);
     let new_lu_tp: *mut tabpage_T = curtab;
     reset_VIsual_and_resel();
     arg_all_close_unused_windows(&raw mut aall);
@@ -3788,7 +3790,7 @@ unsafe extern "C" fn do_arg_all(
     );
     arg_all_open_windows(&raw mut aall, count);
     alist_unlink(aall.alist);
-    arglist_locked = prev_arglist_locked;
+    arglist_locked.set(prev_arglist_locked);
     autocmd_no_enter -= 1;
     if last_curtab != aall.new_curtab {
         if valid_tabpage(last_curtab) {

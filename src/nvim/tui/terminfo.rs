@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type unibi_term;
     fn memset(
@@ -707,28 +708,28 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"ghostty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const ghostty_terminfo;
+        return (ghostty_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"xterm\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"xterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const xterm_256colour_terminfo;
+        return (xterm_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"screen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const screen_256colour_terminfo;
+        return (screen_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"tmux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const tmux_256colour_terminfo;
+        return (tmux_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"rxvt\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"rxvt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const rxvt_256colour_terminfo;
+        return (rxvt_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"putty\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"putty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const putty_256colour_terminfo;
+        return (putty_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"linux\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"linux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const linux_16colour_terminfo;
+        return (linux_16colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"interix\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"interix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const interix_8colour_terminfo;
+        return (interix_8colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"iterm\0".as_ptr() as *const ::core::ffi::c_char)
         as ::core::ffi::c_int
         != 0
@@ -743,10 +744,10 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"iterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const iterm_256colour_terminfo;
+        return (iterm_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"st\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"st\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const st_256colour_terminfo;
+        return (st_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"gnome\0".as_ptr() as *const ::core::ffi::c_char)
         as ::core::ffi::c_int
         != 0
@@ -755,23 +756,23 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"vte\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const vte_256colour_terminfo;
+        return (vte_256colour_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"cygwin\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"cygwin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const cygwin_terminfo;
+        return (cygwin_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"win32con\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname =
             b"win32con\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const win32con_terminfo;
+        return (win32con_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"conemu\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"conemu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const conemu_terminfo;
+        return (conemu_terminfo.ptr() as *const _);
     } else if terminfo_is_term_family(term, b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const vtpcon_terminfo;
+        return (vtpcon_terminfo.ptr() as *const _);
     } else {
         *termname = b"ansi\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return &raw const ansi_terminfo;
+        return (ansi_terminfo.ptr() as *const _);
     };
 }
 #[no_mangle]
@@ -803,7 +804,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         }
         i = i.wrapping_add(1);
     }
-    static mut uni_ids: [unibi_string; 41] = [
+    static uni_ids: GlobalCell<[unibi_string; 41]> = GlobalCell::new([
         unibi_carriage_return,
         unibi_change_scroll_region,
         unibi_clear_screen,
@@ -845,7 +846,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         unibi_set_attributes,
         unibi_set_lr_margin,
         unibi_to_status_line,
-    ];
+    ]);
     let mut i_0: size_t = 0 as size_t;
     while i_0
         < ::core::mem::size_of::<[unibi_string; 41]>()
@@ -856,7 +857,7 @@ pub unsafe extern "C" fn terminfo_from_database(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val: *const ::core::ffi::c_char = unibi_get_str(ut, uni_ids[i_0 as usize]);
+        let mut val: *const ::core::ffi::c_char = unibi_get_str(ut, (*uni_ids.ptr())[i_0 as usize]);
         (*ti).defs[i_0 as usize] = if !val.is_null() {
             arena_strdup(arena, val)
         } else {
@@ -864,7 +865,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         };
         i_0 = i_0.wrapping_add(1);
     }
-    static mut uni_ext: [*const ::core::ffi::c_char; 8] = [
+    static uni_ext: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
         b"Se\0".as_ptr() as *const ::core::ffi::c_char,
         b"Ss\0".as_ptr() as *const ::core::ffi::c_char,
         b"smxx\0".as_ptr() as *const ::core::ffi::c_char,
@@ -873,7 +874,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         b"Cs\0".as_ptr() as *const ::core::ffi::c_char,
         b"Cr\0".as_ptr() as *const ::core::ffi::c_char,
         b"Smulx\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut max: size_t = unibi_count_ext_str(ut);
     let mut i_1: size_t = 0 as size_t;
     while i_1
@@ -885,7 +886,7 @@ pub unsafe extern "C" fn terminfo_from_database(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut name: *const ::core::ffi::c_char = uni_ext[i_1 as usize];
+        let mut name: *const ::core::ffi::c_char = (*uni_ext.ptr())[i_1 as usize];
         let mut val_0: size_t = 0 as size_t;
         while val_0 < max {
             let mut n_0: *const ::core::ffi::c_char = unibi_get_ext_str_name(ut, val_0);
@@ -904,7 +905,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         }
         i_1 = i_1.wrapping_add(1);
     }
-    static mut uni_keys: [[unibi_string; 2]; 16] = [
+    static uni_keys: GlobalCell<[[unibi_string; 2]; 16]> = GlobalCell::new([
         [unibi_key_backspace, unibi_string_begin_],
         [unibi_key_beg, unibi_key_sbeg],
         [unibi_key_btab, unibi_string_begin_],
@@ -921,7 +922,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         [unibi_key_undo, unibi_key_sundo],
         [unibi_key_left, unibi_key_sleft],
         [unibi_key_right, unibi_key_sright],
-    ];
+    ]);
     let mut i_2: size_t = 0 as size_t;
     while i_2
         < ::core::mem::size_of::<[[unibi_string; 2]; 16]>()
@@ -932,15 +933,20 @@ pub unsafe extern "C" fn terminfo_from_database(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val_1: *const ::core::ffi::c_char =
-            unibi_get_str(ut, uni_keys[i_2 as usize][0 as ::core::ffi::c_int as usize]);
+        let mut val_1: *const ::core::ffi::c_char = unibi_get_str(
+            ut,
+            (*uni_keys.ptr())[i_2 as usize][0 as ::core::ffi::c_int as usize],
+        );
         if !val_1.is_null() {
             (*ti).keys[i_2 as usize][0 as ::core::ffi::c_int as usize] = arena_strdup(arena, val_1);
-            if uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_uint
+            if (*uni_keys.ptr())[i_2 as usize][1 as ::core::ffi::c_int as usize]
+                as ::core::ffi::c_uint
                 != unibi_string_begin_ as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut sval: *const ::core::ffi::c_char =
-                    unibi_get_str(ut, uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize]);
+                let mut sval: *const ::core::ffi::c_char = unibi_get_str(
+                    ut,
+                    (*uni_keys.ptr())[i_2 as usize][1 as ::core::ffi::c_int as usize],
+                );
                 (*ti).keys[i_2 as usize][1 as ::core::ffi::c_int as usize] = if !sval.is_null() {
                     arena_strdup(arena, sval)
                 } else {
@@ -950,7 +956,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         }
         i_2 = i_2.wrapping_add(1);
     }
-    static mut uni_fkeys: [unibi_string; 63] = [
+    static uni_fkeys: GlobalCell<[unibi_string; 63]> = GlobalCell::new([
         unibi_key_f1,
         unibi_key_f2,
         unibi_key_f3,
@@ -1014,7 +1020,7 @@ pub unsafe extern "C" fn terminfo_from_database(
         unibi_key_f61,
         unibi_key_f62,
         unibi_key_f63,
-    ];
+    ]);
     let mut i_3: size_t = 0 as size_t;
     while i_3
         < ::core::mem::size_of::<[unibi_string; 63]>()
@@ -1025,7 +1031,8 @@ pub unsafe extern "C" fn terminfo_from_database(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val_2: *const ::core::ffi::c_char = unibi_get_str(ut, uni_fkeys[i_3 as usize]);
+        let mut val_2: *const ::core::ffi::c_char =
+            unibi_get_str(ut, (*uni_fkeys.ptr())[i_3 as usize]);
         (*ti).f_keys[i_3 as usize] = if !val_2.is_null() {
             arena_strdup(arena, val_2)
         } else {
@@ -1120,7 +1127,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         &raw mut data,
         b"String capabilities:\n\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    static mut string_names: [*const ::core::ffi::c_char; 49] = [
+    static string_names: GlobalCell<[*const ::core::ffi::c_char; 49]> = GlobalCell::new([
         b"carriage_return\0".as_ptr() as *const ::core::ffi::c_char,
         b"change_scroll_region\0".as_ptr() as *const ::core::ffi::c_char,
         b"clear_screen\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1170,7 +1177,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"set_cursor_color (Cs)\0".as_ptr() as *const ::core::ffi::c_char,
         b"reset_cursor_color (Cr)\0".as_ptr() as *const ::core::ffi::c_char,
         b"set_underline_style (Smulx)\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut i: size_t = 0 as size_t;
     while i < ::core::mem::size_of::<[*const ::core::ffi::c_char; 49]>()
         .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
@@ -1185,7 +1192,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
             kv_do_printf(
                 &raw mut data,
                 b"  %-31s = \0".as_ptr() as *const ::core::ffi::c_char,
-                string_names[i as usize],
+                (*string_names.ptr())[i as usize],
             );
             kv_transstr(&raw mut data, s, false_0 != 0);
             if data.size == data.capacity {
@@ -1206,7 +1213,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         }
         i = i.wrapping_add(1);
     }
-    static mut key_names: [*const ::core::ffi::c_char; 16] = [
+    static key_names: GlobalCell<[*const ::core::ffi::c_char; 16]> = GlobalCell::new([
         b"backspace\0".as_ptr() as *const ::core::ffi::c_char,
         b"beg\0".as_ptr() as *const ::core::ffi::c_char,
         b"btab\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1223,7 +1230,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"undo\0".as_ptr() as *const ::core::ffi::c_char,
         b"left\0".as_ptr() as *const ::core::ffi::c_char,
         b"right\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut i_0: size_t = (0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t;
     while i_0
         < ::core::mem::size_of::<[*const ::core::ffi::c_char; 16]>()
@@ -1240,7 +1247,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
             kv_do_printf(
                 &raw mut data,
                 b"  key_%-27s = \0".as_ptr() as *const ::core::ffi::c_char,
-                key_names[i_0 as usize],
+                (*key_names.ptr())[i_0 as usize],
             );
             kv_transstr(&raw mut data, s_0, false_0 != 0);
             let mut ss: *const ::core::ffi::c_char =
@@ -1249,7 +1256,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 kv_do_printf(
                     &raw mut data,
                     b", key_s%s = \0".as_ptr() as *const ::core::ffi::c_char,
-                    key_names[i_0 as usize],
+                    (*key_names.ptr())[i_0 as usize],
                 );
                 kv_transstr(&raw mut data, ss, false_0 != 0);
             }
@@ -1271,7 +1278,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         }
         i_0 = i_0.wrapping_add(1);
     }
-    static mut fkey_names: [*const ::core::ffi::c_char; 63] = [
+    static fkey_names: GlobalCell<[*const ::core::ffi::c_char; 63]> = GlobalCell::new([
         b"f1\0".as_ptr() as *const ::core::ffi::c_char,
         b"f2\0".as_ptr() as *const ::core::ffi::c_char,
         b"f3\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1335,7 +1342,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"f61\0".as_ptr() as *const ::core::ffi::c_char,
         b"f62\0".as_ptr() as *const ::core::ffi::c_char,
         b"f63\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut i_1: size_t = (0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t;
     while i_1
         < ::core::mem::size_of::<[*const ::core::ffi::c_char; 63]>()
@@ -1351,7 +1358,7 @@ pub unsafe extern "C" fn terminfo_info_msg(
             kv_do_printf(
                 &raw mut data,
                 b"  key_%-27s = \0".as_ptr() as *const ::core::ffi::c_char,
-                fkey_names[i_1 as usize],
+                (*fkey_names.ptr())[i_1 as usize],
             );
             kv_transstr(&raw mut data, s_1, false_0 != 0);
             if data.size == data.capacity {
@@ -1989,7 +1996,7 @@ pub unsafe extern "C" fn terminfo_fmt(
     }
     return buf.offset_from(buf_start) as size_t;
 }
-static mut ansi_terminfo: TerminfoEntry = TerminfoEntry {
+static ansi_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: false_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -2179,8 +2186,8 @@ static mut ansi_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut ghostty_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static ghostty_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -2372,8 +2379,8 @@ static mut ghostty_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[1;4Q\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[1;4R\0".as_ptr() as *const ::core::ffi::c_char,
     ],
-};
-static mut interix_8colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static interix_8colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -2562,8 +2569,8 @@ static mut interix_8colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut iterm_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static iterm_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -2755,8 +2762,8 @@ static mut iterm_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut linux_16colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static linux_16colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -2946,8 +2953,8 @@ static mut linux_16colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut putty_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static putty_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -3139,8 +3146,8 @@ static mut putty_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut rxvt_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static rxvt_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -3332,8 +3339,8 @@ static mut rxvt_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut screen_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static screen_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: false_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -3525,8 +3532,8 @@ static mut screen_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut st_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static st_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -3718,8 +3725,8 @@ static mut st_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[1;4Q\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[1;4R\0".as_ptr() as *const ::core::ffi::c_char,
     ],
-};
-static mut tmux_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static tmux_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: false_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -3911,8 +3918,8 @@ static mut tmux_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[1;4Q\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[1;4R\0".as_ptr() as *const ::core::ffi::c_char,
     ],
-};
-static mut vte_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static vte_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -4104,8 +4111,8 @@ static mut vte_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[1;4Q\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[1;4R\0".as_ptr() as *const ::core::ffi::c_char,
     ],
-};
-static mut xterm_256colour_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static xterm_256colour_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -4297,8 +4304,8 @@ static mut xterm_256colour_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[1;4Q\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[1;4R\0".as_ptr() as *const ::core::ffi::c_char,
     ],
-};
-static mut cygwin_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static cygwin_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: false_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -4488,8 +4495,8 @@ static mut cygwin_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut win32con_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static win32con_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: false_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -4678,8 +4685,8 @@ static mut win32con_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut conemu_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static conemu_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -4868,8 +4875,8 @@ static mut conemu_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
-static mut vtpcon_terminfo: TerminfoEntry = TerminfoEntry {
+});
+static vtpcon_terminfo: GlobalCell<TerminfoEntry> = GlobalCell::new(TerminfoEntry {
     bce: true_0 != 0,
     has_Tc_or_RGB: false_0 != 0,
     Su: false_0 != 0,
@@ -5061,6 +5068,6 @@ static mut vtpcon_terminfo: TerminfoEntry = TerminfoEntry {
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
     ],
-};
+});
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

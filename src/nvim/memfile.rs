@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2226,7 +2227,7 @@ pub const S_IREAD: ::core::ffi::c_int = S_IRUSR;
 pub const S_IWRITE: ::core::ffi::c_int = S_IWUSR;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -2262,7 +2263,7 @@ unsafe extern "C" fn map_get_int64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2284,9 +2285,9 @@ unsafe extern "C" fn map_put_int64_t_ptr_t(
 pub const BH_DIRTY: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
 pub const BH_LOCKED: ::core::ffi::c_uint = 2 as ::core::ffi::c_uint;
 pub const MEMFILE_PAGE_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-static mut e_block_was_not_locked: [::core::ffi::c_char; 27] = unsafe {
+static e_block_was_not_locked: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E293: Block was not locked\0")
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn mf_open(
     mut fname: *mut ::core::ffi::c_char,
@@ -2573,7 +2574,7 @@ pub unsafe extern "C" fn mf_put(
     let mut flags: ::core::ffi::c_uint = (*hp).bh_flags;
     if flags & BH_LOCKED == 0 as ::core::ffi::c_uint {
         iemsg(gettext(
-            &raw const e_block_was_not_locked as *const ::core::ffi::c_char,
+            (e_block_was_not_locked.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
     }
     flags &= !BH_LOCKED;

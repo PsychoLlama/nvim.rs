@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -3246,9 +3247,10 @@ unsafe extern "C" fn win_charsize(
         return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
-static mut expr_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut execreg_lastc: ::core::ffi::c_int = NUL;
-static mut y_regs: [yankreg_T; 39] = [
+static expr_line: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
+static y_regs: GlobalCell<[yankreg_T; 39]> = GlobalCell::new([
     yankreg_T {
         y_array: ::core::ptr::null_mut::<String_0>(),
         y_size: 0,
@@ -3561,31 +3563,33 @@ static mut y_regs: [yankreg_T; 39] = [
         timestamp: 0,
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     },
-];
-static mut y_previous: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-static mut e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
-    [::core::ffi::c_char; 79] = unsafe {
+]);
+static y_previous: GlobalCell<*mut yankreg_T> =
+    GlobalCell::new(::core::ptr::null_mut::<yankreg_T>());
+static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines: GlobalCell<
+    [::core::ffi::c_char; 79],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 79], [::core::ffi::c_char; 79]>(
         *b"E883: Search pattern and expression register may not contain two or more lines\0",
     )
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn get_unname_register() -> ::core::ffi::c_int {
-    return if y_previous.is_null() {
+    return if (*y_previous.ptr()).is_null() {
         -1 as ::core::ffi::c_int
     } else {
-        y_previous.offset_from(
-            (&raw mut y_regs as *mut yankreg_T).offset(0 as ::core::ffi::c_int as isize),
-        ) as ::core::ffi::c_int
+        (*y_previous.ptr())
+            .offset_from((y_regs.ptr() as *mut yankreg_T).offset(0 as ::core::ffi::c_int as isize))
+            as ::core::ffi::c_int
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_y_register(mut reg: ::core::ffi::c_int) -> *mut yankreg_T {
-    return (&raw mut y_regs as *mut yankreg_T).offset(reg as isize);
+    return (y_regs.ptr() as *mut yankreg_T).offset(reg as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_y_previous() -> *mut yankreg_T {
-    return y_previous;
+    return y_previous.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_expr_register() -> ::core::ffi::c_int {
@@ -3607,31 +3611,31 @@ pub unsafe extern "C" fn get_expr_register() -> ::core::ffi::c_int {
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_expr_line(mut new_line: *mut ::core::ffi::c_char) {
-    xfree(expr_line as *mut ::core::ffi::c_void);
-    expr_line = new_line;
+    xfree(expr_line.get() as *mut ::core::ffi::c_void);
+    expr_line.set(new_line);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_expr_line() -> *mut ::core::ffi::c_char {
-    static mut nested: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if expr_line.is_null() {
+    static nested: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if (*expr_line.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut expr_copy: *mut ::core::ffi::c_char = xstrdup(expr_line);
-    if nested >= 10 as ::core::ffi::c_int {
+    let mut expr_copy: *mut ::core::ffi::c_char = xstrdup(expr_line.get());
+    if nested.get() >= 10 as ::core::ffi::c_int {
         return expr_copy;
     }
-    nested += 1;
+    (*nested.ptr()) += 1;
     let mut rv: *mut ::core::ffi::c_char = eval_to_string(expr_copy, true_0 != 0, false_0 != 0);
-    nested -= 1;
+    (*nested.ptr()) -= 1;
     xfree(expr_copy as *mut ::core::ffi::c_void);
     return rv;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_expr_line_src() -> *mut ::core::ffi::c_char {
-    if expr_line.is_null() {
+    if (*expr_line.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return xstrdup(expr_line);
+    return xstrdup(expr_line.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn valid_yank_reg(
@@ -3693,7 +3697,7 @@ pub unsafe extern "C" fn op_reg_iter(
         iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     *name = get_register_name(iter_off) as ::core::ffi::c_char;
     *reg = *iter_reg;
-    *is_unnamed = iter_reg == y_previous as *const yankreg_T;
+    *is_unnamed = iter_reg == y_previous.get() as *const yankreg_T;
     loop {
         iter_reg = iter_reg.offset(1);
         if iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize))
@@ -3714,20 +3718,14 @@ pub unsafe extern "C" fn op_global_reg_iter(
     reg: *mut yankreg_T,
     mut is_unnamed: *mut bool,
 ) -> *const ::core::ffi::c_void {
-    return op_reg_iter(
-        iter,
-        &raw mut y_regs as *mut yankreg_T,
-        name,
-        reg,
-        is_unnamed,
-    );
+    return op_reg_iter(iter, y_regs.ptr() as *mut yankreg_T, name, reg, is_unnamed);
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_reg_amount() -> size_t {
     let mut ret: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < NUM_SAVED_REGISTERS as ::core::ffi::c_int as size_t {
-        if !reg_empty((&raw mut y_regs as *mut yankreg_T).offset(i as isize)) {
+        if !reg_empty((y_regs.ptr() as *mut yankreg_T).offset(i as isize)) {
             ret = ret.wrapping_add(1);
         }
         i = i.wrapping_add(1);
@@ -3744,10 +3742,10 @@ pub unsafe extern "C" fn op_reg_set(
     if i == -1 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    free_register((&raw mut y_regs as *mut yankreg_T).offset(i as isize));
-    y_regs[i as usize] = reg;
+    free_register((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
+    (*y_regs.ptr())[i as usize] = reg;
     if is_unnamed {
-        y_previous = (&raw mut y_regs as *mut yankreg_T).offset(i as isize);
+        y_previous.set((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
     }
     return true_0 != 0;
 }
@@ -3757,7 +3755,7 @@ pub unsafe extern "C" fn op_reg_get(name: ::core::ffi::c_char) -> *const yankreg
     if i == -1 as ::core::ffi::c_int {
         return ::core::ptr::null::<yankreg_T>();
     }
-    return (&raw mut y_regs as *mut yankreg_T).offset(i as isize);
+    return (y_regs.ptr() as *mut yankreg_T).offset(i as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_reg_set_previous(name: ::core::ffi::c_char) -> bool {
@@ -3765,7 +3763,7 @@ pub unsafe extern "C" fn op_reg_set_previous(name: ::core::ffi::c_char) -> bool 
     if i == -1 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    y_previous = (&raw mut y_regs as *mut yankreg_T).offset(i as isize);
+    y_previous.set((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
     return true_0 != 0;
 }
 #[no_mangle]
@@ -3814,31 +3812,31 @@ pub unsafe extern "C" fn get_yank_register(
     } else if mode == YREG_PUT as ::core::ffi::c_int
         && (regname == '*' as ::core::ffi::c_int || regname == '+' as ::core::ffi::c_int)
     {
-        static mut empty_reg: yankreg_T = yankreg_T {
+        static empty_reg: GlobalCell<yankreg_T> = GlobalCell::new(yankreg_T {
             y_array: ::core::ptr::null_mut::<String_0>(),
             y_size: 0,
             y_type: kMTCharWise,
             y_width: 0,
             timestamp: 0,
             additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-        };
-        return &raw mut empty_reg;
+        });
+        return empty_reg.ptr();
     } else if mode != YREG_YANK as ::core::ffi::c_int
         && (regname == 0 as ::core::ffi::c_int
             || regname == '"' as ::core::ffi::c_int
             || regname == '*' as ::core::ffi::c_int
             || regname == '+' as ::core::ffi::c_int)
-        && !y_previous.is_null()
+        && !(*y_previous.ptr()).is_null()
     {
-        return y_previous;
+        return y_previous.get();
     }
     let mut i: ::core::ffi::c_int = op_reg_index(regname);
     if i == -1 as ::core::ffi::c_int {
         i = 0 as ::core::ffi::c_int;
     }
-    reg = (&raw mut y_regs as *mut yankreg_T).offset(i as isize);
+    reg = (y_regs.ptr() as *mut yankreg_T).offset(i as isize);
     if mode == YREG_YANK as ::core::ffi::c_int {
-        y_previous = reg;
+        y_previous.set(reg);
     }
     return reg;
 }
@@ -3932,7 +3930,7 @@ unsafe extern "C" fn stuff_yank(
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    static mut regname: ::core::ffi::c_int = 0;
+    static regname: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     let mut retval: ::core::ffi::c_int = 0;
     if reg_recording == 0 as ::core::ffi::c_int {
         if c < 0 as ::core::ffi::c_int
@@ -3947,7 +3945,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
         } else {
             reg_recording = c;
             showmode();
-            regname = c;
+            regname.set(c);
             retval = OK;
             apply_autocmds(
                 EVENT_RECORDINGENTER,
@@ -3985,7 +3983,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
             );
         }
         let mut buf: [::core::ffi::c_char; 67] = [0; 67];
-        buf[0 as ::core::ffi::c_int as usize] = regname as ::core::ffi::c_char;
+        buf[0 as ::core::ffi::c_int as usize] = regname.get() as ::core::ffi::c_char;
         buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         tv_dict_add_str(
             dict,
@@ -4015,9 +4013,9 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
         if p.is_null() {
             retval = FAIL;
         } else {
-            let mut old_y_previous: *mut yankreg_T = y_previous;
-            retval = stuff_yank(regname, p);
-            y_previous = old_y_previous;
+            let mut old_y_previous: *mut yankreg_T = y_previous.get();
+            retval = stuff_yank(regname.get(), p);
+            y_previous.set(old_y_previous);
         }
     }
     return retval;
@@ -4193,13 +4191,13 @@ pub unsafe extern "C" fn do_execreg(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = OK;
     if regname == '@' as ::core::ffi::c_int {
-        if execreg_lastc == NUL {
+        if execreg_lastc.get() == NUL {
             emsg(gettext(
                 b"E748: No previously used register\0".as_ptr() as *const ::core::ffi::c_char
             ));
             return FAIL;
         }
-        regname = execreg_lastc;
+        regname = execreg_lastc.get();
     }
     if regname == '%' as ::core::ffi::c_int
         || regname == '#' as ::core::ffi::c_int
@@ -4208,7 +4206,7 @@ pub unsafe extern "C" fn do_execreg(
         emsg_invreg(regname);
         return FAIL;
     }
-    execreg_lastc = regname;
+    execreg_lastc.set(regname);
     if regname == '_' as ::core::ffi::c_int {
         return OK;
     }
@@ -4570,16 +4568,16 @@ pub unsafe extern "C" fn cmdline_paste_reg(
 }
 #[no_mangle]
 pub unsafe extern "C" fn shift_delete_registers(mut y_append: bool) {
-    free_register((&raw mut y_regs as *mut yankreg_T).offset(9 as ::core::ffi::c_int as isize));
+    free_register((y_regs.ptr() as *mut yankreg_T).offset(9 as ::core::ffi::c_int as isize));
     let mut n: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
     while n > 1 as ::core::ffi::c_int {
-        y_regs[n as usize] = y_regs[(n - 1 as ::core::ffi::c_int) as usize];
+        (*y_regs.ptr())[n as usize] = (*y_regs.ptr())[(n - 1 as ::core::ffi::c_int) as usize];
         n -= 1;
     }
     if !y_append {
-        y_previous = (&raw mut y_regs as *mut yankreg_T).offset(1 as ::core::ffi::c_int as isize);
+        y_previous.set((y_regs.ptr() as *mut yankreg_T).offset(1 as ::core::ffi::c_int as isize));
     }
-    y_regs[1 as ::core::ffi::c_int as usize].y_array = ::core::ptr::null_mut::<String_0>();
+    (*y_regs.ptr())[1 as ::core::ffi::c_int as usize].y_array = ::core::ptr::null_mut::<String_0>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_register(mut reg: *mut yankreg_T) {
@@ -4947,11 +4945,11 @@ pub unsafe extern "C" fn format_reg_type(
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg: *mut yankreg_T) {
-    static mut recursive: bool = false_0 != 0;
-    if recursive as ::core::ffi::c_int != 0 || !has_event(EVENT_TEXTYANKPOST) {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if recursive.get() as ::core::ffi::c_int != 0 || !has_event(EVENT_TEXTYANKPOST) {
         return;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut save_v_event: save_v_event_T = save_v_event_T {
         sve_did_save: false,
         sve_hashtab: hashtab_T {
@@ -5051,7 +5049,7 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
     );
     textlock -= 1;
     restore_v_event(dict, &raw mut save_v_event);
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_yank(mut oap: *mut oparg_T, mut message: bool) -> bool {
@@ -6232,18 +6230,17 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
                 }
             }
             if i == -1 as ::core::ffi::c_int {
-                if !y_previous.is_null() {
-                    yb = y_previous;
+                if !(*y_previous.ptr()).is_null() {
+                    yb = y_previous.get();
                 } else {
-                    yb = (&raw mut y_regs as *mut yankreg_T)
-                        .offset(0 as ::core::ffi::c_int as isize);
+                    yb = (y_regs.ptr() as *mut yankreg_T).offset(0 as ::core::ffi::c_int as isize);
                 }
             } else {
-                yb = (&raw mut y_regs as *mut yankreg_T).offset(i as isize);
+                yb = (y_regs.ptr() as *mut yankreg_T).offset(i as isize);
             }
             get_clipboard(name, &raw mut yb, true_0 != 0);
             if !(name == mb_tolower(redir_reg)
-                || redir_reg == '"' as ::core::ffi::c_int && yb == y_previous)
+                || redir_reg == '"' as ::core::ffi::c_int && yb == y_previous.get())
             {
                 if !(*yb).y_array.is_null() {
                     let mut do_show: bool = false_0 != 0;
@@ -6344,13 +6341,13 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
         msg_puts(b"\n  c  \"/   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg(last_search_pat(), false_0 != 0);
     }
-    if !expr_line.is_null()
+    if !(*expr_line.ptr()).is_null()
         && (arg.is_null() || !vim_strchr(arg, '=' as ::core::ffi::c_int).is_null())
         && !got_int
-        && !message_filtered(expr_line)
+        && !message_filtered(expr_line.get())
     {
         msg_puts(b"\n  c  \"=   \0".as_ptr() as *const ::core::ffi::c_char);
-        dis_msg(expr_line, false_0 != 0);
+        dis_msg(expr_line.get(), false_0 != 0);
     }
     msg_ext_skip_flush = false_0 != 0;
 }
@@ -6523,7 +6520,7 @@ unsafe extern "C" fn init_write_reg(
         emsg_invreg(name);
         return ::core::ptr::null_mut::<yankreg_T>();
     }
-    *old_y_previous = y_previous;
+    *old_y_previous = y_previous.get();
     let mut reg: *mut yankreg_T = get_yank_register(name, YREG_YANK as ::core::ffi::c_int);
     if !is_append_register(name) && !must_append {
         free_register(reg);
@@ -6724,7 +6721,7 @@ unsafe extern "C" fn finish_write_reg(
 ) {
     set_clipboard(name, reg);
     if name != '"' as ::core::ffi::c_int {
-        y_previous = old_y_previous;
+        y_previous.set(old_y_previous);
     }
 }
 #[no_mangle]
@@ -6749,12 +6746,10 @@ pub unsafe extern "C" fn write_reg_contents_lst(
         if (*strings.offset(0 as ::core::ffi::c_int as isize)).is_null() {
             s = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if !(*strings.offset(1 as ::core::ffi::c_int as isize)).is_null() {
-            emsg(
-                gettext(
-                    &raw const e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                (e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines.ptr()
+                    as *const _) as *const ::core::ffi::c_char,
+            ));
             return;
         }
         write_reg_contents_ex(name, s, -1 as ssize_t, must_append, yank_type, block_len);
@@ -6824,21 +6819,21 @@ pub unsafe extern "C" fn write_reg_contents_ex(
     if name == '=' as ::core::ffi::c_int {
         let mut offset: size_t = 0 as size_t;
         let mut totlen: size_t = len as size_t;
-        if must_append as ::core::ffi::c_int != 0 && !expr_line.is_null() {
-            let mut exprlen: size_t = strlen(expr_line);
+        if must_append as ::core::ffi::c_int != 0 && !(*expr_line.ptr()).is_null() {
+            let mut exprlen: size_t = strlen(expr_line.get());
             totlen = totlen.wrapping_add(exprlen);
             offset = exprlen;
         }
-        expr_line = xrealloc(
-            expr_line as *mut ::core::ffi::c_void,
+        expr_line.set(xrealloc(
+            expr_line.get() as *mut ::core::ffi::c_void,
             totlen.wrapping_add(1 as size_t),
-        ) as *mut ::core::ffi::c_char;
+        ) as *mut ::core::ffi::c_char);
         memcpy(
-            expr_line.offset(offset as isize) as *mut ::core::ffi::c_void,
+            (*expr_line.ptr()).offset(offset as isize) as *mut ::core::ffi::c_void,
             str as *const ::core::ffi::c_void,
             len as size_t,
         );
-        *expr_line.offset(totlen as isize) = NUL as ::core::ffi::c_char;
+        *(*expr_line.ptr()).offset(totlen as isize) = NUL as ::core::ffi::c_char;
         return;
     }
     if name == '_' as ::core::ffi::c_int {

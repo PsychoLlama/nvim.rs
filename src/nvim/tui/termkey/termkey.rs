@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
     fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -352,7 +353,7 @@ pub struct modnames {
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
-pub static mut termkey_driver_ti: TermKeyDriver = TermKeyDriver {
+pub static termkey_driver_ti: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
     name: b"terminfo\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
         new_driver_ti
@@ -377,9 +378,9 @@ pub static mut termkey_driver_ti: TermKeyDriver = TermKeyDriver {
                 *mut size_t,
             ) -> TermKeyResult,
     ),
-};
+});
 #[no_mangle]
-pub static mut termkey_driver_csi: TermKeyDriver = TermKeyDriver {
+pub static termkey_driver_csi: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
     name: b"CSI\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
         new_driver_csi
@@ -398,15 +399,15 @@ pub static mut termkey_driver_csi: TermKeyDriver = TermKeyDriver {
                 *mut size_t,
             ) -> TermKeyResult,
     ),
-};
-static mut drivers: [*mut TermKeyDriver; 3] = unsafe {
+});
+static drivers: GlobalCell<[*mut TermKeyDriver; 3]> = GlobalCell::new(unsafe {
     [
-        &raw const termkey_driver_ti as *mut TermKeyDriver,
-        &raw const termkey_driver_csi as *mut TermKeyDriver,
+        (termkey_driver_ti.as_raw() as *const _) as *mut TermKeyDriver,
+        (termkey_driver_csi.as_raw() as *const _) as *mut TermKeyDriver,
         ::core::ptr::null_mut::<TermKeyDriver>(),
     ]
-};
-static mut keynames: [C2Rust_Unnamed_6; 61] = [
+});
+static keynames: GlobalCell<[C2Rust_Unnamed_6; 61]> = GlobalCell::new([
     C2Rust_Unnamed_6 {
         sym: TERMKEY_SYM_NONE,
         name: b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
@@ -651,13 +652,13 @@ static mut keynames: [C2Rust_Unnamed_6; 61] = [
         sym: TERMKEY_SYM_NONE,
         name: ::core::ptr::null::<::core::ffi::c_char>(),
     },
-];
-static mut evnames: [*const ::core::ffi::c_char; 4] = [
+]);
+static evnames: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"Unknown\0".as_ptr() as *const ::core::ffi::c_char,
     b"Press\0".as_ptr() as *const ::core::ffi::c_char,
     b"Drag\0".as_ptr() as *const ::core::ffi::c_char,
     b"Release\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn termkey_interpret_string(
     mut tk: *mut TermKey,
@@ -667,7 +668,7 @@ pub unsafe extern "C" fn termkey_interpret_string(
     let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
     p = (*tk).drivers;
     while !p.is_null() {
-        if (*p).driver == &raw mut termkey_driver_csi {
+        if (*p).driver == termkey_driver_csi.ptr() {
             break;
         }
         p = (*p).next;
@@ -848,9 +849,12 @@ unsafe extern "C" fn termkey_init(
     }
     i = 0 as ::core::ffi::c_int;
     '_abort_free_keynames: {
-        while !keynames[i as usize].name.is_null() {
-            if termkey_register_keyname(tk, keynames[i as usize].sym, keynames[i as usize].name)
-                as ::core::ffi::c_int
+        while !(*keynames.ptr())[i as usize].name.is_null() {
+            if termkey_register_keyname(
+                tk,
+                (*keynames.ptr())[i as usize].sym,
+                (*keynames.ptr())[i as usize].name,
+            ) as ::core::ffi::c_int
                 == -1 as ::core::ffi::c_int
             {
                 break '_abort_free_keynames;
@@ -878,10 +882,10 @@ unsafe extern "C" fn termkey_init(
         tail = ::core::ptr::null_mut::<TermKeyDriverNode>();
         i = 0 as ::core::ffi::c_int;
         '_abort_free_drivers: {
-            while !drivers[i as usize].is_null() {
+            while !(*drivers.ptr())[i as usize].is_null() {
                 let mut info: *mut ::core::ffi::c_void =
                     Some(
-                        (**(&raw mut drivers as *mut *mut TermKeyDriver).offset(i as isize))
+                        (**(drivers.ptr() as *mut *mut TermKeyDriver).offset(i as isize))
                             .new_driver
                             .expect("non-null function pointer"),
                     )
@@ -893,7 +897,7 @@ unsafe extern "C" fn termkey_init(
                     if thisdrv.is_null() {
                         break '_abort_free_drivers;
                     }
-                    (*thisdrv).driver = drivers[i as usize];
+                    (*thisdrv).driver = (*drivers.ptr())[i as usize];
                     (*thisdrv).info = info;
                     (*thisdrv).next = ::core::ptr::null_mut::<TermKeyDriverNode>();
                     if tail.is_null() {
@@ -1643,7 +1647,7 @@ unsafe extern "C" fn register_c0_full(
     (*tk).c0[ctrl as usize].modifier_mask = modifier_mask;
     return sym;
 }
-static mut modnames: [modnames; 8] = [
+static modnames: GlobalCell<[modnames; 8]> = GlobalCell::new([
     modnames {
         shift: b"S\0".as_ptr() as *const ::core::ffi::c_char,
         alt: b"A\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1684,7 +1688,7 @@ static mut modnames: [modnames; 8] = [
         alt: b"meta\0".as_ptr() as *const ::core::ffi::c_char,
         ctrl: b"ctrl\0".as_ptr() as *const ::core::ffi::c_char,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn termkey_strfkey(
     mut tk: *mut TermKey,
@@ -1695,7 +1699,7 @@ pub unsafe extern "C" fn termkey_strfkey(
 ) -> size_t {
     let mut pos: size_t = 0 as size_t;
     let mut l: size_t = 0 as size_t;
-    let mut mods: *mut modnames = (&raw mut modnames as *mut modnames).offset(
+    let mut mods: *mut modnames = (modnames.ptr() as *mut modnames).offset(
         ((format as ::core::ffi::c_uint
             & TERMKEY_FORMAT_LONGMOD as ::core::ffi::c_int as ::core::ffi::c_uint
             != 0) as ::core::ffi::c_int
@@ -1880,7 +1884,7 @@ pub unsafe extern "C" fn termkey_strfkey(
                 buffer.offset(pos as isize),
                 len.wrapping_sub(pos),
                 b"Mouse%s(%d)\0".as_ptr() as *const ::core::ffi::c_char,
-                evnames[ev as usize],
+                (*evnames.ptr())[ev as usize],
                 button,
             ) as size_t;
             if format as ::core::ffi::c_uint

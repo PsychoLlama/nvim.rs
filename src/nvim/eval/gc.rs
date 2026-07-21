@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 pub type size_t = usize;
 pub type int32_t = i32;
 pub type int64_t = i64;
@@ -239,6 +240,8 @@ pub struct listwatch_S {
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
-pub static mut gc_first_dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
+pub static gc_first_dict: GlobalCell<*mut dict_T> =
+    GlobalCell::new(::core::ptr::null_mut::<dict_T>());
 #[no_mangle]
-pub static mut gc_first_list: *mut list_T = ::core::ptr::null_mut::<list_T>();
+pub static gc_first_list: GlobalCell<*mut list_T> =
+    GlobalCell::new(::core::ptr::null_mut::<list_T>());

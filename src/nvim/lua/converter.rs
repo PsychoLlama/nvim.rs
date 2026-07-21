@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     fn __assert_fail(
@@ -102,7 +103,7 @@ extern "C" {
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
     static mut nlua_global_refs: *mut nlua_ref_state_t;
-    static mut eval_msgpack_type_lists: [*const list_T; 8];
+    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
     fn encode_vim_list_to_buf(
         list: *const list_T,
         ret_len: *mut size_t,
@@ -1756,7 +1757,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
     };
     return ret;
 }
-static mut typval_conv_special: bool = false_0 != 0;
+static typval_conv_special: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = true_0;
 #[no_mangle]
 pub unsafe extern "C" fn nlua_push_typval(
@@ -1764,7 +1765,7 @@ pub unsafe extern "C" fn nlua_push_typval(
     tv: *mut typval_T,
     mut flags: ::core::ffi::c_int,
 ) -> bool {
-    typval_conv_special = flags & kNluaPushSpecial as ::core::ffi::c_int != 0;
+    typval_conv_special.set(flags & kNluaPushSpecial as ::core::ffi::c_int != 0);
     let initial_size: ::core::ffi::c_int = lua_gettop(lstate);
     if lua_checkstack(lstate, initial_size + 2 as ::core::ffi::c_int) == 0 {
         semsg(
@@ -3235,7 +3236,8 @@ pub unsafe extern "C" fn nlua_push_keydict(
     }
 }
 #[no_mangle]
-pub static mut _typval_encode_lua_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_lua_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_lua_check_self_reference(
     lstate: *mut lua_State,
@@ -3322,7 +3324,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                     && (*fp).uf_flags & FC_LUAREF != 0
                 {
                     nlua_pushref(lstate, (*fp).uf_luaref);
-                } else if typval_conv_special {
+                } else if typval_conv_special.get() {
                     lua_pushnil(lstate);
                 } else {
                     nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
@@ -3357,7 +3359,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                     && (*fp_0).uf_flags & FC_LUAREF != 0
                 {
                     nlua_pushref(lstate, (*fp_0).uf_luaref);
-                } else if typval_conv_special {
+                } else if typval_conv_special.get() {
                     lua_pushnil(lstate);
                 } else {
                     nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
@@ -3511,7 +3513,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
             },
             8 => match (*tv).vval.v_special as ::core::ffi::c_uint {
                 0 => {
-                    if typval_conv_special {
+                    if typval_conv_special.get() {
                         lua_pushnil(lstate);
                     } else {
                         nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
@@ -3523,7 +3525,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                 if (*tv).vval.v_dict.is_null()
                     || (*(*tv).vval.v_dict).dv_hashtab.ht_used == 0 as size_t
                 {
-                    if typval_conv_special {
+                    if typval_conv_special.get() {
                         nlua_create_typed_table(lstate, 0 as size_t, 0 as size_t, kObjectTypeDict);
                     } else {
                         lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
@@ -3572,7 +3574,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -3590,7 +3592,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                             {
                                 match i as MessagePackType as ::core::ffi::c_uint {
                                     0 => {
-                                        if typval_conv_special {
+                                        if typval_conv_special.get() {
                                             lua_pushnil(lstate);
                                         } else {
                                             nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
@@ -3933,7 +3935,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                 || tv_list_len(val_list_0)
                                                     == 0 as ::core::ffi::c_int
                                             {
-                                                if typval_conv_special {
+                                                if typval_conv_special.get() {
                                                     nlua_create_typed_table(
                                                         lstate,
                                                         0 as size_t,
@@ -4218,7 +4220,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                 &raw mut len_0,
                                                 &raw mut buf_0,
                                             ) {
-                                                if typval_conv_special {
+                                                if typval_conv_special.get() {
                                                     lua_pushnil(lstate);
                                                 } else {
                                                     nlua_pushref(
@@ -4659,7 +4661,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                     continue;
                                 }
                                 if (*dict).dv_hashtab.ht_used == 0 as size_t {
-                                    if typval_conv_special {
+                                    if typval_conv_special.get() {
                                         nlua_create_typed_table(
                                             lstate,
                                             0 as size_t,

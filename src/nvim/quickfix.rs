@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -4164,7 +4165,7 @@ unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const INVALID_QFIDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const INVALID_QFBUFNR: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut ql_info_actual: qf_info_T = qf_info_T {
+static ql_info_actual: GlobalCell<qf_info_T> = GlobalCell::new(qf_info_T {
     qf_refcount: 0,
     qf_listcount: 0,
     qf_curlist: 0,
@@ -4172,52 +4173,57 @@ static mut ql_info_actual: qf_info_T = qf_info_T {
     qf_lists: ::core::ptr::null_mut::<qf_list_T>(),
     qfl_type: QFLT_QUICKFIX,
     qf_bufnr: 0,
-};
-static mut ql_info: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
-static mut last_qf_id: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
+});
+static ql_info: GlobalCell<*mut qf_info_T> = GlobalCell::new(::core::ptr::null_mut::<qf_info_T>());
+static last_qf_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 pub const FMT_PATTERNS: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
-static mut e_no_more_items: *const ::core::ffi::c_char =
-    b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_current_quickfix_list_was_changed: *const ::core::ffi::c_char =
-    b"E925: Current quickfix list was changed\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_current_location_list_was_changed: *const ::core::ffi::c_char =
-    b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char;
-static mut qf_last_bufname: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut qf_last_bufref: bufref_T = bufref_T {
+static e_no_more_items: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char);
+static e_current_quickfix_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(
+        b"E925: Current quickfix list was changed\0".as_ptr() as *const ::core::ffi::c_char
+    );
+static e_current_location_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(
+        b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char
+    );
+static qf_last_bufname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static qf_last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T {
     br_buf: ::core::ptr::null_mut::<buf_T>(),
     br_fnum: 0 as ::core::ffi::c_int,
     br_buf_free_count: 0 as ::core::ffi::c_int,
-};
-static mut qfga: garray_T = garray_T {
+});
+static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,
     ga_growsize: 0,
     ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-};
+});
 unsafe extern "C" fn qfga_get() -> *mut garray_T {
-    static mut initialized: bool = false_0 != 0;
-    if !initialized {
-        initialized = true_0 != 0;
+    static initialized: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if !initialized.get() {
+        initialized.set(true_0 != 0);
         ga_init(
-            &raw mut qfga,
+            qfga.ptr(),
             1 as ::core::ffi::c_int,
             256 as ::core::ffi::c_int,
         );
     }
-    qfga.ga_len = 0 as ::core::ffi::c_int;
-    return &raw mut qfga;
+    (*qfga.ptr()).ga_len = 0 as ::core::ffi::c_int;
+    return qfga.ptr();
 }
 unsafe extern "C" fn qfga_clear() {
-    if qfga.ga_maxlen > 1000 as ::core::ffi::c_int {
-        ga_clear(&raw mut qfga);
+    if (*qfga.ptr()).ga_maxlen > 1000 as ::core::ffi::c_int {
+        ga_clear(qfga.ptr());
     } else {
-        qfga.ga_len = 0 as ::core::ffi::c_int;
+        (*qfga.ptr()).ga_len = 0 as ::core::ffi::c_int;
     };
 }
-static mut quickfix_busy: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut qf_delq_head: *mut qf_delq_T = ::core::ptr::null_mut::<qf_delq_T>();
+static quickfix_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static qf_delq_head: GlobalCell<*mut qf_delq_T> =
+    GlobalCell::new(::core::ptr::null_mut::<qf_delq_T>());
 unsafe extern "C" fn qf_init_process_nextline(
     mut qfl: *mut qf_list_T,
     mut fmt_first: *mut efm_T,
@@ -4267,7 +4273,7 @@ pub unsafe extern "C" fn qf_init(
     mut enc: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut qi: *mut qf_info_T = if wp.is_null() {
-        ql_info
+        ql_info.get()
     } else {
         ll_get_or_alloc_list(wp)
     };
@@ -4298,8 +4304,8 @@ pub unsafe extern "C" fn qf_init(
         enc,
     );
 }
-static mut LINE_MAXLEN: size_t = 4096 as size_t;
-static mut fmt_pat: [fmtpattern; 14] = [
+static LINE_MAXLEN: GlobalCell<size_t> = GlobalCell::new(4096 as size_t);
+static fmt_pat: GlobalCell<[fmtpattern; 14]> = GlobalCell::new([
     fmtpattern {
         convchar: 'f' as ::core::ffi::c_char,
         pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4356,7 +4362,7 @@ static mut fmt_pat: [fmtpattern; 14] = [
         convchar: 'o' as ::core::ffi::c_char,
         pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
-];
+]);
 pub const FMT_PATTERN_M: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const FMT_PATTERN_R: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 unsafe extern "C" fn efmpat_to_regpat(
@@ -4426,7 +4432,7 @@ unsafe extern "C" fn efmpat_to_regpat(
             regpat = regpat.offset(4 as ::core::ffi::c_int as isize);
         }
     } else {
-        let mut srcptr: *mut ::core::ffi::c_char = fmt_pat[idx as usize].pattern;
+        let mut srcptr: *mut ::core::ffi::c_char = (*fmt_pat.ptr())[idx as usize].pattern;
         loop {
             let c2rust_fresh18 = srcptr;
             srcptr = srcptr.offset(1);
@@ -4560,7 +4566,7 @@ unsafe extern "C" fn efm_to_regpat(
             let mut idx: ::core::ffi::c_int = 0;
             idx = 0 as ::core::ffi::c_int;
             while idx < FMT_PATTERNS {
-                if fmt_pat[idx as usize].convchar as ::core::ffi::c_int
+                if (*fmt_pat.ptr())[idx as usize].convchar as ::core::ffi::c_int
                     == *efmp as ::core::ffi::c_int
                 {
                     break;
@@ -4636,13 +4642,13 @@ unsafe extern "C" fn efm_to_regpat(
     *ptr = NUL as ::core::ffi::c_char;
     return OK;
 }
-static mut fmt_start: *mut efm_T = ::core::ptr::null_mut::<efm_T>();
-static mut qftf_cb: Callback = Callback {
+static fmt_start: GlobalCell<*mut efm_T> = GlobalCell::new(::core::ptr::null_mut::<efm_T>());
+static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_6 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
-};
+});
 unsafe extern "C" fn free_efm_list(mut efm_first: *mut *mut efm_T) {
     let mut efm_ptr: *mut efm_T = *efm_first;
     while !efm_ptr.is_null() {
@@ -4651,7 +4657,7 @@ unsafe extern "C" fn free_efm_list(mut efm_first: *mut *mut efm_T) {
         xfree(efm_ptr as *mut ::core::ffi::c_void);
         efm_ptr = *efm_first;
     }
-    fmt_start = ::core::ptr::null_mut::<efm_T>();
+    fmt_start.set(::core::ptr::null_mut::<efm_T>());
 }
 unsafe extern "C" fn efm_regpat_bufsz(mut efm: *mut ::core::ffi::c_char) -> size_t {
     let mut sz: size_t = ((FMT_PATTERNS * 3 as ::core::ffi::c_int) as size_t)
@@ -4660,7 +4666,7 @@ unsafe extern "C" fn efm_regpat_bufsz(mut efm: *mut ::core::ffi::c_char) -> size
     while i >= 0 as ::core::ffi::c_int {
         let c2rust_fresh1 = i;
         i = i - 1;
-        sz = sz.wrapping_add(strlen(fmt_pat[c2rust_fresh1 as usize].pattern));
+        sz = sz.wrapping_add(strlen((*fmt_pat.ptr())[c2rust_fresh1 as usize].pattern));
     }
     sz = sz.wrapping_add(2 as size_t);
     return sz;
@@ -4725,8 +4731,8 @@ unsafe extern "C" fn qf_grow_linebuf(
     mut state: *mut qfstate_T,
     mut newsz: size_t,
 ) -> *mut ::core::ffi::c_char {
-    (*state).linelen = if newsz > LINE_MAXLEN {
-        LINE_MAXLEN.wrapping_sub(1 as size_t)
+    (*state).linelen = if newsz > LINE_MAXLEN.get() {
+        (*LINE_MAXLEN.ptr()).wrapping_sub(1 as size_t)
     } else {
         newsz
     };
@@ -4876,16 +4882,17 @@ unsafe extern "C" fn qf_get_next_file_line(mut state: *mut qfstate_T) -> ::core:
                         {
                             break;
                         }
-                        if (*state).growbufsiz == LINE_MAXLEN {
+                        if (*state).growbufsiz == LINE_MAXLEN.get() {
                             discard = true_0 != 0;
                             break;
                         } else {
-                            (*state).growbufsiz =
-                                if (2 as size_t).wrapping_mul((*state).growbufsiz) < LINE_MAXLEN {
-                                    (2 as size_t).wrapping_mul((*state).growbufsiz)
-                                } else {
-                                    LINE_MAXLEN
-                                };
+                            (*state).growbufsiz = if (2 as size_t).wrapping_mul((*state).growbufsiz)
+                                < LINE_MAXLEN.get()
+                            {
+                                (2 as size_t).wrapping_mul((*state).growbufsiz)
+                            } else {
+                                LINE_MAXLEN.get()
+                            };
                             (*state).growbuf = xrealloc(
                                 (*state).growbuf as *mut ::core::ffi::c_void,
                                 (*state).growbufsiz,
@@ -4939,10 +4946,10 @@ unsafe extern "C" fn qf_get_next_file_line(mut state: *mut qfstate_T) -> ::core:
                         xfree((*state).growbuf as *mut ::core::ffi::c_void);
                         (*state).linebuf = line;
                         (*state).growbuf = line;
-                        (*state).growbufsiz = if (*state).linelen < LINE_MAXLEN {
+                        (*state).growbufsiz = if (*state).linelen < LINE_MAXLEN.get() {
                             (*state).linelen
                         } else {
-                            LINE_MAXLEN
+                            LINE_MAXLEN.get()
                         };
                     }
                 }
@@ -5016,11 +5023,11 @@ unsafe extern "C" fn qf_parse_line(
     let mut status: ::core::ffi::c_int = 0;
     's_240: {
         loop {
-            if fmt_start.is_null() {
+            if (*fmt_start.ptr()).is_null() {
                 fmt_ptr = fmt_first;
             } else {
-                fmt_ptr = fmt_start;
-                fmt_start = ::core::ptr::null_mut::<efm_T>();
+                fmt_ptr = fmt_start.get();
+                fmt_start.set(::core::ptr::null_mut::<efm_T>());
             }
             (*fields).valid = true_0 != 0;
             while !fmt_ptr.is_null() {
@@ -5064,7 +5071,7 @@ unsafe extern "C" fn qf_parse_line(
                 break 's_240;
             } else {
                 if (*fmt_ptr).conthere != 0 {
-                    fmt_start = fmt_ptr;
+                    fmt_start.set(fmt_ptr);
                 }
                 if !vim_strchr(b"AEWIN\0".as_ptr() as *const ::core::ffi::c_char, idx).is_null() {
                     (*qfl).qf_multiline = true_0 != 0;
@@ -5237,11 +5244,12 @@ unsafe extern "C" fn qf_init_ext(
         valid: false,
     };
     let mut old_last: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
-    static mut fmt_first: *mut efm_T = ::core::ptr::null_mut::<efm_T>();
-    static mut last_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    static fmt_first: GlobalCell<*mut efm_T> = GlobalCell::new(::core::ptr::null_mut::<efm_T>());
+    static last_efm: GlobalCell<*mut ::core::ffi::c_char> =
+        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
     let mut retval: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut qf_last_bufname as *mut *mut ::core::ffi::c_void;
+        qf_last_bufname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -5270,25 +5278,26 @@ unsafe extern "C" fn qf_init_ext(
             } else {
                 errorformat
             };
-            if last_efm.is_null() || strcmp(last_efm, efm) != 0 as ::core::ffi::c_int {
+            if (*last_efm.ptr()).is_null() || strcmp(last_efm.get(), efm) != 0 as ::core::ffi::c_int
+            {
                 let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                    &raw mut last_efm as *mut *mut ::core::ffi::c_void;
+                    last_efm.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL_0;
                 *ptr__0;
-                free_efm_list(&raw mut fmt_first);
-                fmt_first = parse_efm_option(efm);
-                if !fmt_first.is_null() {
-                    last_efm = xstrdup(efm);
+                free_efm_list(fmt_first.ptr());
+                fmt_first.set(parse_efm_option(efm));
+                if !(*fmt_first.ptr()).is_null() {
+                    last_efm.set(xstrdup(efm));
                 }
             }
             '_error2: {
-                if !fmt_first.is_null() {
+                if !(*fmt_first.ptr()).is_null() {
                     got_int = false_0 != 0;
                     while !got_int {
                         let mut status: ::core::ffi::c_int = qf_init_process_nextline(
                             qfl,
-                            fmt_first,
+                            fmt_first.get(),
                             &raw mut state,
                             &raw mut fields,
                         );
@@ -5352,14 +5361,14 @@ unsafe extern "C" fn qf_store_title(
     xstrlcpy(p, title, len.wrapping_add(1 as size_t));
 }
 unsafe extern "C" fn qf_cmdtitle(mut cmd: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    static mut qftitle_str: [::core::ffi::c_char; 1025] = [0; 1025];
+    static qftitle_str: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
     snprintf(
-        &raw mut qftitle_str as *mut ::core::ffi::c_char,
+        qftitle_str.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         b":%s\0".as_ptr() as *const ::core::ffi::c_char,
         cmd,
     );
-    return &raw mut qftitle_str as *mut ::core::ffi::c_char;
+    return qftitle_str.ptr() as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn qf_get_curlist(mut qi: *mut qf_info_T) -> *mut qf_list_T {
     return qf_get_list(qi, (*qi).qf_curlist);
@@ -5411,8 +5420,8 @@ unsafe extern "C" fn qf_new_list(mut qi: *mut qf_info_T, mut qf_title: *const ::
     );
     qf_store_title(qfl, qf_title);
     (*qfl).qfl_type = (*qi).qfl_type;
-    last_qf_id = last_qf_id.wrapping_add(1);
-    (*qfl).qf_id = last_qf_id;
+    last_qf_id.set((*last_qf_id.ptr()).wrapping_add(1));
+    (*qfl).qf_id = last_qf_id.get();
     (*qfl).qf_has_user_data = false_0 != 0;
 }
 unsafe extern "C" fn qf_parse_fmt_f(
@@ -5656,13 +5665,15 @@ unsafe extern "C" fn qf_parse_fmt_o(
     xstrlcat((*fields).module, (*rmp).startp[midx as usize], dsize);
     return QF_OK as ::core::ffi::c_int;
 }
-static mut qf_parse_fmt: [Option<
-    unsafe extern "C" fn(
-        *mut regmatch_T,
-        ::core::ffi::c_int,
-        *mut qffields_T,
-    ) -> ::core::ffi::c_int,
->; 14] = [
+static qf_parse_fmt: GlobalCell<
+    [Option<
+        unsafe extern "C" fn(
+            *mut regmatch_T,
+            ::core::ffi::c_int,
+            *mut qffields_T,
+        ) -> ::core::ffi::c_int,
+    >; 14],
+> = GlobalCell::new([
     None,
     Some(
         qf_parse_fmt_b
@@ -5761,7 +5772,7 @@ static mut qf_parse_fmt: [Option<
                 *mut qffields_T,
             ) -> ::core::ffi::c_int,
     ),
-];
+]);
 unsafe extern "C" fn qf_parse_match(
     mut linebuf: *mut ::core::ffi::c_char,
     mut linelen: size_t,
@@ -5806,7 +5817,7 @@ unsafe extern "C" fn qf_parse_match(
         } else if i == FMT_PATTERN_R && midx > 0 as ::core::ffi::c_int {
             status = qf_parse_fmt_r(regmatch, midx, tail);
         } else if midx > 0 as ::core::ffi::c_int {
-            status = qf_parse_fmt[i as usize].expect("non-null function pointer")(
+            status = (*qf_parse_fmt.ptr())[i as usize].expect("non-null function pointer")(
                 regmatch, midx, fields,
             );
         }
@@ -6011,13 +6022,13 @@ unsafe extern "C" fn qf_parse_multiline_pfx(
 unsafe extern "C" fn locstack_queue_delreq(mut qi: *mut qf_info_T) {
     let mut q: *mut qf_delq_T = xmalloc(::core::mem::size_of::<qf_delq_T>()) as *mut qf_delq_T;
     (*q).qi = qi;
-    (*q).next = qf_delq_head as *mut qf_delq_S;
-    qf_delq_head = q;
+    (*q).next = qf_delq_head.get() as *mut qf_delq_S;
+    qf_delq_head.set(q);
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_stack_get_bufnr() -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if !ql_info.is_null() {
+        if !(*ql_info.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6027,7 +6038,7 @@ pub unsafe extern "C" fn qf_stack_get_bufnr() -> ::core::ffi::c_int {
             );
         }
     };
-    return (*ql_info).qf_bufnr;
+    return (*ql_info.get()).qf_bufnr;
 }
 unsafe extern "C" fn wipe_qf_buffer(mut qi: *mut qf_info_T) {
     if (*qi).qf_bufnr == INVALID_QFBUFNR {
@@ -6071,7 +6082,7 @@ unsafe extern "C" fn ll_free_all(mut pqi: *mut *mut qf_info_T) {
         return;
     }
     *pqi = ::core::ptr::null_mut::<qf_info_T>();
-    if quickfix_busy > 0 as ::core::ffi::c_int {
+    if quickfix_busy.get() > 0 as ::core::ffi::c_int {
         locstack_queue_delreq(qi);
         return;
     }
@@ -6083,7 +6094,7 @@ unsafe extern "C" fn ll_free_all(mut pqi: *mut *mut qf_info_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_free_all(mut wp: *mut win_T) {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     if !wp.is_null() {
         ll_free_all(&raw mut (*wp).w_llist);
         ll_free_all(&raw mut (*wp).w_llist_ref);
@@ -6092,14 +6103,14 @@ pub unsafe extern "C" fn qf_free_all(mut wp: *mut win_T) {
     }
 }
 unsafe extern "C" fn incr_quickfix_busy() {
-    quickfix_busy += 1;
+    (*quickfix_busy.ptr()) += 1;
 }
 unsafe extern "C" fn decr_quickfix_busy() {
-    quickfix_busy -= 1;
-    if quickfix_busy == 0 as ::core::ffi::c_int {
-        while !qf_delq_head.is_null() {
-            let mut q: *mut qf_delq_T = qf_delq_head;
-            qf_delq_head = (*q).next as *mut qf_delq_T;
+    (*quickfix_busy.ptr()) -= 1;
+    if quickfix_busy.get() == 0 as ::core::ffi::c_int {
+        while !(*qf_delq_head.ptr()).is_null() {
+            let mut q: *mut qf_delq_T = qf_delq_head.get();
+            qf_delq_head.set((*q).next as *mut qf_delq_T);
             ll_free_all(&raw mut (*q).qi);
             xfree(q as *mut ::core::ffi::c_void);
         }
@@ -6225,7 +6236,7 @@ unsafe extern "C" fn qf_add_entry(
 #[no_mangle]
 pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if !ql_info.is_null() {
+        if !(*ql_info.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6235,7 +6246,7 @@ pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
             );
         }
     };
-    qf_resize_stack_base(ql_info, n);
+    qf_resize_stack_base(ql_info.get(), n);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ll_resize_stack(mut wp: *mut win_T, mut n: ::core::ffi::c_int) {
@@ -6277,7 +6288,7 @@ unsafe extern "C" fn qf_resize_stack_base(mut qi: *mut qf_info_T, mut n: ::core:
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_init_stack() {
-    ql_info = qf_alloc_stack(QFLT_QUICKFIX, p_chi as ::core::ffi::c_int);
+    ql_info.set(qf_alloc_stack(QFLT_QUICKFIX, p_chi as ::core::ffi::c_int));
 }
 unsafe extern "C" fn qf_sync_llw_to_win(mut llw: *mut win_T) {
     let mut wp: *mut win_T = qf_find_win_with_loclist((*llw).w_llist_ref);
@@ -6309,7 +6320,7 @@ unsafe extern "C" fn qf_alloc_stack(
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     if qfltype as ::core::ffi::c_uint == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        qi = &raw mut ql_info_actual;
+        qi = ql_info_actual.ptr();
     } else {
         qi = xcalloc(1 as size_t, ::core::mem::size_of::<qf_info_T>()) as *mut qf_info_T;
         (*qi).qf_refcount += 1;
@@ -6340,7 +6351,7 @@ unsafe extern "C" fn qf_cmd_get_stack(
     mut eap: *mut exarg_T,
     mut print_emsg: bool,
 ) -> *mut qf_info_T {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -6374,7 +6385,7 @@ unsafe extern "C" fn qf_cmd_get_or_alloc_stack(
     mut eap: *const exarg_T,
     mut pwinp: *mut *mut win_T,
 ) -> *mut qf_info_T {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     if is_loclist_cmd((*eap).cmdidx as ::core::ffi::c_int) {
         qi = ll_get_or_alloc_list(curwin);
         *pwinp = curwin;
@@ -6456,8 +6467,8 @@ unsafe extern "C" fn copy_loclist(
         }
     }
     (*to_qfl).qf_index = (*from_qfl).qf_index;
-    last_qf_id = last_qf_id.wrapping_add(1);
-    (*to_qfl).qf_id = last_qf_id;
+    last_qf_id.set((*last_qf_id.ptr()).wrapping_add(1));
+    (*to_qfl).qf_id = last_qf_id.get();
     (*to_qfl).qf_changedtick = 0 as ::core::ffi::c_int;
     if (*to_qfl).qf_nonevalid {
         (*to_qfl).qf_ptr = (*to_qfl).qf_start;
@@ -6520,26 +6531,26 @@ unsafe extern "C" fn qf_get_fnum(
     } else {
         bufname = fname;
     }
-    if !qf_last_bufname.is_null()
-        && strcmp(bufname, qf_last_bufname) == 0 as ::core::ffi::c_int
-        && bufref_valid(&raw mut qf_last_bufref) as ::core::ffi::c_int != 0
+    if !(*qf_last_bufname.ptr()).is_null()
+        && strcmp(bufname, qf_last_bufname.get()) == 0 as ::core::ffi::c_int
+        && bufref_valid(qf_last_bufref.ptr()) as ::core::ffi::c_int != 0
     {
-        buf = qf_last_bufref.br_buf;
+        buf = (*qf_last_bufref.ptr()).br_buf;
         xfree(ptr as *mut ::core::ffi::c_void);
     } else {
-        xfree(qf_last_bufname as *mut ::core::ffi::c_void);
+        xfree(qf_last_bufname.get() as *mut ::core::ffi::c_void);
         buf = buflist_new(
             bufname,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             0 as linenr_T,
             BLN_NOOPT as ::core::ffi::c_int,
         );
-        qf_last_bufname = if bufname == ptr {
+        qf_last_bufname.set(if bufname == ptr {
             bufname
         } else {
             xstrdup(bufname)
-        };
-        set_bufref(&raw mut qf_last_bufref, buf);
+        });
+        set_bufref(qf_last_bufref.ptr(), buf);
     }
     if buf.is_null() {
         return 0 as ::core::ffi::c_int;
@@ -6658,7 +6669,7 @@ unsafe extern "C" fn qf_guess_filepath(
     };
 }
 unsafe extern "C" fn qflist_valid(mut wp: *mut win_T, mut qf_id: ::core::ffi::c_uint) -> bool {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     if !wp.is_null() {
         if !win_valid(wp) {
             return false_0 != 0;
@@ -6757,7 +6768,7 @@ unsafe extern "C" fn get_nth_valid_entry(
 ) -> *mut qfline_T {
     let mut qf_ptr: *mut qfline_T = (*qfl).qf_ptr;
     let mut qf_idx: ::core::ffi::c_int = (*qfl).qf_index;
-    let mut err: *const ::core::ffi::c_char = e_no_more_items;
+    let mut err: *const ::core::ffi::c_char = e_no_more_items.get();
     loop {
         let c2rust_fresh22 = errornr;
         errornr = errornr - 1;
@@ -7148,7 +7159,7 @@ unsafe extern "C" fn qf_jump_edit_buffer(
     if qfl_type as ::core::ffi::c_uint == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
         && !qflist_valid(::core::ptr::null_mut::<win_T>(), save_qfid)
     {
-        emsg(gettext(e_current_quickfix_list_was_changed));
+        emsg(gettext(e_current_quickfix_list_was_changed.get()));
         return QF_ABORT as ::core::ffi::c_int;
     }
     if old_qf_curlist != (*qi).qf_curlist
@@ -7158,9 +7169,9 @@ unsafe extern "C" fn qf_jump_edit_buffer(
         if qfl_type as ::core::ffi::c_uint
             == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            emsg(gettext(e_current_quickfix_list_was_changed));
+            emsg(gettext(e_current_quickfix_list_was_changed.get()));
         } else {
-            emsg(gettext(e_current_location_list_was_changed));
+            emsg(gettext(e_current_location_list_was_changed.get()));
         }
         return QF_ABORT as ::core::ffi::c_int;
     }
@@ -7286,9 +7297,9 @@ unsafe extern "C" fn qf_jump_open_window(
         if qfl_type as ::core::ffi::c_uint
             == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            emsg(gettext(e_current_quickfix_list_was_changed));
+            emsg(gettext(e_current_quickfix_list_was_changed.get()));
         } else {
-            emsg(gettext(e_current_location_list_was_changed));
+            emsg(gettext(e_current_location_list_was_changed.get()));
         }
         return QF_ABORT as ::core::ffi::c_int;
     }
@@ -7307,9 +7318,9 @@ unsafe extern "C" fn qf_jump_open_window(
         if qfl_type as ::core::ffi::c_uint
             == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            emsg(gettext(e_current_quickfix_list_was_changed));
+            emsg(gettext(e_current_quickfix_list_was_changed.get()));
         } else {
-            emsg(gettext(e_current_location_list_was_changed));
+            emsg(gettext(e_current_location_list_was_changed.get()));
         }
         return QF_ABORT as ::core::ffi::c_int;
     }
@@ -7378,7 +7389,7 @@ unsafe extern "C" fn qf_jump_newwin(
     let old_KeyTyped: bool = KeyTyped;
     if qi.is_null() {
         '_c2rust_label: {
-            if !ql_info.is_null() {
+            if !(*ql_info.ptr()).is_null() {
             } else {
                 __assert_fail(
                     b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7389,7 +7400,7 @@ unsafe extern "C" fn qf_jump_newwin(
                 );
             }
         };
-        qi = ql_info;
+        qi = ql_info.get();
     }
     if qf_stack_empty(qi) as ::core::ffi::c_int != 0
         || qf_list_empty(qf_get_curlist(qi)) as ::core::ffi::c_int != 0
@@ -7465,9 +7476,9 @@ unsafe extern "C" fn qf_jump_newwin(
     }
     decr_quickfix_busy();
 }
-static mut qfFile_hl_id: ::core::ffi::c_int = 0;
-static mut qfSep_hl_id: ::core::ffi::c_int = 0;
-static mut qfLine_hl_id: ::core::ffi::c_int = 0;
+static qfFile_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static qfSep_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static qfLine_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn qf_list_entry(
     mut qfp: *mut qfline_T,
     mut qf_idx: ::core::ffi::c_int,
@@ -7545,14 +7556,14 @@ unsafe extern "C" fn qf_list_entry(
         if cursel as ::core::ffi::c_int != 0 {
             HLF_QFL as ::core::ffi::c_int
         } else {
-            qfFile_hl_id
+            qfFile_hl_id.get()
         },
         false_0 != 0,
     );
     if (*qfp).qf_lnum != 0 as linenr_T {
         msg_puts_hl(
             b":\0".as_ptr() as *const ::core::ffi::c_char,
-            qfSep_hl_id,
+            qfSep_hl_id.get(),
             false_0 != 0,
         );
     }
@@ -7568,13 +7579,13 @@ unsafe extern "C" fn qf_list_entry(
     if *((*gap).ga_data as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
         msg_puts_hl(
             (*gap).ga_data as *const ::core::ffi::c_char,
-            qfLine_hl_id,
+            qfLine_hl_id.get(),
             false_0 != 0,
         );
     }
     msg_puts_hl(
         b":\0".as_ptr() as *const ::core::ffi::c_char,
-        qfSep_hl_id,
+        qfSep_hl_id.get(),
         false_0 != 0,
     );
     if !(*qfp).qf_pattern.is_null() {
@@ -7584,7 +7595,7 @@ unsafe extern "C" fn qf_list_entry(
         msg_puts((*gap).ga_data as *const ::core::ffi::c_char);
         msg_puts_hl(
             b":\0".as_ptr() as *const ::core::ffi::c_char,
-            qfSep_hl_id,
+            qfSep_hl_id.get(),
             false_0 != 0,
         );
     }
@@ -7657,17 +7668,23 @@ pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
         }
     }
     shorten_fnames(false_0);
-    qfFile_hl_id = syn_name2id(b"qfFileName\0".as_ptr() as *const ::core::ffi::c_char);
-    if qfFile_hl_id == 0 as ::core::ffi::c_int {
-        qfFile_hl_id = HLF_D as ::core::ffi::c_int;
+    qfFile_hl_id.set(syn_name2id(
+        b"qfFileName\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    if qfFile_hl_id.get() == 0 as ::core::ffi::c_int {
+        qfFile_hl_id.set(HLF_D as ::core::ffi::c_int);
     }
-    qfSep_hl_id = syn_name2id(b"qfSeparator\0".as_ptr() as *const ::core::ffi::c_char);
-    if qfSep_hl_id == 0 as ::core::ffi::c_int {
-        qfSep_hl_id = HLF_D as ::core::ffi::c_int;
+    qfSep_hl_id.set(syn_name2id(
+        b"qfSeparator\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    if qfSep_hl_id.get() == 0 as ::core::ffi::c_int {
+        qfSep_hl_id.set(HLF_D as ::core::ffi::c_int);
     }
-    qfLine_hl_id = syn_name2id(b"qfLineNr\0".as_ptr() as *const ::core::ffi::c_char);
-    if qfLine_hl_id == 0 as ::core::ffi::c_int {
-        qfLine_hl_id = HLF_N as ::core::ffi::c_int;
+    qfLine_hl_id.set(syn_name2id(
+        b"qfLineNr\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    if qfLine_hl_id.get() == 0 as ::core::ffi::c_int {
+        qfLine_hl_id.set(HLF_N as ::core::ffi::c_int);
     }
     if (*qfl).qf_nonevalid {
         all = true_0;
@@ -7936,7 +7953,7 @@ pub unsafe extern "C" fn qf_mark_adjust(
     mut amount: linenr_T,
     mut amount_after: linenr_T,
 ) -> bool {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -7997,7 +8014,7 @@ unsafe extern "C" fn qf_types(
     mut c: ::core::ffi::c_int,
     mut nr: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut cc: [::core::ffi::c_char; 3] = [0; 3];
+    static cc: GlobalCell<[::core::ffi::c_char; 3]> = GlobalCell::new([0; 3]);
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if c == 'W' as ::core::ffi::c_int || c == 'w' as ::core::ffi::c_int {
         p = b" warning\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
@@ -8013,27 +8030,27 @@ unsafe extern "C" fn qf_types(
     } else if c == 0 as ::core::ffi::c_int || c == 1 as ::core::ffi::c_int {
         p = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else {
-        cc[0 as ::core::ffi::c_int as usize] = ' ' as ::core::ffi::c_char;
-        cc[1 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-        cc[2 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        p = &raw mut cc as *mut ::core::ffi::c_char;
+        (*cc.ptr())[0 as ::core::ffi::c_int as usize] = ' ' as ::core::ffi::c_char;
+        (*cc.ptr())[1 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
+        (*cc.ptr())[2 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        p = cc.ptr() as *mut ::core::ffi::c_char;
     }
     if nr <= 0 as ::core::ffi::c_int {
         return p;
     }
-    static mut buf: [::core::ffi::c_char; 20] = [0; 20];
+    static buf: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new([0; 20]);
     snprintf(
-        &raw mut buf as *mut ::core::ffi::c_char,
+        buf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
         b"%s %3d\0".as_ptr() as *const ::core::ffi::c_char,
         p,
         nr,
     );
-    return &raw mut buf as *mut ::core::ffi::c_char;
+    return buf.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_view_result(mut split: bool) {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -8359,7 +8376,7 @@ pub unsafe extern "C" fn ex_cbottom(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_current_entry(mut wp: *mut win_T) -> linenr_T {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -8462,7 +8479,7 @@ unsafe extern "C" fn qf_find_buf(mut qi: *mut qf_info_T) -> *mut buf_T {
 pub unsafe extern "C" fn did_set_quickfixtextfunc(
     mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    if option_set_callback_func(p_qftf, &raw mut qftf_cb) == FAIL {
+    if option_set_callback_func(p_qftf, qftf_cb.ptr()) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -8688,13 +8705,13 @@ unsafe extern "C" fn call_qftf_func(
     mut start_idx: ::core::ffi::c_int,
     mut end_idx: ::core::ffi::c_int,
 ) -> *mut list_T {
-    let mut cb: *mut Callback = &raw mut qftf_cb;
+    let mut cb: *mut Callback = qftf_cb.ptr();
     let mut qftf_list: *mut list_T = ::core::ptr::null_mut::<list_T>();
-    static mut recursive: bool = false_0 != 0;
-    if recursive {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if recursive.get() {
         return ::core::ptr::null_mut::<list_T>();
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     if (*qfl).qf_qftf_cb.type_0 as ::core::ffi::c_uint
         != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -8767,7 +8784,7 @@ unsafe extern "C" fn call_qftf_func(
         textlock -= 1;
         tv_dict_unref(dict);
     }
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
     return qftf_list;
 }
 unsafe extern "C" fn qf_fill_buffer(
@@ -9093,7 +9110,7 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
         qf_cmdtitle(*(*eap).cmdlinep),
         enc,
     );
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -9145,8 +9162,8 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut start: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    static mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static start: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
+    static off: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if *p_mef as ::core::ffi::c_int == NUL {
         name = vim_tempname();
         if name.is_null() {
@@ -9170,10 +9187,10 @@ unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
         return xstrdup(p_mef);
     }
     loop {
-        if start == -1 as ::core::ffi::c_int {
-            start = os_get_pid() as ::core::ffi::c_int;
+        if start.get() == -1 as ::core::ffi::c_int {
+            start.set(os_get_pid() as ::core::ffi::c_int);
         } else {
-            off += 19 as ::core::ffi::c_int;
+            (*off.ptr()) += 19 as ::core::ffi::c_int;
         }
         name = xmalloc(strlen(p_mef).wrapping_add(30 as size_t)) as *mut ::core::ffi::c_char;
         strcpy(name, p_mef);
@@ -9181,8 +9198,8 @@ unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
             name.offset(p.offset_from(p_mef) as isize),
             strlen(name),
             b"%d%d\0".as_ptr() as *const ::core::ffi::c_char,
-            start,
-            off,
+            start.get(),
+            off.get(),
         );
         strcat(name, p.offset(2 as ::core::ffi::c_int as isize));
         let mut file_info: FileInfo = FileInfo {
@@ -9790,7 +9807,7 @@ pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
     if errornr > 0 as ::core::ffi::c_int {
         qf_jump(qi, 0 as ::core::ffi::c_int, errornr, false_0);
     } else {
-        emsg(gettext(e_no_more_items));
+        emsg(gettext(e_no_more_items.get()));
     };
 }
 unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
@@ -9823,7 +9840,7 @@ unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
 #[no_mangle]
 pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -10006,7 +10023,7 @@ unsafe extern "C" fn vgr_qflist_valid(
 ) -> bool {
     if !qflist_valid(wp, qfid) {
         if !wp.is_null() {
-            emsg(gettext(e_current_location_list_was_changed));
+            emsg(gettext(e_current_location_list_was_changed.get()));
             return false_0 != 0;
         }
         qf_new_list(qi, title);
@@ -10861,7 +10878,7 @@ unsafe extern "C" fn get_errorlist(
 ) -> ::core::ffi::c_int {
     let mut qi: *mut qf_info_T = qi_arg;
     if qi.is_null() {
-        qi = ql_info;
+        qi = ql_info.get();
         if !wp.is_null() {
             qi = if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
                 && !(*wp).w_llist_ref.is_null()
@@ -11402,7 +11419,7 @@ unsafe extern "C" fn qf_get_properties(
     mut what: *mut dict_T,
     mut retdict: *mut dict_T,
 ) -> ::core::ffi::c_int {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -11545,9 +11562,9 @@ unsafe extern "C" fn qf_add_entry_from_dict(
     mut first_entry: bool,
     mut valid_entry: *mut bool,
 ) -> ::core::ffi::c_int {
-    static mut did_bufnr_emsg: bool = false;
+    static did_bufnr_emsg: GlobalCell<bool> = GlobalCell::new(false);
     if first_entry {
-        did_bufnr_emsg = false_0 != 0;
+        did_bufnr_emsg.set(false_0 != 0);
     }
     let filename: *mut ::core::ffi::c_char = tv_dict_get_string(
         d,
@@ -11612,8 +11629,8 @@ unsafe extern "C" fn qf_add_entry_from_dict(
         valid = false_0 != 0;
     }
     if bufnum != 0 as ::core::ffi::c_int && buflist_findnr(bufnum).is_null() {
-        if !did_bufnr_emsg {
-            did_bufnr_emsg = true_0 != 0;
+        if !did_bufnr_emsg.get() {
+            did_bufnr_emsg.set(true_0 != 0);
             semsg(
                 gettext(b"E92: Buffer %d not found\0".as_ptr() as *const ::core::ffi::c_char),
                 bufnum,
@@ -12163,7 +12180,7 @@ pub unsafe extern "C" fn set_errorlist(
     if !wp.is_null() {
         qi = ll_get_or_alloc_list(wp);
     } else {
-        qi = ql_info;
+        qi = ql_info.get();
     }
     '_c2rust_label: {
         if !qi.is_null() {
@@ -12283,7 +12300,7 @@ unsafe extern "C" fn mark_quickfix_ctx(
 #[no_mangle]
 pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> bool {
     '_c2rust_label: {
-        if !ql_info.is_null() {
+        if !(*ql_info.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -12293,10 +12310,10 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
             );
         }
     };
-    if mark_quickfix_ctx(ql_info, copyID) as ::core::ffi::c_int != 0
-        || mark_quickfix_user_data(ql_info, copyID) as ::core::ffi::c_int != 0
+    if mark_quickfix_ctx(ql_info.get(), copyID) as ::core::ffi::c_int != 0
+        || mark_quickfix_user_data(ql_info.get(), copyID) as ::core::ffi::c_int != 0
         || set_ref_in_callback(
-            &raw mut qftf_cb,
+            qftf_cb.ptr(),
             copyID,
             ::core::ptr::null_mut::<*mut ht_stack_T>(),
             ::core::ptr::null_mut::<*mut list_stack_T>(),
@@ -12755,7 +12772,7 @@ unsafe extern "C" fn hgr_search_in_rtp(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
-    let mut qi: *mut qf_info_T = ql_info;
+    let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {
         } else {
@@ -12950,11 +12967,11 @@ unsafe extern "C" fn set_qf_ll_list(
 ) {
     let mut act: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut what_arg: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    static mut e_invact: *const ::core::ffi::c_char =
-        b"E927: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char;
+    static e_invact: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"E927: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char);
     let mut title: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut action: ::core::ffi::c_char = ' ' as ::core::ffi::c_char;
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut what: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     let mut list_arg: *mut typval_T = args.offset(0 as ::core::ffi::c_int as isize);
@@ -12963,7 +12980,7 @@ unsafe extern "C" fn set_qf_ll_list(
     {
         emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
         return;
-    } else if recursive != 0 as ::core::ffi::c_int {
+    } else if recursive.get() != 0 as ::core::ffi::c_int {
         emsg(gettext(
             &raw const e_au_recursive as *const ::core::ffi::c_char,
         ));
@@ -12991,7 +13008,7 @@ unsafe extern "C" fn set_qf_ll_list(
         {
             action = *act;
         } else {
-            semsg(gettext(e_invact), act);
+            semsg(gettext(e_invact.get()), act);
             return;
         }
         what_arg = args.offset(2 as ::core::ffi::c_int as isize);
@@ -13023,7 +13040,7 @@ unsafe extern "C" fn set_qf_ll_list(
             b":setqflist()\0".as_ptr() as *const ::core::ffi::c_char
         };
     }
-    recursive += 1;
+    (*recursive.ptr()) += 1;
     let l: *mut list_T = (*list_arg).vval.v_list;
     if set_errorlist(
         wp,
@@ -13035,7 +13052,7 @@ unsafe extern "C" fn set_qf_ll_list(
     {
         (*rettv).vval.v_number = 0 as varnumber_T;
     }
-    recursive -= 1;
+    (*recursive.ptr()) -= 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_setloclist(

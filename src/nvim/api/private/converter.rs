@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -46,7 +47,7 @@ extern "C" {
         ret_len: *mut size_t,
         ret_buf: *mut *mut ::core::ffi::c_char,
     ) -> bool;
-    static mut eval_msgpack_type_lists: [*const list_T; 8];
+    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
 }
 pub type ptrdiff_t = isize;
 pub type size_t = usize;
@@ -926,7 +927,8 @@ unsafe extern "C" fn typval_encode_dict_end(edata: *mut EncodedData) {
     };
 }
 #[no_mangle]
-pub static mut _typval_encode_object_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_object_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_object_check_self_reference(
     edata: *mut EncodedData,
@@ -2283,7 +2285,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }

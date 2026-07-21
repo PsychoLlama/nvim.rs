@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::SharedCell;
 extern "C" {
     pub type lua_State;
     fn __assert_fail(
@@ -105,7 +106,7 @@ unsafe extern "C" fn nlua_base64_decode(mut L: *mut lua_State) -> ::core::ffi::c
     xfree(ret as *mut ::core::ffi::c_void);
     return 1 as ::core::ffi::c_int;
 }
-static mut base64_functions: [luaL_Reg; 3] = [
+static base64_functions: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
     luaL_Reg {
         name: b"encode\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
@@ -122,14 +123,14 @@ static mut base64_functions: [luaL_Reg; 3] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn luaopen_base64(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const base64_functions as *const luaL_Reg,
+        (base64_functions.ptr() as *const _) as *const luaL_Reg,
     );
     return 1 as ::core::ffi::c_int;
 }

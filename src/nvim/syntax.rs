@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -3018,16 +3019,20 @@ pub struct time_entry_T {
     pub id: ::core::ffi::c_int,
     pub pattern: *mut ::core::ffi::c_char,
 }
-static mut namelist1: [keyvalue_T; 10] = [keyvalue_T {
-    key: 0,
-    value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    length: 0,
-}; 10];
-static mut namelist2: [keyvalue_T; 3] = [keyvalue_T {
-    key: 0,
-    value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    length: 0,
-}; 3];
+static namelist1: GlobalCell<[keyvalue_T; 10]> = GlobalCell::new(
+    [keyvalue_T {
+        key: 0,
+        value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        length: 0,
+    }; 10],
+);
+static namelist2: GlobalCell<[keyvalue_T; 3]> = GlobalCell::new(
+    [keyvalue_T {
+        key: 0,
+        value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        length: 0,
+    }; 3],
+);
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
@@ -3065,7 +3070,7 @@ pub const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 pub const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 pub const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-static mut did_syntax_onoff: bool = false_0 != 0;
+static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -3074,23 +3079,25 @@ pub const SPO_RS_OFF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const SPO_RE_OFF: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const SPO_LC_OFF: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-static mut e_illegal_arg: [::core::ffi::c_char; 27] = unsafe {
+static e_illegal_arg: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E390: Illegal argument: %s\0")
-};
-static mut e_contains_argument_not_accepted_here: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-        *b"E395: Contains argument not accepted here\0",
-    )
-};
-static mut e_invalid_cchar_value: [::core::ffi::c_char; 26] = unsafe {
+});
+static e_contains_argument_not_accepted_here: GlobalCell<[::core::ffi::c_char; 42]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+            *b"E395: Contains argument not accepted here\0",
+        )
+    });
+static e_invalid_cchar_value: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E844: Invalid cchar value\0")
-};
-static mut e_trailing_char_after_rsb_str_str: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E890: Trailing char after ']': %s]%s\0",
-    )
-};
-static mut spo_name_tab: [*mut ::core::ffi::c_char; 7] = [
+});
+static e_trailing_char_after_rsb_str_str: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E890: Trailing char after ']': %s]%s\0",
+        )
+    });
+static spo_name_tab: GlobalCell<[*mut ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"ms=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"me=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"hs=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3098,7 +3105,7 @@ static mut spo_name_tab: [*mut ::core::ffi::c_char; 7] = [
     b"rs=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"re=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"lc=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
+]);
 pub const SPTYPE_MATCH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SPTYPE_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SPTYPE_END: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -3107,12 +3114,12 @@ pub const NONE_IDX: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SF_CCOMMENT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const SF_MATCH: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MAXKEYWLEN: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-static mut current_attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_trans_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_seqnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_sub_char: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static current_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static current_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static current_trans_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static current_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static current_sub_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const CLUSTER_REPLACE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CLUSTER_ADD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CLUSTER_SUBTRACT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -3121,11 +3128,13 @@ pub const SYNID_CONTAINED: ::core::ffi::c_int = 22000 as ::core::ffi::c_int;
 pub const SYNID_CLUSTER: ::core::ffi::c_int = 23000 as ::core::ffi::c_int;
 pub const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
-static mut syn_cmdlinep: *mut *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-static mut current_syn_inc_tag: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut running_syn_inc_tag: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut dumkey: keyentry_T = keyentry_T {
+static syn_cmdlinep: GlobalCell<*mut *mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static dumkey: GlobalCell<keyentry_T> = GlobalCell::new(keyentry_T {
     ke_next: ::core::ptr::null_mut::<keyentry_T>(),
     k_syn: sp_syn {
         inc_tag: 0,
@@ -3136,42 +3145,46 @@ static mut dumkey: keyentry_T = keyentry_T {
     flags: 0,
     k_char: 0,
     keyword: [],
-};
-static mut keepend_level: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-static mut msg_no_items: [::core::ffi::c_char; 40] = unsafe {
+});
+static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
+static msg_no_items: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"No Syntax items defined for this buffer\0",
     )
-};
+});
 pub const KEYWORD_IDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
-static mut next_seqnr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static mut next_match_col: ::core::ffi::c_int = 0;
-static mut next_match_m_endpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-static mut next_match_h_startpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-static mut next_match_h_endpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-static mut next_match_idx: ::core::ffi::c_int = 0;
-static mut next_match_flags: ::core::ffi::c_int = 0;
-static mut next_match_eos_pos: lpos_T = lpos_T { lnum: 0, col: 0 };
-static mut next_match_eoe_pos: lpos_T = lpos_T { lnum: 0, col: 0 };
-static mut next_match_end_idx: ::core::ffi::c_int = 0;
-static mut next_match_extmatch: *mut reg_extmatch_T = ::core::ptr::null_mut::<reg_extmatch_T>();
-static mut syn_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-static mut syn_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-static mut syn_block: *mut synblock_T = ::core::ptr::null_mut::<synblock_T>();
-static mut syn_tm: *mut proftime_T = ::core::ptr::null_mut::<proftime_T>();
-static mut current_lnum: linenr_T = 0 as linenr_T;
-static mut current_col: colnr_T = 0 as colnr_T;
-static mut current_state_stored: bool = false_0 != 0;
-static mut current_finished: bool = false_0 != 0;
-static mut current_state: garray_T = GA_EMPTY_INIT_VALUE;
-static mut current_next_list: *mut int16_t = ::core::ptr::null_mut::<int16_t>();
-static mut current_next_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut current_line_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut syn_time_on: bool = false_0 != 0;
+static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
+static next_match_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static next_match_m_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_h_startpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_h_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static next_match_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static next_match_eos_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_eoe_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static next_match_extmatch: GlobalCell<*mut reg_extmatch_T> =
+    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
+static syn_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+static syn_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+static syn_block: GlobalCell<*mut synblock_T> =
+    GlobalCell::new(::core::ptr::null_mut::<synblock_T>());
+static syn_tm: GlobalCell<*mut proftime_T> = GlobalCell::new(::core::ptr::null_mut::<proftime_T>());
+static current_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static current_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
+static current_state_stored: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static current_finished: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static current_state: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
+static current_next_list: GlobalCell<*mut int16_t> =
+    GlobalCell::new(::core::ptr::null_mut::<int16_t>());
+static current_next_flags: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static syn_time_on: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn syn_set_timeout(mut tm: *mut proftime_T) {
-    syn_tm = tm;
+    syn_tm.set(tm);
 }
 #[no_mangle]
 pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
@@ -3181,47 +3194,49 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
     let mut prev: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
     let mut first_stored: linenr_T = 0;
     let mut dist: ::core::ffi::c_int = 0;
-    static mut changedtick: varnumber_T = 0 as varnumber_T;
-    current_sub_char = NUL;
-    if syn_block != (*wp).w_s
-        || syn_buf != (*wp).w_buffer
-        || changedtick != buf_get_changedtick(syn_buf)
+    static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0 as varnumber_T);
+    current_sub_char.set(NUL);
+    if syn_block.get() != (*wp).w_s
+        || syn_buf.get() != (*wp).w_buffer
+        || changedtick.get() != buf_get_changedtick(syn_buf.get())
     {
         invalidate_current_state();
-        syn_buf = (*wp).w_buffer;
-        syn_block = (*wp).w_s;
+        syn_buf.set((*wp).w_buffer);
+        syn_block.set((*wp).w_s);
     }
-    changedtick = buf_get_changedtick(syn_buf);
-    syn_win = wp;
+    changedtick.set(buf_get_changedtick(syn_buf.get()));
+    syn_win.set(wp);
     syn_stack_alloc();
-    if (*syn_block).b_sst_array.is_null() {
+    if (*syn_block.get()).b_sst_array.is_null() {
         return;
     }
-    (*syn_block).b_sst_lasttick = display_tick;
-    if current_state.ga_itemsize != 0 as ::core::ffi::c_int
-        && current_lnum < lnum
-        && current_lnum < (*syn_buf).b_ml.ml_line_count
+    (*syn_block.get()).b_sst_lasttick = display_tick;
+    if (*current_state.ptr()).ga_itemsize != 0 as ::core::ffi::c_int
+        && current_lnum.get() < lnum
+        && current_lnum.get() < (*syn_buf.get()).b_ml.ml_line_count
     {
         syn_finish_line(false_0 != 0);
-        if !current_state_stored {
-            current_lnum += 1;
+        if !current_state_stored.get() {
+            (*current_lnum.ptr()) += 1;
             store_current_state();
         }
-        if current_lnum != lnum {
+        if current_lnum.get() != lnum {
             invalidate_current_state();
         }
     } else {
         invalidate_current_state();
     }
-    if current_state.ga_itemsize == 0 as ::core::ffi::c_int && !(*syn_block).b_sst_array.is_null() {
-        let mut p: *mut synstate_T = (*syn_block).b_sst_first;
+    if (*current_state.ptr()).ga_itemsize == 0 as ::core::ffi::c_int
+        && !(*syn_block.get()).b_sst_array.is_null()
+    {
+        let mut p: *mut synstate_T = (*syn_block.get()).b_sst_first;
         while !p.is_null() {
             if (*p).sst_lnum > lnum {
                 break;
             }
             if (*p).sst_change_lnum == 0 as linenr_T {
                 last_valid = p;
-                if (*p).sst_lnum >= lnum - (*syn_block).b_syn_sync_minlines {
+                if (*p).sst_lnum >= lnum - (*syn_block.get()).b_syn_sync_minlines {
                     last_min_valid = p;
                 }
             }
@@ -3231,44 +3246,44 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
             load_current_state(last_min_valid);
         }
     }
-    if current_state.ga_itemsize == 0 as ::core::ffi::c_int {
+    if (*current_state.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
         syn_sync(wp, lnum, last_valid);
-        if current_lnum == 1 as linenr_T {
+        if current_lnum.get() == 1 as linenr_T {
             first_stored = 1 as ::core::ffi::c_int as linenr_T;
         } else {
-            first_stored = current_lnum + (*syn_block).b_syn_sync_minlines;
+            first_stored = current_lnum.get() + (*syn_block.get()).b_syn_sync_minlines;
         }
     } else {
-        first_stored = current_lnum;
+        first_stored = current_lnum.get();
     }
-    if (*syn_block).b_sst_len <= Rows {
+    if (*syn_block.get()).b_sst_len <= Rows {
         dist = 999999 as ::core::ffi::c_int;
     } else {
-        dist = ((*syn_buf).b_ml.ml_line_count
-            / ((*syn_block).b_sst_len as linenr_T - Rows as linenr_T)
+        dist = ((*syn_buf.get()).b_ml.ml_line_count
+            / ((*syn_block.get()).b_sst_len as linenr_T - Rows as linenr_T)
             + 1 as linenr_T) as ::core::ffi::c_int;
     }
-    while current_lnum < lnum {
+    while current_lnum.get() < lnum {
         syn_start_line();
         syn_finish_line(false_0 != 0);
-        current_lnum += 1;
-        if current_lnum >= first_stored {
+        (*current_lnum.ptr()) += 1;
+        if current_lnum.get() >= first_stored {
             if prev.is_null() {
-                prev = syn_stack_find_entry(current_lnum - 1 as linenr_T);
+                prev = syn_stack_find_entry(current_lnum.get() - 1 as linenr_T);
             }
             if prev.is_null() {
-                sp = (*syn_block).b_sst_first;
+                sp = (*syn_block.get()).b_sst_first;
             } else {
                 sp = prev;
             }
-            while !sp.is_null() && (*sp).sst_lnum < current_lnum {
+            while !sp.is_null() && (*sp).sst_lnum < current_lnum.get() {
                 sp = (*sp).sst_next;
             }
             if !sp.is_null()
-                && (*sp).sst_lnum == current_lnum
+                && (*sp).sst_lnum == current_lnum.get()
                 && syn_stack_equal(sp) as ::core::ffi::c_int != 0
             {
-                let mut parsed_lnum: linenr_T = current_lnum;
+                let mut parsed_lnum: linenr_T = current_lnum.get();
                 prev = sp;
                 while !sp.is_null() && (*sp).sst_change_lnum <= parsed_lnum {
                     if (*sp).sst_lnum <= lnum {
@@ -3281,8 +3296,8 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
                 }
                 load_current_state(prev);
             } else if prev.is_null()
-                || current_lnum == lnum
-                || current_lnum >= (*prev).sst_lnum + dist as linenr_T
+                || current_lnum.get() == lnum
+                || current_lnum.get() >= (*prev).sst_lnum + dist as linenr_T
             {
                 prev = store_current_state();
             }
@@ -3291,7 +3306,7 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
         if !got_int {
             continue;
         }
-        current_lnum = lnum;
+        current_lnum.set(lnum);
         break;
     }
     syn_start_line();
@@ -3318,7 +3333,7 @@ unsafe extern "C" fn clear_syn_state(mut p: *mut synstate_T) {
     };
 }
 unsafe extern "C" fn clear_current_state() {
-    let mut _gap: *mut garray_T = &raw mut current_state;
+    let mut _gap: *mut garray_T = current_state.ptr();
     if !(*_gap).ga_data.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*_gap).ga_len {
@@ -3350,20 +3365,20 @@ unsafe extern "C" fn syn_sync(
     let mut found_current_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut found_m_endpos: lpos_T = lpos_T { lnum: 0, col: 0 };
     invalidate_current_state();
-    if (*syn_block).b_syn_sync_minlines > start_lnum {
+    if (*syn_block.get()).b_syn_sync_minlines > start_lnum {
         start_lnum = 1 as ::core::ffi::c_int as linenr_T;
     } else {
-        if (*syn_block).b_syn_sync_minlines == 1 as linenr_T {
+        if (*syn_block.get()).b_syn_sync_minlines == 1 as linenr_T {
             lnum = 1 as ::core::ffi::c_int as linenr_T;
-        } else if (*syn_block).b_syn_sync_minlines < 10 as linenr_T {
-            lnum = (*syn_block).b_syn_sync_minlines * 2 as linenr_T;
+        } else if (*syn_block.get()).b_syn_sync_minlines < 10 as linenr_T {
+            lnum = (*syn_block.get()).b_syn_sync_minlines * 2 as linenr_T;
         } else {
-            lnum = (*syn_block).b_syn_sync_minlines * 3 as linenr_T / 2 as linenr_T;
+            lnum = (*syn_block.get()).b_syn_sync_minlines * 3 as linenr_T / 2 as linenr_T;
         }
-        if (*syn_block).b_syn_sync_maxlines != 0 as linenr_T
-            && lnum > (*syn_block).b_syn_sync_maxlines
+        if (*syn_block.get()).b_syn_sync_maxlines != 0 as linenr_T
+            && lnum > (*syn_block.get()).b_syn_sync_maxlines
         {
-            lnum = (*syn_block).b_syn_sync_maxlines;
+            lnum = (*syn_block.get()).b_syn_sync_maxlines;
         }
         if lnum >= start_lnum {
             start_lnum = 1 as ::core::ffi::c_int as linenr_T;
@@ -3371,12 +3386,12 @@ unsafe extern "C" fn syn_sync(
             start_lnum -= lnum;
         }
     }
-    current_lnum = start_lnum;
-    if (*syn_block).b_syn_sync_flags & SF_CCOMMENT != 0 {
+    current_lnum.set(start_lnum);
+    if (*syn_block.get()).b_syn_sync_flags & SF_CCOMMENT != 0 {
         let mut curwin_save: *mut win_T = curwin;
         curwin = wp;
         let mut curbuf_save: *mut buf_T = curbuf;
-        curbuf = syn_buf;
+        curbuf = syn_buf.get();
         while start_lnum > 1 as linenr_T {
             let mut l: *mut ::core::ffi::c_char = ml_get(start_lnum - 1 as linenr_T);
             if *l as ::core::ffi::c_int == NUL
@@ -3390,22 +3405,25 @@ unsafe extern "C" fn syn_sync(
             }
             start_lnum -= 1;
         }
-        current_lnum = start_lnum;
+        current_lnum.set(start_lnum);
         cursor_save = (*wp).w_cursor;
         (*wp).w_cursor.lnum = start_lnum;
         (*wp).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        if !find_start_comment((*syn_block).b_syn_sync_maxlines as ::core::ffi::c_int).is_null() {
-            let mut idx: ::core::ffi::c_int = (*syn_block).b_syn_patterns.ga_len;
+        if !find_start_comment((*syn_block.get()).b_syn_sync_maxlines as ::core::ffi::c_int)
+            .is_null()
+        {
+            let mut idx: ::core::ffi::c_int = (*syn_block.get()).b_syn_patterns.ga_len;
             loop {
                 idx -= 1;
                 if idx < 0 as ::core::ffi::c_int {
                     break;
                 }
-                if !((*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize))
-                    .sp_syn
-                    .id as ::core::ffi::c_int
-                    == (*syn_block).b_syn_sync_id as ::core::ffi::c_int
-                    && (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                if !((*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
+                    .offset(idx as isize))
+                .sp_syn
+                .id as ::core::ffi::c_int
+                    == (*syn_block.get()).b_syn_sync_id as ::core::ffi::c_int
+                    && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                         .offset(idx as isize))
                     .sp_type as ::core::ffi::c_int
                         == SPTYPE_START)
@@ -3414,18 +3432,18 @@ unsafe extern "C" fn syn_sync(
                 }
                 validate_current_state();
                 push_current_state(idx);
-                update_si_attr(current_state.ga_len - 1 as ::core::ffi::c_int);
+                update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
                 break;
             }
         }
         (*wp).w_cursor = cursor_save;
         curwin = curwin_save;
         curbuf = curbuf_save;
-    } else if (*syn_block).b_syn_sync_flags & SF_MATCH != 0 {
-        if (*syn_block).b_syn_sync_maxlines != 0 as linenr_T
-            && start_lnum > (*syn_block).b_syn_sync_maxlines
+    } else if (*syn_block.get()).b_syn_sync_flags & SF_MATCH != 0 {
+        if (*syn_block.get()).b_syn_sync_maxlines != 0 as linenr_T
+            && start_lnum > (*syn_block.get()).b_syn_sync_maxlines
         {
-            break_lnum = start_lnum - (*syn_block).b_syn_sync_maxlines;
+            break_lnum = start_lnum - (*syn_block.get()).b_syn_sync_maxlines;
         } else {
             break_lnum = 0 as ::core::ffi::c_int as linenr_T;
         }
@@ -3441,7 +3459,7 @@ unsafe extern "C" fn syn_sync(
             line_breakcheck();
             if got_int {
                 invalidate_current_state();
-                current_lnum = start_lnum;
+                current_lnum.set(start_lnum);
                 break;
             } else if !last_valid.is_null() && lnum == (*last_valid).sst_lnum {
                 load_current_state(last_valid);
@@ -3451,77 +3469,81 @@ unsafe extern "C" fn syn_sync(
                     continue;
                 }
                 validate_current_state();
-                current_lnum = lnum;
-                while current_lnum < end_lnum {
+                current_lnum.set(lnum);
+                while current_lnum.get() < end_lnum {
                     syn_start_line();
                     loop {
                         let mut had_sync_point: bool = syn_finish_line(true_0 != 0);
-                        if !(had_sync_point as ::core::ffi::c_int != 0 && current_state.ga_len != 0)
+                        if !(had_sync_point as ::core::ffi::c_int != 0
+                            && (*current_state.ptr()).ga_len != 0)
                         {
                             break;
                         }
-                        cur_si = (current_state.ga_data as *mut stateitem_T)
-                            .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+                        cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                            ((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
+                        );
                         if (*cur_si).si_m_endpos.lnum > start_lnum {
-                            current_lnum = end_lnum;
+                            current_lnum.set(end_lnum);
                             break;
                         } else {
                             if (*cur_si).si_idx < 0 as ::core::ffi::c_int {
                                 found_flags = 0 as ::core::ffi::c_int;
                                 found_match_idx = KEYWORD_IDX;
                             } else {
-                                spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                                spp = ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                                     .offset((*cur_si).si_idx as isize);
                                 found_flags = (*spp).sp_flags;
                                 found_match_idx = (*spp).sp_sync_idx;
                             }
-                            found_current_lnum = current_lnum;
-                            found_current_col = current_col as ::core::ffi::c_int;
+                            found_current_lnum = current_lnum.get();
+                            found_current_col = current_col.get() as ::core::ffi::c_int;
                             found_m_endpos = (*cur_si).si_m_endpos;
-                            if found_m_endpos.lnum > current_lnum {
-                                current_lnum = found_m_endpos.lnum;
-                                current_col = found_m_endpos.col;
-                                if current_lnum >= end_lnum {
+                            if found_m_endpos.lnum > current_lnum.get() {
+                                current_lnum.set(found_m_endpos.lnum);
+                                current_col.set(found_m_endpos.col);
+                                if current_lnum.get() >= end_lnum {
                                     break;
                                 }
-                            } else if found_m_endpos.col > current_col {
-                                current_col = found_m_endpos.col;
+                            } else if found_m_endpos.col > current_col.get() {
+                                current_col.set(found_m_endpos.col);
                             } else {
-                                current_col += 1;
+                                (*current_col.ptr()) += 1;
                             }
-                            let mut prev_current_col: colnr_T = current_col;
-                            if *syn_getcurline().offset(current_col as isize) as ::core::ffi::c_int
+                            let mut prev_current_col: colnr_T = current_col.get();
+                            if *syn_getcurline().offset(current_col.get() as isize)
+                                as ::core::ffi::c_int
                                 != NUL
                             {
-                                current_col += 1;
+                                (*current_col.ptr()) += 1;
                             }
                             check_state_ends();
-                            current_col = prev_current_col;
+                            current_col.set(prev_current_col);
                         }
                     }
-                    current_lnum += 1;
+                    (*current_lnum.ptr()) += 1;
                 }
                 if found_flags != 0 {
                     clear_current_state();
                     if found_match_idx >= 0 as ::core::ffi::c_int {
                         push_current_state(found_match_idx);
-                        update_si_attr(current_state.ga_len - 1 as ::core::ffi::c_int);
+                        update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
                     }
                     if found_flags & HL_SYNC_HERE as ::core::ffi::c_int != 0 {
-                        current_lnum = found_m_endpos.lnum;
-                        current_col = found_m_endpos.col;
-                        if !(current_state.ga_len <= 0 as ::core::ffi::c_int) {
-                            cur_si = (current_state.ga_data as *mut stateitem_T)
-                                .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+                        current_lnum.set(found_m_endpos.lnum);
+                        current_col.set(found_m_endpos.col);
+                        if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
+                            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                                ((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
+                            );
                             (*cur_si).si_h_startpos.lnum = found_current_lnum;
                             (*cur_si).si_h_startpos.col = found_current_col as colnr_T;
-                            update_si_end(cur_si, current_col, true_0 != 0);
+                            update_si_end(cur_si, current_col.get(), true_0 != 0);
                             check_keepend();
                         }
                         syn_finish_line(false_0 != 0);
-                        current_lnum += 1;
+                        (*current_lnum.ptr()) += 1;
                     } else {
-                        current_lnum = start_lnum;
+                        current_lnum.set(start_lnum);
                     }
                     break;
                 } else {
@@ -3532,37 +3554,39 @@ unsafe extern "C" fn syn_sync(
         }
         if lnum <= break_lnum {
             invalidate_current_state();
-            current_lnum = break_lnum + 1 as linenr_T;
+            current_lnum.set(break_lnum + 1 as linenr_T);
         }
     }
     validate_current_state();
 }
 unsafe extern "C" fn save_chartab(mut chartab: *mut ::core::ffi::c_char) {
-    if (*syn_block).b_syn_isk == &raw mut empty_string_option as *mut ::core::ffi::c_char {
+    if (*syn_block.get()).b_syn_isk == &raw mut empty_string_option as *mut ::core::ffi::c_char {
         return;
     }
     memmove(
         chartab as *mut ::core::ffi::c_void,
-        &raw mut (*syn_buf).b_chartab as *mut uint64_t as *const ::core::ffi::c_void,
+        &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *const ::core::ffi::c_void,
         32 as ::core::ffi::c_int as size_t,
     );
     memmove(
-        &raw mut (*syn_buf).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
-        &raw mut (*(*syn_win).w_s).b_syn_chartab as *mut uint8_t as *const ::core::ffi::c_void,
+        &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
+        &raw mut (*(*syn_win.get()).w_s).b_syn_chartab as *mut uint8_t
+            as *const ::core::ffi::c_void,
         32 as ::core::ffi::c_int as size_t,
     );
 }
 unsafe extern "C" fn restore_chartab(mut chartab: *mut ::core::ffi::c_char) {
-    if (*(*syn_win).w_s).b_syn_isk != &raw mut empty_string_option as *mut ::core::ffi::c_char {
+    if (*(*syn_win.get()).w_s).b_syn_isk != &raw mut empty_string_option as *mut ::core::ffi::c_char
+    {
         memmove(
-            &raw mut (*syn_buf).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
+            &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
             chartab as *const ::core::ffi::c_void,
             32 as ::core::ffi::c_int as size_t,
         );
     }
 }
 unsafe extern "C" fn syn_match_linecont(mut lnum: linenr_T) -> ::core::ffi::c_int {
-    if (*syn_block).b_syn_linecont_prog.is_null() {
+    if (*syn_block.get()).b_syn_linecont_prog.is_null() {
         return false_0;
     }
     let mut regmatch: regmmatch_T = regmmatch_T {
@@ -3575,41 +3599,41 @@ unsafe extern "C" fn syn_match_linecont(mut lnum: linenr_T) -> ::core::ffi::c_in
     };
     let mut buf_chartab: [::core::ffi::c_char; 32] = [0; 32];
     save_chartab(&raw mut buf_chartab as *mut ::core::ffi::c_char);
-    regmatch.rmm_ic = (*syn_block).b_syn_linecont_ic;
-    regmatch.regprog = (*syn_block).b_syn_linecont_prog;
+    regmatch.rmm_ic = (*syn_block.get()).b_syn_linecont_ic;
+    regmatch.regprog = (*syn_block.get()).b_syn_linecont_prog;
     let mut r: ::core::ffi::c_int = syn_regexec(
         &raw mut regmatch,
         lnum,
         0 as colnr_T,
-        &raw mut (*syn_block).b_syn_linecont_time,
+        &raw mut (*syn_block.get()).b_syn_linecont_time,
     ) as ::core::ffi::c_int;
-    (*syn_block).b_syn_linecont_prog = regmatch.regprog;
+    (*syn_block.get()).b_syn_linecont_prog = regmatch.regprog;
     restore_chartab(&raw mut buf_chartab as *mut ::core::ffi::c_char);
     return r;
 }
 unsafe extern "C" fn syn_start_line() {
-    current_finished = false_0 != 0;
-    current_col = 0 as ::core::ffi::c_int as colnr_T;
-    if !(current_state.ga_len <= 0 as ::core::ffi::c_int) {
+    current_finished.set(false_0 != 0);
+    current_col.set(0 as ::core::ffi::c_int as colnr_T);
+    if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
         syn_update_ends(true_0 != 0);
         check_state_ends();
     }
-    next_match_idx = -1 as ::core::ffi::c_int;
-    current_line_id += 1;
-    next_seqnr = 1 as ::core::ffi::c_int;
+    next_match_idx.set(-1 as ::core::ffi::c_int);
+    (*current_line_id.ptr()) += 1;
+    next_seqnr.set(1 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
     let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
     if startofline {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < current_state.ga_len {
-            cur_si = (current_state.ga_data as *mut stateitem_T).offset(i as isize);
+        while i < (*current_state.ptr()).ga_len {
+            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize);
             if (*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                && (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_type as ::core::ffi::c_int
                     == SPTYPE_MATCH
-                && (*cur_si).si_m_endpos.lnum < current_lnum
+                && (*cur_si).si_m_endpos.lnum < current_lnum.get()
             {
                 (*cur_si).si_flags |= HL_MATCHCONT as ::core::ffi::c_int;
                 (*cur_si).si_m_endpos.lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -3620,10 +3644,10 @@ unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
             i += 1;
         }
     }
-    let mut i_0: ::core::ffi::c_int = current_state.ga_len - 1 as ::core::ffi::c_int;
-    if keepend_level >= 0 as ::core::ffi::c_int {
-        while i_0 > keepend_level {
-            if (*(current_state.ga_data as *mut stateitem_T).offset(i_0 as isize)).si_flags
+    let mut i_0: ::core::ffi::c_int = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
+    if keepend_level.get() >= 0 as ::core::ffi::c_int {
+        while i_0 > keepend_level.get() {
+            if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize)).si_flags
                 & HL_EXTEND as ::core::ffi::c_int
                 != 0
             {
@@ -3633,17 +3657,17 @@ unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
         }
     }
     let mut seen_keepend: bool = false_0 != 0;
-    while i_0 < current_state.ga_len {
-        cur_si = (current_state.ga_data as *mut stateitem_T).offset(i_0 as isize);
+    while i_0 < (*current_state.ptr()).ga_len {
+        cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize);
         if (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0
             || seen_keepend as ::core::ffi::c_int != 0 && !startofline
-            || i_0 == current_state.ga_len - 1 as ::core::ffi::c_int
+            || i_0 == (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int
                 && startofline as ::core::ffi::c_int != 0
         {
             (*cur_si).si_h_startpos.col = 0 as ::core::ffi::c_int as colnr_T;
-            (*cur_si).si_h_startpos.lnum = current_lnum;
+            (*cur_si).si_h_startpos.lnum = current_lnum.get();
             if (*cur_si).si_flags & HL_MATCHCONT as ::core::ffi::c_int == 0 {
-                update_si_end(cur_si, current_col, !startofline);
+                update_si_end(cur_si, current_col.get(), !startofline);
             }
             if !startofline && (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0 {
                 seen_keepend = true_0 != 0;
@@ -3686,7 +3710,7 @@ pub unsafe extern "C" fn syn_stack_free_all(mut block: *mut synblock_T) {
     }
 }
 unsafe extern "C" fn syn_stack_alloc() {
-    let mut len: ::core::ffi::c_int = (*syn_buf).b_ml.ml_line_count as ::core::ffi::c_int
+    let mut len: ::core::ffi::c_int = (*syn_buf.get()).b_ml.ml_line_count as ::core::ffi::c_int
         / SST_DIST
         + Rows * 2 as ::core::ffi::c_int;
     if len < SST_MIN_ENTRIES {
@@ -3694,23 +3718,28 @@ unsafe extern "C" fn syn_stack_alloc() {
     } else if len > SST_MAX_ENTRIES {
         len = SST_MAX_ENTRIES;
     }
-    if (*syn_block).b_sst_len > len * 2 as ::core::ffi::c_int || (*syn_block).b_sst_len < len {
-        len = (*syn_buf).b_ml.ml_line_count as ::core::ffi::c_int;
+    if (*syn_block.get()).b_sst_len > len * 2 as ::core::ffi::c_int
+        || (*syn_block.get()).b_sst_len < len
+    {
+        len = (*syn_buf.get()).b_ml.ml_line_count as ::core::ffi::c_int;
         len = (len + len / 2 as ::core::ffi::c_int) / SST_DIST + Rows * 2 as ::core::ffi::c_int;
         if len < SST_MIN_ENTRIES {
             len = SST_MIN_ENTRIES;
         } else if len > SST_MAX_ENTRIES {
             len = SST_MAX_ENTRIES;
         }
-        if !(*syn_block).b_sst_array.is_null() {
-            while (*syn_block).b_sst_len - (*syn_block).b_sst_freecount + 2 as ::core::ffi::c_int
+        if !(*syn_block.get()).b_sst_array.is_null() {
+            while (*syn_block.get()).b_sst_len - (*syn_block.get()).b_sst_freecount
+                + 2 as ::core::ffi::c_int
                 > len
                 && syn_stack_cleanup() as ::core::ffi::c_int != 0
             {}
-            if len < (*syn_block).b_sst_len - (*syn_block).b_sst_freecount + 2 as ::core::ffi::c_int
+            if len
+                < (*syn_block.get()).b_sst_len - (*syn_block.get()).b_sst_freecount
+                    + 2 as ::core::ffi::c_int
             {
-                len =
-                    (*syn_block).b_sst_len - (*syn_block).b_sst_freecount + 2 as ::core::ffi::c_int;
+                len = (*syn_block.get()).b_sst_len - (*syn_block.get()).b_sst_freecount
+                    + 2 as ::core::ffi::c_int;
             }
         }
         '_c2rust_label: {
@@ -3727,8 +3756,8 @@ unsafe extern "C" fn syn_stack_alloc() {
         let mut sstp: *mut synstate_T =
             xcalloc(len as size_t, ::core::mem::size_of::<synstate_T>()) as *mut synstate_T;
         let mut to: *mut synstate_T = sstp.offset(-(1 as ::core::ffi::c_int as isize));
-        if !(*syn_block).b_sst_array.is_null() {
-            let mut from: *mut synstate_T = (*syn_block).b_sst_first;
+        if !(*syn_block.get()).b_sst_array.is_null() {
+            let mut from: *mut synstate_T = (*syn_block.get()).b_sst_first;
             while !from.is_null() {
                 to = to.offset(1);
                 *to = *from;
@@ -3738,14 +3767,14 @@ unsafe extern "C" fn syn_stack_alloc() {
         }
         if to != sstp.offset(-(1 as ::core::ffi::c_int as isize)) {
             (*to).sst_next = ::core::ptr::null_mut::<synstate_T>();
-            (*syn_block).b_sst_first = sstp;
-            (*syn_block).b_sst_freecount =
+            (*syn_block.get()).b_sst_first = sstp;
+            (*syn_block.get()).b_sst_freecount =
                 len - to.offset_from(sstp) as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         } else {
-            (*syn_block).b_sst_first = ::core::ptr::null_mut::<synstate_T>();
-            (*syn_block).b_sst_freecount = len;
+            (*syn_block.get()).b_sst_first = ::core::ptr::null_mut::<synstate_T>();
+            (*syn_block.get()).b_sst_freecount = len;
         }
-        (*syn_block).b_sst_firstfree = to.offset(1 as ::core::ffi::c_int as isize);
+        (*syn_block.get()).b_sst_firstfree = to.offset(1 as ::core::ffi::c_int as isize);
         loop {
             to = to.offset(1);
             if to >= sstp.offset(len as isize) {
@@ -3757,9 +3786,9 @@ unsafe extern "C" fn syn_stack_alloc() {
             .offset(len as isize)
             .offset(-(1 as ::core::ffi::c_int as isize)))
         .sst_next = ::core::ptr::null_mut::<synstate_T>();
-        xfree((*syn_block).b_sst_array as *mut ::core::ffi::c_void);
-        (*syn_block).b_sst_array = sstp;
-        (*syn_block).b_sst_len = len;
+        xfree((*syn_block.get()).b_sst_array as *mut ::core::ffi::c_void);
+        (*syn_block.get()).b_sst_array = sstp;
+        (*syn_block.get()).b_sst_len = len;
     }
 }
 #[no_mangle]
@@ -3821,23 +3850,23 @@ unsafe extern "C" fn syn_stack_cleanup() -> bool {
     let mut tick: disptick_T = 0;
     let mut dist: ::core::ffi::c_int = 0;
     let mut retval: bool = false_0 != 0;
-    if (*syn_block).b_sst_first.is_null() {
+    if (*syn_block.get()).b_sst_first.is_null() {
         return retval;
     }
-    if (*syn_block).b_sst_len <= Rows {
+    if (*syn_block.get()).b_sst_len <= Rows {
         dist = 999999 as ::core::ffi::c_int;
     } else {
-        dist = ((*syn_buf).b_ml.ml_line_count
-            / ((*syn_block).b_sst_len as linenr_T - Rows as linenr_T)
+        dist = ((*syn_buf.get()).b_ml.ml_line_count
+            / ((*syn_block.get()).b_sst_len as linenr_T - Rows as linenr_T)
             + 1 as linenr_T) as ::core::ffi::c_int;
     }
-    tick = (*syn_block).b_sst_lasttick;
+    tick = (*syn_block.get()).b_sst_lasttick;
     let mut above: bool = false_0 != 0;
-    prev = (*syn_block).b_sst_first;
+    prev = (*syn_block.get()).b_sst_first;
     let mut p: *mut synstate_T = (*prev).sst_next;
     while !p.is_null() {
         if (*prev).sst_lnum + dist as linenr_T > (*p).sst_lnum {
-            if (*p).sst_tick > (*syn_block).b_sst_lasttick {
+            if (*p).sst_tick > (*syn_block.get()).b_sst_lasttick {
                 if !above || (*p).sst_tick < tick {
                     tick = (*p).sst_tick;
                 }
@@ -3849,12 +3878,12 @@ unsafe extern "C" fn syn_stack_cleanup() -> bool {
         prev = p;
         p = (*p).sst_next;
     }
-    prev = (*syn_block).b_sst_first;
+    prev = (*syn_block.get()).b_sst_first;
     let mut p_0: *mut synstate_T = (*prev).sst_next;
     while !p_0.is_null() {
         if (*p_0).sst_tick == tick && (*prev).sst_lnum + dist as linenr_T > (*p_0).sst_lnum {
             (*prev).sst_next = (*p_0).sst_next;
-            syn_stack_free_entry(syn_block, p_0);
+            syn_stack_free_entry(syn_block.get(), p_0);
             p_0 = prev;
             retval = true_0 != 0;
         }
@@ -3871,7 +3900,7 @@ unsafe extern "C" fn syn_stack_free_entry(mut block: *mut synblock_T, mut p: *mu
 }
 unsafe extern "C" fn syn_stack_find_entry(mut lnum: linenr_T) -> *mut synstate_T {
     let mut prev: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-    let mut p: *mut synstate_T = (*syn_block).b_sst_first;
+    let mut p: *mut synstate_T = (*syn_block.get()).b_sst_first;
     while !p.is_null() {
         if (*p).sst_lnum == lnum {
             return p;
@@ -3889,14 +3918,14 @@ unsafe extern "C" fn store_current_state() -> *mut synstate_T {
     let mut p: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
     let mut bp: *mut bufstate_T = ::core::ptr::null_mut::<bufstate_T>();
     let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
-    let mut sp: *mut synstate_T = syn_stack_find_entry(current_lnum);
-    i = current_state.ga_len - 1 as ::core::ffi::c_int;
+    let mut sp: *mut synstate_T = syn_stack_find_entry(current_lnum.get());
+    i = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
     while i >= 0 as ::core::ffi::c_int {
-        cur_si = (current_state.ga_data as *mut stateitem_T).offset(i as isize);
-        if (*cur_si).si_h_startpos.lnum >= current_lnum
-            || (*cur_si).si_m_endpos.lnum >= current_lnum
-            || (*cur_si).si_h_endpos.lnum >= current_lnum
-            || (*cur_si).si_end_idx != 0 && (*cur_si).si_eoe_pos.lnum >= current_lnum
+        cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize);
+        if (*cur_si).si_h_startpos.lnum >= current_lnum.get()
+            || (*cur_si).si_m_endpos.lnum >= current_lnum.get()
+            || (*cur_si).si_h_endpos.lnum >= current_lnum.get()
+            || (*cur_si).si_end_idx != 0 && (*cur_si).si_eoe_pos.lnum >= current_lnum.get()
         {
             break;
         }
@@ -3904,10 +3933,10 @@ unsafe extern "C" fn store_current_state() -> *mut synstate_T {
     }
     if i >= 0 as ::core::ffi::c_int {
         if !sp.is_null() {
-            if (*syn_block).b_sst_first == sp {
-                (*syn_block).b_sst_first = (*sp).sst_next;
+            if (*syn_block.get()).b_sst_first == sp {
+                (*syn_block.get()).b_sst_first = (*sp).sst_next;
             } else {
-                p = (*syn_block).b_sst_first;
+                p = (*syn_block.get()).b_sst_first;
                 while !p.is_null() {
                     if (*p).sst_next == sp {
                         break;
@@ -3918,43 +3947,46 @@ unsafe extern "C" fn store_current_state() -> *mut synstate_T {
                     (*p).sst_next = (*sp).sst_next;
                 }
             }
-            syn_stack_free_entry(syn_block, sp);
+            syn_stack_free_entry(syn_block.get(), sp);
             sp = ::core::ptr::null_mut::<synstate_T>();
         }
-    } else if sp.is_null() || (*sp).sst_lnum != current_lnum {
-        if (*syn_block).b_sst_freecount == 0 as ::core::ffi::c_int {
+    } else if sp.is_null() || (*sp).sst_lnum != current_lnum.get() {
+        if (*syn_block.get()).b_sst_freecount == 0 as ::core::ffi::c_int {
             syn_stack_cleanup();
-            sp = syn_stack_find_entry(current_lnum);
+            sp = syn_stack_find_entry(current_lnum.get());
         }
-        if (*syn_block).b_sst_freecount == 0 as ::core::ffi::c_int {
+        if (*syn_block.get()).b_sst_freecount == 0 as ::core::ffi::c_int {
             sp = ::core::ptr::null_mut::<synstate_T>();
         } else {
-            p = (*syn_block).b_sst_firstfree;
-            (*syn_block).b_sst_firstfree = (*p).sst_next;
-            (*syn_block).b_sst_freecount -= 1;
+            p = (*syn_block.get()).b_sst_firstfree;
+            (*syn_block.get()).b_sst_firstfree = (*p).sst_next;
+            (*syn_block.get()).b_sst_freecount -= 1;
             if sp.is_null() {
-                (*p).sst_next = (*syn_block).b_sst_first;
-                (*syn_block).b_sst_first = p;
+                (*p).sst_next = (*syn_block.get()).b_sst_first;
+                (*syn_block.get()).b_sst_first = p;
             } else {
                 (*p).sst_next = (*sp).sst_next;
                 (*sp).sst_next = p;
             }
             sp = p;
             (*sp).sst_stacksize = 0 as ::core::ffi::c_int;
-            (*sp).sst_lnum = current_lnum;
+            (*sp).sst_lnum = current_lnum.get();
         }
     }
     if !sp.is_null() {
         clear_syn_state(sp);
-        (*sp).sst_stacksize = current_state.ga_len;
-        if current_state.ga_len > SST_FIX_STATES {
+        (*sp).sst_stacksize = (*current_state.ptr()).ga_len;
+        if (*current_state.ptr()).ga_len > SST_FIX_STATES {
             ga_init(
                 &raw mut (*sp).sst_union.sst_ga,
                 ::core::mem::size_of::<bufstate_T>() as ::core::ffi::c_int,
                 1 as ::core::ffi::c_int,
             );
-            ga_grow(&raw mut (*sp).sst_union.sst_ga, current_state.ga_len);
-            (*sp).sst_union.sst_ga.ga_len = current_state.ga_len;
+            ga_grow(
+                &raw mut (*sp).sst_union.sst_ga,
+                (*current_state.ptr()).ga_len,
+            );
+            (*sp).sst_union.sst_ga.ga_len = (*current_state.ptr()).ga_len;
             bp = (*sp).sst_union.sst_ga.ga_data as *mut bufstate_T;
         } else {
             bp = &raw mut (*sp).sst_union.sst_stack as *mut bufstate_T;
@@ -3962,33 +3994,34 @@ unsafe extern "C" fn store_current_state() -> *mut synstate_T {
         i = 0 as ::core::ffi::c_int;
         while i < (*sp).sst_stacksize {
             (*bp.offset(i as isize)).bs_idx =
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx;
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_idx;
             (*bp.offset(i as isize)).bs_flags =
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_flags;
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags;
             (*bp.offset(i as isize)).bs_seqnr =
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_seqnr;
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_seqnr;
             (*bp.offset(i as isize)).bs_cchar =
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_cchar;
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_cchar;
             (*bp.offset(i as isize)).bs_extmatch = ref_extmatch(
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch,
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                    .si_extmatch,
             );
             i += 1;
         }
-        (*sp).sst_next_flags = current_next_flags;
-        (*sp).sst_next_list = current_next_list;
+        (*sp).sst_next_flags = current_next_flags.get();
+        (*sp).sst_next_list = current_next_list.get();
         (*sp).sst_tick = display_tick;
         (*sp).sst_change_lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
-    current_state_stored = true_0 != 0;
+    current_state_stored.set(true_0 != 0);
     return sp;
 }
 unsafe extern "C" fn load_current_state(mut from: *mut synstate_T) {
     let mut bp: *mut bufstate_T = ::core::ptr::null_mut::<bufstate_T>();
     clear_current_state();
     validate_current_state();
-    keepend_level = -1 as ::core::ffi::c_int;
+    keepend_level.set(-1 as ::core::ffi::c_int);
     if (*from).sst_stacksize != 0 {
-        ga_grow(&raw mut current_state, (*from).sst_stacksize);
+        ga_grow(current_state.ptr(), (*from).sst_stacksize);
         if (*from).sst_stacksize > SST_FIX_STATES {
             bp = (*from).sst_union.sst_ga.ga_data as *mut bufstate_T;
         } else {
@@ -3996,51 +4029,56 @@ unsafe extern "C" fn load_current_state(mut from: *mut synstate_T) {
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*from).sst_stacksize {
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx =
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_idx =
                 (*bp.offset(i as isize)).bs_idx;
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_flags =
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags =
                 (*bp.offset(i as isize)).bs_flags;
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_seqnr =
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_seqnr =
                 (*bp.offset(i as isize)).bs_seqnr;
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_cchar =
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_cchar =
                 (*bp.offset(i as isize)).bs_cchar;
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch =
-                ref_extmatch((*bp.offset(i as isize)).bs_extmatch);
-            if keepend_level < 0 as ::core::ffi::c_int
-                && (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_flags
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                .si_extmatch = ref_extmatch((*bp.offset(i as isize)).bs_extmatch);
+            if keepend_level.get() < 0 as ::core::ffi::c_int
+                && (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                    .si_flags
                     & HL_KEEPEND as ::core::ffi::c_int
                     != 0
             {
-                keepend_level = i;
+                keepend_level.set(i);
             }
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_ends = false_0;
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_m_lnum =
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_ends =
+                false_0;
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_m_lnum =
                 0 as ::core::ffi::c_int;
-            if (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx
+            if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_idx
                 >= 0 as ::core::ffi::c_int
             {
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_next_list =
-                    (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(
-                        (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx
-                            as isize,
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                    .si_next_list = (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
+                    .offset(
+                        (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                            .si_idx as isize,
                     ))
-                    .sp_next_list;
+                .sp_next_list;
             } else {
-                (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_next_list =
-                    ::core::ptr::null_mut::<int16_t>();
+                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                    .si_next_list = ::core::ptr::null_mut::<int16_t>();
             }
             update_si_attr(i);
             i += 1;
         }
-        current_state.ga_len = (*from).sst_stacksize;
+        (*current_state.ptr()).ga_len = (*from).sst_stacksize;
     }
-    current_next_list = (*from).sst_next_list;
-    current_next_flags = (*from).sst_next_flags;
-    current_lnum = (*from).sst_lnum;
+    current_next_list.set((*from).sst_next_list);
+    current_next_flags.set((*from).sst_next_flags);
+    current_lnum.set((*from).sst_lnum);
 }
 unsafe extern "C" fn syn_stack_equal(mut sp: *mut synstate_T) -> bool {
     let mut bp: *mut bufstate_T = ::core::ptr::null_mut::<bufstate_T>();
-    if (*sp).sst_stacksize != current_state.ga_len || (*sp).sst_next_list != current_next_list {
+    if (*sp).sst_stacksize != (*current_state.ptr()).ga_len
+        || (*sp).sst_next_list != current_next_list.get()
+    {
         return false_0 != 0;
     }
     if (*sp).sst_stacksize > SST_FIX_STATES {
@@ -4049,25 +4087,26 @@ unsafe extern "C" fn syn_stack_equal(mut sp: *mut synstate_T) -> bool {
         bp = &raw mut (*sp).sst_union.sst_stack as *mut bufstate_T;
     }
     let mut i: ::core::ffi::c_int = 0;
-    i = current_state.ga_len;
+    i = (*current_state.ptr()).ga_len;
     loop {
         i -= 1;
         if i < 0 as ::core::ffi::c_int {
             break;
         }
         if (*bp.offset(i as isize)).bs_idx
-            != (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx
+            != (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_idx
         {
             break;
         }
         if (*bp.offset(i as isize)).bs_extmatch
-            == (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch
+            == (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                .si_extmatch
         {
             continue;
         }
         let mut bsx: *mut reg_extmatch_T = (*bp.offset(i as isize)).bs_extmatch;
         let mut six: *mut reg_extmatch_T =
-            (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch;
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch;
         if bsx.is_null() || six.is_null() {
             break;
         }
@@ -4079,9 +4118,9 @@ unsafe extern "C" fn syn_stack_equal(mut sp: *mut synstate_T) -> bool {
                     break;
                 }
                 if mb_strcmp_ic(
-                    (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(
-                        (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx
-                            as isize,
+                    (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset(
+                        (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
+                            .si_idx as isize,
                     ))
                     .sp_ic
                         != 0,
@@ -4107,7 +4146,7 @@ unsafe extern "C" fn syn_stack_equal(mut sp: *mut synstate_T) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn syntax_end_parsing(mut wp: *mut win_T, mut lnum: linenr_T) {
     let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-    if syn_block != (*wp).w_s {
+    if syn_block.get() != (*wp).w_s {
         return;
     }
     sp = syn_stack_find_entry(lnum);
@@ -4120,19 +4159,21 @@ pub unsafe extern "C" fn syntax_end_parsing(mut wp: *mut win_T, mut lnum: linenr
 }
 unsafe extern "C" fn invalidate_current_state() {
     clear_current_state();
-    current_state.ga_itemsize = 0 as ::core::ffi::c_int;
-    current_next_list = ::core::ptr::null_mut::<int16_t>();
-    keepend_level = -1 as ::core::ffi::c_int;
+    (*current_state.ptr()).ga_itemsize = 0 as ::core::ffi::c_int;
+    current_next_list.set(::core::ptr::null_mut::<int16_t>());
+    keepend_level.set(-1 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn validate_current_state() {
-    current_state.ga_itemsize = ::core::mem::size_of::<stateitem_T>() as ::core::ffi::c_int;
-    ga_set_growsize(&raw mut current_state, 3 as ::core::ffi::c_int);
+    (*current_state.ptr()).ga_itemsize =
+        ::core::mem::size_of::<stateitem_T>() as ::core::ffi::c_int;
+    ga_set_growsize(current_state.ptr(), 3 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn syntax_check_changed(mut lnum: linenr_T) -> bool {
     let mut retval: bool = true_0 != 0;
     let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-    if current_state.ga_itemsize != 0 as ::core::ffi::c_int && lnum == current_lnum + 1 as linenr_T
+    if (*current_state.ptr()).ga_itemsize != 0 as ::core::ffi::c_int
+        && lnum == current_lnum.get() + 1 as linenr_T
     {
         sp = syn_stack_find_entry(lnum);
         if !sp.is_null() && (*sp).sst_lnum == lnum {
@@ -4140,25 +4181,25 @@ pub unsafe extern "C" fn syntax_check_changed(mut lnum: linenr_T) -> bool {
             if syn_stack_equal(sp) {
                 retval = false_0 != 0;
             }
-            current_lnum += 1;
+            (*current_lnum.ptr()) += 1;
             store_current_state();
         }
     }
     return retval;
 }
 unsafe extern "C" fn syn_finish_line(syncing: bool) -> bool {
-    while !current_finished {
+    while !current_finished.get() {
         syn_current_attr(
             syncing,
             false_0 != 0,
             ::core::ptr::null_mut::<bool>(),
             false_0 != 0,
         );
-        if syncing as ::core::ffi::c_int != 0 && current_state.ga_len != 0 {
-            let cur_si: *const stateitem_T = (current_state.ga_data as *mut stateitem_T)
-                .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+        if syncing as ::core::ffi::c_int != 0 && (*current_state.ptr()).ga_len != 0 {
+            let cur_si: *const stateitem_T = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+                .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
             if (*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                && (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_flags
                     & (HL_SYNC_HERE as ::core::ffi::c_int | HL_SYNC_THERE as ::core::ffi::c_int)
@@ -4166,14 +4207,14 @@ unsafe extern "C" fn syn_finish_line(syncing: bool) -> bool {
             {
                 return true_0 != 0;
             }
-            let prev_current_col: colnr_T = current_col;
-            if *syn_getcurline().offset(current_col as isize) as ::core::ffi::c_int != NUL {
-                current_col += 1;
+            let prev_current_col: colnr_T = current_col.get();
+            if *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int != NUL {
+                (*current_col.ptr()) += 1;
             }
             check_state_ends();
-            current_col = prev_current_col;
+            current_col.set(prev_current_col);
         }
-        current_col += 1;
+        (*current_col.ptr()) += 1;
     }
     return false_0 != 0;
 }
@@ -4185,38 +4226,38 @@ pub unsafe extern "C" fn get_syntax_attr(
 ) -> ::core::ffi::c_int {
     let mut attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if !can_spell.is_null() {
-        *can_spell = if (*syn_block).b_syn_spell == SYNSPL_DEFAULT {
-            ((*syn_block).b_spell_cluster_id == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+        *can_spell = if (*syn_block.get()).b_syn_spell == SYNSPL_DEFAULT {
+            ((*syn_block.get()).b_spell_cluster_id == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
         } else {
-            ((*syn_block).b_syn_spell == SYNSPL_TOP) as ::core::ffi::c_int
+            ((*syn_block.get()).b_syn_spell == SYNSPL_TOP) as ::core::ffi::c_int
         } != 0;
     }
-    if (*syn_block).b_sst_array.is_null() {
+    if (*syn_block.get()).b_sst_array.is_null() {
         return 0 as ::core::ffi::c_int;
     }
-    if (*syn_buf).b_p_smc > 0 as OptInt && col >= (*syn_buf).b_p_smc as colnr_T {
+    if (*syn_buf.get()).b_p_smc > 0 as OptInt && col >= (*syn_buf.get()).b_p_smc as colnr_T {
         clear_current_state();
-        current_id = 0 as ::core::ffi::c_int;
-        current_trans_id = 0 as ::core::ffi::c_int;
-        current_flags = 0 as ::core::ffi::c_int;
-        current_seqnr = 0 as ::core::ffi::c_int;
+        current_id.set(0 as ::core::ffi::c_int);
+        current_trans_id.set(0 as ::core::ffi::c_int);
+        current_flags.set(0 as ::core::ffi::c_int);
+        current_seqnr.set(0 as ::core::ffi::c_int);
         return 0 as ::core::ffi::c_int;
     }
-    if current_state.ga_itemsize == 0 as ::core::ffi::c_int {
+    if (*current_state.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
         validate_current_state();
     }
-    while current_col <= col {
+    while current_col.get() <= col {
         attr = syn_current_attr(
             false_0 != 0,
             true_0 != 0,
             can_spell,
-            if current_col == col {
+            if current_col.get() == col {
                 keep_state as ::core::ffi::c_int
             } else {
                 false_0
             } != 0,
         );
-        current_col += 1;
+        (*current_col.ptr()) += 1;
     }
     return attr;
 }
@@ -4240,7 +4281,7 @@ unsafe extern "C" fn syn_current_attr(
     let mut cchar: ::core::ffi::c_int = 0;
     let mut next_list: *mut int16_t = ::core::ptr::null_mut::<int16_t>();
     let mut found_match: bool = false;
-    static mut try_next_column: bool = false_0 != 0;
+    static try_next_column: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut regmatch: regmmatch_T = regmmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
         startpos: [lpos_T { lnum: 0, col: 0 }; 10],
@@ -4263,34 +4304,35 @@ unsafe extern "C" fn syn_current_attr(
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     line = syn_getcurline();
-    if *line.offset(current_col as isize) as ::core::ffi::c_int == NUL
-        && current_col != 0 as ::core::ffi::c_int
+    if *line.offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
+        && current_col.get() != 0 as ::core::ffi::c_int
     {
-        if next_match_idx >= 0 as ::core::ffi::c_int
-            && next_match_col >= current_col
-            && next_match_col != MAXCOL as ::core::ffi::c_int
+        if next_match_idx.get() >= 0 as ::core::ffi::c_int
+            && next_match_col.get() >= current_col.get()
+            && next_match_col.get() != MAXCOL as ::core::ffi::c_int
         {
             push_next_match();
         }
-        current_finished = true_0 != 0;
-        current_state_stored = false_0 != 0;
+        current_finished.set(true_0 != 0);
+        current_state_stored.set(false_0 != 0);
         return 0 as ::core::ffi::c_int;
     }
-    if *line.offset(current_col as isize) as ::core::ffi::c_int == NUL
-        || *line.offset((current_col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
+    if *line.offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
+        || *line
+            .offset((current_col.get() as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
             as ::core::ffi::c_int
             == NUL
     {
-        current_finished = true_0 != 0;
-        current_state_stored = false_0 != 0;
+        current_finished.set(true_0 != 0);
+        current_state_stored.set(false_0 != 0);
     }
-    if try_next_column {
-        next_match_idx = -1 as ::core::ffi::c_int;
-        try_next_column = false_0 != 0;
+    if try_next_column.get() {
+        next_match_idx.set(-1 as ::core::ffi::c_int);
+        try_next_column.set(false_0 != 0);
     }
     let do_keywords: bool = !syncing
-        && ((*syn_block).b_keywtab.ht_used > 0 as size_t
-            || (*syn_block).b_keywtab_ic.ht_used > 0 as size_t);
+        && ((*syn_block.get()).b_keywtab.ht_used > 0 as size_t
+            || (*syn_block.get()).b_keywtab_ic.ht_used > 0 as size_t);
     ga_init(
         &raw mut zero_width_next_ga,
         ::core::mem::size_of::<::core::ffi::c_int>() as ::core::ffi::c_int,
@@ -4301,21 +4343,22 @@ unsafe extern "C" fn syn_current_attr(
         found_match = false_0 != 0;
         keep_next_list = false_0 != 0;
         let mut syn_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if current_state.ga_len != 0 {
-            cur_si = (current_state.ga_data as *mut stateitem_T)
-                .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+        if (*current_state.ptr()).ga_len != 0 {
+            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+                .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
         } else {
             cur_si = ::core::ptr::null_mut::<stateitem_T>();
         }
-        if (*syn_block).b_syn_containedin != 0
+        if (*syn_block.get()).b_syn_containedin != 0
             || cur_si.is_null()
             || !(*cur_si).si_cont_list.is_null()
         {
             if do_keywords {
                 line = syn_getcurline();
-                let mut cur_pos: *const ::core::ffi::c_char = line.offset(current_col as isize);
-                if vim_iswordp_buf(cur_pos, syn_buf) as ::core::ffi::c_int != 0
-                    && (current_col == 0 as ::core::ffi::c_int
+                let mut cur_pos: *const ::core::ffi::c_char =
+                    line.offset(current_col.get() as isize);
+                if vim_iswordp_buf(cur_pos, syn_buf.get()) as ::core::ffi::c_int != 0
+                    && (current_col.get() == 0 as ::core::ffi::c_int
                         || !vim_iswordp_buf(
                             cur_pos.offset(-(1 as ::core::ffi::c_int as isize)).offset(
                                 -(utf_head_off(
@@ -4323,12 +4366,12 @@ unsafe extern "C" fn syn_current_attr(
                                     cur_pos.offset(-(1 as ::core::ffi::c_int as isize)),
                                 ) as isize),
                             ),
-                            syn_buf,
+                            syn_buf.get(),
                         ))
                 {
                     syn_id = check_keyword_id(
                         line,
-                        current_col,
+                        current_col.get(),
                         &raw mut endcol,
                         &raw mut flags,
                         &raw mut next_list,
@@ -4337,43 +4380,49 @@ unsafe extern "C" fn syn_current_attr(
                     );
                     if syn_id != 0 as ::core::ffi::c_int {
                         push_current_state(KEYWORD_IDX);
-                        cur_si = (current_state.ga_data as *mut stateitem_T)
-                            .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
-                        (*cur_si).si_m_startcol = current_col as ::core::ffi::c_int;
-                        (*cur_si).si_h_startpos.lnum = current_lnum;
+                        cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                            ((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
+                        );
+                        (*cur_si).si_m_startcol = current_col.get() as ::core::ffi::c_int;
+                        (*cur_si).si_h_startpos.lnum = current_lnum.get();
                         (*cur_si).si_h_startpos.col = 0 as ::core::ffi::c_int as colnr_T;
-                        (*cur_si).si_m_endpos.lnum = current_lnum;
+                        (*cur_si).si_m_endpos.lnum = current_lnum.get();
                         (*cur_si).si_m_endpos.col = endcol as colnr_T;
-                        (*cur_si).si_h_endpos.lnum = current_lnum;
+                        (*cur_si).si_h_endpos.lnum = current_lnum.get();
                         (*cur_si).si_h_endpos.col = endcol as colnr_T;
                         (*cur_si).si_ends = true_0;
                         (*cur_si).si_end_idx = 0 as ::core::ffi::c_int;
                         (*cur_si).si_flags = flags;
-                        let c2rust_fresh3 = next_seqnr;
-                        next_seqnr = next_seqnr + 1;
+                        let c2rust_fresh3 = next_seqnr.get();
+                        next_seqnr.set(next_seqnr.get() + 1);
                         (*cur_si).si_seqnr = c2rust_fresh3;
                         (*cur_si).si_cchar = cchar;
-                        if current_state.ga_len > 1 as ::core::ffi::c_int {
-                            (*cur_si).si_flags |= (*(current_state.ga_data as *mut stateitem_T)
-                                .offset((current_state.ga_len - 2 as ::core::ffi::c_int) as isize))
-                            .si_flags
-                                & HL_CONCEAL as ::core::ffi::c_int;
+                        if (*current_state.ptr()).ga_len > 1 as ::core::ffi::c_int {
+                            (*cur_si).si_flags |=
+                                (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                                    ((*current_state.ptr()).ga_len - 2 as ::core::ffi::c_int)
+                                        as isize,
+                                ))
+                                .si_flags
+                                    & HL_CONCEAL as ::core::ffi::c_int;
                         }
                         (*cur_si).si_id = syn_id;
                         (*cur_si).si_trans_id = syn_id;
                         if flags & HL_TRANSP as ::core::ffi::c_int != 0 {
-                            if current_state.ga_len < 2 as ::core::ffi::c_int {
+                            if (*current_state.ptr()).ga_len < 2 as ::core::ffi::c_int {
                                 (*cur_si).si_attr = 0 as ::core::ffi::c_int;
                                 (*cur_si).si_trans_id = 0 as ::core::ffi::c_int;
                             } else {
-                                (*cur_si).si_attr = (*(current_state.ga_data as *mut stateitem_T)
-                                    .offset(
-                                        (current_state.ga_len - 2 as ::core::ffi::c_int) as isize,
+                                (*cur_si).si_attr =
+                                    (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                                        ((*current_state.ptr()).ga_len - 2 as ::core::ffi::c_int)
+                                            as isize,
                                     ))
-                                .si_attr;
+                                    .si_attr;
                                 (*cur_si).si_trans_id =
-                                    (*(current_state.ga_data as *mut stateitem_T).offset(
-                                        (current_state.ga_len - 2 as ::core::ffi::c_int) as isize,
+                                    (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
+                                        ((*current_state.ptr()).ga_len - 2 as ::core::ffi::c_int)
+                                            as isize,
                                     ))
                                     .si_trans_id;
                             }
@@ -4386,17 +4435,19 @@ unsafe extern "C" fn syn_current_attr(
                     }
                 }
             }
-            if syn_id == 0 as ::core::ffi::c_int && (*syn_block).b_syn_patterns.ga_len != 0 {
-                if next_match_idx < 0 as ::core::ffi::c_int || next_match_col < current_col {
-                    next_match_idx = 0 as ::core::ffi::c_int;
-                    next_match_col = MAXCOL as ::core::ffi::c_int;
-                    let mut idx: ::core::ffi::c_int = (*syn_block).b_syn_patterns.ga_len;
+            if syn_id == 0 as ::core::ffi::c_int && (*syn_block.get()).b_syn_patterns.ga_len != 0 {
+                if next_match_idx.get() < 0 as ::core::ffi::c_int
+                    || next_match_col.get() < current_col.get()
+                {
+                    next_match_idx.set(0 as ::core::ffi::c_int);
+                    next_match_col.set(MAXCOL as ::core::ffi::c_int);
+                    let mut idx: ::core::ffi::c_int = (*syn_block.get()).b_syn_patterns.ga_len;
                     loop {
                         idx -= 1;
                         if idx < 0 as ::core::ffi::c_int {
                             break;
                         }
-                        let spp: *mut synpat_T = ((*syn_block).b_syn_patterns.ga_data
+                        let spp: *mut synpat_T = ((*syn_block.get()).b_syn_patterns.ga_data
                             as *mut synpat_T)
                             .offset(idx as isize);
                         if !((*spp).sp_syncing as ::core::ffi::c_int
@@ -4405,10 +4456,10 @@ unsafe extern "C" fn syn_current_attr(
                                 || (*spp).sp_flags & HL_DISPLAY as ::core::ffi::c_int == 0)
                             && ((*spp).sp_type as ::core::ffi::c_int == SPTYPE_MATCH
                                 || (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START)
-                            && (if !current_next_list.is_null() {
+                            && (if !(*current_next_list.ptr()).is_null() {
                                 in_id_list(
                                     ::core::ptr::null_mut::<stateitem_T>(),
-                                    current_next_list,
+                                    current_next_list.get(),
                                     &raw mut (*spp).sp_syn,
                                     0 as ::core::ffi::c_int,
                                 )
@@ -4428,14 +4479,14 @@ unsafe extern "C" fn syn_current_attr(
                         {
                             continue;
                         }
-                        if (*spp).sp_line_id == current_line_id
-                            && (*spp).sp_startcol >= next_match_col
+                        if (*spp).sp_line_id == current_line_id.get()
+                            && (*spp).sp_startcol >= next_match_col.get()
                         {
                             continue;
                         }
-                        (*spp).sp_line_id = current_line_id;
+                        (*spp).sp_line_id = current_line_id.get();
                         let mut lc_col: colnr_T =
-                            current_col - (*spp).sp_offsets[SPO_LC_OFF as usize] as colnr_T;
+                            current_col.get() - (*spp).sp_offsets[SPO_LC_OFF as usize] as colnr_T;
                         if lc_col < 0 as ::core::ffi::c_int {
                             lc_col = 0 as ::core::ffi::c_int as colnr_T;
                         }
@@ -4443,7 +4494,7 @@ unsafe extern "C" fn syn_current_attr(
                         regmatch.regprog = (*spp).sp_prog;
                         let mut r: ::core::ffi::c_int = syn_regexec(
                             &raw mut regmatch,
-                            current_lnum,
+                            current_lnum.get(),
                             lc_col,
                             &raw mut (*spp).sp_time,
                         )
@@ -4459,16 +4510,16 @@ unsafe extern "C" fn syn_current_attr(
                                 SPO_MS_OFF,
                                 -1 as ::core::ffi::c_int,
                             );
-                            if pos.lnum > current_lnum {
+                            if pos.lnum > current_lnum.get() {
                                 (*spp).sp_startcol = MAXCOL as ::core::ffi::c_int;
                             } else {
                                 startcol = pos.col as ::core::ffi::c_int;
                                 (*spp).sp_startcol = startcol;
-                                if startcol >= next_match_col {
+                                if startcol >= next_match_col.get() {
                                     continue;
                                 }
                                 if did_match_already(idx, &raw mut zero_width_next_ga) {
-                                    try_next_column = true_0 != 0;
+                                    try_next_column.set(true_0 != 0);
                                 } else {
                                     endpos.lnum =
                                         regmatch.endpos[0 as ::core::ffi::c_int as usize].lnum;
@@ -4529,7 +4580,7 @@ unsafe extern "C" fn syn_current_attr(
                                             SPO_ME_OFF,
                                             0 as ::core::ffi::c_int,
                                         );
-                                        if endpos.lnum == current_lnum
+                                        if endpos.lnum == current_lnum.get()
                                             && (endpos.col + syncing as ::core::ffi::c_int)
                                                 < startcol
                                         {
@@ -4538,51 +4589,53 @@ unsafe extern "C" fn syn_current_attr(
                                                 == regmatch.endpos[0 as ::core::ffi::c_int as usize]
                                                     .col
                                             {
-                                                try_next_column = true_0 != 0;
+                                                try_next_column.set(true_0 != 0);
                                             }
                                             continue;
                                         }
                                     }
-                                    if hl_startpos.lnum == current_lnum
+                                    if hl_startpos.lnum == current_lnum.get()
                                         && hl_startpos.col < startcol
                                     {
                                         hl_startpos.col = startcol as colnr_T;
                                     }
                                     limit_pos_zero(&raw mut hl_endpos, &raw mut endpos);
-                                    next_match_idx = idx;
-                                    next_match_col = startcol;
-                                    next_match_m_endpos = endpos;
-                                    next_match_h_endpos = hl_endpos;
-                                    next_match_h_startpos = hl_startpos;
-                                    next_match_flags = flags;
-                                    next_match_eos_pos = eos_pos;
-                                    next_match_eoe_pos = eoe_pos;
-                                    next_match_end_idx = end_idx;
-                                    unref_extmatch(next_match_extmatch);
-                                    next_match_extmatch = cur_extmatch;
+                                    next_match_idx.set(idx);
+                                    next_match_col.set(startcol);
+                                    next_match_m_endpos.set(endpos);
+                                    next_match_h_endpos.set(hl_endpos);
+                                    next_match_h_startpos.set(hl_startpos);
+                                    next_match_flags.set(flags);
+                                    next_match_eos_pos.set(eos_pos);
+                                    next_match_eoe_pos.set(eoe_pos);
+                                    next_match_end_idx.set(end_idx);
+                                    unref_extmatch(next_match_extmatch.get());
+                                    next_match_extmatch.set(cur_extmatch);
                                     cur_extmatch = ::core::ptr::null_mut::<reg_extmatch_T>();
                                 }
                             }
                         }
                     }
                 }
-                if next_match_idx >= 0 as ::core::ffi::c_int && next_match_col == current_col {
+                if next_match_idx.get() >= 0 as ::core::ffi::c_int
+                    && next_match_col.get() == current_col.get()
+                {
                     let mut lspp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
-                    lspp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset(next_match_idx as isize);
-                    if next_match_m_endpos.lnum == current_lnum
-                        && next_match_m_endpos.col == current_col
+                    lspp = ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
+                        .offset(next_match_idx.get() as isize);
+                    if (*next_match_m_endpos.ptr()).lnum == current_lnum.get()
+                        && (*next_match_m_endpos.ptr()).col == current_col.get()
                         && !(*lspp).sp_next_list.is_null()
                     {
-                        current_next_list = (*lspp).sp_next_list;
-                        current_next_flags = (*lspp).sp_flags;
+                        current_next_list.set((*lspp).sp_next_list);
+                        current_next_flags.set((*lspp).sp_flags);
                         keep_next_list = true_0 != 0;
                         zero_width_next_list = true_0 != 0;
                         ga_grow(&raw mut zero_width_next_ga, 1 as ::core::ffi::c_int);
                         *(zero_width_next_ga.ga_data as *mut ::core::ffi::c_int)
-                            .offset(zero_width_next_ga.ga_len as isize) = next_match_idx;
+                            .offset(zero_width_next_ga.ga_len as isize) = next_match_idx.get();
                         zero_width_next_ga.ga_len += 1;
-                        next_match_idx = -1 as ::core::ffi::c_int;
+                        next_match_idx.set(-1 as ::core::ffi::c_int);
                     } else {
                         cur_si = push_next_match();
                     }
@@ -4590,21 +4643,21 @@ unsafe extern "C" fn syn_current_attr(
                 }
             }
         }
-        if !current_next_list.is_null() && !keep_next_list {
+        if !(*current_next_list.ptr()).is_null() && !keep_next_list {
             if !found_match {
                 line = syn_getcurline();
-                if current_next_flags & HL_SKIPWHITE as ::core::ffi::c_int != 0
-                    && ascii_iswhite(*line.offset(current_col as isize) as ::core::ffi::c_int)
+                if current_next_flags.get() & HL_SKIPWHITE as ::core::ffi::c_int != 0
+                    && ascii_iswhite(*line.offset(current_col.get() as isize) as ::core::ffi::c_int)
                         as ::core::ffi::c_int
                         != 0
-                    || current_next_flags & HL_SKIPEMPTY as ::core::ffi::c_int != 0
+                    || current_next_flags.get() & HL_SKIPEMPTY as ::core::ffi::c_int != 0
                         && *line as ::core::ffi::c_int == NUL
                 {
                     break;
                 }
             }
-            current_next_list = ::core::ptr::null_mut::<int16_t>();
-            next_match_idx = -1 as ::core::ffi::c_int;
+            current_next_list.set(::core::ptr::null_mut::<int16_t>());
+            next_match_idx.set(-1 as ::core::ffi::c_int);
             if !zero_width_next_list {
                 found_match = true_0 != 0;
             }
@@ -4614,29 +4667,29 @@ unsafe extern "C" fn syn_current_attr(
         }
     }
     restore_chartab(&raw mut buf_chartab as *mut ::core::ffi::c_char);
-    current_attr = 0 as ::core::ffi::c_int;
-    current_id = 0 as ::core::ffi::c_int;
-    current_trans_id = 0 as ::core::ffi::c_int;
-    current_flags = 0 as ::core::ffi::c_int;
-    current_seqnr = 0 as ::core::ffi::c_int;
+    current_attr.set(0 as ::core::ffi::c_int);
+    current_id.set(0 as ::core::ffi::c_int);
+    current_trans_id.set(0 as ::core::ffi::c_int);
+    current_flags.set(0 as ::core::ffi::c_int);
+    current_seqnr.set(0 as ::core::ffi::c_int);
     if !cur_si.is_null() {
-        let mut idx_0: ::core::ffi::c_int = current_state.ga_len - 1 as ::core::ffi::c_int;
+        let mut idx_0: ::core::ffi::c_int = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
         while idx_0 >= 0 as ::core::ffi::c_int {
-            sip = (current_state.ga_data as *mut stateitem_T).offset(idx_0 as isize);
-            if (current_lnum > (*sip).si_h_startpos.lnum
-                || current_lnum == (*sip).si_h_startpos.lnum
-                    && current_col >= (*sip).si_h_startpos.col)
+            sip = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(idx_0 as isize);
+            if (current_lnum.get() > (*sip).si_h_startpos.lnum
+                || current_lnum.get() == (*sip).si_h_startpos.lnum
+                    && current_col.get() >= (*sip).si_h_startpos.col)
                 && ((*sip).si_h_endpos.lnum == 0 as linenr_T
-                    || current_lnum < (*sip).si_h_endpos.lnum
-                    || current_lnum == (*sip).si_h_endpos.lnum
-                        && current_col < (*sip).si_h_endpos.col)
+                    || current_lnum.get() < (*sip).si_h_endpos.lnum
+                    || current_lnum.get() == (*sip).si_h_endpos.lnum
+                        && current_col.get() < (*sip).si_h_endpos.col)
             {
-                current_attr = (*sip).si_attr;
-                current_id = (*sip).si_id;
-                current_trans_id = (*sip).si_trans_id;
-                current_flags = (*sip).si_flags;
-                current_seqnr = (*sip).si_seqnr;
-                current_sub_char = (*sip).si_cchar;
+                current_attr.set((*sip).si_attr);
+                current_id.set((*sip).si_id);
+                current_trans_id.set((*sip).si_trans_id);
+                current_flags.set((*sip).si_flags);
+                current_seqnr.set((*sip).si_seqnr);
+                current_sub_char.set((*sip).si_cchar);
                 break;
             } else {
                 idx_0 -= 1;
@@ -4648,14 +4701,14 @@ unsafe extern "C" fn syn_current_attr(
                 id: 0,
                 cont_in_list: ::core::ptr::null_mut::<int16_t>(),
             };
-            if (*syn_block).b_spell_cluster_id == 0 as ::core::ffi::c_int {
-                if (*syn_block).b_nospell_cluster_id == 0 as ::core::ffi::c_int
-                    || current_trans_id == 0 as ::core::ffi::c_int
+            if (*syn_block.get()).b_spell_cluster_id == 0 as ::core::ffi::c_int {
+                if (*syn_block.get()).b_nospell_cluster_id == 0 as ::core::ffi::c_int
+                    || current_trans_id.get() == 0 as ::core::ffi::c_int
                 {
-                    *can_spell = (*syn_block).b_syn_spell != SYNSPL_NOTOP;
+                    *can_spell = (*syn_block.get()).b_syn_spell != SYNSPL_NOTOP;
                 } else {
                     sps.inc_tag = 0 as ::core::ffi::c_int;
-                    sps.id = (*syn_block).b_nospell_cluster_id as int16_t;
+                    sps.id = (*syn_block.get()).b_nospell_cluster_id as int16_t;
                     sps.cont_in_list = ::core::ptr::null_mut::<int16_t>();
                     *can_spell = in_id_list(
                         sip,
@@ -4664,11 +4717,11 @@ unsafe extern "C" fn syn_current_attr(
                         0 as ::core::ffi::c_int,
                     ) == 0;
                 }
-            } else if current_trans_id == 0 as ::core::ffi::c_int {
-                *can_spell = (*syn_block).b_syn_spell == SYNSPL_TOP;
+            } else if current_trans_id.get() == 0 as ::core::ffi::c_int {
+                *can_spell = (*syn_block.get()).b_syn_spell == SYNSPL_TOP;
             } else {
                 sps.inc_tag = 0 as ::core::ffi::c_int;
-                sps.id = (*syn_block).b_spell_cluster_id as int16_t;
+                sps.id = (*syn_block.get()).b_spell_cluster_id as int16_t;
                 sps.cont_in_list = ::core::ptr::null_mut::<int16_t>();
                 *can_spell = in_id_list(
                     sip,
@@ -4676,8 +4729,8 @@ unsafe extern "C" fn syn_current_attr(
                     &raw mut sps,
                     0 as ::core::ffi::c_int,
                 ) != 0;
-                if (*syn_block).b_nospell_cluster_id != 0 as ::core::ffi::c_int {
-                    sps.id = (*syn_block).b_nospell_cluster_id as int16_t;
+                if (*syn_block.get()).b_nospell_cluster_id != 0 as ::core::ffi::c_int {
+                    sps.id = (*syn_block.get()).b_nospell_cluster_id as int16_t;
                     if in_id_list(
                         sip,
                         (*sip).si_cont_list,
@@ -4692,34 +4745,35 @@ unsafe extern "C" fn syn_current_attr(
         }
         if !syncing && !keep_state {
             check_state_ends();
-            if !(current_state.ga_len <= 0 as ::core::ffi::c_int)
-                && *syn_getcurline().offset(current_col as isize) as ::core::ffi::c_int != NUL
+            if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int)
+                && *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int != NUL
             {
-                current_col += 1;
+                (*current_col.ptr()) += 1;
                 check_state_ends();
-                current_col -= 1;
+                (*current_col.ptr()) -= 1;
             }
         }
     } else if !can_spell.is_null() {
-        *can_spell = if (*syn_block).b_syn_spell == SYNSPL_DEFAULT {
-            ((*syn_block).b_spell_cluster_id == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+        *can_spell = if (*syn_block.get()).b_syn_spell == SYNSPL_DEFAULT {
+            ((*syn_block.get()).b_spell_cluster_id == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
         } else {
-            ((*syn_block).b_syn_spell == SYNSPL_TOP) as ::core::ffi::c_int
+            ((*syn_block.get()).b_syn_spell == SYNSPL_TOP) as ::core::ffi::c_int
         } != 0;
     }
-    if !current_next_list.is_null()
+    if !(*current_next_list.ptr()).is_null()
         && {
             line = syn_getcurline();
-            *line.offset(current_col as isize) as ::core::ffi::c_int != NUL
+            *line.offset(current_col.get() as isize) as ::core::ffi::c_int != NUL
         }
-        && *line.offset((current_col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
+        && *line
+            .offset((current_col.get() as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
             as ::core::ffi::c_int
             == NUL
-        && current_next_flags
+        && current_next_flags.get()
             & (HL_SKIPNL as ::core::ffi::c_int | HL_SKIPEMPTY as ::core::ffi::c_int)
             == 0
     {
-        current_next_list = ::core::ptr::null_mut::<int16_t>();
+        current_next_list.set(::core::ptr::null_mut::<int16_t>());
     }
     if !(zero_width_next_ga.ga_len <= 0 as ::core::ffi::c_int) {
         ga_clear(&raw mut zero_width_next_ga);
@@ -4727,23 +4781,24 @@ unsafe extern "C" fn syn_current_attr(
     unref_extmatch(re_extmatch_out);
     re_extmatch_out = ::core::ptr::null_mut::<reg_extmatch_T>();
     unref_extmatch(cur_extmatch);
-    return current_attr;
+    return current_attr.get();
 }
 unsafe extern "C" fn did_match_already(
     mut idx: ::core::ffi::c_int,
     mut gap: *mut garray_T,
 ) -> bool {
-    let mut i: ::core::ffi::c_int = current_state.ga_len;
+    let mut i: ::core::ffi::c_int = (*current_state.ptr()).ga_len;
     loop {
         i -= 1;
         if i < 0 as ::core::ffi::c_int {
             break;
         }
-        if (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_m_startcol
-            == current_col
-            && (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_m_lnum
-                == current_lnum as ::core::ffi::c_int
-            && (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_idx == idx
+        if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_m_startcol
+            == current_col.get()
+            && (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_m_lnum
+                == current_lnum.get() as ::core::ffi::c_int
+            && (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_idx
+                == idx
         {
             return true_0 != 0;
         }
@@ -4764,64 +4819,65 @@ unsafe extern "C" fn push_next_match() -> *mut stateitem_T {
     let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
     let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
     let mut save_flags: ::core::ffi::c_int = 0;
-    spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(next_match_idx as isize);
-    push_current_state(next_match_idx);
-    cur_si = (current_state.ga_data as *mut stateitem_T)
-        .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
-    (*cur_si).si_h_startpos = next_match_h_startpos;
-    (*cur_si).si_m_startcol = current_col as ::core::ffi::c_int;
-    (*cur_si).si_m_lnum = current_lnum as ::core::ffi::c_int;
+    spp = ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
+        .offset(next_match_idx.get() as isize);
+    push_current_state(next_match_idx.get());
+    cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+        .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
+    (*cur_si).si_h_startpos = next_match_h_startpos.get();
+    (*cur_si).si_m_startcol = current_col.get() as ::core::ffi::c_int;
+    (*cur_si).si_m_lnum = current_lnum.get() as ::core::ffi::c_int;
     (*cur_si).si_flags = (*spp).sp_flags;
-    let c2rust_fresh4 = next_seqnr;
-    next_seqnr = next_seqnr + 1;
+    let c2rust_fresh4 = next_seqnr.get();
+    next_seqnr.set(next_seqnr.get() + 1);
     (*cur_si).si_seqnr = c2rust_fresh4;
     (*cur_si).si_cchar = (*spp).sp_cchar;
-    if current_state.ga_len > 1 as ::core::ffi::c_int {
-        (*cur_si).si_flags |= (*(current_state.ga_data as *mut stateitem_T)
-            .offset((current_state.ga_len - 2 as ::core::ffi::c_int) as isize))
+    if (*current_state.ptr()).ga_len > 1 as ::core::ffi::c_int {
+        (*cur_si).si_flags |= (*((*current_state.ptr()).ga_data as *mut stateitem_T)
+            .offset(((*current_state.ptr()).ga_len - 2 as ::core::ffi::c_int) as isize))
         .si_flags
             & HL_CONCEAL as ::core::ffi::c_int;
     }
     (*cur_si).si_next_list = (*spp).sp_next_list;
-    (*cur_si).si_extmatch = ref_extmatch(next_match_extmatch);
+    (*cur_si).si_extmatch = ref_extmatch(next_match_extmatch.get());
     if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
         && (*spp).sp_flags & HL_ONELINE as ::core::ffi::c_int == 0
     {
-        update_si_end(cur_si, next_match_m_endpos.col, true_0 != 0);
+        update_si_end(cur_si, (*next_match_m_endpos.ptr()).col, true_0 != 0);
         check_keepend();
     } else {
-        (*cur_si).si_m_endpos = next_match_m_endpos;
-        (*cur_si).si_h_endpos = next_match_h_endpos;
+        (*cur_si).si_m_endpos = next_match_m_endpos.get();
+        (*cur_si).si_h_endpos = next_match_h_endpos.get();
         (*cur_si).si_ends = true_0;
-        (*cur_si).si_flags |= next_match_flags;
-        (*cur_si).si_eoe_pos = next_match_eoe_pos;
-        (*cur_si).si_end_idx = next_match_end_idx;
+        (*cur_si).si_flags |= next_match_flags.get();
+        (*cur_si).si_eoe_pos = next_match_eoe_pos.get();
+        (*cur_si).si_end_idx = next_match_end_idx.get();
     }
-    if keepend_level < 0 as ::core::ffi::c_int
+    if keepend_level.get() < 0 as ::core::ffi::c_int
         && (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0
     {
-        keepend_level = current_state.ga_len - 1 as ::core::ffi::c_int;
+        keepend_level.set((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
     }
     check_keepend();
-    update_si_attr(current_state.ga_len - 1 as ::core::ffi::c_int);
+    update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
     save_flags = (*cur_si).si_flags
         & (HL_CONCEAL as ::core::ffi::c_int | HL_CONCEALENDS as ::core::ffi::c_int);
     if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
         && (*spp).sp_syn_match_id as ::core::ffi::c_int != 0 as ::core::ffi::c_int
     {
-        push_current_state(next_match_idx);
-        cur_si = (current_state.ga_data as *mut stateitem_T)
-            .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
-        (*cur_si).si_h_startpos = next_match_h_startpos;
-        (*cur_si).si_m_startcol = current_col as ::core::ffi::c_int;
-        (*cur_si).si_m_lnum = current_lnum as ::core::ffi::c_int;
-        (*cur_si).si_m_endpos = next_match_eos_pos;
-        (*cur_si).si_h_endpos = next_match_eos_pos;
+        push_current_state(next_match_idx.get());
+        cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+            .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
+        (*cur_si).si_h_startpos = next_match_h_startpos.get();
+        (*cur_si).si_m_startcol = current_col.get() as ::core::ffi::c_int;
+        (*cur_si).si_m_lnum = current_lnum.get() as ::core::ffi::c_int;
+        (*cur_si).si_m_endpos = next_match_eos_pos.get();
+        (*cur_si).si_h_endpos = next_match_eos_pos.get();
         (*cur_si).si_ends = true_0;
         (*cur_si).si_end_idx = 0 as ::core::ffi::c_int;
         (*cur_si).si_flags = HL_MATCH as ::core::ffi::c_int;
-        let c2rust_fresh5 = next_seqnr;
-        next_seqnr = next_seqnr + 1;
+        let c2rust_fresh5 = next_seqnr.get();
+        next_seqnr.set(next_seqnr.get() + 1);
         (*cur_si).si_seqnr = c2rust_fresh5;
         (*cur_si).si_flags |= save_flags;
         if (*cur_si).si_flags & HL_CONCEALENDS as ::core::ffi::c_int != 0 {
@@ -4829,67 +4885,67 @@ unsafe extern "C" fn push_next_match() -> *mut stateitem_T {
         }
         (*cur_si).si_next_list = ::core::ptr::null_mut::<int16_t>();
         check_keepend();
-        update_si_attr(current_state.ga_len - 1 as ::core::ffi::c_int);
+        update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
     }
-    next_match_idx = -1 as ::core::ffi::c_int;
+    next_match_idx.set(-1 as ::core::ffi::c_int);
     return cur_si;
 }
 unsafe extern "C" fn check_state_ends() {
     let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
     let mut had_extend: ::core::ffi::c_int = 0;
-    cur_si = (current_state.ga_data as *mut stateitem_T)
-        .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+    cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+        .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
     while (*cur_si).si_ends != 0
-        && ((*cur_si).si_m_endpos.lnum < current_lnum
-            || (*cur_si).si_m_endpos.lnum == current_lnum
-                && (*cur_si).si_m_endpos.col <= current_col)
+        && ((*cur_si).si_m_endpos.lnum < current_lnum.get()
+            || (*cur_si).si_m_endpos.lnum == current_lnum.get()
+                && (*cur_si).si_m_endpos.col <= current_col.get())
     {
         if (*cur_si).si_end_idx != 0
-            && ((*cur_si).si_eoe_pos.lnum > current_lnum
-                || (*cur_si).si_eoe_pos.lnum == current_lnum
-                    && (*cur_si).si_eoe_pos.col > current_col)
+            && ((*cur_si).si_eoe_pos.lnum > current_lnum.get()
+                || (*cur_si).si_eoe_pos.lnum == current_lnum.get()
+                    && (*cur_si).si_eoe_pos.col > current_col.get())
         {
             (*cur_si).si_idx = (*cur_si).si_end_idx;
             (*cur_si).si_end_idx = 0 as ::core::ffi::c_int;
             (*cur_si).si_m_endpos = (*cur_si).si_eoe_pos;
             (*cur_si).si_h_endpos = (*cur_si).si_eoe_pos;
             (*cur_si).si_flags |= HL_MATCH as ::core::ffi::c_int;
-            let c2rust_fresh0 = next_seqnr;
-            next_seqnr = next_seqnr + 1;
+            let c2rust_fresh0 = next_seqnr.get();
+            next_seqnr.set(next_seqnr.get() + 1);
             (*cur_si).si_seqnr = c2rust_fresh0;
             if (*cur_si).si_flags & HL_CONCEALENDS as ::core::ffi::c_int != 0 {
                 (*cur_si).si_flags |= HL_CONCEAL as ::core::ffi::c_int;
             }
-            update_si_attr(current_state.ga_len - 1 as ::core::ffi::c_int);
-            current_next_list = ::core::ptr::null_mut::<int16_t>();
-            next_match_idx = 0 as ::core::ffi::c_int;
-            next_match_col = MAXCOL as ::core::ffi::c_int;
+            update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
+            current_next_list.set(::core::ptr::null_mut::<int16_t>());
+            next_match_idx.set(0 as ::core::ffi::c_int);
+            next_match_col.set(MAXCOL as ::core::ffi::c_int);
             break;
         } else {
-            current_next_list = (*cur_si).si_next_list;
-            current_next_flags = (*cur_si).si_flags;
-            if current_next_flags
+            current_next_list.set((*cur_si).si_next_list);
+            current_next_flags.set((*cur_si).si_flags);
+            if current_next_flags.get()
                 & (HL_SKIPNL as ::core::ffi::c_int | HL_SKIPEMPTY as ::core::ffi::c_int)
                 == 0
-                && *syn_getcurline().offset(current_col as isize) as ::core::ffi::c_int == NUL
+                && *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
             {
-                current_next_list = ::core::ptr::null_mut::<int16_t>();
+                current_next_list.set(::core::ptr::null_mut::<int16_t>());
             }
             had_extend = (*cur_si).si_flags & HL_EXTEND as ::core::ffi::c_int;
             pop_current_state();
-            if current_state.ga_len <= 0 as ::core::ffi::c_int {
+            if (*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int {
                 break;
             }
-            if had_extend != 0 && keepend_level >= 0 as ::core::ffi::c_int {
+            if had_extend != 0 && keepend_level.get() >= 0 as ::core::ffi::c_int {
                 syn_update_ends(false_0 != 0);
-                if current_state.ga_len <= 0 as ::core::ffi::c_int {
+                if (*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int {
                     break;
                 }
             }
-            cur_si = (current_state.ga_data as *mut stateitem_T)
-                .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize);
+            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
+                .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
             if !((*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                && (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_type as ::core::ffi::c_int
                     == SPTYPE_START
@@ -4899,11 +4955,11 @@ unsafe extern "C" fn check_state_ends() {
             {
                 continue;
             }
-            update_si_end(cur_si, current_col, true_0 != 0);
+            update_si_end(cur_si, current_col.get(), true_0 != 0);
             check_keepend();
-            if current_next_flags & HL_HAS_EOL as ::core::ffi::c_int != 0
-                && keepend_level < 0 as ::core::ffi::c_int
-                && *syn_getcurline().offset(current_col as isize) as ::core::ffi::c_int == NUL
+            if current_next_flags.get() & HL_HAS_EOL as ::core::ffi::c_int != 0
+                && keepend_level.get() < 0 as ::core::ffi::c_int
+                && *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
             {
                 break;
             }
@@ -4912,12 +4968,13 @@ unsafe extern "C" fn check_state_ends() {
 }
 unsafe extern "C" fn update_si_attr(mut idx: ::core::ffi::c_int) {
     let mut sip: *mut stateitem_T =
-        (current_state.ga_data as *mut stateitem_T).offset(idx as isize);
+        ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(idx as isize);
     let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
     if (*sip).si_idx < 0 as ::core::ffi::c_int {
         return;
     }
-    spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset((*sip).si_idx as isize);
+    spp =
+        ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset((*sip).si_idx as isize);
     if (*sip).si_flags & HL_MATCH as ::core::ffi::c_int != 0 {
         (*sip).si_id = (*spp).sp_syn_match_id as ::core::ffi::c_int;
     } else {
@@ -4940,15 +4997,15 @@ unsafe extern "C" fn update_si_attr(mut idx: ::core::ffi::c_int) {
                 (*sip).si_cont_list = ID_LIST_ALL;
             }
         } else {
-            (*sip).si_attr = (*(current_state.ga_data as *mut stateitem_T)
+            (*sip).si_attr = (*((*current_state.ptr()).ga_data as *mut stateitem_T)
                 .offset((idx - 1 as ::core::ffi::c_int) as isize))
             .si_attr;
-            (*sip).si_trans_id = (*(current_state.ga_data as *mut stateitem_T)
+            (*sip).si_trans_id = (*((*current_state.ptr()).ga_data as *mut stateitem_T)
                 .offset((idx - 1 as ::core::ffi::c_int) as isize))
             .si_trans_id;
             if (*sip).si_cont_list.is_null() {
                 (*sip).si_flags |= HL_TRANS_CONT as ::core::ffi::c_int;
-                (*sip).si_cont_list = (*(current_state.ga_data as *mut stateitem_T)
+                (*sip).si_cont_list = (*((*current_state.ptr()).ga_data as *mut stateitem_T)
                     .offset((idx - 1 as ::core::ffi::c_int) as isize))
                 .si_cont_list;
             }
@@ -4960,12 +5017,12 @@ unsafe extern "C" fn check_keepend() {
     let mut maxpos: lpos_T = lpos_T { lnum: 0, col: 0 };
     let mut maxpos_h: lpos_T = lpos_T { lnum: 0, col: 0 };
     let mut sip: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
-    if keepend_level < 0 as ::core::ffi::c_int {
+    if keepend_level.get() < 0 as ::core::ffi::c_int {
         return;
     }
-    i = current_state.ga_len - 1 as ::core::ffi::c_int;
-    while i > keepend_level {
-        if (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_flags
+    i = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
+    while i > keepend_level.get() {
+        if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags
             & HL_EXTEND as ::core::ffi::c_int
             != 0
         {
@@ -4977,8 +5034,8 @@ unsafe extern "C" fn check_keepend() {
     maxpos.col = 0 as ::core::ffi::c_int as colnr_T;
     maxpos_h.lnum = 0 as ::core::ffi::c_int as linenr_T;
     maxpos_h.col = 0 as ::core::ffi::c_int as colnr_T;
-    while i < current_state.ga_len {
-        sip = (current_state.ga_data as *mut stateitem_T).offset(i as isize);
+    while i < (*current_state.ptr()).ga_len {
+        sip = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize);
         if maxpos.lnum != 0 as linenr_T {
             limit_pos_zero(&raw mut (*sip).si_m_endpos, &raw mut maxpos);
             limit_pos_zero(&raw mut (*sip).si_h_endpos, &raw mut maxpos_h);
@@ -5012,12 +5069,12 @@ unsafe extern "C" fn update_si_end(
     if (*sip).si_idx < 0 as ::core::ffi::c_int {
         return;
     }
-    if !force && (*sip).si_m_endpos.lnum >= current_lnum {
+    if !force && (*sip).si_m_endpos.lnum >= current_lnum.get() {
         return;
     }
     let mut end_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut startpos: lpos_T = lpos_T {
-        lnum: current_lnum,
+        lnum: current_lnum.get(),
         col: startcol as colnr_T,
     };
     let mut endpos: lpos_T = lpos_T {
@@ -5035,13 +5092,14 @@ unsafe extern "C" fn update_si_end(
         (*sip).si_extmatch,
     );
     if endpos.lnum == 0 as linenr_T {
-        if (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset((*sip).si_idx as isize))
-            .sp_flags
+        if (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
+            .offset((*sip).si_idx as isize))
+        .sp_flags
             & HL_ONELINE as ::core::ffi::c_int
             != 0
         {
             (*sip).si_ends = true_0;
-            (*sip).si_m_endpos.lnum = current_lnum;
+            (*sip).si_m_endpos.lnum = current_lnum.get();
             (*sip).si_m_endpos.col = syn_getcurline_len();
         } else {
             (*sip).si_ends = false_0;
@@ -5057,10 +5115,9 @@ unsafe extern "C" fn update_si_end(
     };
 }
 unsafe extern "C" fn push_current_state(mut idx: ::core::ffi::c_int) {
-    let mut p: *mut stateitem_T = ga_append_via_ptr(
-        &raw mut current_state,
-        ::core::mem::size_of::<stateitem_T>(),
-    ) as *mut stateitem_T;
+    let mut p: *mut stateitem_T =
+        ga_append_via_ptr(current_state.ptr(), ::core::mem::size_of::<stateitem_T>())
+            as *mut stateitem_T;
     memset(
         p as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -5069,17 +5126,17 @@ unsafe extern "C" fn push_current_state(mut idx: ::core::ffi::c_int) {
     (*p).si_idx = idx;
 }
 unsafe extern "C" fn pop_current_state() {
-    if !(current_state.ga_len <= 0 as ::core::ffi::c_int) {
+    if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
         unref_extmatch(
-            (*(current_state.ga_data as *mut stateitem_T)
-                .offset((current_state.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*((*current_state.ptr()).ga_data as *mut stateitem_T)
+                .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .si_extmatch,
         );
-        current_state.ga_len -= 1;
+        (*current_state.ptr()).ga_len -= 1;
     }
-    next_match_idx = -1 as ::core::ffi::c_int;
-    if keepend_level >= current_state.ga_len {
-        keepend_level = -1 as ::core::ffi::c_int;
+    next_match_idx.set(-1 as ::core::ffi::c_int);
+    if keepend_level.get() >= (*current_state.ptr()).ga_len {
+        keepend_level.set(-1 as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn find_endpos(
@@ -5117,13 +5174,13 @@ unsafe extern "C" fn find_endpos(
         return;
     }
     let mut spp: *mut synpat_T =
-        ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
+        ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
     if (*spp).sp_type as ::core::ffi::c_int != SPTYPE_START {
         *hl_endpos = *startpos;
         return;
     }
     loop {
-        spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
+        spp = ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
         if (*spp).sp_type as ::core::ffi::c_int != SPTYPE_START {
             break;
         }
@@ -5145,9 +5202,9 @@ unsafe extern "C" fn find_endpos(
     loop {
         best_idx = -1 as ::core::ffi::c_int;
         idx = start_idx;
-        while idx < (*syn_block).b_syn_patterns.ga_len {
+        while idx < (*syn_block.get()).b_syn_patterns.ga_len {
             let mut lc_col: ::core::ffi::c_int = matchcol as ::core::ffi::c_int;
-            spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
+            spp = ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
             if (*spp).sp_type as ::core::ffi::c_int != SPTYPE_END {
                 break;
             }
@@ -5210,7 +5267,8 @@ unsafe extern "C" fn find_endpos(
                 if pos.lnum > (*startpos).lnum {
                     break;
                 }
-                let mut line_len: ::core::ffi::c_int = ml_get_buf_len(syn_buf, (*startpos).lnum);
+                let mut line_len: ::core::ffi::c_int =
+                    ml_get_buf_len(syn_buf.get(), (*startpos).lnum);
                 if pos.col <= matchcol {
                     matchcol += 1;
                 } else if pos.col <= regmatch.endpos[0 as ::core::ffi::c_int as usize].col {
@@ -5228,7 +5286,8 @@ unsafe extern "C" fn find_endpos(
                 }
             }
         }
-        spp = ((*syn_block).b_syn_patterns.ga_data as *mut synpat_T).offset(best_idx as isize);
+        spp =
+            ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset(best_idx as isize);
         syn_add_end_off(
             m_endpos,
             &raw mut best_regmatch,
@@ -5319,10 +5378,10 @@ unsafe extern "C" fn syn_add_end_off(
         col = (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col as ::core::ffi::c_int;
         off = (*spp).sp_offsets[idx as usize];
     }
-    if (*result).lnum > (*syn_buf).b_ml.ml_line_count {
+    if (*result).lnum > (*syn_buf.get()).b_ml.ml_line_count {
         col = 0 as ::core::ffi::c_int;
     } else if off != 0 as ::core::ffi::c_int {
-        base = ml_get_buf(syn_buf, (*result).lnum);
+        base = ml_get_buf(syn_buf.get(), (*result).lnum);
         p = base.offset(col as isize);
         if off > 0 as ::core::ffi::c_int {
             loop {
@@ -5371,12 +5430,12 @@ unsafe extern "C" fn syn_add_start_off(
         col = (*regmatch).startpos[0 as ::core::ffi::c_int as usize].col as ::core::ffi::c_int;
         off = (*spp).sp_offsets[idx as usize];
     }
-    if (*result).lnum > (*syn_buf).b_ml.ml_line_count {
-        (*result).lnum = (*syn_buf).b_ml.ml_line_count;
-        col = ml_get_buf_len(syn_buf, (*result).lnum) as ::core::ffi::c_int;
+    if (*result).lnum > (*syn_buf.get()).b_ml.ml_line_count {
+        (*result).lnum = (*syn_buf.get()).b_ml.ml_line_count;
+        col = ml_get_buf_len(syn_buf.get(), (*result).lnum) as ::core::ffi::c_int;
     }
     if off != 0 as ::core::ffi::c_int {
-        base = ml_get_buf(syn_buf, (*result).lnum);
+        base = ml_get_buf(syn_buf.get(), (*result).lnum);
         p = base.offset(col as isize);
         if off > 0 as ::core::ffi::c_int {
             loop {
@@ -5405,10 +5464,10 @@ unsafe extern "C" fn syn_add_start_off(
     (*result).col = col as colnr_T;
 }
 unsafe extern "C" fn syn_getcurline() -> *mut ::core::ffi::c_char {
-    return ml_get_buf(syn_buf, current_lnum);
+    return ml_get_buf(syn_buf.get(), current_lnum.get());
 }
 unsafe extern "C" fn syn_getcurline_len() -> colnr_T {
-    return ml_get_buf_len(syn_buf, current_lnum);
+    return ml_get_buf_len(syn_buf.get(), current_lnum.get());
 }
 unsafe extern "C" fn syn_regexec(
     mut rmp: *mut regmmatch_T,
@@ -5418,16 +5477,23 @@ unsafe extern "C" fn syn_regexec(
 ) -> bool {
     let mut timed_out: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut pt: proftime_T = 0;
-    let l_syn_time_on: bool = syn_time_on;
+    let l_syn_time_on: bool = syn_time_on.get();
     if l_syn_time_on {
         pt = profile_start();
     }
     if (*rmp).regprog.is_null() {
         return false_0 != 0;
     }
-    (*rmp).rmm_maxcol = (*syn_buf).b_p_smc as colnr_T;
-    let mut r: ::core::ffi::c_int =
-        vim_regexec_multi(rmp, syn_win, syn_buf, lnum, col, syn_tm, &raw mut timed_out);
+    (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as colnr_T;
+    let mut r: ::core::ffi::c_int = vim_regexec_multi(
+        rmp,
+        syn_win.get(),
+        syn_buf.get(),
+        lnum,
+        col,
+        syn_tm.get(),
+        &raw mut timed_out,
+    );
     if l_syn_time_on {
         pt = profile_end(pt);
         (*st).total = profile_add((*st).total, pt);
@@ -5439,8 +5505,8 @@ unsafe extern "C" fn syn_regexec(
             (*st).match_0 += 1;
         }
     }
-    if timed_out != 0 && !(*(*syn_win).w_s).b_syn_slow {
-        (*(*syn_win).w_s).b_syn_slow = true_0 != 0;
+    if timed_out != 0 && !(*(*syn_win.get()).w_s).b_syn_slow {
+        (*(*syn_win.get()).w_s).b_syn_slow = true_0 != 0;
         msg(
             gettext(
                 b"'redrawtime' exceeded, syntax highlighting disabled\0".as_ptr()
@@ -5469,7 +5535,7 @@ unsafe extern "C" fn check_keyword_id(
     let mut kwlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     loop {
         kwlen += utfc_ptr2len(kwp.offset(kwlen as isize));
-        if !vim_iswordp_buf(kwp.offset(kwlen as isize), syn_buf) {
+        if !vim_iswordp_buf(kwp.offset(kwlen as isize), syn_buf.get()) {
             break;
         }
     }
@@ -5483,14 +5549,14 @@ unsafe extern "C" fn check_keyword_id(
         kwlen as size_t,
     );
     let mut kp: *mut keyentry_T = ::core::ptr::null_mut::<keyentry_T>();
-    if (*syn_block).b_keywtab.ht_used != 0 as size_t {
+    if (*syn_block.get()).b_keywtab.ht_used != 0 as size_t {
         kp = match_keyword(
             &raw mut keyword as *mut ::core::ffi::c_char,
-            &raw mut (*syn_block).b_keywtab,
+            &raw mut (*syn_block.get()).b_keywtab,
             cur_si,
         );
     }
-    if kp.is_null() && (*syn_block).b_keywtab_ic.ht_used != 0 as size_t {
+    if kp.is_null() && (*syn_block.get()).b_keywtab_ic.ht_used != 0 as size_t {
         str_foldcase(
             kwp,
             kwlen,
@@ -5499,7 +5565,7 @@ unsafe extern "C" fn check_keyword_id(
         );
         kp = match_keyword(
             &raw mut keyword as *mut ::core::ffi::c_char,
-            &raw mut (*syn_block).b_keywtab_ic,
+            &raw mut (*syn_block.get()).b_keywtab_ic,
             cur_si,
         );
     }
@@ -5520,14 +5586,14 @@ unsafe extern "C" fn match_keyword(
     let mut hi: *mut hashitem_T = hash_find(ht, keyword);
     if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
         let mut kp: *mut keyentry_T = (*hi).hi_key.offset(
-            -((&raw mut dumkey.keyword as *mut ::core::ffi::c_char)
-                .offset_from(&raw mut dumkey as *mut ::core::ffi::c_char) as isize),
+            -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
+                .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char) as isize),
         ) as *mut keyentry_T;
         while !kp.is_null() {
-            if if !current_next_list.is_null() {
+            if if !(*current_next_list.ptr()).is_null() {
                 in_id_list(
                     ::core::ptr::null_mut::<stateitem_T>(),
-                    current_next_list,
+                    current_next_list.get(),
                     &raw mut (*kp).k_syn,
                     0 as ::core::ffi::c_int,
                 )
@@ -5587,7 +5653,7 @@ unsafe extern "C" fn syn_cmd_conceal(mut eap: *mut exarg_T, mut _syncing: ::core
         (*(*curwin).w_s).b_syn_conceal = false_0;
     } else {
         semsg(
-            gettext(&raw const e_illegal_arg as *const ::core::ffi::c_char),
+            gettext((e_illegal_arg.ptr() as *const _) as *const ::core::ffi::c_char),
             arg,
         );
     };
@@ -5630,7 +5696,7 @@ unsafe extern "C" fn syn_cmd_case(mut eap: *mut exarg_T, mut _syncing: ::core::f
         (*(*curwin).w_s).b_syn_ic = true_0;
     } else {
         semsg(
-            gettext(&raw const e_illegal_arg as *const ::core::ffi::c_char),
+            gettext((e_illegal_arg.ptr() as *const _) as *const ::core::ffi::c_char),
             arg,
         );
     };
@@ -5679,7 +5745,7 @@ unsafe extern "C" fn syn_cmd_foldlevel(mut eap: *mut exarg_T, mut _syncing: ::co
         (*(*curwin).w_s).b_syn_foldlevel = SYNFLD_MINIMUM;
     } else {
         semsg(
-            gettext(&raw const e_illegal_arg as *const ::core::ffi::c_char),
+            gettext((e_illegal_arg.ptr() as *const _) as *const ::core::ffi::c_char),
             arg,
         );
         return;
@@ -5687,7 +5753,7 @@ unsafe extern "C" fn syn_cmd_foldlevel(mut eap: *mut exarg_T, mut _syncing: ::co
     arg = skipwhite(arg_end);
     if *arg as ::core::ffi::c_int != NUL {
         semsg(
-            gettext(&raw const e_illegal_arg as *const ::core::ffi::c_char),
+            gettext((e_illegal_arg.ptr() as *const _) as *const ::core::ffi::c_char),
             arg,
         );
     }
@@ -5743,7 +5809,7 @@ unsafe extern "C" fn syn_cmd_spell(mut eap: *mut exarg_T, mut _syncing: ::core::
         (*(*curwin).w_s).b_syn_spell = SYNSPL_DEFAULT;
     } else {
         semsg(
-            gettext(&raw const e_illegal_arg as *const ::core::ffi::c_char),
+            gettext((e_illegal_arg.ptr() as *const _) as *const ::core::ffi::c_char),
             arg,
         );
         return;
@@ -5857,7 +5923,7 @@ pub unsafe extern "C" fn syntax_clear(mut block: *mut synblock_T) {
     clear_string_option(&raw mut (*block).b_syn_isk);
     syn_stack_free_all(block);
     invalidate_current_state();
-    running_syn_inc_tag = 0 as ::core::ffi::c_int;
+    running_syn_inc_tag.set(0 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn reset_synblock(mut wp: *mut win_T) {
@@ -6071,7 +6137,7 @@ unsafe extern "C" fn syn_cmd_off(mut eap: *mut exarg_T, mut _syncing: ::core::ff
 unsafe extern "C" fn syn_cmd_onoff(mut eap: *mut exarg_T, mut name: *mut ::core::ffi::c_char) {
     (*eap).nextcmd = check_nextcmd((*eap).arg);
     if (*eap).skip == 0 {
-        did_syntax_onoff = true_0 != 0;
+        did_syntax_onoff.set(true_0 != 0);
         let mut buf: [::core::ffi::c_char; 100] = [0; 100];
         memcpy(
             &raw mut buf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
@@ -6089,7 +6155,7 @@ unsafe extern "C" fn syn_cmd_onoff(mut eap: *mut exarg_T, mut name: *mut ::core:
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_maybe_enable() {
-    if !did_syntax_onoff {
+    if !did_syntax_onoff.get() {
         let mut ea: exarg_T = exarg_T {
             arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
@@ -6141,7 +6207,7 @@ unsafe extern "C" fn syn_cmd_list(mut eap: *mut exarg_T, mut syncing: ::core::ff
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     if !syntax_present(curwin) {
         msg(
-            gettext(&raw mut msg_no_items as *mut ::core::ffi::c_char),
+            gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
         return;
@@ -6278,7 +6344,7 @@ unsafe extern "C" fn syn_match_msg() {
         ));
     }
 }
-static mut last_matchgroup: ::core::ffi::c_int = 0;
+static last_matchgroup: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_only: bool) {
     let mut did_header: bool = false_0 != 0;
     let hl_id: ::core::ffi::c_int = HLF_D as ::core::ffi::c_int;
@@ -6301,7 +6367,7 @@ unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_on
         {
             syn_list_header(did_header, 0 as ::core::ffi::c_int, id, true_0 != 0);
             did_header = true_0 != 0;
-            last_matchgroup = 0 as ::core::ffi::c_int;
+            last_matchgroup.set(0 as ::core::ffi::c_int);
             if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_MATCH {
                 put_pattern(
                     b"match\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6361,7 +6427,7 @@ unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_on
                 msg_putchar(' ' as ::core::ffi::c_int);
             }
             syn_list_flags(
-                &raw mut namelist1 as *mut keyvalue_T,
+                namelist1.ptr() as *mut keyvalue_T,
                 ::core::mem::size_of::<[keyvalue_T; 10]>()
                     .wrapping_div(::core::mem::size_of::<keyvalue_T>())
                     .wrapping_div(
@@ -6393,7 +6459,7 @@ unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_on
                     hl_id,
                 );
                 syn_list_flags(
-                    &raw mut namelist2 as *mut keyvalue_T,
+                    namelist2.ptr() as *mut keyvalue_T,
                     ::core::mem::size_of::<[keyvalue_T; 3]>()
                         .wrapping_div(::core::mem::size_of::<keyvalue_T>())
                         .wrapping_div(
@@ -6568,18 +6634,18 @@ unsafe extern "C" fn put_pattern(
     spp: *const synpat_T,
     hl_id: ::core::ffi::c_int,
 ) {
-    static mut sepchars: *const ::core::ffi::c_char =
-        b"/+=-#@\"|'^&\0".as_ptr() as *const ::core::ffi::c_char;
+    static sepchars: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"/+=-#@\"|'^&\0".as_ptr() as *const ::core::ffi::c_char);
     let mut i: ::core::ffi::c_int = 0;
-    if last_matchgroup != (*spp).sp_syn_match_id as ::core::ffi::c_int {
-        last_matchgroup = (*spp).sp_syn_match_id as ::core::ffi::c_int;
+    if last_matchgroup.get() != (*spp).sp_syn_match_id as ::core::ffi::c_int {
+        last_matchgroup.set((*spp).sp_syn_match_id as ::core::ffi::c_int);
         msg_puts_hl(
             b"matchgroup\0".as_ptr() as *const ::core::ffi::c_char,
             hl_id,
             false_0 != 0,
         );
         msg_putchar('=' as ::core::ffi::c_int);
-        if last_matchgroup == 0 as ::core::ffi::c_int {
+        if last_matchgroup.get() == 0 as ::core::ffi::c_int {
             msg_outtrans(
                 b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
@@ -6587,7 +6653,7 @@ unsafe extern "C" fn put_pattern(
             );
         } else {
             msg_outtrans(
-                highlight_group_name(last_matchgroup - 1 as ::core::ffi::c_int),
+                highlight_group_name(last_matchgroup.get() - 1 as ::core::ffi::c_int),
                 0 as ::core::ffi::c_int,
                 false_0 != 0,
             );
@@ -6599,20 +6665,20 @@ unsafe extern "C" fn put_pattern(
     i = 0 as ::core::ffi::c_int;
     while !vim_strchr(
         (*spp).sp_pattern,
-        *sepchars.offset(i as isize) as uint8_t as ::core::ffi::c_int,
+        *(*sepchars.ptr()).offset(i as isize) as uint8_t as ::core::ffi::c_int,
     )
     .is_null()
     {
         i += 1;
-        if *sepchars.offset(i as isize) as ::core::ffi::c_int != NUL {
+        if *(*sepchars.ptr()).offset(i as isize) as ::core::ffi::c_int != NUL {
             continue;
         }
         i = 0 as ::core::ffi::c_int;
         break;
     }
-    msg_putchar(*sepchars.offset(i as isize) as ::core::ffi::c_int);
+    msg_putchar(*(*sepchars.ptr()).offset(i as isize) as ::core::ffi::c_int);
     msg_outtrans((*spp).sp_pattern, 0 as ::core::ffi::c_int, false_0 != 0);
-    msg_putchar(*sepchars.offset(i as isize) as ::core::ffi::c_int);
+    msg_putchar(*(*sepchars.ptr()).offset(i as isize) as ::core::ffi::c_int);
     let mut first: bool = true_0 != 0;
     i = 0 as ::core::ffi::c_int;
     while i < SPO_COUNT {
@@ -6621,7 +6687,7 @@ unsafe extern "C" fn put_pattern(
             if !first {
                 msg_putchar(',' as ::core::ffi::c_int);
             }
-            msg_puts(spo_name_tab[i as usize] as *const ::core::ffi::c_char);
+            msg_puts((*spo_name_tab.ptr())[i as usize] as *const ::core::ffi::c_char);
             let n: ::core::ffi::c_int = (*spp).sp_offsets[i as usize];
             if i != SPO_LC_OFF {
                 if (*spp).sp_off_flags as ::core::ffi::c_int & mask != 0 {
@@ -6660,8 +6726,8 @@ unsafe extern "C" fn syn_list_keywords(
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
             todo = todo.wrapping_sub(1);
             let mut kp: *mut keyentry_T = (*hi).hi_key.offset(
-                -((&raw mut dumkey.keyword as *mut ::core::ffi::c_char)
-                    .offset_from(&raw mut dumkey as *mut ::core::ffi::c_char)
+                -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
+                    .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char)
                     as isize),
             ) as *mut keyentry_T;
             while !kp.is_null() && !got_int {
@@ -6765,8 +6831,8 @@ unsafe extern "C" fn syn_clear_keyword(mut id: ::core::ffi::c_int, mut ht: *mut 
             todo -= 1;
             let mut kp_prev: *mut keyentry_T = ::core::ptr::null_mut::<keyentry_T>();
             let mut kp: *mut keyentry_T = (*hi).hi_key.offset(
-                -((&raw mut dumkey.keyword as *mut ::core::ffi::c_char)
-                    .offset_from(&raw mut dumkey as *mut ::core::ffi::c_char)
+                -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
+                    .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char)
                     as isize),
             ) as *mut keyentry_T;
             while !kp.is_null() {
@@ -6803,8 +6869,8 @@ unsafe extern "C" fn clear_keywtab(mut ht: *mut hashtab_T) {
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
             todo -= 1;
             let mut kp: *mut keyentry_T = (*hi).hi_key.offset(
-                -((&raw mut dumkey.keyword as *mut ::core::ffi::c_char)
-                    .offset_from(&raw mut dumkey as *mut ::core::ffi::c_char)
+                -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
+                    .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char)
                     as isize),
             ) as *mut keyentry_T;
             while !kp.is_null() {
@@ -6854,7 +6920,7 @@ unsafe extern "C" fn add_keyword(
         name_ic as *mut ::core::ffi::c_char,
     );
     (*kp).k_syn.id = id as int16_t;
-    (*kp).k_syn.inc_tag = current_syn_inc_tag;
+    (*kp).k_syn.inc_tag = current_syn_inc_tag.get();
     (*kp).flags = flags;
     (*kp).k_char = conceal_char;
     (*kp).k_syn.cont_in_list = copy_id_list(cont_in_list);
@@ -6884,8 +6950,8 @@ unsafe extern "C" fn add_keyword(
         );
     } else {
         (*kp).ke_next = (*hi).hi_key.offset(
-            -((&raw mut dumkey.keyword as *mut ::core::ffi::c_char)
-                .offset_from(&raw mut dumkey as *mut ::core::ffi::c_char) as isize),
+            -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
+                .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char) as isize),
         ) as *mut keyentry_T;
         (*hi).hi_key = &raw mut (*kp).keyword as *mut ::core::ffi::c_char;
     };
@@ -6909,7 +6975,7 @@ unsafe extern "C" fn get_syn_options(
 ) -> *mut ::core::ffi::c_char {
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut fidx: ::core::ffi::c_int = 0;
-    static mut flagtab: [flag; 19] = [
+    static flagtab: GlobalCell<[flag; 19]> = GlobalCell::new([
         flag {
             name: b"cCoOnNtTaAiInNeEdD\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
@@ -7023,16 +7089,16 @@ unsafe extern "C" fn get_syn_options(
             argtype: 3 as ::core::ffi::c_int,
             flags: 0 as ::core::ffi::c_int,
         },
-    ];
-    static mut first_letters: *const ::core::ffi::c_char =
-        b"cCoOkKeEtTsSgGdDfFnN\0".as_ptr() as *const ::core::ffi::c_char;
+    ]);
+    static first_letters: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"cCoOkKeEtTsSgGdDfFnN\0".as_ptr() as *const ::core::ffi::c_char);
     if arg.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if (*(*curwin).w_s).b_syn_conceal != 0 {
         (*opt).flags |= HL_CONCEAL as ::core::ffi::c_int;
     }
-    while !strchr(first_letters, *arg as ::core::ffi::c_int).is_null() {
+    while !strchr(first_letters.get(), *arg as ::core::ffi::c_int).is_null() {
         fidx = ::core::mem::size_of::<[flag; 19]>()
             .wrapping_div(::core::mem::size_of::<flag>())
             .wrapping_div(
@@ -7044,7 +7110,7 @@ unsafe extern "C" fn get_syn_options(
             if fidx < 0 as ::core::ffi::c_int {
                 break;
             }
-            let mut p: *mut ::core::ffi::c_char = flagtab[fidx as usize].name;
+            let mut p: *mut ::core::ffi::c_char = (*flagtab.ptr())[fidx as usize].name;
             let mut i: ::core::ffi::c_int = 0;
             i = 0 as ::core::ffi::c_int;
             len = 0 as ::core::ffi::c_int;
@@ -7063,7 +7129,7 @@ unsafe extern "C" fn get_syn_options(
                 && (ascii_iswhite(*arg.offset(len as isize) as ::core::ffi::c_int)
                     as ::core::ffi::c_int
                     != 0
-                    || (if flagtab[fidx as usize].argtype > 0 as ::core::ffi::c_int {
+                    || (if (*flagtab.ptr())[fidx as usize].argtype > 0 as ::core::ffi::c_int {
                         (*arg.offset(len as isize) as ::core::ffi::c_int
                             == '=' as ::core::ffi::c_int)
                             as ::core::ffi::c_int
@@ -7074,9 +7140,9 @@ unsafe extern "C" fn get_syn_options(
                 continue;
             }
             if (*opt).keyword as ::core::ffi::c_int != 0
-                && (flagtab[fidx as usize].flags == HL_DISPLAY as ::core::ffi::c_int
-                    || flagtab[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
-                    || flagtab[fidx as usize].flags == HL_EXTEND as ::core::ffi::c_int)
+                && ((*flagtab.ptr())[fidx as usize].flags == HL_DISPLAY as ::core::ffi::c_int
+                    || (*flagtab.ptr())[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
+                    || (*flagtab.ptr())[fidx as usize].flags == HL_EXTEND as ::core::ffi::c_int)
             {
                 fidx = -1 as ::core::ffi::c_int;
             }
@@ -7085,10 +7151,11 @@ unsafe extern "C" fn get_syn_options(
         if fidx < 0 as ::core::ffi::c_int {
             break;
         }
-        if flagtab[fidx as usize].argtype == 1 as ::core::ffi::c_int {
+        if (*flagtab.ptr())[fidx as usize].argtype == 1 as ::core::ffi::c_int {
             if !(*opt).has_cont_list {
                 emsg(gettext(
-                    &raw const e_contains_argument_not_accepted_here as *const ::core::ffi::c_char,
+                    (e_contains_argument_not_accepted_here.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ));
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
@@ -7101,7 +7168,7 @@ unsafe extern "C" fn get_syn_options(
             {
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-        } else if flagtab[fidx as usize].argtype == 2 as ::core::ffi::c_int {
+        } else if (*flagtab.ptr())[fidx as usize].argtype == 2 as ::core::ffi::c_int {
             if get_id_list(
                 &raw mut arg,
                 11 as ::core::ffi::c_int,
@@ -7111,7 +7178,7 @@ unsafe extern "C" fn get_syn_options(
             {
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-        } else if flagtab[fidx as usize].argtype == 3 as ::core::ffi::c_int {
+        } else if (*flagtab.ptr())[fidx as usize].argtype == 3 as ::core::ffi::c_int {
             if get_id_list(
                 &raw mut arg,
                 9 as ::core::ffi::c_int,
@@ -7121,7 +7188,7 @@ unsafe extern "C" fn get_syn_options(
             {
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-        } else if flagtab[fidx as usize].argtype == 11 as ::core::ffi::c_int
+        } else if (*flagtab.ptr())[fidx as usize].argtype == 11 as ::core::ffi::c_int
             && *arg.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '=' as ::core::ffi::c_int
         {
@@ -7132,16 +7199,16 @@ unsafe extern "C" fn get_syn_options(
             );
             if !vim_isprintc(*conceal_char) {
                 emsg(gettext(
-                    &raw const e_invalid_cchar_value as *const ::core::ffi::c_char,
+                    (e_invalid_cchar_value.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
             arg = skipwhite(arg.offset(7 as ::core::ffi::c_int as isize));
         } else {
-            (*opt).flags |= flagtab[fidx as usize].flags;
+            (*opt).flags |= (*flagtab.ptr())[fidx as usize].flags;
             arg = skipwhite(arg.offset(len as isize));
-            if flagtab[fidx as usize].flags == HL_SYNC_HERE as ::core::ffi::c_int
-                || flagtab[fidx as usize].flags == HL_SYNC_THERE as ::core::ffi::c_int
+            if (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_HERE as ::core::ffi::c_int
+                || (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_THERE as ::core::ffi::c_int
             {
                 if (*opt).sync_idx.is_null() {
                     emsg(gettext(b"E393: group[t]here not accepted here\0".as_ptr()
@@ -7195,7 +7262,7 @@ unsafe extern "C" fn get_syn_options(
                 }
                 xfree(gname as *mut ::core::ffi::c_void);
                 arg = skipwhite(arg);
-            } else if flagtab[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
+            } else if (*flagtab.ptr())[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
                 && foldmethodIsSyntax(curwin) as ::core::ffi::c_int != 0
             {
                 foldUpdateAll(curwin);
@@ -7264,22 +7331,22 @@ unsafe extern "C" fn syn_cmd_include(mut eap: *mut exarg_T, mut _syncing: ::core
         || path_is_absolute((*eap).arg) as ::core::ffi::c_int != 0
     {
         source = true_0 != 0;
-        if expand_filename(eap, syn_cmdlinep, &raw mut errormsg) == FAIL {
+        if expand_filename(eap, syn_cmdlinep.get(), &raw mut errormsg) == FAIL {
             if !errormsg.is_null() {
                 emsg(errormsg);
             }
             return;
         }
     }
-    if running_syn_inc_tag >= MAX_SYN_INC_TAG {
+    if running_syn_inc_tag.get() >= MAX_SYN_INC_TAG {
         emsg(gettext(
             b"E847: Too many syntax includes\0".as_ptr() as *const ::core::ffi::c_char
         ));
         return;
     }
-    let mut prev_syn_inc_tag: ::core::ffi::c_int = current_syn_inc_tag;
-    running_syn_inc_tag += 1;
-    current_syn_inc_tag = running_syn_inc_tag;
+    let mut prev_syn_inc_tag: ::core::ffi::c_int = current_syn_inc_tag.get();
+    (*running_syn_inc_tag.ptr()) += 1;
+    current_syn_inc_tag.set(running_syn_inc_tag.get());
     let mut prev_toplvl_grp: ::core::ffi::c_int = (*(*curwin).w_s).b_syn_topgrp;
     (*(*curwin).w_s).b_syn_topgrp = sgl_id;
     if if source as ::core::ffi::c_int != 0 {
@@ -7299,7 +7366,7 @@ unsafe extern "C" fn syn_cmd_include(mut eap: *mut exarg_T, mut _syncing: ::core
         );
     }
     (*(*curwin).w_s).b_syn_topgrp = prev_toplvl_grp;
-    current_syn_inc_tag = prev_syn_inc_tag;
+    current_syn_inc_tag.set(prev_syn_inc_tag);
 }
 unsafe extern "C" fn syn_cmd_keyword(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
@@ -7416,7 +7483,7 @@ unsafe extern "C" fn syn_cmd_keyword(mut eap: *mut exarg_T, mut _syncing: ::core
                                 {
                                     semsg(
                                         gettext(
-                                            &raw const e_trailing_char_after_rsb_str_str
+                                            (e_trailing_char_after_rsb_str_str.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         kw,
@@ -7554,7 +7621,7 @@ unsafe extern "C" fn syn_cmd_match(mut eap: *mut exarg_T, mut syncing: ::core::f
                 (*spp).sp_syncing = syncing != 0;
                 (*spp).sp_type = SPTYPE_MATCH as ::core::ffi::c_char;
                 (*spp).sp_syn.id = syn_id as int16_t;
-                (*spp).sp_syn.inc_tag = current_syn_inc_tag;
+                (*spp).sp_syn.inc_tag = current_syn_inc_tag.get();
                 (*spp).sp_flags = syn_opt_arg.flags;
                 (*spp).sp_sync_idx = sync_idx;
                 (*spp).sp_cont_list = syn_opt_arg.cont_list;
@@ -7791,7 +7858,7 @@ unsafe extern "C" fn syn_cmd_region(mut eap: *mut exarg_T, mut syncing: ::core::
                         (*((*(*curwin).w_s).b_syn_patterns.ga_data as *mut synpat_T)
                             .offset(idx as isize))
                         .sp_syn
-                        .inc_tag = current_syn_inc_tag;
+                        .inc_tag = current_syn_inc_tag.get();
                         (*((*(*curwin).w_s).b_syn_patterns.ga_data as *mut synpat_T)
                             .offset(idx as isize))
                         .sp_syn_match_id = (*ppp).pp_matchgroup_id as int16_t;
@@ -8262,7 +8329,7 @@ unsafe extern "C" fn get_syn_pattern(
             }
             if strncmp(
                 end,
-                spo_name_tab[idx as usize] as *const ::core::ffi::c_char,
+                (*spo_name_tab.ptr())[idx as usize] as *const ::core::ffi::c_char,
                 3 as size_t,
             ) == 0 as ::core::ffi::c_int
             {
@@ -8614,7 +8681,7 @@ unsafe extern "C" fn get_id_list(
                             } else {
                                 id = SYNID_CONTAINED;
                             }
-                            id += current_syn_inc_tag;
+                            id += current_syn_inc_tag.get();
                         }
                     } else if *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '@' as ::core::ffi::c_int
@@ -8762,13 +8829,13 @@ unsafe extern "C" fn in_id_list(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0;
     let mut id: int16_t = (*ssp).id;
-    static mut depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static depth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if !cur_si.is_null()
         && !(*ssp).cont_in_list.is_null()
         && (*cur_si).si_flags & HL_MATCH as ::core::ffi::c_int == 0
     {
         while (*cur_si).si_flags & HL_TRANS_CONT as ::core::ffi::c_int != 0
-            && cur_si > current_state.ga_data as *mut stateitem_T
+            && cur_si > (*current_state.ptr()).ga_data as *mut stateitem_T
         {
             cur_si = cur_si.offset(-1);
         }
@@ -8776,10 +8843,10 @@ unsafe extern "C" fn in_id_list(
             && in_id_list(
                 ::core::ptr::null_mut::<stateitem_T>(),
                 (*ssp).cont_in_list,
-                &raw mut (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                &raw mut (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_syn,
-                (*((*syn_block).b_syn_patterns.ga_data as *mut synpat_T)
+                (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_flags,
             ) != 0
@@ -8823,15 +8890,15 @@ unsafe extern "C" fn in_id_list(
             return retval;
         }
         if item as ::core::ffi::c_int >= SYNID_CLUSTER {
-            let mut scl_list: *mut int16_t = (*((*syn_block).b_syn_clusters.ga_data
+            let mut scl_list: *mut int16_t = (*((*syn_block.get()).b_syn_clusters.ga_data
                 as *mut syn_cluster_T)
                 .offset((item as ::core::ffi::c_int - SYNID_CLUSTER) as isize))
             .scl_list;
-            if !scl_list.is_null() && depth < 30 as ::core::ffi::c_int {
-                depth += 1;
+            if !scl_list.is_null() && depth.get() < 30 as ::core::ffi::c_int {
+                (*depth.ptr()) += 1;
                 let mut r: ::core::ffi::c_int =
                     in_id_list(::core::ptr::null_mut::<stateitem_T>(), scl_list, ssp, flags);
-                depth -= 1;
+                (*depth.ptr()) -= 1;
                 if r != 0 {
                     return retval;
                 }
@@ -8842,7 +8909,7 @@ unsafe extern "C" fn in_id_list(
     }
     return (retval == 0) as ::core::ffi::c_int;
 }
-static mut subcommands: [subcommand; 19] = [
+static subcommands: GlobalCell<[subcommand; 19]> = GlobalCell::new([
     subcommand {
         name: b"case\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         func: Some(syn_cmd_case as unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int) -> ()),
@@ -8923,12 +8990,12 @@ static mut subcommands: [subcommand; 19] = [
         name: b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         func: Some(syn_cmd_list as unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int) -> ()),
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut subcmd_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    syn_cmdlinep = (*eap).cmdlinep;
+    syn_cmdlinep.set((*eap).cmdlinep);
     subcmd_end = arg;
     while *subcmd_end as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && *subcmd_end as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -8952,9 +9019,9 @@ pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
                 == 0) as ::core::ffi::c_int as usize,
         )
     {
-        if strcmp(subcmd_name, subcommands[i as usize].name) == 0 as ::core::ffi::c_int {
+        if strcmp(subcmd_name, (*subcommands.ptr())[i as usize].name) == 0 as ::core::ffi::c_int {
             (*eap).arg = skipwhite(subcmd_end);
-            subcommands[i as usize]
+            (*subcommands.ptr())[i as usize]
                 .func
                 .expect("non-null function pointer")(eap, false_0);
             break;
@@ -9037,7 +9104,7 @@ pub unsafe extern "C" fn syntax_present(mut win: *mut win_T) -> bool {
         || (*(*win).w_s).b_keywtab.ht_used > 0 as size_t
         || (*(*win).w_s).b_keywtab_ic.ht_used > 0 as size_t;
 }
-static mut expand_what: C2Rust_Unnamed_24 = EXP_SUBCMD;
+static expand_what: GlobalCell<C2Rust_Unnamed_24> = GlobalCell::new(EXP_SUBCMD);
 #[no_mangle]
 pub unsafe extern "C" fn reset_expand_highlight() {
     include_none = 0 as ::core::ffi::c_int;
@@ -9059,7 +9126,7 @@ pub unsafe extern "C" fn set_context_in_syntax_cmd(
     mut arg: *const ::core::ffi::c_char,
 ) {
     (*xp).xp_context = EXPAND_SYNTAX as ::core::ffi::c_int;
-    expand_what = EXP_SUBCMD;
+    expand_what.set(EXP_SUBCMD);
     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
     include_link = 0 as ::core::ffi::c_int;
     include_default = 0 as ::core::ffi::c_int;
@@ -9079,21 +9146,21 @@ pub unsafe extern "C" fn set_context_in_syntax_cmd(
         p.offset_from(arg) as size_t,
     ) == 0 as ::core::ffi::c_int
     {
-        expand_what = EXP_CASE;
+        expand_what.set(EXP_CASE);
     } else if strncasecmp(
         arg as *mut ::core::ffi::c_char,
         b"spell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         p.offset_from(arg) as size_t,
     ) == 0 as ::core::ffi::c_int
     {
-        expand_what = EXP_SPELL;
+        expand_what.set(EXP_SPELL);
     } else if strncasecmp(
         arg as *mut ::core::ffi::c_char,
         b"sync\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         p.offset_from(arg) as size_t,
     ) == 0 as ::core::ffi::c_int
     {
-        expand_what = EXP_SYNC;
+        expand_what.set(EXP_SYNC);
     } else if strncasecmp(
         arg as *mut ::core::ffi::c_char,
         b"list\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -9102,7 +9169,7 @@ pub unsafe extern "C" fn set_context_in_syntax_cmd(
     {
         p = skipwhite(p);
         if *p as ::core::ffi::c_int == '@' as ::core::ffi::c_int {
-            expand_what = EXP_CLUSTER;
+            expand_what.set(EXP_CLUSTER);
         } else {
             (*xp).xp_context = EXPAND_HIGHLIGHT as ::core::ffi::c_int;
         }
@@ -9132,7 +9199,7 @@ pub unsafe extern "C" fn get_syntax_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    match expand_what as ::core::ffi::c_uint {
+    match expand_what.get() as ::core::ffi::c_uint {
         0 => {
             if idx < 0 as ::core::ffi::c_int
                 || idx
@@ -9146,27 +9213,27 @@ pub unsafe extern "C" fn get_syntax_name(
             {
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-            return subcommands[idx as usize].name;
+            return (*subcommands.ptr())[idx as usize].name;
         }
         1 => {
-            static mut case_args: [*mut ::core::ffi::c_char; 3] = [
+            static case_args: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([
                 b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"ignore\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return case_args[idx as usize];
+            ]);
+            return (*case_args.ptr())[idx as usize];
         }
         2 => {
-            static mut spell_args: [*mut ::core::ffi::c_char; 4] = [
+            static spell_args: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
                 b"toplevel\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"notoplevel\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"default\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return spell_args[idx as usize];
+            ]);
+            return (*spell_args.ptr())[idx as usize];
         }
         3 => {
-            static mut sync_args: [*mut ::core::ffi::c_char; 11] = [
+            static sync_args: GlobalCell<[*mut ::core::ffi::c_char; 11]> = GlobalCell::new([
                 b"ccomment\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"fromstart\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -9178,8 +9245,8 @@ pub unsafe extern "C" fn get_syntax_name(
                 b"minlines=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"region\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return sync_args[idx as usize];
+            ]);
+            return (*sync_args.ptr())[idx as usize];
         }
         4 => {
             if idx < (*(*curwin).w_s).b_syn_clusters.ga_len {
@@ -9209,24 +9276,28 @@ pub unsafe extern "C" fn syn_get_id(
     mut spellp: *mut bool,
     mut keep_state: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if wp != syn_win || (*wp).w_buffer != syn_buf || lnum != current_lnum || col < current_col {
+    if wp != syn_win.get()
+        || (*wp).w_buffer != syn_buf.get()
+        || lnum != current_lnum.get()
+        || col < current_col.get()
+    {
         syntax_start(wp, lnum);
-    } else if col > current_col {
-        next_match_idx = -1 as ::core::ffi::c_int;
+    } else if col > current_col.get() {
+        next_match_idx.set(-1 as ::core::ffi::c_int);
     }
     get_syntax_attr(col, spellp, keep_state != 0);
     return if trans != 0 {
-        current_trans_id
+        current_trans_id.get()
     } else {
-        current_id
+        current_id.get()
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_syntax_info(
     mut seqnrp: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    *seqnrp = current_seqnr;
-    return current_flags;
+    *seqnrp = current_seqnr.get();
+    return current_flags.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_get_concealed_id(
@@ -9251,22 +9322,22 @@ pub unsafe extern "C" fn syn_get_concealed_id(
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_get_sub_char() -> ::core::ffi::c_int {
-    return current_sub_char;
+    return current_sub_char.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_get_stack_item(mut i: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if i >= current_state.ga_len {
+    if i >= (*current_state.ptr()).ga_len {
         invalidate_current_state();
-        current_col = MAXCOL as ::core::ffi::c_int as colnr_T;
+        current_col.set(MAXCOL as ::core::ffi::c_int as colnr_T);
         return -1 as ::core::ffi::c_int;
     }
-    return (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_id;
+    return (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_id;
 }
 unsafe extern "C" fn syn_cur_foldlevel() -> ::core::ffi::c_int {
     let mut level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < current_state.ga_len {
-        if (*(current_state.ga_data as *mut stateitem_T).offset(i as isize)).si_flags
+    while i < (*current_state.ptr()).ga_len {
+        if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags
             & HL_FOLD as ::core::ffi::c_int
             != 0
         {
@@ -9291,7 +9362,7 @@ pub unsafe extern "C" fn syn_get_foldlevel(
         if (*(*wp).w_s).b_syn_foldlevel == SYNFLD_MINIMUM {
             let mut cur_level: ::core::ffi::c_int = level;
             let mut low_level: ::core::ffi::c_int = cur_level;
-            while !current_finished {
+            while !current_finished.get() {
                 syn_current_attr(
                     false_0 != 0,
                     false_0 != 0,
@@ -9304,7 +9375,7 @@ pub unsafe extern "C" fn syn_get_foldlevel(
                 } else if cur_level > low_level {
                     level = low_level;
                 }
-                current_col += 1;
+                (*current_col.ptr()) += 1;
             }
         }
     }
@@ -9320,11 +9391,11 @@ pub unsafe extern "C" fn syn_get_foldlevel(
 pub unsafe extern "C" fn ex_syntime(mut eap: *mut exarg_T) {
     if strcmp((*eap).arg, b"on\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
     {
-        syn_time_on = true_0 != 0;
+        syn_time_on.set(true_0 != 0);
     } else if strcmp((*eap).arg, b"off\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int
     {
-        syn_time_on = false_0 != 0;
+        syn_time_on.set(false_0 != 0);
     } else if strcmp(
         (*eap).arg,
         b"clear\0".as_ptr() as *const ::core::ffi::c_char,
@@ -9354,7 +9425,7 @@ unsafe extern "C" fn syntime_clear() {
     let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
     if !syntax_present(curwin) {
         msg(
-            gettext(&raw mut msg_no_items as *mut ::core::ffi::c_char),
+            gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
         return;
@@ -9399,7 +9470,7 @@ unsafe extern "C" fn syn_compare_syntime(
 unsafe extern "C" fn syntime_report() {
     if !syntax_present(curwin) {
         msg(
-            gettext(&raw mut msg_no_items as *mut ::core::ffi::c_char),
+            gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
         return;
@@ -9510,7 +9581,7 @@ pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    namelist1 = [
+    namelist1.set([
         keyvalue_T {
             key: HL_DISPLAY as ::core::ffi::c_int,
             value: b"display\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -9565,8 +9636,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
         },
-    ];
-    namelist2 = [
+    ]);
+    namelist2.set([
         keyvalue_T {
             key: HL_SKIPWHITE as ::core::ffi::c_int,
             value: b"skipwhite\0".as_ptr() as *const ::core::ffi::c_char
@@ -9584,7 +9655,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         },
-    ];
+    ]);
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

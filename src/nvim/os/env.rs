@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2068,16 +2069,17 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut default_vim_dir: *mut ::core::ffi::c_char =
-    b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static default_vim_dir: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[no_mangle]
-pub static mut default_vimruntime_dir: *mut ::core::ffi::c_char =
-    concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char;
+pub static default_vimruntime_dir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr()
+        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
 #[no_mangle]
-pub static mut default_lib_dir: *mut ::core::ffi::c_char =
-    concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char;
+pub static default_lib_dir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_ptr()
+        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
 #[no_mangle]
 pub unsafe extern "C" fn env_init() {
     nvim_testing = os_env_exists(
@@ -2439,19 +2441,20 @@ pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char,
         );
     };
 }
-static mut homedir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static homedir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
-    if homedir.is_null() {
+    if (*homedir.ptr()).is_null() {
         emsg(b"os_homedir failed: homedir not initialized\0".as_ptr() as *const ::core::ffi::c_char);
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    return homedir;
+    return homedir.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn init_homedir() {
-    xfree(homedir as *mut ::core::ffi::c_void);
-    homedir = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    xfree(homedir.get() as *mut ::core::ffi::c_void);
+    homedir.set(::core::ptr::null_mut::<::core::ffi::c_char>());
     let mut var: *mut ::core::ffi::c_char =
         os_getenv(b"HOME\0".as_ptr() as *const ::core::ffi::c_char);
     let mut tofree: *mut ::core::ffi::c_char = var;
@@ -2477,20 +2480,20 @@ pub unsafe extern "C" fn init_homedir() {
         var = &raw mut os_buf as *mut ::core::ffi::c_char;
     }
     if !var.is_null() {
-        homedir = xstrdup(var);
+        homedir.set(xstrdup(var));
     }
     xfree(tofree as *mut ::core::ffi::c_void);
 }
-static mut homedir_buf: [::core::ffi::c_char; 4096] = [0; 4096];
+static homedir_buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
 unsafe extern "C" fn os_uv_homedir() -> *mut ::core::ffi::c_char {
-    homedir_buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+    (*homedir_buf.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     let mut homedir_size: size_t = MAXPATHL as size_t;
     let mut ret_value: ::core::ffi::c_int = uv_os_homedir(
-        &raw mut homedir_buf as *mut ::core::ffi::c_char,
+        homedir_buf.ptr() as *mut ::core::ffi::c_char,
         &raw mut homedir_size,
     );
     if ret_value == 0 as ::core::ffi::c_int && homedir_size < MAXPATHL as size_t {
-        return &raw mut homedir_buf as *mut ::core::ffi::c_char;
+        return homedir_buf.ptr() as *mut ::core::ffi::c_char;
     }
     logmsg(
         LOGLVL_ERR,
@@ -2502,7 +2505,7 @@ unsafe extern "C" fn os_uv_homedir() -> *mut ::core::ffi::c_char {
         ret_value,
         uv_strerror(ret_value),
     );
-    homedir_buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+    (*homedir_buf.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
@@ -2663,7 +2666,7 @@ pub unsafe extern "C" fn expand_env_esc(
                     )
                     .is_null()
                 {
-                    var = homedir;
+                    var = homedir.get();
                     tail = src.offset(1 as ::core::ffi::c_int as isize);
                 } else {
                     tail = src;
@@ -2937,7 +2940,8 @@ pub unsafe extern "C" fn vim_getenv(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut vim_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if vimruntime as ::core::ffi::c_int != 0 && *default_vimruntime_dir as ::core::ffi::c_int == NUL
+    if vimruntime as ::core::ffi::c_int != 0
+        && *default_vimruntime_dir.get() as ::core::ffi::c_int == NUL
     {
         kos_env_path = os_getenv(b"VIM\0".as_ptr() as *const ::core::ffi::c_char);
         if !kos_env_path.is_null() {
@@ -3018,15 +3022,15 @@ pub unsafe extern "C" fn vim_getenv(
     }
     if vim_path.is_null() {
         if vimruntime as ::core::ffi::c_int != 0
-            && *default_vimruntime_dir as ::core::ffi::c_int != NUL
+            && *default_vimruntime_dir.get() as ::core::ffi::c_int != NUL
         {
-            vim_path = xstrdup(default_vimruntime_dir);
-        } else if *default_vim_dir as ::core::ffi::c_int != NUL {
+            vim_path = xstrdup(default_vimruntime_dir.get());
+        } else if *default_vim_dir.get() as ::core::ffi::c_int != NUL {
             if vimruntime as ::core::ffi::c_int != 0 && {
-                vim_path = vim_runtime_dir(default_vim_dir);
+                vim_path = vim_runtime_dir(default_vim_dir.get());
                 vim_path.is_null()
             } {
-                vim_path = xstrdup(default_vim_dir);
+                vim_path = xstrdup(default_vim_dir.get());
             }
         }
     }
@@ -3071,8 +3075,8 @@ pub unsafe extern "C" fn home_replace(
             dstlen.wrapping_sub(1 as size_t)
         };
     }
-    if !homedir.is_null() {
-        dirlen = strlen(homedir);
+    if !(*homedir.ptr()).is_null() {
+        dirlen = strlen(homedir.get());
     }
     let mut homedir_env: *mut ::core::ffi::c_char =
         os_getenv(b"HOME\0".as_ptr() as *const ::core::ffi::c_char);
@@ -3123,7 +3127,7 @@ pub unsafe extern "C" fn home_replace(
     }
     let mut dst_p: *mut ::core::ffi::c_char = dst;
     while *src as ::core::ffi::c_int != 0 && dstlen > 0 as size_t {
-        let mut p: *mut ::core::ffi::c_char = homedir;
+        let mut p: *mut ::core::ffi::c_char = homedir.get();
         let mut len: size_t = dirlen;
         loop {
             if len != 0

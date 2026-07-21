@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     fn __assert_fail(
@@ -882,8 +883,10 @@ pub const CSI_ARG_MASK: ::core::ffi::c_uint =
     !((1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int);
 pub const CSI_ARG_MISSING: ::core::ffi::c_long = 2147483647 as ::core::ffi::c_long;
 #[no_mangle]
-pub static mut vterm_primary_device_attr: [::core::ffi::c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0") };
+pub static vterm_primary_device_attr: GlobalCell<[::core::ffi::c_char; 9]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0")
+    });
 unsafe extern "C" fn putglyph(
     mut state: *mut VTermState,
     schar: schar_T,
@@ -2961,7 +2964,7 @@ unsafe extern "C" fn on_csi(
                     (*state).vt,
                     C1_CSI as ::core::ffi::c_int as uint8_t,
                     b"?%sc\0".as_ptr() as *const ::core::ffi::c_char,
-                    &raw mut vterm_primary_device_attr as *mut ::core::ffi::c_char,
+                    vterm_primary_device_attr.ptr() as *mut ::core::ffi::c_char,
                 );
             }
         }
@@ -4410,7 +4413,7 @@ unsafe extern "C" fn on_resize(
     updatecursor(state, &raw mut oldpos, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-static mut parser_callbacks: VTermParserCallbacks = VTermParserCallbacks {
+static parser_callbacks: GlobalCell<VTermParserCallbacks> = GlobalCell::new(VTermParserCallbacks {
     text: Some(
         on_text
             as unsafe extern "C" fn(
@@ -4487,7 +4490,7 @@ static mut parser_callbacks: VTermParserCallbacks = VTermParserCallbacks {
                 *mut ::core::ffi::c_void,
             ) -> ::core::ffi::c_int,
     ),
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn vterm_obtain_state(mut vt: *mut VTerm) -> *mut VTermState {
     if !(*vt).state.is_null() {
@@ -4497,7 +4500,7 @@ pub unsafe extern "C" fn vterm_obtain_state(mut vt: *mut VTerm) -> *mut VTermSta
     (*vt).state = state;
     vterm_parser_set_callbacks(
         vt,
-        &raw const parser_callbacks,
+        (parser_callbacks.ptr() as *const _),
         state as *mut ::core::ffi::c_void,
     );
     return state;

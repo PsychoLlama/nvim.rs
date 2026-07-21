@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -2939,7 +2940,7 @@ pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_put_uint64_t_ptr_t(
@@ -2962,7 +2963,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2992,8 +2993,9 @@ unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
     }
     abort();
 }
-static mut did_stdio: bool = false_0 != 0;
-static mut next_chan_id: uint64_t = (CHAN_STDERR + 1 as ::core::ffi::c_int) as uint64_t;
+static did_stdio: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static next_chan_id: GlobalCell<uint64_t> =
+    GlobalCell::new((CHAN_STDERR + 1 as ::core::ffi::c_int) as uint64_t);
 #[no_mangle]
 pub unsafe extern "C" fn channel_teardown() {
     let mut chan: *mut Channel = ::core::ptr::null_mut::<Channel>();
@@ -3023,7 +3025,7 @@ pub unsafe extern "C" fn channel_close(
     }
     chan = find_channel(id);
     if chan.is_null() {
-        if id < next_chan_id {
+        if id < next_chan_id.get() {
             return true_0 != 0;
         }
         *error = &raw const e_invchan as *const ::core::ffi::c_char;
@@ -3167,8 +3169,8 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
     {
         (*chan).id = CHAN_STDERR as uint64_t;
     } else {
-        let c2rust_fresh0 = next_chan_id;
-        next_chan_id = next_chan_id.wrapping_add(1);
+        let c2rust_fresh0 = next_chan_id.get();
+        next_chan_id.set((*next_chan_id.ptr()).wrapping_add(1));
         (*chan).id = c2rust_fresh0;
     }
     (*chan).events = multiqueue_new_child(main_loop.events);
@@ -3335,8 +3337,8 @@ unsafe extern "C" fn free_channel_event(mut argv: *mut *mut ::core::ffi::c_void)
     channel_destroy(chan);
 }
 unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
-    next_chan_id = next_chan_id.wrapping_sub(1);
-    if (*chan).id != next_chan_id {
+    next_chan_id.set((*next_chan_id.ptr()).wrapping_sub(1));
+    if (*chan).id != next_chan_id.get() {
         abort();
     }
     map_del_uint64_t_ptr_t(
@@ -3614,11 +3616,11 @@ pub unsafe extern "C" fn channel_from_stdio(
         );
         return 0 as uint64_t;
     }
-    if did_stdio {
+    if did_stdio.get() {
         *error = gettext(b"channel was already open\0".as_ptr() as *const ::core::ffi::c_char);
         return 0 as uint64_t;
     }
-    did_stdio = true_0 != 0;
+    did_stdio.set(true_0 != 0);
     let mut channel: *mut Channel = channel_alloc(kChannelStreamStdio);
     let mut stdin_dup_fd: ::core::ffi::c_int = STDIN_FILENO;
     let mut stdout_dup_fd: ::core::ffi::c_int = STDOUT_FILENO;

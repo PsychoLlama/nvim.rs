@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -195,7 +196,7 @@ extern "C" {
     fn option_was_set(opt_idx: OptIndex) -> bool;
     fn reset_option_was_set(opt_idx: OptIndex);
     fn os_delay(ms: uint64_t, ignoreinput: bool);
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn source_runtime_vim_lua(
         name: *mut ::core::ffi::c_char,
         flags: ::core::ffi::c_int,
@@ -2859,7 +2860,7 @@ pub const KEYSET_OPTIDX_get_highlight__id: ::core::ffi::c_int = 1 as ::core::ffi
 pub const KEYSET_OPTIDX_get_highlight__link: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_highlight__name: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_highlight__create: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-static mut value_init_int: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -2885,7 +2886,7 @@ unsafe extern "C" fn map_get_cstr_t_int(
 ) -> ::core::ffi::c_int {
     let mut k: uint32_t = mh_get_cstr_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_int
+        value_init_int.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2933,12 +2934,12 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
 pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
-static mut highlight_ga: garray_T = GA_EMPTY_INIT_VALUE;
+static highlight_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 #[no_mangle]
-pub static mut highlight_arena: Arena = ARENA_EMPTY;
+pub static highlight_arena: GlobalCell<Arena> = GlobalCell::new(ARENA_EMPTY);
 #[no_mangle]
-pub static mut highlight_unames: Map_cstr_t_int = MAP_INIT;
-static mut hl_name_table: [*mut ::core::ffi::c_char; 18] = [
+pub static highlight_unames: GlobalCell<Map_cstr_t_int> = GlobalCell::new(MAP_INIT);
+static hl_name_table: GlobalCell<[*mut ::core::ffi::c_char; 18]> = GlobalCell::new([
     b"bold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"standout\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"underline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2957,8 +2958,8 @@ static mut hl_name_table: [*mut ::core::ffi::c_char; 18] = [
     b"overline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"nocombine\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"NONE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
-static mut hl_attr_table: [::core::ffi::c_int; 18] = [
+]);
+static hl_attr_table: GlobalCell<[::core::ffi::c_int; 18]> = GlobalCell::new([
     HL_BOLD as ::core::ffi::c_int,
     HL_STANDOUT as ::core::ffi::c_int,
     HL_UNDERLINE as ::core::ffi::c_int,
@@ -2977,31 +2978,35 @@ static mut hl_attr_table: [::core::ffi::c_int; 18] = [
     HL_OVERLINE as ::core::ffi::c_int,
     HL_NOCOMBINE as ::core::ffi::c_int,
     0 as ::core::ffi::c_int,
-];
-static mut e_highlight_group_name_not_found_str: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E411: Highlight group not found: %s\0",
-    )
-};
-static mut e_group_has_settings_highlight_link_ignored: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E414: Group has settings, highlight link ignored\0",
-    )
-};
-static mut e_unexpected_equal_sign_str: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E415: Unexpected equal sign: %s\0",
-    )
-};
-static mut e_missing_equal_sign_str_2: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-        *b"E416: Missing equal sign: %s\0",
-    )
-};
-static mut e_missing_argument_str: [::core::ffi::c_char; 27] = unsafe {
+]);
+static e_highlight_group_name_not_found_str: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E411: Highlight group not found: %s\0",
+        )
+    });
+static e_group_has_settings_highlight_link_ignored: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E414: Group has settings, highlight link ignored\0",
+        )
+    });
+static e_unexpected_equal_sign_str: GlobalCell<[::core::ffi::c_char; 32]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+            *b"E415: Unexpected equal sign: %s\0",
+        )
+    });
+static e_missing_equal_sign_str_2: GlobalCell<[::core::ffi::c_char; 29]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+            *b"E416: Missing equal sign: %s\0",
+        )
+    });
+static e_missing_argument_str: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E417: Missing argument: %s\0")
-};
-static mut highlight_init_both: [*const ::core::ffi::c_char; 175] = [
+});
+static highlight_init_both: GlobalCell<[*const ::core::ffi::c_char; 175]> = GlobalCell::new([
     b"Cursor            guifg=bg      guibg=fg\0".as_ptr() as *const ::core::ffi::c_char,
     b"CursorLineNr      gui=bold      cterm=bold\0".as_ptr()
         as *const ::core::ffi::c_char,
@@ -3266,8 +3271,8 @@ static mut highlight_init_both: [*const ::core::ffi::c_char; 175] = [
     b"default link @lsp.mod.deprecated DiagnosticDeprecated\0".as_ptr()
         as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
-static mut highlight_init_light: [*const ::core::ffi::c_char; 71] = [
+]);
+static highlight_init_light: GlobalCell<[*const ::core::ffi::c_char; 71]> = GlobalCell::new([
     b"Normal guifg=NvimDarkGrey2 guibg=NvimLightGrey2 ctermfg=NONE ctermbg=NONE\0"
         .as_ptr() as *const ::core::ffi::c_char,
     b"Added                guifg=NvimDarkGreen                                  ctermfg=2\0"
@@ -3402,8 +3407,8 @@ static mut highlight_init_light: [*const ::core::ffi::c_char; 71] = [
         .as_ptr() as *const ::core::ffi::c_char,
     b"@variable guifg=NvimDarkGrey2\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
-static mut highlight_init_dark: [*const ::core::ffi::c_char; 71] = [
+]);
+static highlight_init_dark: GlobalCell<[*const ::core::ffi::c_char; 71]> = GlobalCell::new([
     b"Normal guifg=NvimLightGrey2 guibg=NvimDarkGrey2 ctermfg=NONE ctermbg=NONE\0"
         .as_ptr() as *const ::core::ffi::c_char,
     b"Added                guifg=NvimLightGreen                                ctermfg=10\0"
@@ -3534,238 +3539,258 @@ static mut highlight_init_dark: [*const ::core::ffi::c_char; 71] = [
         .as_ptr() as *const ::core::ffi::c_char,
     b"@variable guifg=NvimLightGrey2\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
-    b"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimAssignment Operator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimPlainAssignment NvimAssignment\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimAugmentedAssignment NvimAssignment\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimAssignmentWithAddition NvimAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimAssignmentWithSubtraction NvimAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimAssignmentWithConcatenation NvimAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimOperator Operator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimUnaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimUnaryPlus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimUnaryMinus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimNot NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimBinaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimComparison NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimComparisonModifier NvimComparison\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimBinaryPlus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimBinaryMinus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimConcat NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimConcatOrSubscript NvimConcat\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOr NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimAnd NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimMultiplication NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimDivision NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimMod NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimTernary NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimTernaryColon NvimTernary\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimParenthesis Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimLambda NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimNestingParenthesis NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimCallingParenthesis NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSubscript NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSubscriptBracket NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSubscriptColon NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimCurly NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimContainer NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimDict NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimList NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimIdentifier Identifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierScope NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierScopeDelimiter NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierKey NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimColon Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimComma Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimArrow Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimRegister SpecialChar\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimNumber Number\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimFloat NvimNumber\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimNumberPrefix Type\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOptionSigil Type\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOptionName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOptionScope NvimIdentifierScope\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOptionScopeDelimiter NvimIdentifierScopeDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimEnvironmentSigil NvimOptionSigil\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimEnvironmentName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimString String\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimStringBody NvimString\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimStringQuote NvimString\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimStringSpecial SpecialChar\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuotedBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuotedQuote NvimStringSpecial\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuotedBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuotedEscape NvimStringSpecial\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimFigureBrace NvimInternalError\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSpacing Normal\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalid Error\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignment NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidPlainAssignment NvimInvalidAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAugmentedAssignment NvimInvalidAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOperator NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidUnaryOperator NvimInvalidOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidUnaryPlus NvimInvalidUnaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidUnaryMinus NvimInvalidUnaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidNot NvimInvalidUnaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidBinaryOperator NvimInvalidOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidComparison NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidComparisonModifier NvimInvalidComparison\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidBinaryPlus NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidBinaryMinus NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidConcat NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidConcatOrSubscript NvimInvalidConcat\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOr NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAnd NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidMultiplication NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDivision NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidMod NvimInvalidBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidTernary NvimInvalidOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidTernaryColon NvimInvalidTernary\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDelimiter NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidParenthesis NvimInvalidDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidLambda NvimInvalidParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidNestingParenthesis NvimInvalidParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidCallingParenthesis NvimInvalidParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSubscript NvimInvalidParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSubscriptBracket NvimInvalidSubscript\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSubscriptColon NvimInvalidSubscript\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidCurly NvimInvalidSubscript\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidContainer NvimInvalidParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDict NvimInvalidContainer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidList NvimInvalidContainer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidValue NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifier NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifierScope NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifierScopeDelimiter NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifierName NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifierKey NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidColon NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidComma NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidArrow NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidRegister NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidNumber NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidFloat NvimInvalidNumber\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidNumberPrefix NvimInvalidNumber\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOptionSigil NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOptionName NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOptionScope NvimInvalidIdentifierScope\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidEnvironmentSigil NvimInvalidOptionSigil\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidEnvironmentName NvimInvalidIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidString NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidStringBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidStringQuote NvimInvalidString\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidStringSpecial NvimStringSpecial\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSingleQuote NvimInvalidStringQuote\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSingleQuotedBody NvimInvalidStringBody\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSingleQuotedQuote NvimInvalidStringSpecial\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDoubleQuote NvimInvalidStringQuote\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDoubleQuotedBody NvimInvalidStringBody\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDoubleQuotedEscape NvimInvalidStringSpecial\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDoubleQuotedUnknownEscape NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidFigureBrace NvimInvalidDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidSpacing ErrorMsg\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuotedUnknownEscape NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-];
+pub static highlight_init_cmdline: GlobalCell<[*const ::core::ffi::c_char; 141]> =
+    GlobalCell::new([
+        b"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimAssignment Operator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimPlainAssignment NvimAssignment\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimAugmentedAssignment NvimAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimAssignmentWithAddition NvimAugmentedAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimAssignmentWithSubtraction NvimAugmentedAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimAssignmentWithConcatenation NvimAugmentedAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimOperator Operator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimUnaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimUnaryPlus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimUnaryMinus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimNot NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimBinaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimComparison NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimComparisonModifier NvimComparison\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimBinaryPlus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimBinaryMinus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimConcat NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimConcatOrSubscript NvimConcat\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimOr NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimAnd NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimMultiplication NvimBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimDivision NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimMod NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimTernary NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimTernaryColon NvimTernary\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimParenthesis Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimLambda NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimNestingParenthesis NvimParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimCallingParenthesis NvimParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimSubscript NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimSubscriptBracket NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimSubscriptColon NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimCurly NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimContainer NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimDict NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimList NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimIdentifier Identifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimIdentifierScope NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimIdentifierScopeDelimiter NvimIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimIdentifierName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimIdentifierKey NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimColon Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimComma Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimArrow Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimRegister SpecialChar\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimNumber Number\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimFloat NvimNumber\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimNumberPrefix Type\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimOptionSigil Type\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimOptionName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimOptionScope NvimIdentifierScope\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimOptionScopeDelimiter NvimIdentifierScopeDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimEnvironmentSigil NvimOptionSigil\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimEnvironmentName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimString String\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimStringBody NvimString\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimStringQuote NvimString\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimStringSpecial SpecialChar\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimSingleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimSingleQuotedBody NvimStringBody\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimSingleQuotedQuote NvimStringSpecial\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimDoubleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimDoubleQuotedBody NvimStringBody\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimDoubleQuotedEscape NvimStringSpecial\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimFigureBrace NvimInternalError\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimSpacing Normal\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalid Error\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAssignment NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidPlainAssignment NvimInvalidAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAugmentedAssignment NvimInvalidAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment\0"
+            .as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment\0"
+            .as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOperator NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidUnaryOperator NvimInvalidOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidUnaryPlus NvimInvalidUnaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidUnaryMinus NvimInvalidUnaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidNot NvimInvalidUnaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidBinaryOperator NvimInvalidOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidComparison NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidComparisonModifier NvimInvalidComparison\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidBinaryPlus NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidBinaryMinus NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidConcat NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidConcatOrSubscript NvimInvalidConcat\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOr NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidAnd NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidMultiplication NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDivision NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidMod NvimInvalidBinaryOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidTernary NvimInvalidOperator\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidTernaryColon NvimInvalidTernary\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDelimiter NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidParenthesis NvimInvalidDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidLambda NvimInvalidParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidNestingParenthesis NvimInvalidParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidCallingParenthesis NvimInvalidParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSubscript NvimInvalidParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSubscriptBracket NvimInvalidSubscript\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSubscriptColon NvimInvalidSubscript\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidCurly NvimInvalidSubscript\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidContainer NvimInvalidParenthesis\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDict NvimInvalidContainer\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidList NvimInvalidContainer\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidValue NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidIdentifier NvimInvalidValue\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidIdentifierScope NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidIdentifierScopeDelimiter NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidIdentifierName NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidIdentifierKey NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidColon NvimInvalidDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidComma NvimInvalidDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidArrow NvimInvalidDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidRegister NvimInvalidValue\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidNumber NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidFloat NvimInvalidNumber\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidNumberPrefix NvimInvalidNumber\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOptionSigil NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOptionName NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOptionScope NvimInvalidIdentifierScope\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter\0"
+            .as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidEnvironmentSigil NvimInvalidOptionSigil\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidEnvironmentName NvimInvalidIdentifier\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidString NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimInvalidStringBody NvimStringBody\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidStringQuote NvimInvalidString\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidStringSpecial NvimStringSpecial\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSingleQuote NvimInvalidStringQuote\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSingleQuotedBody NvimInvalidStringBody\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSingleQuotedQuote NvimInvalidStringSpecial\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDoubleQuote NvimInvalidStringQuote\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDoubleQuotedBody NvimInvalidStringBody\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDoubleQuotedEscape NvimInvalidStringSpecial\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidDoubleQuotedUnknownEscape NvimInvalidValue\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidFigureBrace NvimInvalidDelimiter\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        b"default link NvimInvalidSpacing ErrorMsg\0".as_ptr() as *const ::core::ffi::c_char,
+        b"default link NvimDoubleQuotedUnknownEscape NvimInvalidValue\0".as_ptr()
+            as *const ::core::ffi::c_char,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+    ]);
 #[no_mangle]
 pub unsafe extern "C" fn highlight_num_groups() -> ::core::ffi::c_int {
-    return highlight_ga.ga_len;
+    return (*highlight_ga.ptr()).ga_len;
 }
 #[no_mangle]
 pub unsafe extern "C" fn highlight_group_name(
     mut id: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    return (*(highlight_ga.ga_data as *mut HlGroup).offset(id as isize)).sg_name;
+    return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(id as isize)).sg_name;
 }
 #[no_mangle]
 pub unsafe extern "C" fn highlight_link_id(mut id: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return (*(highlight_ga.ga_data as *mut HlGroup).offset(id as isize)).sg_link;
+    return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(id as isize)).sg_link;
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_init_cmdline_highlight(mut reset: bool, mut init: bool) {
     let mut i: size_t = 0 as size_t;
-    while !highlight_init_cmdline[i as usize].is_null() {
-        do_highlight(highlight_init_cmdline[i as usize], reset, init);
+    while !(*highlight_init_cmdline.ptr())[i as usize].is_null() {
+        do_highlight((*highlight_init_cmdline.ptr())[i as usize], reset, init);
         i = i.wrapping_add(1);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
-    static mut had_both: bool = false_0 != 0;
+    static had_both: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut p: *mut ::core::ffi::c_char =
         get_var_value(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char);
     if !p.is_null() {
@@ -3777,22 +3802,22 @@ pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
         }
     }
     if both {
-        had_both = true_0 != 0;
+        had_both.set(true_0 != 0);
         let pp: *const *const ::core::ffi::c_char =
-            &raw mut highlight_init_both as *mut *const ::core::ffi::c_char;
+            highlight_init_both.ptr() as *mut *const ::core::ffi::c_char;
         let mut i: size_t = 0 as size_t;
         while !(*pp.offset(i as isize)).is_null() {
             do_highlight(*pp.offset(i as isize), reset, true_0 != 0);
             i = i.wrapping_add(1);
         }
-    } else if !had_both {
+    } else if !had_both.get() {
         return;
     }
     let pp_0: *const *const ::core::ffi::c_char =
         if *p_bg as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-            &raw mut highlight_init_light as *mut *const ::core::ffi::c_char
+            highlight_init_light.ptr() as *mut *const ::core::ffi::c_char
         } else {
-            &raw mut highlight_init_dark as *mut *const ::core::ffi::c_char
+            highlight_init_dark.ptr() as *mut *const ::core::ffi::c_char
         };
     let mut i_0: size_t = 0 as size_t;
     while !(*pp_0.offset(i_0 as isize)).is_null() {
@@ -3803,11 +3828,11 @@ pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn load_colors(mut name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    static mut recursive: bool = false_0 != 0;
-    if recursive {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if recursive.get() {
         return OK;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut buflen: size_t = strlen(name).wrapping_add(12 as size_t);
     let mut buf: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
     apply_autocmds(
@@ -3837,10 +3862,10 @@ pub unsafe extern "C" fn load_colors(mut name: *mut ::core::ffi::c_char) -> ::co
             curbuf,
         );
     }
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
     return retval;
 }
-static mut color_names: [*mut ::core::ffi::c_char; 28] = [
+static color_names: GlobalCell<[*mut ::core::ffi::c_char; 28]> = GlobalCell::new([
     b"Black\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"DarkBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"DarkGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3869,8 +3894,8 @@ static mut color_names: [*mut ::core::ffi::c_char; 28] = [
     b"LightYellow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"White\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"NONE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
-static mut color_numbers_16: [::core::ffi::c_int; 28] = [
+]);
+static color_numbers_16: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
     0 as ::core::ffi::c_int,
     1 as ::core::ffi::c_int,
     2 as ::core::ffi::c_int,
@@ -3899,8 +3924,8 @@ static mut color_numbers_16: [::core::ffi::c_int; 28] = [
     14 as ::core::ffi::c_int,
     15 as ::core::ffi::c_int,
     -1 as ::core::ffi::c_int,
-];
-static mut color_numbers_88: [::core::ffi::c_int; 28] = [
+]);
+static color_numbers_88: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
     0 as ::core::ffi::c_int,
     4 as ::core::ffi::c_int,
     2 as ::core::ffi::c_int,
@@ -3929,8 +3954,8 @@ static mut color_numbers_88: [::core::ffi::c_int; 28] = [
     78 as ::core::ffi::c_int,
     15 as ::core::ffi::c_int,
     -1 as ::core::ffi::c_int,
-];
-static mut color_numbers_256: [::core::ffi::c_int; 28] = [
+]);
+static color_numbers_256: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
     0 as ::core::ffi::c_int,
     4 as ::core::ffi::c_int,
     2 as ::core::ffi::c_int,
@@ -3959,8 +3984,8 @@ static mut color_numbers_256: [::core::ffi::c_int; 28] = [
     229 as ::core::ffi::c_int,
     15 as ::core::ffi::c_int,
     -1 as ::core::ffi::c_int,
-];
-static mut color_numbers_8: [::core::ffi::c_int; 28] = [
+]);
+static color_numbers_8: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
     0 as ::core::ffi::c_int,
     4 as ::core::ffi::c_int,
     2 as ::core::ffi::c_int,
@@ -3989,18 +4014,18 @@ static mut color_numbers_8: [::core::ffi::c_int; 28] = [
     3 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
     7 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
     -1 as ::core::ffi::c_int,
-];
+]);
 unsafe extern "C" fn lookup_color(
     idx: ::core::ffi::c_int,
     foreground: bool,
     boldp: *mut TriState,
 ) -> ::core::ffi::c_int {
-    let mut color: ::core::ffi::c_int = color_numbers_16[idx as usize];
+    let mut color: ::core::ffi::c_int = (*color_numbers_16.ptr())[idx as usize];
     if color < 0 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
     }
     if t_colors == 8 as ::core::ffi::c_int {
-        color = color_numbers_8[idx as usize];
+        color = (*color_numbers_8.ptr())[idx as usize];
         if foreground {
             if color & 8 as ::core::ffi::c_int != 0 {
                 *boldp = kTrue;
@@ -4010,11 +4035,11 @@ unsafe extern "C" fn lookup_color(
         }
         color &= 7 as ::core::ffi::c_int;
     } else if t_colors == 16 as ::core::ffi::c_int {
-        color = color_numbers_8[idx as usize];
+        color = (*color_numbers_8.ptr())[idx as usize];
     } else if t_colors == 88 as ::core::ffi::c_int {
-        color = color_numbers_88[idx as usize];
+        color = (*color_numbers_88.ptr())[idx as usize];
     } else if t_colors >= 256 as ::core::ffi::c_int {
-        color = color_numbers_256[idx as usize];
+        color = (*color_numbers_256.ptr())[idx as usize];
     }
     return color;
 }
@@ -4033,22 +4058,22 @@ pub unsafe extern "C" fn set_hl_group(
     {
         return;
     }
-    let mut g: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
+    let mut g: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize);
     (*g).sg_cleared = false_0 != 0;
     let mut old_link: ::core::ffi::c_int = (*g).sg_link;
     if link_id > 0 as ::core::ffi::c_int {
         (*g).sg_link = link_id;
         (*g).sg_script_ctx = current_sctx;
-        (*g).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        (*g).sg_script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum;
         nlua_set_sctx(&raw mut (*g).sg_script_ctx);
         (*g).sg_set |= SG_LINK as ::core::ffi::c_int;
         if is_default {
             (*g).sg_deflink = link_id;
             (*g).sg_deflink_sctx = current_sctx;
-            (*g).sg_deflink_sctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*g).sg_deflink_sctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum;
             nlua_set_sctx(&raw mut (*g).sg_deflink_sctx);
         }
@@ -4131,7 +4156,7 @@ pub unsafe extern "C" fn set_hl_group(
         } else if !update {
             *cattrs[j as usize].dest = kColorIdxNone as ::core::ffi::c_int;
         } else if old_link > 0 as ::core::ffi::c_int && cattrs[j as usize].val >= 0 as RgbValue {
-            let mut linked: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
+            let mut linked: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((old_link - 1 as ::core::ffi::c_int) as isize);
             let mut linked_idx: ::core::ffi::c_int = if j == 0 as ::core::ffi::c_int {
                 (*linked).sg_rgb_fg_idx
@@ -4159,8 +4184,8 @@ pub unsafe extern "C" fn set_hl_group(
         (*g).sg_blend = -1 as ::core::ffi::c_int;
     }
     (*g).sg_script_ctx = current_sctx;
-    (*g).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    (*g).sg_script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
     nlua_set_sctx(&raw mut (*g).sg_script_ctx);
     (*g).sg_attr = hl_get_syn_attr(0 as ::core::ffi::c_int, id, attrs);
@@ -4199,14 +4224,14 @@ unsafe extern "C" fn set_gui_color(
     mut color_idx: *mut ::core::ffi::c_int,
 ) -> bool {
     if init as ::core::ffi::c_int != 0
-        && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
+        && (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set
             & SG_GUI as ::core::ffi::c_int
             != 0
     {
         return false_0 != 0;
     }
     if !init {
-        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set |=
+        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set |=
             SG_GUI as ::core::ffi::c_int;
     }
     let mut old_color: RgbValue = *color;
@@ -4228,7 +4253,7 @@ pub unsafe extern "C" fn do_highlight(
     if !init && ends_excmd(*line as uint8_t as ::core::ffi::c_int) != 0 {
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while i <= highlight_ga.ga_len && !got_int {
+        while i <= (*highlight_ga.ptr()).ga_len && !got_int {
             highlight_list_one(i);
             i += 1;
         }
@@ -4271,7 +4296,8 @@ pub unsafe extern "C" fn do_highlight(
         if id == 0 as ::core::ffi::c_int {
             semsg(
                 gettext(
-                    &raw const e_highlight_group_name_not_found_str as *const ::core::ffi::c_char,
+                    (e_highlight_group_name_not_found_str.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ),
                 line,
             );
@@ -4323,7 +4349,7 @@ pub unsafe extern "C" fn do_highlight(
             to_id = syn_check_group(to_start, to_end.offset_from(to_start) as size_t);
         }
         if from_id > 0 as ::core::ffi::c_int {
-            hlgroup = (highlight_ga.ga_data as *mut HlGroup)
+            hlgroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((from_id - 1 as ::core::ffi::c_int) as isize);
             if dodefault as ::core::ffi::c_int != 0
                 && (forceit as ::core::ffi::c_int != 0
@@ -4331,8 +4357,9 @@ pub unsafe extern "C" fn do_highlight(
             {
                 (*hlgroup).sg_deflink = to_id;
                 (*hlgroup).sg_deflink_sctx = current_sctx;
-                (*hlgroup).sg_deflink_sctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*hlgroup).sg_deflink_sctx.sc_lnum += (*((*exestack.ptr()).ga_data
+                    as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum;
                 nlua_set_sctx(&raw mut (*hlgroup).sg_deflink_sctx);
             }
@@ -4347,14 +4374,14 @@ pub unsafe extern "C" fn do_highlight(
                     as ::core::ffi::c_int
                     != 0
             {
-                if (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                if (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name
                 .is_null()
                     && !dodefault
                 {
                     emsg(gettext(
-                        &raw const e_group_has_settings_highlight_link_ignored
+                        (e_group_has_settings_highlight_link_ignored.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     ));
                 }
@@ -4367,8 +4394,8 @@ pub unsafe extern "C" fn do_highlight(
                 }
                 (*hlgroup).sg_link = to_id;
                 (*hlgroup).sg_script_ctx = current_sctx;
-                (*hlgroup).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*hlgroup).sg_script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum;
                 nlua_set_sctx(&raw mut (*hlgroup).sg_script_ctx);
                 (*hlgroup).sg_cleared = false_0 != 0;
@@ -4388,7 +4415,7 @@ pub unsafe extern "C" fn do_highlight(
             );
             restore_cterm_colors();
             let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while j < highlight_ga.ga_len {
+            while j < (*highlight_ga.ptr()).ga_len {
                 highlight_clear(j);
                 j += 1;
             }
@@ -4410,9 +4437,10 @@ pub unsafe extern "C" fn do_highlight(
     {
         return;
     }
-    let mut item_before: HlGroup = *(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
+    let mut item_before: HlGroup =
+        *((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize);
     let mut is_normal_group: bool = strcmp(
-        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_name_u,
+        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_name_u,
         b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int;
     if doclear as ::core::ffi::c_int != 0
@@ -4420,7 +4448,7 @@ pub unsafe extern "C" fn do_highlight(
     {
         highlight_clear(idx);
         if !doclear {
-            (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set =
+            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set =
                 0 as ::core::ffi::c_int;
         }
     }
@@ -4434,7 +4462,10 @@ pub unsafe extern "C" fn do_highlight(
             let mut key_start: *const ::core::ffi::c_char = linep;
             if *linep as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
                 semsg(
-                    gettext(&raw const e_unexpected_equal_sign_str as *const ::core::ffi::c_char),
+                    gettext(
+                        (e_unexpected_equal_sign_str.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
+                    ),
                     key_start,
                 );
                 error = true_0 != 0;
@@ -4465,12 +4496,15 @@ pub unsafe extern "C" fn do_highlight(
                     ) == 0 as ::core::ffi::c_int
                     {
                         if !init
-                            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
+                            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+                                .offset(idx as isize))
+                            .sg_set
                                 == 0 as ::core::ffi::c_int
                         {
                             if !init {
-                                (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-                                    .sg_set |=
+                                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+                                    .offset(idx as isize))
+                                .sg_set |=
                                     SG_CTERM as ::core::ffi::c_int + SG_GUI as ::core::ffi::c_int;
                             }
                             highlight_clear(idx);
@@ -4478,7 +4512,8 @@ pub unsafe extern "C" fn do_highlight(
                     } else if *linep as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
                         semsg(
                             gettext(
-                                &raw const e_missing_equal_sign_str_2 as *const ::core::ffi::c_char,
+                                (e_missing_equal_sign_str_2.ptr() as *const _)
+                                    as *const ::core::ffi::c_char,
                             ),
                             key_start,
                         );
@@ -4506,7 +4541,8 @@ pub unsafe extern "C" fn do_highlight(
                         if linep == arg_start {
                             semsg(
                                 gettext(
-                                    &raw const e_missing_argument_str as *const ::core::ffi::c_char,
+                                    (e_missing_argument_str.ptr() as *const _)
+                                        as *const ::core::ffi::c_char,
                                 ),
                                 key_start,
                             );
@@ -4571,26 +4607,26 @@ pub unsafe extern "C" fn do_highlight(
                                                 break;
                                             }
                                             let mut len: ::core::ffi::c_int = strlen(
-                                                hl_name_table[i_0 as usize]
+                                                (*hl_name_table.ptr())[i_0 as usize]
                                                     as *const ::core::ffi::c_char,
                                             )
                                                 as ::core::ffi::c_int;
                                             if strncasecmp(
                                                 (&raw mut arg as *mut ::core::ffi::c_char)
                                                     .offset(off as isize),
-                                                hl_name_table[i_0 as usize],
+                                                (*hl_name_table.ptr())[i_0 as usize],
                                                 len as size_t,
                                             ) != 0 as ::core::ffi::c_int
                                             {
                                                 continue;
                                             }
-                                            if hl_attr_table[i_0 as usize]
+                                            if (*hl_attr_table.ptr())[i_0 as usize]
                                                 & HL_UNDERLINE_MASK as ::core::ffi::c_int
                                                 != 0
                                             {
                                                 attr &= !(HL_UNDERLINE_MASK as ::core::ffi::c_int);
                                             }
-                                            attr |= hl_attr_table[i_0 as usize];
+                                            attr |= (*hl_attr_table.ptr())[i_0 as usize];
                                             off += len;
                                             break;
                                         }
@@ -4616,21 +4652,22 @@ pub unsafe extern "C" fn do_highlight(
                                         == 'C' as ::core::ffi::c_int
                                     {
                                         if !init
-                                            || (*(highlight_ga.ga_data as *mut HlGroup)
+                                            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_set
                                                 & SG_CTERM as ::core::ffi::c_int
                                                 == 0
                                         {
                                             if !init {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_set |= SG_CTERM as ::core::ffi::c_int;
                                             }
-                                            (*(highlight_ga.ga_data as *mut HlGroup)
+                                            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_cterm = attr;
-                                            (*(highlight_ga.ga_data as *mut HlGroup)
+                                            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_cterm_bold = false_0 != 0;
                                         }
@@ -4639,18 +4676,19 @@ pub unsafe extern "C" fn do_highlight(
                                         == 'G' as ::core::ffi::c_int
                                     {
                                         if !init
-                                            || (*(highlight_ga.ga_data as *mut HlGroup)
+                                            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_set
                                                 & SG_GUI as ::core::ffi::c_int
                                                 == 0
                                         {
                                             if !init {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_set |= SG_GUI as ::core::ffi::c_int;
                                             }
-                                            (*(highlight_ga.ga_data as *mut HlGroup)
+                                            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_gui = attr;
                                         }
@@ -4670,30 +4708,34 @@ pub unsafe extern "C" fn do_highlight(
                                         ) == 0 as ::core::ffi::c_int
                                     {
                                         if !init
-                                            || (*(highlight_ga.ga_data as *mut HlGroup)
+                                            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_set
                                                 & SG_CTERM as ::core::ffi::c_int
                                                 == 0
                                         {
                                             if !init {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_set |= SG_CTERM as ::core::ffi::c_int;
                                             }
                                             if key[5 as ::core::ffi::c_int as usize]
                                                 as ::core::ffi::c_int
                                                 == 'F' as ::core::ffi::c_int
-                                                && (*(highlight_ga.ga_data as *mut HlGroup)
+                                                && (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_cterm_bold
                                                     as ::core::ffi::c_int
                                                     != 0
                                             {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_cterm &= !(HL_BOLD as ::core::ffi::c_int);
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_cterm_bold = false_0 != 0;
                                             }
@@ -4784,9 +4826,10 @@ pub unsafe extern "C" fn do_highlight(
                                                         break;
                                                     }
                                                     if off_0
-                                                        == *color_names[i_1 as usize].offset(
-                                                            0 as ::core::ffi::c_int as isize,
-                                                        )
+                                                        == *(*color_names.ptr())[i_1 as usize]
+                                                            .offset(
+                                                                0 as ::core::ffi::c_int as isize,
+                                                            )
                                                             as ::core::ffi::c_int
                                                         && strcasecmp(
                                                             (&raw mut arg
@@ -4795,9 +4838,11 @@ pub unsafe extern "C" fn do_highlight(
                                                                     1 as ::core::ffi::c_int
                                                                         as isize,
                                                                 ),
-                                                            color_names[i_1 as usize].offset(
-                                                                1 as ::core::ffi::c_int as isize,
-                                                            ),
+                                                            (*color_names.ptr())[i_1 as usize]
+                                                                .offset(
+                                                                    1 as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
                                                         ) == 0 as ::core::ffi::c_int
                                                     {
                                                         break;
@@ -4825,17 +4870,18 @@ pub unsafe extern "C" fn do_highlight(
                                                     if bold as ::core::ffi::c_int
                                                         == kTrue as ::core::ffi::c_int
                                                     {
-                                                        (*(highlight_ga.ga_data
+                                                        (*((*highlight_ga.ptr()).ga_data
                                                             as *mut HlGroup)
                                                             .offset(idx as isize))
                                                         .sg_cterm |= HL_BOLD as ::core::ffi::c_int;
-                                                        (*(highlight_ga.ga_data as *mut HlGroup)
+                                                        (*((*highlight_ga.ptr()).ga_data
+                                                            as *mut HlGroup)
                                                             .offset(idx as isize))
                                                         .sg_cterm_bold = true_0 != 0;
                                                     } else if bold as ::core::ffi::c_int
                                                         == kFalse as ::core::ffi::c_int
                                                     {
-                                                        (*(highlight_ga.ga_data
+                                                        (*((*highlight_ga.ptr()).ga_data
                                                             as *mut HlGroup)
                                                             .offset(idx as isize))
                                                         .sg_cterm &=
@@ -4847,7 +4893,8 @@ pub unsafe extern "C" fn do_highlight(
                                                 as ::core::ffi::c_int
                                                 == 'F' as ::core::ffi::c_int
                                             {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_cterm_fg = color + 1 as ::core::ffi::c_int;
                                                 if is_normal_group {
@@ -4855,7 +4902,8 @@ pub unsafe extern "C" fn do_highlight(
                                                         color + 1 as ::core::ffi::c_int;
                                                 }
                                             } else {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_cterm_bg = color + 1 as ::core::ffi::c_int;
                                                 if is_normal_group {
@@ -4922,15 +4970,18 @@ pub unsafe extern "C" fn do_highlight(
                                             idx,
                                             init,
                                             &raw mut arg as *mut ::core::ffi::c_char,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_fg,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_fg_idx,
                                         );
                                         if is_normal_group {
-                                            normal_fg = (*(highlight_ga.ga_data as *mut HlGroup)
+                                            normal_fg = (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_fg;
                                         }
@@ -4943,15 +4994,18 @@ pub unsafe extern "C" fn do_highlight(
                                             idx,
                                             init,
                                             &raw mut arg as *mut ::core::ffi::c_char,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_bg,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_bg_idx,
                                         );
                                         if is_normal_group {
-                                            normal_bg = (*(highlight_ga.ga_data as *mut HlGroup)
+                                            normal_bg = (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_bg;
                                         }
@@ -4964,15 +5018,18 @@ pub unsafe extern "C" fn do_highlight(
                                             idx,
                                             init,
                                             &raw mut arg as *mut ::core::ffi::c_char,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_sp,
-                                            &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
+                                            &raw mut (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_sp_idx,
                                         );
                                         if is_normal_group {
-                                            normal_sp = (*(highlight_ga.ga_data as *mut HlGroup)
+                                            normal_sp = (*((*highlight_ga.ptr()).ga_data
+                                                as *mut HlGroup)
                                                 .offset(idx as isize))
                                             .sg_rgb_sp;
                                         }
@@ -4995,7 +5052,8 @@ pub unsafe extern "C" fn do_highlight(
                                                 b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
                                             ) != 0 as ::core::ffi::c_int
                                             {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_blend = strtol(
                                                     &raw mut arg as *mut ::core::ffi::c_char,
@@ -5005,7 +5063,8 @@ pub unsafe extern "C" fn do_highlight(
                                                 )
                                                     as ::core::ffi::c_int;
                                             } else {
-                                                (*(highlight_ga.ga_data as *mut HlGroup)
+                                                (*((*highlight_ga.ptr()).ga_data
+                                                    as *mut HlGroup)
                                                     .offset(idx as isize))
                                                 .sg_blend = -1 as ::core::ffi::c_int;
                                             }
@@ -5020,16 +5079,17 @@ pub unsafe extern "C" fn do_highlight(
                                         }
                                     }
                                 }
-                                (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-                                    .sg_cleared = false_0 != 0;
+                                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+                                    .offset(idx as isize))
+                                .sg_cleared = false_0 != 0;
                                 if !init
-                                    || (*(highlight_ga.ga_data as *mut HlGroup)
+                                    || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                         .offset(idx as isize))
                                     .sg_set
                                         & SG_LINK as ::core::ffi::c_int
                                         == 0
                                 {
-                                    (*(highlight_ga.ga_data as *mut HlGroup)
+                                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                                         .offset(idx as isize))
                                     .sg_link = 0 as ::core::ffi::c_int;
                                 }
@@ -5054,18 +5114,20 @@ pub unsafe extern "C" fn do_highlight(
     } else {
         set_hl_attr(idx);
     }
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx = current_sctx;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx =
+        current_sctx;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
         .sg_script_ctx
-        .sc_lnum += (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        .sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
     nlua_set_sctx(
-        &raw mut (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx,
+        &raw mut (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+            .sg_script_ctx,
     );
     if (did_change as ::core::ffi::c_int != 0
         || memcmp(
-            (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)
+            ((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)
                 as *const ::core::ffi::c_void,
             &raw mut item_before as *const ::core::ffi::c_void,
             ::core::mem::size_of::<HlGroup>(),
@@ -5087,63 +5149,71 @@ pub unsafe extern "C" fn restore_cterm_colors() {
     cterm_normal_bg_color = 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn hl_has_settings(mut idx: ::core::ffi::c_int, mut check_link: bool) -> bool {
-    return (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
+    return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
         as ::core::ffi::c_int
         == 0 as ::core::ffi::c_int
-        && ((*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_attr
+        && ((*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_attr
             != 0 as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg
+            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+                .sg_cterm_fg
                 != 0 as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg
+            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+                .sg_cterm_bg
                 != 0 as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx
+            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+                .sg_rgb_fg_idx
                 != kColorIdxNone as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx
+            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+                .sg_rgb_bg_idx
                 != kColorIdxNone as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx
+            || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
+                .sg_rgb_sp_idx
                 != kColorIdxNone as ::core::ffi::c_int
             || check_link as ::core::ffi::c_int != 0
-                && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
+                && (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set
                     & SG_LINK as ::core::ffi::c_int
                     != 0);
 }
 unsafe extern "C" fn highlight_clear(mut idx: ::core::ffi::c_int) {
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared = true_0 != 0;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_attr =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared =
+        true_0 != 0;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_attr =
         0 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm =
         0 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bold = false_0 != 0;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bold =
+        false_0 != 0;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg =
         0 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg =
         0 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_gui = 0 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_gui =
+        0 as ::core::ffi::c_int;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg =
         -1 as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg =
         -1 as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp =
         -1 as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx =
         kColorIdxNone as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx =
         kColorIdxNone as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx =
         kColorIdxNone as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_blend =
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_blend =
         -1 as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_link =
-        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx =
-        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink_sctx;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_link =
+        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink;
+    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx =
+        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink_sctx;
 }
 pub const LIST_ATTR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LIST_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LIST_INT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
-    let mut sgp: *const HlGroup =
-        (highlight_ga.ga_data as *mut HlGroup).offset((id - 1 as ::core::ffi::c_int) as isize);
+    let mut sgp: *const HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+        .offset((id - 1 as ::core::ffi::c_int) as isize);
     let mut didh: bool = false_0 != 0;
     if message_filtered((*sgp).sg_name) {
         return;
@@ -5238,8 +5308,8 @@ unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
         );
         msg_putchar(' ' as ::core::ffi::c_int);
         msg_outtrans(
-            (*(highlight_ga.ga_data as *mut HlGroup).offset(
-                ((*(highlight_ga.ga_data as *mut HlGroup)
+            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(
+                ((*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_link
                     - 1 as ::core::ffi::c_int) as isize,
@@ -5269,8 +5339,8 @@ unsafe extern "C" fn hlgroup2dict(
     mut hl_id: ::core::ffi::c_int,
     mut arena: *mut Arena,
 ) -> bool {
-    let mut sgp: *mut HlGroup =
-        (highlight_ga.ga_data as *mut HlGroup).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
+    let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+        .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
     let mut ns: NS = ns_id;
     let mut link: ::core::ffi::c_int = if ns_id == 0 as ::core::ffi::c_int {
         (*sgp).sg_link
@@ -5309,7 +5379,7 @@ unsafe extern "C" fn hlgroup2dict(
     }
     if link > 0 as ::core::ffi::c_int {
         '_c2rust_label: {
-            if 1 as ::core::ffi::c_int <= link && link <= highlight_ga.ga_len {
+            if 1 as ::core::ffi::c_int <= link && link <= (*highlight_ga.ptr()).ga_len {
             } else {
                 __assert_fail(
                     b"1 <= link && link <= highlight_ga.ga_len\0".as_ptr()
@@ -5328,7 +5398,7 @@ unsafe extern "C" fn hlgroup2dict(
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_0 {
                     string: cstr_as_string(
-                        (*(highlight_ga.ga_data as *mut HlGroup)
+                        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                             .offset((link - 1 as ::core::ffi::c_int) as isize))
                         .sg_name,
                     ),
@@ -5407,7 +5477,7 @@ pub unsafe extern "C" fn ns_get_hl_defs(
         id = (*opts).id as ::core::ffi::c_int;
     }
     if id != -1 as ::core::ffi::c_int {
-        if !(1 as ::core::ffi::c_int <= id && id <= highlight_ga.ga_len) {
+        if !(1 as ::core::ffi::c_int <= id && id <= (*highlight_ga.ptr()).ga_len) {
             api_set_error(
                 err,
                 kErrorTypeValidation,
@@ -5429,16 +5499,16 @@ pub unsafe extern "C" fn ns_get_hl_defs(
             return attrs_0;
         }
     } else if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-        rv = arena_dict(arena, highlight_ga.ga_len as size_t);
+        rv = arena_dict(arena, (*highlight_ga.ptr()).ga_len as size_t);
         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while i <= highlight_ga.ga_len {
+        while i <= (*highlight_ga.ptr()).ga_len {
             let mut attrs_1: Dict = ARRAY_DICT_INIT;
             if hlgroup2dict(&raw mut attrs_1, ns_id, i, arena) {
                 let c2rust_fresh0 = rv.size;
                 rv.size = rv.size.wrapping_add(1);
                 *rv.items.offset(c2rust_fresh0 as isize) = key_value_pair {
                     key: cstr_as_string(
-                        (*(highlight_ga.ga_data as *mut HlGroup).offset(
+                        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(
                             ((if link as ::core::ffi::c_int != 0 {
                                 i
                             } else {
@@ -5492,11 +5562,12 @@ unsafe extern "C" fn highlight_list_arg(
     } else {
         buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while hl_attr_table[i as usize] != 0 as ::core::ffi::c_int {
-            if hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
-                && iarg & HL_UNDERLINE_MASK as ::core::ffi::c_int == hl_attr_table[i as usize]
-                || hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
-                    && iarg & hl_attr_table[i as usize] != 0
+        while (*hl_attr_table.ptr())[i as usize] != 0 as ::core::ffi::c_int {
+            if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
+                && iarg & HL_UNDERLINE_MASK as ::core::ffi::c_int
+                    == (*hl_attr_table.ptr())[i as usize]
+                || (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
+                    && iarg & (*hl_attr_table.ptr())[i as usize] != 0
             {
                 if buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != NUL {
                     xstrlcat(
@@ -5507,11 +5578,12 @@ unsafe extern "C" fn highlight_list_arg(
                 }
                 xstrlcat(
                     &raw mut buf as *mut ::core::ffi::c_char,
-                    hl_name_table[i as usize] as *const ::core::ffi::c_char,
+                    (*hl_name_table.ptr())[i as usize] as *const ::core::ffi::c_char,
                     100 as size_t,
                 );
-                if hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0 {
-                    iarg &= !hl_attr_table[i as usize];
+                if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
+                {
+                    iarg &= !(*hl_attr_table.ptr())[i as usize];
                 }
             }
             i += 1;
@@ -5543,16 +5615,16 @@ pub unsafe extern "C" fn highlight_has_attr(
     flag: ::core::ffi::c_int,
     modec: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
-    if id <= 0 as ::core::ffi::c_int || id > highlight_ga.ga_len {
+    if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut attr: ::core::ffi::c_int = 0;
     if modec == 'g' as ::core::ffi::c_int {
-        attr = (*(highlight_ga.ga_data as *mut HlGroup)
+        attr = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
             .offset((id - 1 as ::core::ffi::c_int) as isize))
         .sg_gui;
     } else {
-        attr = (*(highlight_ga.ga_data as *mut HlGroup)
+        attr = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
             .offset((id - 1 as ::core::ffi::c_int) as isize))
         .sg_cterm;
     }
@@ -5577,11 +5649,11 @@ pub unsafe extern "C" fn highlight_color(
     what: *const ::core::ffi::c_char,
     modec: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
-    static mut name: [::core::ffi::c_char; 20] = [0; 20];
+    static name: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new([0; 20]);
     let mut fg: bool = false_0 != 0;
     let mut sp: bool = false_0 != 0;
     let mut font: bool = false_0 != 0;
-    if id <= 0 as ::core::ffi::c_int || id > highlight_ga.ga_len {
+    if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     if (if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
@@ -5700,15 +5772,15 @@ pub unsafe extern "C" fn highlight_color(
             && ui_rgb_attached() as ::core::ffi::c_int != 0
         {
             if fg {
-                n = (*(highlight_ga.ga_data as *mut HlGroup)
+                n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_fg as ::core::ffi::c_int;
             } else if sp {
-                n = (*(highlight_ga.ga_data as *mut HlGroup)
+                n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_sp as ::core::ffi::c_int;
             } else {
-                n = (*(highlight_ga.ga_data as *mut HlGroup)
+                n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_bg as ::core::ffi::c_int;
             }
@@ -5716,42 +5788,42 @@ pub unsafe extern "C" fn highlight_color(
                 return ::core::ptr::null::<::core::ffi::c_char>();
             }
             snprintf(
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
                 b"#%06x\0".as_ptr() as *const ::core::ffi::c_char,
                 n,
             );
-            return &raw mut name as *mut ::core::ffi::c_char;
+            return name.ptr() as *mut ::core::ffi::c_char;
         }
         if fg {
             return coloridx_to_name(
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_fg_idx,
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_fg as ::core::ffi::c_int,
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
             );
         } else if sp {
             return coloridx_to_name(
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_sp_idx,
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_sp as ::core::ffi::c_int,
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
             );
         } else {
             return coloridx_to_name(
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_bg_idx,
-                (*(highlight_ga.ga_data as *mut HlGroup)
+                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
                 .sg_rgb_bg as ::core::ffi::c_int,
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
             );
         }
     }
@@ -5760,12 +5832,12 @@ pub unsafe extern "C" fn highlight_color(
     }
     if modec == 'c' as ::core::ffi::c_int {
         if fg {
-            n = (*(highlight_ga.ga_data as *mut HlGroup)
+            n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
             .sg_cterm_fg
                 - 1 as ::core::ffi::c_int;
         } else {
-            n = (*(highlight_ga.ga_data as *mut HlGroup)
+            n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
             .sg_cterm_bg
                 - 1 as ::core::ffi::c_int;
@@ -5774,12 +5846,12 @@ pub unsafe extern "C" fn highlight_color(
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         snprintf(
-            &raw mut name as *mut ::core::ffi::c_char,
+            name.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
             b"%d\0".as_ptr() as *const ::core::ffi::c_char,
             n,
         );
-        return &raw mut name as *mut ::core::ffi::c_char;
+        return name.ptr() as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -5802,7 +5874,7 @@ pub unsafe extern "C" fn syn_list_header(
             return true_0 != 0;
         }
         name_col = msg_outtrans(
-            (*(highlight_ga.ga_data as *mut HlGroup)
+            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
             .sg_name,
             0 as ::core::ffi::c_int,
@@ -5845,7 +5917,8 @@ pub unsafe extern "C" fn syn_list_header(
 }
 unsafe extern "C" fn set_hl_attr(mut idx: ::core::ffi::c_int) {
     let mut at_en: HlAttrs = HLATTRS_INIT;
-    let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
+    let mut sgp: *mut HlGroup =
+        ((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize);
     at_en.cterm_ae_attr = (*sgp).sg_cterm as int32_t;
     at_en.cterm_fg_color = (*sgp).sg_cterm_fg as int16_t;
     at_en.cterm_bg_color = (*sgp).sg_cterm_bg as int16_t;
@@ -5896,7 +5969,7 @@ pub unsafe extern "C" fn syn_name2id_len(
     vim_memcpy_up(&raw mut name_u as *mut ::core::ffi::c_char, name, len);
     name_u[len as usize] = NUL as ::core::ffi::c_char;
     return map_get_cstr_t_int(
-        &raw mut highlight_unames,
+        highlight_unames.ptr(),
         &raw mut name_u as *mut ::core::ffi::c_char as cstr_t,
     );
 }
@@ -5916,10 +5989,10 @@ pub unsafe extern "C" fn highlight_exists(
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_id2name(mut id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-    if id <= 0 as ::core::ffi::c_int || id > highlight_ga.ga_len {
+    if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
         return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
-    return (*(highlight_ga.ga_data as *mut HlGroup)
+    return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
         .offset((id - 1 as ::core::ffi::c_int) as isize))
     .sg_name;
 }
@@ -5983,25 +6056,25 @@ unsafe extern "C" fn syn_add_group(
             scoped_parent = syn_check_group(name, delim.offset_from(name) as size_t);
         }
     }
-    if highlight_ga.ga_data.is_null() {
-        highlight_ga.ga_itemsize = ::core::mem::size_of::<HlGroup>() as ::core::ffi::c_int;
-        ga_set_growsize(&raw mut highlight_ga, 10 as ::core::ffi::c_int);
-        ga_grow(&raw mut highlight_ga, 300 as ::core::ffi::c_int);
+    if (*highlight_ga.ptr()).ga_data.is_null() {
+        (*highlight_ga.ptr()).ga_itemsize = ::core::mem::size_of::<HlGroup>() as ::core::ffi::c_int;
+        ga_set_growsize(highlight_ga.ptr(), 10 as ::core::ffi::c_int);
+        ga_grow(highlight_ga.ptr(), 300 as ::core::ffi::c_int);
     }
-    if highlight_ga.ga_len >= MAX_HL_ID as ::core::ffi::c_int {
+    if (*highlight_ga.ptr()).ga_len >= MAX_HL_ID as ::core::ffi::c_int {
         emsg(gettext(
             b"E849: Too many highlight and syntax groups\0".as_ptr() as *const ::core::ffi::c_char,
         ));
         return 0 as ::core::ffi::c_int;
     }
     let mut hlgp: *mut HlGroup =
-        ga_append_via_ptr(&raw mut highlight_ga, ::core::mem::size_of::<HlGroup>()) as *mut HlGroup;
+        ga_append_via_ptr(highlight_ga.ptr(), ::core::mem::size_of::<HlGroup>()) as *mut HlGroup;
     memset(
         hlgp as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<HlGroup>(),
     );
-    (*hlgp).sg_name = arena_memdupz(&raw mut highlight_arena, name, len);
+    (*hlgp).sg_name = arena_memdupz(highlight_arena.ptr(), name, len);
     (*hlgp).sg_rgb_bg = -1 as ::core::ffi::c_int as RgbValue;
     (*hlgp).sg_rgb_fg = -1 as ::core::ffi::c_int as RgbValue;
     (*hlgp).sg_rgb_sp = -1 as ::core::ffi::c_int as RgbValue;
@@ -6009,12 +6082,12 @@ unsafe extern "C" fn syn_add_group(
     (*hlgp).sg_rgb_fg_idx = kColorIdxNone as ::core::ffi::c_int;
     (*hlgp).sg_rgb_sp_idx = kColorIdxNone as ::core::ffi::c_int;
     (*hlgp).sg_blend = -1 as ::core::ffi::c_int;
-    (*hlgp).sg_name_u = arena_memdupz(&raw mut highlight_arena, name, len);
+    (*hlgp).sg_name_u = arena_memdupz(highlight_arena.ptr(), name, len);
     (*hlgp).sg_parent = scoped_parent;
     (*hlgp).sg_cleared = true_0 != 0;
     vim_strup((*hlgp).sg_name_u);
-    let mut id: ::core::ffi::c_int = highlight_ga.ga_len;
-    map_put_cstr_t_int(&raw mut highlight_unames, (*hlgp).sg_name_u as cstr_t, id);
+    let mut id: ::core::ffi::c_int = (*highlight_ga.ptr()).ga_len;
+    map_put_cstr_t_int(highlight_unames.ptr(), (*hlgp).sg_name_u as cstr_t, id);
     return id;
 }
 #[no_mangle]
@@ -6031,8 +6104,8 @@ pub unsafe extern "C" fn syn_ns_id2attr(
     if syn_ns_get_final_id(&raw mut ns_id, &raw mut hl_id) {
         *optional = false_0 != 0;
     }
-    let mut sgp: *mut HlGroup =
-        (highlight_ga.ga_data as *mut HlGroup).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
+    let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
+        .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
     let mut attr: ::core::ffi::c_int =
         ns_get_hl(&raw mut ns_id, hl_id, false_0 != 0, (*sgp).sg_set != 0);
     if attr >= 0 as ::core::ffi::c_int
@@ -6055,7 +6128,7 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
 ) -> bool {
     let mut hl_id: ::core::ffi::c_int = *hl_idp;
     let mut used: bool = false_0 != 0;
-    if hl_id > highlight_ga.ga_len || hl_id < 1 as ::core::ffi::c_int {
+    if hl_id > (*highlight_ga.ptr()).ga_len || hl_id < 1 as ::core::ffi::c_int {
         *hl_idp = 0 as ::core::ffi::c_int;
         return false_0 != 0;
     }
@@ -6065,7 +6138,7 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
         if count < 0 as ::core::ffi::c_int {
             break;
         }
-        let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
+        let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
             .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
         let mut check: ::core::ffi::c_int =
             ns_get_hl(ns_id as *mut NS, hl_id, true_0 != 0, (*sgp).sg_set != 0);
@@ -6075,7 +6148,8 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
         } else if check > 0 as ::core::ffi::c_int {
             used = true_0 != 0;
             hl_id = check;
-        } else if (*sgp).sg_link > 0 as ::core::ffi::c_int && (*sgp).sg_link <= highlight_ga.ga_len
+        } else if (*sgp).sg_link > 0 as ::core::ffi::c_int
+            && (*sgp).sg_link <= (*highlight_ga.ptr()).ga_len
         {
             hl_id = (*sgp).sg_link;
         } else {
@@ -6093,8 +6167,9 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
 #[no_mangle]
 pub unsafe extern "C" fn highlight_attr_set_all() {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while idx < highlight_ga.ga_len {
-        let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
+    while idx < (*highlight_ga.ptr()).ga_len {
+        let mut sgp: *mut HlGroup =
+            ((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize);
         if (*sgp).sg_rgb_bg_idx == kColorIdxFg as ::core::ffi::c_int {
             (*sgp).sg_rgb_bg = normal_fg;
         } else if (*sgp).sg_rgb_bg_idx == kColorIdxBg as ::core::ffi::c_int {
@@ -6123,7 +6198,7 @@ unsafe extern "C" fn combine_stl_hlt(
     mut hlf: ::core::ffi::c_int,
     mut table: *mut ::core::ffi::c_int,
 ) {
-    let hlt: *mut HlGroup = highlight_ga.ga_data as *mut HlGroup;
+    let hlt: *mut HlGroup = (*highlight_ga.ptr()).ga_data as *mut HlGroup;
     if id_alt == 0 as ::core::ffi::c_int {
         memset(
             hlt.offset((hlcnt + i) as isize) as *mut ::core::ffi::c_void,
@@ -6176,7 +6251,7 @@ unsafe extern "C" fn combine_stl_hlt(
         (*hlt.offset((hlcnt + i) as isize)).sg_rgb_sp =
             (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp;
     }
-    highlight_ga.ga_len = hlcnt + i + 1 as ::core::ffi::c_int;
+    (*highlight_ga.ptr()).ga_len = hlcnt + i + 1 as ::core::ffi::c_int;
     set_hl_attr(hlcnt + i);
     *table.offset(i as isize) = syn_id2attr(hlcnt + i + 1 as ::core::ffi::c_int);
 }
@@ -6226,11 +6301,11 @@ pub unsafe extern "C" fn highlight_changed() {
         }
         hlf += 1;
     }
-    ga_grow(&raw mut highlight_ga, 10 as ::core::ffi::c_int);
-    let mut hlcnt: ::core::ffi::c_int = highlight_ga.ga_len;
+    ga_grow(highlight_ga.ptr(), 10 as ::core::ffi::c_int);
+    let mut hlcnt: ::core::ffi::c_int = (*highlight_ga.ptr()).ga_len;
     if id_S == -1 as ::core::ffi::c_int {
         memset(
-            (highlight_ga.ga_data as *mut HlGroup)
+            ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                 .offset((hlcnt + 9 as ::core::ffi::c_int) as isize)
                 as *mut ::core::ffi::c_void,
             0 as ::core::ffi::c_int,
@@ -6264,7 +6339,7 @@ pub unsafe extern "C" fn highlight_changed() {
         }
         i += 1;
     }
-    highlight_ga.ga_len = hlcnt;
+    (*highlight_ga.ptr()).ga_len = hlcnt;
     decor_provider_invalidate_hl();
 }
 #[no_mangle]
@@ -6380,34 +6455,35 @@ pub unsafe extern "C" fn get_highlight_name_ext(
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     if skip_cleared as ::core::ffi::c_int != 0
-        && idx < highlight_ga.ga_len
-        && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
+        && idx < (*highlight_ga.ptr()).ga_len
+        && (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
             as ::core::ffi::c_int
             != 0
     {
         return b"\0".as_ptr() as *const ::core::ffi::c_char;
     }
-    if idx == highlight_ga.ga_len && include_none != 0 as ::core::ffi::c_int {
+    if idx == (*highlight_ga.ptr()).ga_len && include_none != 0 as ::core::ffi::c_int {
         return b"none\0".as_ptr() as *const ::core::ffi::c_char;
-    } else if idx == highlight_ga.ga_len + include_none
+    } else if idx == (*highlight_ga.ptr()).ga_len + include_none
         && include_default != 0 as ::core::ffi::c_int
     {
         return b"default\0".as_ptr() as *const ::core::ffi::c_char;
-    } else if idx == highlight_ga.ga_len + include_none + include_default
+    } else if idx == (*highlight_ga.ptr()).ga_len + include_none + include_default
         && include_link != 0 as ::core::ffi::c_int
     {
         return b"link\0".as_ptr() as *const ::core::ffi::c_char;
-    } else if idx == highlight_ga.ga_len + include_none + include_default + 1 as ::core::ffi::c_int
+    } else if idx
+        == (*highlight_ga.ptr()).ga_len + include_none + include_default + 1 as ::core::ffi::c_int
         && include_link != 0 as ::core::ffi::c_int
     {
         return b"clear\0".as_ptr() as *const ::core::ffi::c_char;
-    } else if idx >= highlight_ga.ga_len {
+    } else if idx >= (*highlight_ga.ptr()).ga_len {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    return (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_name;
+    return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_name;
 }
 #[no_mangle]
-pub static mut color_name_table: [color_name_table_T; 708] = [
+pub static color_name_table: GlobalCell<[color_name_table_T; 708]> = GlobalCell::new([
     color_name_table_T {
         name: b"AliceBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
@@ -10714,7 +10790,7 @@ pub static mut color_name_table: [color_name_table_T; 708] = [
         name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         color: 0 as RgbValue,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn name_to_color(
     mut name: *const ::core::ffi::c_char,
@@ -10790,7 +10866,7 @@ pub unsafe extern "C" fn name_to_color(
         let mut m: ::core::ffi::c_int = (lo + hi) / 2 as ::core::ffi::c_int;
         let mut cmp: ::core::ffi::c_int = strcasecmp(
             name as *mut ::core::ffi::c_char,
-            color_name_table[m as usize].name,
+            (*color_name_table.ptr())[m as usize].name,
         );
         if cmp < 0 as ::core::ffi::c_int {
             hi = m;
@@ -10798,7 +10874,7 @@ pub unsafe extern "C" fn name_to_color(
             lo = m + 1 as ::core::ffi::c_int;
         } else {
             *idx = m;
-            return color_name_table[m as usize].color;
+            return (*color_name_table.ptr())[m as usize].color;
         }
     }
     *idx = kColorIdxNone as ::core::ffi::c_int;
@@ -10811,7 +10887,7 @@ pub unsafe extern "C" fn coloridx_to_name(
     mut hexbuf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     if idx >= 0 as ::core::ffi::c_int {
-        return color_name_table[idx as usize].name;
+        return (*color_name_table.ptr())[idx as usize].name;
     }
     match idx {
         -1 => return ::core::ptr::null::<::core::ffi::c_char>(),
@@ -10856,11 +10932,11 @@ pub unsafe extern "C" fn name_to_ctermcolor(
             break;
         }
         if off
-            == *color_names[i as usize].offset(0 as ::core::ffi::c_int as isize)
+            == *(*color_names.ptr())[i as usize].offset(0 as ::core::ffi::c_int as isize)
                 as ::core::ffi::c_int
             && strcasecmp(
                 name.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
-                color_names[i as usize].offset(1 as ::core::ffi::c_int as isize),
+                (*color_names.ptr())[i as usize].offset(1 as ::core::ffi::c_int as isize),
             ) == 0 as ::core::ffi::c_int
         {
             break;

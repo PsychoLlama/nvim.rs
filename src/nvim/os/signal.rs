@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2424,7 +2425,7 @@ pub const SIG_SETMASK: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static mut sint: SignalWatcher = SignalWatcher {
+static sint: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2452,8 +2453,8 @@ static mut sint: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut spipe: SignalWatcher = SignalWatcher {
+});
+static spipe: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2481,8 +2482,8 @@ static mut spipe: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut squit: SignalWatcher = SignalWatcher {
+});
+static squit: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2510,8 +2511,8 @@ static mut squit: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut sterm: SignalWatcher = SignalWatcher {
+});
+static sterm: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2539,8 +2540,8 @@ static mut sterm: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut ststp: SignalWatcher = SignalWatcher {
+});
+static ststp: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2568,8 +2569,8 @@ static mut ststp: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut swinch: SignalWatcher = SignalWatcher {
+});
+static swinch: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2597,8 +2598,8 @@ static mut swinch: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut susr1: SignalWatcher = SignalWatcher {
+});
+static susr1: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2626,8 +2627,8 @@ static mut susr1: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut shup: SignalWatcher = SignalWatcher {
+});
+static shup: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2655,8 +2656,8 @@ static mut shup: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut spwr: SignalWatcher = SignalWatcher {
+});
+static spwr: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -2684,8 +2685,8 @@ static mut spwr: SignalWatcher = SignalWatcher {
     cb: None,
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
-};
-static mut rejecting_deadly: bool = false;
+});
+static rejecting_deadly: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
 pub unsafe extern "C" fn signal_init() {
     let mut mask: sigset_t = sigset_t { __val: [0; 16] };
@@ -2706,34 +2707,34 @@ pub unsafe extern "C" fn signal_init() {
                 as *const ::core::ffi::c_char,
         );
     }
-    signal_watcher_init(&raw mut main_loop, &raw mut spipe, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut shup, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut sint, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut squit, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut sterm, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut ststp, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut spwr, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut susr1, NULL);
-    signal_watcher_init(&raw mut main_loop, &raw mut swinch, NULL);
+    signal_watcher_init(&raw mut main_loop, spipe.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, shup.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, sint.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, squit.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, sterm.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, ststp.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, spwr.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, susr1.ptr(), NULL);
+    signal_watcher_init(&raw mut main_loop, swinch.ptr(), NULL);
     signal_start();
 }
 #[no_mangle]
 pub unsafe extern "C" fn signal_teardown() {
     signal_stop();
-    signal_watcher_close(&raw mut spipe, None);
-    signal_watcher_close(&raw mut shup, None);
-    signal_watcher_close(&raw mut sint, None);
-    signal_watcher_close(&raw mut squit, None);
-    signal_watcher_close(&raw mut sterm, None);
-    signal_watcher_close(&raw mut ststp, None);
-    signal_watcher_close(&raw mut spwr, None);
-    signal_watcher_close(&raw mut susr1, None);
-    signal_watcher_close(&raw mut swinch, None);
+    signal_watcher_close(spipe.ptr(), None);
+    signal_watcher_close(shup.ptr(), None);
+    signal_watcher_close(sint.ptr(), None);
+    signal_watcher_close(squit.ptr(), None);
+    signal_watcher_close(sterm.ptr(), None);
+    signal_watcher_close(ststp.ptr(), None);
+    signal_watcher_close(spwr.ptr(), None);
+    signal_watcher_close(susr1.ptr(), None);
+    signal_watcher_close(swinch.ptr(), None);
 }
 #[no_mangle]
 pub unsafe extern "C" fn signal_start() {
     signal_watcher_start(
-        &raw mut spipe,
+        spipe.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2745,7 +2746,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGPIPE,
     );
     signal_watcher_start(
-        &raw mut shup,
+        shup.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2757,7 +2758,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGHUP,
     );
     signal_watcher_start(
-        &raw mut sint,
+        sint.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2769,7 +2770,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGINT,
     );
     signal_watcher_start(
-        &raw mut squit,
+        squit.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2781,7 +2782,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGQUIT,
     );
     signal_watcher_start(
-        &raw mut sterm,
+        sterm.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2793,7 +2794,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGTERM,
     );
     signal_watcher_start(
-        &raw mut ststp,
+        ststp.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2805,7 +2806,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGTSTP,
     );
     signal_watcher_start(
-        &raw mut spwr,
+        spwr.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2817,7 +2818,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGPWR,
     );
     signal_watcher_start(
-        &raw mut susr1,
+        susr1.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2829,7 +2830,7 @@ pub unsafe extern "C" fn signal_start() {
         SIGUSR1,
     );
     signal_watcher_start(
-        &raw mut swinch,
+        swinch.ptr(),
         Some(
             on_signal
                 as unsafe extern "C" fn(
@@ -2843,23 +2844,23 @@ pub unsafe extern "C" fn signal_start() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn signal_stop() {
-    signal_watcher_stop(&raw mut spipe);
-    signal_watcher_stop(&raw mut shup);
-    signal_watcher_stop(&raw mut sint);
-    signal_watcher_stop(&raw mut squit);
-    signal_watcher_stop(&raw mut sterm);
-    signal_watcher_stop(&raw mut ststp);
-    signal_watcher_stop(&raw mut spwr);
-    signal_watcher_stop(&raw mut susr1);
-    signal_watcher_stop(&raw mut swinch);
+    signal_watcher_stop(spipe.ptr());
+    signal_watcher_stop(shup.ptr());
+    signal_watcher_stop(sint.ptr());
+    signal_watcher_stop(squit.ptr());
+    signal_watcher_stop(sterm.ptr());
+    signal_watcher_stop(ststp.ptr());
+    signal_watcher_stop(spwr.ptr());
+    signal_watcher_stop(susr1.ptr());
+    signal_watcher_stop(swinch.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn signal_reject_deadly() {
-    rejecting_deadly = true_0 != 0;
+    rejecting_deadly.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn signal_accept_deadly() {
-    rejecting_deadly = false_0 != 0;
+    rejecting_deadly.set(false_0 != 0);
 }
 unsafe extern "C" fn signal_name(mut signum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     match signum {
@@ -2947,7 +2948,7 @@ unsafe extern "C" fn on_signal(
             }
         }
         SIGHUP | SIGINT | SIGTERM | SIGQUIT => {
-            if !rejecting_deadly {
+            if !rejecting_deadly.get() {
                 deadly_signal(signum);
             }
         }

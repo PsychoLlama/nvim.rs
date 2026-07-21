@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -75,7 +76,7 @@ extern "C" {
     fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
     fn tv_blob_alloc_ret(ret_tv: *mut typval_T) -> *mut blob_T;
     fn tv_clear(tv: *mut typval_T);
-    static mut eval_msgpack_type_lists: [*const list_T; 8];
+    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -498,7 +499,7 @@ unsafe extern "C" fn create_special_dict(
     );
     (*type_di).di_tv.v_type = VAR_LIST;
     (*type_di).di_tv.v_lock = VAR_UNLOCKED;
-    (*type_di).di_tv.vval.v_list = eval_msgpack_type_lists[type_0 as usize] as *mut list_T;
+    (*type_di).di_tv.vval.v_list = (*eval_msgpack_type_lists.ptr())[type_0 as usize] as *mut list_T;
     tv_list_ref((*type_di).di_tv.vval.v_list);
     tv_dict_add(dict, type_di);
     let val_di: *mut dictitem_T = tv_dict_item_alloc_len(

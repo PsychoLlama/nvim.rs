@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -149,8 +150,8 @@ extern "C" {
         tv2: *const typval_T,
         op: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    static mut gc_first_dict: *mut dict_T;
-    static mut gc_first_list: *mut list_T;
+    static gc_first_dict: GlobalCell<*mut dict_T>;
+    static gc_first_list: GlobalCell<*mut list_T>;
     static mut hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
@@ -191,7 +192,7 @@ extern "C" {
     ) -> bool;
     fn var_wrong_func_name(name: *const ::core::ffi::c_char, new_var: bool) -> bool;
     fn valid_varname(varname: *const ::core::ffi::c_char) -> bool;
-    static mut eval_msgpack_type_lists: [*const list_T; 8];
+    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
@@ -2241,97 +2242,114 @@ unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
-static mut e_variable_nested_too_deep_for_unlock: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E743: Variable nested too deep for (un)lock\0",
-    )
-};
-static mut e_using_invalid_value_as_string: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E908: Using an invalid value as a String\0",
-    )
-};
-static mut e_string_required_for_argument_nr: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E1174: String required for argument %d\0",
-    )
-};
-static mut e_non_empty_string_required_for_argument_nr: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E1175: Non-empty string required for argument %d\0",
-    )
-};
-static mut e_dict_required_for_argument_nr: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-        *b"E1206: Dictionary required for argument %d\0",
-    )
-};
-static mut e_number_required_for_argument_nr: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E1210: Number required for argument %d\0",
-    )
-};
-static mut e_list_required_for_argument_nr: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1211: List required for argument %d\0",
-    )
-};
-static mut e_bool_required_for_argument_nr: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1212: Bool required for argument %d\0",
-    )
-};
-static mut e_float_or_number_required_for_argument_nr: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E1219: Float or Number required for argument %d\0",
-    )
-};
-static mut e_string_or_number_required_for_argument_nr: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E1220: String or Number required for argument %d\0",
-    )
-};
-static mut e_string_or_list_required_for_argument_nr: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-        *b"E1222: String or List required for argument %d\0",
-    )
-};
-static mut e_list_dict_blob_or_string_required_for_argument_nr: [::core::ffi::c_char; 65] = unsafe {
-    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
-        *b"E1225: List, Dictionary, Blob or String required for argument %d\0",
-    )
-};
-static mut e_list_or_blob_required_for_argument_nr: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E1226: List or Blob required for argument %d\0",
-    )
-};
-static mut e_blob_required_for_argument_nr: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1238: Blob required for argument %d\0",
-    )
-};
-static mut e_string_list_or_blob_required_for_argument_nr: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-        *b"E1252: String, List or Blob required for argument %d\0",
-    )
-};
-static mut e_string_or_function_required_for_argument_nr: [::core::ffi::c_char; 51] = unsafe {
-    ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
-        *b"E1256: String or function required for argument %d\0",
-    )
-};
-static mut e_non_null_dict_required_for_argument_nr: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-        *b"E1297: Non-NULL Dictionary required for argument %d\0",
-    )
-};
+static e_variable_nested_too_deep_for_unlock: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E743: Variable nested too deep for (un)lock\0",
+        )
+    });
+static e_using_invalid_value_as_string: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E908: Using an invalid value as a String\0",
+        )
+    });
+static e_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E1174: String required for argument %d\0",
+        )
+    });
+static e_non_empty_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E1175: Non-empty string required for argument %d\0",
+        )
+    });
+static e_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 43]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+            *b"E1206: Dictionary required for argument %d\0",
+        )
+    });
+static e_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E1210: Number required for argument %d\0",
+        )
+    });
+static e_list_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1211: List required for argument %d\0",
+        )
+    });
+static e_bool_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1212: Bool required for argument %d\0",
+        )
+    });
+static e_float_or_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 48]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+            *b"E1219: Float or Number required for argument %d\0",
+        )
+    });
+static e_string_or_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E1220: String or Number required for argument %d\0",
+        )
+    });
+static e_string_or_list_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 47]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+            *b"E1222: String or List required for argument %d\0",
+        )
+    });
+static e_list_dict_blob_or_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 65]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
+            *b"E1225: List, Dictionary, Blob or String required for argument %d\0",
+        )
+    });
+static e_list_or_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E1226: List or Blob required for argument %d\0",
+        )
+    });
+static e_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1238: Blob required for argument %d\0",
+        )
+    });
+static e_string_list_or_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 53]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+            *b"E1252: String, List or Blob required for argument %d\0",
+        )
+    });
+static e_string_or_function_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 51]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
+            *b"E1256: String or function required for argument %d\0",
+        )
+    });
+static e_non_null_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 52]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+            *b"E1297: Non-NULL Dictionary required for argument %d\0",
+        )
+    });
 #[no_mangle]
-pub static mut tv_in_free_unref_items: bool = false_0 != 0;
+pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut tv_empty_string: *const ::core::ffi::c_char =
-    b"\0".as_ptr() as *const ::core::ffi::c_char;
+pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"\0".as_ptr() as *const ::core::ffi::c_char);
 unsafe extern "C" fn tv_list_item_alloc() -> *mut listitem_T {
     return xmalloc(::core::mem::size_of::<listitem_T>()) as *mut listitem_T;
 }
@@ -2377,12 +2395,12 @@ unsafe extern "C" fn tv_list_watch_fix(l: *mut list_T, item: *const listitem_T) 
 #[no_mangle]
 pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut list_T {
     let list: *mut list_T = xcalloc(1 as size_t, ::core::mem::size_of::<list_T>()) as *mut list_T;
-    if !gc_first_list.is_null() {
-        (*gc_first_list).lv_used_prev = list;
+    if !(*gc_first_list.ptr()).is_null() {
+        (*gc_first_list.get()).lv_used_prev = list;
     }
     (*list).lv_used_prev = ::core::ptr::null_mut::<list_T>();
-    (*list).lv_used_next = gc_first_list;
-    gc_first_list = list;
+    (*list).lv_used_next = gc_first_list.get();
+    gc_first_list.set(list);
     (*list).lua_table_ref = LUA_NOREF as LuaRef;
     return list;
 }
@@ -2462,7 +2480,7 @@ pub unsafe extern "C" fn tv_list_free_contents(l: *mut list_T) {
 #[no_mangle]
 pub unsafe extern "C" fn tv_list_free_list(l: *mut list_T) {
     if (*l).lv_used_prev.is_null() {
-        gc_first_list = (*l).lv_used_next;
+        gc_first_list.set((*l).lv_used_next);
     } else {
         (*(*l).lv_used_prev).lv_used_next = (*l).lv_used_next;
     }
@@ -2477,7 +2495,7 @@ pub unsafe extern "C" fn tv_list_free_list(l: *mut list_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_list_free(l: *mut list_T) {
-    if tv_in_free_unref_items {
+    if tv_in_free_unref_items.get() {
         return;
     }
     tv_list_free_contents(l);
@@ -3393,7 +3411,8 @@ pub unsafe extern "C" fn tv_list_remove(
         }
     }
 }
-static mut sortinfo: *mut sortinfo_T = ::core::ptr::null_mut::<sortinfo_T>();
+static sortinfo: GlobalCell<*mut sortinfo_T> =
+    GlobalCell::new(::core::ptr::null_mut::<sortinfo_T>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 unsafe extern "C" fn item_compare(
     mut s1: *const ::core::ffi::c_void,
@@ -3409,7 +3428,7 @@ unsafe extern "C" fn item_compare(
     let tv1: *mut typval_T = &raw mut (*(*si1).item).li_tv;
     let tv2: *mut typval_T = &raw mut (*(*si2).item).li_tv;
     let mut res: ::core::ffi::c_int = 0;
-    if (*sortinfo).item_compare_numbers {
+    if (*sortinfo.get()).item_compare_numbers {
         let v1: varnumber_T = tv_get_number(tv1);
         let v2: varnumber_T = tv_get_number(tv2);
         res = if v1 == v2 {
@@ -3419,7 +3438,7 @@ unsafe extern "C" fn item_compare(
         } else {
             -1 as ::core::ffi::c_int
         };
-    } else if (*sortinfo).item_compare_float {
+    } else if (*sortinfo.get()).item_compare_float {
         let v1_0: float_T = tv_get_float(tv1);
         let v2_0: float_T = tv_get_float(tv2);
         res = if v1_0 == v2_0 {
@@ -3439,7 +3458,7 @@ unsafe extern "C" fn item_compare(
         {
             if (*tv2).v_type as ::core::ffi::c_uint
                 != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*sortinfo).item_compare_numeric as ::core::ffi::c_int != 0
+                || (*sortinfo.get()).item_compare_numeric as ::core::ffi::c_int != 0
             {
                 p1 = b"'\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
@@ -3454,7 +3473,7 @@ unsafe extern "C" fn item_compare(
         {
             if (*tv1).v_type as ::core::ffi::c_uint
                 != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*sortinfo).item_compare_numeric as ::core::ffi::c_int != 0
+                || (*sortinfo.get()).item_compare_numeric as ::core::ffi::c_int != 0
             {
                 p2 = b"'\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
@@ -3470,11 +3489,11 @@ unsafe extern "C" fn item_compare(
         if p2.is_null() {
             p2 = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
-        if !(*sortinfo).item_compare_numeric {
-            if (*sortinfo).item_compare_lc {
+        if !(*sortinfo.get()).item_compare_numeric {
+            if (*sortinfo.get()).item_compare_lc {
                 res = strcoll(p1, p2);
             } else {
-                res = if (*sortinfo).item_compare_ic != 0 {
+                res = if (*sortinfo.get()).item_compare_ic != 0 {
                     strcasecmp(p1, p2)
                 } else {
                     strcmp(p1, p2)
@@ -3531,14 +3550,14 @@ unsafe extern "C" fn item_compare2(
         vval: typval_vval_union { v_number: 0 },
     }; 3];
     let mut func_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut partial: *mut partial_T = (*sortinfo).item_compare_partial;
-    if (*sortinfo).item_compare_func_err {
+    let mut partial: *mut partial_T = (*sortinfo.get()).item_compare_partial;
+    if (*sortinfo.get()).item_compare_func_err {
         return 0 as ::core::ffi::c_int;
     }
     let mut si1: *mut ListSortItem = s1 as *mut ListSortItem;
     let mut si2: *mut ListSortItem = s2 as *mut ListSortItem;
     if partial.is_null() {
-        func_name = (*sortinfo).item_compare_func;
+        func_name = (*sortinfo.get()).item_compare_func;
     } else {
         func_name = partial_name(partial);
     }
@@ -3554,7 +3573,7 @@ unsafe extern "C" fn item_compare2(
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_evaluate = true_0 != 0;
     funcexe.fe_partial = partial;
-    funcexe.fe_selfdict = (*sortinfo).item_compare_selfdict;
+    funcexe.fe_selfdict = (*sortinfo.get()).item_compare_selfdict;
     let mut res: ::core::ffi::c_int = call_func(
         func_name,
         -1 as ::core::ffi::c_int,
@@ -3567,10 +3586,12 @@ unsafe extern "C" fn item_compare2(
     tv_clear((&raw mut argv as *mut typval_T).offset(1 as ::core::ffi::c_int as isize));
     if res == FAIL {
         res = ITEM_COMPARE_FAIL;
-        (*sortinfo).item_compare_func_err = true_0 != 0;
+        (*sortinfo.get()).item_compare_func_err = true_0 != 0;
     } else {
-        let mut n: varnumber_T =
-            tv_get_number_chk(&raw mut rettv, &raw mut (*sortinfo).item_compare_func_err);
+        let mut n: varnumber_T = tv_get_number_chk(
+            &raw mut rettv,
+            &raw mut (*sortinfo.get()).item_compare_func_err,
+        );
         res = if n > 0 as varnumber_T {
             1 as ::core::ffi::c_int
         } else if n < 0 as varnumber_T {
@@ -3579,7 +3600,7 @@ unsafe extern "C" fn item_compare2(
             0 as ::core::ffi::c_int
         };
     }
-    if (*sortinfo).item_compare_func_err {
+    if (*sortinfo.get()).item_compare_func_err {
         res = ITEM_COMPARE_FAIL;
     }
     tv_clear(&raw mut rettv);
@@ -3841,8 +3862,8 @@ unsafe extern "C" fn do_sort_uniq(
         item_compare_selfdict: ::core::ptr::null_mut::<dict_T>(),
         item_compare_func_err: false,
     };
-    let mut old_sortinfo: *mut sortinfo_T = sortinfo;
-    sortinfo = &raw mut info;
+    let mut old_sortinfo: *mut sortinfo_T = sortinfo.get();
+    sortinfo.set(&raw mut info);
     let arg_errmsg: *const ::core::ffi::c_char = if sort as ::core::ffi::c_int != 0 {
         b"sort() argument\0".as_ptr() as *const ::core::ffi::c_char
     } else {
@@ -3864,7 +3885,7 @@ unsafe extern "C" fn do_sort_uniq(
             }
         }
     }
-    sortinfo = old_sortinfo;
+    sortinfo.set(old_sortinfo);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_sort(
@@ -4428,12 +4449,12 @@ pub unsafe extern "C" fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dicti
 #[no_mangle]
 pub unsafe extern "C" fn tv_dict_alloc() -> *mut dict_T {
     let d: *mut dict_T = xcalloc(1 as size_t, ::core::mem::size_of::<dict_T>()) as *mut dict_T;
-    if !gc_first_dict.is_null() {
-        (*gc_first_dict).dv_used_prev = d;
+    if !(*gc_first_dict.ptr()).is_null() {
+        (*gc_first_dict.get()).dv_used_prev = d;
     }
-    (*d).dv_used_next = gc_first_dict;
+    (*d).dv_used_next = gc_first_dict.get();
     (*d).dv_used_prev = ::core::ptr::null_mut::<dict_T>();
-    gc_first_dict = d;
+    gc_first_dict.set(d);
     hash_init(&raw mut (*d).dv_hashtab);
     (*d).dv_lock = VAR_UNLOCKED;
     (*d).dv_scope = VAR_NO_SCOPE;
@@ -4484,7 +4505,7 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
 #[no_mangle]
 pub unsafe extern "C" fn tv_dict_free_dict(d: *mut dict_T) {
     if (*d).dv_used_prev.is_null() {
-        gc_first_dict = (*d).dv_used_next;
+        gc_first_dict.set((*d).dv_used_next);
     } else {
         (*(*d).dv_used_prev).dv_used_next = (*d).dv_used_next;
     }
@@ -4499,7 +4520,7 @@ pub unsafe extern "C" fn tv_dict_free_dict(d: *mut dict_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_dict_free(d: *mut dict_T) {
-    if tv_in_free_unref_items {
+    if tv_in_free_unref_items.get() {
         return;
     }
     tv_dict_free_contents(d);
@@ -4642,9 +4663,9 @@ pub unsafe extern "C" fn tv_dict_get_string(
     key: *const ::core::ffi::c_char,
     save: bool,
 ) -> *mut ::core::ffi::c_char {
-    static mut numbuf: [::core::ffi::c_char; 65] = [0; 65];
+    static numbuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
     let s: *const ::core::ffi::c_char =
-        tv_dict_get_string_buf(d, key, &raw mut numbuf as *mut ::core::ffi::c_char);
+        tv_dict_get_string_buf(d, key, numbuf.ptr() as *mut ::core::ffi::c_char);
     if save as ::core::ffi::c_int != 0 && !s.is_null() {
         return xstrdup(s);
     }
@@ -5631,7 +5652,7 @@ pub unsafe extern "C" fn f_items(
     } else {
         semsg(
             gettext(
-                &raw const e_list_dict_blob_or_string_required_for_argument_nr
+                (e_list_dict_blob_or_string_required_for_argument_nr.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             1 as ::core::ffi::c_int,
@@ -5771,7 +5792,7 @@ unsafe extern "C" fn _nothing_conv_func_start(
         }
     } else {
         func_unref(fun);
-        if fun != tv_empty_string as *mut ::core::ffi::c_char {
+        if fun != tv_empty_string.get() as *mut ::core::ffi::c_char {
             xfree(fun as *mut ::core::ffi::c_void);
         }
         (*tv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6034,17 +6055,17 @@ pub unsafe extern "C" fn tv_item_lock(
     lock: bool,
     check_refcount: bool,
 ) {
-    static mut recurse: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if recurse >= DICT_MAXNEST {
+    static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if recurse.get() >= DICT_MAXNEST {
         emsg(gettext(
-            &raw const e_variable_nested_too_deep_for_unlock as *const ::core::ffi::c_char,
+            (e_variable_nested_too_deep_for_unlock.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return;
     }
     if deep == 0 as ::core::ffi::c_int {
         return;
     }
-    recurse += 1;
+    (*recurse.ptr()) += 1;
     (*tv).v_lock = [
         (if lock as ::core::ffi::c_int != 0 {
             VAR_LOCKED as ::core::ffi::c_int
@@ -6164,7 +6185,7 @@ pub unsafe extern "C" fn tv_item_lock(
         }
         1 | 6 | 2 | 3 | 9 | 7 | 8 | _ => {}
     }
-    recurse -= 1;
+    (*recurse.ptr()) -= 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_islocked(tv: *const typval_T) -> bool {
@@ -6260,33 +6281,33 @@ pub unsafe extern "C" fn value_check_lock(
     }
     return true_0 != 0;
 }
-static mut tv_equal_recurse_limit: ::core::ffi::c_int = 0;
+static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
 pub unsafe extern "C" fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
-    static mut recursive_cnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if !(tv_is_func(*tv1) as ::core::ffi::c_int != 0 && tv_is_func(*tv2) as ::core::ffi::c_int != 0)
         && (*tv1).v_type as ::core::ffi::c_uint != (*tv2).v_type as ::core::ffi::c_uint
     {
         return false_0 != 0;
     }
-    if recursive_cnt == 0 as ::core::ffi::c_int {
-        tv_equal_recurse_limit = 1000 as ::core::ffi::c_int;
+    if recursive_cnt.get() == 0 as ::core::ffi::c_int {
+        tv_equal_recurse_limit.set(1000 as ::core::ffi::c_int);
     }
-    if recursive_cnt >= tv_equal_recurse_limit {
-        tv_equal_recurse_limit -= 1;
+    if recursive_cnt.get() >= tv_equal_recurse_limit.get() {
+        (*tv_equal_recurse_limit.ptr()) -= 1;
         return true_0 != 0;
     }
     match (*tv1).v_type as ::core::ffi::c_uint {
         4 => {
-            recursive_cnt += 1;
+            (*recursive_cnt.ptr()) += 1;
             let r: bool = tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic);
-            recursive_cnt -= 1;
+            (*recursive_cnt.ptr()) -= 1;
             return r;
         }
         5 => {
-            recursive_cnt += 1;
+            (*recursive_cnt.ptr()) += 1;
             let r_0: bool = tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic);
-            recursive_cnt -= 1;
+            (*recursive_cnt.ptr()) -= 1;
             return r_0;
         }
         9 | 3 => {
@@ -6299,9 +6320,9 @@ pub unsafe extern "C" fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bo
             {
                 return false_0 != 0;
             }
-            recursive_cnt += 1;
+            (*recursive_cnt.ptr()) += 1;
             let r_1: bool = func_equal(tv1, tv2, ic);
-            recursive_cnt -= 1;
+            (*recursive_cnt.ptr()) -= 1;
             return r_1;
         }
         10 => return tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob),
@@ -6392,7 +6413,7 @@ pub unsafe extern "C" fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
     }
     abort();
 }
-static mut num_errors: [*const ::core::ffi::c_char; 11] = [
+static num_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
     b"E685: using an invalid value as a Number\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6404,22 +6425,22 @@ static mut num_errors: [*const ::core::ffi::c_char; 11] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"E703: Using a Funcref as a Number\0".as_ptr() as *const ::core::ffi::c_char,
     b"E974: Using a Blob as a Number\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn tv_check_num(tv: *const typval_T) -> bool {
     match (*tv).v_type as ::core::ffi::c_uint {
         1 | 7 | 8 | 2 => return true_0 != 0,
         3 | 9 | 4 | 5 | 6 | 10 | 0 => {
-            emsg(gettext(num_errors[(*tv).v_type as usize]));
+            emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
             return false_0 != 0;
         }
         _ => {}
     }
     abort();
 }
-static mut str_errors: [*const ::core::ffi::c_char; 11] = unsafe {
+static str_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new(unsafe {
     [
-        &raw const e_using_invalid_value_as_string as *const ::core::ffi::c_char,
+        (e_using_invalid_value_as_string.as_raw() as *const _) as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6431,13 +6452,13 @@ static mut str_errors: [*const ::core::ffi::c_char; 11] = unsafe {
         b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
         b"E976: Using a Blob as a String\0".as_ptr() as *const ::core::ffi::c_char,
     ]
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn tv_check_str(tv: *const typval_T) -> bool {
     match (*tv).v_type as ::core::ffi::c_uint {
         1 | 7 | 8 | 2 | 6 => return true_0 != 0,
         9 | 3 | 4 | 5 | 10 | 0 => {
-            emsg(gettext(str_errors[(*tv).v_type as usize]));
+            emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
             return false_0 != 0;
         }
         _ => {}
@@ -6456,7 +6477,7 @@ pub unsafe extern "C" fn tv_get_number_chk(
 ) -> varnumber_T {
     match (*tv).v_type as ::core::ffi::c_uint {
         3 | 9 | 4 | 5 | 10 | 6 => {
-            emsg(gettext(num_errors[(*tv).v_type as usize]));
+            emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
         }
         1 => return (*tv).vval.v_number,
         2 => {
@@ -6602,7 +6623,9 @@ pub unsafe extern "C" fn tv_check_for_string_arg(
         != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            gettext(&raw const e_string_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_string_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6622,7 +6645,7 @@ pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
     {
         semsg(
             gettext(
-                &raw const e_non_empty_string_required_for_argument_nr
+                (e_non_empty_string_required_for_argument_nr.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
@@ -6654,7 +6677,9 @@ pub unsafe extern "C" fn tv_check_for_number_arg(
         != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            gettext(&raw const e_number_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_number_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6687,7 +6712,8 @@ pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
     {
         semsg(
             gettext(
-                &raw const e_float_or_number_required_for_argument_nr as *const ::core::ffi::c_char,
+                (e_float_or_number_required_for_argument_nr.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
         );
@@ -6708,7 +6734,9 @@ pub unsafe extern "C" fn tv_check_for_bool_arg(
                 || (*args.offset(idx as isize)).vval.v_number == 1 as varnumber_T))
     {
         semsg(
-            gettext(&raw const e_bool_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_bool_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6736,7 +6764,9 @@ pub unsafe extern "C" fn tv_check_for_blob_arg(
         != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            gettext(&raw const e_blob_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_blob_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6752,7 +6782,9 @@ pub unsafe extern "C" fn tv_check_for_list_arg(
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            gettext(&raw const e_list_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_list_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6768,7 +6800,9 @@ pub unsafe extern "C" fn tv_check_for_dict_arg(
         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            gettext(&raw const e_dict_required_for_argument_nr as *const ::core::ffi::c_char),
+            gettext(
+                (e_dict_required_for_argument_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             idx + 1 as ::core::ffi::c_int,
         );
         return FAIL;
@@ -6786,7 +6820,8 @@ pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
     if (*args.offset(idx as isize)).vval.v_dict.is_null() {
         semsg(
             gettext(
-                &raw const e_non_null_dict_required_for_argument_nr as *const ::core::ffi::c_char,
+                (e_non_null_dict_required_for_argument_nr.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
         );
@@ -6820,7 +6855,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
     {
         semsg(
             gettext(
-                &raw const e_string_or_number_required_for_argument_nr
+                (e_string_or_number_required_for_argument_nr.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
@@ -6855,7 +6890,8 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
     {
         semsg(
             gettext(
-                &raw const e_string_or_list_required_for_argument_nr as *const ::core::ffi::c_char,
+                (e_string_or_list_required_for_argument_nr.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
         );
@@ -6877,7 +6913,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
     {
         semsg(
             gettext(
-                &raw const e_string_list_or_blob_required_for_argument_nr
+                (e_string_list_or_blob_required_for_argument_nr.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
@@ -6914,7 +6950,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
     {
         semsg(
             gettext(
-                &raw const e_string_or_function_required_for_argument_nr
+                (e_string_or_function_required_for_argument_nr.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
@@ -6935,7 +6971,8 @@ pub unsafe extern "C" fn tv_check_for_list_or_blob_arg(
     {
         semsg(
             gettext(
-                &raw const e_list_or_blob_required_for_argument_nr as *const ::core::ffi::c_char,
+                (e_list_or_blob_required_for_argument_nr.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             idx + 1 as ::core::ffi::c_int,
         );
@@ -6991,7 +7028,7 @@ pub unsafe extern "C" fn tv_get_string_buf_chk(
             return buf;
         }
         9 | 3 | 4 | 5 | 10 | 0 => {
-            emsg(gettext(str_errors[(*tv).v_type as usize]));
+            emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         _ => {}
@@ -7000,16 +7037,13 @@ pub unsafe extern "C" fn tv_get_string_buf_chk(
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char {
-    static mut mybuf: [::core::ffi::c_char; 65] = [0; 65];
-    return tv_get_string_buf_chk(tv, &raw mut mybuf as *mut ::core::ffi::c_char);
+    static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
+    return tv_get_string_buf_chk(tv, mybuf.ptr() as *mut ::core::ffi::c_char);
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char {
-    static mut mybuf: [::core::ffi::c_char; 65] = [0; 65];
-    return tv_get_string_buf(
-        tv as *mut typval_T,
-        &raw mut mybuf as *mut ::core::ffi::c_char,
-    );
+    static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
+    return tv_get_string_buf(tv as *mut typval_T, mybuf.ptr() as *mut ::core::ffi::c_char);
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_get_string_buf(
@@ -7069,7 +7103,8 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_found_var: false_0 != 0,
 };
 #[no_mangle]
-pub static mut _typval_encode_nothing_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
+pub static _typval_encode_nothing_nodict_var: GlobalCell<*const dict_T> =
+    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_nothing_check_self_reference(
     _ignored: *const ::core::ffi::c_void,
@@ -7377,7 +7412,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                 {
                     '_c2rust_label_0: {
                         if &raw mut (*tv).vval.v_dict as *mut ::core::ffi::c_void
-                            != &raw const _typval_encode_nothing_nodict_var
+                            != (_typval_encode_nothing_nodict_var.ptr() as *const _)
                                 as *mut ::core::ffi::c_void
                         {
                         } else {
@@ -7435,7 +7470,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                 )
                             {
                                 if (*type_di).di_tv.vval.v_list
-                                    == eval_msgpack_type_lists[i as usize] as *mut list_T
+                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
                                 {
                                     break;
                                 }
@@ -7761,11 +7796,14 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                     == 0 as ::core::ffi::c_int
                                             {
                                                 '_c2rust_label_2: {
-                                                    if &raw const _typval_encode_nothing_nodict_var
+                                                    if (_typval_encode_nothing_nodict_var.ptr()
+                                                        as *const _)
                                                         as *mut ::core::ffi::c_void
-                                                        != &raw const _typval_encode_nothing_nodict_var
+                                                        != (_typval_encode_nothing_nodict_var.ptr()
+                                                            as *const _)
                                                             as *mut ::core::ffi::c_void
-                                                    {} else {
+                                                    {
+                                                    } else {
                                                         __assert_fail(
                                                             b"(void *)&(_typval_encode_nothing_nodict_var) != (void *)&TYPVAL_ENCODE_NODICT_VAR\0"
                                                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -7779,7 +7817,8 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                 };
                                                 _nothing_conv_empty_dict(
                                                     tv,
-                                                    &raw const _typval_encode_nothing_nodict_var
+                                                    (_typval_encode_nothing_nodict_var.ptr()
+                                                        as *const _)
                                                         as *mut *mut dict_T,
                                                 );
                                                 break '_typval_encode_stop_converting_one_item;
@@ -8157,7 +8196,8 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                     _nothing_conv_real_dict_after_start(
                         tv,
                         &raw mut (*tv).vval.v_dict,
-                        &raw const _typval_encode_nothing_nodict_var as *mut ::core::ffi::c_void,
+                        (_typval_encode_nothing_nodict_var.ptr() as *const _)
+                            as *mut ::core::ffi::c_void,
                         (*mpstack).items.offset(
                             (*mpstack)
                                 .size
@@ -8236,7 +8276,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             _nothing_conv_dict_end(
                                 (*cur_mpsv).tv,
                                 (*cur_mpsv).data.d.dictp,
-                                &raw const _typval_encode_nothing_nodict_var
+                                (_typval_encode_nothing_nodict_var.ptr() as *const _)
                                     as *mut ::core::ffi::c_void,
                             );
                             continue;
@@ -8275,8 +8315,9 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             tv_list_set_copyid((*cur_mpsv).data.l.list, (*cur_mpsv).saved_copyID);
                             _nothing_conv_dict_end(
                                 (*cur_mpsv).tv,
-                                &raw const _typval_encode_nothing_nodict_var as *mut *mut dict_T,
-                                &raw const _typval_encode_nothing_nodict_var
+                                (_typval_encode_nothing_nodict_var.ptr() as *const _)
+                                    as *mut *mut dict_T,
+                                (_typval_encode_nothing_nodict_var.ptr() as *const _)
                                     as *mut ::core::ffi::c_void,
                             );
                             continue;
@@ -8435,7 +8476,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                 if (*dict).dv_hashtab.ht_used == 0 as size_t {
                                     '_c2rust_label: {
                                         if &raw mut (*pt).pt_dict as *mut ::core::ffi::c_void
-                                            != &raw const _typval_encode_nothing_nodict_var
+                                            != (_typval_encode_nothing_nodict_var.ptr() as *const _)
                                                 as *mut ::core::ffi::c_void
                                         {
                                         } else {
@@ -8627,7 +8668,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                         if _nothing_conv_real_dict_after_start(
                                             ::core::ptr::null_mut::<typval_T>(),
                                             &raw mut (*pt).pt_dict,
-                                            &raw const _typval_encode_nothing_nodict_var
+                                            (_typval_encode_nothing_nodict_var.ptr() as *const _)
                                                 as *mut ::core::ffi::c_void,
                                             mpstack.items.offset(
                                                 mpstack

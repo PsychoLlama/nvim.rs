@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     fn memset(
@@ -1206,13 +1207,13 @@ pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut empty_table: [KeySetLink; 1] = [KeySetLink {
+pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new([KeySetLink {
     str: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     ptr_off: 0 as size_t,
     type_0: kObjectTypeNil as ::core::ffi::c_int,
     opt_index: -1 as ::core::ffi::c_int,
     is_hlgroup: false_0 != 0,
-}];
+}]);
 #[no_mangle]
 pub unsafe extern "C" fn empty_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1225,7 +1226,7 @@ pub unsafe extern "C" fn empty_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            empty_table[low as usize].str as *const ::core::ffi::c_void,
+            (*empty_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -1242,10 +1243,10 @@ pub unsafe extern "C" fn KeyDict_empty_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut empty_table as *mut KeySetLink).offset(hash as isize);
+    return (empty_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut context_table: [KeySetLink; 2] = [
+pub static context_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"types\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -1260,7 +1261,7 @@ pub static mut context_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn context_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1276,7 +1277,7 @@ pub unsafe extern "C" fn context_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            context_table[low as usize].str as *const ::core::ffi::c_void,
+            (*context_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -1293,10 +1294,10 @@ pub unsafe extern "C" fn KeyDict_context_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut context_table as *mut KeySetLink).offset(hash as isize);
+    return (context_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut set_decoration_provider_table: [KeySetLink; 10] = [
+pub static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"on_buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 12 as size_t,
@@ -1368,7 +1369,7 @@ pub static mut set_decoration_provider_table: [KeySetLink; 10] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn set_decoration_provider_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1414,7 +1415,7 @@ pub unsafe extern "C" fn set_decoration_provider_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            set_decoration_provider_table[low as usize].str as *const ::core::ffi::c_void,
+            (*set_decoration_provider_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -1431,10 +1432,10 @@ pub unsafe extern "C" fn KeyDict_set_decoration_provider_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut set_decoration_provider_table as *mut KeySetLink).offset(hash as isize);
+    return (set_decoration_provider_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut set_extmark_table: [KeySetLink; 36] = [
+pub static set_extmark_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -1695,7 +1696,7 @@ pub static mut set_extmark_table: [KeySetLink; 36] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn set_extmark_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1840,7 +1841,7 @@ pub unsafe extern "C" fn set_extmark_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            set_extmark_table[low as usize].str as *const ::core::ffi::c_void,
+            (*set_extmark_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -1857,10 +1858,10 @@ pub unsafe extern "C" fn KeyDict_set_extmark_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut set_extmark_table as *mut KeySetLink).offset(hash as isize);
+    return (set_extmark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_extmark_table: [KeySetLink; 3] = [
+pub static get_extmark_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"details\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -1882,7 +1883,7 @@ pub static mut get_extmark_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_extmark_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1904,7 +1905,7 @@ pub unsafe extern "C" fn get_extmark_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_extmark_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_extmark_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -1921,10 +1922,10 @@ pub unsafe extern "C" fn KeyDict_get_extmark_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_extmark_table as *mut KeySetLink).offset(hash as isize);
+    return (get_extmark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_extmarks_table: [KeySetLink; 6] = [
+pub static get_extmarks_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"type\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 24 as size_t,
@@ -1967,7 +1968,7 @@ pub static mut get_extmarks_table: [KeySetLink; 6] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_extmarks_hash(
     mut str: *const ::core::ffi::c_char,
@@ -1998,7 +1999,7 @@ pub unsafe extern "C" fn get_extmarks_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_extmarks_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_extmarks_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2015,10 +2016,10 @@ pub unsafe extern "C" fn KeyDict_get_extmarks_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_extmarks_table as *mut KeySetLink).offset(hash as isize);
+    return (get_extmarks_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut keymap_table: [KeySetLink; 10] = [
+pub static keymap_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"desc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 24 as size_t,
@@ -2090,7 +2091,7 @@ pub static mut keymap_table: [KeySetLink; 10] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn keymap_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2136,7 +2137,7 @@ pub unsafe extern "C" fn keymap_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            keymap_table[low as usize].str as *const ::core::ffi::c_void,
+            (*keymap_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2153,10 +2154,10 @@ pub unsafe extern "C" fn KeyDict_keymap_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut keymap_table as *mut KeySetLink).offset(hash as isize);
+    return (keymap_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_commands_table: [KeySetLink; 2] = [
+pub static get_commands_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"builtin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 0 as size_t,
@@ -2171,7 +2172,7 @@ pub static mut get_commands_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_commands_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2187,7 +2188,7 @@ pub unsafe extern "C" fn get_commands_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_commands_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_commands_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2204,10 +2205,10 @@ pub unsafe extern "C" fn KeyDict_get_commands_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_commands_table as *mut KeySetLink).offset(hash as isize);
+    return (get_commands_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut user_command_table: [KeySetLink; 13] = [
+pub static user_command_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
     KeySetLink {
         str: b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 41 as size_t,
@@ -2299,7 +2300,7 @@ pub static mut user_command_table: [KeySetLink; 13] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn user_command_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2357,7 +2358,7 @@ pub unsafe extern "C" fn user_command_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            user_command_table[low as usize].str as *const ::core::ffi::c_void,
+            (*user_command_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2374,10 +2375,10 @@ pub unsafe extern "C" fn KeyDict_user_command_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut user_command_table as *mut KeySetLink).offset(hash as isize);
+    return (user_command_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut win_config_table: [KeySetLink; 25] = [
+pub static win_config_table: GlobalCell<[KeySetLink; 25]> = GlobalCell::new([
     KeySetLink {
         str: b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 224 as size_t,
@@ -2554,7 +2555,7 @@ pub static mut win_config_table: [KeySetLink; 25] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn win_config_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2654,7 +2655,7 @@ pub unsafe extern "C" fn win_config_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            win_config_table[low as usize].str as *const ::core::ffi::c_void,
+            (*win_config_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2671,10 +2672,10 @@ pub unsafe extern "C" fn KeyDict_win_config_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut win_config_table as *mut KeySetLink).offset(hash as isize);
+    return (win_config_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut tabpage_config_table: [KeySetLink; 2] = [
+pub static tabpage_config_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"after\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -2689,7 +2690,7 @@ pub static mut tabpage_config_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn tabpage_config_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2705,7 +2706,7 @@ pub unsafe extern "C" fn tabpage_config_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            tabpage_config_table[low as usize].str as *const ::core::ffi::c_void,
+            (*tabpage_config_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2722,10 +2723,10 @@ pub unsafe extern "C" fn KeyDict_tabpage_config_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut tabpage_config_table as *mut KeySetLink).offset(hash as isize);
+    return (tabpage_config_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut runtime_table: [KeySetLink; 3] = [
+pub static runtime_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"is_lua\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 0 as size_t,
@@ -2747,7 +2748,7 @@ pub static mut runtime_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn runtime_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2766,7 +2767,7 @@ pub unsafe extern "C" fn runtime_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            runtime_table[low as usize].str as *const ::core::ffi::c_void,
+            (*runtime_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2783,10 +2784,10 @@ pub unsafe extern "C" fn KeyDict_runtime_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut runtime_table as *mut KeySetLink).offset(hash as isize);
+    return (runtime_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut eval_statusline_table: [KeySetLink; 8] = [
+pub static eval_statusline_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new([
     KeySetLink {
         str: b"winid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -2844,7 +2845,7 @@ pub static mut eval_statusline_table: [KeySetLink; 8] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn eval_statusline_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2884,7 +2885,7 @@ pub unsafe extern "C" fn eval_statusline_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            eval_statusline_table[low as usize].str as *const ::core::ffi::c_void,
+            (*eval_statusline_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2901,10 +2902,10 @@ pub unsafe extern "C" fn KeyDict_eval_statusline_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut eval_statusline_table as *mut KeySetLink).offset(hash as isize);
+    return (eval_statusline_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut option_table: [KeySetLink; 5] = [
+pub static option_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 28 as size_t,
@@ -2940,7 +2941,7 @@ pub static mut option_table: [KeySetLink; 5] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn option_hash(
     mut str: *const ::core::ffi::c_char,
@@ -2968,7 +2969,7 @@ pub unsafe extern "C" fn option_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            option_table[low as usize].str as *const ::core::ffi::c_void,
+            (*option_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -2985,10 +2986,10 @@ pub unsafe extern "C" fn KeyDict_option_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut option_table as *mut KeySetLink).offset(hash as isize);
+    return (option_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut highlight_table: [KeySetLink; 36] = [
+pub static highlight_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
     KeySetLink {
         str: b"bg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 152 as size_t,
@@ -3241,7 +3242,7 @@ pub static mut highlight_table: [KeySetLink; 36] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn highlight_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3410,7 +3411,7 @@ pub unsafe extern "C" fn highlight_hash(
     while i < high {
         if memcmp(
             str as *const ::core::ffi::c_void,
-            highlight_table[i as usize].str as *const ::core::ffi::c_void,
+            (*highlight_table.ptr())[i as usize].str as *const ::core::ffi::c_void,
             len,
         ) == 0
         {
@@ -3429,10 +3430,10 @@ pub unsafe extern "C" fn KeyDict_highlight_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut highlight_table as *mut KeySetLink).offset(hash as isize);
+    return (highlight_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut highlight_cterm_table: [KeySetLink; 17] = [
+pub static highlight_cterm_table: GlobalCell<[KeySetLink; 17]> = GlobalCell::new([
     KeySetLink {
         str: b"dim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 11 as size_t,
@@ -3552,7 +3553,7 @@ pub static mut highlight_cterm_table: [KeySetLink; 17] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn highlight_cterm_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3625,7 +3626,7 @@ pub unsafe extern "C" fn highlight_cterm_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            highlight_cterm_table[low as usize].str as *const ::core::ffi::c_void,
+            (*highlight_cterm_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -3642,10 +3643,10 @@ pub unsafe extern "C" fn KeyDict_highlight_cterm_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut highlight_cterm_table as *mut KeySetLink).offset(hash as isize);
+    return (highlight_cterm_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_highlight_table: [KeySetLink; 5] = [
+pub static get_highlight_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -3681,7 +3682,7 @@ pub static mut get_highlight_table: [KeySetLink; 5] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_highlight_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3709,7 +3710,7 @@ pub unsafe extern "C" fn get_highlight_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_highlight_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_highlight_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -3726,10 +3727,10 @@ pub unsafe extern "C" fn KeyDict_get_highlight_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_highlight_table as *mut KeySetLink).offset(hash as isize);
+    return (get_highlight_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_ns_table: [KeySetLink; 2] = [
+pub static get_ns_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"winid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -3744,7 +3745,7 @@ pub static mut get_ns_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_ns_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3760,7 +3761,7 @@ pub unsafe extern "C" fn get_ns_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_ns_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_ns_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -3777,10 +3778,10 @@ pub unsafe extern "C" fn KeyDict_get_ns_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_ns_table as *mut KeySetLink).offset(hash as isize);
+    return (get_ns_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut win_text_height_table: [KeySetLink; 6] = [
+pub static win_text_height_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"end_row\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 16 as size_t,
@@ -3823,7 +3824,7 @@ pub static mut win_text_height_table: [KeySetLink; 6] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn win_text_height_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3854,7 +3855,7 @@ pub unsafe extern "C" fn win_text_height_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            win_text_height_table[low as usize].str as *const ::core::ffi::c_void,
+            (*win_text_height_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -3871,10 +3872,10 @@ pub unsafe extern "C" fn KeyDict_win_text_height_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut win_text_height_table as *mut KeySetLink).offset(hash as isize);
+    return (win_text_height_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut clear_autocmds_table: [KeySetLink; 6] = [
+pub static clear_autocmds_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 12 as size_t,
@@ -3917,7 +3918,7 @@ pub static mut clear_autocmds_table: [KeySetLink; 6] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn clear_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
@@ -3948,7 +3949,7 @@ pub unsafe extern "C" fn clear_autocmds_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            clear_autocmds_table[low as usize].str as *const ::core::ffi::c_void,
+            (*clear_autocmds_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -3965,10 +3966,10 @@ pub unsafe extern "C" fn KeyDict_clear_autocmds_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut clear_autocmds_table as *mut KeySetLink).offset(hash as isize);
+    return (clear_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut create_autocmd_table: [KeySetLink; 10] = [
+pub static create_autocmd_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 12 as size_t,
@@ -4039,7 +4040,7 @@ pub static mut create_autocmd_table: [KeySetLink; 10] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn create_autocmd_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4088,7 +4089,7 @@ pub unsafe extern "C" fn create_autocmd_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            create_autocmd_table[low as usize].str as *const ::core::ffi::c_void,
+            (*create_autocmd_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4105,10 +4106,10 @@ pub unsafe extern "C" fn KeyDict_create_autocmd_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut create_autocmd_table as *mut KeySetLink).offset(hash as isize);
+    return (create_autocmd_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut exec_autocmds_table: [KeySetLink; 7] = [
+pub static exec_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 12 as size_t,
@@ -4158,7 +4159,7 @@ pub static mut exec_autocmds_table: [KeySetLink; 7] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn exec_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4189,7 +4190,7 @@ pub unsafe extern "C" fn exec_autocmds_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            exec_autocmds_table[low as usize].str as *const ::core::ffi::c_void,
+            (*exec_autocmds_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4206,10 +4207,10 @@ pub unsafe extern "C" fn KeyDict_exec_autocmds_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut exec_autocmds_table as *mut KeySetLink).offset(hash as isize);
+    return (exec_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut get_autocmds_table: [KeySetLink; 7] = [
+pub static get_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 168 as size_t,
@@ -4259,7 +4260,7 @@ pub static mut get_autocmds_table: [KeySetLink; 7] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4293,7 +4294,7 @@ pub unsafe extern "C" fn get_autocmds_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            get_autocmds_table[low as usize].str as *const ::core::ffi::c_void,
+            (*get_autocmds_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4310,10 +4311,10 @@ pub unsafe extern "C" fn KeyDict_get_autocmds_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut get_autocmds_table as *mut KeySetLink).offset(hash as isize);
+    return (get_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut create_augroup_table: [KeySetLink; 2] = [
+pub static create_augroup_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -4328,7 +4329,7 @@ pub static mut create_augroup_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn create_augroup_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4344,7 +4345,7 @@ pub unsafe extern "C" fn create_augroup_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            create_augroup_table[low as usize].str as *const ::core::ffi::c_void,
+            (*create_augroup_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4361,10 +4362,10 @@ pub unsafe extern "C" fn KeyDict_create_augroup_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut create_augroup_table as *mut KeySetLink).offset(hash as isize);
+    return (create_augroup_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut cmd_table: [KeySetLink; 12] = [
+pub static cmd_table: GlobalCell<[KeySetLink; 12]> = GlobalCell::new([
     KeySetLink {
         str: b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -4449,7 +4450,7 @@ pub static mut cmd_table: [KeySetLink; 12] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn cmd_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4504,7 +4505,7 @@ pub unsafe extern "C" fn cmd_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            cmd_table[low as usize].str as *const ::core::ffi::c_void,
+            (*cmd_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4521,10 +4522,10 @@ pub unsafe extern "C" fn KeyDict_cmd_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut cmd_table as *mut KeySetLink).offset(hash as isize);
+    return (cmd_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut cmd_magic_table: [KeySetLink; 3] = [
+pub static cmd_magic_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 9 as size_t,
@@ -4546,7 +4547,7 @@ pub static mut cmd_magic_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn cmd_magic_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4565,7 +4566,7 @@ pub unsafe extern "C" fn cmd_magic_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            cmd_magic_table[low as usize].str as *const ::core::ffi::c_void,
+            (*cmd_magic_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4582,10 +4583,10 @@ pub unsafe extern "C" fn KeyDict_cmd_magic_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut cmd_magic_table as *mut KeySetLink).offset(hash as isize);
+    return (cmd_magic_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut cmd_mods_table: [KeySetLink; 21] = [
+pub static cmd_mods_table: GlobalCell<[KeySetLink; 21]> = GlobalCell::new([
     KeySetLink {
         str: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 56 as size_t,
@@ -4733,7 +4734,7 @@ pub static mut cmd_mods_table: [KeySetLink; 21] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn cmd_mods_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4839,7 +4840,7 @@ pub unsafe extern "C" fn cmd_mods_hash(
     while i < high {
         if memcmp(
             str as *const ::core::ffi::c_void,
-            cmd_mods_table[i as usize].str as *const ::core::ffi::c_void,
+            (*cmd_mods_table.ptr())[i as usize].str as *const ::core::ffi::c_void,
             len,
         ) == 0
         {
@@ -4858,10 +4859,10 @@ pub unsafe extern "C" fn KeyDict_cmd_mods_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut cmd_mods_table as *mut KeySetLink).offset(hash as isize);
+    return (cmd_mods_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut cmd_mods_filter_table: [KeySetLink; 3] = [
+pub static cmd_mods_filter_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"force\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 24 as size_t,
@@ -4883,7 +4884,7 @@ pub static mut cmd_mods_filter_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn cmd_mods_filter_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4902,7 +4903,7 @@ pub unsafe extern "C" fn cmd_mods_filter_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            cmd_mods_filter_table[low as usize].str as *const ::core::ffi::c_void,
+            (*cmd_mods_filter_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4919,10 +4920,10 @@ pub unsafe extern "C" fn KeyDict_cmd_mods_filter_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut cmd_mods_filter_table as *mut KeySetLink).offset(hash as isize);
+    return (cmd_mods_filter_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut cmd_opts_table: [KeySetLink; 2] = [
+pub static cmd_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"output\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 0 as size_t,
@@ -4937,7 +4938,7 @@ pub static mut cmd_opts_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn cmd_opts_hash(
     mut str: *const ::core::ffi::c_char,
@@ -4953,7 +4954,7 @@ pub unsafe extern "C" fn cmd_opts_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            cmd_opts_table[low as usize].str as *const ::core::ffi::c_void,
+            (*cmd_opts_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -4970,10 +4971,10 @@ pub unsafe extern "C" fn KeyDict_cmd_opts_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut cmd_opts_table as *mut KeySetLink).offset(hash as isize);
+    return (cmd_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut echo_opts_table: [KeySetLink; 11] = [
+pub static echo_opts_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 32 as size_t,
@@ -5051,7 +5052,7 @@ pub static mut echo_opts_table: [KeySetLink; 11] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn echo_opts_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5103,7 +5104,7 @@ pub unsafe extern "C" fn echo_opts_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            echo_opts_table[low as usize].str as *const ::core::ffi::c_void,
+            (*echo_opts_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5120,10 +5121,10 @@ pub unsafe extern "C" fn KeyDict_echo_opts_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut echo_opts_table as *mut KeySetLink).offset(hash as isize);
+    return (echo_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut exec_opts_table: [KeySetLink; 2] = [
+pub static exec_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"output\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 0 as size_t,
@@ -5138,7 +5139,7 @@ pub static mut exec_opts_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn exec_opts_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5154,7 +5155,7 @@ pub unsafe extern "C" fn exec_opts_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            exec_opts_table[low as usize].str as *const ::core::ffi::c_void,
+            (*exec_opts_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5171,10 +5172,10 @@ pub unsafe extern "C" fn KeyDict_exec_opts_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut exec_opts_table as *mut KeySetLink).offset(hash as isize);
+    return (exec_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut buf_attach_table: [KeySetLink; 8] = [
+pub static buf_attach_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new([
     KeySetLink {
         str: b"preview\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 29 as size_t,
@@ -5231,7 +5232,7 @@ pub static mut buf_attach_table: [KeySetLink; 8] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn buf_attach_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5271,7 +5272,7 @@ pub unsafe extern "C" fn buf_attach_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            buf_attach_table[low as usize].str as *const ::core::ffi::c_void,
+            (*buf_attach_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5288,10 +5289,10 @@ pub unsafe extern "C" fn KeyDict_buf_attach_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut buf_attach_table as *mut KeySetLink).offset(hash as isize);
+    return (buf_attach_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut buf_delete_table: [KeySetLink; 3] = [
+pub static buf_delete_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"force\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -5313,7 +5314,7 @@ pub static mut buf_delete_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn buf_delete_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5332,7 +5333,7 @@ pub unsafe extern "C" fn buf_delete_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            buf_delete_table[low as usize].str as *const ::core::ffi::c_void,
+            (*buf_delete_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5349,10 +5350,10 @@ pub unsafe extern "C" fn KeyDict_buf_delete_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut buf_delete_table as *mut KeySetLink).offset(hash as isize);
+    return (buf_delete_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut open_term_table: [KeySetLink; 3] = [
+pub static open_term_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"on_input\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -5374,7 +5375,7 @@ pub static mut open_term_table: [KeySetLink; 3] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn open_term_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5393,7 +5394,7 @@ pub unsafe extern "C" fn open_term_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            open_term_table[low as usize].str as *const ::core::ffi::c_void,
+            (*open_term_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5410,10 +5411,10 @@ pub unsafe extern "C" fn KeyDict_open_term_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut open_term_table as *mut KeySetLink).offset(hash as isize);
+    return (open_term_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut complete_set_table: [KeySetLink; 2] = [
+pub static complete_set_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"info\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -5428,7 +5429,7 @@ pub static mut complete_set_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn complete_set_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5444,7 +5445,7 @@ pub unsafe extern "C" fn complete_set_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            complete_set_table[low as usize].str as *const ::core::ffi::c_void,
+            (*complete_set_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5461,10 +5462,10 @@ pub unsafe extern "C" fn KeyDict_complete_set_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut complete_set_table as *mut KeySetLink).offset(hash as isize);
+    return (complete_set_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut xdl_diff_table: [KeySetLink; 13] = [
+pub static xdl_diff_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
     KeySetLink {
         str: b"ctxlen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 48 as size_t,
@@ -5563,7 +5564,7 @@ pub static mut xdl_diff_table: [KeySetLink; 13] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn xdl_diff_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5618,7 +5619,7 @@ pub unsafe extern "C" fn xdl_diff_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            xdl_diff_table[low as usize].str as *const ::core::ffi::c_void,
+            (*xdl_diff_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5635,10 +5636,10 @@ pub unsafe extern "C" fn KeyDict_xdl_diff_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut xdl_diff_table as *mut KeySetLink).offset(hash as isize);
+    return (xdl_diff_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut redraw_table: [KeySetLink; 11] = [
+pub static redraw_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 44 as size_t,
@@ -5716,7 +5717,7 @@ pub static mut redraw_table: [KeySetLink; 11] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn redraw_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5768,7 +5769,7 @@ pub unsafe extern "C" fn redraw_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            redraw_table[low as usize].str as *const ::core::ffi::c_void,
+            (*redraw_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5785,10 +5786,10 @@ pub unsafe extern "C" fn KeyDict_redraw_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut redraw_table as *mut KeySetLink).offset(hash as isize);
+    return (redraw_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut ns_opts_table: [KeySetLink; 2] = [
+pub static ns_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"wins\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 8 as size_t,
@@ -5803,7 +5804,7 @@ pub static mut ns_opts_table: [KeySetLink; 2] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn ns_opts_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5819,7 +5820,7 @@ pub unsafe extern "C" fn ns_opts_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            ns_opts_table[low as usize].str as *const ::core::ffi::c_void,
+            (*ns_opts_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5836,10 +5837,10 @@ pub unsafe extern "C" fn KeyDict_ns_opts_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut ns_opts_table as *mut KeySetLink).offset(hash as isize);
+    return (ns_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut _shada_search_pat_table: [KeySetLink; 11] = [
+pub static _shada_search_pat_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"sb\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 15 as size_t,
@@ -5917,7 +5918,7 @@ pub static mut _shada_search_pat_table: [KeySetLink; 11] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn _shada_search_pat_hash(
     mut str: *const ::core::ffi::c_char,
@@ -5963,7 +5964,7 @@ pub unsafe extern "C" fn _shada_search_pat_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            _shada_search_pat_table[low as usize].str as *const ::core::ffi::c_void,
+            (*_shada_search_pat_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -5980,10 +5981,10 @@ pub unsafe extern "C" fn KeyDict__shada_search_pat_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut _shada_search_pat_table as *mut KeySetLink).offset(hash as isize);
+    return (_shada_search_pat_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut _shada_mark_table: [KeySetLink; 5] = [
+pub static _shada_mark_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 24 as size_t,
@@ -6019,7 +6020,7 @@ pub static mut _shada_mark_table: [KeySetLink; 5] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn _shada_mark_hash(
     mut str: *const ::core::ffi::c_char,
@@ -6046,10 +6047,10 @@ pub unsafe extern "C" fn KeyDict__shada_mark_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut _shada_mark_table as *mut KeySetLink).offset(hash as isize);
+    return (_shada_mark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut _shada_register_table: [KeySetLink; 6] = [
+pub static _shada_register_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 48 as size_t,
@@ -6092,7 +6093,7 @@ pub static mut _shada_register_table: [KeySetLink; 6] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn _shada_register_hash(
     mut str: *const ::core::ffi::c_char,
@@ -6123,7 +6124,7 @@ pub unsafe extern "C" fn _shada_register_hash(
     if low < 0 as ::core::ffi::c_int
         || memcmp(
             str as *const ::core::ffi::c_void,
-            _shada_register_table[low as usize].str as *const ::core::ffi::c_void,
+            (*_shada_register_table.ptr())[low as usize].str as *const ::core::ffi::c_void,
             len,
         ) != 0
     {
@@ -6140,10 +6141,10 @@ pub unsafe extern "C" fn KeyDict__shada_register_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut _shada_register_table as *mut KeySetLink).offset(hash as isize);
+    return (_shada_register_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
-pub static mut _shada_buflist_item_table: [KeySetLink; 4] = [
+pub static _shada_buflist_item_table: GlobalCell<[KeySetLink; 4]> = GlobalCell::new([
     KeySetLink {
         str: b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ptr_off: 16 as size_t,
@@ -6172,7 +6173,7 @@ pub static mut _shada_buflist_item_table: [KeySetLink; 4] = [
         opt_index: -1 as ::core::ffi::c_int,
         is_hlgroup: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn _shada_buflist_item_hash(
     mut str: *const ::core::ffi::c_char,
@@ -6198,7 +6199,7 @@ pub unsafe extern "C" fn KeyDict__shada_buflist_item_get_field(
     if hash == -1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<KeySetLink>();
     }
-    return (&raw mut _shada_buflist_item_table as *mut KeySetLink).offset(hash as isize);
+    return (_shada_buflist_item_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_autocmds(
@@ -9709,7 +9710,7 @@ pub unsafe extern "C" fn handle_nvim_parse_cmd(
                     data: C2Rust_Unnamed {
                         dict: api_keydict_to_dict(
                             &raw mut rv as *mut ::core::ffi::c_void,
-                            &raw mut cmd_table as *mut KeySetLink,
+                            cmd_table.ptr() as *mut KeySetLink,
                             ::core::mem::size_of::<[KeySetLink; 12]>()
                                 .wrapping_div(::core::mem::size_of::<KeySetLink>())
                                 .wrapping_div(
@@ -15172,7 +15173,7 @@ pub unsafe extern "C" fn handle_nvim__ns_get(
                 data: C2Rust_Unnamed {
                     dict: api_keydict_to_dict(
                         &raw mut rv as *mut ::core::ffi::c_void,
-                        &raw mut ns_opts_table as *mut KeySetLink,
+                        ns_opts_table.ptr() as *mut KeySetLink,
                         ::core::mem::size_of::<[KeySetLink; 2]>()
                             .wrapping_div(::core::mem::size_of::<KeySetLink>())
                             .wrapping_div(
@@ -23608,7 +23609,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_config(
                     data: C2Rust_Unnamed {
                         dict: api_keydict_to_dict(
                             &raw mut rv as *mut ::core::ffi::c_void,
-                            &raw mut win_config_table as *mut KeySetLink,
+                            win_config_table.ptr() as *mut KeySetLink,
                             ::core::mem::size_of::<[KeySetLink; 25]>()
                                 .wrapping_div(::core::mem::size_of::<KeySetLink>())
                                 .wrapping_div(
@@ -25239,7 +25240,7 @@ pub unsafe extern "C" fn handle_nvim_win_text_height(
     return ret;
 }
 #[no_mangle]
-pub static mut method_handlers: [MsgpackRpcRequestHandler; 280] = [
+pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; 280]> = GlobalCell::new([
     MsgpackRpcRequestHandler {
         name: b"redraw\0".as_ptr() as *const ::core::ffi::c_char,
         fn_0: Some(
@@ -27760,7 +27761,7 @@ pub static mut method_handlers: [MsgpackRpcRequestHandler; 280] = [
         fast: false_0 != 0,
         ret_alloc: false_0 != 0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn msgpack_rpc_get_handler_for_hash(
     mut str: *const ::core::ffi::c_char,
@@ -28439,7 +28440,7 @@ pub unsafe extern "C" fn msgpack_rpc_get_handler_for_hash(
     while i < high {
         if memcmp(
             str as *const ::core::ffi::c_void,
-            method_handlers[i as usize].name as *const ::core::ffi::c_void,
+            (*method_handlers.ptr())[i as usize].name as *const ::core::ffi::c_void,
             len,
         ) == 0
         {
@@ -28479,5 +28480,5 @@ pub unsafe extern "C" fn msgpack_rpc_get_handler_for(
             ret_alloc: false,
         };
     }
-    return method_handlers[hash as usize];
+    return (*method_handlers.ptr())[hash as usize];
 }

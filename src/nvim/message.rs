@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -400,7 +401,7 @@ extern "C" {
         len: ssize_t,
         must_append: ::core::ffi::c_int,
     );
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn ui_active() -> size_t;
     fn ui_refresh();
     fn vim_beep(val: ::core::ffi::c_uint);
@@ -4805,17 +4806,17 @@ pub unsafe extern "C" fn reset_last_sourcing() {
     last_sourcing_lnum = 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn other_sourcing_name() -> bool {
-    if !exestack.ga_data.is_null()
-        && exestack.ga_len > 0 as ::core::ffi::c_int
-        && !(*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if !(*exestack.ptr()).ga_data.is_null()
+        && (*exestack.ptr()).ga_len > 0 as ::core::ffi::c_int
+        && !(*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
         .is_null()
     {
         if !last_sourcing_name.is_null() {
             return strcmp(
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name,
                 last_sourcing_name,
             ) != 0 as ::core::ffi::c_int;
@@ -4825,10 +4826,10 @@ unsafe extern "C" fn other_sourcing_name() -> bool {
     return false_0 != 0;
 }
 unsafe extern "C" fn get_emsg_source() -> *mut ::core::ffi::c_char {
-    if !exestack.ga_data.is_null()
-        && exestack.ga_len > 0 as ::core::ffi::c_int
-        && !(*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if !(*exestack.ptr()).ga_data.is_null()
+        && (*exestack.ptr()).ga_len > 0 as ::core::ffi::c_int
+        && !(*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
         .is_null()
         && other_sourcing_name() as ::core::ffi::c_int != 0
@@ -4836,8 +4837,8 @@ unsafe extern "C" fn get_emsg_source() -> *mut ::core::ffi::c_char {
         let mut sname: *mut ::core::ffi::c_char = estack_sfile(ESTACK_NONE);
         let mut tofree: *mut ::core::ffi::c_char = sname;
         if sname.is_null() {
-            sname = (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            sname = (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name;
         }
         let p: *const ::core::ffi::c_char =
@@ -4853,17 +4854,17 @@ unsafe extern "C" fn get_emsg_source() -> *mut ::core::ffi::c_char {
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
-    if !(*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if !(*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_name
     .is_null()
         && (other_sourcing_name() as ::core::ffi::c_int != 0
-            || (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            || (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum
                 != last_sourcing_lnum as linenr_T)
-        && (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        && (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum
             != 0 as linenr_T
     {
@@ -4875,8 +4876,8 @@ unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
             buf,
             buf_len,
             p,
-            (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
         return buf;
@@ -4901,12 +4902,12 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
     if !p.is_null() {
         msg(p, HLF_N as ::core::ffi::c_int);
         xfree(p as *mut ::core::ffi::c_void);
-        last_sourcing_lnum = (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        last_sourcing_lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum as ::core::ffi::c_int;
     }
-    if (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_name
     .is_null()
         || other_sourcing_name() as ::core::ffi::c_int != 0
@@ -4916,14 +4917,14 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        if !(*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        if !(*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
         .is_null()
         {
             last_sourcing_name = xstrdup(
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name,
             );
             if redirecting() == 0 {
@@ -4973,20 +4974,20 @@ pub unsafe extern "C" fn emsg_multiline(
         }
         if in_assert_fails as ::core::ffi::c_int != 0 && emsg_assert_fails_msg.is_null() {
             emsg_assert_fails_msg = xstrdup(s);
-            emsg_assert_fails_lnum = (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            emsg_assert_fails_lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum as ::core::ffi::c_long;
             xfree(emsg_assert_fails_context as *mut ::core::ffi::c_void);
             emsg_assert_fails_context = xstrdup(
-                if (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                if (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name
                 .is_null()
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
-                    (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_name as *const ::core::ffi::c_char
                 },
             );
@@ -5011,12 +5012,12 @@ pub unsafe extern "C" fn emsg_multiline(
                 }
                 redir_write(s, strlen(s) as ptrdiff_t);
             }
-            if !(*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            if !(*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name
             .is_null()
-                && (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                && (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum
                     != 0 as linenr_T
             {
@@ -5028,11 +5029,11 @@ pub unsafe extern "C" fn emsg_multiline(
                     true_0 != 0,
                     b"(:silent) %s (%s (line %d))\0".as_ptr() as *const ::core::ffi::c_char,
                     s,
-                    (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_name,
-                    (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum,
                 );
             } else {
@@ -5048,12 +5049,12 @@ pub unsafe extern "C" fn emsg_multiline(
             }
             return true_0 != 0;
         }
-        if !(*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        if !(*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
         .is_null()
-            && (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            && (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum
                 != 0 as linenr_T
         {
@@ -5065,11 +5066,11 @@ pub unsafe extern "C" fn emsg_multiline(
                 true_0 != 0,
                 b"%s (%s (line %d))\0".as_ptr() as *const ::core::ffi::c_char,
                 s,
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name,
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum,
             );
         } else {
@@ -7808,8 +7809,8 @@ pub unsafe extern "C" fn msg_ui_flush() {
 unsafe extern "C" fn inc_msg_scrolled() {
     if *get_vim_var_str(VV_SCROLLSTART) as ::core::ffi::c_int == NUL {
         let mut p: String_0 = String_0 {
-            data: (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            data: (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name,
             size: 0,
         };
@@ -7824,8 +7825,8 @@ unsafe extern "C" fn inc_msg_scrolled() {
                 tofreesize,
                 gettext(b"%s line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 p.data,
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum as int64_t,
             );
             p.data = tofree;

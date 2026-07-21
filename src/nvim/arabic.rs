@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     static mut p_arshape: ::core::ffi::c_int;
     static mut p_tbidi: ::core::ffi::c_int;
@@ -78,7 +79,7 @@ pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-static mut achars: [achar; 54] = [
+static achars: GlobalCell<[achar; 54]> = GlobalCell::new([
     achar {
         c: a_HAMZA as ::core::ffi::c_int as ::core::ffi::c_uint,
         isolated: 0xfe80 as ::core::ffi::c_uint,
@@ -457,7 +458,7 @@ static mut achars: [achar; 54] = [
         medial: 0xfbff as ::core::ffi::c_uint,
         final_0: 0xfbfd as ::core::ffi::c_uint,
     },
-];
+]);
 pub const a_BYTE_ORDER_MARK: ::core::ffi::c_int = 0xfeff as ::core::ffi::c_int;
 unsafe extern "C" fn find_achar(mut c: ::core::ffi::c_int) -> *mut achar {
     let mut h: ::core::ffi::c_int = ::core::mem::size_of::<[achar; 54]>()
@@ -469,10 +470,10 @@ unsafe extern "C" fn find_achar(mut c: ::core::ffi::c_int) -> *mut achar {
     let mut l: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while l < h {
         let mut m: ::core::ffi::c_int = (h + l) / 2 as ::core::ffi::c_int;
-        if achars[m as usize].c == c as ::core::ffi::c_uint {
-            return (&raw mut achars as *mut achar).offset(m as isize) as *mut achar;
+        if (*achars.ptr())[m as usize].c == c as ::core::ffi::c_uint {
+            return (achars.ptr() as *mut achar).offset(m as isize) as *mut achar;
         }
-        if (c as ::core::ffi::c_uint) < achars[m as usize].c {
+        if (c as ::core::ffi::c_uint) < (*achars.ptr())[m as usize].c {
             h = m;
         } else {
             l = m + 1 as ::core::ffi::c_int;

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -5235,9 +5236,9 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
     };
 }
 pub const VIM_LC_MESSAGES: ::core::ffi::c_int = LC_MESSAGES;
-static mut locales: *mut *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-static mut did_init_locales: bool = false_0 != 0;
+static locales: GlobalCell<*mut *mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+static did_init_locales: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
     let mut locales_ga: garray_T = garray_T {
         ga_len: 0,
@@ -5285,11 +5286,11 @@ unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
     return locales_ga.ga_data as *mut *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn init_locales() {
-    if did_init_locales {
+    if did_init_locales.get() {
         return;
     }
-    did_init_locales = true_0 != 0;
-    locales = find_locales();
+    did_init_locales.set(true_0 != 0);
+    locales.set(find_locales());
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_lang_arg(
@@ -5309,10 +5310,10 @@ pub unsafe extern "C" fn get_lang_arg(
         return b"collate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     init_locales();
-    if locales.is_null() {
+    if (*locales.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return *locales.offset((idx - 4 as ::core::ffi::c_int) as isize);
+    return *(*locales.ptr()).offset((idx - 4 as ::core::ffi::c_int) as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_locales(
@@ -5320,10 +5321,10 @@ pub unsafe extern "C" fn get_locales(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     init_locales();
-    if locales.is_null() {
+    if (*locales.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return *locales.offset(idx as isize);
+    return *(*locales.ptr()).offset(idx as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn lang_init() {}

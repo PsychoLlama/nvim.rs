@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -533,7 +534,7 @@ pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-static mut log_file_path: [::core::ffi::c_char; 4097] = [
+static log_file_path: GlobalCell<[::core::ffi::c_char; 4097]> = GlobalCell::new([
     0 as ::core::ffi::c_char,
     0,
     0,
@@ -4631,9 +4632,9 @@ static mut log_file_path: [::core::ffi::c_char; 4097] = [
     0,
     0,
     0,
-];
-static mut did_log_init: bool = false_0 != 0;
-static mut mutex: uv_mutex_t = pthread_mutex_t {
+]);
+static did_log_init: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static mutex: GlobalCell<uv_mutex_t> = GlobalCell::new(pthread_mutex_t {
     __data: __pthread_mutex_s {
         __lock: 0,
         __count: 0,
@@ -4647,7 +4648,7 @@ static mut mutex: uv_mutex_t = pthread_mutex_t {
             __next: ::core::ptr::null_mut::<__pthread_internal_list>(),
         },
     },
-};
+});
 unsafe extern "C" fn log_try_create(mut fname: *mut ::core::ffi::c_char) -> bool {
     if fname.is_null()
         || *fname.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
@@ -4666,22 +4667,22 @@ unsafe extern "C" fn log_path_init() {
     let mut size: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 4097]>();
     expand_env(
         b"$NVIM_LOG_FILE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        &raw mut log_file_path as *mut ::core::ffi::c_char,
+        log_file_path.ptr() as *mut ::core::ffi::c_char,
         size as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
     );
     let mut user_set: bool = !strequal(
         b"$NVIM_LOG_FILE\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut log_file_path as *mut ::core::ffi::c_char,
+        log_file_path.ptr() as *mut ::core::ffi::c_char,
     );
     if !user_set
-        || log_file_path[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
-        || os_isdir(&raw mut log_file_path as *mut ::core::ffi::c_char) as ::core::ffi::c_int != 0
-        || !log_try_create(&raw mut log_file_path as *mut ::core::ffi::c_char)
+        || (*log_file_path.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
+        || os_isdir(log_file_path.ptr() as *mut ::core::ffi::c_char) as ::core::ffi::c_int != 0
+        || !log_try_create(log_file_path.ptr() as *mut ::core::ffi::c_char)
     {
         if user_set {
             os_setenv(
                 b"__NVIM_LOG_FILE_WANT\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw mut log_file_path as *mut ::core::ffi::c_char,
+                log_file_path.ptr() as *mut ::core::ffi::c_char,
                 true_0,
             );
         }
@@ -4708,32 +4709,32 @@ unsafe extern "C" fn log_path_init() {
             true_0 != 0,
         );
         let mut len: size_t = xstrlcpy(
-            &raw mut log_file_path as *mut ::core::ffi::c_char,
+            log_file_path.ptr() as *mut ::core::ffi::c_char,
             defaultpath,
             size,
         );
         xfree(defaultpath as *mut ::core::ffi::c_void);
-        if len >= size || !log_try_create(&raw mut log_file_path as *mut ::core::ffi::c_char) {
+        if len >= size || !log_try_create(log_file_path.ptr() as *mut ::core::ffi::c_char) {
             if !user_set {
                 os_setenv(
                     b"__NVIM_LOG_FILE_WANT\0".as_ptr() as *const ::core::ffi::c_char,
-                    &raw mut log_file_path as *mut ::core::ffi::c_char,
+                    log_file_path.ptr() as *mut ::core::ffi::c_char,
                     true_0,
                 );
             }
             len = xstrlcpy(
-                &raw mut log_file_path as *mut ::core::ffi::c_char,
+                log_file_path.ptr() as *mut ::core::ffi::c_char,
                 b"nvim.log\0".as_ptr() as *const ::core::ffi::c_char,
                 size,
             );
         }
-        if len >= size || !log_try_create(&raw mut log_file_path as *mut ::core::ffi::c_char) {
-            log_file_path[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        if len >= size || !log_try_create(log_file_path.ptr() as *mut ::core::ffi::c_char) {
+            (*log_file_path.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
             return;
         }
         os_setenv(
             ENV_LOGFILE.as_ptr(),
-            &raw mut log_file_path as *mut ::core::ffi::c_char,
+            log_file_path.ptr() as *mut ::core::ffi::c_char,
             true_0,
         );
         if log_dir_failure != 0 {
@@ -4758,17 +4759,17 @@ unsafe extern "C" fn log_path_init() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn log_init() {
-    uv_mutex_init_recursive(&raw mut mutex);
+    uv_mutex_init_recursive(mutex.ptr());
     log_path_init();
-    did_log_init = true_0 != 0;
+    did_log_init.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn log_lock() {
-    uv_mutex_lock(&raw mut mutex);
+    uv_mutex_lock(mutex.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn log_unlock() {
-    uv_mutex_unlock(&raw mut mutex);
+    uv_mutex_unlock(mutex.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn logmsg(
@@ -4780,9 +4781,9 @@ pub unsafe extern "C" fn logmsg(
     mut fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> bool {
-    static mut recursive: bool = false_0 != 0;
-    static mut did_msg: bool = false_0 != 0;
-    if !did_log_init {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    static did_msg: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if !did_log_init.get() {
         g_stats.log_skip += 1;
         return false_0 != 0;
     }
@@ -4790,9 +4791,9 @@ pub unsafe extern "C" fn logmsg(
         return false_0 != 0;
     }
     log_lock();
-    if recursive {
-        if !did_msg {
-            did_msg = true_0 != 0;
+    if recursive.get() {
+        if !did_msg.get() {
+            did_msg.set(true_0 != 0);
             msg_schedule_semsg(
                 b"E5430: %s:%d: recursive log!\0".as_ptr() as *const ::core::ffi::c_char,
                 if !func_name.is_null() {
@@ -4807,7 +4808,7 @@ pub unsafe extern "C" fn logmsg(
         log_unlock();
         return false_0 != 0;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut ret: bool = false_0 != 0;
     let mut log_file: *mut FILE = open_log_file();
     let mut args: ::core::ffi::VaListImpl;
@@ -4825,7 +4826,7 @@ pub unsafe extern "C" fn logmsg(
     if log_file != stderr && log_file != stdout {
         fclose(log_file);
     }
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
     log_unlock();
     return ret;
 }
@@ -4843,9 +4844,9 @@ pub unsafe extern "C" fn log_uv_handles(mut loop_0: *mut ::core::ffi::c_void) {
 #[no_mangle]
 pub unsafe extern "C" fn open_log_file() -> *mut FILE {
     *__errno_location() = 0 as ::core::ffi::c_int;
-    if log_file_path[0 as ::core::ffi::c_int as usize] != 0 {
+    if (*log_file_path.ptr())[0 as ::core::ffi::c_int as usize] != 0 {
         let mut f: *mut FILE = fopen(
-            &raw mut log_file_path as *mut ::core::ffi::c_char,
+            log_file_path.ptr() as *mut ::core::ffi::c_char,
             b"a\0".as_ptr() as *const ::core::ffi::c_char,
         ) as *mut FILE;
         if !f.is_null() {
@@ -4861,7 +4862,7 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
         true_0 != 0,
         b"failed to open $NVIM_LOG_FILE (%s): %s\0".as_ptr() as *const ::core::ffi::c_char,
         strerror(*__errno_location()),
-        &raw mut log_file_path as *mut ::core::ffi::c_char,
+        log_file_path.ptr() as *mut ::core::ffi::c_char,
     );
     return stderr;
 }
@@ -9115,7 +9116,7 @@ unsafe extern "C" fn v_do_log_to_file(
     mut fmt: *const ::core::ffi::c_char,
     mut args: ::core::ffi::VaList,
 ) -> bool {
-    static mut name: [::core::ffi::c_char; 32] = [
+    static name: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new([
         0 as ::core::ffi::c_char,
         0,
         0,
@@ -9148,14 +9149,14 @@ unsafe extern "C" fn v_do_log_to_file(
         0,
         0,
         0,
-    ];
-    static mut log_levels: [*const ::core::ffi::c_char; 5] = [
+    ]);
+    static log_levels: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"DBG\0".as_ptr() as *const ::core::ffi::c_char,
         b"INF\0".as_ptr() as *const ::core::ffi::c_char,
         b"WRN\0".as_ptr() as *const ::core::ffi::c_char,
         b"ERR\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     '_c2rust_label: {
         if log_level >= 1 as ::core::ffi::c_int && log_level <= 4 as ::core::ffi::c_int {
         } else {
@@ -9206,8 +9207,8 @@ unsafe extern "C" fn v_do_log_to_file(
     }
     let mut ui: bool = ui_client_channel_id != 0;
     let mut regen: bool = ui as ::core::ffi::c_int != 0
-        || name[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
-        || name[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+        || (*name.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
+        || (*name.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
             == '?' as ::core::ffi::c_int;
     if regen {
         let mut parent_buf: [::core::ffi::c_char; 4096] = [0; 4096];
@@ -9219,7 +9220,7 @@ unsafe extern "C" fn v_do_log_to_file(
         let mut serv: *const ::core::ffi::c_char = path_tail(get_vim_var_str(VV_SEND_SERVER));
         if *parent.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
             snprintf(
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
                 if ui as ::core::ffi::c_int != 0 {
                     b"ui/c/%s\0".as_ptr() as *const ::core::ffi::c_char
@@ -9230,7 +9231,7 @@ unsafe extern "C" fn v_do_log_to_file(
             );
         } else if *serv.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
             snprintf(
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
                 if ui as ::core::ffi::c_int != 0 {
                     b"ui/%s\0".as_ptr() as *const ::core::ffi::c_char
@@ -9242,7 +9243,7 @@ unsafe extern "C" fn v_do_log_to_file(
         } else {
             let mut pid: int64_t = os_get_pid();
             snprintf(
-                &raw mut name as *mut ::core::ffi::c_char,
+                name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
                 b"%s.%-5ld\0".as_ptr() as *const ::core::ffi::c_char,
                 if ui as ::core::ffi::c_int != 0 {
@@ -9259,10 +9260,10 @@ unsafe extern "C" fn v_do_log_to_file(
         fprintf(
             log_file,
             b"%s %s.%03d %-10s %s\0".as_ptr() as *const ::core::ffi::c_char,
-            log_levels[log_level as usize],
+            (*log_levels.ptr())[log_level as usize],
             &raw mut date_time as *mut ::core::ffi::c_char,
             millis,
-            &raw mut name as *mut ::core::ffi::c_char,
+            name.ptr() as *mut ::core::ffi::c_char,
             if context.is_null() {
                 b"?:\0".as_ptr() as *const ::core::ffi::c_char
             } else {
@@ -9273,10 +9274,10 @@ unsafe extern "C" fn v_do_log_to_file(
         fprintf(
             log_file,
             b"%s %s.%03d %-10s %s%s:%d: \0".as_ptr() as *const ::core::ffi::c_char,
-            log_levels[log_level as usize],
+            (*log_levels.ptr())[log_level as usize],
             &raw mut date_time as *mut ::core::ffi::c_char,
             millis,
-            &raw mut name as *mut ::core::ffi::c_char,
+            name.ptr() as *mut ::core::ffi::c_char,
             if context.is_null() {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {

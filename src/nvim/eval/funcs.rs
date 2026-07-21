@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -394,7 +395,7 @@ extern "C" {
         size: *mut size_t,
         ret: *mut typval_T,
     ) -> ::core::ffi::c_int;
-    static mut kCtxAll: ::core::ffi::c_int;
+    static kCtxAll: GlobalCell<::core::ffi::c_int>;
     fn encode_vim_to_msgpack(
         packer: *mut PackerBuffer,
         tv: *mut typval_T,
@@ -1163,7 +1164,7 @@ extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
         -> bool;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn last_csearch() -> *const ::core::ffi::c_char;
     fn last_csearch_forward() -> ::core::ffi::c_int;
     fn last_csearch_until() -> ::core::ffi::c_int;
@@ -6271,7 +6272,7 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_uint64_t_ptr_t(
@@ -6280,7 +6281,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -6335,33 +6336,37 @@ pub const CONTEXT_INIT: Context = Context {
     gvars: STRING_INIT,
     funcs: ARRAY_DICT_INIT,
 };
-static mut e_invalid_submatch_number_nr: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E935: Invalid submatch number: %d\0",
-    )
-};
-static mut e_string_list_or_blob_required: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1098: String, List or Blob required\0",
-    )
-};
-static mut e_missing_function_argument: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-        *b"E1132: Missing function argument\0",
-    )
-};
-static mut dummy_ap: ::core::ffi::VaListImpl =
-    unsafe { ::core::mem::transmute::<[u8; 24], ::core::ffi::VaListImpl>([0u8; 24]) };
+static e_invalid_submatch_number_nr: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E935: Invalid submatch number: %d\0",
+        )
+    });
+static e_string_list_or_blob_required: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1098: String, List or Blob required\0",
+        )
+    });
+static e_missing_function_argument: GlobalCell<[::core::ffi::c_char; 33]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+            *b"E1132: Missing function argument\0",
+        )
+    });
+static dummy_ap: GlobalCell<::core::ffi::VaListImpl> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 24], ::core::ffi::VaListImpl>([0u8; 24])
+});
 #[no_mangle]
 pub unsafe extern "C" fn get_function_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut intidx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+    static intidx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
     if idx == 0 as ::core::ffi::c_int {
-        intidx = -1 as ::core::ffi::c_int;
+        intidx.set(-1 as ::core::ffi::c_int);
     }
-    if intidx < 0 as ::core::ffi::c_int {
+    if intidx.get() < 0 as ::core::ffi::c_int {
         let mut name: *mut ::core::ffi::c_char = get_user_func_name(xp, idx);
         if !name.is_null() {
             if *name as ::core::ffi::c_int != NUL
@@ -6377,8 +6382,8 @@ pub unsafe extern "C" fn get_function_name(
             return name;
         }
     }
-    intidx += 1;
-    let key: *const ::core::ffi::c_char = functions[intidx as usize].name;
+    (*intidx.ptr()) += 1;
+    let key: *const ::core::ffi::c_char = (*functions.ptr())[intidx.get() as usize].name;
     if key.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
@@ -6389,7 +6394,9 @@ pub unsafe extern "C" fn get_function_name(
         key_len,
     );
     IObuff[key_len as usize] = '(' as ::core::ffi::c_char;
-    if functions[intidx as usize].max_argc as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if (*functions.ptr())[intidx.get() as usize].max_argc as ::core::ffi::c_int
+        == 0 as ::core::ffi::c_int
+    {
         IObuff[key_len.wrapping_add(1 as size_t) as usize] = ')' as ::core::ffi::c_char;
         IObuff[key_len.wrapping_add(2 as size_t) as usize] = NUL as ::core::ffi::c_char;
     } else {
@@ -6402,18 +6409,18 @@ pub unsafe extern "C" fn get_expr_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut intidx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+    static intidx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
     if idx == 0 as ::core::ffi::c_int {
-        intidx = -1 as ::core::ffi::c_int;
+        intidx.set(-1 as ::core::ffi::c_int);
     }
-    if intidx < 0 as ::core::ffi::c_int {
+    if intidx.get() < 0 as ::core::ffi::c_int {
         let mut name: *mut ::core::ffi::c_char = get_function_name(xp, idx);
         if !name.is_null() {
             return name;
         }
     }
-    intidx += 1;
-    return get_user_var_name(xp, intidx);
+    (*intidx.ptr()) += 1;
+    return get_user_var_name(xp, intidx.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn find_internal_func(
@@ -6422,7 +6429,7 @@ pub unsafe extern "C" fn find_internal_func(
     let mut len: size_t = strlen(name);
     let mut index: ::core::ffi::c_int = find_internal_func_hash(name, len);
     return if index >= 0 as ::core::ffi::c_int {
-        (&raw const functions as *const EvalFuncDef).offset(index as isize)
+        ((functions.ptr() as *const _) as *const EvalFuncDef).offset(index as isize)
     } else {
         ::core::ptr::null::<EvalFuncDef>()
     };
@@ -7234,7 +7241,7 @@ unsafe extern "C" fn f_ctxpop(
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    if !ctx_restore(::core::ptr::null_mut::<Context>(), kCtxAll) {
+    if !ctx_restore(::core::ptr::null_mut::<Context>(), kCtxAll.get()) {
         emsg(gettext(
             b"Context stack is empty\0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -7245,7 +7252,7 @@ unsafe extern "C" fn f_ctxpush(
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let mut types: ::core::ffi::c_int = kCtxAll;
+    let mut types: ::core::ffi::c_int = kCtxAll.get();
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -10133,7 +10140,7 @@ unsafe extern "C" fn f_has(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    static mut has_list: [*const ::core::ffi::c_char; 90] = [
+    static has_list: GlobalCell<[*const ::core::ffi::c_char; 90]> = GlobalCell::new([
         b"linux\0".as_ptr() as *const ::core::ffi::c_char,
         b"unix\0".as_ptr() as *const ::core::ffi::c_char,
         b"fname_case\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10224,7 +10231,7 @@ unsafe extern "C" fn f_has(
         b"writebackup\0".as_ptr() as *const ::core::ffi::c_char,
         b"xattr\0".as_ptr() as *const ::core::ffi::c_char,
         b"nvim\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut x: bool = false_0 != 0;
     let mut n: bool = false_0 != 0;
     let name: *const ::core::ffi::c_char =
@@ -10344,7 +10351,7 @@ unsafe extern "C" fn f_has(
         {
             if strcasecmp(
                 name as *mut ::core::ffi::c_char,
-                has_list[i as usize] as *mut ::core::ffi::c_char,
+                (*has_list.ptr())[i as usize] as *mut ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
             {
                 x = true_0 != 0;
@@ -10394,8 +10401,8 @@ unsafe extern "C" fn f_has(
     (*rettv).vval.v_number = n as varnumber_T;
 }
 unsafe extern "C" fn has_wsl() -> bool {
-    static mut has_wsl_0: TriState = kNone;
-    if has_wsl_0 as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
+    static has_wsl_0: GlobalCell<TriState> = GlobalCell::new(kNone);
+    if has_wsl_0.get() as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
         let mut err: Error = Error {
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10427,16 +10434,18 @@ unsafe extern "C" fn has_wsl() -> bool {
                 );
             }
         };
-        has_wsl_0 = (if o.type_0 as ::core::ffi::c_uint
-            == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-            && o.data.boolean as ::core::ffi::c_int == true_0
-        {
-            kTrue as ::core::ffi::c_int
-        } else {
-            kFalse as ::core::ffi::c_int
-        }) as TriState;
+        has_wsl_0.set(
+            (if o.type_0 as ::core::ffi::c_uint
+                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
+                && o.data.boolean as ::core::ffi::c_int == true_0
+            {
+                kTrue as ::core::ffi::c_int
+            } else {
+                kFalse as ::core::ffi::c_int
+            }) as TriState,
+        );
     }
-    return has_wsl_0 as ::core::ffi::c_int == kTrue as ::core::ffi::c_int;
+    return has_wsl_0.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int;
 }
 unsafe extern "C" fn f_hlID(
     mut argvars: *mut typval_T,
@@ -10788,20 +10797,20 @@ unsafe extern "C" fn f_indexof(
     restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
     did_emsg |= save_did_emsg;
 }
-static mut inputsecret_flag: bool = false_0 != 0;
+static inputsecret_flag: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn f_input(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    get_user_input(argvars, rettv, false_0 != 0, inputsecret_flag);
+    get_user_input(argvars, rettv, false_0 != 0, inputsecret_flag.get());
 }
 unsafe extern "C" fn f_inputdialog(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    get_user_input(argvars, rettv, true_0 != 0, inputsecret_flag);
+    get_user_input(argvars, rettv, true_0 != 0, inputsecret_flag.get());
 }
 unsafe extern "C" fn f_inputlist(
     mut argvars: *mut typval_T,
@@ -10849,22 +10858,23 @@ unsafe extern "C" fn f_inputlist(
     }
     (*rettv).vval.v_number = selected as varnumber_T;
 }
-static mut ga_userinput: garray_T = garray_T {
+static ga_userinput: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: ::core::mem::size_of::<tasave_T>() as ::core::ffi::c_int,
     ga_growsize: 4 as ::core::ffi::c_int,
     ga_data: NULL_0,
-};
+});
 unsafe extern "C" fn f_inputrestore(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    if !(ga_userinput.ga_len <= 0 as ::core::ffi::c_int) {
-        ga_userinput.ga_len -= 1;
+    if !((*ga_userinput.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
+        (*ga_userinput.ptr()).ga_len -= 1;
         restore_typeahead(
-            (ga_userinput.ga_data as *mut tasave_T).offset(ga_userinput.ga_len as isize),
+            ((*ga_userinput.ptr()).ga_data as *mut tasave_T)
+                .offset((*ga_userinput.ptr()).ga_len as isize),
         );
     } else if p_verbose > 1 as OptInt {
         verb_msg(gettext(
@@ -10880,8 +10890,7 @@ unsafe extern "C" fn f_inputsave(
     mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut tasave_T =
-        ga_append_via_ptr(&raw mut ga_userinput, ::core::mem::size_of::<tasave_T>())
-            as *mut tasave_T;
+        ga_append_via_ptr(ga_userinput.ptr(), ::core::mem::size_of::<tasave_T>()) as *mut tasave_T;
     save_typeahead(p);
 }
 unsafe extern "C" fn f_inputsecret(
@@ -10890,10 +10899,10 @@ unsafe extern "C" fn f_inputsecret(
     mut fptr: EvalFuncData,
 ) {
     cmdline_star += 1;
-    inputsecret_flag = true_0 != 0;
+    inputsecret_flag.set(true_0 != 0);
     f_input(argvars, rettv, fptr);
     cmdline_star -= 1;
-    inputsecret_flag = false_0 != 0;
+    inputsecret_flag.set(false_0 != 0);
 }
 unsafe extern "C" fn f_interrupt(
     mut _argvars: *mut typval_T,
@@ -11031,7 +11040,7 @@ unsafe extern "C" fn f_id(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         0 as size_t,
         b"%p\0".as_ptr() as *const ::core::ffi::c_char,
-        dummy_ap.as_va_list(),
+        (*dummy_ap.ptr()).as_va_list(),
         argvars,
     );
     (*rettv).v_type = VAR_STRING;
@@ -11041,7 +11050,7 @@ unsafe extern "C" fn f_id(
         (*rettv).vval.v_string,
         (len as size_t).wrapping_add(1 as size_t),
         b"%p\0".as_ptr() as *const ::core::ffi::c_char,
-        dummy_ap.as_va_list(),
+        (*dummy_ap.ptr()).as_va_list(),
         argvars,
     );
 }
@@ -11121,7 +11130,7 @@ unsafe extern "C" fn f_jobresize(
     );
     (*rettv).vval.v_number = 1 as varnumber_T;
 }
-static mut pty_ignored_env_vars: [*const ::core::ffi::c_char; 8] = [
+static pty_ignored_env_vars: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"COLUMNS\0".as_ptr() as *const ::core::ffi::c_char,
     b"LINES\0".as_ptr() as *const ::core::ffi::c_char,
     b"TERMCAP\0".as_ptr() as *const ::core::ffi::c_char,
@@ -11130,9 +11139,9 @@ static mut pty_ignored_env_vars: [*const ::core::ffi::c_char; 8] = [
     b"VIM\0".as_ptr() as *const ::core::ffi::c_char,
     b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
-static mut required_env_vars: [*const ::core::ffi::c_char; 1] =
-    [::core::ptr::null::<::core::ffi::c_char>()];
+]);
+static required_env_vars: GlobalCell<[*const ::core::ffi::c_char; 1]> =
+    GlobalCell::new([::core::ptr::null::<::core::ffi::c_char>()]);
 #[no_mangle]
 pub unsafe extern "C" fn create_environment(
     mut job_env: *const dictitem_T,
@@ -11167,10 +11176,13 @@ pub unsafe extern "C" fn create_environment(
                         .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
                         == 0) as ::core::ffi::c_int as usize,
                 )
-                && !pty_ignored_env_vars[i as usize].is_null()
+                && !(*pty_ignored_env_vars.ptr())[i as usize].is_null()
             {
-                let mut dv: *mut dictitem_T =
-                    tv_dict_find(env, pty_ignored_env_vars[i as usize], -1 as ptrdiff_t);
+                let mut dv: *mut dictitem_T = tv_dict_find(
+                    env,
+                    (*pty_ignored_env_vars.ptr())[i as usize],
+                    -1 as ptrdiff_t,
+                );
                 if !dv.is_null() {
                     tv_dict_item_remove(env, dv);
                 }
@@ -11238,16 +11250,24 @@ pub unsafe extern "C" fn create_environment(
                         .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
                         == 0) as ::core::ffi::c_int as usize,
                 )
-            && !required_env_vars[i_0 as usize].is_null()
+            && !(*required_env_vars.ptr())[i_0 as usize].is_null()
         {
-            let mut len: size_t = strlen(required_env_vars[i_0 as usize]);
-            let mut dv_2: *mut dictitem_T =
-                tv_dict_find(env, required_env_vars[i_0 as usize], len as ptrdiff_t);
+            let mut len: size_t = strlen((*required_env_vars.ptr())[i_0 as usize]);
+            let mut dv_2: *mut dictitem_T = tv_dict_find(
+                env,
+                (*required_env_vars.ptr())[i_0 as usize],
+                len as ptrdiff_t,
+            );
             if dv_2.is_null() {
                 let mut env_var: *mut ::core::ffi::c_char =
-                    os_getenv(required_env_vars[i_0 as usize]);
+                    os_getenv((*required_env_vars.ptr())[i_0 as usize]);
                 if !env_var.is_null() {
-                    tv_dict_add_allocated_str(env, required_env_vars[i_0 as usize], len, env_var);
+                    tv_dict_add_allocated_str(
+                        env,
+                        (*required_env_vars.ptr())[i_0 as usize],
+                        len,
+                        env_var,
+                    );
                 }
             }
             i_0 = i_0.wrapping_add(1);
@@ -13347,7 +13367,7 @@ unsafe extern "C" fn f_printf(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         0 as size_t,
         fmt,
-        dummy_ap.as_va_list(),
+        (*dummy_ap.ptr()).as_va_list(),
         argvars.offset(1 as ::core::ffi::c_int as isize),
     );
     if did_emsg == 0 {
@@ -13358,7 +13378,7 @@ unsafe extern "C" fn f_printf(
             s,
             (len as size_t).wrapping_add(1 as size_t),
             fmt,
-            dummy_ap.as_va_list(),
+            (*dummy_ap.ptr()).as_va_list(),
             argvars.offset(1 as ::core::ffi::c_int as isize),
         );
     }
@@ -13478,21 +13498,21 @@ unsafe extern "C" fn f_rand(
         if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            static mut gx: uint32_t = 0;
-            static mut gy: uint32_t = 0;
-            static mut gz: uint32_t = 0;
-            static mut gw: uint32_t = 0;
-            static mut initialized: bool = false_0 != 0;
-            if !initialized {
+            static gx: GlobalCell<uint32_t> = GlobalCell::new(0);
+            static gy: GlobalCell<uint32_t> = GlobalCell::new(0);
+            static gz: GlobalCell<uint32_t> = GlobalCell::new(0);
+            static gw: GlobalCell<uint32_t> = GlobalCell::new(0);
+            static initialized: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+            if !initialized.get() {
                 let mut x: uint32_t = 0 as uint32_t;
                 init_srand(&raw mut x);
-                gx = splitmix32(&raw mut x);
-                gy = splitmix32(&raw mut x);
-                gz = splitmix32(&raw mut x);
-                gw = splitmix32(&raw mut x);
-                initialized = true_0 != 0;
+                gx.set(splitmix32(&raw mut x));
+                gy.set(splitmix32(&raw mut x));
+                gz.set(splitmix32(&raw mut x));
+                gw.set(splitmix32(&raw mut x));
+                initialized.set(true_0 != 0);
             }
-            result = shuffle_xoshiro128starstar(&raw mut gx, &raw mut gy, &raw mut gz, &raw mut gw);
+            result = shuffle_xoshiro128starstar(gx.ptr(), gy.ptr(), gz.ptr(), gw.ptr());
         } else {
             if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -14212,7 +14232,7 @@ unsafe extern "C" fn f_reduce(
             != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         emsg(gettext(
-            &raw const e_string_list_or_blob_required as *const ::core::ffi::c_char,
+            (e_string_list_or_blob_required.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return;
     }
@@ -14236,7 +14256,7 @@ unsafe extern "C" fn f_reduce(
     }
     if func_name.is_null() || *func_name as ::core::ffi::c_int == NUL {
         emsg(gettext(
-            &raw const e_missing_function_argument as *const ::core::ffi::c_char,
+            (e_missing_function_argument.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return;
     }
@@ -14668,10 +14688,10 @@ unsafe extern "C" fn f_rpcrequest(
         save_autocmd_bufnr = autocmd_bufnr;
         save_funccal(&raw mut funccal_entry);
         current_sctx = provider_caller_scope.script_ctx;
-        ga_grow(&raw mut exestack, 1 as ::core::ffi::c_int);
-        let c2rust_fresh4 = exestack.ga_len;
-        exestack.ga_len = exestack.ga_len + 1;
-        *(exestack.ga_data as *mut estack_T).offset(c2rust_fresh4 as isize) =
+        ga_grow(exestack.ptr(), 1 as ::core::ffi::c_int);
+        let c2rust_fresh4 = (*exestack.ptr()).ga_len;
+        (*exestack.ptr()).ga_len = (*exestack.ptr()).ga_len + 1;
+        *((*exestack.ptr()).ga_data as *mut estack_T).offset(c2rust_fresh4 as isize) =
             provider_caller_scope.es_entry;
         autocmd_fname = provider_caller_scope.autocmd_fname;
         autocmd_match = provider_caller_scope.autocmd_match;
@@ -14693,7 +14713,7 @@ unsafe extern "C" fn f_rpcrequest(
     arena_mem_free(arena_finish(&raw mut arena));
     if l_provider_call_nesting != 0 {
         current_sctx = save_current_sctx;
-        exestack.ga_len -= 1;
+        (*exestack.ptr()).ga_len -= 1;
         autocmd_fname = save_autocmd_fname;
         autocmd_match = save_autocmd_match;
         autocmd_fname_full = save_autocmd_fname_full;
@@ -15931,8 +15951,8 @@ unsafe extern "C" fn f_settagstack(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    static mut e_invact2: *const ::core::ffi::c_char =
-        b"E962: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char;
+    static e_invact2: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"E962: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char);
     let mut action: ::core::ffi::c_char = 'r' as ::core::ffi::c_char;
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -15966,7 +15986,7 @@ unsafe extern "C" fn f_settagstack(
             {
                 action = *actstr;
             } else {
-                semsg(gettext(e_invact2), actstr);
+                semsg(gettext(e_invact2.get()), actstr);
                 return;
             }
         }
@@ -16781,7 +16801,7 @@ unsafe extern "C" fn f_submatch(
     }
     if no < 0 as ::core::ffi::c_int || no >= NSUBEXP as ::core::ffi::c_int {
         semsg(
-            gettext(&raw const e_invalid_submatch_number_nr as *const ::core::ffi::c_char),
+            gettext((e_invalid_submatch_number_nr.ptr() as *const _) as *const ::core::ffi::c_char),
             no,
         );
         return;
@@ -17778,15 +17798,17 @@ unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::f
 }
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-static mut functions: [EvalFuncDef; 644] = [EvalFuncDef {
-    name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    min_argc: 0,
-    max_argc: 0,
-    base_arg: 0,
-    fast: false,
-    func: None,
-    data: EvalFuncData { float_func: None },
-}; 644];
+static functions: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(
+    [EvalFuncDef {
+        name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        min_argc: 0,
+        max_argc: 0,
+        base_arg: 0,
+        fast: false,
+        func: None,
+        data: EvalFuncData { float_func: None },
+    }; 644],
+);
 #[no_mangle]
 pub unsafe extern "C" fn find_internal_func_hash(
     mut str: *const ::core::ffi::c_char,
@@ -19039,7 +19061,7 @@ pub unsafe extern "C" fn find_internal_func_hash(
     while i < high {
         if memcmp(
             str as *const ::core::ffi::c_void,
-            functions[i as usize].name as *const ::core::ffi::c_void,
+            (*functions.ptr())[i as usize].name as *const ::core::ffi::c_void,
             len,
         ) == 0
         {
@@ -19060,7 +19082,7 @@ pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_EPSILON__: ::core::ffi::c_double = 2.2204460492503131e-16f64;
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    functions = [
+    functions.set([
         EvalFuncDef {
             name: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             min_argc: 1 as uint8_t,
@@ -27602,7 +27624,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             func: None,
             data: EvalFuncData { null: NULL_0 },
         },
-    ];
+    ]);
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -102,7 +103,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 37] = unsafe {
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-static mut xdg_env_vars: [*const ::core::ffi::c_char; 7] = [
+static xdg_env_vars: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"XDG_CONFIG_HOME\0".as_ptr() as *const ::core::ffi::c_char,
     b"XDG_DATA_HOME\0".as_ptr() as *const ::core::ffi::c_char,
     b"XDG_CACHE_HOME\0".as_ptr() as *const ::core::ffi::c_char,
@@ -110,8 +111,8 @@ static mut xdg_env_vars: [*const ::core::ffi::c_char; 7] = [
     b"XDG_RUNTIME_DIR\0".as_ptr() as *const ::core::ffi::c_char,
     b"XDG_CONFIG_DIRS\0".as_ptr() as *const ::core::ffi::c_char,
     b"XDG_DATA_DIRS\0".as_ptr() as *const ::core::ffi::c_char,
-];
-static mut xdg_defaults: [*const ::core::ffi::c_char; 7] = [
+]);
+static xdg_defaults: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"~/.config\0".as_ptr() as *const ::core::ffi::c_char,
     b"~/.local/share\0".as_ptr() as *const ::core::ffi::c_char,
     b"~/.cache\0".as_ptr() as *const ::core::ffi::c_char,
@@ -119,7 +120,7 @@ static mut xdg_defaults: [*const ::core::ffi::c_char; 7] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"/etc/xdg/\0".as_ptr() as *const ::core::ffi::c_char,
     b"/usr/local/share/:/usr/share/\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::c_char {
     let mut env_val: *const ::core::ffi::c_char =
@@ -244,8 +245,8 @@ unsafe extern "C" fn xdg_remove_duplicate(
 }
 #[no_mangle]
 pub unsafe extern "C" fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char {
-    let env: *const ::core::ffi::c_char = xdg_env_vars[idx as usize];
-    let fallback: *const ::core::ffi::c_char = xdg_defaults[idx as usize];
+    let env: *const ::core::ffi::c_char = (*xdg_env_vars.ptr())[idx as usize];
+    let fallback: *const ::core::ffi::c_char = (*xdg_defaults.ptr())[idx as usize];
     let mut env_val: *mut ::core::ffi::c_char = os_getenv(env);
     if env_val.is_null() && os_env_exists(env, false_0 != 0) as ::core::ffi::c_int != 0 {
         env_val = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -439,7 +440,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 92] = unsafe {
         *b"_Bool try_load_terminfo_key(TermKeyTI *, _Bool, int, _Bool, const char *, struct keyinfo *)\0",
     )
 };
-static mut funcs: [C2Rust_Unnamed_3; 17] = [
+static funcs: GlobalCell<[C2Rust_Unnamed_3; 17]> = GlobalCell::new([
     C2Rust_Unnamed_3 {
         ti_key: kTermKey_backspace,
         funcname: b"backspace\0".as_ptr() as *const ::core::ffi::c_char,
@@ -559,7 +560,7 @@ static mut funcs: [C2Rust_Unnamed_3; 17] = [
         sym: TERMKEY_SYM_NONE,
         mods: 0 as ::core::ffi::c_int,
     },
-];
+]);
 unsafe extern "C" fn new_node_key(
     mut type_0: TermKeyType,
     mut sym: TermKeySym,
@@ -755,23 +756,23 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
         return 0 as ::core::ffi::c_int;
     }
     i = 0 as ::core::ffi::c_int;
-    while !funcs[i as usize].funcname.is_null() {
+    while !(*funcs.ptr())[i as usize].funcname.is_null() {
         let mut name: [::core::ffi::c_char; 15] = [0; 15];
         sprintf(
             &raw mut name as *mut ::core::ffi::c_char,
             b"key_%s\0".as_ptr() as *const ::core::ffi::c_char,
-            funcs[i as usize].funcname,
+            (*funcs.ptr())[i as usize].funcname,
         );
         let mut c2rust_lvalue: keyinfo = keyinfo {
-            type_0: funcs[i as usize].type_0,
-            sym: funcs[i as usize].sym,
-            modifier_mask: funcs[i as usize].mods,
-            modifier_set: funcs[i as usize].mods,
+            type_0: (*funcs.ptr())[i as usize].type_0,
+            sym: (*funcs.ptr())[i as usize].sym,
+            modifier_mask: (*funcs.ptr())[i as usize].mods,
+            modifier_set: (*funcs.ptr())[i as usize].mods,
         };
         if try_load_terminfo_key(
             ti,
             false_0 != 0,
-            funcs[i as usize].ti_key as ::core::ffi::c_int,
+            (*funcs.ptr())[i as usize].ti_key as ::core::ffi::c_int,
             false_0 != 0,
             &raw mut name as *mut ::core::ffi::c_char,
             &raw mut c2rust_lvalue,
@@ -779,18 +780,20 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
             sprintf(
                 &raw mut name as *mut ::core::ffi::c_char,
                 b"key_s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                funcs[i as usize].funcname,
+                (*funcs.ptr())[i as usize].funcname,
             );
             let mut c2rust_lvalue_0: keyinfo = keyinfo {
-                type_0: funcs[i as usize].type_0,
-                sym: funcs[i as usize].sym,
-                modifier_mask: funcs[i as usize].mods | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
-                modifier_set: funcs[i as usize].mods | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
+                type_0: (*funcs.ptr())[i as usize].type_0,
+                sym: (*funcs.ptr())[i as usize].sym,
+                modifier_mask: (*funcs.ptr())[i as usize].mods
+                    | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
+                modifier_set: (*funcs.ptr())[i as usize].mods
+                    | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
             };
             try_load_terminfo_key(
                 ti,
                 false_0 != 0,
-                funcs[i as usize].ti_key as ::core::ffi::c_int,
+                (*funcs.ptr())[i as usize].ti_key as ::core::ffi::c_int,
                 true_0 != 0,
                 &raw mut name as *mut ::core::ffi::c_char,
                 &raw mut c2rust_lvalue_0,

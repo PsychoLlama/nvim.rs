@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -179,8 +180,8 @@ extern "C" {
     );
     fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
     fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    static mut gc_first_dict: *mut dict_T;
-    static mut gc_first_list: *mut list_T;
+    static gc_first_dict: GlobalCell<*mut dict_T>;
+    static gc_first_list: GlobalCell<*mut list_T>;
     static mut hash_removed: ::core::ffi::c_char;
     fn eexe_mod_op(
         tv1: *mut typval_T,
@@ -229,7 +230,7 @@ extern "C" {
     fn verbose_leave_scroll();
     static mut msg_ext_skip_verbose: bool;
     static tv_empty_string: *const ::core::ffi::c_char;
-    static mut tv_in_free_unref_items: bool;
+    static tv_in_free_unref_items: GlobalCell<bool>;
     fn tv_list_watch_add(l: *mut list_T, lw: *mut listwatch_T);
     fn tv_list_watch_remove(l: *mut list_T, lwrem: *mut listwatch_T);
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
@@ -721,7 +722,7 @@ extern "C" {
     fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut ::core::ffi::c_char;
     fn sourcing_a_script(eap: *mut exarg_T) -> ::core::ffi::c_int;
     fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn set_ref_in_tagfunc(copyID: ::core::ffi::c_int) -> bool;
     fn u_clearallandblockfree(buf: *mut buf_T);
     fn ui_has(ext: UIExtension) -> bool;
@@ -5211,7 +5212,7 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -5237,7 +5238,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -5300,62 +5301,70 @@ pub const FNE_INCL_BR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-static mut e_missbrac: *const ::core::ffi::c_char =
-    b"E111: Missing ']'\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_list_end: *const ::core::ffi::c_char =
-    b"E697: Missing end of List ']': %s\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_cannot_slice_dictionary: [::core::ffi::c_char; 32] = unsafe {
+static e_missbrac: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E111: Missing ']'\0".as_ptr() as *const ::core::ffi::c_char);
+static e_list_end: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E697: Missing end of List ']': %s\0".as_ptr() as *const ::core::ffi::c_char);
+static e_cannot_slice_dictionary: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E719: Cannot slice a Dictionary\0",
     )
-};
-static mut e_cannot_index_special_variable: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-        *b"E909: Cannot index a special variable\0",
-    )
-};
-static mut e_nowhitespace: *const ::core::ffi::c_char =
-    b"E274: No white space allowed before parenthesis\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_cannot_index_a_funcref: [::core::ffi::c_char; 29] = unsafe {
+});
+static e_cannot_index_special_variable: GlobalCell<[::core::ffi::c_char; 38]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+            *b"E909: Cannot index a special variable\0",
+        )
+    });
+static e_nowhitespace: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+    b"E274: No white space allowed before parenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+);
+static e_cannot_index_a_funcref: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E695: Cannot index a Funcref\0",
     )
-};
-static mut e_variable_nested_too_deep_for_making_copy: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E698: Variable nested too deep for making a copy\0",
-    )
-};
-static mut e_string_list_or_blob_required: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1098: String, List or Blob required\0",
-    )
-};
-static mut e_expression_too_recursive_str: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E1169: Expression too recursive: %s\0",
-    )
-};
-static mut e_dot_can_only_be_used_on_dictionary_str: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E1203: Dot can only be used on a dictionary: %s\0",
-    )
-};
-static mut e_empty_function_name: [::core::ffi::c_char; 27] = unsafe {
+});
+static e_variable_nested_too_deep_for_making_copy: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E698: Variable nested too deep for making a copy\0",
+        )
+    });
+static e_string_list_or_blob_required: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1098: String, List or Blob required\0",
+        )
+    });
+static e_expression_too_recursive_str: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E1169: Expression too recursive: %s\0",
+        )
+    });
+static e_dot_can_only_be_used_on_dictionary_str: GlobalCell<[::core::ffi::c_char; 48]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+            *b"E1203: Dot can only be used on a dictionary: %s\0",
+        )
+    });
+static e_empty_function_name: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E1192: Empty function name\0")
-};
-static mut e_cannot_use_partial_here: [::core::ffi::c_char; 33] = unsafe {
+});
+static e_cannot_use_partial_here: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E1265: Cannot use a partial here\0",
     )
-};
-static mut namespace_char: *mut ::core::ffi::c_char =
-    b"abglstvw\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+});
+static namespace_char: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"abglstvw\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[no_mangle]
-pub static mut eval_lavars_used: *mut bool = ::core::ptr::null_mut::<bool>();
-static mut echo_hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut last_timer_id: uint64_t = 1 as uint64_t;
-static mut timers: Map_uint64_t_ptr_t = MAP_INIT;
+pub static eval_lavars_used: GlobalCell<*mut bool> =
+    GlobalCell::new(::core::ptr::null_mut::<bool>());
+static echo_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
+static timers: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(MAP_INIT);
 #[no_mangle]
 pub unsafe extern "C" fn get_v_event(mut sve: *mut save_v_event_T) -> *mut dict_T {
     let mut v_event: *mut dict_T = get_vim_var_dict(VV_EVENT);
@@ -6357,7 +6366,7 @@ unsafe extern "C" fn get_lval_subscript(
                 if !quiet {
                     semsg(
                         gettext(
-                            &raw const e_dot_can_only_be_used_on_dictionary_str
+                            (e_dot_can_only_be_used_on_dictionary_str.ptr() as *const _)
                                 as *const ::core::ffi::c_char,
                         ),
                         name,
@@ -6452,7 +6461,7 @@ unsafe extern "C" fn get_lval_subscript(
                         {
                             if !quiet {
                                 emsg(gettext(
-                                    &raw const e_cannot_slice_dictionary
+                                    (e_cannot_slice_dictionary.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ));
                             }
@@ -6494,7 +6503,7 @@ unsafe extern "C" fn get_lval_subscript(
                     }
                     if *p as ::core::ffi::c_int != ']' as ::core::ffi::c_int {
                         if !quiet {
-                            emsg(gettext(e_missbrac));
+                            emsg(gettext(e_missbrac.get()));
                         }
                         break '_done;
                     } else {
@@ -6981,7 +6990,8 @@ pub unsafe extern "C" fn eval_for_line(
                 }
             } else {
                 emsg(gettext(
-                    &raw const e_string_list_or_blob_required as *const ::core::ffi::c_char,
+                    (e_string_list_or_blob_required.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ));
                 tv_clear(&raw mut tv);
             }
@@ -8203,7 +8213,7 @@ unsafe extern "C" fn eval7(
     let evaluate: bool =
         !evalarg.is_null() && (*evalarg).eval_flags & EVAL_EVALUATE as ::core::ffi::c_int != 0;
     let mut ret: ::core::ffi::c_int = OK;
-    static mut recurse: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     (*rettv).v_type = VAR_UNKNOWN;
     let mut start_leader: *const ::core::ffi::c_char = *arg;
     while **arg as ::core::ffi::c_int == '!' as ::core::ffi::c_int
@@ -8213,14 +8223,16 @@ unsafe extern "C" fn eval7(
         *arg = skipwhite((*arg).offset(1 as ::core::ffi::c_int as isize));
     }
     let mut end_leader: *const ::core::ffi::c_char = *arg;
-    if recurse == 1000 as ::core::ffi::c_int {
+    if recurse.get() == 1000 as ::core::ffi::c_int {
         semsg(
-            gettext(&raw const e_expression_too_recursive_str as *const ::core::ffi::c_char),
+            gettext(
+                (e_expression_too_recursive_str.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             *arg,
         );
         return FAIL;
     }
-    recurse += 1;
+    (*recurse.ptr()) += 1;
     match **arg as ::core::ffi::c_int {
         48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
             ret = eval_number(arg, rettv, evaluate, want_string);
@@ -8363,7 +8375,7 @@ unsafe extern "C" fn eval7(
     if ret == OK && evaluate as ::core::ffi::c_int != 0 && end_leader > start_leader {
         ret = eval7_leader(rettv, false_0 != 0, start_leader, &raw mut end_leader);
     }
-    recurse -= 1;
+    (*recurse.ptr()) -= 1;
     return ret;
 }
 unsafe extern "C" fn eval7_leader(
@@ -8477,7 +8489,7 @@ unsafe extern "C" fn call_func_rettv(
                 funcname = functv.vval.v_string;
                 if funcname.is_null() || *funcname as ::core::ffi::c_int == NUL {
                     emsg(gettext(
-                        &raw const e_empty_function_name as *const ::core::ffi::c_char,
+                        (e_empty_function_name.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     ret = FAIL;
                     break '_theend;
@@ -8528,7 +8540,7 @@ unsafe extern "C" fn eval_lambda(
     } else if **arg as ::core::ffi::c_int != '(' as ::core::ffi::c_int {
         if verbose {
             if *skipwhite(*arg) as ::core::ffi::c_int == '(' as ::core::ffi::c_int {
-                emsg(gettext(e_nowhitespace));
+                emsg(gettext(e_nowhitespace.get()));
             } else {
                 semsg(
                     gettext(&raw const e_missingparen as *const ::core::ffi::c_char),
@@ -8652,7 +8664,8 @@ unsafe extern "C" fn eval_method(
                 {
                     if verbose {
                         emsg(gettext(
-                            &raw const e_cannot_use_partial_here as *const ::core::ffi::c_char,
+                            (e_cannot_use_partial_here.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
                         ));
                     }
                     ret = FAIL;
@@ -8691,7 +8704,7 @@ unsafe extern "C" fn eval_method(
                 *(*arg).offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             ) {
                 if verbose {
-                    emsg(gettext(e_nowhitespace));
+                    emsg(gettext(e_nowhitespace.get()));
                 }
                 ret = FAIL;
             } else if !lua_funcname.is_null() {
@@ -8801,7 +8814,7 @@ unsafe extern "C" fn eval_index(
         }
         if **arg as ::core::ffi::c_int != ']' as ::core::ffi::c_int {
             if verbose {
-                emsg(gettext(e_missbrac));
+                emsg(gettext(e_missbrac.get()));
             }
             tv_clear(&raw mut var1);
             if range {
@@ -8849,7 +8862,7 @@ unsafe extern "C" fn check_can_index(
         3 | 9 => {
             if verbose {
                 emsg(gettext(
-                    &raw const e_cannot_index_a_funcref as *const ::core::ffi::c_char,
+                    (e_cannot_index_a_funcref.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
             }
             return FAIL;
@@ -8865,7 +8878,8 @@ unsafe extern "C" fn check_can_index(
         7 | 8 => {
             if verbose {
                 emsg(gettext(
-                    &raw const e_cannot_index_special_variable as *const ::core::ffi::c_char,
+                    (e_cannot_index_special_variable.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ));
             }
             return FAIL;
@@ -8873,7 +8887,8 @@ unsafe extern "C" fn check_can_index(
         0 => {
             if evaluate {
                 emsg(gettext(
-                    &raw const e_cannot_index_special_variable as *const ::core::ffi::c_char,
+                    (e_cannot_index_special_variable.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ));
                 return FAIL;
             }
@@ -8938,7 +8953,7 @@ unsafe extern "C" fn eval_index_inner(
         {
             if verbose {
                 emsg(gettext(
-                    &raw const e_cannot_slice_dictionary as *const ::core::ffi::c_char,
+                    (e_cannot_slice_dictionary.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
             }
             return FAIL;
@@ -9748,7 +9763,7 @@ unsafe extern "C" fn eval_list(
             break '_failret;
         }
         if **arg as ::core::ffi::c_int != ']' as ::core::ffi::c_int {
-            semsg(gettext(e_list_end), *arg);
+            semsg(gettext(e_list_end.get()), *arg);
         } else {
             *arg = skipwhite((*arg).offset(1 as ::core::ffi::c_int as isize));
             if evaluate {
@@ -9848,9 +9863,10 @@ pub unsafe extern "C" fn func_equal(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_copyID() -> ::core::ffi::c_int {
-    static mut current_copyID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    current_copyID += COPYID_INC;
-    return current_copyID;
+    static current_copyID: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    (*current_copyID.ptr()) += COPYID_INC;
+    return current_copyID.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
@@ -9860,18 +9876,18 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
         may_garbage_collect = false_0 != 0;
         garbage_collect_at_exit = false_0 != 0;
     }
-    if exestack.ga_maxlen - exestack.ga_len > 500 as ::core::ffi::c_int {
-        let mut n: ::core::ffi::c_int = exestack.ga_len / 2 as ::core::ffi::c_int;
-        if n < exestack.ga_growsize {
-            n = exestack.ga_growsize;
+    if (*exestack.ptr()).ga_maxlen - (*exestack.ptr()).ga_len > 500 as ::core::ffi::c_int {
+        let mut n: ::core::ffi::c_int = (*exestack.ptr()).ga_len / 2 as ::core::ffi::c_int;
+        if n < (*exestack.ptr()).ga_growsize {
+            n = (*exestack.ptr()).ga_growsize;
         }
-        if exestack.ga_len + n < exestack.ga_maxlen {
-            let mut new_len: size_t =
-                (exestack.ga_itemsize as size_t).wrapping_mul((exestack.ga_len + n) as size_t);
+        if (*exestack.ptr()).ga_len + n < (*exestack.ptr()).ga_maxlen {
+            let mut new_len: size_t = ((*exestack.ptr()).ga_itemsize as size_t)
+                .wrapping_mul(((*exestack.ptr()).ga_len + n) as size_t);
             let mut pp: *mut ::core::ffi::c_char =
-                xrealloc(exestack.ga_data, new_len) as *mut ::core::ffi::c_char;
-            exestack.ga_maxlen = exestack.ga_len + n;
-            exestack.ga_data = pp as *mut ::core::ffi::c_void;
+                xrealloc((*exestack.ptr()).ga_data, new_len) as *mut ::core::ffi::c_char;
+            (*exestack.ptr()).ga_maxlen = (*exestack.ptr()).ga_len + n;
+            (*exestack.ptr()).ga_data = pp as *mut ::core::ffi::c_void;
         }
     }
     let copyID: ::core::ffi::c_int = get_copyID();
@@ -10084,8 +10100,8 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
     let mut timer: *mut timer_T = ::core::ptr::null_mut::<timer_T>();
     let mut __i_0: uint32_t = 0;
     __i_0 = 0 as uint32_t;
-    while __i_0 < timers.set.h.n_keys {
-        timer = *timers.values.offset(__i_0 as isize) as *mut timer_T;
+    while __i_0 < (*timers.ptr()).set.h.n_keys {
+        timer = *(*timers.ptr()).values.offset(__i_0 as isize) as *mut timer_T;
         set_ref_in_callback(
             &raw mut (*timer).callback,
             copyID,
@@ -10116,8 +10132,8 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
 }
 unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut did_free: bool = false_0 != 0;
-    tv_in_free_unref_items = true_0 != 0;
-    let mut dd: *mut dict_T = gc_first_dict;
+    tv_in_free_unref_items.set(true_0 != 0);
+    let mut dd: *mut dict_T = gc_first_dict.get();
     while !dd.is_null() {
         if (*dd).dv_copyID & COPYID_MASK != copyID & COPYID_MASK {
             tv_dict_free_contents(dd);
@@ -10125,7 +10141,7 @@ unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core:
         }
         dd = (*dd).dv_used_next;
     }
-    let mut ll: *mut list_T = gc_first_list;
+    let mut ll: *mut list_T = gc_first_list.get();
     while !ll.is_null() {
         if tv_list_copyid(ll) & COPYID_MASK != copyID & COPYID_MASK && !tv_list_has_watchers(ll) {
             tv_list_free_contents(ll);
@@ -10134,7 +10150,7 @@ unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core:
         ll = (*ll).lv_used_next;
     }
     let mut dd_next: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-    let mut dd_0: *mut dict_T = gc_first_dict;
+    let mut dd_0: *mut dict_T = gc_first_dict.get();
     while !dd_0.is_null() {
         dd_next = (*dd_0).dv_used_next;
         if (*dd_0).dv_copyID & COPYID_MASK != copyID & COPYID_MASK {
@@ -10143,7 +10159,7 @@ unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core:
         dd_0 = dd_next;
     }
     let mut ll_next: *mut list_T = ::core::ptr::null_mut::<list_T>();
-    let mut ll_0: *mut list_T = gc_first_list;
+    let mut ll_0: *mut list_T = gc_first_list.get();
     while !ll_0.is_null() {
         ll_next = (*ll_0).lv_used_next;
         if (*ll_0).lv_copyID & COPYID_MASK != copyID & COPYID_MASK && !tv_list_has_watchers(ll_0) {
@@ -10151,7 +10167,7 @@ unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core:
         }
         ll_0 = ll_next;
     }
-    tv_in_free_unref_items = false_0 != 0;
+    tv_in_free_unref_items.set(false_0 != 0);
     return did_free as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -10884,10 +10900,10 @@ pub unsafe extern "C" fn callback_from_typval(
     }
     return true_0 != 0;
 }
-static mut callback_depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static callback_depth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn get_callback_depth() -> ::core::ffi::c_int {
-    return callback_depth;
+    return callback_depth.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn callback_call(
@@ -10896,7 +10912,7 @@ pub unsafe extern "C" fn callback_call(
     argvars_in: *mut typval_T,
     rettv: *mut typval_T,
 ) -> bool {
-    if callback_depth as OptInt > p_mfd {
+    if callback_depth.get() as OptInt > p_mfd {
         emsg(gettext(
             &raw const e_command_too_recursive as *const ::core::ffi::c_char,
         ));
@@ -10957,7 +10973,7 @@ pub unsafe extern "C" fn callback_call(
     funcexe.fe_lastline = (*curwin).w_cursor.lnum;
     funcexe.fe_evaluate = true_0 != 0;
     funcexe.fe_partial = partial;
-    callback_depth += 1;
+    (*callback_depth.ptr()) += 1;
     let mut ret: ::core::ffi::c_int = call_func(
         name,
         -1 as ::core::ffi::c_int,
@@ -10966,7 +10982,7 @@ pub unsafe extern "C" fn callback_call(
         argvars_in,
         &raw mut funcexe,
     );
-    callback_depth -= 1;
+    (*callback_depth.ptr()) -= 1;
     return ret != 0;
 }
 #[no_mangle]
@@ -11017,7 +11033,7 @@ unsafe extern "C" fn set_ref_in_callback_reader(
 }
 #[no_mangle]
 pub unsafe extern "C" fn find_timer_by_nr(mut xx: varnumber_T) -> *mut timer_T {
-    return map_get_uint64_t_ptr_t(&raw mut timers, xx as uint64_t) as *mut timer_T;
+    return map_get_uint64_t_ptr_t(timers.ptr(), xx as uint64_t) as *mut timer_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn add_timer_info(mut rettv: *mut typval_T, mut timer: *mut timer_T) {
@@ -11062,12 +11078,12 @@ pub unsafe extern "C" fn add_timer_info(mut rettv: *mut typval_T, mut timer: *mu
 }
 #[no_mangle]
 pub unsafe extern "C" fn add_timer_info_all(mut rettv: *mut typval_T) {
-    tv_list_alloc_ret(rettv, timers.set.h.size as ptrdiff_t);
+    tv_list_alloc_ret(rettv, (*timers.ptr()).set.h.size as ptrdiff_t);
     let mut timer: *mut timer_T = ::core::ptr::null_mut::<timer_T>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < timers.set.h.n_keys {
-        timer = *timers.values.offset(__i as isize) as *mut timer_T;
+    while __i < (*timers.ptr()).set.h.n_keys {
+        timer = *(*timers.ptr()).values.offset(__i as isize) as *mut timer_T;
         if !(*timer).stopped || (*timer).refcount > 1 as ::core::ffi::c_int {
             add_timer_info(rettv, timer);
         }
@@ -11156,8 +11172,8 @@ pub unsafe extern "C" fn timer_start(
     (*timer).emsg_count = 0 as ::core::ffi::c_int;
     (*timer).repeat_count = repeat_count;
     (*timer).timeout = timeout;
-    let c2rust_fresh17 = last_timer_id;
-    last_timer_id = last_timer_id.wrapping_add(1);
+    let c2rust_fresh17 = last_timer_id.get();
+    last_timer_id.set((*last_timer_id.ptr()).wrapping_add(1));
     (*timer).timer_id = c2rust_fresh17 as ::core::ffi::c_int;
     (*timer).callback = *callback;
     time_watcher_init(
@@ -11175,11 +11191,7 @@ pub unsafe extern "C" fn timer_start(
         timeout as uint64_t,
         timeout as uint64_t,
     );
-    map_put_uint64_t_ptr_t(
-        &raw mut timers,
-        (*timer).timer_id as uint64_t,
-        timer as ptr_t,
-    );
+    map_put_uint64_t_ptr_t(timers.ptr(), (*timer).timer_id as uint64_t, timer as ptr_t);
     return (*timer).timer_id as uint64_t;
 }
 #[no_mangle]
@@ -11202,7 +11214,7 @@ unsafe extern "C" fn timer_close_cb(mut _tw: *mut TimeWatcher, mut data: *mut ::
     multiqueue_free((*timer).tw.events);
     callback_free(&raw mut (*timer).callback);
     map_del_uint64_t_ptr_t(
-        &raw mut timers,
+        timers.ptr(),
         (*timer).timer_id as uint64_t,
         ::core::ptr::null_mut::<uint64_t>(),
     );
@@ -11219,8 +11231,8 @@ pub unsafe extern "C" fn timer_stop_all() {
     let mut timer: *mut timer_T = ::core::ptr::null_mut::<timer_T>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < timers.set.h.n_keys {
-        timer = *timers.values.offset(__i as isize) as *mut timer_T;
+    while __i < (*timers.ptr()).set.h.n_keys {
+        timer = *(*timers.ptr()).values.offset(__i as isize) as *mut timer_T;
         timer_stop(timer);
         __i = __i.wrapping_add(1);
     }
@@ -11443,11 +11455,11 @@ pub unsafe extern "C" fn var2fpos(
     charcol: bool,
     mut wp: *mut win_T,
 ) -> *mut pos_T {
-    static mut pos: pos_T = pos_T {
+    static pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
         lnum: 0,
         col: 0,
         coladd: 0,
-    };
+    });
     let mut bp: *mut buf_T = (*wp).w_buffer;
     if (*tv).v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -11456,22 +11468,22 @@ pub unsafe extern "C" fn var2fpos(
         if l.is_null() {
             return ::core::ptr::null_mut::<pos_T>();
         }
-        pos.lnum = tv_list_find_nr(l, 0 as ::core::ffi::c_int, &raw mut error) as linenr_T;
+        (*pos.ptr()).lnum = tv_list_find_nr(l, 0 as ::core::ffi::c_int, &raw mut error) as linenr_T;
         if error as ::core::ffi::c_int != 0
-            || pos.lnum <= 0 as linenr_T
-            || pos.lnum > (*bp).b_ml.ml_line_count
+            || (*pos.ptr()).lnum <= 0 as linenr_T
+            || (*pos.ptr()).lnum > (*bp).b_ml.ml_line_count
         {
             return ::core::ptr::null_mut::<pos_T>();
         }
-        pos.col = tv_list_find_nr(l, 1 as ::core::ffi::c_int, &raw mut error) as colnr_T;
+        (*pos.ptr()).col = tv_list_find_nr(l, 1 as ::core::ffi::c_int, &raw mut error) as colnr_T;
         if error {
             return ::core::ptr::null_mut::<pos_T>();
         }
         let mut len: ::core::ffi::c_int = 0;
         if charcol {
-            len = mb_charlen(ml_get_buf(bp, pos.lnum));
+            len = mb_charlen(ml_get_buf(bp, (*pos.ptr()).lnum));
         } else {
-            len = ml_get_buf_len(bp, pos.lnum) as ::core::ffi::c_int;
+            len = ml_get_buf_len(bp, (*pos.ptr()).lnum) as ::core::ffi::c_int;
         }
         let mut li: *mut listitem_T = tv_list_find(l, 1 as ::core::ffi::c_int);
         if !li.is_null()
@@ -11483,35 +11495,38 @@ pub unsafe extern "C" fn var2fpos(
                 b"$\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
         {
-            pos.col = (len + 1 as ::core::ffi::c_int) as colnr_T;
+            (*pos.ptr()).col = (len + 1 as ::core::ffi::c_int) as colnr_T;
         }
-        if pos.col == 0 as ::core::ffi::c_int || pos.col > len + 1 as ::core::ffi::c_int {
+        if (*pos.ptr()).col == 0 as ::core::ffi::c_int
+            || (*pos.ptr()).col > len + 1 as ::core::ffi::c_int
+        {
             return ::core::ptr::null_mut::<pos_T>();
         }
-        pos.col -= 1;
-        pos.coladd = tv_list_find_nr(l, 2 as ::core::ffi::c_int, &raw mut error) as colnr_T;
+        (*pos.ptr()).col -= 1;
+        (*pos.ptr()).coladd =
+            tv_list_find_nr(l, 2 as ::core::ffi::c_int, &raw mut error) as colnr_T;
         if error {
-            pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
+            (*pos.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
         }
-        return &raw mut pos;
+        return pos.ptr();
     }
     let name: *const ::core::ffi::c_char = tv_get_string_chk(tv);
     if name.is_null() {
         return ::core::ptr::null_mut::<pos_T>();
     }
-    pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
+    (*pos.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '.' as ::core::ffi::c_int
     {
-        pos = (*wp).w_cursor;
+        pos.set((*wp).w_cursor);
     } else if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'v' as ::core::ffi::c_int
         && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
         if VIsual_active as ::core::ffi::c_int != 0 && wp == curwin {
-            pos = VIsual;
+            pos.set(VIsual);
         } else {
-            pos = (*wp).w_cursor;
+            pos.set((*wp).w_cursor);
         }
     } else if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '\'' as ::core::ffi::c_int
@@ -11523,7 +11538,7 @@ pub unsafe extern "C" fn var2fpos(
         if fm.is_null() || (*fm).mark.lnum <= 0 as linenr_T {
             return ::core::ptr::null_mut::<pos_T>();
         }
-        pos = (*fm).mark;
+        pos.set((*fm).mark);
         *ret_fnum = if mname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && mname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || ascii_isdigit(mname) as ::core::ffi::c_int != 0
@@ -11533,56 +11548,59 @@ pub unsafe extern "C" fn var2fpos(
             *ret_fnum
         };
     }
-    if pos.lnum != 0 as linenr_T {
+    if (*pos.ptr()).lnum != 0 as linenr_T {
         if charcol {
-            pos.col =
-                buf_byteidx_to_charidx(bp, pos.lnum, pos.col as ::core::ffi::c_int) as colnr_T;
+            (*pos.ptr()).col = buf_byteidx_to_charidx(
+                bp,
+                (*pos.ptr()).lnum,
+                (*pos.ptr()).col as ::core::ffi::c_int,
+            ) as colnr_T;
         }
-        return &raw mut pos;
+        return pos.ptr();
     }
-    pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*pos.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'w' as ::core::ffi::c_int
         && dollar_lnum as ::core::ffi::c_int != 0
     {
         check_cursor_moved(wp);
-        pos.col = 0 as ::core::ffi::c_int as colnr_T;
+        (*pos.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
         if *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '0' as ::core::ffi::c_int
         {
             update_topline(wp);
-            pos.lnum = if (*wp).w_topline > 0 as linenr_T {
+            (*pos.ptr()).lnum = if (*wp).w_topline > 0 as linenr_T {
                 (*wp).w_topline
             } else {
                 1 as linenr_T
             };
-            return &raw mut pos;
+            return pos.ptr();
         } else if *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '$' as ::core::ffi::c_int
         {
             validate_botline_win(wp);
-            pos.lnum = if (*wp).w_botline > 0 as linenr_T {
+            (*pos.ptr()).lnum = if (*wp).w_botline > 0 as linenr_T {
                 (*wp).w_botline - 1 as linenr_T
             } else {
                 0 as linenr_T
             };
-            return &raw mut pos;
+            return pos.ptr();
         }
     } else if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '$' as ::core::ffi::c_int
     {
         if dollar_lnum {
-            pos.lnum = (*bp).b_ml.ml_line_count;
-            pos.col = 0 as ::core::ffi::c_int as colnr_T;
+            (*pos.ptr()).lnum = (*bp).b_ml.ml_line_count;
+            (*pos.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
         } else {
-            pos.lnum = (*wp).w_cursor.lnum;
+            (*pos.ptr()).lnum = (*wp).w_cursor.lnum;
             if charcol {
-                pos.col = mb_charlen(ml_get_buf(bp, (*wp).w_cursor.lnum));
+                (*pos.ptr()).col = mb_charlen(ml_get_buf(bp, (*wp).w_cursor.lnum));
             } else {
-                pos.col = ml_get_buf_len(bp, (*wp).w_cursor.lnum);
+                (*pos.ptr()).col = ml_get_buf_len(bp, (*wp).w_cursor.lnum);
             }
         }
-        return &raw mut pos;
+        return pos.ptr();
     }
     return ::core::ptr::null_mut::<pos_T>();
 }
@@ -11704,7 +11722,8 @@ pub unsafe extern "C" fn get_id_len(arg: *mut *const ::core::ffi::c_char) -> ::c
             len = p.offset_from(*arg) as ::core::ffi::c_int;
             if len > 1 as ::core::ffi::c_int
                 || len == 1 as ::core::ffi::c_int
-                    && vim_strchr(namespace_char, **arg as uint8_t as ::core::ffi::c_int).is_null()
+                    && vim_strchr(namespace_char.get(), **arg as uint8_t as ::core::ffi::c_int)
+                        .is_null()
             {
                 break;
             }
@@ -11852,7 +11871,8 @@ pub unsafe extern "C" fn find_name_end(
                 && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     != '}' as ::core::ffi::c_int
                 || len == 1 as ::core::ffi::c_int
-                    && vim_strchr(namespace_char, *arg as uint8_t as ::core::ffi::c_int).is_null()
+                    && vim_strchr(namespace_char.get(), *arg as uint8_t as ::core::ffi::c_int)
+                        .is_null()
             {
                 break;
             }
@@ -12249,15 +12269,16 @@ pub unsafe extern "C" fn var_item_copy(
     deep: bool,
     copyID: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    static mut recurse: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut ret: ::core::ffi::c_int = OK;
-    if recurse >= DICT_MAXNEST {
+    if recurse.get() >= DICT_MAXNEST {
         emsg(gettext(
-            &raw const e_variable_nested_too_deep_for_making_copy as *const ::core::ffi::c_char,
+            (e_variable_nested_too_deep_for_making_copy.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         ));
         return FAIL;
     }
-    recurse += 1;
+    (*recurse.ptr()) += 1;
     match (*from).v_type as ::core::ffi::c_uint {
         1 | 6 | 3 | 9 | 7 | 8 => {
             tv_copy(from, to);
@@ -12324,7 +12345,7 @@ pub unsafe extern "C" fn var_item_copy(
         }
         _ => {}
     }
-    recurse -= 1;
+    (*recurse.ptr()) -= 1;
     return ret;
 }
 #[no_mangle]
@@ -12383,7 +12404,7 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
                 } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_echo as ::core::ffi::c_int {
                     msg_puts_hl(
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
-                        echo_hl_id,
+                        echo_hl_id.get(),
                         false_0 != 0,
                     );
                 }
@@ -12391,7 +12412,7 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
                     encode_tv2echo(&raw mut rettv, ::core::ptr::null_mut::<size_t>());
                 msg_multiline(
                     cstr_as_string(tofree),
-                    echo_hl_id,
+                    echo_hl_id.get(),
                     true_0 != 0,
                     false_0 != 0,
                     &raw mut need_clear,
@@ -12429,11 +12450,11 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_echohl(mut eap: *mut exarg_T) {
-    echo_hl_id = syn_name2id((*eap).arg);
+    echo_hl_id.set(syn_name2id((*eap).arg));
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_echo_hl_id() -> ::core::ffi::c_int {
-    return echo_hl_id;
+    return echo_hl_id.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
@@ -12508,7 +12529,7 @@ pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
     if ret != FAIL && !ga.ga_data.is_null() {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_echomsg as ::core::ffi::c_int {
             msg_ext_set_kind(b"echomsg\0".as_ptr() as *const ::core::ffi::c_char);
-            msg(ga.ga_data as *const ::core::ffi::c_char, echo_hl_id);
+            msg(ga.ga_data as *const ::core::ffi::c_char, echo_hl_id.get());
         } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_echoerr as ::core::ffi::c_int {
             let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
             emsg_multiline(
@@ -12909,8 +12930,8 @@ pub unsafe extern "C" fn eval_call_provider(
     let mut saved_provider_caller_scope: caller_scope = provider_caller_scope as caller_scope;
     provider_caller_scope = caller_scope {
         script_ctx: current_sctx,
-        es_entry: *(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize),
+        es_entry: *((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize),
         autocmd_fname: autocmd_fname,
         autocmd_match: autocmd_match,
         autocmd_fname_full: autocmd_fname_full,
@@ -13115,8 +13136,8 @@ pub unsafe extern "C" fn eval_fmt_source_name_line(
     mut buf: *mut ::core::ffi::c_char,
     mut bufsize: size_t,
 ) {
-    if !(*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if !(*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_name
     .is_null()
     {
@@ -13124,11 +13145,11 @@ pub unsafe extern "C" fn eval_fmt_source_name_line(
             buf,
             bufsize,
             b"%s:%d\0".as_ptr() as *const ::core::ffi::c_char,
-            (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name,
-            (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
     } else {

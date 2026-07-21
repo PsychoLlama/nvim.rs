@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -533,7 +534,7 @@ extern "C" {
         num_file: *mut ::core::ffi::c_int,
         file: *mut *mut *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    static mut script_items: garray_T;
+    static script_items: GlobalCell<garray_T>;
     fn ignorecase(pat: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn pat_has_uppercase(pat: *mut ::core::ffi::c_char) -> bool;
     fn searchit(
@@ -3414,18 +3415,20 @@ unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
     return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
         || c == ' ' as ::core::ffi::c_int;
 }
-static mut cmd_showtail: bool = false;
-static mut may_expand_pattern: bool = false_0 != 0;
-static mut pre_incsearch_pos: pos_T = pos_T {
+static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
+static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static pre_incsearch_pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
-};
-static mut compl_match_array: *mut pumitem_T = ::core::ptr::null_mut::<pumitem_T>();
-static mut compl_match_arraysize: ::core::ffi::c_int = 0;
-static mut compl_startcol: ::core::ffi::c_int = 0;
-static mut compl_selected: ::core::ffi::c_int = 0;
-static mut cmdline_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+});
+static compl_match_array: GlobalCell<*mut pumitem_T> =
+    GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
+static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static cmdline_orig: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 unsafe extern "C" fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
     match (*xp).xp_context {
         5 | 28 | 29 | 3 | 56 | 2 | 37 | 36 | 59 | 58 | 8 | 55 | 63 | 7 | 52 | 53 | 38 | 44 | 51
@@ -3569,7 +3572,7 @@ pub unsafe extern "C" fn nextwild(
         || type_0 == WILD_PAGEDOWN as ::core::ffi::c_int
         || type_0 == WILD_PUM_WANT as ::core::ffi::c_int;
     if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
-        pre_incsearch_pos = (*xp).xp_pre_incsearch_pos;
+        pre_incsearch_pos.set((*xp).xp_pre_incsearch_pos);
         if (*ccline).input_fn != 0 && (*ccline).xp_context == EXPAND_COMMANDS as ::core::ffi::c_int
         {
             set_cmd_context(
@@ -3580,14 +3583,14 @@ pub unsafe extern "C" fn nextwild(
                 false_0,
             );
         } else {
-            may_expand_pattern = options & WILD_MAY_EXPAND_PATTERN as ::core::ffi::c_int != 0;
+            may_expand_pattern.set(options & WILD_MAY_EXPAND_PATTERN as ::core::ffi::c_int != 0);
             set_expand_context(xp);
-            may_expand_pattern = false_0 != 0;
+            may_expand_pattern.set(false_0 != 0);
         }
         if (*xp).xp_context == EXPAND_LUA as ::core::ffi::c_int {
             nlua_expand_pat(xp);
         }
-        cmd_showtail = expand_showtail(xp);
+        cmd_showtail.set(expand_showtail(xp));
     }
     if (*xp).xp_context == EXPAND_UNSUCCESSFUL as ::core::ffi::c_int {
         beep_flush();
@@ -3687,8 +3690,8 @@ pub unsafe extern "C" fn nextwild(
         }
     }
     if !wild_navigate && !(*ccline).cmdbuff.is_null() {
-        xfree(cmdline_orig as *mut ::core::ffi::c_void);
-        cmdline_orig = xstrnsave((*ccline).cmdbuff, (*ccline).cmdlen as size_t);
+        xfree(cmdline_orig.get() as *mut ::core::ffi::c_void);
+        cmdline_orig.set(xstrnsave((*ccline).cmdbuff, (*ccline).cmdlen as size_t));
     }
     if !p.is_null() && !got_int && options & WILD_NOSELECT as ::core::ffi::c_int == 0 {
         let mut plen: size_t = strlen(p);
@@ -3770,13 +3773,13 @@ unsafe extern "C" fn cmdline_pum_create(
             );
         }
     };
-    compl_match_array =
-        xmalloc(::core::mem::size_of::<pumitem_T>().wrapping_mul(numMatches as size_t))
-            as *mut pumitem_T;
-    compl_match_arraysize = numMatches;
+    compl_match_array.set(xmalloc(
+        ::core::mem::size_of::<pumitem_T>().wrapping_mul(numMatches as size_t),
+    ) as *mut pumitem_T);
+    compl_match_arraysize.set(numMatches);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < numMatches {
-        *compl_match_array.offset(i as isize) = pumitem_T {
+        *(*compl_match_array.ptr()).offset(i as isize) = pumitem_T {
             pum_text: if showtail as ::core::ffi::c_int != 0 {
                 showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
             } else {
@@ -3797,34 +3800,36 @@ unsafe extern "C" fn cmdline_pum_create(
         (*xp).xp_pattern
     };
     if ui_has(kUICmdline) as ::core::ffi::c_int != 0 && cmdline_win.is_null() {
-        compl_startcol = endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int;
+        compl_startcol.set(endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int);
     } else {
-        compl_startcol = cmd_screencol(endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int);
+        compl_startcol.set(cmd_screencol(
+            endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int
+        ));
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_display(mut changed_array: bool) {
     pum_display(
-        compl_match_array,
-        compl_match_arraysize,
-        compl_selected,
+        compl_match_array.get(),
+        compl_match_arraysize.get(),
+        compl_selected.get(),
         changed_array,
-        compl_startcol,
+        compl_startcol.get(),
     );
 }
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_active() -> bool {
-    return pum_visible() as ::core::ffi::c_int != 0 && !compl_match_array.is_null();
+    return pum_visible() as ::core::ffi::c_int != 0 && !(*compl_match_array.ptr()).is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_remove(mut defer_redraw: bool) {
     pum_undisplay(!defer_redraw);
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut compl_match_array as *mut *mut ::core::ffi::c_void;
+        compl_match_array.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
-    compl_match_arraysize = 0 as ::core::ffi::c_int;
+    compl_match_arraysize.set(0 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_cleanup(mut cclp: *mut CmdlineInfo) {
@@ -3910,7 +3915,7 @@ unsafe extern "C" fn redraw_wildmenu(
     let mut selstart: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut selstart_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut selend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut first_match: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static first_match: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut add_left: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0;
     let mut l: ::core::ffi::c_int = 0;
@@ -3935,12 +3940,12 @@ unsafe extern "C" fn redraw_wildmenu(
         },
     ) + 3 as ::core::ffi::c_int;
     if match_0 == 0 as ::core::ffi::c_int {
-        first_match = 0 as ::core::ffi::c_int;
-    } else if match_0 < first_match {
-        first_match = match_0;
+        first_match.set(0 as ::core::ffi::c_int);
+    } else if match_0 < first_match.get() {
+        first_match.set(match_0);
         add_left = true_0 != 0;
     } else {
-        i = first_match;
+        i = first_match.get();
         while i < match_0 {
             clen += wildmenu_match_len(
                 xp,
@@ -3952,11 +3957,11 @@ unsafe extern "C" fn redraw_wildmenu(
             ) + 2 as ::core::ffi::c_int;
             i += 1;
         }
-        if first_match > 0 as ::core::ffi::c_int {
+        if first_match.get() > 0 as ::core::ffi::c_int {
             clen += 2 as ::core::ffi::c_int;
         }
         if clen > Columns {
-            first_match = match_0;
+            first_match.set(match_0);
             clen = 2 as ::core::ffi::c_int;
             i = match_0;
             while i < num_matches {
@@ -3979,29 +3984,29 @@ unsafe extern "C" fn redraw_wildmenu(
         }
     }
     if add_left {
-        while first_match > 0 as ::core::ffi::c_int {
+        while first_match.get() > 0 as ::core::ffi::c_int {
             clen += wildmenu_match_len(
                 xp,
                 if showtail as ::core::ffi::c_int != 0 {
                     showmatches_gettail(
-                        *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize),
+                        *matches.offset((first_match.get() - 1 as ::core::ffi::c_int) as isize),
                         false_0 != 0,
                     )
                 } else {
-                    *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize)
+                    *matches.offset((first_match.get() - 1 as ::core::ffi::c_int) as isize)
                 },
             ) + 2 as ::core::ffi::c_int;
             if clen >= Columns {
                 break;
             }
-            first_match -= 1;
+            (*first_match.ptr()) -= 1;
         }
     }
     let mut len: ::core::ffi::c_int = 0;
     let mut group: hlf_T = HLF_NONE;
     let mut fillchar: schar_T = fillchar_status(&raw mut group, curwin);
     let mut attr: ::core::ffi::c_int = win_hl_attr(curwin, group as ::core::ffi::c_int);
-    if first_match == 0 as ::core::ffi::c_int {
+    if first_match.get() == 0 as ::core::ffi::c_int {
         *buf = NUL as ::core::ffi::c_char;
         len = 0 as ::core::ffi::c_int;
     } else {
@@ -4012,7 +4017,7 @@ unsafe extern "C" fn redraw_wildmenu(
         len = 2 as ::core::ffi::c_int;
     }
     clen = len;
-    i = first_match;
+    i = first_match.get();
     while (clen
         + wildmenu_match_len(
             xp,
@@ -4207,8 +4212,8 @@ unsafe extern "C" fn get_next_or_prev_match(
         }
     }
     if p_wmnu != 0 {
-        if !compl_match_array.is_null() {
-            compl_selected = findex;
+        if !(*compl_match_array.ptr()).is_null() {
+            compl_selected.set(findex);
             cmdline_pum_display(false_0 != 0);
         } else if cmdline_compl_use_pum(true_0 != 0) {
             cmdline_pum_create(
@@ -4216,14 +4221,20 @@ unsafe extern "C" fn get_next_or_prev_match(
                 xp,
                 (*xp).xp_files,
                 (*xp).xp_numfiles,
-                cmd_showtail,
+                cmd_showtail.get(),
                 false_0 != 0,
             );
-            compl_selected = findex;
+            compl_selected.set(findex);
             pum_clear();
             cmdline_pum_display(true_0 != 0);
         } else {
-            redraw_wildmenu(xp, (*xp).xp_numfiles, (*xp).xp_files, findex, cmd_showtail);
+            redraw_wildmenu(
+                xp,
+                (*xp).xp_numfiles,
+                (*xp).xp_files,
+                findex,
+                cmd_showtail.get(),
+            );
         }
     }
     (*xp).xp_selected = findex;
@@ -4389,7 +4400,7 @@ pub unsafe extern "C" fn ExpandOne(
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        if !compl_match_array.is_null() {
+        if !(*compl_match_array.ptr()).is_null() {
             cmdline_pum_remove(false_0 != 0);
         }
     }
@@ -4511,7 +4522,7 @@ pub unsafe extern "C" fn ExpandCleanup(mut xp: *mut expand_T) {
 #[no_mangle]
 pub unsafe extern "C" fn clear_cmdline_orig() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut cmdline_orig as *mut *mut ::core::ffi::c_void;
+        cmdline_orig.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -4652,15 +4663,15 @@ pub unsafe extern "C" fn showmatches(
     } else {
         numMatches = (*xp).xp_numfiles;
         matches = (*xp).xp_files;
-        showtail = cmd_showtail;
+        showtail = cmd_showtail.get();
     }
     if cmdline_compl_use_pum(display_wildmenu as ::core::ffi::c_int != 0 && !display_list) {
         cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
-        compl_selected = if noselect as ::core::ffi::c_int != 0 {
+        compl_selected.set(if noselect as ::core::ffi::c_int != 0 {
             -1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        };
+        });
         pum_clear();
         cmdline_pum_display(true_0 != 0);
         return EXPAND_OK as ::core::ffi::c_int;
@@ -4964,7 +4975,7 @@ pub unsafe extern "C" fn set_expand_context(mut xp: *mut expand_T) {
     let ccline: *mut CmdlineInfo = get_cmdline_info();
     if ((*ccline).cmdfirstc == '/' as ::core::ffi::c_int
         || (*ccline).cmdfirstc == '?' as ::core::ffi::c_int)
-        && may_expand_pattern as ::core::ffi::c_int != 0
+        && may_expand_pattern.get() as ::core::ffi::c_int != 0
     {
         (*xp).xp_context = EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int;
         (*xp).xp_search_dir = (if (*ccline).cmdfirstc == '/' as ::core::ffi::c_int {
@@ -5439,8 +5450,8 @@ unsafe extern "C" fn set_context_in_lang_cmd(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-static mut filetype_expand_what: C2Rust_Unnamed_21 = EXP_FILETYPECMD_ALL;
-static mut breakpt_expand_what: C2Rust_Unnamed_20 = EXP_BREAKPT_ADD;
+static filetype_expand_what: GlobalCell<C2Rust_Unnamed_21> = GlobalCell::new(EXP_FILETYPECMD_ALL);
+static breakpt_expand_what: GlobalCell<C2Rust_Unnamed_20> = GlobalCell::new(EXP_BREAKPT_ADD);
 unsafe extern "C" fn set_context_in_breakadd_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -5449,11 +5460,11 @@ unsafe extern "C" fn set_context_in_breakadd_cmd(
     (*xp).xp_context = EXPAND_BREAKPOINT as ::core::ffi::c_int;
     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
     if cmdidx as ::core::ffi::c_int == CMD_breakadd as ::core::ffi::c_int {
-        breakpt_expand_what = EXP_BREAKPT_ADD;
+        breakpt_expand_what.set(EXP_BREAKPT_ADD);
     } else if cmdidx as ::core::ffi::c_int == CMD_breakdel as ::core::ffi::c_int {
-        breakpt_expand_what = EXP_BREAKPT_DEL;
+        breakpt_expand_what.set(EXP_BREAKPT_DEL);
     } else {
-        breakpt_expand_what = EXP_PROFDEL;
+        breakpt_expand_what.set(EXP_PROFDEL);
     }
     let mut p: *const ::core::ffi::c_char = skipwhite(arg);
     if *p as ::core::ffi::c_int == NUL {
@@ -5523,7 +5534,7 @@ unsafe extern "C" fn set_context_in_filetype_cmd(
 ) -> *const ::core::ffi::c_char {
     (*xp).xp_context = EXPAND_FILETYPECMD as ::core::ffi::c_int;
     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
-    filetype_expand_what = EXP_FILETYPECMD_ALL;
+    filetype_expand_what.set(EXP_FILETYPECMD_ALL);
     let mut p: *mut ::core::ffi::c_char = skipwhite(arg);
     if *p as ::core::ffi::c_int == NUL {
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5554,11 +5565,11 @@ unsafe extern "C" fn set_context_in_filetype_cmd(
     if val & EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int != 0
         && val & EXPAND_FILETYPECMD_INDENT as ::core::ffi::c_int != 0
     {
-        filetype_expand_what = EXP_FILETYPECMD_ONOFF;
+        filetype_expand_what.set(EXP_FILETYPECMD_ONOFF);
     } else if val & EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int != 0 {
-        filetype_expand_what = EXP_FILETYPECMD_INDENT;
+        filetype_expand_what.set(EXP_FILETYPECMD_INDENT);
     } else if val & EXPAND_FILETYPECMD_INDENT as ::core::ffi::c_int != 0 {
-        filetype_expand_what = EXP_FILETYPECMD_PLUGIN;
+        filetype_expand_what.set(EXP_FILETYPECMD_PLUGIN);
     }
     (*xp).xp_pattern = p;
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5570,7 +5581,7 @@ unsafe extern "C" fn set_context_with_pattern(mut xp: *mut expand_T) {
     let mut dummy: ::core::ffi::c_int = 0;
     let mut patlen: ::core::ffi::c_int = 0;
     let mut retval: ::core::ffi::c_int = parse_pattern_and_range(
-        &raw mut pre_incsearch_pos,
+        pre_incsearch_pos.ptr(),
         &raw mut dummy,
         &raw mut skiplen,
         &raw mut patlen,
@@ -5630,14 +5641,14 @@ unsafe extern "C" fn set_context_by_cmdname(
             }
             170 | 504 => {
                 nextcmd = find_cmd_after_global_cmd(arg);
-                if nextcmd.is_null() && may_expand_pattern as ::core::ffi::c_int != 0 {
+                if nextcmd.is_null() && may_expand_pattern.get() as ::core::ffi::c_int != 0 {
                     set_context_with_pattern(xp);
                 }
                 return nextcmd;
             }
             550 | 382 => {
                 nextcmd = find_cmd_after_substitute_cmd(arg);
-                if nextcmd.is_null() && may_expand_pattern as ::core::ffi::c_int != 0 {
+                if nextcmd.is_null() && may_expand_pattern.get() as ::core::ffi::c_int != 0 {
                     set_context_with_pattern(xp);
                 }
                 return nextcmd;
@@ -6281,7 +6292,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
     if idx < 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if filetype_expand_what as ::core::ffi::c_uint
+    if filetype_expand_what.get() as ::core::ffi::c_uint
         == EXP_FILETYPECMD_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
         && idx < 4 as ::core::ffi::c_int
     {
@@ -6293,7 +6304,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
         ];
         return opts_all[idx as usize];
     }
-    if filetype_expand_what as ::core::ffi::c_uint
+    if filetype_expand_what.get() as ::core::ffi::c_uint
         == EXP_FILETYPECMD_PLUGIN as ::core::ffi::c_int as ::core::ffi::c_uint
         && idx < 3 as ::core::ffi::c_int
     {
@@ -6304,7 +6315,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
         ];
         return opts_plugin[idx as usize];
     }
-    if filetype_expand_what as ::core::ffi::c_uint
+    if filetype_expand_what.get() as ::core::ffi::c_uint
         == EXP_FILETYPECMD_INDENT as ::core::ffi::c_int as ::core::ffi::c_uint
         && idx < 3 as ::core::ffi::c_int
     {
@@ -6315,7 +6326,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
         ];
         return opts_indent[idx as usize];
     }
-    if filetype_expand_what as ::core::ffi::c_uint
+    if filetype_expand_what.get() as ::core::ffi::c_uint
         == EXP_FILETYPECMD_ONOFF as ::core::ffi::c_int as ::core::ffi::c_uint
         && idx < 2 as ::core::ffi::c_int
     {
@@ -6338,11 +6349,11 @@ unsafe extern "C" fn get_breakadd_arg(
             b"func\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"here\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ];
-        if breakpt_expand_what as ::core::ffi::c_uint
+        if breakpt_expand_what.get() as ::core::ffi::c_uint
             == EXP_BREAKPT_ADD as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             return opts[idx as usize];
-        } else if breakpt_expand_what as ::core::ffi::c_uint
+        } else if breakpt_expand_what.get() as ::core::ffi::c_uint
             == EXP_BREAKPT_DEL as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             if idx <= 2 as ::core::ffi::c_int {
@@ -6359,11 +6370,11 @@ unsafe extern "C" fn get_scriptnames_arg(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if !(idx + 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int
-        && idx + 1 as ::core::ffi::c_int <= script_items.ga_len)
+        && idx + 1 as ::core::ffi::c_int <= (*script_items.ptr()).ga_len)
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
+    let mut si: *mut scriptitem_T = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
         .offset((idx + 1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
     home_replace(
         ::core::ptr::null::<buf_T>(),
@@ -6405,12 +6416,13 @@ unsafe extern "C" fn get_healthcheck_names(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut names: Object = object {
+    static names: GlobalCell<Object> = GlobalCell::new(object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
-    };
-    static mut last_gen: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    if last_gen != get_cmdline_last_prompt_id() || last_gen == 0 as ::core::ffi::c_uint {
+    });
+    static last_gen: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
+    if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 as ::core::ffi::c_uint
+    {
         let mut a: Array = ARRAY_DICT_INIT;
         let mut err: Error = Error {
             type_0: kErrorTypeNone,
@@ -6429,17 +6441,17 @@ unsafe extern "C" fn get_healthcheck_names(
             &raw mut err,
         );
         api_clear_error(&raw mut err);
-        api_free_object(names);
-        names = res;
-        last_gen = get_cmdline_last_prompt_id();
+        api_free_object(names.get());
+        names.set(res);
+        last_gen.set(get_cmdline_last_prompt_id());
     }
-    if names.type_0 as ::core::ffi::c_uint
+    if (*names.ptr()).type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-        && idx < names.data.array.size as ::core::ffi::c_int
-        && (*names.data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
+        && idx < (*names.ptr()).data.array.size as ::core::ffi::c_int
+        && (*(*names.ptr()).data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return (*names.data.array.items.offset(idx as isize))
+        return (*(*names.ptr()).data.array.items.offset(idx as isize))
             .data
             .string
             .data;
@@ -6450,19 +6462,19 @@ unsafe extern "C" fn get_lsp_arg(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut names: Object = object {
+    static names: GlobalCell<Object> = GlobalCell::new(object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
-    };
-    static mut last_xp_line: *mut ::core::ffi::c_char =
-        ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut last_gen: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    if last_xp_line.is_null()
-        || strcmp(last_xp_line, (*xp).xp_line) != 0 as ::core::ffi::c_int
-        || last_gen != get_cmdline_last_prompt_id()
+    });
+    static last_xp_line: GlobalCell<*mut ::core::ffi::c_char> =
+        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+    static last_gen: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
+    if (*last_xp_line.ptr()).is_null()
+        || strcmp(last_xp_line.get(), (*xp).xp_line) != 0 as ::core::ffi::c_int
+        || last_gen.get() != get_cmdline_last_prompt_id()
     {
-        xfree(last_xp_line as *mut ::core::ffi::c_void);
-        last_xp_line = xstrdup((*xp).xp_line);
+        xfree(last_xp_line.get() as *mut ::core::ffi::c_void);
+        last_xp_line.set(xstrdup((*xp).xp_line));
         let mut args: Array = ARRAY_DICT_INIT;
         let mut args__items: [Object; 1] = [Object {
             type_0: kObjectTypeNil,
@@ -6495,17 +6507,17 @@ unsafe extern "C" fn get_lsp_arg(
             &raw mut err,
         );
         api_clear_error(&raw mut err);
-        api_free_object(names);
-        names = res;
-        last_gen = get_cmdline_last_prompt_id();
+        api_free_object(names.get());
+        names.set(res);
+        last_gen.set(get_cmdline_last_prompt_id());
     }
-    if names.type_0 as ::core::ffi::c_uint
+    if (*names.ptr()).type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-        && idx < names.data.array.size as ::core::ffi::c_int
-        && (*names.data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
+        && idx < (*names.ptr()).data.array.size as ::core::ffi::c_int
+        && (*(*names.ptr()).data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return (*names.data.array.items.offset(idx as isize))
+        return (*(*names.ptr()).data.array.items.offset(idx as isize))
             .data
             .string
             .data;
@@ -6519,7 +6531,7 @@ unsafe extern "C" fn ExpandOther(
     mut matches: *mut *mut *mut ::core::ffi::c_char,
     mut numMatches: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    static mut tab: [expgen; 33] = [
+    static tab: GlobalCell<[expgen; 33]> = GlobalCell::new([
         expgen {
             context: EXPAND_COMMANDS as ::core::ffi::c_int,
             func: Some(
@@ -6916,7 +6928,7 @@ unsafe extern "C" fn ExpandOther(
             ic: true_0,
             escaped: false_0,
         },
-    ];
+    ]);
     let mut ret: ::core::ffi::c_int = FAIL;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < ::core::mem::size_of::<[expgen; 33]>()
@@ -6926,8 +6938,8 @@ unsafe extern "C" fn ExpandOther(
                 == 0) as ::core::ffi::c_int as usize,
         ) as ::core::ffi::c_int
     {
-        if (*xp).xp_context == tab[i as usize].context {
-            if tab[i as usize].ic != 0 {
+        if (*xp).xp_context == (*tab.ptr())[i as usize].context {
+            if (*tab.ptr())[i as usize].ic != 0 {
                 (*rmp).rm_ic = true_0 != 0;
             }
             ExpandGeneric(
@@ -6936,8 +6948,8 @@ unsafe extern "C" fn ExpandOther(
                 rmp,
                 matches,
                 numMatches,
-                tab[i as usize].func as CompleteListItemGetter,
-                tab[i as usize].escaped != 0,
+                (*tab.ptr())[i as usize].func as CompleteListItemGetter,
+                (*tab.ptr())[i as usize].escaped != 0,
             );
             ret = OK;
             break;
@@ -8357,7 +8369,7 @@ pub unsafe extern "C" fn f_getcompletion(
                     .wrapping_sub(xpc.xp_pattern.offset_from(pattern_start) as size_t);
             }
             59 => {
-                filetype_expand_what = EXP_FILETYPECMD_ALL;
+                filetype_expand_what.set(EXP_FILETYPECMD_ALL);
             }
             _ => {}
         }
@@ -8468,7 +8480,7 @@ pub unsafe extern "C" fn f_cmdcomplete_info(
         retdict,
         b"cmdline_orig\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 13]>().wrapping_sub(1 as size_t),
-        cmdline_orig,
+        cmdline_orig.get(),
     );
     if ret == OK {
         ret = tv_dict_add_nr(
@@ -8704,7 +8716,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
     if has_range {
         cur_match_pos.lnum = search_first_line;
     } else {
-        cur_match_pos = pre_incsearch_pos;
+        cur_match_pos = pre_incsearch_pos.get();
     }
     let mut search_flags: ::core::ffi::c_int = SEARCH_OPT as ::core::ffi::c_int
         | SEARCH_NOOF as ::core::ffi::c_int

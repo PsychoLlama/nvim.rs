@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use core::ffi::{c_char, c_int, CStr};
 use core::ptr;
 use core::slice;
@@ -535,71 +536,89 @@ fn ascii_iswhite(c: ::core::ffi::c_int) -> bool {
 fn ascii_isdigit(c: ::core::ffi::c_int) -> bool {
     c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
 }
-static mut e_cannot_mix_positional_and_non_positional_str: [::core::ffi::c_char; 62] = unsafe {
-    ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
-        *b"E1500: Cannot mix positional and non-positional arguments: %s\0",
-    )
-};
-static mut e_fmt_arg_nr_unused_str: [::core::ffi::c_char; 55] = unsafe {
+static e_cannot_mix_positional_and_non_positional_str: GlobalCell<[::core::ffi::c_char; 62]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
+            *b"E1500: Cannot mix positional and non-positional arguments: %s\0",
+        )
+    });
+static e_fmt_arg_nr_unused_str: GlobalCell<[::core::ffi::c_char; 55]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
         *b"E1501: format argument %d unused in $-style format: %s\0",
     )
-};
-static mut e_positional_num_field_spec_reused_str_str: [::core::ffi::c_char; 82] = unsafe {
-    ::core::mem::transmute::<[u8; 82], [::core::ffi::c_char; 82]>(
-        *b"E1502: Positional argument %d used as field width reused as different type: %s/%s\0",
-    )
-};
-static mut e_positional_nr_out_of_bounds_str: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E1503: Positional argument %d out of bounds: %s\0",
-    )
-};
-static mut e_positional_arg_num_type_inconsistent_str_str: [::core::ffi::c_char; 62] = unsafe {
-    ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
-        *b"E1504: Positional argument %d type used inconsistently: %s/%s\0",
-    )
-};
-static mut e_invalid_format_specifier_str: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E1505: Invalid format specifier: %s\0",
-    )
-};
-static mut e_aptypes_is_null_nr_str: [::core::ffi::c_char; 65] = unsafe {
+});
+static e_positional_num_field_spec_reused_str_str: GlobalCell<[::core::ffi::c_char; 82]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 82], [::core::ffi::c_char; 82]>(
+            *b"E1502: Positional argument %d used as field width reused as different type: %s/%s\0",
+        )
+    });
+static e_positional_nr_out_of_bounds_str: GlobalCell<[::core::ffi::c_char; 48]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+            *b"E1503: Positional argument %d out of bounds: %s\0",
+        )
+    });
+static e_positional_arg_num_type_inconsistent_str_str: GlobalCell<[::core::ffi::c_char; 62]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
+            *b"E1504: Positional argument %d type used inconsistently: %s/%s\0",
+        )
+    });
+static e_invalid_format_specifier_str: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E1505: Invalid format specifier: %s\0",
+        )
+    });
+static e_aptypes_is_null_nr_str: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s\0",
     )
-};
-static mut typename_unknown: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"unknown\0") };
-static mut typename_int: [::core::ffi::c_char; 4] =
-    unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"int\0") };
-static mut typename_longint: [::core::ffi::c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"long int\0") };
-static mut typename_longlongint: [::core::ffi::c_char; 14] =
-    unsafe { ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"long long int\0") };
-static mut typename_signedsizet: [::core::ffi::c_char; 14] =
-    unsafe { ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"signed size_t\0") };
-static mut typename_unsignedint: [::core::ffi::c_char; 13] =
-    unsafe { ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"unsigned int\0") };
-static mut typename_unsignedlongint: [::core::ffi::c_char; 18] = unsafe {
+});
+static typename_unknown: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"unknown\0")
+});
+static typename_int: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"int\0")
+});
+static typename_longint: GlobalCell<[::core::ffi::c_char; 9]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"long int\0")
+});
+static typename_longlongint: GlobalCell<[::core::ffi::c_char; 14]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"long long int\0")
+});
+static typename_signedsizet: GlobalCell<[::core::ffi::c_char; 14]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"signed size_t\0")
+});
+static typename_unsignedint: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"unsigned int\0")
+});
+static typename_unsignedlongint: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"unsigned long int\0")
-};
-static mut typename_unsignedlonglongint: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"unsigned long long int\0")
-};
-static mut typename_sizet: [::core::ffi::c_char; 7] =
-    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"size_t\0") };
-static mut typename_pointer: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"pointer\0") };
-static mut typename_percent: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"percent\0") };
-static mut typename_char: [::core::ffi::c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"char\0") };
-static mut typename_string: [::core::ffi::c_char; 7] =
-    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"string\0") };
-static mut typename_float: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"float\0") };
+});
+static typename_unsignedlonglongint: GlobalCell<[::core::ffi::c_char; 23]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"unsigned long long int\0")
+    });
+static typename_sizet: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"size_t\0")
+});
+static typename_pointer: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"pointer\0")
+});
+static typename_percent: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"percent\0")
+});
+static typename_char: GlobalCell<[::core::ffi::c_char; 5]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"char\0")
+});
+static typename_string: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"string\0")
+});
+static typename_float: GlobalCell<[::core::ffi::c_char; 6]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"float\0")
+});
 // ── The vim_str* family: safe cores + C-ABI shims ─────────────────────────
 //
 // Byte-level logic (unquoting, ASCII case mapping, comparison, scanning)
@@ -1053,8 +1072,9 @@ pub unsafe extern "C" fn concat_str(str1: *const c_char, str2: *const c_char) ->
     out[a.len()..].copy_from_slice(b);
     dest
 }
-static mut e_printf: *const ::core::ffi::c_char =
-    b"E766: Insufficient arguments for printf()\0".as_ptr() as *const ::core::ffi::c_char;
+static e_printf: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+    b"E766: Insufficient arguments for printf()\0".as_ptr() as *const ::core::ffi::c_char,
+);
 unsafe extern "C" fn tv_nr(
     mut tvs: *mut typval_T,
     mut idxp: *mut ::core::ffi::c_int,
@@ -1064,7 +1084,7 @@ unsafe extern "C" fn tv_nr(
     if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        emsg(gettext(e_printf));
+        emsg(gettext(e_printf.get()));
     } else {
         *idxp += 1;
         let mut err: bool = false_0 != 0;
@@ -1085,7 +1105,7 @@ unsafe extern "C" fn tv_str(
     if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        emsg(gettext(e_printf));
+        emsg(gettext(e_printf.get()));
     } else {
         *idxp += 1;
         if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
@@ -1110,7 +1130,7 @@ unsafe extern "C" fn tv_ptr(
     if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        emsg(gettext(e_printf));
+        emsg(gettext(e_printf.get()));
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
     *idxp += 1;
@@ -1122,7 +1142,7 @@ unsafe extern "C" fn tv_float(tvs: *mut typval_T, idxp: *mut ::core::ffi::c_int)
     if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        emsg(gettext(e_printf));
+        emsg(gettext(e_printf.get()));
     } else {
         *idxp += 1;
         if (*tvs.offset(idx as isize)).v_type as ::core::ffi::c_uint
@@ -1180,7 +1200,7 @@ unsafe extern "C" fn infinity_str(
     mut force_sign: ::core::ffi::c_int,
     mut space_for_positive: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
-    static mut table: [*const ::core::ffi::c_char; 8] = [
+    static table: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
         b"-inf\0".as_ptr() as *const ::core::ffi::c_char,
         b"inf\0".as_ptr() as *const ::core::ffi::c_char,
         b"+inf\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1189,7 +1209,7 @@ unsafe extern "C" fn infinity_str(
         b"INF\0".as_ptr() as *const ::core::ffi::c_char,
         b"+INF\0".as_ptr() as *const ::core::ffi::c_char,
         b" INF\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut idx: ::core::ffi::c_int = positive as ::core::ffi::c_int
         * (1 as ::core::ffi::c_int + force_sign + force_sign * space_for_positive);
     if fmt_spec as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -1197,7 +1217,7 @@ unsafe extern "C" fn infinity_str(
     {
         idx += 4 as ::core::ffi::c_int;
     }
-    return table[idx as usize];
+    return (*table.ptr())[idx as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_snprintf_safelen(
@@ -1321,32 +1341,36 @@ unsafe extern "C" fn format_typename(
     mut type_0: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     match format_typeof(type_0) {
-        0 => return gettext(&raw const typename_int as *const ::core::ffi::c_char),
-        1 => return gettext(&raw const typename_longint as *const ::core::ffi::c_char),
+        0 => return gettext((typename_int.ptr() as *const _) as *const ::core::ffi::c_char),
+        1 => return gettext((typename_longint.ptr() as *const _) as *const ::core::ffi::c_char),
         2 => {
-            return gettext(&raw const typename_longlongint as *const ::core::ffi::c_char);
+            return gettext((typename_longlongint.ptr() as *const _) as *const ::core::ffi::c_char);
         }
         4 => {
-            return gettext(&raw const typename_unsignedint as *const ::core::ffi::c_char);
+            return gettext((typename_unsignedint.ptr() as *const _) as *const ::core::ffi::c_char);
         }
         3 => {
-            return gettext(&raw const typename_signedsizet as *const ::core::ffi::c_char);
+            return gettext((typename_signedsizet.ptr() as *const _) as *const ::core::ffi::c_char);
         }
         5 => {
-            return gettext(&raw const typename_unsignedlongint as *const ::core::ffi::c_char);
+            return gettext(
+                (typename_unsignedlongint.ptr() as *const _) as *const ::core::ffi::c_char,
+            );
         }
         6 => {
-            return gettext(&raw const typename_unsignedlonglongint as *const ::core::ffi::c_char);
+            return gettext(
+                (typename_unsignedlonglongint.ptr() as *const _) as *const ::core::ffi::c_char,
+            );
         }
-        7 => return gettext(&raw const typename_sizet as *const ::core::ffi::c_char),
-        8 => return gettext(&raw const typename_pointer as *const ::core::ffi::c_char),
-        9 => return gettext(&raw const typename_percent as *const ::core::ffi::c_char),
-        10 => return gettext(&raw const typename_char as *const ::core::ffi::c_char),
-        11 => return gettext(&raw const typename_string as *const ::core::ffi::c_char),
-        12 => return gettext(&raw const typename_float as *const ::core::ffi::c_char),
+        7 => return gettext((typename_sizet.ptr() as *const _) as *const ::core::ffi::c_char),
+        8 => return gettext((typename_pointer.ptr() as *const _) as *const ::core::ffi::c_char),
+        9 => return gettext((typename_percent.ptr() as *const _) as *const ::core::ffi::c_char),
+        10 => return gettext((typename_char.ptr() as *const _) as *const ::core::ffi::c_char),
+        11 => return gettext((typename_string.ptr() as *const _) as *const ::core::ffi::c_char),
+        12 => return gettext((typename_float.ptr() as *const _) as *const ::core::ffi::c_char),
         _ => {}
     }
-    return gettext(&raw const typename_unknown as *const ::core::ffi::c_char);
+    return gettext((typename_unknown.ptr() as *const _) as *const ::core::ffi::c_char);
 }
 unsafe extern "C" fn adjust_types(
     mut ap_types: *mut *mut *const ::core::ffi::c_char,
@@ -1356,7 +1380,9 @@ unsafe extern "C" fn adjust_types(
 ) -> ::core::ffi::c_int {
     if arg <= 0 as ::core::ffi::c_int {
         semsg(
-            gettext(&raw const e_invalid_format_specifier_str as *const ::core::ffi::c_char),
+            gettext(
+                (e_invalid_format_specifier_str.ptr() as *const _) as *const ::core::ffi::c_char,
+            ),
             type_0,
         );
         return FAIL;
@@ -1403,7 +1429,7 @@ unsafe extern "C" fn adjust_types(
                     _ => {
                         semsg(
                             gettext(
-                                &raw const e_positional_num_field_spec_reused_str_str
+                                (e_positional_num_field_spec_reused_str_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             arg,
@@ -1421,7 +1447,7 @@ unsafe extern "C" fn adjust_types(
         {
             semsg(
                 gettext(
-                    &raw const e_positional_arg_num_type_inconsistent_str_str
+                    (e_positional_arg_num_type_inconsistent_str_str.ptr() as *const _)
                         as *const ::core::ffi::c_char,
                 ),
                 arg,
@@ -1507,7 +1533,7 @@ unsafe extern "C" fn parse_fmt_types(
                     if *p as ::core::ffi::c_int == '0' as ::core::ffi::c_int {
                         semsg(
                             gettext(
-                                &raw const e_invalid_format_specifier_str
+                                (e_invalid_format_specifier_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             fmt,
@@ -1524,7 +1550,8 @@ unsafe extern "C" fn parse_fmt_types(
                         if any_pos != 0 && any_arg != 0 {
                             semsg(
                                 gettext(
-                                    &raw const e_cannot_mix_positional_and_non_positional_str
+                                    (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                        as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 fmt,
@@ -1564,7 +1591,7 @@ unsafe extern "C" fn parse_fmt_types(
                         if *p as ::core::ffi::c_int != '$' as ::core::ffi::c_int {
                             semsg(
                                 gettext(
-                                    &raw const e_invalid_format_specifier_str
+                                    (e_invalid_format_specifier_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 fmt,
@@ -1576,7 +1603,8 @@ unsafe extern "C" fn parse_fmt_types(
                             if any_pos != 0 && any_arg != 0 {
                                 semsg(
                                     gettext(
-                                        &raw const e_cannot_mix_positional_and_non_positional_str
+                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                            as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
                                     fmt,
@@ -1597,7 +1625,8 @@ unsafe extern "C" fn parse_fmt_types(
                         if any_pos != 0 && any_arg != 0 {
                             semsg(
                                 gettext(
-                                    &raw const e_cannot_mix_positional_and_non_positional_str
+                                    (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                        as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 fmt,
@@ -1615,7 +1644,7 @@ unsafe extern "C" fn parse_fmt_types(
                     if *p as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
                         semsg(
                             gettext(
-                                &raw const e_invalid_format_specifier_str
+                                (e_invalid_format_specifier_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             fmt,
@@ -1644,7 +1673,8 @@ unsafe extern "C" fn parse_fmt_types(
                                 if any_pos != 0 && any_arg != 0 {
                                     semsg(
                                         gettext(
-                                            &raw const e_cannot_mix_positional_and_non_positional_str
+                                            (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                                as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         fmt,
@@ -1665,7 +1695,7 @@ unsafe extern "C" fn parse_fmt_types(
                             } else {
                                 semsg(
                                     gettext(
-                                        &raw const e_invalid_format_specifier_str
+                                        (e_invalid_format_specifier_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
                                     fmt,
@@ -1677,7 +1707,8 @@ unsafe extern "C" fn parse_fmt_types(
                             if any_pos != 0 && any_arg != 0 {
                                 semsg(
                                     gettext(
-                                        &raw const e_cannot_mix_positional_and_non_positional_str
+                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                            as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
                                     fmt,
@@ -1696,7 +1727,7 @@ unsafe extern "C" fn parse_fmt_types(
                         if *p as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
                             semsg(
                                 gettext(
-                                    &raw const e_invalid_format_specifier_str
+                                    (e_invalid_format_specifier_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 fmt,
@@ -1710,7 +1741,7 @@ unsafe extern "C" fn parse_fmt_types(
                     if any_pos != 0 && any_arg != 0 {
                         semsg(
                             gettext(
-                                &raw const e_cannot_mix_positional_and_non_positional_str
+                                (e_cannot_mix_positional_and_non_positional_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             fmt,
@@ -1744,7 +1775,8 @@ unsafe extern "C" fn parse_fmt_types(
                             if any_pos != 0 && any_arg != 0 {
                                 semsg(
                                     gettext(
-                                        &raw const e_cannot_mix_positional_and_non_positional_str
+                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                            as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
                                     fmt,
@@ -1757,7 +1789,8 @@ unsafe extern "C" fn parse_fmt_types(
                         if pos_arg != -1 as ::core::ffi::c_int {
                             semsg(
                                 gettext(
-                                    &raw const e_cannot_mix_positional_and_non_positional_str
+                                    (e_cannot_mix_positional_and_non_positional_str.ptr()
+                                        as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 fmt,
@@ -1775,7 +1808,9 @@ unsafe extern "C" fn parse_fmt_types(
         while arg_idx < *num_posarg {
             if (*(*ap_types).offset(arg_idx as isize)).is_null() {
                 semsg(
-                    gettext(&raw const e_fmt_arg_nr_unused_str as *const ::core::ffi::c_char),
+                    gettext(
+                        (e_fmt_arg_nr_unused_str.ptr() as *const _) as *const ::core::ffi::c_char,
+                    ),
                     arg_idx + 1 as ::core::ffi::c_int,
                     fmt,
                 );
@@ -1786,7 +1821,8 @@ unsafe extern "C" fn parse_fmt_types(
             {
                 semsg(
                     gettext(
-                        &raw const e_positional_nr_out_of_bounds_str as *const ::core::ffi::c_char,
+                        (e_positional_nr_out_of_bounds_str.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
                     ),
                     arg_idx + 1 as ::core::ffi::c_int,
                     fmt,
@@ -1835,7 +1871,7 @@ unsafe extern "C" fn skip_to_arg<'a, 'f: 'a>(
     while *arg_cur < *arg_idx - 1 as ::core::ffi::c_int {
         if ap_types.is_null() || (*ap_types.offset(*arg_cur as isize)).is_null() {
             siemsg(
-                e_aptypes_is_null_nr_str.as_ptr() as *const ::core::ffi::c_char,
+                (*e_aptypes_is_null_nr_str.ptr()).as_ptr() as *const ::core::ffi::c_char,
                 fmt,
                 *arg_cur,
             );

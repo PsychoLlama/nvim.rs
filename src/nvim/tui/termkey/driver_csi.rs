@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -317,21 +318,26 @@ unsafe extern "C" fn termkey_key_set_linecol(
         | (col & 0x300 as ::core::ffi::c_int) >> 4 as ::core::ffi::c_int)
         as ::core::ffi::c_char;
 }
-static mut keyinfo_initialised: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut ss3s: [keyinfo; 64] = [keyinfo {
-    type_0: TERMKEY_TYPE_UNICODE,
-    sym: TERMKEY_SYM_NONE,
-    modifier_mask: 0,
-    modifier_set: 0,
-}; 64];
-static mut ss3_kpalts: [::core::ffi::c_char; 64] = [0; 64];
-static mut csi_handlers: [Option<CsiHandler>; 64] = [None; 64];
-static mut csi_ss3s: [keyinfo; 64] = [keyinfo {
-    type_0: TERMKEY_TYPE_UNICODE,
-    sym: TERMKEY_SYM_NONE,
-    modifier_mask: 0,
-    modifier_set: 0,
-}; 64];
+static keyinfo_initialised: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static ss3s: GlobalCell<[keyinfo; 64]> = GlobalCell::new(
+    [keyinfo {
+        type_0: TERMKEY_TYPE_UNICODE,
+        sym: TERMKEY_SYM_NONE,
+        modifier_mask: 0,
+        modifier_set: 0,
+    }; 64],
+);
+static ss3_kpalts: GlobalCell<[::core::ffi::c_char; 64]> = GlobalCell::new([0; 64]);
+static csi_handlers: GlobalCell<[Option<CsiHandler>; 64]> = GlobalCell::new([None; 64]);
+static csi_ss3s: GlobalCell<[keyinfo; 64]> = GlobalCell::new(
+    [keyinfo {
+        type_0: TERMKEY_TYPE_UNICODE,
+        sym: TERMKEY_SYM_NONE,
+        modifier_mask: 0,
+        modifier_set: 0,
+    }; 64],
+);
 unsafe extern "C" fn handle_csi_ss3_full(
     mut _tk: *mut TermKey,
     mut key: *mut TermKeyKey,
@@ -371,10 +377,11 @@ unsafe extern "C" fn handle_csi_ss3_full(
     } else {
         (*key).modifiers = 0 as ::core::ffi::c_int;
     }
-    (*key).type_0 = csi_ss3s[(cmd - 0x40 as ::core::ffi::c_int) as usize].type_0;
-    (*key).code.sym = csi_ss3s[(cmd - 0x40 as ::core::ffi::c_int) as usize].sym;
-    (*key).modifiers &= !csi_ss3s[(cmd - 0x40 as ::core::ffi::c_int) as usize].modifier_mask;
-    (*key).modifiers |= csi_ss3s[(cmd - 0x40 as ::core::ffi::c_int) as usize].modifier_set;
+    (*key).type_0 = (*csi_ss3s.ptr())[(cmd - 0x40 as ::core::ffi::c_int) as usize].type_0;
+    (*key).code.sym = (*csi_ss3s.ptr())[(cmd - 0x40 as ::core::ffi::c_int) as usize].sym;
+    (*key).modifiers &=
+        !(*csi_ss3s.ptr())[(cmd - 0x40 as ::core::ffi::c_int) as usize].modifier_mask;
+    (*key).modifiers |= (*csi_ss3s.ptr())[(cmd - 0x40 as ::core::ffi::c_int) as usize].modifier_set;
     if (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_UNKNOWN as ::core::ffi::c_int {
         result = TERMKEY_RES_NONE;
     }
@@ -392,13 +399,14 @@ unsafe extern "C" fn register_csi_ss3_full(
     {
         return;
     }
-    csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0 = type_0;
-    csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym = sym;
-    csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_set =
-        modifier_set;
-    csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_mask =
-        modifier_mask;
-    csi_handlers[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0 =
+        type_0;
+    (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym = sym;
+    (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+        .modifier_set = modifier_set;
+    (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+        .modifier_mask = modifier_mask;
+    (*csi_handlers.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_ss3_full
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -434,21 +442,24 @@ unsafe extern "C" fn register_ss3kpalt(
     {
         return;
     }
-    ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0 = type_0;
-    ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym = sym;
-    ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_set =
+    (*ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0 =
+        type_0;
+    (*ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym = sym;
+    (*ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_set =
         0 as ::core::ffi::c_int;
-    ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_mask =
-        0 as ::core::ffi::c_int;
-    ss3_kpalts[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = kpalt;
+    (*ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+        .modifier_mask = 0 as ::core::ffi::c_int;
+    (*ss3_kpalts.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = kpalt;
 }
 pub const NCSIFUNCS: ::core::ffi::c_int = 35 as ::core::ffi::c_int;
-static mut csifuncs: [keyinfo; 35] = [keyinfo {
-    type_0: TERMKEY_TYPE_UNICODE,
-    sym: TERMKEY_SYM_NONE,
-    modifier_mask: 0,
-    modifier_set: 0,
-}; 35];
+static csifuncs: GlobalCell<[keyinfo; 35]> = GlobalCell::new(
+    [keyinfo {
+        type_0: TERMKEY_TYPE_UNICODE,
+        sym: TERMKEY_SYM_NONE,
+        modifier_mask: 0,
+        modifier_set: 0,
+    }; 35],
+);
 unsafe extern "C" fn handle_csifunc(
     mut tk: *mut TermKey,
     mut key: *mut TermKeyKey,
@@ -533,11 +544,12 @@ unsafe extern "C" fn handle_csifunc(
     } else if args[0 as ::core::ffi::c_int as usize] >= 0 as ::core::ffi::c_int
         && args[0 as ::core::ffi::c_int as usize] < NCSIFUNCS
     {
-        (*key).type_0 = csifuncs[args[0 as ::core::ffi::c_int as usize] as usize].type_0;
-        (*key).code.sym = csifuncs[args[0 as ::core::ffi::c_int as usize] as usize].sym;
+        (*key).type_0 = (*csifuncs.ptr())[args[0 as ::core::ffi::c_int as usize] as usize].type_0;
+        (*key).code.sym = (*csifuncs.ptr())[args[0 as ::core::ffi::c_int as usize] as usize].sym;
         (*key).modifiers &=
-            !csifuncs[args[0 as ::core::ffi::c_int as usize] as usize].modifier_mask;
-        (*key).modifiers |= csifuncs[args[0 as ::core::ffi::c_int as usize] as usize].modifier_set;
+            !(*csifuncs.ptr())[args[0 as ::core::ffi::c_int as usize] as usize].modifier_mask;
+        (*key).modifiers |=
+            (*csifuncs.ptr())[args[0 as ::core::ffi::c_int as usize] as usize].modifier_set;
     } else {
         (*key).code.sym = TERMKEY_SYM_UNKNOWN;
     }
@@ -554,11 +566,11 @@ unsafe extern "C" fn register_csifunc(
     if number >= NCSIFUNCS {
         return;
     }
-    csifuncs[number as usize].type_0 = type_0;
-    csifuncs[number as usize].sym = sym;
-    csifuncs[number as usize].modifier_set = 0 as ::core::ffi::c_int;
-    csifuncs[number as usize].modifier_mask = 0 as ::core::ffi::c_int;
-    csi_handlers[('~' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csifuncs.ptr())[number as usize].type_0 = type_0;
+    (*csifuncs.ptr())[number as usize].sym = sym;
+    (*csifuncs.ptr())[number as usize].modifier_set = 0 as ::core::ffi::c_int;
+    (*csifuncs.ptr())[number as usize].modifier_mask = 0 as ::core::ffi::c_int;
+    (*csi_handlers.ptr())[('~' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csifunc
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1107,14 +1119,14 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0;
     i = 0 as ::core::ffi::c_int;
     while i < 64 as ::core::ffi::c_int {
-        csi_ss3s[i as usize].sym = TERMKEY_SYM_UNKNOWN;
-        ss3s[i as usize].sym = TERMKEY_SYM_UNKNOWN;
-        ss3_kpalts[i as usize] = 0 as ::core::ffi::c_char;
+        (*csi_ss3s.ptr())[i as usize].sym = TERMKEY_SYM_UNKNOWN;
+        (*ss3s.ptr())[i as usize].sym = TERMKEY_SYM_UNKNOWN;
+        (*ss3_kpalts.ptr())[i as usize] = 0 as ::core::ffi::c_char;
         i += 1;
     }
     i = 0 as ::core::ffi::c_int;
     while i < NCSIFUNCS {
-        csifuncs[i as usize].sym = TERMKEY_SYM_UNKNOWN;
+        (*csifuncs.ptr())[i as usize].sym = TERMKEY_SYM_UNKNOWN;
         i += 1;
     }
     register_csi_ss3(
@@ -1427,7 +1439,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
         TERMKEY_SYM_CANCEL,
         34 as ::core::ffi::c_int,
     );
-    csi_handlers[('u' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_handlers.ptr())[('u' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_u
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1438,7 +1450,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
             ) -> TermKeyResult,
     )
         as Option<CsiHandler>;
-    csi_handlers[('M' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_handlers.ptr())[('M' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_m
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1449,7 +1461,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
             ) -> TermKeyResult,
     )
         as Option<CsiHandler>;
-    csi_handlers[('m' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_handlers.ptr())[('m' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_m
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1460,7 +1472,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
             ) -> TermKeyResult,
     )
         as Option<CsiHandler>;
-    csi_handlers[('R' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_handlers.ptr())[('R' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_R
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1471,7 +1483,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
             ) -> TermKeyResult,
     )
         as Option<CsiHandler>;
-    csi_handlers[('y' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
+    (*csi_handlers.ptr())[('y' as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize] = Some(
         handle_csi_y
             as unsafe extern "C" fn(
                 *mut TermKey,
@@ -1482,7 +1494,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
             ) -> TermKeyResult,
     )
         as Option<CsiHandler>;
-    keyinfo_initialised = 1 as ::core::ffi::c_int;
+    keyinfo_initialised.set(1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -1490,7 +1502,7 @@ pub unsafe extern "C" fn new_driver_csi(
     mut tk: *mut TermKey,
     mut _term: *mut TerminfoEntry,
 ) -> *mut ::core::ffi::c_void {
-    if keyinfo_initialised == 0 {
+    if keyinfo_initialised.get() == 0 {
         if register_keys() == 0 {
             return NULL;
         }
@@ -1569,12 +1581,12 @@ unsafe extern "C" fn peekkey_csi_csi(
         return mouse_result;
     }
     let mut result: TermKeyResult = TERMKEY_RES_NONE;
-    if csi_handlers
+    if (*csi_handlers.ptr())
         [(cmd & 0xff as ::core::ffi::c_uint).wrapping_sub(0x40 as ::core::ffi::c_uint) as usize]
         .is_some()
     {
         result = Some(
-            (*(&raw mut csi_handlers as *mut Option<CsiHandler>).offset(
+            (*(csi_handlers.ptr() as *mut Option<CsiHandler>).offset(
                 (cmd & 0xff as ::core::ffi::c_uint).wrapping_sub(0x40 as ::core::ffi::c_uint)
                     as isize,
             ))
@@ -1633,19 +1645,21 @@ unsafe extern "C" fn peekkey_ss3(
         return TERMKEY_RES_NONE;
     }
     (*key).type_0 =
-        csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0;
+        (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0;
     (*key).code.sym =
-        csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym;
-    (*key).modifiers =
-        csi_ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].modifier_set;
+        (*csi_ss3s.ptr())[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym;
+    (*key).modifiers = (*csi_ss3s.ptr())
+        [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+        .modifier_set;
     if (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_UNKNOWN as ::core::ffi::c_int {
         if (*tk).flags & TERMKEY_FLAG_CONVERTKP as ::core::ffi::c_int != 0
-            && ss3_kpalts[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+            && (*ss3_kpalts.ptr())
+                [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
                 as ::core::ffi::c_int
                 != 0
         {
             (*key).type_0 = TERMKEY_TYPE_UNICODE;
-            (*key).code.codepoint = ss3_kpalts
+            (*key).code.codepoint = (*ss3_kpalts.ptr())
                 [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
                 as ::core::ffi::c_uchar as ::core::ffi::c_int;
             (*key).modifiers = 0 as ::core::ffi::c_int;
@@ -1653,11 +1667,13 @@ unsafe extern "C" fn peekkey_ss3(
                 (*key).code.codepoint as ::core::ffi::c_char;
             (*key).utf8[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
         } else {
-            (*key).type_0 =
-                ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].type_0;
-            (*key).code.sym =
-                ss3s[(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize].sym;
-            (*key).modifiers = ss3s
+            (*key).type_0 = (*ss3s.ptr())
+                [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+                .type_0;
+            (*key).code.sym = (*ss3s.ptr())
+                [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
+                .sym;
+            (*key).modifiers = (*ss3s.ptr())
                 [(cmd as ::core::ffi::c_int - 0x40 as ::core::ffi::c_int) as usize]
                 .modifier_set;
         }

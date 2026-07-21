@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2098,11 +2099,12 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
     return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
 }
 #[no_mangle]
-pub static mut decor_freelist: uint32_t = UINT32_MAX as uint32_t;
+pub static decor_freelist: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
 #[no_mangle]
-pub static mut to_free_virt: *mut DecorVirtText = ::core::ptr::null_mut::<DecorVirtText>();
+pub static to_free_virt: GlobalCell<*mut DecorVirtText> =
+    GlobalCell::new(::core::ptr::null_mut::<DecorVirtText>());
 #[no_mangle]
-pub static mut to_free_sh: uint32_t = UINT32_MAX as uint32_t;
+pub static to_free_sh: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
 #[no_mangle]
 pub unsafe extern "C" fn bufhl_add_hl_pos_offset(
     mut buf: *mut buf_T,
@@ -2254,9 +2256,9 @@ pub unsafe extern "C" fn decor_redraw_sh(
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t {
-    if decor_freelist != UINT32_MAX as uint32_t {
-        let mut pos: uint32_t = decor_freelist;
-        decor_freelist = (*decor_items.items.offset(decor_freelist as isize)).next;
+    if decor_freelist.get() != UINT32_MAX as uint32_t {
+        let mut pos: uint32_t = decor_freelist.get();
+        decor_freelist.set((*decor_items.items.offset(decor_freelist.get() as isize)).next);
         *decor_items.items.offset(pos as isize) = item;
         return pos;
     } else {
@@ -2364,7 +2366,7 @@ unsafe extern "C" fn may_force_numberwidth_recompute(mut buf: *mut buf_T, mut un
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-static mut sign_add_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static sign_add_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn buf_put_decor_sh(
     mut buf: *mut buf_T,
@@ -2373,8 +2375,8 @@ pub unsafe extern "C" fn buf_put_decor_sh(
     mut row2: ::core::ffi::c_int,
 ) {
     if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-        let c2rust_fresh1 = sign_add_id;
-        sign_add_id = sign_add_id + 1;
+        let c2rust_fresh1 = sign_add_id.get();
+        sign_add_id.set(sign_add_id.get() + 1);
         (*sh).sign_add_id = c2rust_fresh1;
         if (*sh).text[0 as ::core::ffi::c_int as usize] != 0 {
             buf_signcols_count_range(buf, row1, row2, 1 as ::core::ffi::c_int, kFalse);
@@ -2438,8 +2440,8 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
     if decor_state.running_decor_provider {
         while !vt.is_null() {
             if (*vt).next.is_null() {
-                (*vt).next = to_free_virt;
-                to_free_virt = decor.data.ext.vt;
+                (*vt).next = to_free_virt.get();
+                to_free_virt.set(decor.data.ext.vt);
                 break;
             } else {
                 vt = (*vt).next;
@@ -2448,8 +2450,8 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
         while idx != DECOR_ID_INVALID as uint32_t {
             let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
             if (*sh).next == DECOR_ID_INVALID as uint32_t {
-                (*sh).next = to_free_sh;
-                to_free_sh = decor.data.ext.sh_idx;
+                (*sh).next = to_free_sh.get();
+                to_free_sh.set(decor.data.ext.sh_idx);
                 break;
             } else {
                 idx = (*sh).next;
@@ -2489,8 +2491,8 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
             *ptr__0;
         }
         if (*sh).next == DECOR_ID_INVALID as uint32_t {
-            (*sh).next = decor_freelist;
-            decor_freelist = first_idx;
+            (*sh).next = decor_freelist.get();
+            decor_freelist.set(first_idx);
             break;
         } else {
             idx = (*sh).next;
@@ -2516,9 +2518,9 @@ pub unsafe extern "C" fn decor_check_to_be_deleted() {
             );
         }
     };
-    decor_free_inner(to_free_virt, to_free_sh);
-    to_free_virt = ::core::ptr::null_mut::<DecorVirtText>();
-    to_free_sh = DECOR_ID_INVALID as uint32_t;
+    decor_free_inner(to_free_virt.get(), to_free_sh.get());
+    to_free_virt.set(::core::ptr::null_mut::<DecorVirtText>());
+    to_free_sh.set(DECOR_ID_INVALID as uint32_t);
     decor_state.win = ::core::ptr::null_mut::<win_T>();
 }
 #[no_mangle]
@@ -3297,7 +3299,7 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
     (*state).spell = spell;
     return attr;
 }
-static mut conceal_filter: [uint32_t; 5] = [0, 0, 0, 0, kMTFilterSelect];
+static conceal_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, 0, 0, 0, kMTFilterSelect]);
 #[no_mangle]
 pub unsafe extern "C" fn decor_conceal_line(
     mut wp: *mut win_T,
@@ -3364,7 +3366,7 @@ pub unsafe extern "C" fn decor_conceal_line(
     marktree_itr_step_out_filter(
         &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
         &raw mut itr as *mut MarkTreeIter,
-        &raw const conceal_filter as MetaFilter,
+        (conceal_filter.ptr() as *const _) as MetaFilter,
     );
     while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
         let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
@@ -3381,7 +3383,7 @@ pub unsafe extern "C" fn decor_conceal_line(
             &raw mut itr as *mut MarkTreeIter,
             row + 1 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            &raw const conceal_filter as MetaFilter,
+            (conceal_filter.ptr() as *const _) as MetaFilter,
         );
     }
     return decor_providers_invoke_conceal_line(wp, row);
@@ -3422,7 +3424,8 @@ pub unsafe extern "C" fn sign_item_cmp(
     }
     return 0 as ::core::ffi::c_int;
 }
-static mut sign_filter: [uint32_t; 5] = [0, 0, kMTFilterSelect, kMTFilterSelect, 0];
+static sign_filter: GlobalCell<[uint32_t; 5]> =
+    GlobalCell::new([0, 0, kMTFilterSelect, kMTFilterSelect, 0]);
 #[no_mangle]
 pub unsafe extern "C" fn decor_redraw_signs(
     mut wp: *mut win_T,
@@ -3511,7 +3514,7 @@ pub unsafe extern "C" fn decor_redraw_signs(
     marktree_itr_step_out_filter(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         &raw mut itr as *mut MarkTreeIter,
-        &raw const sign_filter as MetaFilter,
+        (sign_filter.ptr() as *const _) as MetaFilter,
     );
     while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
         let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
@@ -3550,7 +3553,7 @@ pub unsafe extern "C" fn decor_redraw_signs(
             &raw mut itr as *mut MarkTreeIter,
             row + 1 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            &raw const sign_filter as MetaFilter,
+            (sign_filter.ptr() as *const _) as MetaFilter,
         );
     }
     if signs.size != 0 {
@@ -3623,7 +3626,7 @@ pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSi
         decor_id = (*sh).next;
     }
 }
-static mut signtext_filter: [uint32_t; 5] = [0, 0, 0, kMTFilterSelect, 0];
+static signtext_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, 0, 0, kMTFilterSelect, 0]);
 #[no_mangle]
 pub unsafe extern "C" fn buf_signcols_count_range(
     mut buf: *mut buf_T,
@@ -3700,7 +3703,7 @@ pub unsafe extern "C" fn buf_signcols_count_range(
     marktree_itr_step_out_filter(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         &raw mut itr as *mut MarkTreeIter,
-        &raw const signtext_filter as MetaFilter,
+        (signtext_filter.ptr() as *const _) as MetaFilter,
     );
     while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
         let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
@@ -3733,7 +3736,7 @@ pub unsafe extern "C" fn buf_signcols_count_range(
             &raw mut itr as *mut MarkTreeIter,
             row2 + 1 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            &raw const signtext_filter as MetaFilter,
+            (signtext_filter.ptr() as *const _) as MetaFilter,
         );
     }
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3823,7 +3826,7 @@ pub unsafe extern "C" fn decor_redraw_eol(
     }
     return has_virt_pos;
 }
-static mut lines_filter: [uint32_t; 5] = [0, kMTFilterSelect, 0, 0, 0];
+static lines_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, kMTFilterSelect, 0, 0, 0]);
 #[no_mangle]
 pub unsafe extern "C" fn decor_virt_lines(
     mut wp: *mut win_T,
@@ -3860,7 +3863,7 @@ pub unsafe extern "C" fn decor_virt_lines(
         0 as ::core::ffi::c_int,
         end_row,
         0 as ::core::ffi::c_int,
-        &raw const lines_filter as MetaFilter,
+        (lines_filter.ptr() as *const _) as MetaFilter,
         &raw mut itr as *mut MarkTreeIter,
     ) {
         return 0 as ::core::ffi::c_int;
@@ -3973,7 +3976,7 @@ pub unsafe extern "C" fn decor_virt_lines(
             &raw mut itr as *mut MarkTreeIter,
             end_row,
             0 as ::core::ffi::c_int,
-            &raw const lines_filter as MetaFilter,
+            (lines_filter.ptr() as *const _) as MetaFilter,
         ) {
             break;
         }

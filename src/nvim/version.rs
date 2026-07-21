@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -76,8 +77,8 @@ extern "C" {
     fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
     fn msg_putchar(c: ::core::ffi::c_int);
     fn msg_puts(s: *const ::core::ffi::c_char);
-    static mut default_vim_dir: *mut ::core::ffi::c_char;
-    static mut default_vimruntime_dir: *mut ::core::ffi::c_char;
+    static default_vim_dir: GlobalCell<*mut ::core::ffi::c_char>;
+    static default_vimruntime_dir: GlobalCell<*mut ::core::ffi::c_char>;
     fn ui_has(ext: UIExtension) -> bool;
     fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool;
 }
@@ -2515,37 +2516,38 @@ pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
 pub const NVIM_VERSION_LONG: [::core::ffi::c_char; 13] =
     unsafe { ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"NVIM v0.12.4\0") };
 #[no_mangle]
-pub static mut Versions: [*mut ::core::ffi::c_char; 5] = [
+pub static Versions: GlobalCell<[*mut ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"8.1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"8.2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"9.0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"9.1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"9.2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut longVersion: *mut ::core::ffi::c_char =
-    NVIM_VERSION_LONG.as_ptr() as *mut ::core::ffi::c_char;
+pub static longVersion: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(NVIM_VERSION_LONG.as_ptr() as *mut ::core::ffi::c_char);
 #[no_mangle]
-pub static mut version_buildtype: *mut ::core::ffi::c_char =
-    b"Build type: Debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static version_buildtype: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"Build type: Debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[no_mangle]
-pub static mut version_cflags: *mut ::core::ffi::c_char = b"Compilation: /nix/store/vr15iyyykg9zai6fpgvhcgyw7gckl78w-gcc-wrapper-14.3.0/bin/gcc -g  -Wall -Wextra -pedantic -Wno-unused-parameter -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla -Wdouble-promotion -Wmissing-noreturn -Wmissing-format-attribute -Wmissing-prototypes -Wno-unused-function -fsigned-char -fstack-protector-strong -Wno-conversion -fno-common -Wimplicit-fallthrough -fdiagnostics-color=always -Wno-free-nonheap-object -DHAVE_UNIBILIUM -DNVIM_LOG_DEBUG -DUNIT_TESTING -D_GNU_SOURCE -DUTF8PROC_STATIC -I.deps/usr/include/luajit-2.1 -I.deps/usr/include -Ibuild/src/nvim/auto -Ibuild/include -Ibuild/cmake.config -Isrc -I/nix/store/l1fi677mcxsa175gf0zvpk68kf1calbn-glibc-iconv-2.40/include -I/nix/store/gi4cz4ir3zlwhf1azqfgxqdnczfrwsr7-glibc-2.40-66-dev/include \0"
-    .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-static mut vim_versions: [::core::ffi::c_int; 5] = [
+pub static version_cflags: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(b"Compilation: /nix/store/vr15iyyykg9zai6fpgvhcgyw7gckl78w-gcc-wrapper-14.3.0/bin/gcc -g  -Wall -Wextra -pedantic -Wno-unused-parameter -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla -Wdouble-promotion -Wmissing-noreturn -Wmissing-format-attribute -Wmissing-prototypes -Wno-unused-function -fsigned-char -fstack-protector-strong -Wno-conversion -fno-common -Wimplicit-fallthrough -fdiagnostics-color=always -Wno-free-nonheap-object -DHAVE_UNIBILIUM -DNVIM_LOG_DEBUG -DUNIT_TESTING -D_GNU_SOURCE -DUTF8PROC_STATIC -I.deps/usr/include/luajit-2.1 -I.deps/usr/include -Ibuild/src/nvim/auto -Ibuild/include -Ibuild/cmake.config -Isrc -I/nix/store/l1fi677mcxsa175gf0zvpk68kf1calbn-glibc-iconv-2.40/include -I/nix/store/gi4cz4ir3zlwhf1azqfgxqdnczfrwsr7-glibc-2.40-66-dev/include \0"
+    .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
+static vim_versions: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
     801 as ::core::ffi::c_int,
     802 as ::core::ffi::c_int,
     900 as ::core::ffi::c_int,
     901 as ::core::ffi::c_int,
     902 as ::core::ffi::c_int,
-];
-static mut num_patches: [::core::ffi::c_int; 5] = [
+]);
+static num_patches: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
     2331 as ::core::ffi::c_int,
     3803 as ::core::ffi::c_int,
     1574 as ::core::ffi::c_int,
     1612 as ::core::ffi::c_int,
     121 as ::core::ffi::c_int,
-];
-static mut c2rust_lvalue: [::core::ffi::c_int; 2331] = [
+]);
+static c2rust_lvalue: GlobalCell<[::core::ffi::c_int; 2331]> = GlobalCell::new([
     2424, 2423, 2422, 2421, 2420, 2419, 2417, 2416, 2414, 2413, 2412, 2411, 2410, 2409, 2408, 2407,
     2406, 2405, 2404, 2403, 2402, 2401, 2400, 2398, 2397, 2396, 2395, 2394, 2393, 2392, 2391, 2390,
     2389, 2388, 2387, 2385, 2384, 2383, 2382, 2380, 2379, 2378, 2377, 2376, 2375, 2374, 2373, 2372,
@@ -2681,8 +2683,8 @@ static mut c2rust_lvalue: [::core::ffi::c_int; 2331] = [
     67, 66, 65, 64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44,
     43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20,
     19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-];
-static mut c2rust_lvalue_0: [::core::ffi::c_int; 3803] = [
+]);
+static c2rust_lvalue_0: GlobalCell<[::core::ffi::c_int; 3803]> = GlobalCell::new([
     5171, 5170, 5168, 5167, 5166, 5165, 5164, 5163, 5162, 5161, 5159, 5158, 5157, 5155, 5154, 5153,
     5152, 5151, 5150, 5149, 5148, 5146, 5145, 5142, 5138, 5137, 5135, 5133, 5132, 5130, 5126, 5125,
     5123, 5122, 5121, 5120, 5119, 5117, 5116, 5110, 5109, 5108, 5107, 5106, 5105, 5104, 5103, 5102,
@@ -2912,8 +2914,8 @@ static mut c2rust_lvalue_0: [::core::ffi::c_int; 3803] = [
     62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 47, 46, 45, 44, 42, 41, 40, 39, 38, 37,
     36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 19, 18, 17, 16, 15, 14, 13, 12, 10,
     9, 8, 7, 6, 5, 4, 3, 2, 1,
-];
-static mut c2rust_lvalue_1: [::core::ffi::c_int; 1574] = [
+]);
+static c2rust_lvalue_1: GlobalCell<[::core::ffi::c_int; 1574]> = GlobalCell::new([
     2190, 2189, 2188, 2187, 2185, 2183, 2182, 2180, 2179, 2178, 2177, 2175, 2173, 2168, 2166, 2163,
     2161, 2159, 2158, 2155, 2154, 2151, 2150, 2149, 2148, 2146, 2145, 2143, 2142, 2141, 2140, 2139,
     2138, 2137, 2136, 2135, 2134, 2133, 2131, 2129, 2128, 2126, 2125, 2124, 2122, 2121, 2120, 2119,
@@ -3005,8 +3007,8 @@ static mut c2rust_lvalue_1: [::core::ffi::c_int; 1574] = [
     81, 79, 77, 76, 74, 73, 71, 70, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59, 57, 55, 54, 53, 52, 51,
     50, 49, 48, 47, 46, 45, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 31, 30, 29, 26, 25, 24, 23,
     22, 21, 20, 19, 18, 17, 16, 15, 12, 11, 10, 9, 8, 6, 5, 4, 3, 2, 1,
-];
-static mut c2rust_lvalue_2: [::core::ffi::c_int; 1612] = [
+]);
+static c2rust_lvalue_2: GlobalCell<[::core::ffi::c_int; 1612]> = GlobalCell::new([
     2147, 2146, 2138, 2136, 2135, 2133, 2132, 2130, 2128, 2127, 2125, 2123, 2122, 2119, 2118, 2117,
     2116, 2112, 2111, 2110, 2109, 2108, 2107, 2105, 2103, 2102, 2101, 2100, 2099, 2098, 2097, 2096,
     2095, 2094, 2093, 2091, 2090, 2088, 2087, 2086, 2085, 2079, 2078, 2075, 2074, 2073, 2071, 2070,
@@ -3100,24 +3102,24 @@ static mut c2rust_lvalue_2: [::core::ffi::c_int; 1612] = [
     77, 76, 75, 74, 73, 72, 68, 67, 66, 65, 63, 61, 60, 59, 58, 56, 54, 52, 49, 48, 47, 46, 43, 42,
     41, 40, 39, 38, 37, 36, 35, 33, 32, 31, 25, 23, 22, 21, 20, 18, 16, 15, 14, 13, 12, 11, 10, 9,
     8, 7, 5, 4, 3, 2, 1,
-];
-static mut c2rust_lvalue_3: [::core::ffi::c_int; 121] = [
+]);
+static c2rust_lvalue_3: GlobalCell<[::core::ffi::c_int; 121]> = GlobalCell::new([
     239, 237, 235, 233, 231, 230, 226, 225, 224, 223, 222, 220, 219, 217, 210, 209, 204, 202, 201,
     191, 188, 187, 183, 182, 180, 177, 176, 174, 173, 170, 166, 165, 162, 159, 157, 156, 155, 154,
     152, 148, 147, 146, 143, 142, 141, 140, 137, 136, 133, 132, 131, 130, 128, 125, 124, 123, 122,
     121, 120, 114, 109, 108, 106, 105, 102, 97, 91, 90, 88, 87, 86, 84, 82, 81, 78, 77, 75, 74, 71,
     70, 67, 66, 65, 64, 63, 62, 61, 59, 58, 57, 56, 55, 54, 52, 47, 46, 44, 41, 40, 38, 36, 33, 32,
     31, 30, 28, 27, 25, 24, 23, 22, 20, 18, 13, 12, 10, 9, 8, 7, 4, 1,
-];
-static mut included_patchsets: [*const ::core::ffi::c_int; 5] = unsafe {
+]);
+static included_patchsets: GlobalCell<[*const ::core::ffi::c_int; 5]> = GlobalCell::new(unsafe {
     [
-        &raw const c2rust_lvalue as *const ::core::ffi::c_int,
-        &raw const c2rust_lvalue_0 as *const ::core::ffi::c_int,
-        &raw const c2rust_lvalue_1 as *const ::core::ffi::c_int,
-        &raw const c2rust_lvalue_2 as *const ::core::ffi::c_int,
-        &raw const c2rust_lvalue_3 as *const ::core::ffi::c_int,
+        (c2rust_lvalue.as_raw() as *const _) as *const ::core::ffi::c_int,
+        (c2rust_lvalue_0.as_raw() as *const _) as *const ::core::ffi::c_int,
+        (c2rust_lvalue_1.as_raw() as *const _) as *const ::core::ffi::c_int,
+        (c2rust_lvalue_2.as_raw() as *const _) as *const ::core::ffi::c_int,
+        (c2rust_lvalue_3.as_raw() as *const _) as *const ::core::ffi::c_int,
     ]
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn has_nvim_version(version_str: *const ::core::ffi::c_char) -> bool {
     let mut p: *const ::core::ffi::c_char = version_str;
@@ -3150,11 +3152,11 @@ pub unsafe extern "C" fn has_nvim_version(version_str: *const ::core::ffi::c_cha
 }
 #[no_mangle]
 pub unsafe extern "C" fn min_vim_version() -> ::core::ffi::c_int {
-    return vim_versions[0 as ::core::ffi::c_int as usize];
+    return (*vim_versions.ptr())[0 as ::core::ffi::c_int as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn highest_patch() -> ::core::ffi::c_int {
-    return *included_patchsets[0 as ::core::ffi::c_int as usize]
+    return *(*included_patchsets.ptr())[0 as ::core::ffi::c_int as usize]
         .offset(0 as ::core::ffi::c_int as isize);
 }
 #[no_mangle]
@@ -3164,7 +3166,7 @@ pub unsafe extern "C" fn has_vim_patch(
 ) -> bool {
     let mut v_i: ::core::ffi::c_int = 0;
     if major_minor_version > 0 as ::core::ffi::c_int {
-        if major_minor_version < vim_versions[0 as ::core::ffi::c_int as usize] {
+        if major_minor_version < (*vim_versions.ptr())[0 as ::core::ffi::c_int as usize] {
             return true_0 != 0;
         }
         let size: size_t = ::core::mem::size_of::<[::core::ffi::c_int; 5]>()
@@ -3177,7 +3179,7 @@ pub unsafe extern "C" fn has_vim_patch(
         v_i = -1 as ::core::ffi::c_int;
         let mut i: size_t = 0 as size_t;
         while i < size {
-            if vim_versions[i as usize] == major_minor_version {
+            if (*vim_versions.ptr())[i as usize] == major_minor_version {
                 v_i = i as ::core::ffi::c_int;
                 break;
             } else {
@@ -3191,16 +3193,16 @@ pub unsafe extern "C" fn has_vim_patch(
         v_i = 0 as ::core::ffi::c_int;
     }
     let mut l: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut h: ::core::ffi::c_int = num_patches[v_i as usize] - 1 as ::core::ffi::c_int;
+    let mut h: ::core::ffi::c_int = (*num_patches.ptr())[v_i as usize] - 1 as ::core::ffi::c_int;
     loop {
         let m: ::core::ffi::c_int = (l + h) / 2 as ::core::ffi::c_int;
-        if *included_patchsets[v_i as usize].offset(m as isize) == n {
+        if *(*included_patchsets.ptr())[v_i as usize].offset(m as isize) == n {
             return true_0 != 0;
         }
         if l == h {
             break;
         }
-        if *included_patchsets[v_i as usize].offset(m as isize) < n {
+        if *(*included_patchsets.ptr())[v_i as usize].offset(m as isize) < n {
             h = m;
         } else {
             l = m + 1 as ::core::ffi::c_int;
@@ -3375,9 +3377,9 @@ pub unsafe extern "C" fn list_lua_version() {
 #[no_mangle]
 pub unsafe extern "C" fn list_version() {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-    msg_puts(longVersion);
+    msg_puts(longVersion.get());
     msg_putchar('\n' as ::core::ffi::c_int);
-    msg_puts(version_buildtype);
+    msg_puts(version_buildtype.get());
     msg_putchar('\n' as ::core::ffi::c_int);
     list_lua_version();
     if p_verbose > 0 as OptInt {
@@ -3395,31 +3397,31 @@ pub unsafe extern "C" fn list_version() {
             if i != 0 {
                 msg_puts(b", \0".as_ptr() as *const ::core::ffi::c_char);
             }
-            msg_puts(Versions[i as usize]);
+            msg_puts((*Versions.ptr())[i as usize]);
             i = i.wrapping_add(1);
         }
         msg_putchar('\n' as ::core::ffi::c_int);
-        msg_puts(version_cflags);
+        msg_puts(version_cflags.get());
         version_msg(b"\n\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
         version_msg(gettext(
             b"   system vimrc file: \"\0".as_ptr() as *const ::core::ffi::c_char
         ));
         version_msg(SYS_VIMRC_FILE.as_ptr() as *mut ::core::ffi::c_char);
         version_msg(b"\"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
-        if *default_vim_dir as ::core::ffi::c_int != NUL {
+        if *default_vim_dir.get() as ::core::ffi::c_int != NUL {
             version_msg(gettext(
                 b"  fall-back for $VIM: \"\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            version_msg(default_vim_dir);
+            version_msg(default_vim_dir.get());
             version_msg(
                 b"\"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char
             );
         }
-        if *default_vimruntime_dir as ::core::ffi::c_int != NUL {
+        if *default_vimruntime_dir.get() as ::core::ffi::c_int != NUL {
             version_msg(gettext(
                 b" f-b for $VIMRUNTIME: \"\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            version_msg(default_vimruntime_dir);
+            version_msg(default_vimruntime_dir.get());
             version_msg(
                 b"\"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char
             );
@@ -3446,7 +3448,7 @@ pub unsafe extern "C" fn may_show_intro() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn intro_message(mut colon: bool) {
-    static mut lines: [*mut ::core::ffi::c_char; 18] = [
+    static lines: GlobalCell<[*mut ::core::ffi::c_char; 18]> = GlobalCell::new([
         b"\xE2\x94\x82 \xE2\x95\xB2 \xE2\x94\x82\xE2\x94\x82\0".as_ptr()
             as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"\xE2\x94\x82\xE2\x94\x82\xE2\x95\xB2\xE2\x95\xB2\xE2\x94\x82\xE2\x94\x82\0"
@@ -3482,7 +3484,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
             as *mut ::core::ffi::c_char,
         b"type  :help Kuwasha<Enter>  for information \0".as_ptr()
             as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    ]);
     let mut lines_size: size_t = ::core::mem::size_of::<[*mut ::core::ffi::c_char; 18]>()
         .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
         .wrapping_div(
@@ -3522,7 +3524,8 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
                     == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int
         {
-            let mut p: *mut ::core::ffi::c_char = lines[i as usize] as *mut ::core::ffi::c_char;
+            let mut p: *mut ::core::ffi::c_char =
+                (*lines.ptr())[i as usize] as *mut ::core::ffi::c_char;
             let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut mesg_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             if !strstr(p, b"news\0".as_ptr() as *const ::core::ffi::c_char).is_null() {

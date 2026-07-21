@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -181,7 +182,7 @@ extern "C" {
     ) -> size_t;
     fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict;
     fn channel_all_info(arena: *mut Arena) -> Array;
-    static mut kCtxAll: ::core::ffi::c_int;
+    static kCtxAll: GlobalCell<::core::ffi::c_int>;
     fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T;
     fn ctx_free(ctx: *mut Context);
     fn ctx_save(ctx: *mut Context, flags: ::core::ffi::c_int);
@@ -309,7 +310,7 @@ extern "C" {
     fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
-    static mut color_name_table: [color_name_table_T; 708];
+    static color_name_table: GlobalCell<[color_name_table_T; 708]>;
     fn get_cot_flags() -> ::core::ffi::c_uint;
     fn name_to_mod_mask(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn replace_termcodes(
@@ -4449,7 +4450,7 @@ pub const KEYSET_OPTIDX_redraw__flush: ::core::ffi::c_int = 3 as ::core::ffi::c_
 pub const KEYSET_OPTIDX_redraw__range: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__valid: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_uint64_t_ptr_t(
@@ -4458,7 +4459,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -5943,7 +5944,7 @@ pub unsafe extern "C" fn nvim_paste(
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    static mut cancelled: bool = false_0 != 0;
+    static cancelled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if !(phase >= -1 as Integer && phase <= 3 as Integer) {
         api_err_invalid(
             err,
@@ -5956,11 +5957,11 @@ pub unsafe extern "C" fn nvim_paste(
     }
     's_151: {
         if phase == -1 as Integer || phase == 1 as Integer {
-            cancelled = false_0 != 0;
+            cancelled.set(false_0 != 0);
             if !(*curbuf).terminal.is_null() {
                 terminal_set_streamed_paste((*curbuf).terminal, true_0 != 0);
             }
-        } else if cancelled {
+        } else if cancelled.get() {
             break 's_151;
         }
         lines = string_to_array(data, crlf as bool, arena);
@@ -6004,22 +6005,24 @@ pub unsafe extern "C" fn nvim_paste(
                 == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                 && !rv.data.boolean
         {
-            cancelled = true_0 != 0;
+            cancelled.set(true_0 != 0);
         }
-        if (phase == -1 as Integer || phase == 3 as Integer || cancelled as ::core::ffi::c_int != 0)
+        if (phase == -1 as Integer
+            || phase == 3 as Integer
+            || cancelled.get() as ::core::ffi::c_int != 0)
             && !(*curbuf).terminal.is_null()
         {
             terminal_set_streamed_paste((*curbuf).terminal, false_0 != 0);
         }
-        if !cancelled && (phase == -1 as Integer || phase == 1 as Integer) {
+        if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
             paste_store(channel_id, kFalse, NULL_STRING, crlf as bool);
         }
-        if !cancelled {
+        if !cancelled.get() {
             paste_store(channel_id, kNone, data, crlf as bool);
         }
         if phase == 3 as Integer
             || phase
-                == (if cancelled as ::core::ffi::c_int != 0 {
+                == (if cancelled.get() as ::core::ffi::c_int != 0 {
                     2 as ::core::ffi::c_int
                 } else {
                     -1 as ::core::ffi::c_int
@@ -6028,9 +6031,9 @@ pub unsafe extern "C" fn nvim_paste(
             paste_store(channel_id, kTrue, NULL_STRING, crlf as bool);
         }
     }
-    let mut retval: bool = !cancelled;
+    let mut retval: bool = !cancelled.get();
     if phase == -1 as Integer || phase == 3 as Integer {
-        cancelled = false_0 != 0;
+        cancelled.set(false_0 != 0);
     }
     return retval as Boolean;
 }
@@ -6148,15 +6151,15 @@ pub unsafe extern "C" fn nvim_get_color_map(mut arena: *mut Arena) -> Dict {
             ),
     );
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while !color_name_table[i as usize].name.is_null() {
+    while !(*color_name_table.ptr())[i as usize].name.is_null() {
         let c2rust_fresh9 = colors.size;
         colors.size = colors.size.wrapping_add(1);
         *colors.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-            key: cstr_as_string(color_name_table[i as usize].name),
+            key: cstr_as_string((*color_name_table.ptr())[i as usize].name),
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
-                    integer: color_name_table[i as usize].color as Integer,
+                    integer: (*color_name_table.ptr())[i as usize].color as Integer,
                 },
             },
         };
@@ -6184,7 +6187,7 @@ pub unsafe extern "C" fn nvim_get_context(
     let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
-        kCtxAll
+        kCtxAll.get()
     };
     if types.size > 0 as size_t {
         let mut i: size_t = 0 as size_t;
@@ -6237,7 +6240,7 @@ pub unsafe extern "C" fn nvim_load_context(mut dict: Dict, mut err: *mut Error) 
     did_emsg = false_0;
     ctx_from_dict(dict, &raw mut ctx, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        ctx_restore(&raw mut ctx, kCtxAll);
+        ctx_restore(&raw mut ctx, kCtxAll.get());
     }
     ctx_free(&raw mut ctx);
     did_emsg = save_did_emsg;

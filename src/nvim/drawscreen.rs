@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2645,15 +2646,15 @@ pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-static mut redraw_popupmenu: bool = false_0 != 0;
-static mut msg_grid_invalid: bool = false_0 != 0;
-static mut resizing_autocmd: bool = false_0 != 0;
-static mut conceal_cursor_used: bool = false_0 != 0;
+static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn conceal_check_cursor_line() {
     let mut should_conceal: bool = conceal_cursor_line(curwin);
     if (*curwin).w_onebuf_opt.wo_cole <= 0 as OptInt
-        || conceal_cursor_used as ::core::ffi::c_int == should_conceal as ::core::ffi::c_int
+        || conceal_cursor_used.get() as ::core::ffi::c_int == should_conceal as ::core::ffi::c_int
     {
         return;
     }
@@ -2669,16 +2670,16 @@ pub unsafe extern "C" fn conceal_check_cursor_line() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn default_grid_alloc() -> bool {
-    static mut resizing: bool = false_0 != 0;
-    if resizing {
+    static resizing: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if resizing.get() {
         return false_0 != 0;
     }
-    resizing = true_0 != 0;
+    resizing.set(true_0 != 0);
     if !default_grid.chars.is_null() && Rows == default_grid.rows && Columns == default_grid.cols
         || Rows == 0 as ::core::ffi::c_int
         || Columns == 0 as ::core::ffi::c_int
     {
-        resizing = false_0 != 0;
+        resizing.set(false_0 != 0);
         return false_0 != 0;
     }
     grid_alloc(
@@ -2697,7 +2698,7 @@ pub unsafe extern "C" fn default_grid_alloc() -> bool {
     default_grid.comp_height = Rows;
     default_grid.comp_width = Columns;
     default_grid.handle = DEFAULT_GRID_HANDLE as handle_T;
-    resizing = false_0 != 0;
+    resizing.set(false_0 != 0);
     return true_0 != 0;
 }
 #[no_mangle]
@@ -2725,7 +2726,7 @@ pub unsafe extern "C" fn screenclear() {
     cmdline_was_last_drawn = false_0 != 0;
     redraw_cmdline = true_0 != 0;
     redraw_tabline = true_0 != 0;
-    redraw_popupmenu = true_0 != 0;
+    redraw_popupmenu.set(true_0 != 0);
     pum_invalidate();
     let mut wp: *mut win_T = if curtab == curtab {
         firstwin
@@ -2753,7 +2754,7 @@ pub unsafe extern "C" fn screenclear() {
     {
         grid_invalidate(&raw mut msg_grid);
         msg_grid_validate();
-        msg_grid_invalid = false_0 != 0;
+        msg_grid_invalid.set(false_0 != 0);
         clear_cmdline = true_0 != 0;
     }
 }
@@ -2817,11 +2818,11 @@ pub unsafe extern "C" fn screen_resize(
     p_columns = Columns as OptInt;
     ui_call_grid_resize(1 as Integer, width as Integer, height as Integer);
     let mut retry_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    resizing_autocmd = true_0 != 0;
+    resizing_autocmd.set(true_0 != 0);
     while default_grid_alloc() {
         ui_comp_set_screen_valid(false_0 != 0);
         if !msg_grid.chars.is_null() {
-            msg_grid_invalid = true_0 != 0;
+            msg_grid_invalid.set(true_0 != 0);
         }
         RedrawingDisabled += 1;
         win_new_screensize();
@@ -2839,7 +2840,7 @@ pub unsafe extern "C" fn screen_resize(
             curbuf,
         );
     }
-    resizing_autocmd = false_0 != 0;
+    resizing_autocmd.set(false_0 != 0);
     redraw_all_later(UPD_CLEAR as ::core::ffi::c_int);
     if State != MODE_ASKMORE as ::core::ffi::c_int && State != MODE_EXTERNCMD as ::core::ffi::c_int
     {
@@ -2868,7 +2869,7 @@ pub unsafe extern "C" fn screen_resize(
                 do_check_scrollbind(true_0 != 0);
             }
             if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
-                redraw_popupmenu = false_0 != 0;
+                redraw_popupmenu.set(false_0 != 0);
                 update_screen();
                 redrawcmdline();
                 if pum_drawn() {
@@ -2877,7 +2878,7 @@ pub unsafe extern "C" fn screen_resize(
             } else {
                 update_topline(curwin);
                 if pum_drawn() {
-                    redraw_popupmenu = false_0 != 0;
+                    redraw_popupmenu.set(false_0 != 0);
                     ins_compl_show_pum();
                 }
                 update_screen();
@@ -2928,15 +2929,15 @@ pub unsafe extern "C" fn redrawing() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn update_screen() -> ::core::ffi::c_int {
-    static mut still_may_intro: bool = true_0 != 0;
-    if still_may_intro {
+    static still_may_intro: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
+    if still_may_intro.get() {
         if !may_show_intro() {
             redraw_later(firstwin, UPD_NOT_VALID as ::core::ffi::c_int);
-            still_may_intro = false_0 != 0;
+            still_may_intro.set(false_0 != 0);
         }
     }
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
-    if resizing_autocmd as ::core::ffi::c_int != 0 || default_grid.chars.is_null() {
+    if resizing_autocmd.get() as ::core::ffi::c_int != 0 || default_grid.chars.is_null() {
         return FAIL;
     }
     if need_diff_redraw {
@@ -2966,7 +2967,7 @@ pub unsafe extern "C" fn update_screen() -> ::core::ffi::c_int {
     if type_0 >= UPD_CLEAR as ::core::ffi::c_int || !default_grid.valid {
         ui_comp_set_screen_valid(false_0 != 0);
     }
-    if msg_scrolled != 0 || msg_grid_invalid as ::core::ffi::c_int != 0 {
+    if msg_scrolled != 0 || msg_grid_invalid.get() as ::core::ffi::c_int != 0 {
         clear_cmdline = true_0 != 0;
         let mut valid: ::core::ffi::c_int = if Rows - msg_scrollsize() > 0 as ::core::ffi::c_int {
             Rows - msg_scrollsize()
@@ -3038,7 +3039,7 @@ pub unsafe extern "C" fn update_screen() -> ::core::ffi::c_int {
             }
         }
         msg_grid_set_pos(Rows - p_ch as ::core::ffi::c_int, false_0 != 0);
-        msg_grid_invalid = false_0 != 0;
+        msg_grid_invalid.set(false_0 != 0);
         if was_invalidated {
             ui_comp_set_screen_valid(true_0 != 0);
         }
@@ -3222,7 +3223,7 @@ pub unsafe extern "C" fn update_screen() -> ::core::ffi::c_int {
     {
         showmode();
     }
-    if still_may_intro {
+    if still_may_intro.get() {
         intro_message(false_0 != 0);
     }
     repeat_message();
@@ -4018,7 +4019,7 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
     let mut scrolled_for_mod: bool = false_0 != 0;
     let mut top_to_mod: bool = false_0 != 0;
     let mut bot_scroll_start: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut did_update: C2Rust_Unnamed_25 = DID_NONE;
     let mut syntax_last_parsed: linenr_T = 0 as linenr_T;
     let mut mod_top: linenr_T = 0 as linenr_T;
@@ -4048,12 +4049,12 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
     decor_providers_invoke_win(wp);
     if !(*buf).terminal.is_null() && terminal_suspended((*buf).terminal) as ::core::ffi::c_int != 0
     {
-        static mut chunk: VirtTextChunk = VirtTextChunk {
+        static chunk: GlobalCell<VirtTextChunk> = GlobalCell::new(VirtTextChunk {
             text: b"[Process suspended]\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             hl_id: -1 as ::core::ffi::c_int,
-        };
-        static mut virt_text: DecorVirtText = unsafe {
+        });
+        static virt_text: GlobalCell<DecorVirtText> = GlobalCell::new(unsafe {
             DecorVirtText {
                 flags: 0,
                 hl_mode: 0,
@@ -4065,19 +4066,19 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
                     virt_text: VirtText {
                         size: 1 as size_t,
                         capacity: 0,
-                        items: &raw const chunk as *mut VirtTextChunk,
+                        items: (chunk.as_raw() as *const _) as *mut VirtTextChunk,
                     },
                 },
                 next: ::core::ptr::null_mut::<DecorVirtText>(),
             }
-        };
+        });
         decor_range_add_virt(
             &raw mut decor_state,
             (*buf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
             (*buf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            &raw mut virt_text,
+            virt_text.ptr(),
             false_0 != 0,
         );
     }
@@ -4672,7 +4673,7 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
     };
     win_update_cursorline(wp, &raw mut cursorline_fi);
     if wp == curwin {
-        conceal_cursor_used = conceal_cursor_line(curwin);
+        conceal_cursor_used.set(conceal_cursor_line(curwin));
     }
     win_check_ns_hl(wp);
     let mut spv: spellvars_T = spellvars_T {
@@ -5340,8 +5341,8 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
     if dollar_vcol == -1 as ::core::ffi::c_int || wp != curwin {
         (*wp).w_valid |= VALID_BOTLINE;
         (*wp).w_viewport_invalid = true_0 != 0;
-        if wp == curwin && (*wp).w_botline != old_botline && !recursive {
-            recursive = true_0 != 0;
+        if wp == curwin && (*wp).w_botline != old_botline && !recursive.get() {
+            recursive.set(true_0 != 0);
             (*curwin).w_valid &= !VALID_TOPLINE;
             update_topline(curwin);
             if must_redraw != 0 as ::core::ffi::c_int {
@@ -5352,7 +5353,7 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
                 must_redraw = 0 as ::core::ffi::c_int;
                 (*curbuf).b_mod_set = mod_set != 0;
             }
-            recursive = false_0 != 0;
+            recursive.set(false_0 != 0);
         }
     }
     if nrwidth_before != (*wp).w_nrwidth && !(*buf).terminal.is_null() {

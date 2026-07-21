@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2872,11 +2873,12 @@ pub const BF_SYN_SET: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut e_compiler_not_supported_str: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-        *b"E666: Compiler not supported: %s\0",
-    )
-};
+static e_compiler_not_supported_str: GlobalCell<[::core::ffi::c_char; 33]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+            *b"E666: Compiler not supported: %s\0",
+        )
+    });
 #[no_mangle]
 pub unsafe extern "C" fn ex_ruby(mut eap: *mut exarg_T) {
     script_host_execute(
@@ -3819,7 +3821,7 @@ pub unsafe extern "C" fn ex_compiler(mut eap: *mut exarg_T) {
     );
     if source_runtime_vim_lua(buf, DIP_ALL as ::core::ffi::c_int) == FAIL {
         semsg(
-            gettext(&raw const e_compiler_not_supported_str as *const ::core::ffi::c_char),
+            gettext((e_compiler_not_supported_str.ptr() as *const _) as *const ::core::ffi::c_char),
             (*eap).arg,
         );
     }

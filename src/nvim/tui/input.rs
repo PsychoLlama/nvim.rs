@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     pub type TUIData;
@@ -1159,7 +1160,7 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -1203,13 +1204,13 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
 }
 pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-static mut kitty_key_map_entry: [kitty_key_map_entry; 77] = [
+static kitty_key_map_entry: GlobalCell<[kitty_key_map_entry; 77]> = GlobalCell::new([
     kitty_key_map_entry {
         key: KITTY_KEY_ESCAPE as ::core::ffi::c_int,
         name: b"Esc\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1518,8 +1519,8 @@ static mut kitty_key_map_entry: [kitty_key_map_entry; 77] = [
         key: KITTY_KEY_KP_BEGIN as ::core::ffi::c_int,
         name: b"kOrigin\0".as_ptr() as *const ::core::ffi::c_char,
     },
-];
-static mut kitty_key_map: Map_int_ptr_t = MAP_INIT;
+]);
+static kitty_key_map: GlobalCell<Map_int_ptr_t> = GlobalCell::new(MAP_INIT);
 #[no_mangle]
 pub unsafe extern "C" fn tinput_init(
     mut input: *mut TermInput,
@@ -1554,9 +1555,9 @@ pub unsafe extern "C" fn tinput_init(
         )
     {
         map_put_int_ptr_t(
-            &raw mut kitty_key_map,
-            kitty_key_map_entry[i as usize].key,
-            kitty_key_map_entry[i as usize].name as ptr_t,
+            kitty_key_map.ptr(),
+            (*kitty_key_map_entry.ptr())[i as usize].key,
+            (*kitty_key_map_entry.ptr())[i as usize].name as ptr_t,
         );
         i = i.wrapping_add(1);
     }
@@ -1585,11 +1586,11 @@ pub unsafe extern "C" fn tinput_init(
 }
 #[no_mangle]
 pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
-    xfree(kitty_key_map.set.keys as *mut ::core::ffi::c_void);
-    xfree(kitty_key_map.set.h.hash as *mut ::core::ffi::c_void);
-    kitty_key_map.set = SET_INIT;
+    xfree((*kitty_key_map.ptr()).set.keys as *mut ::core::ffi::c_void);
+    xfree((*kitty_key_map.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+    (*kitty_key_map.ptr()).set = SET_INIT;
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut kitty_key_map.values as *mut *mut ::core::ffi::c_void;
+        &raw mut (*kitty_key_map.ptr()).values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -1789,8 +1790,7 @@ unsafe extern "C" fn handle_kitty_key_protocol(
     mut key: *mut TermKeyKey,
 ) {
     let mut name: *const ::core::ffi::c_char =
-        map_get_int_ptr_t(&raw mut kitty_key_map, (*key).code.codepoint)
-            as *const ::core::ffi::c_char;
+        map_get_int_ptr_t(kitty_key_map.ptr(), (*key).code.codepoint) as *const ::core::ffi::c_char;
     if !name.is_null() {
         let mut buf: [::core::ffi::c_char; 64] = [0; 64];
         let mut len: size_t = 0 as size_t;
@@ -1834,7 +1834,9 @@ unsafe extern "C" fn forward_simple_utf8(mut input: *mut TermInput, mut key: *mu
     let mut ptr: *mut ::core::ffi::c_char = &raw mut (*key).utf8 as *mut ::core::ffi::c_char;
     if (*key).code.codepoint >= 0xe000 as ::core::ffi::c_int
         && (*key).code.codepoint <= 0xf8ff as ::core::ffi::c_int
-        && set_has_int(&raw mut kitty_key_map.set, (*key).code.codepoint) as ::core::ffi::c_int != 0
+        && set_has_int(&raw mut (*kitty_key_map.ptr()).set, (*key).code.codepoint)
+            as ::core::ffi::c_int
+            != 0
     {
         handle_kitty_key_protocol(input, key);
         return;
@@ -1902,7 +1904,8 @@ unsafe extern "C" fn forward_modified_utf8(mut input: *mut TermInput, mut key: *
         };
         if (*key).code.codepoint >= 0xe000 as ::core::ffi::c_int
             && (*key).code.codepoint <= 0xf8ff as ::core::ffi::c_int
-            && set_has_int(&raw mut kitty_key_map.set, (*key).code.codepoint) as ::core::ffi::c_int
+            && set_has_int(&raw mut (*kitty_key_map.ptr()).set, (*key).code.codepoint)
+                as ::core::ffi::c_int
                 != 0
         {
             handle_kitty_key_protocol(input, key);
@@ -2002,7 +2005,8 @@ unsafe extern "C" fn forward_mouse_event(mut input: *mut TermInput, mut key: *mu
     let mut button: ::core::ffi::c_int = 0;
     let mut row: ::core::ffi::c_int = 0;
     let mut col: ::core::ffi::c_int = 0;
-    static mut last_pressed_button: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static last_pressed_button: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
     let mut ev: TermKeyMouseEvent = TERMKEY_MOUSE_UNKNOWN;
     termkey_interpret_mouse(
         (*input).tk,
@@ -2018,7 +2022,7 @@ unsafe extern "C" fn forward_mouse_event(mut input: *mut TermInput, mut key: *mu
             == TERMKEY_MOUSE_DRAG as ::core::ffi::c_int as ::core::ffi::c_uint)
         && button == 0 as ::core::ffi::c_int
     {
-        button = last_pressed_button;
+        button = last_pressed_button.get();
     }
     if button == 0 as ::core::ffi::c_int
         && ev as ::core::ffi::c_uint
@@ -2105,7 +2109,7 @@ unsafe extern "C" fn forward_mouse_event(mut input: *mut TermInput, mut key: *mu
                     ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(len),
                     b"Mouse\0".as_ptr() as *const ::core::ffi::c_char,
                 ) as size_t);
-                last_pressed_button = button;
+                last_pressed_button.set(button);
             }
         }
         2 => {
@@ -2125,7 +2129,7 @@ unsafe extern "C" fn forward_mouse_event(mut input: *mut TermInput, mut key: *mu
                     b"MouseMove\0".as_ptr() as *const ::core::ffi::c_char
                 },
             ) as size_t);
-            last_pressed_button = 0 as ::core::ffi::c_int;
+            last_pressed_button.set(0 as ::core::ffi::c_int);
         }
         0 => {
             abort();

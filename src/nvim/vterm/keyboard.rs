@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     fn __assert_fail(
@@ -948,7 +949,7 @@ pub unsafe extern "C" fn vterm_keyboard_unichar(
         c,
     );
 }
-static mut keycodes: [keycodes_s; 15] = [
+static keycodes: GlobalCell<[keycodes_s; 15]> = GlobalCell::new([
     keycodes_s {
         type_0: KEYCODE_NONE,
         literal: NUL,
@@ -1024,8 +1025,8 @@ static mut keycodes: [keycodes_s; 15] = [
         literal: '~' as ::core::ffi::c_int,
         csinum: 6 as ::core::ffi::c_int,
     },
-];
-static mut keycodes_fn: [keycodes_s; 13] = [
+]);
+static keycodes_fn: GlobalCell<[keycodes_s; 13]> = GlobalCell::new([
     keycodes_s {
         type_0: KEYCODE_NONE,
         literal: NUL,
@@ -1091,8 +1092,8 @@ static mut keycodes_fn: [keycodes_s; 13] = [
         literal: '~' as ::core::ffi::c_int,
         csinum: 24 as ::core::ffi::c_int,
     },
-];
-static mut keycodes_kp: [keycodes_s; 18] = [
+]);
+static keycodes_kp: GlobalCell<[keycodes_s; 18]> = GlobalCell::new([
     keycodes_s {
         type_0: KEYCODE_KEYPAD,
         literal: '0' as ::core::ffi::c_int,
@@ -1183,8 +1184,8 @@ static mut keycodes_kp: [keycodes_s; 18] = [
         literal: '=' as ::core::ffi::c_int,
         csinum: 'X' as ::core::ffi::c_int,
     },
-];
-static mut keycodes_kp_csiu: [keycodes_s; 18] = [
+]);
+static keycodes_kp_csiu: GlobalCell<[keycodes_s; 18]> = GlobalCell::new([
     keycodes_s {
         type_0: KEYCODE_KEYPAD,
         literal: 57399 as ::core::ffi::c_int,
@@ -1275,7 +1276,7 @@ static mut keycodes_kp_csiu: [keycodes_s; 18] = [
         literal: 57415 as ::core::ffi::c_int,
         csinum: 'X' as ::core::ffi::c_int,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn vterm_keyboard_key(
     mut vt: *mut VTerm,
@@ -1300,7 +1301,7 @@ pub unsafe extern "C" fn vterm_keyboard_key(
         {
             return;
         }
-        k = keycodes[key as usize];
+        k = (*keycodes.ptr())[key as usize];
     } else if key as ::core::ffi::c_uint
         >= VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint
         && key as ::core::ffi::c_uint
@@ -1314,7 +1315,7 @@ pub unsafe extern "C" fn vterm_keyboard_key(
         {
             return;
         }
-        k = keycodes_fn[(key as ::core::ffi::c_uint)
+        k = (*keycodes_fn.ptr())[(key as ::core::ffi::c_uint)
             .wrapping_sub(VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
             as usize];
     } else if key as ::core::ffi::c_uint
@@ -1329,11 +1330,11 @@ pub unsafe extern "C" fn vterm_keyboard_key(
             return;
         }
         if flags.disambiguate() {
-            k = keycodes_kp_csiu[(key as ::core::ffi::c_uint)
+            k = (*keycodes_kp_csiu.ptr())[(key as ::core::ffi::c_uint)
                 .wrapping_sub(VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
                 as usize];
         } else {
-            k = keycodes_kp[(key as ::core::ffi::c_uint)
+            k = (*keycodes_kp.ptr())[(key as ::core::ffi::c_uint)
                 .wrapping_sub(VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
                 as usize];
         }

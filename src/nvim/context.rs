@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -824,39 +825,44 @@ pub const ARRAY_DICT_INIT: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 #[no_mangle]
-pub static mut kCtxAll: ::core::ffi::c_int = kCtxRegs as ::core::ffi::c_int
-    | kCtxJumps as ::core::ffi::c_int
-    | kCtxBufs as ::core::ffi::c_int
-    | kCtxGVars as ::core::ffi::c_int
-    | kCtxSFuncs as ::core::ffi::c_int
-    | kCtxFuncs as ::core::ffi::c_int;
-static mut ctx_stack: ContextVec = ContextVec {
+pub static kCtxAll: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
+    kCtxRegs as ::core::ffi::c_int
+        | kCtxJumps as ::core::ffi::c_int
+        | kCtxBufs as ::core::ffi::c_int
+        | kCtxGVars as ::core::ffi::c_int
+        | kCtxSFuncs as ::core::ffi::c_int
+        | kCtxFuncs as ::core::ffi::c_int,
+);
+static ctx_stack: GlobalCell<ContextVec> = GlobalCell::new(ContextVec {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Context>(),
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn ctx_free_all() {
     let mut i: size_t = 0 as size_t;
-    while i < ctx_stack.size {
-        ctx_free(ctx_stack.items.offset(i as isize));
+    while i < (*ctx_stack.ptr()).size {
+        ctx_free((*ctx_stack.ptr()).items.offset(i as isize));
         i = i.wrapping_add(1);
     }
-    xfree(ctx_stack.items as *mut ::core::ffi::c_void);
-    ctx_stack.capacity = 0 as size_t;
-    ctx_stack.size = ctx_stack.capacity;
-    ctx_stack.items = ::core::ptr::null_mut::<Context>();
+    xfree((*ctx_stack.ptr()).items as *mut ::core::ffi::c_void);
+    (*ctx_stack.ptr()).capacity = 0 as size_t;
+    (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).capacity;
+    (*ctx_stack.ptr()).items = ::core::ptr::null_mut::<Context>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn ctx_size() -> size_t {
-    return ctx_stack.size;
+    return (*ctx_stack.ptr()).size;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ctx_get(mut index: size_t) -> *mut Context {
-    if index < ctx_stack.size {
-        return ctx_stack
-            .items
-            .offset(ctx_stack.size.wrapping_sub(index).wrapping_sub(1 as size_t) as isize);
+    if index < (*ctx_stack.ptr()).size {
+        return (*ctx_stack.ptr()).items.offset(
+            (*ctx_stack.ptr())
+                .size
+                .wrapping_sub(index)
+                .wrapping_sub(1 as size_t) as isize,
+        );
     }
     return ::core::ptr::null_mut::<Context>();
 }
@@ -871,21 +877,21 @@ pub unsafe extern "C" fn ctx_free(mut ctx: *mut Context) {
 #[no_mangle]
 pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_int) {
     if ctx.is_null() {
-        if ctx_stack.size == ctx_stack.capacity {
-            ctx_stack.capacity = if ctx_stack.capacity != 0 {
-                ctx_stack.capacity << 1 as ::core::ffi::c_int
+        if (*ctx_stack.ptr()).size == (*ctx_stack.ptr()).capacity {
+            (*ctx_stack.ptr()).capacity = if (*ctx_stack.ptr()).capacity != 0 {
+                (*ctx_stack.ptr()).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
             };
-            ctx_stack.items = xrealloc(
-                ctx_stack.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Context>().wrapping_mul(ctx_stack.capacity),
+            (*ctx_stack.ptr()).items = xrealloc(
+                (*ctx_stack.ptr()).items as *mut ::core::ffi::c_void,
+                ::core::mem::size_of::<Context>().wrapping_mul((*ctx_stack.ptr()).capacity),
             ) as *mut Context;
         } else {
         };
-        let c2rust_fresh0 = ctx_stack.size;
-        ctx_stack.size = ctx_stack.size.wrapping_add(1);
-        *ctx_stack.items.offset(c2rust_fresh0 as isize) = Context {
+        let c2rust_fresh0 = (*ctx_stack.ptr()).size;
+        (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).size.wrapping_add(1);
+        *(*ctx_stack.ptr()).items.offset(c2rust_fresh0 as isize) = Context {
             regs: String_0 {
                 data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 size: 0 as size_t,
@@ -908,8 +914,8 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
                 items: ::core::ptr::null_mut::<Object>(),
             },
         };
-        ctx = ctx_stack.items.offset(
-            ctx_stack
+        ctx = (*ctx_stack.ptr()).items.offset(
+            (*ctx_stack.ptr())
                 .size
                 .wrapping_sub(0 as size_t)
                 .wrapping_sub(1 as size_t) as isize,
@@ -937,11 +943,13 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
 pub unsafe extern "C" fn ctx_restore(mut ctx: *mut Context, flags: ::core::ffi::c_int) -> bool {
     let mut free_ctx: bool = false_0 != 0;
     if ctx.is_null() {
-        if ctx_stack.size == 0 as size_t {
+        if (*ctx_stack.ptr()).size == 0 as size_t {
             return false_0 != 0;
         }
-        ctx_stack.size = ctx_stack.size.wrapping_sub(1);
-        ctx = ctx_stack.items.offset(ctx_stack.size as isize);
+        (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).size.wrapping_sub(1);
+        ctx = (*ctx_stack.ptr())
+            .items
+            .offset((*ctx_stack.ptr()).size as isize);
         free_ctx = true_0 != 0;
     }
     let mut op_shada: OptVal = get_option_value(kOptShada, OPT_GLOBAL as ::core::ffi::c_int);

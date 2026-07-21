@@ -5,9 +5,10 @@
 //! GlobalCell<T>`, then fixes up access sites crate-wide:
 //!
 //! - cross-module `extern "C" { static mut NAME: T; }` redeclarations of a
-//!   converted exported global are removed and replaced with a `use` of the
-//!   defining module's item (same symbol, same layout: the cell is
-//!   repr(transparent));
+//!   converted exported global are retyped in place to `static NAME:
+//!   GlobalCell<T>;` — same symbol, same layout (the cell is
+//!   repr(transparent)), and the module keeps viewing the global at its own
+//!   c2rust-duplicated copy of the type;
 //! - `NAME = rhs` (whole-static assignment) becomes `NAME.set(rhs)`;
 //! - `NAME` in a plain value position becomes `NAME.get()`;
 //! - `&raw mut NAME` / `&raw const NAME` become `NAME.ptr()` /
@@ -27,7 +28,7 @@
 
 use proc_macro2::TokenTree;
 use quote::ToTokens;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
@@ -182,8 +183,19 @@ impl<'ast> Visit<'ast> for Prescan {
 // Pass 2: the rewriter proper.
 // ---------------------------------------------------------------------------
 
+/// Extend a removal range over one trailing space so deleting a token does
+/// not leave doubled whitespace behind.
+fn pad_right(r: Range<usize>, src: &str) -> Range<usize> {
+    if src.as_bytes().get(r.end) == Some(&b' ') {
+        r.start..r.end + 1
+    } else {
+        r
+    }
+}
+
 struct Rewriter<'a> {
     rel: &'a Path,
+    src: &'a str,
     /// Converted names visible at file scope (this file's converted defs +
     /// extern redeclarations of converted exports).
     file_active: HashSet<String>,
@@ -191,14 +203,13 @@ struct Rewriter<'a> {
     exports: &'a HashMap<String, String>,
     /// This file defines targets (drives def rewriting + GlobalCell import).
     is_target: bool,
-    my_modpath: &'a str,
     shadowed: HashSet<String>,
     fn_extras: HashSet<String>,
     const_ctx: u32,
     edits: Vec<Edit>,
     warns: Vec<String>,
-    imports: BTreeMap<String, BTreeSet<String>>,
     converted_defs: usize,
+    retyped_decls: usize,
 }
 
 impl<'a> Rewriter<'a> {
@@ -296,7 +307,9 @@ impl<'a> Rewriter<'a> {
         }
         let syn::StaticMutability::Mut(m) = &s.mutability else { return };
         // `static mut N: T = init;` -> `static N: GlobalCell<T> = GlobalCell::new(init);`
-        self.edit(m.span.byte_range(), "");
+        // Consume the following space too: rustfmt refuses to reformat items
+        // whose giant literals exceed max_width, so residue would stick.
+        self.edit(pad_right(m.span.byte_range(), self.src), "");
         let ty = span_range(&s.ty);
         self.edit(ty.start..ty.start, "GlobalCell<");
         self.edit(ty.end..ty.end, ">");
@@ -323,31 +336,27 @@ impl<'a, 'ast> Visit<'ast> for Rewriter<'a> {
         self.const_ctx -= 1;
     }
 
+    // Extern-block redeclarations of converted globals are retyped in place:
+    // `static mut NAME: T;` -> `static NAME: GlobalCell<T>;`. Same symbol,
+    // transparent layout — and crucially the module keeps viewing the global
+    // at its own duplicate of the struct type (c2rust re-emits type
+    // definitions per module, so a `use` of the defining module's item would
+    // change the nominal type at every access site).
     fn visit_item_foreign_mod(&mut self, fm: &'ast syn::ItemForeignMod) {
-        let mut removed = 0;
-        let mut removal_edits = Vec::new();
         for fi in &fm.items {
             if let syn::ForeignItem::Static(fs) = fi {
+                let syn::StaticMutability::Mut(m) = &fs.mutability else {
+                    continue;
+                };
                 let name = fs.ident.to_string();
-                if let Some(modpath) = self.exports.get(&name) {
-                    removed += 1;
-                    removal_edits.push(span_range(fs));
-                    self.file_active.insert(name.clone());
-                    if modpath != self.my_modpath {
-                        self.imports
-                            .entry(modpath.clone())
-                            .or_default()
-                            .insert(name);
-                    }
+                if self.exports.contains_key(&name) {
+                    self.edit(pad_right(m.span.byte_range(), self.src), "");
+                    let ty = span_range(&fs.ty);
+                    self.edit(ty.start..ty.start, "GlobalCell<");
+                    self.edit(ty.end..ty.end, ">");
+                    self.file_active.insert(name);
+                    self.retyped_decls += 1;
                 }
-            }
-        }
-        if removed > 0 && removed == fm.items.len() {
-            // Block emptied: drop it entirely.
-            self.edit(span_range(fm), "");
-        } else {
-            for r in removal_edits {
-                self.edit(r, "");
             }
         }
     }
@@ -657,17 +666,17 @@ fn main() {
         };
         let mut rw = Rewriter {
             rel: &fd.rel,
+            src: &fd.src,
             file_active,
             exports: &exports,
             is_target,
-            my_modpath: &fd.modpath,
             shadowed: HashSet::new(),
             fn_extras: HashSet::new(),
             const_ctx: 0,
             edits: Vec::new(),
             warns: Vec::new(),
-            imports: BTreeMap::new(),
             converted_defs: 0,
+            retyped_decls: 0,
         };
         rw.visit_file(&fd.ast);
 
@@ -675,14 +684,12 @@ fn main() {
             continue;
         }
 
-        // Imports go in front of the first item.
+        // The GlobalCell type import goes in front of the first item.
         let mut use_lines = String::new();
-        if rw.converted_defs > 0 && !fd.src.contains("global_cell::GlobalCell") {
+        if (rw.converted_defs > 0 || rw.retyped_decls > 0)
+            && !fd.src.contains("global_cell::GlobalCell")
+        {
             use_lines.push_str("use crate::src::nvim::global_cell::GlobalCell;\n");
-        }
-        for (modpath, names) in &rw.imports {
-            let names: Vec<String> = names.iter().cloned().collect();
-            use_lines.push_str(&format!("use {}::{{{}}};\n", modpath, names.join(", ")));
         }
         if !use_lines.is_empty() {
             let first_item_start = fd
@@ -701,10 +708,11 @@ fn main() {
         total_edits += rw.edits.len();
         total_defs += rw.converted_defs;
         println!(
-            "{}: {} edits, {} defs converted",
+            "{}: {} edits, {} defs converted, {} decls retyped",
             fd.rel.display(),
             rw.edits.len(),
-            rw.converted_defs
+            rw.converted_defs,
+            rw.retyped_decls
         );
         all_warns.extend(rw.warns);
 

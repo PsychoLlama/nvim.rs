@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -3904,7 +3905,7 @@ unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_int_ptr_t(
@@ -3913,7 +3914,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -3947,13 +3948,14 @@ unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-static mut e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-        *b"E937: Attempt to delete a buffer that is in use: %s\0",
-    )
-};
-static mut buf_free_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut top_file_num: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+static e_attempt_to_delete_buffer_that_is_in_use_str: GlobalCell<[::core::ffi::c_char; 52]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+            *b"E937: Attempt to delete a buffer that is in use: %s\0",
+        )
+    });
+static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut win_T) {
     let win_was_locked: bool = (*win).w_locked;
     window_layout_lock();
@@ -3980,7 +3982,7 @@ pub unsafe extern "C" fn calc_percentage(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_highest_fnum() -> ::core::ffi::c_int {
-    return top_file_num - 1 as ::core::ffi::c_int;
+    return top_file_num.get() - 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn read_buffer(
     mut read_stdin: bool,
@@ -4276,11 +4278,11 @@ pub unsafe extern "C" fn set_bufref(mut bufref: *mut bufref_T, mut buf: *mut buf
     } else {
         (*buf).handle as ::core::ffi::c_int
     };
-    (*bufref).br_buf_free_count = buf_free_count;
+    (*bufref).br_buf_free_count = buf_free_count.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn bufref_valid(mut bufref: *mut bufref_T) -> bool {
-    return if (*bufref).br_buf_free_count == buf_free_count {
+    return if (*bufref).br_buf_free_count == buf_free_count.get() {
         true_0
     } else {
         (buf_valid((*bufref).br_buf) as ::core::ffi::c_int != 0
@@ -4329,7 +4331,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
         };
         semsg(
             gettext(
-                &raw const e_attempt_to_delete_buffer_that_is_in_use_str
+                (e_attempt_to_delete_buffer_that_is_in_use_str.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             if !fname.is_null() {
@@ -4758,7 +4760,7 @@ unsafe extern "C" fn free_buffer(mut buf: *mut buf_T) {
         (*buf).handle as ::core::ffi::c_int,
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     );
-    buf_free_count += 1;
+    (*buf_free_count.ptr()) += 1;
     free_buffer_stuff(buf, kBffClearWinInfo as ::core::ffi::c_int);
     if (*(*buf).b_vars).dv_refcount > DO_NOT_FREE_CNT as ::core::ffi::c_int {
         tv_dict_add(
@@ -6056,15 +6058,15 @@ pub unsafe extern "C" fn buflist_new(
             (*buf).b_prev = lastbuf;
         }
         lastbuf = buf;
-        let c2rust_fresh1 = top_file_num;
-        top_file_num = top_file_num + 1;
+        let c2rust_fresh1 = top_file_num.get();
+        top_file_num.set(top_file_num.get() + 1);
         (*buf).handle = c2rust_fresh1 as handle_T;
         map_put_int_ptr_t(
             &raw mut buffer_handles,
             (*buf).handle as ::core::ffi::c_int,
             buf as ptr_t,
         );
-        if top_file_num < 0 as ::core::ffi::c_int {
+        if top_file_num.get() < 0 as ::core::ffi::c_int {
             emsg(gettext(
                 b"W14: Warning: List of file names overflow\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -6072,7 +6074,7 @@ pub unsafe extern "C" fn buflist_new(
             if emsg_silent == 0 as ::core::ffi::c_int && !in_assert_fails {
                 msg_delay(3001 as uint64_t, true_0 != 0);
             }
-            top_file_num = 1 as ::core::ffi::c_int;
+            top_file_num.set(1 as ::core::ffi::c_int);
         }
         buf_copy_options(buf, BCO_ALWAYS as ::core::ffi::c_int);
     }
@@ -7025,7 +7027,7 @@ pub unsafe extern "C" fn get_winopts(mut buf: *mut buf_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T {
-    static mut no_position: fmark_T = fmark_T {
+    static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
             lnum: 1 as linenr_T,
             col: 0 as colnr_T,
@@ -7038,10 +7040,10 @@ pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T 
             skipcol: 0 as colnr_T,
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    };
+    });
     let wip: *mut WinInfo = find_wininfo(buf, false_0 != 0, false_0 != 0);
     return if wip.is_null() {
-        &raw mut no_position
+        no_position.ptr()
     } else {
         &raw mut (*wip).wi_mark
     };
@@ -7681,8 +7683,10 @@ pub unsafe extern "C" fn col_print(
         vcol,
     ) as ::core::ffi::c_int;
 }
-static mut lasttitle: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut lasticon: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static lasticon: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub unsafe extern "C" fn maketitle() {
     let mut title_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7693,7 +7697,7 @@ pub unsafe extern "C" fn maketitle() {
         return;
     }
     need_maketitle = false_0 != 0;
-    if p_title == 0 && p_icon == 0 && lasttitle.is_null() && lasticon.is_null() {
+    if p_title == 0 && p_icon == 0 && (*lasttitle.ptr()).is_null() && (*lasticon.ptr()).is_null() {
         return;
     }
     if p_title != 0 {
@@ -7748,7 +7752,7 @@ pub unsafe extern "C" fn maketitle() {
             title_str = &raw mut buf as *mut ::core::ffi::c_char;
         }
     }
-    let mut mustset: bool = value_change(title_str, &raw mut lasttitle);
+    let mut mustset: bool = value_change(title_str, lasttitle.ptr());
     if p_icon != 0 {
         icon_str = &raw mut buf as *mut ::core::ffi::c_char;
         if *p_iconstring as ::core::ffi::c_int != NUL {
@@ -7790,7 +7794,7 @@ pub unsafe extern "C" fn maketitle() {
         }
     }
     mustset = mustset as ::core::ffi::c_int
-        | value_change(icon_str, &raw mut lasticon) as ::core::ffi::c_int
+        | value_change(icon_str, lasticon.ptr()) as ::core::ffi::c_int
         != 0;
     if mustset {
         resettitle();
@@ -7816,8 +7820,8 @@ unsafe extern "C" fn value_change(
 }
 #[no_mangle]
 pub unsafe extern "C" fn resettitle() {
-    ui_call_set_icon(cstr_as_string(lasticon));
-    ui_call_set_title(cstr_as_string(lasttitle));
+    ui_call_set_icon(cstr_as_string(lasticon.get()));
+    ui_call_set_title(cstr_as_string(lasttitle.get()));
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_rel_pos(
@@ -8112,17 +8116,17 @@ pub unsafe extern "C" fn ex_buffer_all(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn do_modelines(mut flags: ::core::ffi::c_int) {
     let mut lnum: linenr_T = 0;
     let mut nmlines: ::core::ffi::c_int = 0;
-    static mut entered: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static entered: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if (*curbuf).b_p_ml == 0 || {
         nmlines = p_mls as ::core::ffi::c_int;
         nmlines == 0 as ::core::ffi::c_int
     } {
         return;
     }
-    if entered != 0 {
+    if entered.get() != 0 {
         return;
     }
-    entered += 1;
+    (*entered.ptr()) += 1;
     lnum = 1 as ::core::ffi::c_int as linenr_T;
     while (*curbuf).b_p_ml != 0
         && lnum <= (*curbuf).b_ml.ml_line_count
@@ -8144,7 +8148,7 @@ pub unsafe extern "C" fn do_modelines(mut flags: ::core::ffi::c_int) {
         }
         lnum -= 1;
     }
-    entered -= 1;
+    (*entered.ptr()) -= 1;
 }
 unsafe extern "C" fn chk_modeline(
     mut lnum: linenr_T,

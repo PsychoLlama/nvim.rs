@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -245,7 +246,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 53] = unsafe {
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
-static mut mod_mask_table: [modmasktable; 10] = [
+static mod_mask_table: GlobalCell<[modmasktable; 10]> = GlobalCell::new([
     modmasktable {
         mod_mask: MOD_MASK_ALT as uint16_t,
         mod_flag: MOD_MASK_ALT as uint16_t,
@@ -296,9 +297,9 @@ static mut mod_mask_table: [modmasktable; 10] = [
         mod_flag: 0 as uint16_t,
         name: NUL as ::core::ffi::c_char,
     },
-];
+]);
 pub const MOD_KEYS_ENTRY_SIZE: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-static mut modifier_keys_table: [uint8_t; 376] = [
+static modifier_keys_table: GlobalCell<[uint8_t; 376]> = GlobalCell::new([
     MOD_MASK_SHIFT as uint8_t,
     '&' as uint8_t,
     '9' as uint8_t,
@@ -675,8 +676,8 @@ static mut modifier_keys_table: [uint8_t; 376] = [
     KS_EXTRA as uint8_t,
     KE_TAB as ::core::ffi::c_int as uint8_t,
     NUL as uint8_t,
-];
-static mut mouse_table: [mousetable; 18] = [
+]);
+static mouse_table: GlobalCell<[mousetable; 18]> = GlobalCell::new([
     mousetable {
         pseudo_code: KE_LEFTMOUSE as ::core::ffi::c_int,
         button: MOUSE_LEFT as ::core::ffi::c_int,
@@ -785,7 +786,7 @@ static mut mouse_table: [mousetable; 18] = [
         is_click: false,
         is_drag: false,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn name_to_mod_mask(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     c = if c < 'a' as ::core::ffi::c_int || c > 'z' as ::core::ffi::c_int {
@@ -794,9 +795,11 @@ pub unsafe extern "C" fn name_to_mod_mask(mut c: ::core::ffi::c_int) -> ::core::
         c - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
     };
     let mut i: size_t = 0 as size_t;
-    while mod_mask_table[i as usize].mod_mask as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
-        if c == mod_mask_table[i as usize].name as uint8_t as ::core::ffi::c_int {
-            return mod_mask_table[i as usize].mod_flag as ::core::ffi::c_int;
+    while (*mod_mask_table.ptr())[i as usize].mod_mask as ::core::ffi::c_int
+        != 0 as ::core::ffi::c_int
+    {
+        if c == (*mod_mask_table.ptr())[i as usize].name as uint8_t as ::core::ffi::c_int {
+            return (*mod_mask_table.ptr())[i as usize].mod_flag as ::core::ffi::c_int;
         }
         i = i.wrapping_add(1);
     }
@@ -818,16 +821,19 @@ pub unsafe extern "C" fn simplify_key(
     let key1: ::core::ffi::c_int = (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
         & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while modifier_keys_table[i as usize] as ::core::ffi::c_int != NUL {
-        if key0 == modifier_keys_table[(i + 3 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
-            && key1
-                == modifier_keys_table[(i + 4 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
-            && *modifiers & modifier_keys_table[i as usize] as ::core::ffi::c_int != 0
-        {
-            *modifiers &= !(modifier_keys_table[i as usize] as ::core::ffi::c_int);
-            return -(modifier_keys_table[(i + 1 as ::core::ffi::c_int) as usize]
+    while (*modifier_keys_table.ptr())[i as usize] as ::core::ffi::c_int != NUL {
+        if key0
+            == (*modifier_keys_table.ptr())[(i + 3 as ::core::ffi::c_int) as usize]
                 as ::core::ffi::c_int
-                + ((modifier_keys_table[(i + 2 as ::core::ffi::c_int) as usize]
+            && key1
+                == (*modifier_keys_table.ptr())[(i + 4 as ::core::ffi::c_int) as usize]
+                    as ::core::ffi::c_int
+            && *modifiers & (*modifier_keys_table.ptr())[i as usize] as ::core::ffi::c_int != 0
+        {
+            *modifiers &= !((*modifier_keys_table.ptr())[i as usize] as ::core::ffi::c_int);
+            return -((*modifier_keys_table.ptr())[(i + 1 as ::core::ffi::c_int) as usize]
+                as ::core::ffi::c_int
+                + (((*modifier_keys_table.ptr())[(i + 2 as ::core::ffi::c_int) as usize]
                     as ::core::ffi::c_int)
                     << 8 as ::core::ffi::c_int));
         }
@@ -875,8 +881,8 @@ pub unsafe extern "C" fn get_special_key_name(
     mut c: ::core::ffi::c_int,
     mut modifiers: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut string: [::core::ffi::c_char; 33] = [0; 33];
-    string[0 as ::core::ffi::c_int as usize] = '<' as ::core::ffi::c_char;
+    static string: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new([0; 33]);
+    (*string.ptr())[0 as ::core::ffi::c_int as usize] = '<' as ::core::ffi::c_char;
     let mut idx: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     if c < 0 as ::core::ffi::c_int && -c & 0xff as ::core::ffi::c_int == KS_KEY {
         c = (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
@@ -884,18 +890,21 @@ pub unsafe extern "C" fn get_special_key_name(
     }
     if c < 0 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while modifier_keys_table[i as usize] as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
+        while (*modifier_keys_table.ptr())[i as usize] as ::core::ffi::c_int
+            != 0 as ::core::ffi::c_int
+        {
             if -c & 0xff as ::core::ffi::c_int
-                == modifier_keys_table[(i + 1 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                == (*modifier_keys_table.ptr())[(i + 1 as ::core::ffi::c_int) as usize]
+                    as ::core::ffi::c_int
                 && (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
                     & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int
-                    == modifier_keys_table[(i + 2 as ::core::ffi::c_int) as usize]
+                    == (*modifier_keys_table.ptr())[(i + 2 as ::core::ffi::c_int) as usize]
                         as ::core::ffi::c_int
             {
-                modifiers |= modifier_keys_table[i as usize] as ::core::ffi::c_int;
-                c = -(modifier_keys_table[(i + 3 as ::core::ffi::c_int) as usize]
+                modifiers |= (*modifier_keys_table.ptr())[i as usize] as ::core::ffi::c_int;
+                c = -((*modifier_keys_table.ptr())[(i + 3 as ::core::ffi::c_int) as usize]
                     as ::core::ffi::c_int
-                    + ((modifier_keys_table[(i + 4 as ::core::ffi::c_int) as usize]
+                    + (((*modifier_keys_table.ptr())[(i + 4 as ::core::ffi::c_int) as usize]
                         as ::core::ffi::c_int)
                         << 8 as ::core::ffi::c_int));
                 break;
@@ -921,16 +930,18 @@ pub unsafe extern "C" fn get_special_key_name(
         }
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while mod_mask_table[i_0 as usize].name as ::core::ffi::c_int != 'A' as ::core::ffi::c_int {
-        if modifiers & mod_mask_table[i_0 as usize].mod_mask as ::core::ffi::c_int
-            == mod_mask_table[i_0 as usize].mod_flag as ::core::ffi::c_int
+    while (*mod_mask_table.ptr())[i_0 as usize].name as ::core::ffi::c_int
+        != 'A' as ::core::ffi::c_int
+    {
+        if modifiers & (*mod_mask_table.ptr())[i_0 as usize].mod_mask as ::core::ffi::c_int
+            == (*mod_mask_table.ptr())[i_0 as usize].mod_flag as ::core::ffi::c_int
         {
             let c2rust_fresh0 = idx;
             idx = idx + 1;
-            string[c2rust_fresh0 as usize] = mod_mask_table[i_0 as usize].name;
+            (*string.ptr())[c2rust_fresh0 as usize] = (*mod_mask_table.ptr())[i_0 as usize].name;
             let c2rust_fresh1 = idx;
             idx = idx + 1;
-            string[c2rust_fresh1 as usize] = '-' as ::core::ffi::c_char;
+            (*string.ptr())[c2rust_fresh1 as usize] = '-' as ::core::ffi::c_char;
         }
         i_0 += 1;
     }
@@ -938,29 +949,31 @@ pub unsafe extern "C" fn get_special_key_name(
         if c < 0 as ::core::ffi::c_int {
             let c2rust_fresh2 = idx;
             idx = idx + 1;
-            string[c2rust_fresh2 as usize] = 't' as ::core::ffi::c_char;
+            (*string.ptr())[c2rust_fresh2 as usize] = 't' as ::core::ffi::c_char;
             let c2rust_fresh3 = idx;
             idx = idx + 1;
-            string[c2rust_fresh3 as usize] = '_' as ::core::ffi::c_char;
+            (*string.ptr())[c2rust_fresh3 as usize] = '_' as ::core::ffi::c_char;
             let c2rust_fresh4 = idx;
             idx = idx + 1;
-            string[c2rust_fresh4 as usize] =
+            (*string.ptr())[c2rust_fresh4 as usize] =
                 (-c & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
             let c2rust_fresh5 = idx;
             idx = idx + 1;
-            string[c2rust_fresh5 as usize] = (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
+            (*string.ptr())[c2rust_fresh5 as usize] = (-c as ::core::ffi::c_uint
+                >> 8 as ::core::ffi::c_int
                 & 0xff as ::core::ffi::c_uint)
-                as uint8_t as ::core::ffi::c_char;
+                as uint8_t
+                as ::core::ffi::c_char;
         } else {
             let mut len: ::core::ffi::c_int = utf_char2len(c);
             if len == 1 as ::core::ffi::c_int && vim_isprintc(c) as ::core::ffi::c_int != 0 {
                 let c2rust_fresh6 = idx;
                 idx = idx + 1;
-                string[c2rust_fresh6 as usize] = c as uint8_t as ::core::ffi::c_char;
+                (*string.ptr())[c2rust_fresh6 as usize] = c as uint8_t as ::core::ffi::c_char;
             } else if len > 1 as ::core::ffi::c_int {
                 idx += utf_char2bytes(
                     c,
-                    (&raw mut string as *mut ::core::ffi::c_char).offset(idx as isize),
+                    (string.ptr() as *mut ::core::ffi::c_char).offset(idx as isize),
                 );
             } else {
                 let mut s: *mut ::core::ffi::c_char = transchar(c);
@@ -969,18 +982,18 @@ pub unsafe extern "C" fn get_special_key_name(
                     s = s.offset(1);
                     let c2rust_fresh8 = idx;
                     idx = idx + 1;
-                    string[c2rust_fresh8 as usize] = *c2rust_fresh7;
+                    (*string.ptr())[c2rust_fresh8 as usize] = *c2rust_fresh7;
                 }
             }
         }
     } else {
-        let mut s_0: *const String_0 = &raw const (*(&raw const key_names_table
+        let mut s_0: *const String_0 = &raw const (*((key_names_table.ptr() as *const _)
             as *const key_name_entry)
             .offset(table_idx as isize))
         .name;
         if (*s_0).size as ::core::ffi::c_int + idx + 2 as ::core::ffi::c_int <= MAX_KEY_NAME_LEN {
             strcpy(
-                (&raw mut string as *mut ::core::ffi::c_char).offset(idx as isize),
+                (string.ptr() as *mut ::core::ffi::c_char).offset(idx as isize),
                 (*s_0).data,
             );
             idx += (*s_0).size as ::core::ffi::c_int;
@@ -988,9 +1001,9 @@ pub unsafe extern "C" fn get_special_key_name(
     }
     let c2rust_fresh9 = idx;
     idx = idx + 1;
-    string[c2rust_fresh9 as usize] = '>' as ::core::ffi::c_char;
-    string[idx as usize] = NUL as ::core::ffi::c_char;
-    return &raw mut string as *mut ::core::ffi::c_char;
+    (*string.ptr())[c2rust_fresh9 as usize] = '>' as ::core::ffi::c_char;
+    (*string.ptr())[idx as usize] = NUL as ::core::ffi::c_char;
+    return string.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn trans_special(
@@ -1334,7 +1347,9 @@ pub unsafe extern "C" fn find_special_key_in_table(
                 == 0) as ::core::ffi::c_int as usize,
         ) as ::core::ffi::c_int
     {
-        if c == key_names_table[i as usize].key && !key_names_table[i as usize].is_alt {
+        if c == (*key_names_table.ptr())[i as usize].key
+            && !(*key_names_table.ptr())[i as usize].is_alt
+        {
             return i;
         }
         i += 1;
@@ -1363,7 +1378,7 @@ pub unsafe extern "C" fn get_special_key_code(
     let mut idx: ::core::ffi::c_int =
         get_special_key_code_hash(name, name_end.offset_from(name) as size_t);
     return if idx >= 0 as ::core::ffi::c_int {
-        key_names_table[idx as usize].key
+        (*key_names_table.ptr())[idx as usize].key
     } else {
         0 as ::core::ffi::c_int
     };
@@ -1375,11 +1390,11 @@ pub unsafe extern "C" fn get_mouse_button(
     mut is_drag: *mut bool,
 ) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while mouse_table[i as usize].pseudo_code != 0 {
-        if code == mouse_table[i as usize].pseudo_code {
-            *is_click = mouse_table[i as usize].is_click;
-            *is_drag = mouse_table[i as usize].is_drag;
-            return mouse_table[i as usize].button;
+    while (*mouse_table.ptr())[i as usize].pseudo_code != 0 {
+        if code == (*mouse_table.ptr())[i as usize].pseudo_code {
+            *is_click = (*mouse_table.ptr())[i as usize].is_click;
+            *is_drag = (*mouse_table.ptr())[i as usize].is_drag;
+            return (*mouse_table.ptr())[i as usize].button;
         }
         i += 1;
     }
@@ -1911,7 +1926,7 @@ pub const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int =
     MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 pub const MAX_KEY_NAME_LEN: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-static mut key_names_table: [key_name_entry; 187] = [
+static key_names_table: GlobalCell<[key_name_entry; 187]> = GlobalCell::new([
     key_name_entry {
         key: K_K0,
         is_alt: false_0 != 0,
@@ -3466,7 +3481,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             size: 16 as size_t,
         },
     },
-];
+]);
 unsafe extern "C" fn get_special_key_code_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3890,7 +3905,7 @@ unsafe extern "C" fn get_special_key_code_hash(
     }
     let mut i: ::core::ffi::c_int = low;
     while i < high {
-        if vim_strnicmp_asc(str, key_names_table[i as usize].name.data, len) == 0 {
+        if vim_strnicmp_asc(str, (*key_names_table.ptr())[i as usize].name.data, len) == 0 {
             return i;
         }
         i += 1;

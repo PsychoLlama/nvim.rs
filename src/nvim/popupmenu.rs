@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -3397,53 +3398,57 @@ unsafe extern "C" fn win_linetabsize(
         return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
     };
 }
-static mut pum_array: *mut pumitem_T = ::core::ptr::null_mut::<pumitem_T>();
-static mut pum_size: ::core::ffi::c_int = 0;
-static mut pum_selected: ::core::ffi::c_int = 0;
-static mut pum_first: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut pum_height: ::core::ffi::c_int = 0;
-static mut pum_width: ::core::ffi::c_int = 0;
-static mut pum_base_width: ::core::ffi::c_int = 0;
-static mut pum_kind_width: ::core::ffi::c_int = 0;
-static mut pum_extra_width: ::core::ffi::c_int = 0;
-static mut pum_scrollbar: ::core::ffi::c_int = 0;
-static mut pum_rl: bool = false;
-static mut pum_anchor_grid: ::core::ffi::c_int = 0;
-static mut pum_row: ::core::ffi::c_int = 0;
-static mut pum_col: ::core::ffi::c_int = 0;
-static mut pum_win_row_offset: ::core::ffi::c_int = 0;
-static mut pum_win_col_offset: ::core::ffi::c_int = 0;
-static mut pum_left_col: ::core::ffi::c_int = 0;
-static mut pum_right_col: ::core::ffi::c_int = 0;
-static mut pum_above: bool = false;
-static mut pum_is_visible: bool = false_0 != 0;
-static mut pum_is_drawn: bool = false_0 != 0;
-static mut pum_external: bool = false_0 != 0;
-static mut pum_invalid: bool = false_0 != 0;
+static pum_array: GlobalCell<*mut pumitem_T> =
+    GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
+static pum_size: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_first: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static pum_height: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_base_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_kind_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_extra_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_scrollbar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_rl: GlobalCell<bool> = GlobalCell::new(false);
+static pum_anchor_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_win_row_offset: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_win_col_offset: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_left_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_right_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static pum_above: GlobalCell<bool> = GlobalCell::new(false);
+static pum_is_visible: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static pum_is_drawn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static pum_external: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static pum_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn pum_compute_size() {
-    pum_base_width = 0 as ::core::ffi::c_int;
-    pum_kind_width = 0 as ::core::ffi::c_int;
-    pum_extra_width = 0 as ::core::ffi::c_int;
+    pum_base_width.set(0 as ::core::ffi::c_int);
+    pum_kind_width.set(0 as ::core::ffi::c_int);
+    pum_extra_width.set(0 as ::core::ffi::c_int);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < pum_size {
-        if !(*pum_array.offset(i as isize)).pum_text.is_null() {
-            let mut w: ::core::ffi::c_int = vim_strsize((*pum_array.offset(i as isize)).pum_text);
-            if pum_base_width < w {
-                pum_base_width = w;
+    while i < pum_size.get() {
+        if !(*(*pum_array.ptr()).offset(i as isize)).pum_text.is_null() {
+            let mut w: ::core::ffi::c_int =
+                vim_strsize((*(*pum_array.ptr()).offset(i as isize)).pum_text);
+            if pum_base_width.get() < w {
+                pum_base_width.set(w);
             }
         }
-        if !(*pum_array.offset(i as isize)).pum_kind.is_null() {
+        if !(*(*pum_array.ptr()).offset(i as isize)).pum_kind.is_null() {
             let mut w_0: ::core::ffi::c_int =
-                vim_strsize((*pum_array.offset(i as isize)).pum_kind) + 1 as ::core::ffi::c_int;
-            if pum_kind_width < w_0 {
-                pum_kind_width = w_0;
+                vim_strsize((*(*pum_array.ptr()).offset(i as isize)).pum_kind)
+                    + 1 as ::core::ffi::c_int;
+            if pum_kind_width.get() < w_0 {
+                pum_kind_width.set(w_0);
             }
         }
-        if !(*pum_array.offset(i as isize)).pum_extra.is_null() {
+        if !(*(*pum_array.ptr()).offset(i as isize)).pum_extra.is_null() {
             let mut w_1: ::core::ffi::c_int =
-                vim_strsize((*pum_array.offset(i as isize)).pum_extra) + 1 as ::core::ffi::c_int;
-            if pum_extra_width < w_1 {
-                pum_extra_width = w_1;
+                vim_strsize((*(*pum_array.ptr()).offset(i as isize)).pum_extra)
+                    + 1 as ::core::ffi::c_int;
+            if pum_extra_width.get() < w_1 {
+                pum_extra_width.set(w_1);
             }
         }
         i += 1;
@@ -3458,18 +3463,18 @@ unsafe extern "C" fn pum_compute_vertical_placement(
     mut pum_border_size: ::core::ffi::c_int,
 ) {
     let mut context_lines: ::core::ffi::c_int = 0;
-    pum_height = if size < 10 as ::core::ffi::c_int {
+    pum_height.set(if size < 10 as ::core::ffi::c_int {
         size
     } else {
         10 as ::core::ffi::c_int
-    };
-    if p_ph > 0 as OptInt && pum_height as OptInt > p_ph {
-        pum_height = p_ph as ::core::ffi::c_int;
+    });
+    if p_ph > 0 as OptInt && pum_height.get() as OptInt > p_ph {
+        pum_height.set(p_ph as ::core::ffi::c_int);
     }
-    if pum_win_row + 2 as ::core::ffi::c_int + pum_border_size >= below_row - pum_height
+    if pum_win_row + 2 as ::core::ffi::c_int + pum_border_size >= below_row - pum_height.get()
         && pum_win_row - above_row > (below_row - above_row) / 2 as ::core::ffi::c_int
     {
-        pum_above = true_0 != 0;
+        pum_above.set(true_0 != 0);
         if State & MODE_CMDLINE as ::core::ffi::c_int != 0 && target_win.is_null() {
             context_lines = 0 as ::core::ffi::c_int;
         } else {
@@ -3481,27 +3486,27 @@ unsafe extern "C" fn pum_compute_vertical_placement(
                 };
         }
         if pum_win_row >= size + context_lines {
-            pum_row = pum_win_row - size - context_lines;
-            pum_height = size;
+            pum_row.set(pum_win_row - size - context_lines);
+            pum_height.set(size);
         } else {
-            pum_row = 0 as ::core::ffi::c_int;
-            pum_height = pum_win_row - context_lines;
+            pum_row.set(0 as ::core::ffi::c_int);
+            pum_height.set(pum_win_row - context_lines);
         }
-        if p_ph > 0 as OptInt && pum_height as OptInt > p_ph {
-            pum_row += pum_height - p_ph as ::core::ffi::c_int;
-            pum_height = p_ph as ::core::ffi::c_int;
+        if p_ph > 0 as OptInt && pum_height.get() as OptInt > p_ph {
+            (*pum_row.ptr()) += pum_height.get() - p_ph as ::core::ffi::c_int;
+            pum_height.set(p_ph as ::core::ffi::c_int);
         }
         if pum_border_size > 0 as ::core::ffi::c_int
-            && pum_border_size + pum_row + pum_height >= pum_win_row
+            && pum_border_size + pum_row.get() + pum_height.get() >= pum_win_row
         {
-            if pum_row < 2 as ::core::ffi::c_int {
-                pum_height -= pum_border_size;
+            if pum_row.get() < 2 as ::core::ffi::c_int {
+                (*pum_height.ptr()) -= pum_border_size;
             } else {
-                pum_row -= pum_border_size;
+                (*pum_row.ptr()) -= pum_border_size;
             }
         }
     } else {
-        pum_above = false_0 != 0;
+        pum_above.set(false_0 != 0);
         if State & MODE_CMDLINE as ::core::ffi::c_int != 0 && target_win.is_null() {
             context_lines = 0 as ::core::ffi::c_int;
         } else {
@@ -3514,22 +3519,25 @@ unsafe extern "C" fn pum_compute_vertical_placement(
                 cline_visible_offset
             };
         }
-        pum_row = pum_win_row + context_lines;
-        pum_height = if below_row - pum_row < size {
-            below_row - pum_row
+        pum_row.set(pum_win_row + context_lines);
+        pum_height.set(if below_row - pum_row.get() < size {
+            below_row - pum_row.get()
         } else {
             size
-        };
-        if p_ph > 0 as OptInt && pum_height as OptInt > p_ph {
-            pum_height = p_ph as ::core::ffi::c_int;
+        });
+        if p_ph > 0 as OptInt && pum_height.get() as OptInt > p_ph {
+            pum_height.set(p_ph as ::core::ffi::c_int);
         }
-        if pum_row + pum_height + pum_border_size >= cmdline_row {
-            pum_height -= pum_border_size;
+        if pum_row.get() + pum_height.get() + pum_border_size >= cmdline_row {
+            (*pum_height.ptr()) -= pum_border_size;
         }
     }
-    if above_row > 0 as ::core::ffi::c_int && pum_row < above_row && pum_height > above_row {
-        pum_row = above_row;
-        pum_height = pum_win_row - above_row;
+    if above_row > 0 as ::core::ffi::c_int
+        && pum_row.get() < above_row
+        && pum_height.get() > above_row
+    {
+        pum_row.set(above_row);
+        pum_height.set(pum_win_row - above_row);
     }
 }
 unsafe extern "C" fn set_pum_width_aligned_with_cursor(
@@ -3545,13 +3553,15 @@ unsafe extern "C" fn set_pum_width_aligned_with_cursor(
         width = p_pmw as ::core::ffi::c_int;
         end_padding = false_0 != 0;
     }
-    pum_width = width
-        + (if end_padding as ::core::ffi::c_int != 0 && width as OptInt >= p_pw {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        });
-    return available_width >= pum_width;
+    pum_width.set(
+        width
+            + (if end_padding as ::core::ffi::c_int != 0 && width as OptInt >= p_pw {
+                1 as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }),
+    );
+    return available_width >= pum_width.get();
 }
 unsafe extern "C" fn pum_compute_horizontal_placement(
     mut target_win: *mut win_T,
@@ -3570,41 +3580,42 @@ unsafe extern "C" fn pum_compute_horizontal_placement(
     } else {
         0 as ::core::ffi::c_int
     };
-    let mut desired_width: ::core::ffi::c_int = pum_base_width + pum_kind_width + pum_extra_width;
+    let mut desired_width: ::core::ffi::c_int =
+        pum_base_width.get() + pum_kind_width.get() + pum_extra_width.get();
     let mut available_width: ::core::ffi::c_int = 0;
-    if pum_rl {
-        available_width = cursor_col - pum_scrollbar + 1 as ::core::ffi::c_int - border_width;
+    if pum_rl.get() {
+        available_width = cursor_col - pum_scrollbar.get() + 1 as ::core::ffi::c_int - border_width;
     } else {
-        available_width = max_col - cursor_col - pum_scrollbar - border_width;
+        available_width = max_col - cursor_col - pum_scrollbar.get() - border_width;
     }
-    pum_col = cursor_col;
+    pum_col.set(cursor_col);
     if set_pum_width_aligned_with_cursor(desired_width, available_width) {
         return;
     }
     if available_width as OptInt > p_pw {
-        pum_width = available_width;
+        pum_width.set(available_width);
         return;
     }
-    if pum_rl {
-        available_width = max_col - pum_scrollbar - border_width;
+    if pum_rl.get() {
+        available_width = max_col - pum_scrollbar.get() - border_width;
     } else {
         available_width += cursor_col;
     }
     if available_width as OptInt > p_pw {
-        pum_width = p_pw as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-        if pum_rl {
-            pum_col = pum_width + pum_scrollbar + border_width;
+        pum_width.set(p_pw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
+        if pum_rl.get() {
+            pum_col.set(pum_width.get() + pum_scrollbar.get() + border_width);
         } else {
-            pum_col = max_col - pum_width - pum_scrollbar - border_width;
+            pum_col.set(max_col - pum_width.get() - pum_scrollbar.get() - border_width);
         }
         return;
     }
-    if pum_rl {
-        pum_col = max_col - 1 as ::core::ffi::c_int;
+    if pum_rl.get() {
+        pum_col.set(max_col - 1 as ::core::ffi::c_int);
     } else {
-        pum_col = 0 as ::core::ffi::c_int;
+        pum_col.set(0 as ::core::ffi::c_int);
     }
-    pum_width = max_col - pum_scrollbar - border_width;
+    pum_width.set(max_col - pum_scrollbar.get() - border_width);
 }
 #[inline]
 unsafe extern "C" fn pum_border_width() -> ::core::ffi::c_int {
@@ -3639,17 +3650,21 @@ pub unsafe extern "C" fn pum_display(
     let mut redo_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut pum_win_row: ::core::ffi::c_int = 0;
     let mut cursor_col: ::core::ffi::c_int = 0;
-    if !pum_is_visible {
-        pum_external = ui_has(kUIPopupmenu) as ::core::ffi::c_int != 0
-            || State & MODE_CMDLINE as ::core::ffi::c_int != 0
-                && ui_has(kUIWildmenu) as ::core::ffi::c_int != 0;
+    if !pum_is_visible.get() {
+        pum_external.set(
+            ui_has(kUIPopupmenu) as ::core::ffi::c_int != 0
+                || State & MODE_CMDLINE as ::core::ffi::c_int != 0
+                    && ui_has(kUIWildmenu) as ::core::ffi::c_int != 0,
+        );
     }
-    pum_rl = State & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-        && (*curwin).w_onebuf_opt.wo_rl != 0;
+    pum_rl.set(
+        State & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+            && (*curwin).w_onebuf_opt.wo_rl != 0,
+    );
     let mut border_width: ::core::ffi::c_int = pum_border_width();
     loop {
-        pum_is_visible = true_0 != 0;
-        pum_is_drawn = true_0 != 0;
+        pum_is_visible.set(true_0 != 0);
+        pum_is_drawn.set(true_0 != 0);
         validate_cursor_col(curwin);
         let mut above_row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut below_row: ::core::ffi::c_int =
@@ -3666,8 +3681,8 @@ pub unsafe extern "C" fn pum_display(
         } else {
             curwin
         };
-        pum_win_row_offset = 0 as ::core::ffi::c_int;
-        pum_win_col_offset = 0 as ::core::ffi::c_int;
+        pum_win_row_offset.set(0 as ::core::ffi::c_int);
+        pum_win_col_offset.set(0 as ::core::ffi::c_int);
         if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
             pum_win_row = if !cmdline_win.is_null() {
                 (*cmdline_win).w_wrow
@@ -3686,35 +3701,35 @@ pub unsafe extern "C" fn pum_display(
             } else {
                 Columns
             };
-            pum_anchor_grid = if ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
+            pum_anchor_grid.set(if ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
                 -1 as ::core::ffi::c_int
             } else {
                 DEFAULT_GRID_HANDLE
-            };
+            });
         } else {
             pum_win_row = (*curwin).w_wrow;
-            if pum_rl {
+            if pum_rl.get() {
                 cursor_col = (*curwin).w_view_width - (*curwin).w_wcol - 1 as ::core::ffi::c_int;
             } else {
                 cursor_col = (*curwin).w_wcol;
             }
         }
         if !target_win.is_null() {
-            pum_anchor_grid = (*(*target_win).w_grid.target).handle as ::core::ffi::c_int;
+            pum_anchor_grid.set((*(*target_win).w_grid.target).handle as ::core::ffi::c_int);
             pum_win_row += (*target_win).w_grid.row_offset;
             cursor_col += (*target_win).w_grid.col_offset;
             if (*target_win).w_grid.target != &raw mut default_grid {
                 pum_win_row += (*target_win).w_winrow;
                 cursor_col += (*target_win).w_wincol;
                 if !ui_has(kUIMultigrid) {
-                    pum_anchor_grid = DEFAULT_GRID_HANDLE;
+                    pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
                 } else {
-                    pum_win_row_offset = (*target_win).w_winrow;
-                    pum_win_col_offset = (*target_win).w_wincol;
+                    pum_win_row_offset.set((*target_win).w_winrow);
+                    pum_win_col_offset.set((*target_win).w_wincol);
                 }
             }
         }
-        if pum_external {
+        if pum_external.get() {
             if array_changed {
                 let mut arena: Arena = ARENA_EMPTY;
                 let mut arr: Array = arena_array(&raw mut arena, size as size_t);
@@ -3764,9 +3779,9 @@ pub unsafe extern "C" fn pum_display(
                 ui_call_popupmenu_show(
                     arr,
                     selected as Integer,
-                    (pum_win_row - pum_win_row_offset) as Integer,
-                    (cursor_col - pum_win_col_offset) as Integer,
-                    pum_anchor_grid as Integer,
+                    (pum_win_row - pum_win_row_offset.get()) as Integer,
+                    (cursor_col - pum_win_col_offset.get()) as Integer,
+                    pum_anchor_grid.get() as Integer,
                 );
                 arena_mem_free(arena_finish(&raw mut arena));
             } else {
@@ -3804,22 +3819,22 @@ pub unsafe extern "C" fn pum_display(
             border_width,
         );
         if border_width == 0 as ::core::ffi::c_int
-            && (pum_height < 1 as ::core::ffi::c_int
-                || pum_height == 1 as ::core::ffi::c_int && size > 1 as ::core::ffi::c_int)
+            && (pum_height.get() < 1 as ::core::ffi::c_int
+                || pum_height.get() == 1 as ::core::ffi::c_int && size > 1 as ::core::ffi::c_int)
         {
             return;
         }
-        pum_array = array;
-        pum_size = size;
-        if pum_external {
+        pum_array.set(array);
+        pum_size.set(size);
+        if pum_external.get() {
             return;
         }
         pum_compute_size();
-        pum_scrollbar = if pum_height < size {
+        pum_scrollbar.set(if pum_height.get() < size {
             1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        };
+        });
         pum_compute_horizontal_placement(target_win, cursor_col, border_width);
         if !(pum_set_selected(selected, redo_count) as ::core::ffi::c_int != 0 && {
             redo_count += 1;
@@ -3965,7 +3980,7 @@ unsafe extern "C" fn pum_grid_puts_with_attrs(
     {
         let mut char_len: ::core::ffi::c_int = utfc_ptr2len(ptr);
         let mut attr: ::core::ffi::c_int = *attrs.offset(
-            (if pum_rl as ::core::ffi::c_int != 0 {
+            (if pum_rl.get() as ::core::ffi::c_int != 0 {
                 col_start + cells - col - 1 as ::core::ffi::c_int
             } else {
                 col - col_start
@@ -4003,9 +4018,9 @@ unsafe extern "C" fn pum_get_item(
     mut type_0: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     match type_0 {
-        0 => return (*pum_array.offset(index as isize)).pum_text,
-        1 => return (*pum_array.offset(index as isize)).pum_kind,
-        2 => return (*pum_array.offset(index as isize)).pum_extra,
+        0 => return (*(*pum_array.ptr()).offset(index as isize)).pum_text,
+        1 => return (*(*pum_array.ptr()).offset(index as isize)).pum_kind,
+        2 => return (*(*pum_array.ptr()).offset(index as isize)).pum_extra,
         _ => {}
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4017,8 +4032,8 @@ unsafe extern "C" fn pum_user_attr_combine(
     mut attr: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut user_attr: [::core::ffi::c_int; 2] = [
-        (*pum_array.offset(idx as isize)).pum_user_abbr_hlattr,
-        (*pum_array.offset(idx as isize)).pum_user_kind_hlattr,
+        (*(*pum_array.ptr()).offset(idx as isize)).pum_user_abbr_hlattr,
+        (*(*pum_array.ptr()).offset(idx as isize)).pum_user_kind_hlattr,
     ];
     return if user_attr[type_0 as usize] > 0 as ::core::ffi::c_int {
         hl_combine_attr(attr, user_attr[type_0 as usize])
@@ -4035,18 +4050,18 @@ pub unsafe extern "C" fn pum_redraw() {
     let mut thumb_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut thumb_height: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut n: ::core::ffi::c_int = 0;
-    let fcs_trunc: schar_T = if pum_rl as ::core::ffi::c_int != 0 {
+    let fcs_trunc: schar_T = if pum_rl.get() as ::core::ffi::c_int != 0 {
         (*curwin).w_p_fcs_chars.truncrl
     } else {
         (*curwin).w_p_fcs_chars.trunc
     };
     let hlfsNorm: [hlf_T; 3] = [HLF_PNI, HLF_PNK, HLF_PNX];
     let hlfsSel: [hlf_T; 3] = [HLF_PSI, HLF_PSK, HLF_PSX];
-    let mut grid_width: ::core::ffi::c_int = pum_width;
+    let mut grid_width: ::core::ffi::c_int = pum_width.get();
     let mut col_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut extra_space: bool = false_0 != 0;
-    if pum_rl {
-        col_off = pum_width - 1 as ::core::ffi::c_int;
+    if pum_rl.get() {
+        col_off = pum_width.get() - 1 as ::core::ffi::c_int;
         '_c2rust_label: {
             if State & MODE_CMDLINE as ::core::ffi::c_int == 0 {
             } else {
@@ -4059,13 +4074,13 @@ pub unsafe extern "C" fn pum_redraw() {
             }
         };
         let mut win_end_col: ::core::ffi::c_int = (*curwin).w_wincol + (*curwin).w_width;
-        if pum_col < win_end_col - 1 as ::core::ffi::c_int {
+        if pum_col.get() < win_end_col - 1 as ::core::ffi::c_int {
             grid_width += 1 as ::core::ffi::c_int;
             extra_space = true_0 != 0;
         }
     } else {
         let mut min_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if pum_col > min_col {
+        if pum_col.get() > min_col {
             grid_width += 1 as ::core::ffi::c_int;
             col_off = 1 as ::core::ffi::c_int;
             extra_space = true_0 != 0;
@@ -4167,7 +4182,7 @@ pub unsafe extern "C" fn pum_redraw() {
             i += 1;
         }
         api_clear_error(&raw mut err);
-        if pum_scrollbar != 0 {
+        if pum_scrollbar.get() != 0 {
             border_char = schar_from_str(
                 &raw mut *(&raw mut fconfig.border_chars as *mut [::core::ffi::c_char; 32])
                     .offset(3 as ::core::ffi::c_int as isize)
@@ -4176,38 +4191,38 @@ pub unsafe extern "C" fn pum_redraw() {
             border_attr = fconfig.border_attr[3 as ::core::ffi::c_int as usize];
         }
     }
-    if pum_scrollbar > 0 as ::core::ffi::c_int
+    if pum_scrollbar.get() > 0 as ::core::ffi::c_int
         && (!fconfig.border || fconfig.shadow as ::core::ffi::c_int != 0)
     {
         grid_width += 1;
-        if pum_rl {
+        if pum_rl.get() {
             col_off += 1;
         }
     }
     pum_grid.blending = p_pb > 0 as OptInt || fconfig.shadow as ::core::ffi::c_int != 0;
     grid_assign_handle(&raw mut pum_grid);
-    pum_left_col = pum_col - col_off;
-    pum_right_col = pum_left_col + grid_width;
+    pum_left_col.set(pum_col.get() - col_off);
+    pum_right_col.set(pum_left_col.get() + grid_width);
     let mut moved: bool = ui_comp_put_grid(
         &raw mut pum_grid,
-        pum_row,
-        pum_left_col,
-        pum_height + border_width,
+        pum_row.get(),
+        pum_left_col.get(),
+        pum_height.get() + border_width,
         grid_width + border_width,
         false_0 != 0,
         true_0 != 0,
     );
     let mut invalid_grid: bool =
-        moved as ::core::ffi::c_int != 0 || pum_invalid as ::core::ffi::c_int != 0;
-    pum_invalid = false_0 != 0;
+        moved as ::core::ffi::c_int != 0 || pum_invalid.get() as ::core::ffi::c_int != 0;
+    pum_invalid.set(false_0 != 0);
     must_redraw_pum = false_0 != 0;
     if pum_grid.chars.is_null()
-        || pum_grid.rows != pum_height + border_width
+        || pum_grid.rows != pum_height.get() + border_width
         || pum_grid.cols != grid_width + border_width
     {
         grid_alloc(
             &raw mut pum_grid,
-            pum_height + border_width,
+            pum_height.get() + border_width,
             grid_width + border_width,
             !invalid_grid,
             false_0 != 0,
@@ -4221,13 +4236,13 @@ pub unsafe extern "C" fn pum_redraw() {
         grid_invalidate(&raw mut pum_grid);
     }
     if ui_has(kUIMultigrid) {
-        let mut anchor: *const ::core::ffi::c_char = if pum_above as ::core::ffi::c_int != 0 {
+        let mut anchor: *const ::core::ffi::c_char = if pum_above.get() as ::core::ffi::c_int != 0 {
             b"SW\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"NW\0".as_ptr() as *const ::core::ffi::c_char
         };
-        let mut row_off: ::core::ffi::c_int = if pum_above as ::core::ffi::c_int != 0 {
-            -pum_height
+        let mut row_off: ::core::ffi::c_int = if pum_above.get() as ::core::ffi::c_int != 0 {
+            -pum_height.get()
         } else {
             0 as ::core::ffi::c_int
         };
@@ -4235,9 +4250,9 @@ pub unsafe extern "C" fn pum_redraw() {
             pum_grid.handle as Integer,
             -1 as Window,
             cstr_as_string(anchor),
-            pum_anchor_grid as Integer,
-            (pum_row - row_off - pum_win_row_offset) as Float,
-            (pum_left_col - pum_win_col_offset) as Float,
+            pum_anchor_grid.get() as Integer,
+            (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
+            (pum_left_col.get() - pum_win_col_offset.get()) as Float,
             false_0 != 0,
             pum_grid.zindex as Integer,
             pum_grid.comp_index as ::core::ffi::c_int as Integer,
@@ -4245,7 +4260,7 @@ pub unsafe extern "C" fn pum_redraw() {
             pum_grid.comp_col as Integer,
         );
     }
-    let mut scroll_range: ::core::ffi::c_int = pum_size - pum_height;
+    let mut scroll_range: ::core::ffi::c_int = pum_size.get() - pum_height.get();
     if fconfig.border {
         grid_draw_border(
             &raw mut pum_grid,
@@ -4259,24 +4274,24 @@ pub unsafe extern "C" fn pum_redraw() {
             col_off += 1;
         }
     }
-    pum_first = if pum_first < scroll_range {
-        pum_first
+    pum_first.set(if pum_first.get() < scroll_range {
+        pum_first.get()
     } else {
         scroll_range
-    };
-    if pum_scrollbar != 0 {
-        thumb_height = pum_height * pum_height / pum_size;
+    });
+    if pum_scrollbar.get() != 0 {
+        thumb_height = pum_height.get() * pum_height.get() / pum_size.get();
         if thumb_height == 0 as ::core::ffi::c_int {
             thumb_height = 1 as ::core::ffi::c_int;
         }
-        thumb_pos = (pum_first * (pum_height - thumb_height)
+        thumb_pos = (pum_first.get() * (pum_height.get() - thumb_height)
             + scroll_range / 2 as ::core::ffi::c_int)
             / scroll_range;
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < pum_height {
-        let mut idx: ::core::ffi::c_int = i_0 + pum_first;
-        let selected: bool = idx == pum_selected;
+    while i_0 < pum_height.get() {
+        let mut idx: ::core::ffi::c_int = i_0 + pum_first.get();
+        let selected: bool = idx == pum_selected.get();
         let hlfs: *const hlf_T = if selected as ::core::ffi::c_int != 0 {
             &raw const hlfsSel as *const hlf_T
         } else {
@@ -4295,7 +4310,7 @@ pub unsafe extern "C" fn pum_redraw() {
         attr_0 = hl_combine_attr(win_hl_attr(curwin, HLF_PNI as ::core::ffi::c_int), attr_0);
         screengrid_line_start(&raw mut pum_grid, row, 0 as ::core::ffi::c_int);
         if extra_space {
-            if pum_rl {
+            if pum_rl.get() {
                 grid_line_puts(
                     col_off + 1 as ::core::ffi::c_int,
                     b" \0".as_ptr() as *const ::core::ffi::c_char,
@@ -4315,8 +4330,11 @@ pub unsafe extern "C" fn pum_redraw() {
         let mut totwidth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut need_fcs_trunc: bool = false_0 != 0;
         let mut order: [::core::ffi::c_int; 3] = [0; 3];
-        let mut items_width_array: [::core::ffi::c_int; 3] =
-            [pum_base_width, pum_kind_width, pum_extra_width];
+        let mut items_width_array: [::core::ffi::c_int; 3] = [
+            pum_base_width.get(),
+            pum_kind_width.get(),
+            pum_extra_width.get(),
+        ];
         pum_align_order(&raw mut order as *mut ::core::ffi::c_int);
         let mut basic_width: ::core::ffi::c_int =
             items_width_array[order[0 as ::core::ffi::c_int as usize] as usize];
@@ -4346,11 +4364,11 @@ pub unsafe extern "C" fn pum_redraw() {
                     let mut w: ::core::ffi::c_int = ptr2cells(p);
                     if *p as ::core::ffi::c_int != NUL
                         && *p as ::core::ffi::c_int != TAB
-                        && totwidth + w <= pum_width
+                        && totwidth + w <= pum_width.get()
                     {
                         width += w;
                     } else {
-                        let width_limit: ::core::ffi::c_int = pum_width;
+                        let width_limit: ::core::ffi::c_int = pum_width.get();
                         let mut saved: ::core::ffi::c_char = *p;
                         if saved as ::core::ffi::c_int != NUL {
                             *p = NUL as ::core::ffi::c_char;
@@ -4365,10 +4383,10 @@ pub unsafe extern "C" fn pum_redraw() {
                             attrs = pum_compute_text_attrs(
                                 st,
                                 hlf,
-                                (*pum_array.offset(idx as isize)).pum_user_abbr_hlattr,
+                                (*(*pum_array.ptr()).offset(idx as isize)).pum_user_abbr_hlattr,
                             );
                         }
-                        if pum_rl {
+                        if pum_rl.get() {
                             let mut rt: *mut ::core::ffi::c_char = reverse_text(st);
                             let mut rt_start: *mut ::core::ffi::c_char = rt;
                             let mut cells: ::core::ffi::c_int =
@@ -4468,7 +4486,7 @@ pub unsafe extern "C" fn pum_redraw() {
                         if *p as ::core::ffi::c_int != TAB {
                             break;
                         }
-                        if pum_rl {
+                        if pum_rl.get() {
                             grid_line_puts(
                                 grid_col - 1 as ::core::ffi::c_int,
                                 b"  \0".as_ptr() as *const ::core::ffi::c_char,
@@ -4512,11 +4530,11 @@ pub unsafe extern "C" fn pum_redraw() {
                         || j == 0 as ::core::ffi::c_int
                             && pum_get_item(idx, order[(j + 2 as ::core::ffi::c_int) as usize])
                                 .is_null())
-                || basic_width + n >= pum_width
+                || basic_width + n >= pum_width.get()
             {
                 break;
             }
-            if pum_rl {
+            if pum_rl.get() {
                 grid_line_fill(
                     col_off - basic_width - n + 1 as ::core::ffi::c_int,
                     grid_col + 1 as ::core::ffi::c_int,
@@ -4536,8 +4554,8 @@ pub unsafe extern "C" fn pum_redraw() {
             totwidth = basic_width + n;
             j += 1;
         }
-        if pum_rl {
-            let lcol: ::core::ffi::c_int = col_off - pum_width + 1 as ::core::ffi::c_int;
+        if pum_rl.get() {
+            let lcol: ::core::ffi::c_int = col_off - pum_width.get() + 1 as ::core::ffi::c_int;
             grid_line_fill(
                 lcol,
                 grid_col + 1 as ::core::ffi::c_int,
@@ -4551,7 +4569,7 @@ pub unsafe extern "C" fn pum_redraw() {
                     '<' as ::core::ffi::c_int as schar_T
                 };
                 *linebuf_attr.offset(lcol as isize) = trunc_attr as sattr_T;
-                if pum_width > 1 as ::core::ffi::c_int
+                if pum_width.get() > 1 as ::core::ffi::c_int
                     && *linebuf_char.offset((lcol + 1 as ::core::ffi::c_int) as isize)
                         == NUL as schar_T
                 {
@@ -4560,7 +4578,7 @@ pub unsafe extern "C" fn pum_redraw() {
                 }
             }
         } else {
-            let rcol: ::core::ffi::c_int = col_off + pum_width;
+            let rcol: ::core::ffi::c_int = col_off + pum_width.get();
             grid_line_fill(
                 grid_col,
                 rcol,
@@ -4568,7 +4586,7 @@ pub unsafe extern "C" fn pum_redraw() {
                 orig_attr,
             );
             if need_fcs_trunc {
-                if pum_width > 1 as ::core::ffi::c_int
+                if pum_width.get() > 1 as ::core::ffi::c_int
                     && *linebuf_char.offset((rcol - 1 as ::core::ffi::c_int) as isize)
                         == NUL as schar_T
                 {
@@ -4585,13 +4603,13 @@ pub unsafe extern "C" fn pum_redraw() {
                     trunc_attr as sattr_T;
             }
         }
-        if pum_scrollbar > 0 as ::core::ffi::c_int {
+        if pum_scrollbar.get() > 0 as ::core::ffi::c_int {
             let mut thumb: bool = i_0 >= thumb_pos && i_0 < thumb_pos + thumb_height;
             let mut scrollbar_col: ::core::ffi::c_int = col_off
-                + (if pum_rl as ::core::ffi::c_int != 0 {
-                    -pum_width
+                + (if pum_rl.get() as ::core::ffi::c_int != 0 {
+                    -pum_width.get()
                 } else {
-                    pum_width
+                    pum_width.get()
                 });
             let mut use_border_style: bool =
                 has_border as ::core::ffi::c_int != 0 && !fconfig.shadow;
@@ -4706,16 +4724,16 @@ unsafe extern "C" fn pum_adjust_info_position(
     mut width: ::core::ffi::c_int,
 ) -> bool {
     let mut border_width: ::core::ffi::c_int = pum_border_width();
-    let mut col: ::core::ffi::c_int = pum_col
-        + pum_width
+    let mut col: ::core::ffi::c_int = pum_col.get()
+        + pum_width.get()
         + 1 as ::core::ffi::c_int
-        + (if border_width > pum_scrollbar {
+        + (if border_width > pum_scrollbar.get() {
             border_width
         } else {
-            pum_scrollbar
+            pum_scrollbar.get()
         });
     let mut right_extra: ::core::ffi::c_int = Columns - col;
-    let mut left_extra: ::core::ffi::c_int = pum_col - 2 as ::core::ffi::c_int;
+    let mut left_extra: ::core::ffi::c_int = pum_col.get() - 2 as ::core::ffi::c_int;
     let mut max_extra: ::core::ffi::c_int = if right_extra > left_extra {
         right_extra
     } else {
@@ -4730,22 +4748,22 @@ unsafe extern "C" fn pum_adjust_info_position(
         (*wp).w_config.col = (col - 1 as ::core::ffi::c_int) as ::core::ffi::c_double;
     } else if left_extra > width {
         (*wp).w_config.width = width;
-        (*wp).w_config.col =
-            (pum_col - (*wp).w_config.width - 1 as ::core::ffi::c_int) as ::core::ffi::c_double;
+        (*wp).w_config.col = (pum_col.get() - (*wp).w_config.width - 1 as ::core::ffi::c_int)
+            as ::core::ffi::c_double;
     } else {
         let place_in_right: bool = right_extra > left_extra;
         (*wp).w_config.width = max_extra;
         (*wp).w_config.col = (if place_in_right as ::core::ffi::c_int != 0 {
             col - 1 as ::core::ffi::c_int
         } else {
-            pum_col - (*wp).w_config.width - 1 as ::core::ffi::c_int
+            pum_col.get() - (*wp).w_config.width - 1 as ::core::ffi::c_int
         }) as ::core::ffi::c_double;
     }
     (*wp).w_config.anchor = 0 as ::core::ffi::c_int as FloatAnchor;
     let mut count: linenr_T = (*(*wp).w_buffer).b_ml.ml_line_count;
     (*wp).w_view_width = (*wp).w_config.width;
     (*wp).w_config.height = plines_m_win(wp, (*wp).w_topline, count, Rows);
-    (*wp).w_config.row = pum_row as ::core::ffi::c_double;
+    (*wp).w_config.row = pum_row.get() as ::core::ffi::c_double;
     (*wp).w_config.hide = false_0 != 0;
     win_config_float(wp, (*wp).w_config);
     return true_0 != 0;
@@ -4755,7 +4773,7 @@ pub unsafe extern "C" fn pum_set_info(
     mut selected: ::core::ffi::c_int,
     mut info: *mut ::core::ffi::c_char,
 ) -> *mut win_T {
-    if !pum_is_visible || !compl_match_curr_select(selected) {
+    if !pum_is_visible.get() || !compl_match_curr_select(selected) {
         return ::core::ptr::null_mut::<win_T>();
     }
     block_autocmds();
@@ -4787,17 +4805,17 @@ unsafe extern "C" fn pum_set_selected(
     mut repeat: ::core::ffi::c_int,
 ) -> bool {
     let mut resized: bool = false_0 != 0;
-    let mut context: ::core::ffi::c_int = pum_height / 2 as ::core::ffi::c_int;
-    let mut prev_selected: ::core::ffi::c_int = pum_selected;
-    pum_selected = n;
-    let mut scroll_offset: ::core::ffi::c_int = pum_selected - pum_height;
+    let mut context: ::core::ffi::c_int = pum_height.get() / 2 as ::core::ffi::c_int;
+    let mut prev_selected: ::core::ffi::c_int = pum_selected.get();
+    pum_selected.set(n);
+    let mut scroll_offset: ::core::ffi::c_int = pum_selected.get() - pum_height.get();
     let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
     let mut use_float: bool = cur_cot_flags
         & kOptCotFlagPopup as ::core::ffi::c_int as ::core::ffi::c_uint
         != 0 as ::core::ffi::c_uint;
     if use_float as ::core::ffi::c_int != 0
-        && (pum_selected < 0 as ::core::ffi::c_int
-            || (*pum_array.offset(pum_selected as isize))
+        && (pum_selected.get() < 0 as ::core::ffi::c_int
+            || (*(*pum_array.ptr()).offset(pum_selected.get() as isize))
                 .pum_info
                 .is_null())
     {
@@ -4807,29 +4825,31 @@ unsafe extern "C" fn pum_set_selected(
             win_config_float(wp, (*wp).w_config);
         }
     }
-    if pum_selected >= 0 as ::core::ffi::c_int && pum_selected < pum_size {
-        if pum_first > pum_selected - 4 as ::core::ffi::c_int {
-            if pum_first > pum_selected - 2 as ::core::ffi::c_int {
-                pum_first -= pum_height - 2 as ::core::ffi::c_int;
-                if pum_first < 0 as ::core::ffi::c_int {
-                    pum_first = 0 as ::core::ffi::c_int;
-                } else if pum_first > pum_selected {
-                    pum_first = pum_selected;
+    if pum_selected.get() >= 0 as ::core::ffi::c_int && pum_selected.get() < pum_size.get() {
+        if pum_first.get() > pum_selected.get() - 4 as ::core::ffi::c_int {
+            if pum_first.get() > pum_selected.get() - 2 as ::core::ffi::c_int {
+                (*pum_first.ptr()) -= pum_height.get() - 2 as ::core::ffi::c_int;
+                if pum_first.get() < 0 as ::core::ffi::c_int {
+                    pum_first.set(0 as ::core::ffi::c_int);
+                } else if pum_first.get() > pum_selected.get() {
+                    pum_first.set(pum_selected.get());
                 }
             } else {
-                pum_first = pum_selected;
+                pum_first.set(pum_selected.get());
             }
-        } else if pum_first < scroll_offset + 5 as ::core::ffi::c_int {
-            if pum_first < scroll_offset + 3 as ::core::ffi::c_int {
-                pum_first = if pum_first + pum_height - 2 as ::core::ffi::c_int
-                    > scroll_offset + 1 as ::core::ffi::c_int
-                {
-                    pum_first + pum_height - 2 as ::core::ffi::c_int
-                } else {
-                    scroll_offset + 1 as ::core::ffi::c_int
-                };
+        } else if pum_first.get() < scroll_offset + 5 as ::core::ffi::c_int {
+            if pum_first.get() < scroll_offset + 3 as ::core::ffi::c_int {
+                pum_first.set(
+                    if pum_first.get() + pum_height.get() - 2 as ::core::ffi::c_int
+                        > scroll_offset + 1 as ::core::ffi::c_int
+                    {
+                        pum_first.get() + pum_height.get() - 2 as ::core::ffi::c_int
+                    } else {
+                        scroll_offset + 1 as ::core::ffi::c_int
+                    },
+                );
             } else {
-                pum_first = scroll_offset + 1 as ::core::ffi::c_int;
+                pum_first.set(scroll_offset + 1 as ::core::ffi::c_int);
             }
         }
         context = if context < 3 as ::core::ffi::c_int {
@@ -4837,23 +4857,26 @@ unsafe extern "C" fn pum_set_selected(
         } else {
             3 as ::core::ffi::c_int
         };
-        if pum_height > 2 as ::core::ffi::c_int {
-            if pum_first > pum_selected - context {
-                pum_first = if pum_selected - context > 0 as ::core::ffi::c_int {
-                    pum_selected - context
+        if pum_height.get() > 2 as ::core::ffi::c_int {
+            if pum_first.get() > pum_selected.get() - context {
+                pum_first.set(if pum_selected.get() - context > 0 as ::core::ffi::c_int {
+                    pum_selected.get() - context
                 } else {
                     0 as ::core::ffi::c_int
-                };
-            } else if pum_first < pum_selected + context - pum_height + 1 as ::core::ffi::c_int {
-                pum_first = pum_selected + context - pum_height + 1 as ::core::ffi::c_int;
+                });
+            } else if pum_first.get()
+                < pum_selected.get() + context - pum_height.get() + 1 as ::core::ffi::c_int
+            {
+                pum_first
+                    .set(pum_selected.get() + context - pum_height.get() + 1 as ::core::ffi::c_int);
             }
         }
-        pum_first = if pum_first < pum_size - pum_height {
-            pum_first
+        pum_first.set(if pum_first.get() < pum_size.get() - pum_height.get() {
+            pum_first.get()
         } else {
-            pum_size - pum_height
-        };
-        if !(*pum_array.offset(pum_selected as isize))
+            pum_size.get() - pum_height.get()
+        });
+        if !(*(*pum_array.ptr()).offset(pum_selected.get() as isize))
             .pum_info
             .is_null()
             && Rows > 10 as ::core::ffi::c_int
@@ -4981,7 +5004,7 @@ unsafe extern "C" fn pum_set_selected(
                     let mut max_info_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     pum_preview_set_text(
                         curwin,
-                        (*pum_array.offset(pum_selected as isize)).pum_info,
+                        (*(*pum_array.ptr()).offset(pum_selected.get() as isize)).pum_info,
                         &raw mut lnum,
                         &raw mut max_info_width,
                     );
@@ -4998,7 +5021,7 @@ unsafe extern "C" fn pum_set_selected(
                     }
                     (*curbuf).b_changed = false_0;
                     (*curbuf).b_p_ma = false_0;
-                    if pum_selected != prev_selected {
+                    if pum_selected.get() != prev_selected {
                         (*curwin).w_topline = 1 as ::core::ffi::c_int as linenr_T;
                     } else if (*curwin).w_topline > (*curbuf).b_ml.ml_line_count {
                         (*curwin).w_topline = (*curbuf).b_ml.ml_line_count;
@@ -5034,17 +5057,17 @@ unsafe extern "C" fn pum_set_selected(
                             no_u_sync -= 1;
                             update_topline(curwin);
                         }
-                        pum_is_visible = false_0 != 0;
+                        pum_is_visible.set(false_0 != 0);
                         update_screen();
-                        pum_is_visible = true_0 != 0;
+                        pum_is_visible.set(true_0 != 0);
                         if !resized && win_valid(curwin_save) as ::core::ffi::c_int != 0 {
                             no_u_sync += 1;
                             win_enter(curwin_save, true_0 != 0);
                             no_u_sync -= 1;
                         }
-                        pum_is_visible = false_0 != 0;
+                        pum_is_visible.set(false_0 != 0);
                         update_screen();
-                        pum_is_visible = true_0 != 0;
+                        pum_is_visible.set(true_0 != 0);
                     }
                 }
             }
@@ -5057,8 +5080,8 @@ unsafe extern "C" fn pum_set_selected(
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_undisplay(mut immediate: bool) {
-    pum_is_visible = false_0 != 0;
-    pum_array = ::core::ptr::null_mut::<pumitem_T>();
+    pum_is_visible.set(false_0 != 0);
+    pum_array.set(::core::ptr::null_mut::<pumitem_T>());
     must_redraw_pum = false_0 != 0;
     if immediate {
         pum_check_clear();
@@ -5066,8 +5089,8 @@ pub unsafe extern "C" fn pum_undisplay(mut immediate: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_check_clear() {
-    if !pum_is_visible && pum_is_drawn as ::core::ffi::c_int != 0 {
-        if pum_external {
+    if !pum_is_visible.get() && pum_is_drawn.get() as ::core::ffi::c_int != 0 {
+        if pum_external.get() {
             ui_call_popupmenu_hide();
         } else {
             ui_comp_remove_grid(&raw mut pum_grid);
@@ -5077,8 +5100,8 @@ pub unsafe extern "C" fn pum_check_clear() {
             }
             grid_free(&raw mut pum_grid);
         }
-        pum_is_drawn = false_0 != 0;
-        pum_external = false_0 != 0;
+        pum_is_drawn.set(false_0 != 0);
+        pum_external.set(false_0 != 0);
         let mut wp: *mut win_T = win_float_find_preview();
         if !wp.is_null() {
             win_close(wp, false_0 != 0, false_0 != 0);
@@ -5087,19 +5110,19 @@ pub unsafe extern "C" fn pum_check_clear() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_clear() {
-    pum_first = 0 as ::core::ffi::c_int;
+    pum_first.set(0 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_visible() -> bool {
-    return pum_is_visible;
+    return pum_is_visible.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_drawn() -> bool {
-    return pum_visible() as ::core::ffi::c_int != 0 && !pum_external;
+    return pum_visible() as ::core::ffi::c_int != 0 && !pum_external.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_invalidate() {
-    pum_invalid = true_0 != 0;
+    pum_invalid.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_recompose() {
@@ -5111,7 +5134,7 @@ pub unsafe extern "C" fn pum_ext_select_item(
     mut insert: bool,
     mut finish: bool,
 ) {
-    if !pum_visible() || item < -1 as ::core::ffi::c_int || item >= pum_size {
+    if !pum_visible() || item < -1 as ::core::ffi::c_int || item >= pum_size.get() {
         return;
     }
     pum_want.active = true_0 != 0;
@@ -5121,13 +5144,13 @@ pub unsafe extern "C" fn pum_ext_select_item(
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_get_height() -> ::core::ffi::c_int {
-    if pum_external {
+    if pum_external.get() {
         let mut ui_pum_height: ::core::ffi::c_int = ui_pum_get_height();
         if ui_pum_height != 0 {
             return ui_pum_height;
         }
     }
-    return pum_height;
+    return pum_height.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
@@ -5139,10 +5162,10 @@ pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
     let mut r: ::core::ffi::c_double = 0.;
     let mut c: ::core::ffi::c_double = 0.;
     if !ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) {
-        w = pum_width as ::core::ffi::c_double;
-        h = pum_height as ::core::ffi::c_double;
-        r = pum_row as ::core::ffi::c_double;
-        c = pum_col as ::core::ffi::c_double;
+        w = pum_width.get() as ::core::ffi::c_double;
+        h = pum_height.get() as ::core::ffi::c_double;
+        r = pum_row.get() as ::core::ffi::c_double;
+        c = pum_col.get() as ::core::ffi::c_double;
     }
     tv_dict_add_float(
         dict,
@@ -5172,13 +5195,13 @@ pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
         dict,
         b"size\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        pum_size as varnumber_T,
+        pum_size.get() as varnumber_T,
     );
     tv_dict_add_bool(
         dict,
         b"scrollbar\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        (if pum_scrollbar != 0 {
+        (if pum_scrollbar.get() != 0 {
             kBoolVarTrue as ::core::ffi::c_int
         } else {
             kBoolVarFalse as ::core::ffi::c_int
@@ -5193,8 +5216,8 @@ unsafe extern "C" fn pum_position_at_mouse(mut min_width: ::core::ffi::c_int) {
     let mut grid: ::core::ffi::c_int = mouse_grid;
     let mut row: ::core::ffi::c_int = mouse_row;
     let mut col: ::core::ffi::c_int = mouse_col;
-    pum_win_row_offset = 0 as ::core::ffi::c_int;
-    pum_win_col_offset = 0 as ::core::ffi::c_int;
+    pum_win_row_offset.set(0 as ::core::ffi::c_int);
+    pum_win_col_offset.set(0 as ::core::ffi::c_int);
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 && grid == 0 as ::core::ffi::c_int {
         mouse_find_win_outer(&raw mut grid, &raw mut row, &raw mut col);
     }
@@ -5203,8 +5226,8 @@ unsafe extern "C" fn pum_position_at_mouse(mut min_width: ::core::ffi::c_int) {
         if !wp.is_null() {
             row += (*wp).w_winrow;
             col += (*wp).w_wincol;
-            pum_win_row_offset = (*wp).w_winrow;
-            pum_win_col_offset = (*wp).w_wincol;
+            pum_win_row_offset.set((*wp).w_winrow);
+            pum_win_col_offset.set((*wp).w_wincol);
             if (*wp).w_view_height > 0 as ::core::ffi::c_int
                 || (*wp).w_view_width > 0 as ::core::ffi::c_int
             {
@@ -5222,62 +5245,68 @@ unsafe extern "C" fn pum_position_at_mouse(mut min_width: ::core::ffi::c_int) {
         }
     }
     if pum_grid.handle != 0 as ::core::ffi::c_int && grid == pum_grid.handle {
-        row += pum_row;
-        col += pum_left_col;
+        row += pum_row.get();
+        col += pum_left_col.get();
     } else {
-        pum_anchor_grid = grid;
+        pum_anchor_grid.set(grid);
     }
     let mut border_width: ::core::ffi::c_int = pum_border_width();
     let mut border_height: ::core::ffi::c_int = border_width;
-    if max_row - row > pum_size + border_height || max_row - row > row - min_row {
-        pum_above = false_0 != 0;
-        pum_row = row + 1 as ::core::ffi::c_int;
-        if pum_height + border_height > max_row - pum_row {
-            pum_height = max_row - pum_row - border_height;
+    if max_row - row > pum_size.get() + border_height || max_row - row > row - min_row {
+        pum_above.set(false_0 != 0);
+        pum_row.set(row + 1 as ::core::ffi::c_int);
+        if pum_height.get() + border_height > max_row - pum_row.get() {
+            pum_height.set(max_row - pum_row.get() - border_height);
         }
     } else {
-        pum_above = true_0 != 0;
-        pum_row = row - pum_size - border_height;
-        if pum_row < min_row {
-            pum_height += pum_row - min_row;
-            pum_row = min_row;
+        pum_above.set(true_0 != 0);
+        pum_row.set(row - pum_size.get() - border_height);
+        if pum_row.get() < min_row {
+            (*pum_height.ptr()) += pum_row.get() - min_row;
+            pum_row.set(min_row);
         }
     }
-    if pum_rl {
-        if col - min_col + 1 as ::core::ffi::c_int >= pum_base_width + border_width
+    if pum_rl.get() {
+        if col - min_col + 1 as ::core::ffi::c_int >= pum_base_width.get() + border_width
             || col - min_col + 1 as ::core::ffi::c_int > min_width + border_width
         {
-            pum_col = col;
+            pum_col.set(col);
         } else {
-            pum_col = min_col
-                + (if pum_base_width + border_width < min_width + border_width {
-                    pum_base_width + border_width
-                } else {
-                    min_width + border_width
-                })
-                - 1 as ::core::ffi::c_int;
+            pum_col.set(
+                min_col
+                    + (if pum_base_width.get() + border_width < min_width + border_width {
+                        pum_base_width.get() + border_width
+                    } else {
+                        min_width + border_width
+                    })
+                    - 1 as ::core::ffi::c_int,
+            );
         }
-        pum_width = pum_col - min_col + 1 as ::core::ffi::c_int - border_width;
+        pum_width.set(pum_col.get() - min_col + 1 as ::core::ffi::c_int - border_width);
     } else {
-        if max_col - col >= pum_base_width + border_width
+        if max_col - col >= pum_base_width.get() + border_width
             || max_col - col > min_width + border_width
         {
-            pum_col = col;
+            pum_col.set(col);
         } else {
-            pum_col = max_col
-                - (if pum_base_width + border_width < min_width + border_width {
-                    pum_base_width + border_width
-                } else {
-                    min_width + border_width
-                });
+            pum_col.set(
+                max_col
+                    - (if pum_base_width.get() + border_width < min_width + border_width {
+                        pum_base_width.get() + border_width
+                    } else {
+                        min_width + border_width
+                    }),
+            );
         }
-        pum_width = max_col - pum_col - border_width;
+        pum_width.set(max_col - pum_col.get() - border_width);
     }
-    pum_width = if pum_width < pum_base_width + 1 as ::core::ffi::c_int {
-        pum_width
-    } else {
-        pum_base_width + 1 as ::core::ffi::c_int
-    };
+    pum_width.set(
+        if pum_width.get() < pum_base_width.get() + 1 as ::core::ffi::c_int {
+            pum_width.get()
+        } else {
+            pum_base_width.get() + 1 as ::core::ffi::c_int
+        },
+    );
 }
 unsafe extern "C" fn pum_select_mouse_pos() {
     let mut grid: ::core::ffi::c_int = mouse_grid;
@@ -5294,25 +5323,27 @@ unsafe extern "C" fn pum_select_mouse_pos() {
             0 as ::core::ffi::c_int
         };
         let mut item: ::core::ffi::c_int = row - border_offset;
-        pum_selected = if item >= 0 as ::core::ffi::c_int && item < pum_height {
-            item
-        } else {
-            -1 as ::core::ffi::c_int
-        };
+        pum_selected.set(
+            if item >= 0 as ::core::ffi::c_int && item < pum_height.get() {
+                item
+            } else {
+                -1 as ::core::ffi::c_int
+            },
+        );
         return;
     }
-    if grid != pum_anchor_grid
-        || col < pum_left_col - pum_win_col_offset
-        || col >= pum_right_col - pum_win_col_offset
+    if grid != pum_anchor_grid.get()
+        || col < pum_left_col.get() - pum_win_col_offset.get()
+        || col >= pum_right_col.get() - pum_win_col_offset.get()
     {
-        pum_selected = -1 as ::core::ffi::c_int;
+        pum_selected.set(-1 as ::core::ffi::c_int);
         return;
     }
-    let mut idx: ::core::ffi::c_int = row - (pum_row - pum_win_row_offset);
-    if idx < 0 as ::core::ffi::c_int || idx >= pum_height {
-        pum_selected = -1 as ::core::ffi::c_int;
-    } else if *(*pum_array.offset(idx as isize)).pum_text as ::core::ffi::c_int != NUL {
-        pum_selected = idx;
+    let mut idx: ::core::ffi::c_int = row - (pum_row.get() - pum_win_row_offset.get());
+    if idx < 0 as ::core::ffi::c_int || idx >= pum_height.get() {
+        pum_selected.set(-1 as ::core::ffi::c_int);
+    } else if *(*(*pum_array.ptr()).offset(idx as isize)).pum_text as ::core::ffi::c_int != NUL {
+        pum_selected.set(idx);
     }
 }
 unsafe extern "C" fn pum_execute_menu(mut menu: *mut vimmenu_T, mut mode: ::core::ffi::c_int) {
@@ -5358,7 +5389,7 @@ unsafe extern "C" fn pum_execute_menu(mut menu: *mut vimmenu_T, mut mode: ::core
         if (*mp).modes & (*mp).enabled & mode != 0 && {
             let c2rust_fresh7 = idx;
             idx = idx + 1;
-            c2rust_fresh7 == pum_selected
+            c2rust_fresh7 == pum_selected.get()
         } {
             memset(
                 &raw mut ea as *mut ::core::ffi::c_void,
@@ -5375,26 +5406,28 @@ unsafe extern "C" fn pum_execute_menu(mut menu: *mut vimmenu_T, mut mode: ::core
 #[no_mangle]
 pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
     pum_undisplay(true_0 != 0);
-    pum_size = 0 as ::core::ffi::c_int;
+    pum_size.set(0 as ::core::ffi::c_int);
     let mut mode: ::core::ffi::c_int = get_menu_mode_flag();
     let mut mp: *mut vimmenu_T = (*menu).children;
     while !mp.is_null() {
         if menu_is_separator((*mp).dname) as ::core::ffi::c_int != 0
             || (*mp).modes & (*mp).enabled & mode != 0
         {
-            pum_size += 1;
+            (*pum_size.ptr()) += 1;
         }
         mp = (*mp).next;
     }
-    if pum_size <= 0 as ::core::ffi::c_int {
+    if pum_size.get() <= 0 as ::core::ffi::c_int {
         emsg(gettext(
             &raw const e_menu_only_exists_in_another_mode as *const ::core::ffi::c_char,
         ));
         return;
     }
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut array: *mut pumitem_T =
-        xcalloc(pum_size as size_t, ::core::mem::size_of::<pumitem_T>()) as *mut pumitem_T;
+    let mut array: *mut pumitem_T = xcalloc(
+        pum_size.get() as size_t,
+        ::core::mem::size_of::<pumitem_T>(),
+    ) as *mut pumitem_T;
     let mut mp_0: *mut vimmenu_T = (*menu).children;
     while !mp_0.is_null() {
         let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5412,14 +5445,14 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
         }
         mp_0 = (*mp_0).next;
     }
-    pum_array = array;
+    pum_array.set(array);
     pum_compute_size();
-    pum_scrollbar = 0 as ::core::ffi::c_int;
-    pum_height = pum_size;
-    pum_rl = (*curwin).w_onebuf_opt.wo_rl != 0;
+    pum_scrollbar.set(0 as ::core::ffi::c_int);
+    pum_height.set(pum_size.get());
+    pum_rl.set((*curwin).w_onebuf_opt.wo_rl != 0);
     pum_position_at_mouse(20 as ::core::ffi::c_int);
-    pum_selected = -1 as ::core::ffi::c_int;
-    pum_first = 0 as ::core::ffi::c_int;
+    pum_selected.set(-1 as ::core::ffi::c_int);
+    pum_first.set(0 as ::core::ffi::c_int);
     if p_mousemev == 0 {
         ui_call_option_set(
             String_0 {
@@ -5434,13 +5467,13 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
         );
     }
     loop {
-        pum_is_visible = true_0 != 0;
-        pum_is_drawn = true_0 != 0;
+        pum_is_visible.set(true_0 != 0);
+        pum_is_drawn.set(true_0 != 0);
         pum_grid.zindex = kZIndexCmdlinePopupMenu as ::core::ffi::c_int;
         pum_redraw();
         setcursor_mayforce(curwin, true_0 != 0);
         let mut c: ::core::ffi::c_int = vgetc();
-        if c == ESC || c == Ctrl_C || pum_array.is_null() {
+        if c == ESC || c == Ctrl_C || (*pum_array.ptr()).is_null() {
             break;
         }
         if c == CAR || c == NL {
@@ -5451,9 +5484,11 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
             || c == -(253 as ::core::ffi::c_int
                 + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         {
-            while pum_selected > 0 as ::core::ffi::c_int {
-                pum_selected -= 1;
-                if *(*array.offset(pum_selected as isize)).pum_text as ::core::ffi::c_int != NUL {
+            while pum_selected.get() > 0 as ::core::ffi::c_int {
+                (*pum_selected.ptr()) -= 1;
+                if *(*array.offset(pum_selected.get() as isize)).pum_text as ::core::ffi::c_int
+                    != NUL
+                {
                     break;
                 }
             }
@@ -5462,9 +5497,11 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
             || c == -(253 as ::core::ffi::c_int
                 + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         {
-            while pum_selected < pum_size - 1 as ::core::ffi::c_int {
-                pum_selected += 1;
-                if *(*array.offset(pum_selected as isize)).pum_text as ::core::ffi::c_int != NUL {
+            while pum_selected.get() < pum_size.get() - 1 as ::core::ffi::c_int {
+                (*pum_selected.ptr()) += 1;
+                if *(*array.offset(pum_selected.get() as isize)).pum_text as ::core::ffi::c_int
+                    != NUL
+                {
                     break;
                 }
             }
@@ -5495,7 +5532,7 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
                 continue;
             }
             pum_select_mouse_pos();
-            if pum_selected >= 0 as ::core::ffi::c_int {
+            if pum_selected.get() >= 0 as ::core::ffi::c_int {
                 pum_execute_menu(menu, mode);
                 break;
             } else if c
@@ -5509,7 +5546,7 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
         }
     }
     idx = 0 as ::core::ffi::c_int;
-    while idx < pum_size {
+    while idx < pum_size.get() {
         xfree((*array.offset(idx as isize)).pum_text as *mut ::core::ffi::c_void);
         idx += 1;
     }
@@ -5558,18 +5595,18 @@ pub unsafe extern "C" fn pum_make_popup(
 #[no_mangle]
 pub unsafe extern "C" fn pum_ui_flush() {
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
-        && pum_is_drawn as ::core::ffi::c_int != 0
-        && !pum_external
+        && pum_is_drawn.get() as ::core::ffi::c_int != 0
+        && !pum_external.get()
         && pum_grid.handle != 0 as ::core::ffi::c_int
         && pum_grid.pending_comp_index_update as ::core::ffi::c_int != 0
     {
-        let mut anchor: *const ::core::ffi::c_char = if pum_above as ::core::ffi::c_int != 0 {
+        let mut anchor: *const ::core::ffi::c_char = if pum_above.get() as ::core::ffi::c_int != 0 {
             b"SW\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"NW\0".as_ptr() as *const ::core::ffi::c_char
         };
-        let mut row_off: ::core::ffi::c_int = if pum_above as ::core::ffi::c_int != 0 {
-            -pum_height
+        let mut row_off: ::core::ffi::c_int = if pum_above.get() as ::core::ffi::c_int != 0 {
+            -pum_height.get()
         } else {
             0 as ::core::ffi::c_int
         };
@@ -5577,9 +5614,9 @@ pub unsafe extern "C" fn pum_ui_flush() {
             pum_grid.handle as Integer,
             -1 as Window,
             cstr_as_string(anchor),
-            pum_anchor_grid as Integer,
-            (pum_row - row_off - pum_win_row_offset) as Float,
-            (pum_left_col - pum_win_col_offset) as Float,
+            pum_anchor_grid.get() as Integer,
+            (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
+            (pum_left_col.get() - pum_win_col_offset.get()) as Float,
             false_0 != 0,
             pum_grid.zindex as Integer,
             pum_grid.comp_index as ::core::ffi::c_int as Integer,

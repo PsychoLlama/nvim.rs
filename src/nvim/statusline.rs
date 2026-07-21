@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2707,13 +2708,13 @@ pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
-    static mut busy: bool = false_0 != 0;
-    if busy as ::core::ffi::c_int != 0
+    static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if busy.get() as ::core::ffi::c_int != 0
         || wild_menu_showing != 0 as ::core::ffi::c_int && !ui_has(kUIWildmenu)
     {
         return;
     }
-    busy = true_0 != 0;
+    busy.set(true_0 != 0);
     (*wp).w_redr_status = false_0 != 0;
     if (*wp).w_status_height == 0 as ::core::ffi::c_int
         && !(is_stl_global as ::core::ffi::c_int != 0 && wp == curwin)
@@ -2743,7 +2744,7 @@ pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
         grid_line_put_schar((*wp).w_wincol + (*wp).w_width, fillchar, attr);
         grid_line_flush();
     }
-    busy = false_0 != 0;
+    busy.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
@@ -2884,7 +2885,7 @@ pub unsafe extern "C" fn stl_fill_click_defs(
         xfree(cur_click_def.func as *mut ::core::ffi::c_void);
     };
 }
-static mut did_show_ext_ruler: bool = false_0 != 0;
+static did_show_ext_ruler: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn win_redr_custom(
     mut wp: *mut win_T,
     mut draw_winbar: bool,
@@ -2905,7 +2906,7 @@ unsafe extern "C" fn win_redr_custom(
     };
     let mut maxcol: ::core::ffi::c_int = 0;
     let mut click_defs: *mut StlClickDefinition = ::core::ptr::null_mut::<StlClickDefinition>();
-    static mut entered: bool = false_0 != 0;
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut attr: ::core::ffi::c_int = 0;
     let mut row: ::core::ffi::c_int = 0;
@@ -2926,10 +2927,10 @@ unsafe extern "C" fn win_redr_custom(
         } else {
             &raw mut default_grid
         };
-    if entered {
+    if entered.get() {
         return;
     }
-    entered = true_0 != 0;
+    entered.set(true_0 != 0);
     '_theend: {
         if wp.is_null() {
             stl = p_tal;
@@ -3238,7 +3239,7 @@ unsafe extern "C" fn win_redr_custom(
             }
             if ui_event {
                 ui_call_msg_ruler(content);
-                did_show_ext_ruler = true_0 != 0;
+                did_show_ext_ruler.set(true_0 != 0);
                 api_free_array(content);
             } else {
                 maxcol = start_col + maxwidth;
@@ -3261,15 +3262,15 @@ unsafe extern "C" fn win_redr_custom(
             }
         }
     }
-    entered = false_0 != 0;
+    entered.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
-    static mut entered: bool = false_0 != 0;
-    if entered {
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if entered.get() {
         return;
     }
-    entered = true_0 != 0;
+    entered.set(true_0 != 0);
     if !((*wp).w_winbar_height == 0 as ::core::ffi::c_int || !redrawing()) {
         if *p_wbr as ::core::ffi::c_int != NUL
             || *(*wp).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL
@@ -3277,11 +3278,12 @@ pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
             win_redr_custom(wp, true_0 != 0, false_0 != 0, false_0 != 0);
         }
     }
-    entered = false_0 != 0;
+    entered.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn redraw_ruler() {
-    static mut did_ruler_col: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+    static did_ruler_col: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(-1 as ::core::ffi::c_int);
     let mut wp: *mut win_T =
         if !is_aucmd_win(curwin) && (*curwin).w_status_height == 0 as ::core::ffi::c_int {
             curwin
@@ -3294,17 +3296,17 @@ pub unsafe extern "C" fn redraw_ruler() {
         || is_stl_global as ::core::ffi::c_int != 0
         || p_ch == 0 as OptInt && !ui_has(kUIMessages)
     {
-        if did_show_ext_ruler as ::core::ffi::c_int != 0
+        if did_show_ext_ruler.get() as ::core::ffi::c_int != 0
             && ui_has(kUIMessages) as ::core::ffi::c_int != 0
         {
             ui_call_msg_ruler(ARRAY_DICT_INIT);
-            did_show_ext_ruler = false_0 != 0;
-        } else if did_ruler_col > 0 as ::core::ffi::c_int {
-            msg_col = did_ruler_col;
+            did_show_ext_ruler.set(false_0 != 0);
+        } else if did_ruler_col.get() > 0 as ::core::ffi::c_int {
+            msg_col = did_ruler_col.get();
             msg_row = Rows - 1 as ::core::ffi::c_int;
             msg_clr_eos();
         }
-        did_ruler_col = -1 as ::core::ffi::c_int;
+        did_ruler_col.set(-1 as ::core::ffi::c_int);
         return;
     }
     if (*wp).w_cursor.lnum > (*(*wp).w_buffer).b_ml.ml_line_count {
@@ -3468,12 +3470,12 @@ pub unsafe extern "C" fn redraw_ruler() {
             data: C2Rust_Unnamed { array: chunk },
         };
         ui_call_msg_ruler(content);
-        did_show_ext_ruler = true_0 != 0;
-        did_ruler_col = 1 as ::core::ffi::c_int;
+        did_show_ext_ruler.set(true_0 != 0);
+        did_ruler_col.set(1 as ::core::ffi::c_int);
     } else {
-        if did_show_ext_ruler {
+        if did_show_ext_ruler.get() {
             ui_call_msg_ruler(ARRAY_DICT_INIT);
-            did_show_ext_ruler = false_0 != 0;
+            did_show_ext_ruler.set(false_0 != 0);
         }
         n1 = 0 as ::core::ffi::c_int;
         n2 = 0 as ::core::ffi::c_int;
@@ -3489,14 +3491,14 @@ pub unsafe extern "C" fn redraw_ruler() {
             }
         }
         grid_line_start(&raw mut msg_grid_adj, Rows - 1 as ::core::ffi::c_int);
-        did_ruler_col = off + this_ru_col;
+        did_ruler_col.set(off + this_ru_col);
         let mut w: ::core::ffi::c_int = grid_line_puts(
-            did_ruler_col,
+            did_ruler_col.get(),
             &raw mut buffer as *mut ::core::ffi::c_char,
             -1 as ::core::ffi::c_int,
             attr,
         );
-        grid_line_fill(did_ruler_col + w, off + width, fillchar, attr);
+        grid_line_fill(did_ruler_col.get() + w, off + width, fillchar, attr);
         grid_line_flush();
     };
 }
@@ -3513,13 +3515,13 @@ pub unsafe extern "C" fn fillchar_status(mut group: *mut hlf_T, mut wp: *mut win
 }
 #[no_mangle]
 pub unsafe extern "C" fn redraw_custom_statusline(mut wp: *mut win_T) {
-    static mut entered: bool = false_0 != 0;
-    if entered {
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if entered.get() {
         return;
     }
-    entered = true_0 != 0;
+    entered.set(true_0 != 0);
     win_redr_custom(wp, false_0 != 0, false_0 != 0, false_0 != 0);
-    entered = false_0 != 0;
+    entered.set(false_0 != 0);
 }
 unsafe extern "C" fn ui_ext_tabline_update() {
     let mut arena: Arena = ARENA_EMPTY;
@@ -3920,15 +3922,18 @@ pub unsafe extern "C" fn build_stl_str_hl(
     mut tabtab: *mut *mut StlClickRecord,
     mut stcp: *mut statuscol_T,
 ) -> ::core::ffi::c_int {
-    static mut stl_items_len: size_t = 20 as size_t;
-    static mut stl_items: *mut stl_item_t = ::core::ptr::null_mut::<stl_item_t>();
-    static mut stl_groupitems: *mut ::core::ffi::c_int =
-        ::core::ptr::null_mut::<::core::ffi::c_int>();
-    static mut stl_hltab: *mut stl_hlrec_t = ::core::ptr::null_mut::<stl_hlrec_t>();
-    static mut stl_tabtab: *mut StlClickRecord = ::core::ptr::null_mut::<StlClickRecord>();
-    static mut stl_separator_locations: *mut ::core::ffi::c_int =
-        ::core::ptr::null_mut::<::core::ffi::c_int>();
-    static mut curitem: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static stl_items_len: GlobalCell<size_t> = GlobalCell::new(20 as size_t);
+    static stl_items: GlobalCell<*mut stl_item_t> =
+        GlobalCell::new(::core::ptr::null_mut::<stl_item_t>());
+    static stl_groupitems: GlobalCell<*mut ::core::ffi::c_int> =
+        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
+    static stl_hltab: GlobalCell<*mut stl_hlrec_t> =
+        GlobalCell::new(::core::ptr::null_mut::<stl_hlrec_t>());
+    static stl_tabtab: GlobalCell<*mut StlClickRecord> =
+        GlobalCell::new(::core::ptr::null_mut::<StlClickRecord>());
+    static stl_separator_locations: GlobalCell<*mut ::core::ffi::c_int> =
+        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
+    static curitem: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut buf_tmp: [::core::ffi::c_char; 70] = [0; 70];
     let mut usefmt: *mut ::core::ffi::c_char = fmt;
     let save_redraw_not_allowed: bool = redraw_not_allowed;
@@ -3937,23 +3942,24 @@ pub unsafe extern "C" fn build_stl_str_hl(
     if updating_screen {
         redraw_not_allowed = true_0 != 0;
     }
-    if stl_items.is_null() {
-        stl_items = xmalloc(::core::mem::size_of::<stl_item_t>().wrapping_mul(stl_items_len))
-            as *mut stl_item_t;
-        stl_groupitems =
-            xmalloc(::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(stl_items_len))
-                as *mut ::core::ffi::c_int;
-        stl_hltab = xmalloc(
+    if (*stl_items.ptr()).is_null() {
+        stl_items.set(xmalloc(
+            ::core::mem::size_of::<stl_item_t>().wrapping_mul(stl_items_len.get()),
+        ) as *mut stl_item_t);
+        stl_groupitems.set(xmalloc(
+            ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(stl_items_len.get()),
+        ) as *mut ::core::ffi::c_int);
+        stl_hltab.set(xmalloc(
             ::core::mem::size_of::<stl_hlrec_t>()
-                .wrapping_mul(stl_items_len.wrapping_add(1 as size_t)),
-        ) as *mut stl_hlrec_t;
-        stl_tabtab = xmalloc(
+                .wrapping_mul((*stl_items_len.ptr()).wrapping_add(1 as size_t)),
+        ) as *mut stl_hlrec_t);
+        stl_tabtab.set(xmalloc(
             ::core::mem::size_of::<StlClickRecord>()
-                .wrapping_mul(stl_items_len.wrapping_add(1 as size_t)),
-        ) as *mut StlClickRecord;
-        stl_separator_locations =
-            xmalloc(::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(stl_items_len))
-                as *mut ::core::ffi::c_int;
+                .wrapping_mul((*stl_items_len.ptr()).wrapping_add(1 as size_t)),
+        ) as *mut StlClickRecord);
+        stl_separator_locations.set(xmalloc(
+            ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(stl_items_len.get()),
+        ) as *mut ::core::ffi::c_int);
     }
     let use_sandbox: bool = if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
         was_set_insecurely(wp, opt_idx, opt_scope)
@@ -4013,7 +4019,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
     }
     let mut groupdepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut evaldepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut evalstart: ::core::ffi::c_int = curitem;
+    let mut evalstart: ::core::ffi::c_int = curitem.get();
     let mut prevchar_isflag: bool = true_0 != 0;
     let mut prevchar_isitem: bool = false_0 != 0;
     let mut out_p: *mut ::core::ffi::c_char = out;
@@ -4022,33 +4028,33 @@ pub unsafe extern "C" fn build_stl_str_hl(
         .offset(-(1 as ::core::ffi::c_int as isize));
     let mut fmt_p: *mut ::core::ffi::c_char = usefmt;
     's_2297: while *fmt_p as ::core::ffi::c_int != NUL {
-        if curitem == stl_items_len as ::core::ffi::c_int {
-            let mut new_len: size_t = stl_items_len
+        if curitem.get() == stl_items_len.get() as ::core::ffi::c_int {
+            let mut new_len: size_t = (*stl_items_len.ptr())
                 .wrapping_mul(3 as size_t)
                 .wrapping_div(2 as size_t);
-            stl_items = xrealloc(
-                stl_items as *mut ::core::ffi::c_void,
+            stl_items.set(xrealloc(
+                stl_items.get() as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<stl_item_t>().wrapping_mul(new_len),
-            ) as *mut stl_item_t;
-            stl_groupitems = xrealloc(
-                stl_groupitems as *mut ::core::ffi::c_void,
+            ) as *mut stl_item_t);
+            stl_groupitems.set(xrealloc(
+                stl_groupitems.get() as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(new_len),
-            ) as *mut ::core::ffi::c_int;
-            stl_hltab = xrealloc(
-                stl_hltab as *mut ::core::ffi::c_void,
+            ) as *mut ::core::ffi::c_int);
+            stl_hltab.set(xrealloc(
+                stl_hltab.get() as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<stl_hlrec_t>()
                     .wrapping_mul(new_len.wrapping_add(1 as size_t)),
-            ) as *mut stl_hlrec_t;
-            stl_tabtab = xrealloc(
-                stl_tabtab as *mut ::core::ffi::c_void,
+            ) as *mut stl_hlrec_t);
+            stl_tabtab.set(xrealloc(
+                stl_tabtab.get() as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<StlClickRecord>()
                     .wrapping_mul(new_len.wrapping_add(1 as size_t)),
-            ) as *mut StlClickRecord;
-            stl_separator_locations = xrealloc(
-                stl_separator_locations as *mut ::core::ffi::c_void,
+            ) as *mut StlClickRecord);
+            stl_separator_locations.set(xrealloc(
+                stl_separator_locations.get() as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(new_len),
-            ) as *mut ::core::ffi::c_int;
-            stl_items_len = new_len;
+            ) as *mut ::core::ffi::c_int);
+            stl_items_len.set(new_len);
         }
         if *fmt_p as ::core::ffi::c_int != '%' as ::core::ffi::c_int {
             prevchar_isitem = false_0 != 0;
@@ -4084,17 +4090,19 @@ pub unsafe extern "C" fn build_stl_str_hl(
             if groupdepth > 0 as ::core::ffi::c_int {
                 continue;
             }
-            (*stl_items.offset(curitem as isize)).type_0 = Separate;
-            let c2rust_fresh11 = curitem;
-            curitem = curitem + 1;
-            let c2rust_lvalue_ptr = &raw mut (*stl_items.offset(c2rust_fresh11 as isize)).start;
+            (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Separate;
+            let c2rust_fresh11 = curitem.get();
+            curitem.set(curitem.get() + 1);
+            let c2rust_lvalue_ptr =
+                &raw mut (*(*stl_items.ptr()).offset(c2rust_fresh11 as isize)).start;
             *c2rust_lvalue_ptr = out_p;
         } else if *fmt_p as ::core::ffi::c_int == STL_TRUNCMARK as ::core::ffi::c_int {
             fmt_p = fmt_p.offset(1);
-            (*stl_items.offset(curitem as isize)).type_0 = Trunc;
-            let c2rust_fresh12 = curitem;
-            curitem = curitem + 1;
-            let c2rust_lvalue_ptr_0 = &raw mut (*stl_items.offset(c2rust_fresh12 as isize)).start;
+            (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Trunc;
+            let c2rust_fresh12 = curitem.get();
+            curitem.set(curitem.get() + 1);
+            let c2rust_lvalue_ptr_0 =
+                &raw mut (*(*stl_items.ptr()).offset(c2rust_fresh12 as isize)).start;
             *c2rust_lvalue_ptr_0 = out_p;
         } else if *fmt_p as ::core::ffi::c_int == ')' as ::core::ffi::c_int {
             fmt_p = fmt_p.offset(1);
@@ -4102,79 +4110,88 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 continue;
             }
             groupdepth -= 1;
-            let mut t: *mut ::core::ffi::c_char =
-                (*stl_items.offset(*stl_groupitems.offset(groupdepth as isize) as isize)).start;
+            let mut t: *mut ::core::ffi::c_char = (*(*stl_items.ptr())
+                .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
+            .start;
             *out_p = NUL as ::core::ffi::c_char;
             let mut group_len: ptrdiff_t = vim_strsize(t) as ptrdiff_t;
-            if curitem > *stl_groupitems.offset(groupdepth as isize) + 1 as ::core::ffi::c_int
-                && (*stl_items.offset(*stl_groupitems.offset(groupdepth as isize) as isize)).minwid
+            if curitem.get()
+                > *(*stl_groupitems.ptr()).offset(groupdepth as isize) + 1 as ::core::ffi::c_int
+                && (*(*stl_items.ptr())
+                    .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
+                .minwid
                     == 0 as ::core::ffi::c_int
             {
                 let mut group_start_userhl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 let mut group_end_userhl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 let mut n: ::core::ffi::c_int = 0;
-                n = *stl_groupitems.offset(groupdepth as isize) - 1 as ::core::ffi::c_int;
+                n = *(*stl_groupitems.ptr()).offset(groupdepth as isize) - 1 as ::core::ffi::c_int;
                 while n >= 0 as ::core::ffi::c_int {
-                    if (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                    if (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                         == Highlight as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                        || (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                             == HighlightCombining as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        group_end_userhl = (*stl_items.offset(n as isize)).minwid;
+                        group_end_userhl = (*(*stl_items.ptr()).offset(n as isize)).minwid;
                         group_start_userhl = group_end_userhl;
                         break;
                     } else {
                         n -= 1;
                     }
                 }
-                n = *stl_groupitems.offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
-                while n < curitem {
-                    if (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                n = *(*stl_groupitems.ptr()).offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
+                while n < curitem.get() {
+                    if (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                         == Normal as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         break;
                     }
-                    if (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                    if (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                         == Highlight as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                        || (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                             == HighlightCombining as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        group_end_userhl = (*stl_items.offset(n as isize)).minwid;
+                        group_end_userhl = (*(*stl_items.ptr()).offset(n as isize)).minwid;
                     }
                     n += 1;
                 }
-                if n == curitem && group_start_userhl == group_end_userhl {
+                if n == curitem.get() && group_start_userhl == group_end_userhl {
                     out_p = t;
                     group_len = 0 as ptrdiff_t;
-                    n = *stl_groupitems.offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
-                    while n < curitem {
-                        if (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                    n = *(*stl_groupitems.ptr()).offset(groupdepth as isize)
+                        + 1 as ::core::ffi::c_int;
+                    while n < curitem.get() {
+                        if (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                             == Highlight as ::core::ffi::c_int as ::core::ffi::c_uint
-                            || (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                            || (*(*stl_items.ptr()).offset(n as isize)).type_0
+                                as ::core::ffi::c_uint
                                 == HighlightCombining as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            (*stl_items.offset(n as isize)).type_0 = Empty;
+                            (*(*stl_items.ptr()).offset(n as isize)).type_0 = Empty;
                         }
-                        if (*stl_items.offset(n as isize)).type_0 as ::core::ffi::c_uint
+                        if (*(*stl_items.ptr()).offset(n as isize)).type_0 as ::core::ffi::c_uint
                             == TabPage as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            (*stl_items.offset(n as isize)).start = out_p;
+                            (*(*stl_items.ptr()).offset(n as isize)).start = out_p;
                         }
                         n += 1;
                     }
                 }
             }
-            let mut minwid: ::core::ffi::c_int =
-                (*stl_items.offset(*stl_groupitems.offset(groupdepth as isize) as isize)).minwid;
+            let mut minwid: ::core::ffi::c_int = (*(*stl_items.ptr())
+                .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
+            .minwid;
             if group_len
-                > (*stl_items.offset(*stl_groupitems.offset(groupdepth as isize) as isize)).maxwid
-                    as ptrdiff_t
-                && (*stl_items.offset(*stl_groupitems.offset(groupdepth as isize) as isize)).type_0
-                    as ::core::ffi::c_uint
+                > (*(*stl_items.ptr())
+                    .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
+                .maxwid as ptrdiff_t
+                && (*(*stl_items.ptr())
+                    .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
+                .type_0 as ::core::ffi::c_uint
                     != HighlightFold as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut maxwid: ::core::ffi::c_int = (*stl_items
-                    .offset(*stl_groupitems.offset(groupdepth as isize) as isize))
+                let mut maxwid: ::core::ffi::c_int = (*(*stl_items.ptr())
+                    .offset(*(*stl_groupitems.ptr()).offset(groupdepth as isize) as isize))
                 .maxwid;
                 let mut n_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while group_len >= maxwid as ptrdiff_t {
@@ -4199,14 +4216,15 @@ pub unsafe extern "C" fn build_stl_str_hl(
                     schar_get_adv(&raw mut out_p, fillchar);
                 }
                 let mut idx: ::core::ffi::c_int =
-                    *stl_groupitems.offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
-                while idx < curitem {
-                    (*stl_items.offset(idx as isize)).start = (*stl_items.offset(idx as isize))
-                        .start
-                        .offset(-((n_0 - 1 as ::core::ffi::c_int) as isize));
-                    (*stl_items.offset(idx as isize)).start =
-                        if (*stl_items.offset(idx as isize)).start > t {
-                            (*stl_items.offset(idx as isize)).start
+                    *(*stl_groupitems.ptr()).offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
+                while idx < curitem.get() {
+                    (*(*stl_items.ptr()).offset(idx as isize)).start = (*(*stl_items.ptr())
+                        .offset(idx as isize))
+                    .start
+                    .offset(-((n_0 - 1 as ::core::ffi::c_int) as isize));
+                    (*(*stl_items.ptr()).offset(idx as isize)).start =
+                        if (*(*stl_items.ptr()).offset(idx as isize)).start > t {
+                            (*(*stl_items.ptr()).offset(idx as isize)).start
                         } else {
                             t
                         };
@@ -4240,12 +4258,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
                         out_p.offset_from(t) as size_t,
                     );
                     out_p = out_p.offset(added_bytes as isize);
-                    let mut n_1: ::core::ffi::c_int =
-                        *stl_groupitems.offset(groupdepth as isize) + 1 as ::core::ffi::c_int;
-                    while n_1 < curitem {
-                        (*stl_items.offset(n_1 as isize)).start = (*stl_items.offset(n_1 as isize))
-                            .start
-                            .offset(added_bytes as isize);
+                    let mut n_1: ::core::ffi::c_int = *(*stl_groupitems.ptr())
+                        .offset(groupdepth as isize)
+                        + 1 as ::core::ffi::c_int;
+                    while n_1 < curitem.get() {
+                        (*(*stl_items.ptr()).offset(n_1 as isize)).start = (*(*stl_items.ptr())
+                            .offset(n_1 as isize))
+                        .start
+                        .offset(added_bytes as isize);
                         n_1 += 1;
                     }
                     while added_cells > 0 as ptrdiff_t {
@@ -4272,29 +4292,30 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 minwid_0 = getdigits_int(&raw mut fmt_p, false_0 != 0, 0 as ::core::ffi::c_int);
             }
             if *fmt_p as ::core::ffi::c_int == STL_USER_HL as ::core::ffi::c_int {
-                (*stl_items.offset(curitem as isize)).type_0 = Highlight;
-                (*stl_items.offset(curitem as isize)).start = out_p;
-                (*stl_items.offset(curitem as isize)).minwid = if minwid_0 > 9 as ::core::ffi::c_int
-                {
-                    1 as ::core::ffi::c_int
-                } else {
-                    minwid_0
-                };
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Highlight;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).minwid =
+                    if minwid_0 > 9 as ::core::ffi::c_int {
+                        1 as ::core::ffi::c_int
+                    } else {
+                        minwid_0
+                    };
                 fmt_p = fmt_p.offset(1);
-                curitem += 1;
+                (*curitem.ptr()) += 1;
             } else if *fmt_p as ::core::ffi::c_int == STL_TABPAGENR as ::core::ffi::c_int
                 || *fmt_p as ::core::ffi::c_int == STL_TABCLOSENR as ::core::ffi::c_int
             {
                 if *fmt_p as ::core::ffi::c_int == STL_TABCLOSENR as ::core::ffi::c_int {
                     if minwid_0 == 0 as ::core::ffi::c_int {
-                        let mut n_2: ::core::ffi::c_int = curitem - 1 as ::core::ffi::c_int;
+                        let mut n_2: ::core::ffi::c_int = curitem.get() - 1 as ::core::ffi::c_int;
                         while n_2 >= 0 as ::core::ffi::c_int {
-                            if (*stl_items.offset(n_2 as isize)).type_0 as ::core::ffi::c_uint
+                            if (*(*stl_items.ptr()).offset(n_2 as isize)).type_0
+                                as ::core::ffi::c_uint
                                 == TabPage as ::core::ffi::c_int as ::core::ffi::c_uint
-                                && (*stl_items.offset(n_2 as isize)).minwid
+                                && (*(*stl_items.ptr()).offset(n_2 as isize)).minwid
                                     >= 0 as ::core::ffi::c_int
                             {
-                                minwid_0 = (*stl_items.offset(n_2 as isize)).minwid;
+                                minwid_0 = (*(*stl_items.ptr()).offset(n_2 as isize)).minwid;
                                 break;
                             } else {
                                 n_2 -= 1;
@@ -4304,11 +4325,11 @@ pub unsafe extern "C" fn build_stl_str_hl(
                         minwid_0 = -minwid_0;
                     }
                 }
-                (*stl_items.offset(curitem as isize)).type_0 = TabPage;
-                (*stl_items.offset(curitem as isize)).start = out_p;
-                (*stl_items.offset(curitem as isize)).minwid = minwid_0;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = TabPage;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).minwid = minwid_0;
                 fmt_p = fmt_p.offset(1);
-                curitem += 1;
+                (*curitem.ptr()) += 1;
             } else if *fmt_p as ::core::ffi::c_int == STL_CLICK_FUNC as ::core::ffi::c_int {
                 fmt_p = fmt_p.offset(1);
                 let mut t_0: *mut ::core::ffi::c_char = fmt_p;
@@ -4320,9 +4341,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 if *fmt_p as ::core::ffi::c_int != STL_CLICK_FUNC as ::core::ffi::c_int {
                     break;
                 }
-                (*stl_items.offset(curitem as isize)).type_0 = ClickFunc;
-                (*stl_items.offset(curitem as isize)).start = out_p;
-                (*stl_items.offset(curitem as isize)).cmd = (if !tabtab.is_null() {
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = ClickFunc;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).cmd = (if !tabtab.is_null() {
                     xmemdupz(
                         t_0 as *const ::core::ffi::c_void,
                         fmt_p.offset_from(t_0) as size_t,
@@ -4331,9 +4352,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                     NULL
                 })
                     as *mut ::core::ffi::c_char;
-                (*stl_items.offset(curitem as isize)).minwid = minwid_0;
+                (*(*stl_items.ptr()).offset(curitem.get() as isize)).minwid = minwid_0;
                 fmt_p = fmt_p.offset(1);
-                curitem += 1;
+                (*curitem.ptr()) += 1;
             } else {
                 if *fmt_p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
                     fmt_p = fmt_p.offset(1);
@@ -4354,13 +4375,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 if *fmt_p as ::core::ffi::c_int == '(' as ::core::ffi::c_int {
                     let c2rust_fresh14 = groupdepth;
                     groupdepth = groupdepth + 1;
-                    *stl_groupitems.offset(c2rust_fresh14 as isize) = curitem;
-                    (*stl_items.offset(curitem as isize)).type_0 = Group;
-                    (*stl_items.offset(curitem as isize)).start = out_p;
-                    (*stl_items.offset(curitem as isize)).minwid = minwid_0;
-                    (*stl_items.offset(curitem as isize)).maxwid = maxwid_0;
+                    *(*stl_groupitems.ptr()).offset(c2rust_fresh14 as isize) = curitem.get();
+                    (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Group;
+                    (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                    (*(*stl_items.ptr()).offset(curitem.get() as isize)).minwid = minwid_0;
+                    (*(*stl_items.ptr()).offset(curitem.get() as isize)).maxwid = maxwid_0;
                     fmt_p = fmt_p.offset(1);
-                    curitem += 1;
+                    (*curitem.ptr()) += 1;
                 } else if *fmt_p as ::core::ffi::c_int == '}' as ::core::ffi::c_int
                     && evaldepth > 0 as ::core::ffi::c_int
                 {
@@ -4700,12 +4721,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                         && (*wp).w_onebuf_opt.wo_nu != 0
                                                         && relnum == 0 as ::core::ffi::c_int;
                                                     if !left_align_num {
-                                                        (*stl_items.offset(curitem as isize))
-                                                            .type_0 = Separate;
-                                                        let c2rust_fresh18 = curitem;
-                                                        curitem = curitem + 1;
+                                                        (*(*stl_items.ptr())
+                                                            .offset(curitem.get() as isize))
+                                                        .type_0 = Separate;
+                                                        let c2rust_fresh18 = curitem.get();
+                                                        curitem.set(curitem.get() + 1);
                                                         let c2rust_lvalue_ptr_1 =
-                                                            &raw mut (*stl_items
+                                                            &raw mut (*(*stl_items.ptr())
                                                                 .offset(c2rust_fresh18 as isize))
                                                             .start;
                                                         *c2rust_lvalue_ptr_1 = out_p;
@@ -5006,22 +5028,26 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             if *fmt_p as ::core::ffi::c_int
                                                 == opt as ::core::ffi::c_int
                                             {
-                                                (*stl_items.offset(curitem as isize)).type_0 =
-                                                    (if opt as ::core::ffi::c_int
-                                                        == STL_HIGHLIGHT_COMB as ::core::ffi::c_int
-                                                    {
-                                                        HighlightCombining as ::core::ffi::c_int
-                                                    } else {
-                                                        Highlight as ::core::ffi::c_int
-                                                    })
-                                                        as C2Rust_Unnamed_15;
-                                                (*stl_items.offset(curitem as isize)).start = out_p;
-                                                (*stl_items.offset(curitem as isize)).minwid =
-                                                    -syn_name2id_len(
-                                                        t_4,
-                                                        fmt_p.offset_from(t_4) as size_t,
-                                                    );
-                                                curitem += 1;
+                                                (*(*stl_items.ptr())
+                                                    .offset(curitem.get() as isize))
+                                                .type_0 = (if opt as ::core::ffi::c_int
+                                                    == STL_HIGHLIGHT_COMB as ::core::ffi::c_int
+                                                {
+                                                    HighlightCombining as ::core::ffi::c_int
+                                                } else {
+                                                    Highlight as ::core::ffi::c_int
+                                                })
+                                                    as C2Rust_Unnamed_15;
+                                                (*(*stl_items.ptr())
+                                                    .offset(curitem.get() as isize))
+                                                .start = out_p;
+                                                (*(*stl_items.ptr())
+                                                    .offset(curitem.get() as isize))
+                                                .minwid = -syn_name2id_len(
+                                                    t_4,
+                                                    fmt_p.offset_from(t_4) as size_t,
+                                                );
+                                                (*curitem.ptr()) += 1;
                                                 fmt_p = fmt_p.offset(1);
                                             }
                                             continue 's_2297;
@@ -5083,7 +5109,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     1 as ::core::ffi::c_int
                                 };
                                 if width > 0 as ::core::ffi::c_int {
-                                    foldsignitem = curitem;
+                                    foldsignitem = curitem.get();
                                     lnum = get_vim_var_nr(VV_LNUM) as linenr_T;
                                     if fdc > 0 as ::core::ffi::c_int {
                                         let mut fold_buf: [schar_T; 9] = [0; 9];
@@ -5098,15 +5124,15 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             &raw mut (*stcp).fold_vcol as *mut colnr_T,
                                             &raw mut fold_buf as *mut schar_T,
                                         );
-                                        (*stl_items.offset(curitem as isize)).minwid =
-                                            -if use_cursor_line_highlight(wp, lnum)
-                                                as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                HLF_CLF as ::core::ffi::c_int
-                                            } else {
-                                                HLF_FC as ::core::ffi::c_int
-                                            };
+                                        (*(*stl_items.ptr()).offset(curitem.get() as isize))
+                                            .minwid = -if use_cursor_line_highlight(wp, lnum)
+                                            as ::core::ffi::c_int
+                                            != 0
+                                        {
+                                            HLF_CLF as ::core::ffi::c_int
+                                        } else {
+                                            HLF_FC as ::core::ffi::c_int
+                                        };
                                         let mut buflen: size_t = 0 as size_t;
                                         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                         while i < fdc {
@@ -5121,8 +5147,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     let mut signlen: size_t = 0 as size_t;
                                     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                     while i_0 < width {
-                                        (*stl_items.offset(curitem as isize)).start =
-                                            out_p.offset(signlen as isize);
+                                        (*(*stl_items.ptr()).offset(curitem.get() as isize))
+                                            .start = out_p.offset(signlen as isize);
                                         if fdc == 0 as ::core::ffi::c_int {
                                             let mut sattr: SignTextAttrs =
                                                 *(*stcp).sattrs.offset(i_0 as isize);
@@ -5134,12 +5160,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                         .offset(signlen as isize),
                                                     &raw mut sattr.text as *mut schar_T,
                                                 ));
-                                                (*stl_items.offset(curitem as isize)).minwid =
-                                                    -if (*stcp).sign_cul_id != 0 {
-                                                        (*stcp).sign_cul_id
-                                                    } else {
-                                                        sattr.hl_id
-                                                    };
+                                                (*(*stl_items.ptr())
+                                                    .offset(curitem.get() as isize))
+                                                .minwid = -if (*stcp).sign_cul_id != 0 {
+                                                    (*stcp).sign_cul_id
+                                                } else {
+                                                    sattr.hl_id
+                                                };
                                             } else {
                                                 let c2rust_fresh19 = signlen;
                                                 signlen = signlen.wrapping_add(1);
@@ -5151,27 +5178,28 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     ' ' as ::core::ffi::c_char;
                                                 buf_tmp[signlen as usize] =
                                                     NUL as ::core::ffi::c_char;
-                                                (*stl_items.offset(curitem as isize)).minwid =
-                                                    0 as ::core::ffi::c_int;
+                                                (*(*stl_items.ptr())
+                                                    .offset(curitem.get() as isize))
+                                                .minwid = 0 as ::core::ffi::c_int;
                                             }
                                         }
-                                        let c2rust_fresh21 = curitem;
-                                        curitem = curitem + 1;
-                                        (*stl_items.offset(c2rust_fresh21 as isize)).type_0 =
-                                            (if fdc > 0 as ::core::ffi::c_int {
-                                                HighlightFold as ::core::ffi::c_int
-                                            } else {
-                                                HighlightSign as ::core::ffi::c_int
-                                            })
-                                                as C2Rust_Unnamed_15;
+                                        let c2rust_fresh21 = curitem.get();
+                                        curitem.set(curitem.get() + 1);
+                                        (*(*stl_items.ptr()).offset(c2rust_fresh21 as isize))
+                                            .type_0 = (if fdc > 0 as ::core::ffi::c_int {
+                                            HighlightFold as ::core::ffi::c_int
+                                        } else {
+                                            HighlightSign as ::core::ffi::c_int
+                                        })
+                                            as C2Rust_Unnamed_15;
                                         i_0 += 1;
                                     }
                                     str = &raw mut buf_tmp as *mut ::core::ffi::c_char;
                                 }
                             }
                         }
-                        (*stl_items.offset(curitem as isize)).start = out_p;
-                        (*stl_items.offset(curitem as isize)).type_0 = Normal;
+                        (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                        (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Normal;
                         if !str.is_null() && *str as ::core::ffi::c_int != 0 {
                             let mut t_5: *mut ::core::ffi::c_char = str;
                             if itemisflag {
@@ -5226,14 +5254,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                 minwid_0 = 0 as ::core::ffi::c_int;
                                 if foldsignitem >= 0 as ::core::ffi::c_int {
                                     let mut offset: ptrdiff_t = out_p.offset_from(
-                                        (*stl_items.offset(foldsignitem as isize)).start,
+                                        (*(*stl_items.ptr()).offset(foldsignitem as isize)).start,
                                     );
                                     let mut i_1: ::core::ffi::c_int = foldsignitem;
-                                    while i_1 < curitem {
-                                        (*stl_items.offset(i_1 as isize)).start = (*stl_items
-                                            .offset(i_1 as isize))
-                                        .start
-                                        .offset(offset as isize);
+                                    while i_1 < curitem.get() {
+                                        (*(*stl_items.ptr()).offset(i_1 as isize)).start =
+                                            (*(*stl_items.ptr()).offset(i_1 as isize))
+                                                .start
+                                                .offset(offset as isize);
                                         i_1 += 1;
                                     }
                                 }
@@ -5257,9 +5285,10 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                 t_5 = t_5.offset(1);
                             }
                             if foldsignitem >= 0 as ::core::ffi::c_int {
-                                (*stl_items.offset(curitem as isize)).type_0 = Highlight;
-                                (*stl_items.offset(curitem as isize)).start = out_p;
-                                (*stl_items.offset(curitem as isize)).minwid =
+                                (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 =
+                                    Highlight;
+                                (*(*stl_items.ptr()).offset(curitem.get() as isize)).start = out_p;
+                                (*(*stl_items.ptr()).offset(curitem.get() as isize)).minwid =
                                     0 as ::core::ffi::c_int;
                             }
                             while l_0 < minwid_0 && out_p < out_end_p {
@@ -5364,7 +5393,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                 ) as isize);
                             }
                         } else {
-                            (*stl_items.offset(curitem as isize)).type_0 = Empty;
+                            (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Empty;
                         }
                         if num >= 0 as ::core::ffi::c_int
                             || !itemisflag && !str.is_null() && *str as ::core::ffi::c_int != 0
@@ -5378,13 +5407,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
                             *ptr__1 = NULL;
                             *ptr__1;
                         }
-                        curitem += 1;
+                        (*curitem.ptr()) += 1;
                         if left_align_num {
-                            (*stl_items.offset(curitem as isize)).type_0 = Separate;
-                            let c2rust_fresh33 = curitem;
-                            curitem = curitem + 1;
-                            let c2rust_lvalue_ptr_2 =
-                                &raw mut (*stl_items.offset(c2rust_fresh33 as isize)).start;
+                            (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Separate;
+                            let c2rust_fresh33 = curitem.get();
+                            curitem.set(curitem.get() + 1);
+                            let c2rust_lvalue_ptr_2 = &raw mut (*(*stl_items.ptr())
+                                .offset(c2rust_fresh33 as isize))
+                            .start;
                             *c2rust_lvalue_ptr_2 = out_p;
                         }
                     }
@@ -5394,8 +5424,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
     }
     *out_p = NUL as ::core::ffi::c_char;
     let mut outputlen: size_t = out_p.offset_from(out) as size_t;
-    let mut itemcnt: ::core::ffi::c_int = curitem - evalstart;
-    curitem = evalstart;
+    let mut itemcnt: ::core::ffi::c_int = curitem.get() - evalstart;
+    curitem.set(evalstart);
     if usefmt != fmt {
         xfree(usefmt as *mut ::core::ffi::c_void);
     }
@@ -5413,13 +5443,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
         if itemcnt == 0 as ::core::ffi::c_int {
             trunc_p = out;
         } else {
-            trunc_p = (*stl_items.offset(item_idx as isize)).start;
+            trunc_p = (*(*stl_items.ptr()).offset(item_idx as isize)).start;
             let mut i_2: ::core::ffi::c_int = evalstart;
             while i_2 < itemcnt + evalstart {
-                if (*stl_items.offset(i_2 as isize)).type_0 as ::core::ffi::c_uint
+                if (*(*stl_items.ptr()).offset(i_2 as isize)).type_0 as ::core::ffi::c_uint
                     == Trunc as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    trunc_p = (*stl_items.offset(i_2 as isize)).start;
+                    trunc_p = (*(*stl_items.ptr()).offset(i_2 as isize)).start;
                     item_idx = i_2;
                     break;
                 } else {
@@ -5439,14 +5469,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
             }
             let mut i_3: ::core::ffi::c_int = evalstart;
             while i_3 < itemcnt + evalstart {
-                if (*stl_items.offset(i_3 as isize)).start > trunc_p {
+                if (*(*stl_items.ptr()).offset(i_3 as isize)).start > trunc_p {
                     let mut j: ::core::ffi::c_int = i_3;
                     while j < itemcnt + evalstart {
-                        if (*stl_items.offset(j as isize)).type_0 as ::core::ffi::c_uint
+                        if (*(*stl_items.ptr()).offset(j as isize)).type_0 as ::core::ffi::c_uint
                             == ClickFunc as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             let mut ptr__2: *mut *mut ::core::ffi::c_void =
-                                &raw mut (*stl_items.offset(j as isize)).cmd
+                                &raw mut (*(*stl_items.ptr()).offset(j as isize)).cmd
                                     as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__2);
                             *ptr__2 = NULL;
@@ -5485,12 +5515,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
             let mut item_offset: ::core::ffi::c_int = trunc_len - 1 as ::core::ffi::c_int;
             let mut i_4: ::core::ffi::c_int = item_idx;
             while i_4 < itemcnt + evalstart {
-                if (*stl_items.offset(i_4 as isize)).start >= trunc_end_p {
-                    (*stl_items.offset(i_4 as isize)).start = (*stl_items.offset(i_4 as isize))
-                        .start
-                        .offset(-(item_offset as isize));
+                if (*(*stl_items.ptr()).offset(i_4 as isize)).start >= trunc_end_p {
+                    (*(*stl_items.ptr()).offset(i_4 as isize)).start = (*(*stl_items.ptr())
+                        .offset(i_4 as isize))
+                    .start
+                    .offset(-(item_offset as isize));
                 } else {
-                    (*stl_items.offset(i_4 as isize)).start = trunc_p;
+                    (*(*stl_items.ptr()).offset(i_4 as isize)).start = trunc_p;
                 }
                 i_4 += 1;
             }
@@ -5516,10 +5547,10 @@ pub unsafe extern "C" fn build_stl_str_hl(
         let mut num_separators: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i_5: ::core::ffi::c_int = evalstart;
         while i_5 < itemcnt + evalstart {
-            if (*stl_items.offset(i_5 as isize)).type_0 as ::core::ffi::c_uint
+            if (*(*stl_items.ptr()).offset(i_5 as isize)).type_0 as ::core::ffi::c_uint
                 == Separate as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                *stl_separator_locations.offset(num_separators as isize) = i_5;
+                *(*stl_separator_locations.ptr()).offset(num_separators as isize) = i_5;
                 num_separators += 1;
             }
             i_5 += 1;
@@ -5537,8 +5568,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
                         standard_spaces
                     };
                 dislocation *= schar_len(fillchar) as ::core::ffi::c_int;
-                let mut start: *mut ::core::ffi::c_char = (*stl_items
-                    .offset(*stl_separator_locations.offset(l_1 as isize) as isize))
+                let mut start: *mut ::core::ffi::c_char = (*(*stl_items.ptr())
+                    .offset(*(*stl_separator_locations.ptr()).offset(l_1 as isize) as isize))
                 .start;
                 let mut seploc: *mut ::core::ffi::c_char = start.offset(dislocation as isize);
                 memmove(
@@ -5550,10 +5581,11 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 while s < seploc {
                     schar_get_adv(&raw mut s, fillchar);
                 }
-                let mut item_idx_0: ::core::ffi::c_int =
-                    *stl_separator_locations.offset(l_1 as isize) + 1 as ::core::ffi::c_int;
+                let mut item_idx_0: ::core::ffi::c_int = *(*stl_separator_locations.ptr())
+                    .offset(l_1 as isize)
+                    + 1 as ::core::ffi::c_int;
                 while item_idx_0 < itemcnt + evalstart {
-                    (*stl_items.offset(item_idx_0 as isize)).start = (*stl_items
+                    (*(*stl_items.ptr()).offset(item_idx_0 as isize)).start = (*(*stl_items.ptr())
                         .offset(item_idx_0 as isize))
                     .start
                     .offset(dislocation as isize);
@@ -5565,23 +5597,23 @@ pub unsafe extern "C" fn build_stl_str_hl(
         }
     }
     if !hltab.is_null() {
-        *hltab = stl_hltab;
-        let mut sp: *mut stl_hlrec_t = stl_hltab;
+        *hltab = stl_hltab.get();
+        let mut sp: *mut stl_hlrec_t = stl_hltab.get();
         let mut l_2: ::core::ffi::c_int = evalstart;
         while l_2 < itemcnt + evalstart {
-            if (*stl_items.offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
+            if (*(*stl_items.ptr()).offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
                 == Highlight as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*stl_items.offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
+                || (*(*stl_items.ptr()).offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
                     == HighlightCombining as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*stl_items.offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
+                || (*(*stl_items.ptr()).offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
                     == HighlightFold as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*stl_items.offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
+                || (*(*stl_items.ptr()).offset(l_2 as isize)).type_0 as ::core::ffi::c_uint
                     == HighlightSign as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                (*sp).start = (*stl_items.offset(l_2 as isize)).start;
-                (*sp).userhl = (*stl_items.offset(l_2 as isize)).minwid;
+                (*sp).start = (*(*stl_items.ptr()).offset(l_2 as isize)).start;
+                (*sp).userhl = (*(*stl_items.ptr()).offset(l_2 as isize)).minwid;
                 let mut type_0: ::core::ffi::c_uint =
-                    (*stl_items.offset(l_2 as isize)).type_0 as ::core::ffi::c_uint;
+                    (*(*stl_items.ptr()).offset(l_2 as isize)).type_0 as ::core::ffi::c_uint;
                 (*sp).item = (if type_0
                     == HighlightSign as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -5605,20 +5637,21 @@ pub unsafe extern "C" fn build_stl_str_hl(
         *hltab_len = itemcnt as size_t;
     }
     if !tabtab.is_null() {
-        *tabtab = stl_tabtab;
-        let mut cur_tab_rec: *mut StlClickRecord = stl_tabtab;
+        *tabtab = stl_tabtab.get();
+        let mut cur_tab_rec: *mut StlClickRecord = stl_tabtab.get();
         let mut l_3: ::core::ffi::c_int = evalstart;
         while l_3 < itemcnt + evalstart {
-            if (*stl_items.offset(l_3 as isize)).type_0 as ::core::ffi::c_uint
+            if (*(*stl_items.ptr()).offset(l_3 as isize)).type_0 as ::core::ffi::c_uint
                 == TabPage as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                (*cur_tab_rec).start = (*stl_items.offset(l_3 as isize)).start;
-                if (*stl_items.offset(l_3 as isize)).minwid == 0 as ::core::ffi::c_int {
+                (*cur_tab_rec).start = (*(*stl_items.ptr()).offset(l_3 as isize)).start;
+                if (*(*stl_items.ptr()).offset(l_3 as isize)).minwid == 0 as ::core::ffi::c_int {
                     (*cur_tab_rec).def.type_0 = kStlClickDisabled;
                     (*cur_tab_rec).def.tabnr = 0 as ::core::ffi::c_int;
                 } else {
-                    let mut tabnr: ::core::ffi::c_int = (*stl_items.offset(l_3 as isize)).minwid;
-                    if (*stl_items.offset(l_3 as isize)).minwid > 0 as ::core::ffi::c_int {
+                    let mut tabnr: ::core::ffi::c_int =
+                        (*(*stl_items.ptr()).offset(l_3 as isize)).minwid;
+                    if (*(*stl_items.ptr()).offset(l_3 as isize)).minwid > 0 as ::core::ffi::c_int {
                         (*cur_tab_rec).def.type_0 = kStlClickTabSwitch;
                     } else {
                         (*cur_tab_rec).def.type_0 = kStlClickTabClose;
@@ -5628,13 +5661,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
                 }
                 (*cur_tab_rec).def.func = ::core::ptr::null_mut::<::core::ffi::c_char>();
                 cur_tab_rec = cur_tab_rec.offset(1);
-            } else if (*stl_items.offset(l_3 as isize)).type_0 as ::core::ffi::c_uint
+            } else if (*(*stl_items.ptr()).offset(l_3 as isize)).type_0 as ::core::ffi::c_uint
                 == ClickFunc as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                (*cur_tab_rec).start = (*stl_items.offset(l_3 as isize)).start;
+                (*cur_tab_rec).start = (*(*stl_items.ptr()).offset(l_3 as isize)).start;
                 (*cur_tab_rec).def.type_0 = kStlClickFuncRun;
-                (*cur_tab_rec).def.tabnr = (*stl_items.offset(l_3 as isize)).minwid;
-                (*cur_tab_rec).def.func = (*stl_items.offset(l_3 as isize)).cmd;
+                (*cur_tab_rec).def.tabnr = (*(*stl_items.ptr()).offset(l_3 as isize)).minwid;
+                (*cur_tab_rec).def.func = (*(*stl_items.ptr()).offset(l_3 as isize)).cmd;
                 cur_tab_rec = cur_tab_rec.offset(1);
             }
             l_3 += 1;

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -3783,34 +3784,37 @@ pub const K_RIGHT: ::core::ffi::c_int = -29291;
 pub const K_BS: ::core::ffi::c_int = -25195;
 pub const K_KENTER: ::core::ffi::c_int = -16715;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
-static mut e_cannot_close_last_window: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E444: Cannot close last window\0",
-    )
-};
-static mut e_cannot_split_window_when_closing_buffer: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-        *b"E1159: Cannot split a window when closing the buffer\0",
-    )
-};
-static mut m_onlyone: *mut ::core::ffi::c_char =
-    b"Already only one window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-static mut split_disallowed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut close_disallowed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut frame_locked: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static e_cannot_close_last_window: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E444: Cannot close last window\0",
+        )
+    });
+static e_cannot_split_window_when_closing_buffer: GlobalCell<[::core::ffi::c_char; 53]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+            *b"E1159: Cannot split a window when closing the buffer\0",
+        )
+    });
+static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"Already only one window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
+static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn window_layout_lock() {
-    split_disallowed += 1;
-    close_disallowed += 1;
+    (*split_disallowed.ptr()) += 1;
+    (*close_disallowed.ptr()) += 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn window_layout_unlock() {
-    split_disallowed -= 1;
-    close_disallowed -= 1;
+    (*split_disallowed.ptr()) -= 1;
+    (*close_disallowed.ptr()) -= 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn frames_locked() -> bool {
-    return frame_locked != 0;
+    return frame_locked.get() != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn window_layout_locked(mut cmd: cmdidx_T) -> bool {
@@ -3827,15 +3831,18 @@ pub unsafe extern "C" fn window_layout_locked(mut cmd: cmdidx_T) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *mut Error) -> bool {
-    if split_disallowed > 0 as ::core::ffi::c_int || close_disallowed > 0 as ::core::ffi::c_int {
-        if close_disallowed == 0 as ::core::ffi::c_int
+    if split_disallowed.get() > 0 as ::core::ffi::c_int
+        || close_disallowed.get() > 0 as ::core::ffi::c_int
+    {
+        if close_disallowed.get() == 0 as ::core::ffi::c_int
             && cmd as ::core::ffi::c_int == CMD_tabnew as ::core::ffi::c_int
         {
             api_set_error(
                 err,
                 kErrorTypeException,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw const e_cannot_split_window_when_closing_buffer as *const ::core::ffi::c_char,
+                (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             );
         } else {
             api_set_error(
@@ -3894,7 +3901,7 @@ pub unsafe extern "C" fn swbuf_goto_win_with_buf(mut buf: *mut buf_T) -> *mut wi
     }
     return wp;
 }
-static mut min_set_ch: OptInt = 1 as OptInt;
+static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 #[no_mangle]
 pub unsafe extern "C" fn do_window(
     mut nchar: ::core::ffi::c_int,
@@ -4214,7 +4221,7 @@ pub unsafe extern "C" fn do_window(
                                 return;
                             }
                             if one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) {
-                                msg(gettext(m_onlyone), 0 as ::core::ffi::c_int);
+                                msg(gettext(m_onlyone.get()), 0 as ::core::ffi::c_int);
                             } else {
                                 let mut oldtab: *mut tabpage_T = curtab;
                                 let mut wp_1: *mut win_T = curwin;
@@ -4345,7 +4352,7 @@ pub unsafe extern "C" fn do_window(
                             win_setheight(if Prenum != 0 {
                                 Prenum
                             } else {
-                                Rows - min_set_ch as ::core::ffi::c_int
+                                Rows - min_set_ch.get() as ::core::ffi::c_int
                             });
                             break 's_1675;
                         }
@@ -5206,7 +5213,7 @@ pub unsafe extern "C" fn check_split_disallowed_err(
     mut wp: *const win_T,
     mut err: *mut Error,
 ) -> bool {
-    if split_disallowed > 0 as ::core::ffi::c_int {
+    if split_disallowed.get() > 0 as ::core::ffi::c_int {
         api_set_error(
             err,
             kErrorTypeException,
@@ -5220,7 +5227,8 @@ pub unsafe extern "C" fn check_split_disallowed_err(
             err,
             kErrorTypeException,
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw const e_cannot_split_window_when_closing_buffer as *const ::core::ffi::c_char,
+            (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         );
         return false_0 != 0;
     }
@@ -7034,7 +7042,7 @@ pub unsafe extern "C" fn win_close(
     let had_diffmode: bool = (*win).w_onebuf_opt.wo_diff != 0;
     if last_window(win) {
         emsg(gettext(
-            &raw const e_cannot_close_last_window as *const ::core::ffi::c_char,
+            (e_cannot_close_last_window.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return FAIL;
     }
@@ -7077,7 +7085,7 @@ pub unsafe extern "C" fn win_close(
             }
             if last_window(win) {
                 emsg(gettext(
-                    &raw const e_cannot_close_last_window as *const ::core::ffi::c_char,
+                    (e_cannot_close_last_window.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
                 return FAIL;
             }
@@ -7201,7 +7209,7 @@ pub unsafe extern "C" fn win_close(
     if close_last_window_tabpage(win, free_buf, prev_curtab) {
         return FAIL;
     }
-    split_disallowed += 1;
+    (*split_disallowed.ptr()) += 1;
     let mut was_floating: bool = (*win).w_floating;
     if ui_has(kUIMultigrid) {
         ui_call_win_close((*win).w_grid_alloc.handle as Integer);
@@ -7331,7 +7339,7 @@ pub unsafe extern "C" fn win_close(
             curbuf,
         );
     }
-    split_disallowed -= 1;
+    (*split_disallowed.ptr()) -= 1;
     if help_window as ::core::ffi::c_int != 0 || quickfix_window as ::core::ffi::c_int != 0 {
         restore_snapshot(
             if help_window as ::core::ffi::c_int != 0 {
@@ -7380,11 +7388,11 @@ unsafe extern "C" fn trigger_winnewpre() {
     window_layout_unlock();
 }
 unsafe extern "C" fn do_autocmd_winclosed(mut win: *mut win_T) {
-    static mut recursive: bool = false_0 != 0;
-    if recursive as ::core::ffi::c_int != 0 || !has_event(EVENT_WINCLOSED) {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if recursive.get() as ::core::ffi::c_int != 0 || !has_event(EVENT_WINCLOSED) {
         return;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut winid: [::core::ffi::c_char; 65] = [0; 65];
     vim_snprintf(
         &raw mut winid as *mut ::core::ffi::c_char,
@@ -7399,19 +7407,19 @@ unsafe extern "C" fn do_autocmd_winclosed(mut win: *mut win_T) {
         false_0 != 0,
         (*win).w_buffer,
     );
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn trigger_tabclosedpre(mut tp: *mut tabpage_T) {
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut ptp: *mut tabpage_T = curtab;
-    if !has_event(EVENT_TABCLOSEDPRE) || recursive as ::core::ffi::c_int != 0 {
+    if !has_event(EVENT_TABCLOSEDPRE) || recursive.get() as ::core::ffi::c_int != 0 {
         return;
     }
     if valid_tabpage(tp) {
         goto_tabpage_tp(tp, false_0 != 0, false_0 != 0);
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     window_layout_lock();
     apply_autocmds(
         EVENT_TABCLOSEDPRE,
@@ -7421,7 +7429,7 @@ pub unsafe extern "C" fn trigger_tabclosedpre(mut tp: *mut tabpage_T) {
         ::core::ptr::null_mut::<buf_T>(),
     );
     window_layout_unlock();
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
     if valid_tabpage(ptp) {
         goto_tabpage_tp(ptp, false_0 != 0, false_0 != 0);
     } else {
@@ -7637,7 +7645,7 @@ pub unsafe extern "C" fn winframe_remove(
         return ::core::ptr::null_mut::<win_T>();
     }
     let mut frp_close: *mut frame_T = (*win).w_frame;
-    frame_locked += 1;
+    (*frame_locked.ptr()) += 1;
     let topleft: *const win_T = frame2win((*frp_close).fr_parent);
     let mut row: ::core::ffi::c_int = (*topleft).w_winrow;
     let mut col: ::core::ffi::c_int = (*topleft).w_wincol;
@@ -7684,7 +7692,7 @@ pub unsafe extern "C" fn winframe_remove(
     } else {
         *unflat_altfr = altfr;
     }
-    frame_locked -= 1;
+    (*frame_locked.ptr()) -= 1;
     return wp;
 }
 #[no_mangle]
@@ -8013,13 +8021,13 @@ pub unsafe extern "C" fn frame_new_height(
 ) {
     if (*topfrp).fr_parent.is_null() && set_ch as ::core::ffi::c_int != 0 {
         let mut new_ch: OptInt =
-            if min_set_ch > p_ch + (*topfrp).fr_height as OptInt - height as OptInt {
-                min_set_ch
+            if min_set_ch.get() > p_ch + (*topfrp).fr_height as OptInt - height as OptInt {
+                min_set_ch.get()
             } else {
                 p_ch + (*topfrp).fr_height as OptInt - height as OptInt
             };
         if new_ch != p_ch {
-            let save_ch: OptInt = min_set_ch;
+            let save_ch: OptInt = min_set_ch.get();
             set_option_value(
                 kOptCmdheight,
                 OptVal {
@@ -8028,7 +8036,7 @@ pub unsafe extern "C" fn frame_new_height(
                 },
                 0 as ::core::ffi::c_int,
             );
-            min_set_ch = save_ch;
+            min_set_ch.set(save_ch);
         }
         height = (if (Rows as OptInt
             - p_ch
@@ -8482,7 +8490,7 @@ pub unsafe extern "C" fn close_others(
         && !(*lastwin).w_floating
     {
         if message != 0 && !autocmd_busy {
-            msg(gettext(m_onlyone), 0 as ::core::ffi::c_int);
+            msg(gettext(m_onlyone.get()), 0 as ::core::ffi::c_int);
         }
         return;
     }
@@ -8545,7 +8553,7 @@ pub unsafe extern "C" fn unuse_tabpage(mut tp: *mut tabpage_T) {
     (*tp).tp_lastwin = lastwin;
     (*tp).tp_curwin = curwin;
 }
-static mut command_frame_height: bool = true_0 != 0;
+static command_frame_height: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn use_tabpage(mut tp: *mut tabpage_T) {
     curtab = tp;
@@ -8686,11 +8694,12 @@ pub unsafe extern "C" fn win_init_size() {
     (*topframe).fr_width = Columns;
 }
 unsafe extern "C" fn alloc_tabpage() -> *mut tabpage_T {
-    static mut last_tp_handle: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static last_tp_handle: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
     let mut tp: *mut tabpage_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<tabpage_T>()) as *mut tabpage_T;
-    last_tp_handle += 1;
-    (*tp).handle = last_tp_handle as handle_T;
+    (*last_tp_handle.ptr()) += 1;
+    (*tp).handle = last_tp_handle.get() as handle_T;
     map_put_int_ptr_t(
         &raw mut tabpage_handles,
         (*tp).handle as ::core::ffi::c_int,
@@ -9089,7 +9098,7 @@ unsafe extern "C" fn enter_tabpage(
         if p_ch != (*curtab).tp_ch_used {
             let mut new_ch: OptInt = (*curtab).tp_ch_used;
             (*curtab).tp_ch_used = p_ch;
-            command_frame_height = false_0 != 0;
+            command_frame_height.set(false_0 != 0);
             set_option_value(
                 kOptCmdheight,
                 OptVal {
@@ -9098,7 +9107,7 @@ unsafe extern "C" fn enter_tabpage(
                 },
                 0 as ::core::ffi::c_int,
             );
-            command_frame_height = true_0 != 0;
+            command_frame_height.set(true_0 != 0);
         }
     }
     win_enter_ext(
@@ -9792,14 +9801,14 @@ pub unsafe extern "C" fn buf_jump_open_tab(mut buf: *mut buf_T) -> *mut win_T {
     }
     return ::core::ptr::null_mut::<win_T>();
 }
-static mut last_win_id: ::core::ffi::c_int =
-    LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+static last_win_id: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn win_alloc(mut after: *mut win_T, mut hidden: bool) -> *mut win_T {
     let mut new_wp: *mut win_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<win_T>()) as *mut win_T;
-    last_win_id += 1;
-    (*new_wp).handle = last_win_id as handle_T;
+    (*last_win_id.ptr()) += 1;
+    (*new_wp).handle = last_win_id.get() as handle_T;
     map_put_int_ptr_t(
         &raw mut window_handles,
         (*new_wp).handle as ::core::ffi::c_int,
@@ -10137,19 +10146,19 @@ unsafe extern "C" fn frame_remove(mut frp: *mut frame_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_new_screensize() {
-    static mut old_Rows: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut old_Columns: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if old_Rows != Rows {
-        if p_window == (old_Rows - 1 as ::core::ffi::c_int) as OptInt
-            || old_Rows == 0 as ::core::ffi::c_int && !option_was_set(kOptWindow)
+    static old_Rows: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static old_Columns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if old_Rows.get() != Rows {
+        if p_window == (old_Rows.get() - 1 as ::core::ffi::c_int) as OptInt
+            || old_Rows.get() == 0 as ::core::ffi::c_int && !option_was_set(kOptWindow)
         {
             p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
         }
-        old_Rows = Rows;
+        old_Rows.set(Rows);
         win_new_screen_rows();
     }
-    if old_Columns != Columns {
-        old_Columns = Columns;
+    if old_Columns.get() != Columns {
+        old_Columns.set(Columns);
         win_new_screen_cols();
     }
 }
@@ -10209,11 +10218,11 @@ pub unsafe extern "C" fn snapshot_windows_scroll_size() {
         wp = (*wp).w_next;
     }
 }
-static mut did_initial_scroll_size_snapshot: bool = false_0 != 0;
+static did_initial_scroll_size_snapshot: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn may_make_initial_scroll_size_snapshot() {
-    if !did_initial_scroll_size_snapshot {
-        did_initial_scroll_size_snapshot = true_0 != 0;
+    if !did_initial_scroll_size_snapshot.get() {
+        did_initial_scroll_size_snapshot.set(true_0 != 0);
         snapshot_windows_scroll_size();
     }
 }
@@ -10440,12 +10449,12 @@ unsafe extern "C" fn check_window_scroll_resize(
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let do_resize: bool = has_event(EVENT_WINRESIZED);
     let do_scroll: bool = has_event(EVENT_WINSCROLLED);
-    if recursive as ::core::ffi::c_int != 0
+    if recursive.get() as ::core::ffi::c_int != 0
         || !(do_scroll as ::core::ffi::c_int != 0 || do_resize as ::core::ffi::c_int != 0)
-        || !did_initial_scroll_size_snapshot
+        || !did_initial_scroll_size_snapshot.get()
     {
         return;
     }
@@ -10490,7 +10499,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         );
     }
     snapshot_windows_scroll_size();
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut resize_winid: [::core::ffi::c_char; 65] = [0; 65];
     let mut resize_bufref: bufref_T = bufref_T {
         br_buf: ::core::ptr::null_mut::<buf_T>(),
@@ -10601,7 +10610,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         );
         restore_v_event(v_event_0, &raw mut save_v_event_0);
     }
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_size_save(mut gap: *mut garray_T) {
@@ -11141,7 +11150,7 @@ pub unsafe extern "C" fn win_drag_status_line(
         room = Rows - cmdline_row;
         if !(*curfr).fr_next.is_null() {
             room -= p_ch as ::core::ffi::c_int + global_stl_height();
-        } else if min_set_ch > 0 as OptInt {
+        } else if min_set_ch.get() > 0 as OptInt {
             room -= 1;
         }
         room = if room > 0 as ::core::ffi::c_int {
@@ -11604,7 +11613,7 @@ pub unsafe extern "C" fn command_height() {
     {
         frp = (*frp).fr_prev;
     }
-    while p_ch > old_p_ch as OptInt && command_frame_height as ::core::ffi::c_int != 0 {
+    while p_ch > old_p_ch as OptInt && command_frame_height.get() as ::core::ffi::c_int != 0 {
         if frp.is_null() {
             emsg(gettext(&raw const e_noroom as *const ::core::ffi::c_char));
             p_ch = old_p_ch as OptInt;
@@ -11623,7 +11632,7 @@ pub unsafe extern "C" fn command_height() {
         }
     }
     if p_ch < old_p_ch as OptInt
-        && command_frame_height as ::core::ffi::c_int != 0
+        && command_frame_height.get() as ::core::ffi::c_int != 0
         && !frp.is_null()
     {
         frame_add_height(frp, (old_p_ch as OptInt - p_ch) as ::core::ffi::c_int);
@@ -11648,7 +11657,7 @@ pub unsafe extern "C" fn command_height() {
         msg_row = cmdline_row;
     }
     (*curtab).tp_ch_used = p_ch;
-    min_set_ch = p_ch;
+    min_set_ch.set(p_ch);
 }
 unsafe extern "C" fn frame_add_height(mut frp: *mut frame_T, mut n: ::core::ffi::c_int) {
     frame_new_height(
@@ -12358,7 +12367,7 @@ pub unsafe extern "C" fn check_colorcolumn(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_last_winid() -> ::core::ffi::c_int {
-    return last_win_id;
+    return last_win_id.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_locked(mut wp: *mut win_T) -> ::core::ffi::c_int {

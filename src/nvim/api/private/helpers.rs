@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2023,7 +2024,7 @@ pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uin
 unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
     return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
 }
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_int_ptr_t(
@@ -2032,7 +2033,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2872,14 +2873,15 @@ pub unsafe extern "C" fn api_clear_error(mut value: *mut Error) {
     (*value).msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*value).type_0 = kErrorTypeNone;
 }
-static mut mem_for_metadata: ArenaMem = ::core::ptr::null_mut::<consumed_blk>();
+static mem_for_metadata: GlobalCell<ArenaMem> =
+    GlobalCell::new(::core::ptr::null_mut::<consumed_blk>());
 #[no_mangle]
 pub unsafe extern "C" fn api_metadata() -> Object {
-    static mut metadata: Object = object {
+    static metadata: GlobalCell<Object> = GlobalCell::new(object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
-    };
-    if metadata.type_0 as ::core::ffi::c_uint
+    });
+    if (*metadata.ptr()).type_0 as ::core::ffi::c_uint
         == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut arena: Arena = ARENA_EMPTY;
@@ -2887,26 +2889,26 @@ pub unsafe extern "C" fn api_metadata() -> Object {
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
-        metadata = unpack(
-            &raw const packed_api_metadata as *const uint8_t as *mut ::core::ffi::c_char,
+        metadata.set(unpack(
+            (packed_api_metadata.ptr() as *const _) as *const uint8_t as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[uint8_t; 32041]>(),
             &raw mut arena,
             &raw mut err,
-        );
+        ));
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-            || metadata.type_0 as ::core::ffi::c_uint
+            || (*metadata.ptr()).type_0 as ::core::ffi::c_uint
                 != kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             abort();
         }
-        mem_for_metadata = arena_finish(&raw mut arena);
+        mem_for_metadata.set(arena_finish(&raw mut arena));
     }
-    return metadata;
+    return metadata.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn api_metadata_raw() -> String_0 {
     return String_0 {
-        data: &raw const packed_api_metadata as *const uint8_t as *mut ::core::ffi::c_char,
+        data: (packed_api_metadata.ptr() as *const _) as *const uint8_t as *mut ::core::ffi::c_char,
         size: ::core::mem::size_of::<[uint8_t; 32041]>(),
     };
 }
@@ -3691,7 +3693,7 @@ unsafe extern "C" fn tv_dict_is_watched(d: *const dict_T) -> bool {
 }
 pub const SID_LUA: ::core::ffi::c_int = -8 as ::core::ffi::c_int;
 pub const SID_API_CLIENT: ::core::ffi::c_int = -9 as ::core::ffi::c_int;
-static mut packed_api_metadata: [uint8_t; 32041] = [
+static packed_api_metadata: GlobalCell<[uint8_t; 32041]> = GlobalCell::new([
     134 as uint8_t,
     167 as uint8_t,
     118 as uint8_t,
@@ -35733,7 +35735,7 @@ static mut packed_api_metadata: [uint8_t; 32041] = [
     103 as uint8_t,
     101 as uint8_t,
     95 as uint8_t,
-];
+]);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

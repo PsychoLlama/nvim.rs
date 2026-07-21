@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -354,7 +355,7 @@ extern "C" {
     fn ui_flush();
     fn ui_has(ext: UIExtension) -> bool;
     fn bufIsChanged(buf: *mut buf_T) -> bool;
-    static mut Versions: [*mut ::core::ffi::c_char; 0];
+    static Versions: GlobalCell<[*mut ::core::ffi::c_char; 0]>;
 }
 pub type __uid_t = ::core::ffi::c_uint;
 pub type __off_t = ::core::ffi::c_long;
@@ -3589,7 +3590,7 @@ pub const ML_LOCKED_DIRTY: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const ML_LOCKED_POS: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const ML_ALLOCATED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const BH_DIRTY: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_int64_t_ptr_t(
@@ -3598,7 +3599,7 @@ unsafe extern "C" fn map_get_int64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -3622,52 +3623,59 @@ pub const B0_FF_MASK: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const B0_SAME_DIR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const B0_HAS_FENC: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-static mut lowest_marked: linenr_T = 0 as linenr_T;
-static mut e_ml_get_invalid_lnum_nr: [::core::ffi::c_char; 32] = unsafe {
+static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static e_ml_get_invalid_lnum_nr: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E315: ml_get: Invalid lnum: %ld\0",
     )
-};
-static mut e_ml_get_cannot_find_line_nr_in_buffer_nr_str: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
-        *b"E316: ml_get: Cannot find line %ldin buffer %d %s\0",
-    )
-};
-static mut e_pointer_block_id_wrong: [::core::ffi::c_char; 29] = unsafe {
+});
+static e_ml_get_cannot_find_line_nr_in_buffer_nr_str: GlobalCell<[::core::ffi::c_char; 50]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+            *b"E316: ml_get: Cannot find line %ldin buffer %d %s\0",
+        )
+    });
+static e_pointer_block_id_wrong: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E317: Pointer block id wrong\0",
     )
-};
-static mut e_pointer_block_id_wrong_two: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E317: Pointer block id wrong 2\0",
-    )
-};
-static mut e_pointer_block_id_wrong_three: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E317: Pointer block id wrong 3\0",
-    )
-};
-static mut e_pointer_block_id_wrong_four: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E317: Pointer block id wrong 4\0",
-    )
-};
-static mut e_line_number_out_of_range_nr_past_the_end: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E322: Line number out of range: %ld past the end\0",
-    )
-};
-static mut e_line_count_wrong_in_block_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E323: Line count wrong in block %ld\0",
-    )
-};
-static mut e_warning_pointer_block_corrupted: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-        *b"E1364: Warning: Pointer block corrupted\0",
-    )
-};
+});
+static e_pointer_block_id_wrong_two: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E317: Pointer block id wrong 2\0",
+        )
+    });
+static e_pointer_block_id_wrong_three: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E317: Pointer block id wrong 3\0",
+        )
+    });
+static e_pointer_block_id_wrong_four: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E317: Pointer block id wrong 4\0",
+        )
+    });
+static e_line_number_out_of_range_nr_past_the_end: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E322: Line number out of range: %ld past the end\0",
+        )
+    });
+static e_line_count_wrong_in_block_nr: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E323: Line count wrong in block %ld\0",
+        )
+    });
+static e_warning_pointer_block_corrupted: GlobalCell<[::core::ffi::c_char; 40]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+            *b"E1364: Warning: Pointer block corrupted\0",
+        )
+    });
 #[no_mangle]
 pub unsafe extern "C" fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
@@ -3718,7 +3726,7 @@ pub unsafe extern "C" fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
                     &raw mut (*b0p).b0_version as *mut ::core::ffi::c_char,
                     b"VIM \0".as_ptr() as *const ::core::ffi::c_char,
                 ),
-                *(&raw mut Versions as *mut *mut ::core::ffi::c_char)
+                *(Versions.ptr() as *mut *mut ::core::ffi::c_char)
                     .offset(0 as ::core::ffi::c_int as isize),
                 6 as size_t,
             );
@@ -4891,7 +4899,8 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                         }
                                         if ptr_block_error {
                                             emsg(gettext(
-                                                &raw const e_warning_pointer_block_corrupted
+                                                (e_warning_pointer_block_corrupted.ptr()
+                                                    as *const _)
                                                     as *const ::core::ffi::c_char,
                                             ));
                                         }
@@ -5638,7 +5647,7 @@ pub unsafe extern "C" fn make_percent_swname(
     xfree(f as *mut ::core::ffi::c_void);
     return d;
 }
-static mut proc_running: ::core::ffi::c_int = 0;
+static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
 pub unsafe extern "C" fn swapfile_dict(mut fname: *const ::core::ffi::c_char, mut d: *mut dict_T) {
     let mut fd: ::core::ffi::c_int = 0;
@@ -5977,8 +5986,8 @@ unsafe extern "C" fn swapfile_info(
                         char_to_long(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
                             as ::core::ffi::c_int,
                     );
-                    proc_running = swapfile_proc_running(&raw mut b0, fname);
-                    if proc_running != 0 {
+                    proc_running.set(swapfile_proc_running(&raw mut b0, fname));
+                    if proc_running.get() != 0 {
                         kv_do_printf(
                             msg_0,
                             gettext(b" (STILL RUNNING)\0".as_ptr() as *const ::core::ffi::c_char),
@@ -6336,21 +6345,23 @@ unsafe extern "C" fn ml_get_buf_impl(
     mut lnum: linenr_T,
     mut will_change: bool,
 ) -> *mut ::core::ffi::c_char {
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut questions: [::core::ffi::c_char; 4] = [0; 4];
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static questions: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new([0; 4]);
     if (*buf).b_ml.ml_mfp.is_null() {
         (*buf).b_ml.ml_line_textlen = 1 as ::core::ffi::c_int as colnr_T;
         return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     '_errorret: {
         if lnum > (*buf).b_ml.ml_line_count {
-            if recursive == 0 as ::core::ffi::c_int {
-                recursive += 1;
+            if recursive.get() == 0 as ::core::ffi::c_int {
+                (*recursive.ptr()) += 1;
                 siemsg(
-                    gettext(&raw const e_ml_get_invalid_lnum_nr as *const ::core::ffi::c_char),
+                    gettext(
+                        (e_ml_get_invalid_lnum_nr.ptr() as *const _) as *const ::core::ffi::c_char,
+                    ),
                     lnum as int64_t,
                 );
-                recursive -= 1;
+                (*recursive.ptr()) -= 1;
             }
             ml_flush_line(buf, false_0 != 0);
         } else {
@@ -6364,20 +6375,20 @@ unsafe extern "C" fn ml_get_buf_impl(
                 let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
                 hp = ml_find_line(buf, lnum, ML_FIND as ::core::ffi::c_int);
                 if hp.is_null() {
-                    if recursive == 0 as ::core::ffi::c_int {
-                        recursive += 1;
+                    if recursive.get() == 0 as ::core::ffi::c_int {
+                        (*recursive.ptr()) += 1;
                         get_trans_bufname(buf);
                         shorten_dir(&raw mut NameBuff as *mut ::core::ffi::c_char);
                         siemsg(
                             gettext(
-                                &raw const e_ml_get_cannot_find_line_nr_in_buffer_nr_str
+                                (e_ml_get_cannot_find_line_nr_in_buffer_nr_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             lnum as int64_t,
                             (*buf).handle,
                             &raw mut NameBuff as *mut ::core::ffi::c_char,
                         );
-                        recursive -= 1;
+                        (*recursive.ptr()) -= 1;
                     }
                     break '_errorret;
                 } else {
@@ -6409,12 +6420,12 @@ unsafe extern "C" fn ml_get_buf_impl(
         }
     }
     strcpy(
-        &raw mut questions as *mut ::core::ffi::c_char,
+        questions.ptr() as *mut ::core::ffi::c_char,
         b"???\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     (*buf).b_ml.ml_line_textlen = 4 as ::core::ffi::c_int as colnr_T;
     (*buf).b_ml.ml_line_lnum = lnum;
-    return &raw mut questions as *mut ::core::ffi::c_char;
+    return questions.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_line_alloced() -> ::core::ffi::c_int {
@@ -6435,8 +6446,8 @@ unsafe extern "C" fn ml_append_int(
     if lnum > (*buf).b_ml.ml_line_count || (*buf).b_ml.ml_mfp.is_null() {
         return FAIL;
     }
-    if lowest_marked != 0 && lowest_marked > lnum {
-        lowest_marked = lnum + 1 as linenr_T;
+    if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
+        lowest_marked.set(lnum + 1 as linenr_T);
     }
     if len == 0 as ::core::ffi::c_int {
         len = (strlen(line) as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
@@ -6731,7 +6742,8 @@ unsafe extern "C" fn ml_append_int(
                     let mut pp: *mut PointerBlock = (*hp).bh_data as *mut PointerBlock;
                     if (*pp).pb_id as ::core::ffi::c_int != PTR_ID as ::core::ffi::c_int {
                         iemsg(gettext(
-                            &raw const e_pointer_block_id_wrong_three as *const ::core::ffi::c_char,
+                            (e_pointer_block_id_wrong_three.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
                         ));
                         mf_put(mfp, hp, false_0 != 0, false_0 != 0);
                         break '_theend;
@@ -7161,8 +7173,8 @@ unsafe extern "C" fn ml_delete_int(
     mut lnum: linenr_T,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if lowest_marked != 0 && lowest_marked > lnum {
-        lowest_marked -= 1;
+    if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
+        (*lowest_marked.ptr()) -= 1;
     }
     if (*buf).b_ml.ml_line_count == 1 as linenr_T {
         if flags & ML_DEL_MESSAGE as ::core::ffi::c_int != 0 {
@@ -7255,7 +7267,8 @@ unsafe extern "C" fn ml_delete_int(
                     let mut pp: *mut PointerBlock = (*hp).bh_data as *mut PointerBlock;
                     if (*pp).pb_id as ::core::ffi::c_int != PTR_ID as ::core::ffi::c_int {
                         iemsg(gettext(
-                            &raw const e_pointer_block_id_wrong_four as *const ::core::ffi::c_char,
+                            (e_pointer_block_id_wrong_four.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
                         ));
                         mf_put(mfp, hp, false_0 != 0, false_0 != 0);
                         break '_theend;
@@ -7357,8 +7370,8 @@ pub unsafe extern "C" fn ml_setmarked(mut lnum: linenr_T) {
     {
         return;
     }
-    if lowest_marked == 0 as linenr_T || lowest_marked > lnum {
-        lowest_marked = lnum;
+    if lowest_marked.get() == 0 as linenr_T || lowest_marked.get() > lnum {
+        lowest_marked.set(lnum);
     }
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
     hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
@@ -7375,7 +7388,7 @@ pub unsafe extern "C" fn ml_firstmarked() -> linenr_T {
     if (*curbuf).b_ml.ml_mfp.is_null() {
         return 0 as linenr_T;
     }
-    let mut lnum: linenr_T = lowest_marked;
+    let mut lnum: linenr_T = lowest_marked.get();
     while lnum <= (*curbuf).b_ml.ml_line_count {
         let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
         hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
@@ -7392,7 +7405,7 @@ pub unsafe extern "C" fn ml_firstmarked() -> linenr_T {
                 *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint).offset(i as isize) &=
                     DB_INDEX_MASK;
                 (*curbuf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
-                lowest_marked = lnum + 1 as linenr_T;
+                lowest_marked.set(lnum + 1 as linenr_T);
                 return lnum;
             }
             i += 1;
@@ -7406,7 +7419,7 @@ pub unsafe extern "C" fn ml_clearmarked() {
     if (*curbuf).b_ml.ml_mfp.is_null() {
         return;
     }
-    let mut lnum: linenr_T = lowest_marked;
+    let mut lnum: linenr_T = lowest_marked.get();
     while lnum <= (*curbuf).b_ml.ml_line_count {
         let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
         hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
@@ -7428,7 +7441,7 @@ pub unsafe extern "C" fn ml_clearmarked() {
             lnum += 1;
         }
     }
-    lowest_marked = 0 as ::core::ffi::c_int as linenr_T;
+    lowest_marked.set(0 as ::core::ffi::c_int as linenr_T);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_flush_deleted_bytes(
@@ -7445,15 +7458,15 @@ pub unsafe extern "C" fn ml_flush_deleted_bytes(
     return ret;
 }
 unsafe extern "C" fn ml_flush_line(mut buf: *mut buf_T, mut noalloc: bool) {
-    static mut entered: bool = false_0 != 0;
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if (*buf).b_ml.ml_line_lnum == 0 as linenr_T || (*buf).b_ml.ml_mfp.is_null() {
         return;
     }
     if (*buf).b_ml.ml_flags & ML_LINE_DIRTY != 0 {
-        if entered {
+        if entered.get() {
             return;
         }
-        entered = true_0 != 0;
+        entered.set(true_0 != 0);
         (*buf).flush_count += 1;
         let mut lnum: linenr_T = (*buf).b_ml.ml_line_lnum;
         let mut new_line: *mut ::core::ffi::c_char = (*buf).b_ml.ml_line_ptr;
@@ -7544,7 +7557,7 @@ unsafe extern "C" fn ml_flush_line(mut buf: *mut buf_T, mut noalloc: bool) {
         if !noalloc {
             xfree(new_line as *mut ::core::ffi::c_void);
         }
-        entered = false_0 != 0;
+        entered.set(false_0 != 0);
     } else if (*buf).b_ml.ml_flags & ML_ALLOCATED != 0 {
         '_c2rust_label: {
             if !noalloc {
@@ -7685,7 +7698,7 @@ unsafe extern "C" fn ml_find_line(
             let mut pp: *mut PointerBlock = dp as *mut PointerBlock;
             if (*pp).pb_id as ::core::ffi::c_int != PTR_ID as ::core::ffi::c_int {
                 iemsg(gettext(
-                    &raw const e_pointer_block_id_wrong as *const ::core::ffi::c_char,
+                    (e_pointer_block_id_wrong.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
                 break;
             } else {
@@ -7732,7 +7745,7 @@ unsafe extern "C" fn ml_find_line(
                     if lnum > (*buf).b_ml.ml_line_count {
                         siemsg(
                             gettext(
-                                &raw const e_line_number_out_of_range_nr_past_the_end
+                                (e_line_number_out_of_range_nr_past_the_end.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             lnum as int64_t - (*buf).b_ml.ml_line_count as int64_t,
@@ -7740,7 +7753,7 @@ unsafe extern "C" fn ml_find_line(
                     } else {
                         siemsg(
                             gettext(
-                                &raw const e_line_count_wrong_in_block_nr
+                                (e_line_count_wrong_in_block_nr.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                             ),
                             bnum,
@@ -7797,7 +7810,7 @@ unsafe extern "C" fn ml_lineadd(mut buf: *mut buf_T, mut count: ::core::ffi::c_i
         if (*pp).pb_id as ::core::ffi::c_int != PTR_ID as ::core::ffi::c_int {
             mf_put(mfp, hp, false_0 != 0, false_0 != 0);
             iemsg(gettext(
-                &raw const e_pointer_block_id_wrong_two as *const ::core::ffi::c_char,
+                (e_pointer_block_id_wrong_two.ptr() as *const _) as *const ::core::ffi::c_char,
             ));
             break;
         } else {
@@ -8243,7 +8256,7 @@ unsafe extern "C" fn findswapname(
                         ) as usize
                             == ::core::mem::size_of::<ZeroBlock>()
                         {
-                            proc_running = swapfile_proc_running(&raw mut b0, fname);
+                            proc_running.set(swapfile_proc_running(&raw mut b0, fname));
                             if b0.b0_fname[(B0_FNAME_SIZE_ORG as ::core::ffi::c_int
                                 - 2 as ::core::ffi::c_int)
                                 as usize] as ::core::ffi::c_int
@@ -8318,7 +8331,7 @@ unsafe extern "C" fn findswapname(
                         {
                             choice = SEA_CHOICE_READONLY;
                         }
-                        proc_running = 0 as ::core::ffi::c_int;
+                        proc_running.set(0 as ::core::ffi::c_int);
                         if choice as ::core::ffi::c_uint
                             == SEA_CHOICE_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
@@ -8368,13 +8381,17 @@ unsafe extern "C" fn findswapname(
                                         b"VIM - ATTENTION\0".as_ptr() as *const ::core::ffi::c_char
                                     ),
                                     msg_0.items,
-                                    if proc_running != 0 { run_but } else { but },
+                                    if proc_running.get() != 0 {
+                                        run_but
+                                    } else {
+                                        but
+                                    },
                                     1 as ::core::ffi::c_int,
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                     false_0,
                                 ) as sea_choice_T;
                                 choice = (choice as ::core::ffi::c_uint).wrapping_add(
-                                    (proc_running != 0
+                                    (proc_running.get() != 0
                                         && choice as ::core::ffi::c_uint
                                             >= 4 as ::core::ffi::c_uint)
                                         as ::core::ffi::c_int
@@ -8629,12 +8646,13 @@ unsafe extern "C" fn ml_updatechunk(
     mut len: ::core::ffi::c_int,
     mut updtype: ::core::ffi::c_int,
 ) {
-    static mut ml_upd_lastbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    static mut ml_upd_lastline: linenr_T = 0;
-    static mut ml_upd_lastcurline: linenr_T = 0;
-    static mut ml_upd_lastcurix: ::core::ffi::c_int = 0;
-    let mut curline: linenr_T = ml_upd_lastcurline;
-    let mut curix: ::core::ffi::c_int = ml_upd_lastcurix;
+    static ml_upd_lastbuf: GlobalCell<*mut buf_T> =
+        GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+    static ml_upd_lastline: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static ml_upd_lastcurline: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static ml_upd_lastcurix: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    let mut curline: linenr_T = ml_upd_lastcurline.get();
+    let mut curix: ::core::ffi::c_int = ml_upd_lastcurix.get();
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
     if (*buf).b_ml.ml_usedchunks == -1 as ::core::ffi::c_int || len == 0 as ::core::ffi::c_int {
         return;
@@ -8670,8 +8688,8 @@ unsafe extern "C" fn ml_updatechunk(
         .mlcs_totalsize = (*buf).b_ml.ml_line_textlen as ::core::ffi::c_int;
         return;
     }
-    if buf != ml_upd_lastbuf
-        || line != ml_upd_lastline + 1 as linenr_T
+    if buf != ml_upd_lastbuf.get()
+        || line != ml_upd_lastline.get() + 1 as linenr_T
         || updtype != ML_CHNK_ADDLINE
     {
         curline = 1 as ::core::ffi::c_int as linenr_T;
@@ -8780,7 +8798,7 @@ unsafe extern "C" fn ml_updatechunk(
                 .offset((curix + 1 as ::core::ffi::c_int) as isize))
             .mlcs_totalsize -= size;
             (*buf).b_ml.ml_usedchunks += 1;
-            ml_upd_lastbuf = ::core::ptr::null_mut::<buf_T>();
+            ml_upd_lastbuf.set(::core::ptr::null_mut::<buf_T>());
             return;
         } else if (*(*buf).b_ml.ml_chunksize.offset(curix as isize)).mlcs_numlines
             >= MLCS_MINL as ::core::ffi::c_int
@@ -8824,7 +8842,7 @@ unsafe extern "C" fn ml_updatechunk(
         }
     } else if updtype == ML_CHNK_DELLINE {
         (*curchnk).mlcs_numlines -= 1;
-        ml_upd_lastbuf = ::core::ptr::null_mut::<buf_T>();
+        ml_upd_lastbuf.set(::core::ptr::null_mut::<buf_T>());
         if curix < (*buf).b_ml.ml_usedchunks - 1 as ::core::ffi::c_int
             && (*curchnk).mlcs_numlines
                 + (*curchnk.offset(1 as ::core::ffi::c_int as isize)).mlcs_numlines
@@ -8875,10 +8893,10 @@ unsafe extern "C" fn ml_updatechunk(
         }
         return;
     }
-    ml_upd_lastbuf = buf;
-    ml_upd_lastline = line;
-    ml_upd_lastcurline = curline;
-    ml_upd_lastcurix = curix;
+    ml_upd_lastbuf.set(buf);
+    ml_upd_lastline.set(line);
+    ml_upd_lastcurline.set(curline);
+    ml_upd_lastcurix.set(curix);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_find_line_or_offset(

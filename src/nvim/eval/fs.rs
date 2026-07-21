@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -2322,11 +2323,11 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut e_error_while_writing_str: [::core::ffi::c_char; 29] = unsafe {
+static e_error_while_writing_str: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E80: Error while writing: %s\0",
     )
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn modify_fname(
     mut src: *mut ::core::ffi::c_char,
@@ -4689,7 +4690,7 @@ unsafe extern "C" fn write_list(
         }
     }
     semsg(
-        gettext(&raw const e_error_while_writing_str as *const ::core::ffi::c_char),
+        gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
         uv_strerror(error),
     );
     return false_0 != 0;
@@ -4714,7 +4715,7 @@ unsafe extern "C" fn write_data(
         }
     }
     semsg(
-        gettext(&raw const e_error_while_writing_str as *const ::core::ffi::c_char),
+        gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
         uv_strerror(error),
     );
     return false_0 != 0;

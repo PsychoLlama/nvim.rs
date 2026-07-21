@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2528,30 +2529,33 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut e_digraph_must_be_just_two_characters_str: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-        *b"E1214: Digraph must be just two characters: %s\0",
-    )
-};
-static mut e_digraph_argument_must_be_one_character_str: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E1215: Digraph must be one character: %s\0",
-    )
-};
-static mut e_digraph_setlist_argument_must_be_list_of_lists_with_two_items: [::core::ffi::c_char;
-    73] = unsafe {
+static e_digraph_must_be_just_two_characters_str: GlobalCell<[::core::ffi::c_char; 47]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+            *b"E1214: Digraph must be just two characters: %s\0",
+        )
+    });
+static e_digraph_argument_must_be_one_character_str: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E1215: Digraph must be one character: %s\0",
+        )
+    });
+static e_digraph_setlist_argument_must_be_list_of_lists_with_two_items: GlobalCell<
+    [::core::ffi::c_char; 73],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 73], [::core::ffi::c_char; 73]>(
         *b"E1216: digraph_setlist() argument must be a list of lists with two items\0",
     )
-};
-static mut user_digraphs: garray_T = garray_T {
+});
+static user_digraphs: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: ::core::mem::size_of::<digr_T>() as ::core::ffi::c_int,
     ga_growsize: 10 as ::core::ffi::c_int,
     ga_data: NULL,
-};
-static mut digraphdefault: [digr_T; 1367] = [
+});
+static digraphdefault: GlobalCell<[digr_T; 1367]> = GlobalCell::new([
     digr_T {
         char1: 'N' as uint8_t,
         char2: 'U' as uint8_t,
@@ -9387,7 +9391,7 @@ static mut digraphdefault: [digr_T; 1367] = [
         char2: NUL as uint8_t,
         result: NUL,
     },
-];
+]);
 pub const DG_START_LATIN: ::core::ffi::c_int = 0xa1 as ::core::ffi::c_int;
 pub const DG_START_GREEK: ::core::ffi::c_int = 0x386 as ::core::ffi::c_int;
 pub const DG_START_CYRILLIC: ::core::ffi::c_int = 0x401 as ::core::ffi::c_int;
@@ -9416,20 +9420,20 @@ pub const DG_START_BOPOMOFO: ::core::ffi::c_int = 0x3105 as ::core::ffi::c_int;
 pub const DG_START_OTHER3: ::core::ffi::c_int = 0x3220 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn do_digraph(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    static mut backspaced: ::core::ffi::c_int = 0;
-    static mut lastchar: ::core::ffi::c_int = 0;
+    static backspaced: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static lastchar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     if c == -1 as ::core::ffi::c_int {
-        backspaced = -1 as ::core::ffi::c_int;
+        backspaced.set(-1 as ::core::ffi::c_int);
     } else if p_dg != 0 {
-        if backspaced >= 0 as ::core::ffi::c_int {
-            c = digraph_get(backspaced, c, false_0 != 0);
+        if backspaced.get() >= 0 as ::core::ffi::c_int {
+            c = digraph_get(backspaced.get(), c, false_0 != 0);
         }
-        backspaced = -1 as ::core::ffi::c_int;
-        if (c == K_BS || c == Ctrl_H) && lastchar >= 0 as ::core::ffi::c_int {
-            backspaced = lastchar;
+        backspaced.set(-1 as ::core::ffi::c_int);
+        if (c == K_BS || c == Ctrl_H) && lastchar.get() >= 0 as ::core::ffi::c_int {
+            backspaced.set(lastchar.get());
         }
     }
-    lastchar = c;
+    lastchar.set(c);
     return c;
 }
 #[no_mangle]
@@ -9438,26 +9442,26 @@ pub unsafe extern "C" fn get_digraph_for_char(
 ) -> *mut ::core::ffi::c_char {
     let val: ::core::ffi::c_int = val_arg;
     let mut dp: *const digr_T = ::core::ptr::null::<digr_T>();
-    static mut r: [::core::ffi::c_char; 3] = [0; 3];
+    static r: GlobalCell<[::core::ffi::c_char; 3]> = GlobalCell::new([0; 3]);
     let mut use_defaults: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while use_defaults <= 1 as ::core::ffi::c_int {
         if use_defaults == 0 as ::core::ffi::c_int {
-            dp = user_digraphs.ga_data as *const digr_T;
+            dp = (*user_digraphs.ptr()).ga_data as *const digr_T;
         } else {
-            dp = &raw mut digraphdefault as *mut digr_T;
+            dp = digraphdefault.ptr() as *mut digr_T;
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while if use_defaults != 0 {
             ((*dp).char1 as ::core::ffi::c_int != NUL) as ::core::ffi::c_int
         } else {
-            (i < user_digraphs.ga_len) as ::core::ffi::c_int
+            (i < (*user_digraphs.ptr()).ga_len) as ::core::ffi::c_int
         } != 0
         {
             if (*dp).result == val {
-                r[0 as ::core::ffi::c_int as usize] = (*dp).char1 as ::core::ffi::c_char;
-                r[1 as ::core::ffi::c_int as usize] = (*dp).char2 as ::core::ffi::c_char;
-                r[2 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-                return &raw mut r as *mut ::core::ffi::c_char;
+                (*r.ptr())[0 as ::core::ffi::c_int as usize] = (*dp).char1 as ::core::ffi::c_char;
+                (*r.ptr())[1 as ::core::ffi::c_int as usize] = (*dp).char2 as ::core::ffi::c_char;
+                (*r.ptr())[2 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+                return r.ptr() as *mut ::core::ffi::c_char;
             }
             dp = dp.offset(1);
             i += 1;
@@ -9508,9 +9512,9 @@ unsafe extern "C" fn getexactdigraph(
     if char1 < 0 as ::core::ffi::c_int || char2 < 0 as ::core::ffi::c_int {
         return char2;
     }
-    let mut dp: *const digr_T = user_digraphs.ga_data as *const digr_T;
+    let mut dp: *const digr_T = (*user_digraphs.ptr()).ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < user_digraphs.ga_len {
+    while i < (*user_digraphs.ptr()).ga_len {
         if (*dp).char1 as ::core::ffi::c_int == char1 && (*dp).char2 as ::core::ffi::c_int == char2
         {
             retval = (*dp).result as ::core::ffi::c_int;
@@ -9521,7 +9525,7 @@ unsafe extern "C" fn getexactdigraph(
         }
     }
     if retval == 0 as ::core::ffi::c_int {
-        dp = &raw mut digraphdefault as *mut digr_T;
+        dp = digraphdefault.ptr() as *mut digr_T;
         while (*dp).char1 as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
             if (*dp).char1 as ::core::ffi::c_int == char1
                 && (*dp).char2 as ::core::ffi::c_int == char2
@@ -9562,9 +9566,9 @@ unsafe extern "C" fn registerdigraph(
     mut char2: ::core::ffi::c_int,
     mut n: ::core::ffi::c_int,
 ) {
-    let mut dp: *mut digr_T = user_digraphs.ga_data as *mut digr_T;
+    let mut dp: *mut digr_T = (*user_digraphs.ptr()).ga_data as *mut digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < user_digraphs.ga_len {
+    while i < (*user_digraphs.ptr()).ga_len {
         if (*dp).char1 as ::core::ffi::c_int == char1 && (*dp).char2 as ::core::ffi::c_int == char2
         {
             (*dp).result = n as result_T;
@@ -9573,7 +9577,7 @@ unsafe extern "C" fn registerdigraph(
         dp = dp.offset(1);
         i += 1;
     }
-    dp = ga_append_via_ptr(&raw mut user_digraphs, ::core::mem::size_of::<digr_T>()) as *mut digr_T;
+    dp = ga_append_via_ptr(user_digraphs.ptr(), ::core::mem::size_of::<digr_T>()) as *mut digr_T;
     (*dp).char1 = char1 as uint8_t;
     (*dp).char2 = char2 as uint8_t;
     (*dp).result = n as result_T;
@@ -9589,7 +9593,8 @@ pub unsafe extern "C" fn check_digraph_chars_valid(
             NUL as ::core::ffi::c_char;
         semsg(
             gettext(
-                &raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char,
+                (e_digraph_must_be_just_two_characters_str.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             &raw mut msg as *mut ::core::ffi::c_char,
         );
@@ -9643,7 +9648,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
     let mut previous: result_T = 0 as result_T;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_putchar('\n' as ::core::ffi::c_int);
-    let mut dp: *const digr_T = &raw mut digraphdefault as *mut digr_T;
+    let mut dp: *const digr_T = digraphdefault.ptr() as *mut digr_T;
     while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int {
         let mut tmp: digr_T = digr_T {
             char1: 0,
@@ -9670,9 +9675,9 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
         dp = dp.offset(1);
         fast_breakcheck();
     }
-    dp = user_digraphs.ga_data as *const digr_T;
+    dp = (*user_digraphs.ptr()).ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < user_digraphs.ga_len && !got_int {
+    while i < (*user_digraphs.ptr()).ga_len && !got_int {
         if previous >= 0 as ::core::ffi::c_int && use_headers as ::core::ffi::c_int != 0 {
             digraph_header(gettext(b"Custom\0".as_ptr() as *const ::core::ffi::c_char));
         }
@@ -9700,12 +9705,12 @@ unsafe extern "C" fn digraph_getlist_appendpair(mut dp: *const digr_T, mut l: *m
 pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *mut typval_T) {
     tv_list_alloc_ret(
         rettv,
-        (::core::mem::size_of::<[digr_T; 1367]>() as ::core::ffi::c_int + user_digraphs.ga_len)
-            as ptrdiff_t,
+        (::core::mem::size_of::<[digr_T; 1367]>() as ::core::ffi::c_int
+            + (*user_digraphs.ptr()).ga_len) as ptrdiff_t,
     );
     let mut dp: *const digr_T = ::core::ptr::null::<digr_T>();
     if list_all {
-        dp = &raw mut digraphdefault as *mut digr_T;
+        dp = digraphdefault.ptr() as *mut digr_T;
         while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int {
             let mut tmp: digr_T = digr_T {
                 char1: 0,
@@ -9727,15 +9732,15 @@ pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *
             dp = dp.offset(1);
         }
     }
-    dp = user_digraphs.ga_data as *const digr_T;
+    dp = (*user_digraphs.ptr()).ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < user_digraphs.ga_len && !got_int {
+    while i < (*user_digraphs.ptr()).ga_len && !got_int {
         digraph_getlist_appendpair(dp, (*rettv).vval.v_list);
         dp = dp.offset(1);
         i += 1;
     }
 }
-static mut header_table: [dg_header_entry; 27] = [
+static header_table: GlobalCell<[dg_header_entry; 27]> = GlobalCell::new([
     dg_header_entry {
         dg_start: DG_START_LATIN,
         dg_header: b"Latin supplement\0".as_ptr() as *const ::core::ffi::c_char,
@@ -9844,7 +9849,7 @@ static mut header_table: [dg_header_entry; 27] = [
         dg_start: 0xfffffff as ::core::ffi::c_int,
         dg_header: ::core::ptr::null::<::core::ffi::c_char>(),
     },
-];
+]);
 unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut result_T) {
     let mut buf: [::core::ffi::c_char; 30] = [0; 30];
     let mut list_width: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
@@ -9853,12 +9858,13 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
     }
     if !previous.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while !header_table[i as usize].dg_header.is_null() {
-            if *previous < header_table[i as usize].dg_start
-                && (*dp).result >= header_table[i as usize].dg_start
-                && (*dp).result < header_table[(i + 1 as ::core::ffi::c_int) as usize].dg_start
+        while !(*header_table.ptr())[i as usize].dg_header.is_null() {
+            if *previous < (*header_table.ptr())[i as usize].dg_start
+                && (*dp).result >= (*header_table.ptr())[i as usize].dg_start
+                && (*dp).result
+                    < (*header_table.ptr())[(i + 1 as ::core::ffi::c_int) as usize].dg_start
             {
-                digraph_header(gettext(header_table[i as usize].dg_header));
+                digraph_header(gettext((*header_table.ptr())[i as usize].dg_header));
                 break;
             } else {
                 i += 1;
@@ -9957,7 +9963,10 @@ unsafe extern "C" fn get_digraph_chars(
         }
     }
     semsg(
-        gettext(&raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char),
+        gettext(
+            (e_digraph_must_be_just_two_characters_str.ptr() as *const _)
+                as *const ::core::ffi::c_char,
+        ),
         chars,
     );
     return FAIL;
@@ -9982,7 +9991,7 @@ unsafe extern "C" fn digraph_set_common(
     if *p as ::core::ffi::c_int != NUL {
         semsg(
             gettext(
-                &raw const e_digraph_argument_must_be_one_character_str
+                (e_digraph_argument_must_be_one_character_str.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             ),
             digraph,
@@ -10008,7 +10017,8 @@ pub unsafe extern "C" fn f_digraph_get(
     if strlen(digraphs) != 2 as size_t {
         semsg(
             gettext(
-                &raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char,
+                (e_digraph_must_be_just_two_characters_str.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             ),
             digraphs,
         );
@@ -10072,7 +10082,7 @@ pub unsafe extern "C" fn f_digraph_setlist(
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         emsg(gettext(
-            &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
+            (e_digraph_setlist_argument_must_be_list_of_lists_with_two_items.ptr() as *const _)
                 as *const ::core::ffi::c_char,
         ));
         return;
@@ -10092,16 +10102,16 @@ pub unsafe extern "C" fn f_digraph_setlist(
                 != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 emsg(gettext(
-                    &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
-                        as *const ::core::ffi::c_char,
+                    (e_digraph_setlist_argument_must_be_list_of_lists_with_two_items.ptr()
+                        as *const _) as *const ::core::ffi::c_char,
                 ));
                 return;
             }
             let mut l: *mut list_T = (*pli).li_tv.vval.v_list;
             if l.is_null() || tv_list_len(l) != 2 as ::core::ffi::c_int {
                 emsg(gettext(
-                    &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
-                        as *const ::core::ffi::c_char,
+                    (e_digraph_setlist_argument_must_be_list_of_lists_with_two_items.ptr()
+                        as *const _) as *const ::core::ffi::c_char,
                 ));
                 return;
             }

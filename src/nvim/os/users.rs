@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -121,7 +122,7 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut ga_users: garray_T = GA_EMPTY_INIT_VALUE;
+static ga_users: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 unsafe extern "C" fn add_user(
     mut users: *mut garray_T,
     mut user: *mut ::core::ffi::c_char,
@@ -227,12 +228,12 @@ pub unsafe extern "C" fn os_get_userdir(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn init_users() {
-    static mut lazy_init_done: bool = false_0 != 0;
-    if lazy_init_done {
+    static lazy_init_done: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if lazy_init_done.get() {
         return;
     }
-    lazy_init_done = true_0 != 0;
-    os_get_usernames(&raw mut ga_users);
+    lazy_init_done.set(true_0 != 0);
+    os_get_usernames(ga_users.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_users(
@@ -240,8 +241,8 @@ pub unsafe extern "C" fn get_users(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     init_users();
-    if idx < ga_users.ga_len {
-        return *(ga_users.ga_data as *mut *mut ::core::ffi::c_char).offset(idx as isize);
+    if idx < (*ga_users.ptr()).ga_len {
+        return *((*ga_users.ptr()).ga_data as *mut *mut ::core::ffi::c_char).offset(idx as isize);
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -251,16 +252,16 @@ pub unsafe extern "C" fn match_user(mut name: *mut ::core::ffi::c_char) -> ::cor
     let mut result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     init_users();
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < ga_users.ga_len {
+    while i < (*ga_users.ptr()).ga_len {
         if strcmp(
-            *(ga_users.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
+            *((*ga_users.ptr()).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
             name,
         ) == 0 as ::core::ffi::c_int
         {
             return 2 as ::core::ffi::c_int;
         }
         if strncmp(
-            *(ga_users.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
+            *((*ga_users.ptr()).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
             name,
             n as size_t,
         ) == 0 as ::core::ffi::c_int

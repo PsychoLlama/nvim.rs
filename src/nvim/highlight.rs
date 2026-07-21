@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2170,9 +2171,9 @@ pub const COLOR_ITEM_INITIALIZER: ColorItem = ColorItem {
     is_default: false_0 != 0,
     link_global: false_0 != 0,
 };
-static mut value_init_int: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
-static mut value_init_ColorItem: ColorItem = COLOR_ITEM_INITIALIZER;
+static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
+static value_init_ColorItem: GlobalCell<ColorItem> = GlobalCell::new(COLOR_ITEM_INITIALIZER);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -2215,7 +2216,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2227,7 +2228,7 @@ unsafe extern "C" fn map_get_uint64_t_int(
 ) -> ::core::ffi::c_int {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_int
+        value_init_int.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2267,25 +2268,25 @@ unsafe extern "C" fn map_get_ColorKey_ColorItem(
 ) -> ColorItem {
     let mut k: uint32_t = mh_get_ColorKey(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ColorItem
+        value_init_ColorItem.get()
     } else {
         *(*map).values.offset(k as isize)
     };
 }
 pub const MAX_TYPENR: ::core::ffi::c_int = 65535 as ::core::ffi::c_int;
-static mut hlstate_active: bool = false_0 != 0;
-static mut attr_entries: Set_HlEntry = Set_HlEntry {
+static hlstate_active: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static attr_entries: GlobalCell<Set_HlEntry> = GlobalCell::new(Set_HlEntry {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<HlEntry>(),
-};
-static mut combine_attr_entries: Map_uint64_t_int = MAP_INIT;
-static mut blend_attr_entries: Map_uint64_t_int = MAP_INIT;
-static mut blendthrough_attr_entries: Map_uint64_t_int = MAP_INIT;
-static mut urls: Set_cstr_t = Set_cstr_t {
+});
+static combine_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
+static blend_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
+static blendthrough_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
+static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(Set_cstr_t {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<cstr_t>(),
-};
-static mut ns_hls: Map_ColorKey_ColorItem = Map_ColorKey_ColorItem {
+});
+static ns_hls: GlobalCell<Map_ColorKey_ColorItem> = GlobalCell::new(Map_ColorKey_ColorItem {
     set: Set_ColorKey {
         h: MapHash {
             n_buckets: 0,
@@ -2299,8 +2300,8 @@ static mut ns_hls: Map_ColorKey_ColorItem = Map_ColorKey_ColorItem {
         keys: ::core::ptr::null_mut::<ColorKey>(),
     },
     values: ::core::ptr::null_mut::<ColorItem>(),
-};
-static mut ns_hl_attr: Map_int_ptr_t = Map_int_ptr_t {
+});
+static ns_hl_attr: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
             n_buckets: 0,
@@ -2314,11 +2315,11 @@ static mut ns_hl_attr: Map_int_ptr_t = Map_int_ptr_t {
         keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn highlight_init() {
     set_put_HlEntry(
-        &raw mut attr_entries,
+        attr_entries.ptr(),
         HlEntry {
             attr: HlAttrs {
                 rgb_ae_attr: 0 as int32_t,
@@ -2341,43 +2342,43 @@ pub unsafe extern "C" fn highlight_init() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn highlight_use_hlstate() -> bool {
-    if hlstate_active {
+    if hlstate_active.get() {
         return false_0 != 0;
     }
-    hlstate_active = true_0 != 0;
+    hlstate_active.set(true_0 != 0);
     clear_hl_tables(true_0 != 0);
     return true_0 != 0;
 }
 unsafe extern "C" fn get_attr_entry(mut entry: HlEntry) -> ::core::ffi::c_int {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = 0;
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut retried: bool = false_0 != 0;
-    if !hlstate_active {
+    if !hlstate_active.get() {
         entry.kind = kHlUnknown;
         entry.id1 = 0 as ::core::ffi::c_int;
         entry.id2 = 0 as ::core::ffi::c_int;
     }
     loop {
         status = kMHExisting;
-        k = mh_put_HlEntry(&raw mut attr_entries, entry, &raw mut status);
+        k = mh_put_HlEntry(attr_entries.ptr(), entry, &raw mut status);
         if status as ::core::ffi::c_uint == kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             return k as ::core::ffi::c_int;
         }
-        if attr_entries.h.size <= MAX_TYPENR as uint32_t {
+        if (*attr_entries.ptr()).h.size <= MAX_TYPENR as uint32_t {
             break;
         }
-        if recursive as ::core::ffi::c_int != 0 || retried as ::core::ffi::c_int != 0 {
+        if recursive.get() as ::core::ffi::c_int != 0 || retried as ::core::ffi::c_int != 0 {
             emsg(gettext(
                 b"E424: Too many different highlighting attributes in use\0".as_ptr()
                     as *const ::core::ffi::c_char,
             ));
             return 0 as ::core::ffi::c_int;
         }
-        recursive = true_0 != 0;
+        recursive.set(true_0 != 0);
         clear_hl_tables(true_0 != 0);
-        recursive = false_0 != 0;
+        recursive.set(false_0 != 0);
         if entry.kind as ::core::ffi::c_uint
             == kHlCombine as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2395,10 +2396,10 @@ unsafe extern "C" fn get_attr_entry(mut entry: HlEntry) -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn ui_send_all_hls(mut ui: *mut RemoteUI) {
     let mut i: size_t = 1 as size_t;
-    while i < attr_entries.h.size as size_t {
+    while i < (*attr_entries.ptr()).h.size as size_t {
         let mut arena: Arena = ARENA_EMPTY;
         let mut inspect: Array = hl_inspect(i as ::core::ffi::c_int, &raw mut arena);
-        let mut attr: HlAttrs = (*attr_entries.keys.offset(i as isize)).attr;
+        let mut attr: HlAttrs = (*(*attr_entries.ptr()).keys.offset(i as isize)).attr;
         remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect);
         arena_mem_free(arena_finish(&raw mut arena));
         i = i.wrapping_add(1);
@@ -2466,7 +2467,7 @@ pub unsafe extern "C" fn ns_hl_def(
     }
     if attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0
         && set_has_ColorKey(
-            &raw mut ns_hls.set,
+            &raw mut (*ns_hls.ptr()).set,
             ColorKey {
                 ns_id: ns_id,
                 syn_id: hl_id,
@@ -2490,7 +2491,7 @@ pub unsafe extern "C" fn ns_hl_def(
         link_global: attrs.rgb_ae_attr & HL_GLOBAL as ::core::ffi::c_int as int32_t != 0,
     };
     map_put_ColorKey_ColorItem(
-        &raw mut ns_hls,
+        ns_hls.ptr(),
         ColorKey {
             ns_id: ns_id,
             syn_id: hl_id,
@@ -2506,7 +2507,7 @@ pub unsafe extern "C" fn ns_get_hl(
     mut link: bool,
     mut nodefault: bool,
 ) -> ::core::ffi::c_int {
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if *ns_hl == 0 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
     }
@@ -2519,14 +2520,14 @@ pub unsafe extern "C" fn ns_get_hl(
     let mut ns_id: ::core::ffi::c_int = *ns_hl as ::core::ffi::c_int;
     let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true_0 != 0);
     let mut it: ColorItem = map_get_ColorKey_ColorItem(
-        &raw mut ns_hls,
+        ns_hls.ptr(),
         ColorKey {
             ns_id: ns_id,
             syn_id: hl_id,
         },
     );
     let mut valid_item: bool = it.version >= (*p).hl_valid;
-    if !valid_item && (*p).hl_def != LUA_NOREF && recursive == 0 {
+    if !valid_item && (*p).hl_def != LUA_NOREF && recursive.get() == 0 {
         let mut args: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
@@ -2564,7 +2565,7 @@ pub unsafe extern "C" fn ns_get_hl(
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
-        recursive += 1;
+        (*recursive.ptr()) += 1;
         let mut ret: Object = nlua_call_ref(
             (*p).hl_def,
             b"hl_def\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2573,7 +2574,7 @@ pub unsafe extern "C" fn ns_get_hl(
             ::core::ptr::null_mut::<Arena>(),
             &raw mut err,
         );
-        recursive -= 1;
+        (*recursive.ptr()) -= 1;
         let mut fallback: bool = true_0 != 0;
         let mut tmp: bool = false_0 != 0;
         let mut attrs: HlAttrs = HLATTRS_INIT;
@@ -2692,7 +2693,7 @@ pub unsafe extern "C" fn ns_get_hl(
         it.is_default = attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0;
         it.link_global = attrs.rgb_ae_attr & HL_GLOBAL as ::core::ffi::c_int as int32_t != 0;
         map_put_ColorKey_ColorItem(
-            &raw mut ns_hls,
+            ns_hls.ptr(),
             ColorKey {
                 ns_id: ns_id,
                 syn_id: hl_id,
@@ -2735,7 +2736,7 @@ pub unsafe extern "C" fn hl_check_ns() -> bool {
     hl_attr_active = &raw mut highlight_attr as *mut ::core::ffi::c_int;
     if ns > 0 as ::core::ffi::c_int {
         update_ns_hl(ns);
-        let mut hl_def: *mut NSHlAttr = map_get_int_ptr_t(&raw mut ns_hl_attr, ns) as *mut NSHlAttr;
+        let mut hl_def: *mut NSHlAttr = map_get_int_ptr_t(ns_hl_attr.ptr(), ns) as *mut NSHlAttr;
         if !hl_def.is_null() {
             hl_attr_active = &raw mut *hl_def as *mut ::core::ffi::c_int;
         }
@@ -2810,7 +2811,7 @@ pub unsafe extern "C" fn hl_apply_winblend(
     mut winbl: ::core::ffi::c_int,
     mut attr: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut entry: HlEntry = *attr_entries.keys.offset(attr as isize);
+    let mut entry: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
     if entry.attr.hl_blend == -1 as int32_t && winbl > 0 as ::core::ffi::c_int {
         entry.attr.hl_blend = winbl as int32_t;
         attr = get_attr_entry(entry);
@@ -2824,7 +2825,7 @@ pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool)
     if ns_id != (*wp).w_ns_hl_active || (*wp).w_ns_hl_attr.is_null() {
         (*wp).w_ns_hl_active = ns_id;
         let mut hl_def_ptr: *mut NSHlAttr =
-            map_get_int_ptr_t(&raw mut ns_hl_attr, ns_id) as *mut NSHlAttr;
+            map_get_int_ptr_t(ns_hl_attr.ptr(), ns_id) as *mut NSHlAttr;
         if !hl_def_ptr.is_null() {
             (*wp).w_ns_hl_attr = &raw mut *hl_def_ptr as *mut ::core::ffi::c_int;
         } else {
@@ -2913,7 +2914,7 @@ pub unsafe extern "C" fn update_ns_hl(mut ns_id: ::core::ffi::c_int) {
         return;
     }
     let mut alloc: *mut *mut NSHlAttr = map_put_ref_int_ptr_t(
-        &raw mut ns_hl_attr,
+        ns_hl_attr.ptr(),
         ns_id,
         ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
         ::core::ptr::null_mut::<bool>(),
@@ -2983,9 +2984,9 @@ pub unsafe extern "C" fn hl_add_url(
 ) -> ::core::ffi::c_int {
     let mut attrs: HlAttrs = HLATTRS_INIT;
     let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_cstr_t(&raw mut urls, url as cstr_t, &raw mut status);
+    let mut k: uint32_t = mh_put_cstr_t(urls.ptr(), url as cstr_t, &raw mut status);
     if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        *urls.keys.offset(k as isize) = xstrdup(url) as cstr_t;
+        *(*urls.ptr()).keys.offset(k as isize) = xstrdup(url) as cstr_t;
     }
     attrs.url = k as int32_t;
     let mut new: ::core::ffi::c_int = get_attr_entry(HlEntry {
@@ -3000,7 +3001,7 @@ pub unsafe extern "C" fn hl_add_url(
 #[no_mangle]
 pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::c_char {
     '_c2rust_label: {
-        if !urls.keys.is_null() {
+        if !(*urls.ptr()).keys.is_null() {
         } else {
             __assert_fail(
                 b"urls.keys\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3010,7 +3011,7 @@ pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::
             );
         }
     };
-    return *urls.keys.offset(index as isize) as *const ::core::ffi::c_char;
+    return *(*urls.ptr()).keys.offset(index as isize) as *const ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn hl_get_term_attr(mut aep: *mut HlAttrs) -> ::core::ffi::c_int {
@@ -3027,18 +3028,18 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
     let mut url: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < urls.h.n_keys {
-        url = *urls.keys.offset(__i as isize) as *const ::core::ffi::c_char;
+    while __i < (*urls.ptr()).h.n_keys {
+        url = *(*urls.ptr()).keys.offset(__i as isize) as *const ::core::ffi::c_char;
         xfree(url as *mut ::core::ffi::c_void);
         __i = __i.wrapping_add(1);
     }
     if reinit {
-        mh_clear(&raw mut attr_entries.h);
+        mh_clear(&raw mut (*attr_entries.ptr()).h);
         highlight_init();
-        mh_clear(&raw mut combine_attr_entries.set.h);
-        mh_clear(&raw mut blend_attr_entries.set.h);
-        mh_clear(&raw mut blendthrough_attr_entries.set.h);
-        mh_clear(&raw mut urls.h);
+        mh_clear(&raw mut (*combine_attr_entries.ptr()).set.h);
+        mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
+        mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
+        mh_clear(&raw mut (*urls.ptr()).h);
         memset(
             &raw mut highlight_attr_last as *mut ::core::ffi::c_int as *mut ::core::ffi::c_void,
             -1 as ::core::ffi::c_int,
@@ -3048,68 +3049,68 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
         highlight_changed();
         screen_invalidate_highlights();
     } else {
-        xfree(attr_entries.keys as *mut ::core::ffi::c_void);
-        xfree(attr_entries.h.hash as *mut ::core::ffi::c_void);
-        attr_entries = Set_HlEntry {
+        xfree((*attr_entries.ptr()).keys as *mut ::core::ffi::c_void);
+        xfree((*attr_entries.ptr()).h.hash as *mut ::core::ffi::c_void);
+        attr_entries.set(Set_HlEntry {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<HlEntry>(),
-        };
-        xfree(combine_attr_entries.set.keys as *mut ::core::ffi::c_void);
-        xfree(combine_attr_entries.set.h.hash as *mut ::core::ffi::c_void);
-        combine_attr_entries.set = Set_uint64_t {
+        });
+        xfree((*combine_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
+        xfree((*combine_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+        (*combine_attr_entries.ptr()).set = Set_uint64_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<uint64_t>(),
         };
         let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut combine_attr_entries.values as *mut *mut ::core::ffi::c_void;
+            &raw mut (*combine_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
-        xfree(blend_attr_entries.set.keys as *mut ::core::ffi::c_void);
-        xfree(blend_attr_entries.set.h.hash as *mut ::core::ffi::c_void);
-        blend_attr_entries.set = Set_uint64_t {
+        xfree((*blend_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
+        xfree((*blend_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+        (*blend_attr_entries.ptr()).set = Set_uint64_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<uint64_t>(),
         };
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut blend_attr_entries.values as *mut *mut ::core::ffi::c_void;
+            &raw mut (*blend_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
         *ptr__0;
-        xfree(blendthrough_attr_entries.set.keys as *mut ::core::ffi::c_void);
-        xfree(blendthrough_attr_entries.set.h.hash as *mut ::core::ffi::c_void);
-        blendthrough_attr_entries.set = Set_uint64_t {
+        xfree((*blendthrough_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
+        xfree((*blendthrough_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+        (*blendthrough_attr_entries.ptr()).set = Set_uint64_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<uint64_t>(),
         };
         let mut ptr__1: *mut *mut ::core::ffi::c_void =
-            &raw mut blendthrough_attr_entries.values as *mut *mut ::core::ffi::c_void;
+            &raw mut (*blendthrough_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__1);
         *ptr__1 = NULL_0;
         *ptr__1;
-        xfree(ns_hls.set.keys as *mut ::core::ffi::c_void);
-        xfree(ns_hls.set.h.hash as *mut ::core::ffi::c_void);
-        ns_hls.set = Set_ColorKey {
+        xfree((*ns_hls.ptr()).set.keys as *mut ::core::ffi::c_void);
+        xfree((*ns_hls.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+        (*ns_hls.ptr()).set = Set_ColorKey {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<ColorKey>(),
         };
         let mut ptr__2: *mut *mut ::core::ffi::c_void =
-            &raw mut ns_hls.values as *mut *mut ::core::ffi::c_void;
+            &raw mut (*ns_hls.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__2);
         *ptr__2 = NULL_0;
         *ptr__2;
-        xfree(urls.keys as *mut ::core::ffi::c_void);
-        xfree(urls.h.hash as *mut ::core::ffi::c_void);
-        urls = Set_cstr_t {
+        xfree((*urls.ptr()).keys as *mut ::core::ffi::c_void);
+        xfree((*urls.ptr()).h.hash as *mut ::core::ffi::c_void);
+        urls.set(Set_cstr_t {
             h: MAPHASH_INIT,
             keys: ::core::ptr::null_mut::<cstr_t>(),
-        };
+        });
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn hl_invalidate_blends() {
-    mh_clear(&raw mut blend_attr_entries.set.h);
-    mh_clear(&raw mut blendthrough_attr_entries.set.h);
+    mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
+    mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
     highlight_changed();
     update_window_hl(curwin, true_0 != 0);
 }
@@ -3133,8 +3134,7 @@ pub unsafe extern "C" fn hl_combine_attr(
     }
     let mut combine_tag: uint64_t = (char_attr as uint32_t as uint64_t) << 32 as ::core::ffi::c_int
         | prim_attr as uint32_t as uint64_t;
-    let mut id: ::core::ffi::c_int =
-        map_get_uint64_t_int(&raw mut combine_attr_entries, combine_tag);
+    let mut id: ::core::ffi::c_int = map_get_uint64_t_int(combine_attr_entries.ptr(), combine_tag);
     if id > 0 as ::core::ffi::c_int {
         return id;
     }
@@ -3196,7 +3196,7 @@ pub unsafe extern "C" fn hl_combine_attr(
         winid: 0,
     });
     if id > 0 as ::core::ffi::c_int {
-        map_put_uint64_t_int(&raw mut combine_attr_entries, combine_tag, id);
+        map_put_uint64_t_int(combine_attr_entries.ptr(), combine_tag, id);
     }
     return id;
 }
@@ -3258,9 +3258,9 @@ pub unsafe extern "C" fn hl_blend_attrs(
     let mut combine_tag: uint64_t = (back_attr as uint32_t as uint64_t) << 32 as ::core::ffi::c_int
         | front_attr as uint32_t as uint64_t;
     let mut map: *mut Map_uint64_t_int = if *through as ::core::ffi::c_int != 0 {
-        &raw mut blendthrough_attr_entries
+        blendthrough_attr_entries.ptr()
     } else {
-        &raw mut blend_attr_entries
+        blend_attr_entries.ptr()
     };
     let mut id: ::core::ffi::c_int = map_get_uint64_t_int(map, combine_tag);
     if id > 0 as ::core::ffi::c_int {
@@ -3398,15 +3398,15 @@ unsafe extern "C" fn hl_rgb2cterm_color(mut rgb: ::core::ffi::c_int) -> ::core::
         + b * 6 as ::core::ffi::c_int / 256 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn hl_cterm2rgb_color(mut nr: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    static mut cube_value: [::core::ffi::c_int; 6] = [
+    static cube_value: GlobalCell<[::core::ffi::c_int; 6]> = GlobalCell::new([
         0 as ::core::ffi::c_int,
         0x5f as ::core::ffi::c_int,
         0x87 as ::core::ffi::c_int,
         0xaf as ::core::ffi::c_int,
         0xd7 as ::core::ffi::c_int,
         0xff as ::core::ffi::c_int,
-    ];
-    static mut grey_ramp: [::core::ffi::c_int; 24] = [
+    ]);
+    static grey_ramp: GlobalCell<[::core::ffi::c_int; 24]> = GlobalCell::new([
         0x8 as ::core::ffi::c_int,
         0x12 as ::core::ffi::c_int,
         0x1c as ::core::ffi::c_int,
@@ -3431,8 +3431,8 @@ unsafe extern "C" fn hl_cterm2rgb_color(mut nr: ::core::ffi::c_int) -> ::core::f
         0xda as ::core::ffi::c_int,
         0xe4 as ::core::ffi::c_int,
         0xee as ::core::ffi::c_int,
-    ];
-    static mut ansi_table: [[uint8_t; 4]; 16] = [
+    ]);
+    static ansi_table: GlobalCell<[[uint8_t; 4]; 16]> = GlobalCell::new([
         [0 as uint8_t, 0 as uint8_t, 0 as uint8_t, 1 as uint8_t],
         [224 as uint8_t, 0 as uint8_t, 0 as uint8_t, 2 as uint8_t],
         [0 as uint8_t, 224 as uint8_t, 0 as uint8_t, 3 as uint8_t],
@@ -3454,34 +3454,39 @@ unsafe extern "C" fn hl_cterm2rgb_color(mut nr: ::core::ffi::c_int) -> ::core::f
             255 as uint8_t,
             16 as uint8_t,
         ],
-    ];
+    ]);
     let mut r: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut g: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut b: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut idx: ::core::ffi::c_int = 0;
     if nr < 16 as ::core::ffi::c_int {
-        r = ansi_table[nr as usize][0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
-        g = ansi_table[nr as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
-        b = ansi_table[nr as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
+        r = (*ansi_table.ptr())[nr as usize][0 as ::core::ffi::c_int as usize]
+            as ::core::ffi::c_int;
+        g = (*ansi_table.ptr())[nr as usize][1 as ::core::ffi::c_int as usize]
+            as ::core::ffi::c_int;
+        b = (*ansi_table.ptr())[nr as usize][2 as ::core::ffi::c_int as usize]
+            as ::core::ffi::c_int;
     } else if nr < 232 as ::core::ffi::c_int {
         idx = nr - 16 as ::core::ffi::c_int;
-        r = cube_value[(idx / 36 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
-        g = cube_value[(idx / 6 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
-        b = cube_value[(idx % 6 as ::core::ffi::c_int) as usize];
+        r = (*cube_value.ptr())
+            [(idx / 36 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
+        g = (*cube_value.ptr())[(idx / 6 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
+        b = (*cube_value.ptr())[(idx % 6 as ::core::ffi::c_int) as usize];
     } else if nr < 256 as ::core::ffi::c_int {
         idx = nr - 232 as ::core::ffi::c_int;
-        r = grey_ramp[idx as usize];
-        g = grey_ramp[idx as usize];
-        b = grey_ramp[idx as usize];
+        r = (*grey_ramp.ptr())[idx as usize];
+        g = (*grey_ramp.ptr())[idx as usize];
+        b = (*grey_ramp.ptr())[idx as usize];
     }
     return (r << 16 as ::core::ffi::c_int) + (g << 8 as ::core::ffi::c_int) + b;
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_attr2entry(mut attr: ::core::ffi::c_int) -> HlAttrs {
-    if attr <= 0 as ::core::ffi::c_int || attr >= attr_entries.h.size as ::core::ffi::c_int {
+    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
+    {
         return HLATTRS_INIT;
     }
-    return (*attr_entries.keys.offset(attr as isize)).attr;
+    return (*(*attr_entries.ptr()).keys.offset(attr as isize)).attr;
 }
 #[no_mangle]
 pub unsafe extern "C" fn hl_get_attr_by_id(
@@ -3498,7 +3503,9 @@ pub unsafe extern "C" fn hl_get_attr_by_id(
     if attr_id == 0 as Integer {
         return dic;
     }
-    if attr_id < 0 as Integer || attr_id >= attr_entries.h.size as ::core::ffi::c_int as Integer {
+    if attr_id < 0 as Integer
+        || attr_id >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int as Integer
+    {
         api_set_error(
             err,
             kErrorTypeException,
@@ -4666,7 +4673,7 @@ pub unsafe extern "C" fn object_to_color(
 }
 #[no_mangle]
 pub unsafe extern "C" fn hl_inspect(mut attr: ::core::ffi::c_int, mut arena: *mut Arena) -> Array {
-    if !hlstate_active {
+    if !hlstate_active.get() {
         return Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
@@ -4678,10 +4685,11 @@ pub unsafe extern "C" fn hl_inspect(mut attr: ::core::ffi::c_int, mut arena: *mu
     return ret;
 }
 unsafe extern "C" fn hl_inspect_size(mut attr: ::core::ffi::c_int) -> size_t {
-    if attr <= 0 as ::core::ffi::c_int || attr >= attr_entries.h.size as ::core::ffi::c_int {
+    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
+    {
         return 0 as size_t;
     }
-    let mut e: HlEntry = *attr_entries.keys.offset(attr as isize);
+    let mut e: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
     if e.kind as ::core::ffi::c_uint == kHlCombine as ::core::ffi::c_int as ::core::ffi::c_uint
         || e.kind as ::core::ffi::c_uint == kHlBlend as ::core::ffi::c_int as ::core::ffi::c_uint
         || e.kind as ::core::ffi::c_uint
@@ -4701,10 +4709,11 @@ unsafe extern "C" fn hl_inspect_impl(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
-    if attr <= 0 as ::core::ffi::c_int || attr >= attr_entries.h.size as ::core::ffi::c_int {
+    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
+    {
         return;
     }
-    let mut e: HlEntry = *attr_entries.keys.offset(attr as isize);
+    let mut e: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
     let mut ui_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     match e.kind as ::core::ffi::c_uint {
         2 => {

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -4017,7 +4018,7 @@ unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     return (*l).lv_first;
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static mut mt_names: [*mut ::core::ffi::c_char; 8] = [
+static mt_names: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"FSC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"F C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"F  \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4026,40 +4027,45 @@ static mut mt_names: [*mut ::core::ffi::c_char; 8] = [
     b"  C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"   \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b" S \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
+]);
 pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
-static mut nofile_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut e_tag_stack_empty: [::core::ffi::c_char; 21] = unsafe {
+static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static e_tag_stack_empty: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E73: Tag stack empty\0")
-};
-static mut e_tag_not_found_str: [::core::ffi::c_char; 24] = unsafe {
+});
+static e_tag_not_found_str: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E426: Tag not found: %s\0")
-};
-static mut e_at_bottom_of_tag_stack: [::core::ffi::c_char; 29] = unsafe {
+});
+static e_at_bottom_of_tag_stack: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E555: At bottom of tag stack\0",
     )
-};
-static mut e_at_top_of_tag_stack: [::core::ffi::c_char; 26] = unsafe {
+});
+static e_at_top_of_tag_stack: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E556: At top of tag stack\0")
-};
-static mut e_cannot_modify_tag_stack_within_tagfunc: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E986: Cannot modify the tag stack within tagfunc\0",
-    )
-};
-static mut e_invalid_return_value_from_tagfunc: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-        *b"E987: Invalid return value from tagfunc\0",
-    )
-};
-static mut e_window_unexpectedly_close_while_searching_for_tags: [::core::ffi::c_char; 59] = unsafe {
-    ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
-        *b"E1299: Window unexpectedly closed while searching for tags\0",
-    )
-};
-static mut tagmatchname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut ptag_entry: taggy_T = taggy_T {
+});
+static e_cannot_modify_tag_stack_within_tagfunc: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E986: Cannot modify the tag stack within tagfunc\0",
+        )
+    });
+static e_invalid_return_value_from_tagfunc: GlobalCell<[::core::ffi::c_char; 40]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+            *b"E987: Invalid return value from tagfunc\0",
+        )
+    });
+static e_window_unexpectedly_close_while_searching_for_tags: GlobalCell<[::core::ffi::c_char; 59]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+            *b"E1299: Window unexpectedly closed while searching for tags\0",
+        )
+    });
+static tagmatchname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static ptag_entry: GlobalCell<taggy_T> = GlobalCell::new(taggy_T {
     tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     fmark: fmark_T {
         mark: pos_T {
@@ -4078,14 +4084,14 @@ static mut ptag_entry: taggy_T = taggy_T {
     cur_match: 0 as ::core::ffi::c_int,
     cur_fnum: 0 as ::core::ffi::c_int,
     user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
-static mut tfu_in_use: bool = false_0 != 0;
-static mut tfu_cb: Callback = Callback {
+});
+static tfu_in_use: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_5 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
-};
+});
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
@@ -4094,7 +4100,7 @@ pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::co
     if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         retval = option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_tfu_cb);
     } else {
-        retval = option_set_callback_func((*args).os_newval.string.data, &raw mut tfu_cb);
+        retval = option_set_callback_func((*args).os_newval.string.data, tfu_cb.ptr());
         if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
             set_buflocal_tfu_callback(buf);
         }
@@ -4108,7 +4114,7 @@ pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::co
 #[no_mangle]
 pub unsafe extern "C" fn set_ref_in_tagfunc(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_callback(
-        &raw mut tfu_cb,
+        tfu_cb.ptr(),
         copyID,
         ::core::ptr::null_mut::<*mut ht_stack_T>(),
         ::core::ptr::null_mut::<*mut list_stack_T>(),
@@ -4117,10 +4123,10 @@ pub unsafe extern "C" fn set_ref_in_tagfunc(mut copyID: ::core::ffi::c_int) -> b
 #[no_mangle]
 pub unsafe extern "C" fn set_buflocal_tfu_callback(mut buf: *mut buf_T) {
     callback_free(&raw mut (*buf).b_tfu_cb);
-    if tfu_cb.type_0 as ::core::ffi::c_uint
+    if (*tfu_cb.ptr()).type_0 as ::core::ffi::c_uint
         != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        callback_copy(&raw mut (*buf).b_tfu_cb, &raw mut tfu_cb);
+        callback_copy(&raw mut (*buf).b_tfu_cb, tfu_cb.ptr());
     }
 }
 #[no_mangle]
@@ -4164,14 +4170,16 @@ pub unsafe extern "C" fn do_tag(
     let mut buf_ffname: *mut ::core::ffi::c_char = (*curbuf).b_ffname;
     let mut use_tfu: bool = true_0 != 0;
     let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut num_matches: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut max_num_matches: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut matches: *mut *mut ::core::ffi::c_char =
-        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    static mut flags: ::core::ffi::c_int = 0;
-    if tfu_in_use {
+    static num_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static max_num_matches: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static matches: GlobalCell<*mut *mut ::core::ffi::c_char> =
+        GlobalCell::new(::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+    static flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    if tfu_in_use.get() {
         emsg(gettext(
-            &raw const e_cannot_modify_tag_stack_within_tagfunc as *const ::core::ffi::c_char,
+            (e_cannot_modify_tag_stack_within_tagfunc.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         ));
         return;
     }
@@ -4183,9 +4191,9 @@ pub unsafe extern "C" fn do_tag(
         no_regexp = true_0 != 0;
         use_tfu = false_0 != 0;
     }
-    let mut prev_num_matches: ::core::ffi::c_int = num_matches;
-    free_string_option(nofile_fname);
-    nofile_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut prev_num_matches: ::core::ffi::c_int = num_matches.get();
+    free_string_option(nofile_fname.get());
+    nofile_fname.set(::core::ptr::null_mut::<::core::ffi::c_char>());
     clearpos(&raw mut saved_fmark.mark);
     saved_fmark.fnum = 0 as ::core::ffi::c_int;
     saved_fmark.view = fmarkv_T {
@@ -4209,8 +4217,8 @@ pub unsafe extern "C" fn do_tag(
             use_tagstack = false_0 != 0;
             new_tag = true_0 != 0;
             if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                tagstack_clear_entry(&raw mut ptag_entry);
-                ptag_entry.tagname = xstrdup(tag);
+                tagstack_clear_entry(ptag_entry.ptr());
+                (*ptag_entry.ptr()).tagname = xstrdup(tag);
             }
         } else {
             if g_do_tagpreview != 0 as ::core::ffi::c_int {
@@ -4225,14 +4233,14 @@ pub unsafe extern "C" fn do_tag(
                     || type_0 == DT_LTAG as ::core::ffi::c_int)
             {
                 if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                    if !ptag_entry.tagname.is_null()
-                        && strcmp(ptag_entry.tagname, tag) == 0 as ::core::ffi::c_int
+                    if !(*ptag_entry.ptr()).tagname.is_null()
+                        && strcmp((*ptag_entry.ptr()).tagname, tag) == 0 as ::core::ffi::c_int
                     {
-                        cur_match = ptag_entry.cur_match;
-                        cur_fnum = ptag_entry.cur_fnum;
+                        cur_match = (*ptag_entry.ptr()).cur_match;
+                        cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                     } else {
-                        tagstack_clear_entry(&raw mut ptag_entry);
-                        ptag_entry.tagname = xstrdup(tag);
+                        tagstack_clear_entry(ptag_entry.ptr());
+                        (*ptag_entry.ptr()).tagname = xstrdup(tag);
                     }
                 } else {
                     while tagstackidx < tagstacklen {
@@ -4260,13 +4268,13 @@ pub unsafe extern "C" fn do_tag(
                 }
                 new_tag = true_0 != 0;
             } else if if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                ptag_entry.tagname.is_null() as ::core::ffi::c_int
+                (*ptag_entry.ptr()).tagname.is_null() as ::core::ffi::c_int
             } else {
                 (tagstacklen == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             } != 0
             {
                 emsg(gettext(
-                    &raw const e_tag_stack_empty as *const ::core::ffi::c_char,
+                    (e_tag_stack_empty.ptr() as *const _) as *const ::core::ffi::c_char,
                 ));
                 break '_end_do_tag;
             } else if type_0 == DT_POP as ::core::ffi::c_int {
@@ -4274,7 +4282,7 @@ pub unsafe extern "C" fn do_tag(
                 tagstackidx -= count;
                 if tagstackidx < 0 as ::core::ffi::c_int {
                     emsg(gettext(
-                        &raw const e_at_bottom_of_tag_stack as *const ::core::ffi::c_char,
+                        (e_at_bottom_of_tag_stack.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     if tagstackidx + count == 0 as ::core::ffi::c_int {
                         tagstackidx = 0 as ::core::ffi::c_int;
@@ -4284,7 +4292,7 @@ pub unsafe extern "C" fn do_tag(
                     }
                 } else if tagstackidx >= tagstacklen {
                     emsg(gettext(
-                        &raw const e_at_top_of_tag_stack as *const ::core::ffi::c_char,
+                        (e_at_top_of_tag_stack.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     break '_end_do_tag;
                 }
@@ -4317,28 +4325,29 @@ pub unsafe extern "C" fn do_tag(
                 {
                     foldOpenCursor();
                 }
-                FreeWild(num_matches, matches);
-                num_matches = 0 as ::core::ffi::c_int;
+                FreeWild(num_matches.get(), matches.get());
+                num_matches.set(0 as ::core::ffi::c_int);
                 tag_freematch();
                 break '_end_do_tag;
             } else if type_0 == DT_TAG as ::core::ffi::c_int
                 || type_0 == DT_LTAG as ::core::ffi::c_int
             {
                 if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                    cur_match = ptag_entry.cur_match;
-                    cur_fnum = ptag_entry.cur_fnum;
+                    cur_match = (*ptag_entry.ptr()).cur_match;
+                    cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                 } else {
                     save_pos = true_0 != 0;
                     tagstackidx += count - 1 as ::core::ffi::c_int;
                     if tagstackidx >= tagstacklen {
                         tagstackidx = tagstacklen - 1 as ::core::ffi::c_int;
                         emsg(gettext(
-                            &raw const e_at_top_of_tag_stack as *const ::core::ffi::c_char,
+                            (e_at_top_of_tag_stack.ptr() as *const _) as *const ::core::ffi::c_char,
                         ));
                         save_pos = false_0 != 0;
                     } else if tagstackidx < 0 as ::core::ffi::c_int {
                         emsg(gettext(
-                            &raw const e_at_bottom_of_tag_stack as *const ::core::ffi::c_char,
+                            (e_at_bottom_of_tag_stack.ptr() as *const _)
+                                as *const ::core::ffi::c_char,
                         ));
                         tagstackidx = 0 as ::core::ffi::c_int;
                         break '_end_do_tag;
@@ -4350,8 +4359,8 @@ pub unsafe extern "C" fn do_tag(
             } else {
                 prevtagstackidx = tagstackidx;
                 if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                    cur_match = ptag_entry.cur_match;
-                    cur_fnum = ptag_entry.cur_fnum;
+                    cur_match = (*ptag_entry.ptr()).cur_match;
+                    cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                 } else {
                     tagstackidx -= 1;
                     if tagstackidx < 0 as ::core::ffi::c_int {
@@ -4391,8 +4400,8 @@ pub unsafe extern "C" fn do_tag(
                 if type_0 != DT_SELECT as ::core::ffi::c_int
                     && type_0 != DT_JUMP as ::core::ffi::c_int
                 {
-                    ptag_entry.cur_match = cur_match;
-                    ptag_entry.cur_fnum = cur_fnum;
+                    (*ptag_entry.ptr()).cur_match = cur_match;
+                    (*ptag_entry.ptr()).cur_fnum = cur_fnum;
                 }
             } else {
                 saved_fmark = (*tagstack.offset(tagstackidx as isize)).fmark;
@@ -4425,19 +4434,20 @@ pub unsafe extern "C" fn do_tag(
                 xfree(tofree as *mut ::core::ffi::c_void);
                 tofree = name;
             } else if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                name = ptag_entry.tagname;
+                name = (*ptag_entry.ptr()).tagname;
             } else {
                 name = tag;
             }
-            let mut other_name: bool =
-                tagmatchname.is_null() || strcmp(tagmatchname, name) != 0 as ::core::ffi::c_int;
+            let mut other_name: bool = (*tagmatchname.ptr()).is_null()
+                || strcmp(tagmatchname.get(), name) != 0 as ::core::ffi::c_int;
             if new_tag as ::core::ffi::c_int != 0
-                || cur_match >= num_matches && max_num_matches != MAXCOL as ::core::ffi::c_int
+                || cur_match >= num_matches.get()
+                    && max_num_matches.get() != MAXCOL as ::core::ffi::c_int
                 || other_name as ::core::ffi::c_int != 0
             {
                 if other_name {
-                    xfree(tagmatchname as *mut ::core::ffi::c_void);
-                    tagmatchname = xstrdup(name);
+                    xfree(tagmatchname.get() as *mut ::core::ffi::c_void);
+                    tagmatchname.set(xstrdup(name));
                 }
                 if type_0 == DT_SELECT as ::core::ffi::c_int
                     || type_0 == DT_JUMP as ::core::ffi::c_int
@@ -4445,23 +4455,23 @@ pub unsafe extern "C" fn do_tag(
                 {
                     cur_match = MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
                 }
-                max_num_matches = if type_0 == DT_TAG as ::core::ffi::c_int {
+                max_num_matches.set(if type_0 == DT_TAG as ::core::ffi::c_int {
                     MAXCOL as ::core::ffi::c_int
                 } else {
                     cur_match + 1 as ::core::ffi::c_int
-                };
+                });
                 if !no_regexp && *name as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-                    flags = TAG_REGEXP as ::core::ffi::c_int;
+                    flags.set(TAG_REGEXP as ::core::ffi::c_int);
                     name = name.offset(1);
                 } else {
-                    flags = TAG_NOIC as ::core::ffi::c_int;
+                    flags.set(TAG_NOIC as ::core::ffi::c_int);
                 }
-                flags |= if verbose as ::core::ffi::c_int != 0 {
+                (*flags.ptr()) |= if verbose as ::core::ffi::c_int != 0 {
                     TAG_VERBOSE as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                flags |= if !use_tfu {
+                (*flags.ptr()) |= if !use_tfu {
                     TAG_NO_TAGFUNC as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
@@ -4470,17 +4480,17 @@ pub unsafe extern "C" fn do_tag(
                     name,
                     &raw mut new_num_matches,
                     &raw mut new_matches,
-                    flags,
-                    max_num_matches,
+                    flags.get(),
+                    max_num_matches.get(),
                     buf_ffname,
                 ) == OK
-                    && new_num_matches < max_num_matches
+                    && new_num_matches < max_num_matches.get()
                 {
-                    max_num_matches = MAXCOL as ::core::ffi::c_int;
+                    max_num_matches.set(MAXCOL as ::core::ffi::c_int);
                 }
                 if tagstack != &raw mut (*curwin).w_tagstack as *mut taggy_T {
                     emsg(gettext(
-                        &raw const e_window_unexpectedly_close_while_searching_for_tags
+                        (e_window_unexpectedly_close_while_searching_for_tags.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     ));
                     FreeWild(new_num_matches, new_matches);
@@ -4517,8 +4527,8 @@ pub unsafe extern "C" fn do_tag(
                             tagline: 0,
                         };
                         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        while j < num_matches {
-                            parse_match(*matches.offset(j as isize), &raw mut tagp);
+                        while j < num_matches.get() {
+                            parse_match(*(*matches.ptr()).offset(j as isize), &raw mut tagp);
                             let mut i_0: ::core::ffi::c_int = idx;
                             while i_0 < new_num_matches {
                                 parse_match(*new_matches.offset(i_0 as isize), &raw mut tagp2);
@@ -4544,15 +4554,17 @@ pub unsafe extern "C" fn do_tag(
                             j += 1;
                         }
                     }
-                    FreeWild(num_matches, matches);
-                    num_matches = new_num_matches;
-                    matches = new_matches;
+                    FreeWild(num_matches.get(), matches.get());
+                    num_matches.set(new_num_matches);
+                    matches.set(new_matches);
                 }
             }
-            if num_matches <= 0 as ::core::ffi::c_int {
+            if num_matches.get() <= 0 as ::core::ffi::c_int {
                 if verbose {
                     semsg(
-                        gettext(&raw const e_tag_not_found_str as *const ::core::ffi::c_char),
+                        gettext(
+                            (e_tag_not_found_str.ptr() as *const _) as *const ::core::ffi::c_char,
+                        ),
                         name,
                     );
                 }
@@ -4568,12 +4580,12 @@ pub unsafe extern "C" fn do_tag(
                     };
                 } else if type_0 == DT_SELECT as ::core::ffi::c_int
                     || type_0 == DT_JUMP as ::core::ffi::c_int
-                        && num_matches > 1 as ::core::ffi::c_int
+                        && num_matches.get() > 1 as ::core::ffi::c_int
                 {
-                    print_tag_list(new_tag, use_tagstack, num_matches, matches);
+                    print_tag_list(new_tag, use_tagstack, num_matches.get(), matches.get());
                     ask_for_selection = true_0 != 0;
                 } else if type_0 == DT_LTAG as ::core::ffi::c_int {
-                    if add_llist_tags(tag, num_matches, matches) == FAIL {
+                    if add_llist_tags(tag, num_matches.get(), matches.get()) == FAIL {
                         break '_end_do_tag;
                     }
                     cur_match = 0 as ::core::ffi::c_int;
@@ -4586,7 +4598,7 @@ pub unsafe extern "C" fn do_tag(
                         ::core::ptr::null_mut::<bool>(),
                     );
                     if i_1 <= 0 as ::core::ffi::c_int
-                        || i_1 > num_matches
+                        || i_1 > num_matches.get()
                         || got_int as ::core::ffi::c_int != 0
                     {
                         if use_tagstack {
@@ -4598,12 +4610,12 @@ pub unsafe extern "C" fn do_tag(
                         cur_match = i_1 - 1 as ::core::ffi::c_int;
                     }
                 }
-                if cur_match >= num_matches {
+                if cur_match >= num_matches.get() {
                     if (type_0 == DT_NEXT as ::core::ffi::c_int
                         || type_0 == DT_FIRST as ::core::ffi::c_int)
-                        && nofile_fname.is_null()
+                        && (*nofile_fname.ptr()).is_null()
                     {
-                        if num_matches == 1 as ::core::ffi::c_int {
+                        if num_matches.get() == 1 as ::core::ffi::c_int {
                             emsg(gettext(b"E427: There is only one matching tag\0".as_ptr()
                                 as *const ::core::ffi::c_char));
                         } else {
@@ -4614,7 +4626,7 @@ pub unsafe extern "C" fn do_tag(
                         }
                         skip_msg = true_0 != 0;
                     }
-                    cur_match = num_matches - 1 as ::core::ffi::c_int;
+                    cur_match = num_matches.get() - 1 as ::core::ffi::c_int;
                 }
                 if use_tagstack {
                     let mut tagp2_0: tagptrs_T = tagptrs_T {
@@ -4634,7 +4646,10 @@ pub unsafe extern "C" fn do_tag(
                     (*tagstack.offset(tagstackidx as isize)).cur_match = cur_match;
                     (*tagstack.offset(tagstackidx as isize)).cur_fnum = cur_fnum;
                     if use_tfu as ::core::ffi::c_int != 0
-                        && parse_match(*matches.offset(cur_match as isize), &raw mut tagp2_0) == OK
+                        && parse_match(
+                            *(*matches.ptr()).offset(cur_match as isize),
+                            &raw mut tagp2_0,
+                        ) == OK
                         && !tagp2_0.user_data.is_null()
                     {
                         let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -4651,19 +4666,19 @@ pub unsafe extern "C" fn do_tag(
                     }
                     tagstackidx += 1;
                 } else if g_do_tagpreview != 0 as ::core::ffi::c_int {
-                    ptag_entry.cur_match = cur_match;
-                    ptag_entry.cur_fnum = cur_fnum;
+                    (*ptag_entry.ptr()).cur_match = cur_match;
+                    (*ptag_entry.ptr()).cur_fnum = cur_fnum;
                 }
-                if !nofile_fname.is_null() && error_cur_match != cur_match {
+                if !(*nofile_fname.ptr()).is_null() && error_cur_match != cur_match {
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
                             b"File \"%s\" does not exist\0".as_ptr() as *const ::core::ffi::c_char
                         ),
-                        nofile_fname,
+                        nofile_fname.get(),
                     );
                 }
-                let mut ic: bool = *(*matches.offset(cur_match as isize))
+                let mut ic: bool = *(*(*matches.ptr()).offset(cur_match as isize))
                     .offset(0 as ::core::ffi::c_int as isize)
                     as ::core::ffi::c_int
                     & MT_IC_OFF as ::core::ffi::c_int
@@ -4671,7 +4686,8 @@ pub unsafe extern "C" fn do_tag(
                 if type_0 != DT_TAG as ::core::ffi::c_int
                     && type_0 != DT_SELECT as ::core::ffi::c_int
                     && type_0 != DT_JUMP as ::core::ffi::c_int
-                    && (num_matches > 1 as ::core::ffi::c_int || ic as ::core::ffi::c_int != 0)
+                    && (num_matches.get() > 1 as ::core::ffi::c_int
+                        || ic as ::core::ffi::c_int != 0)
                     && !skip_msg
                 {
                     snprintf(
@@ -4679,8 +4695,8 @@ pub unsafe extern "C" fn do_tag(
                         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
                         gettext(b"tag %d of %d%s\0".as_ptr() as *const ::core::ffi::c_char),
                         cur_match + 1 as ::core::ffi::c_int,
-                        num_matches,
-                        if max_num_matches != MAXCOL as ::core::ffi::c_int {
+                        num_matches.get(),
+                        if max_num_matches.get() != MAXCOL as ::core::ffi::c_int {
                             gettext(b" or more\0".as_ptr() as *const ::core::ffi::c_char)
                                 as *const ::core::ffi::c_char
                         } else {
@@ -4695,8 +4711,8 @@ pub unsafe extern "C" fn do_tag(
                             IOSIZE as size_t,
                         );
                     }
-                    if (num_matches > prev_num_matches || new_tag as ::core::ffi::c_int != 0)
-                        && num_matches > 1 as ::core::ffi::c_int
+                    if (num_matches.get() > prev_num_matches || new_tag as ::core::ffi::c_int != 0)
+                        && num_matches.get() > 1 as ::core::ffi::c_int
                     {
                         msg(
                             &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -4728,8 +4744,11 @@ pub unsafe extern "C" fn do_tag(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     IObufflen as ptrdiff_t,
                 );
-                let mut i_2: ::core::ffi::c_int =
-                    jumpto_tag(*matches.offset(cur_match as isize), forceit, true_0 != 0);
+                let mut i_2: ::core::ffi::c_int = jumpto_tag(
+                    *(*matches.ptr()).offset(cur_match as isize),
+                    forceit,
+                    true_0 != 0,
+                );
                 set_vim_var_string(
                     VV_SWAPCOMMAND,
                     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -4741,8 +4760,8 @@ pub unsafe extern "C" fn do_tag(
                         || (type_0 == DT_TAG as ::core::ffi::c_int
                             || type_0 == DT_NEXT as ::core::ffi::c_int
                             || type_0 == DT_FIRST as ::core::ffi::c_int)
-                            && (max_num_matches != MAXCOL as ::core::ffi::c_int
-                                || cur_match < num_matches - 1 as ::core::ffi::c_int)
+                            && (max_num_matches.get() != MAXCOL as ::core::ffi::c_int
+                                || cur_match < num_matches.get() - 1 as ::core::ffi::c_int)
                     {
                         error_cur_match = cur_match;
                         if use_tagstack {
@@ -4758,7 +4777,7 @@ pub unsafe extern "C" fn do_tag(
                         semsg(
                             gettext(b"E429: File \"%s\" does not exist\0".as_ptr()
                                 as *const ::core::ffi::c_char),
-                            nofile_fname,
+                            nofile_fname.get(),
                         );
                         break '_end_do_tag;
                     }
@@ -4838,7 +4857,7 @@ unsafe extern "C" fn print_tag_list(
     while i < num_matches && !got_int {
         parse_match(*matches.offset(i as isize), &raw mut tagp);
         if !new_tag
-            && (g_do_tagpreview != 0 as ::core::ffi::c_int && i == ptag_entry.cur_match
+            && (g_do_tagpreview != 0 as ::core::ffi::c_int && i == (*ptag_entry.ptr()).cur_match
                 || use_tagstack as ::core::ffi::c_int != 0
                     && i == (*tagstack.offset(tagstackidx as isize)).cur_match)
         {
@@ -4851,7 +4870,8 @@ unsafe extern "C" fn print_tag_list(
             (IOSIZE - 1 as ::core::ffi::c_int) as size_t,
             b"%2d %s \0".as_ptr() as *const ::core::ffi::c_char,
             i + 1 as ::core::ffi::c_int,
-            mt_names[(*(*matches.offset(i as isize)).offset(0 as ::core::ffi::c_int as isize)
+            (*mt_names.ptr())[(*(*matches.offset(i as isize))
+                .offset(0 as ::core::ffi::c_int as isize)
                 as ::core::ffi::c_int
                 & MT_MASK as ::core::ffi::c_int) as usize],
         );
@@ -5209,7 +5229,7 @@ unsafe extern "C" fn add_llist_tags(
 #[no_mangle]
 pub unsafe extern "C" fn tag_freematch() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut tagmatchname as *mut *mut ::core::ffi::c_void;
+        tagmatchname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -5472,7 +5492,7 @@ unsafe extern "C" fn find_tagfunc_tags(
     {
         tv_clear(&raw mut rettv);
         emsg(gettext(
-            &raw const e_invalid_return_value_from_tagfunc as *const ::core::ffi::c_char,
+            (e_invalid_return_value_from_tagfunc.ptr() as *const _) as *const ::core::ffi::c_char,
         ));
         return FAIL;
     }
@@ -5495,7 +5515,8 @@ unsafe extern "C" fn find_tagfunc_tags(
                 != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 emsg(gettext(
-                    &raw const e_invalid_return_value_from_tagfunc as *const ::core::ffi::c_char,
+                    (e_invalid_return_value_from_tagfunc.ptr() as *const _)
+                        as *const ::core::ffi::c_char,
                 ));
                 break;
             } else {
@@ -5562,7 +5583,7 @@ unsafe extern "C" fn find_tagfunc_tags(
                 }
                 if res_name.is_null() || res_fname.is_null() || res_cmd.is_null() {
                     emsg(gettext(
-                        &raw const e_invalid_return_value_from_tagfunc
+                        (e_invalid_return_value_from_tagfunc.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     ));
                     break;
@@ -5845,12 +5866,12 @@ unsafe extern "C" fn findtags_apply_tfu(
     let use_tfu: bool =
         (*st).flags & TAG_NO_TAGFUNC as ::core::ffi::c_int == 0 as ::core::ffi::c_int;
     if !use_tfu
-        || tfu_in_use as ::core::ffi::c_int != 0
+        || tfu_in_use.get() as ::core::ffi::c_int != 0
         || *(*curbuf).b_p_tfu as ::core::ffi::c_int == NUL
     {
         return NOTDONE;
     }
-    tfu_in_use = true_0 != 0;
+    tfu_in_use.set(true_0 != 0);
     let mut retval: ::core::ffi::c_int = find_tagfunc_tags(
         pat,
         &raw mut (*st).ga_match as *mut garray_T,
@@ -5858,7 +5879,7 @@ unsafe extern "C" fn findtags_apply_tfu(
         (*st).flags,
         buf_ffname,
     );
-    tfu_in_use = false_0 != 0;
+    tfu_in_use.set(false_0 != 0);
     return retval;
 }
 unsafe extern "C" fn findtags_get_next_line(
@@ -6948,7 +6969,7 @@ pub unsafe extern "C" fn find_tags(
     p_ic = save_p_ic;
     return retval;
 }
-static mut tag_fnames: garray_T = GA_EMPTY_INIT_VALUE;
+static tag_fnames: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 unsafe extern "C" fn found_tagfile_cb(
     mut num_fnames: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
@@ -6959,10 +6980,10 @@ unsafe extern "C" fn found_tagfile_cb(
     while i < num_fnames {
         let tag_fname: *mut ::core::ffi::c_char = xstrdup(*fnames.offset(i as isize));
         simplify_filename(tag_fname);
-        ga_grow(&raw mut tag_fnames, 1 as ::core::ffi::c_int);
-        *(tag_fnames.ga_data as *mut *mut ::core::ffi::c_char).offset(tag_fnames.ga_len as isize) =
-            tag_fname;
-        tag_fnames.ga_len += 1;
+        ga_grow(tag_fnames.ptr(), 1 as ::core::ffi::c_int);
+        *((*tag_fnames.ptr()).ga_data as *mut *mut ::core::ffi::c_char)
+            .offset((*tag_fnames.ptr()).ga_len as isize) = tag_fname;
+        (*tag_fnames.ptr()).ga_len += 1;
         if !all {
             break;
         }
@@ -6986,9 +7007,9 @@ pub unsafe extern "C" fn get_tagfname(
     }
     if (*curbuf).b_help {
         if first != 0 {
-            ga_clear_strings(&raw mut tag_fnames);
+            ga_clear_strings(tag_fnames.ptr());
             ga_init(
-                &raw mut tag_fnames,
+                tag_fnames.ptr(),
                 ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
                 10 as ::core::ffi::c_int,
             );
@@ -7008,8 +7029,8 @@ pub unsafe extern "C" fn get_tagfname(
                 NULL_0,
             );
         }
-        if (*tnp).tn_hf_idx >= tag_fnames.ga_len {
-            if (*tnp).tn_hf_idx > tag_fnames.ga_len || *p_hf as ::core::ffi::c_int == NUL {
+        if (*tnp).tn_hf_idx >= (*tag_fnames.ptr()).ga_len {
+            if (*tnp).tn_hf_idx > (*tag_fnames.ptr()).ga_len || *p_hf as ::core::ffi::c_int == NUL {
                 return FAIL;
             }
             (*tnp).tn_hf_idx += 1;
@@ -7026,10 +7047,11 @@ pub unsafe extern "C" fn get_tagfname(
             );
             simplify_filename(buf);
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < tag_fnames.ga_len {
+            while i < (*tag_fnames.ptr()).ga_len {
                 if strcmp(
                     buf,
-                    *(tag_fnames.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
+                    *((*tag_fnames.ptr()).ga_data as *mut *mut ::core::ffi::c_char)
+                        .offset(i as isize),
                 ) == 0 as ::core::ffi::c_int
                 {
                     return FAIL;
@@ -7041,7 +7063,7 @@ pub unsafe extern "C" fn get_tagfname(
             (*tnp).tn_hf_idx = (*tnp).tn_hf_idx + 1;
             xstrlcpy(
                 buf,
-                *(tag_fnames.ga_data as *mut *mut ::core::ffi::c_char)
+                *((*tag_fnames.ptr()).ga_data as *mut *mut ::core::ffi::c_char)
                     .offset(c2rust_fresh5 as isize),
                 MAXPATHL as size_t,
             );
@@ -7122,7 +7144,7 @@ pub unsafe extern "C" fn tagname_free(mut tnp: *mut tagname_T) {
     xfree((*tnp).tn_tags as *mut ::core::ffi::c_void);
     vim_findfile_cleanup((*tnp).tn_search_ctx);
     (*tnp).tn_search_ctx = NULL_0;
-    ga_clear_strings(&raw mut tag_fnames);
+    ga_clear_strings(tag_fnames.ptr());
 }
 unsafe extern "C" fn parse_tag_line(
     mut lbuf: *mut ::core::ffi::c_char,
@@ -7354,8 +7376,8 @@ unsafe extern "C" fn jumpto_tag(
                 && !has_autocmd(EVENT_BUFREADCMD, fname, ::core::ptr::null_mut::<buf_T>())
             {
                 retval = NOTAGFILE;
-                xfree(nofile_fname as *mut ::core::ffi::c_void);
-                nofile_fname = xstrdup(fname);
+                xfree(nofile_fname.get() as *mut ::core::ffi::c_void);
+                nofile_fname.set(xstrdup(fname));
             } else {
                 RedrawingDisabled += 1;
                 if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
@@ -8330,9 +8352,10 @@ pub unsafe extern "C" fn set_tagstack(
     mut d: *const dict_T,
     mut action: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if tfu_in_use {
+    if tfu_in_use.get() {
         emsg(gettext(
-            &raw const e_cannot_modify_tag_stack_within_tagfunc as *const ::core::ffi::c_char,
+            (e_cannot_modify_tag_stack_within_tagfunc.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         ));
         return FAIL;
     }

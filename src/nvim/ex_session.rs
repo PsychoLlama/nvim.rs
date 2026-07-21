@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -2718,7 +2719,7 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut did_lcd: ::core::ffi::c_int = 0;
+static did_lcd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn put_view_curpos(
     mut fd: *mut FILE,
     mut wp: *const win_T,
@@ -2952,7 +2953,7 @@ unsafe extern "C" fn ses_get_fname(
                 as ::core::ffi::c_uint
             != 0
         && p_acd == 0
-        && did_lcd == 0
+        && did_lcd.get() == 0
     {
         return (*buf).b_sfname;
     }
@@ -3267,7 +3268,7 @@ unsafe extern "C" fn put_view(
         {
             return FAIL;
         }
-        did_lcd = true_0;
+        did_lcd.set(true_0);
     }
     return OK;
 }
@@ -3743,7 +3744,7 @@ unsafe extern "C" fn makeopens(
             {
                 return FAIL;
             }
-            did_lcd = true_0;
+            did_lcd.set(true_0);
         }
         let mut wp_1: *mut win_T = tab_firstwin;
         while !wp_1.is_null() {
@@ -3905,7 +3906,7 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
     {
         view_session = true_0 != 0;
     }
-    did_lcd = false_0;
+    did_lcd.set(false_0);
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkview as ::core::ffi::c_int
         && (*(*eap).arg as ::core::ffi::c_int == NUL

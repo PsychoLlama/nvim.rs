@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -2234,19 +2235,20 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const VIRTTEXT_EMPTY: VirtText = KV_INITIAL_VALUE;
 pub const MAX_LEVEL: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-static mut fold_changed: bool = false;
-static mut e_nofold: *const ::core::ffi::c_char =
-    b"E490: No fold found\0".as_ptr() as *const ::core::ffi::c_char;
-static mut invalid_top: linenr_T = 0 as linenr_T;
-static mut invalid_bot: linenr_T = 0 as linenr_T;
-static mut prev_lnum: linenr_T = 0 as linenr_T;
-static mut prev_lnum_lvl: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+static fold_changed: GlobalCell<bool> = GlobalCell::new(false);
+static e_nofold: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E490: No fold found\0".as_ptr() as *const ::core::ffi::c_char);
+static invalid_top: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static invalid_bot: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static prev_lnum_lvl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 pub const DONE_NOTHING: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const DONE_ACTION: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DONE_FOLD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut foldstartmarkerlen: size_t = 0;
-static mut foldendmarker: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut foldendmarkerlen: size_t = 0;
+static foldstartmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
+static foldendmarker: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 #[no_mangle]
 pub unsafe extern "C" fn copyFoldingState(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
     (*wp_to).w_fold_manual = (*wp_from).w_fold_manual;
@@ -2372,11 +2374,11 @@ pub unsafe extern "C" fn hasFoldingWin(
     return true_0 != 0;
 }
 unsafe extern "C" fn foldLevel(mut lnum: linenr_T) -> ::core::ffi::c_int {
-    if invalid_top == 0 as linenr_T {
+    if invalid_top.get() == 0 as linenr_T {
         checkupdate(curwin);
-    } else if lnum == prev_lnum && prev_lnum_lvl >= 0 as ::core::ffi::c_int {
-        return prev_lnum_lvl;
-    } else if lnum >= invalid_top && lnum <= invalid_bot {
+    } else if lnum == prev_lnum.get() && prev_lnum_lvl.get() >= 0 as ::core::ffi::c_int {
+        return prev_lnum_lvl.get();
+    } else if lnum >= invalid_top.get() && lnum <= invalid_bot.get() {
         return -1 as ::core::ffi::c_int;
     }
     if hasAnyFolding(curwin) == 0 {
@@ -2527,7 +2529,7 @@ pub unsafe extern "C" fn opFoldRange(
         lnum = lnum_next + 1 as linenr_T;
     }
     if done == DONE_NOTHING {
-        emsg(gettext(e_nofold));
+        emsg(gettext(e_nofold.get()));
     }
     if had_visual {
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
@@ -2858,7 +2860,7 @@ pub unsafe extern "C" fn deleteFold(
         }
     }
     if !did_one {
-        emsg(gettext(e_nofold));
+        emsg(gettext(e_nofold.get()));
         if had_visual {
             redraw_buf_later((*wp).w_buffer, UPD_INVERTED as ::core::ffi::c_int);
         }
@@ -3190,7 +3192,7 @@ unsafe extern "C" fn setFoldRepeat(
         setManualFold(pos, do_open != 0, false_0 != 0, &raw mut done);
         if done & DONE_ACTION == 0 {
             if n == 0 as ::core::ffi::c_int && done & DONE_FOLD == 0 {
-                emsg(gettext(e_nofold));
+                emsg(gettext(e_nofold.get()));
             }
             break;
         } else {
@@ -3314,7 +3316,7 @@ unsafe extern "C" fn setManualFoldWin(
         }
         done |= DONE_FOLD;
     } else if donep.is_null() && wp == curwin {
-        emsg(gettext(e_nofold));
+        emsg(gettext(e_nofold.get()));
     }
     if !donep.is_null() {
         *donep |= done;
@@ -3602,8 +3604,13 @@ unsafe extern "C" fn foldCreateMarkers(mut wp: *mut win_T, mut start: pos_T, mut
         return;
     }
     parseMarker(wp);
-    foldAddMarker(buf, start, (*wp).w_onebuf_opt.wo_fmr, foldstartmarkerlen);
-    foldAddMarker(buf, end, foldendmarker, foldendmarkerlen);
+    foldAddMarker(
+        buf,
+        start,
+        (*wp).w_onebuf_opt.wo_fmr,
+        foldstartmarkerlen.get(),
+    );
+    foldAddMarker(buf, end, foldendmarker.get(), foldendmarkerlen.get());
     changed_lines(
         buf,
         start.lnum,
@@ -3703,13 +3710,13 @@ unsafe extern "C" fn deleteFoldMarkers(
         (*wp).w_buffer,
         (*fp).fd_top + lnum_off,
         (*wp).w_onebuf_opt.wo_fmr,
-        foldstartmarkerlen,
+        foldstartmarkerlen.get(),
     );
     foldDelMarker(
         (*wp).w_buffer,
         (*fp).fd_top + lnum_off + (*fp).fd_len - 1 as linenr_T,
-        foldendmarker,
-        foldendmarkerlen,
+        foldendmarker.get(),
+        foldendmarkerlen.get(),
     );
 }
 unsafe extern "C" fn foldDelMarker(
@@ -3804,14 +3811,18 @@ pub unsafe extern "C" fn get_foldtext(
     mut vt: *mut VirtText,
 ) -> *mut ::core::ffi::c_char {
     let mut text: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut got_fdt_error: bool = false_0 != 0;
+    static got_fdt_error: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    static mut last_wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    static mut last_lnum: linenr_T = 0 as linenr_T;
-    if last_wp.is_null() || last_wp != wp || last_lnum > lnum || last_lnum == 0 as linenr_T {
-        got_fdt_error = false_0 != 0;
+    static last_wp: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+    static last_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+    if (*last_wp.ptr()).is_null()
+        || last_wp.get() != wp
+        || last_lnum.get() > lnum
+        || last_lnum.get() == 0 as linenr_T
+    {
+        got_fdt_error.set(false_0 != 0);
     }
-    if !got_fdt_error {
+    if !got_fdt_error.get() {
         did_emsg = false_0;
     }
     if *(*wp).w_onebuf_opt.wo_fdt as ::core::ffi::c_int != NUL {
@@ -3839,7 +3850,7 @@ pub unsafe extern "C" fn get_foldtext(
             level as ptrdiff_t,
         );
         set_vim_var_nr(VV_FOLDLEVEL, level as varnumber_T);
-        if !got_fdt_error {
+        if !got_fdt_error.get() {
             let save_curwin: *mut win_T = curwin;
             let saved_sctx: sctx_T = current_sctx;
             curwin = wp;
@@ -3877,14 +3888,14 @@ pub unsafe extern "C" fn get_foldtext(
             api_free_object(obj);
             emsg_off -= 1;
             if text.is_null() || did_emsg != 0 {
-                got_fdt_error = true_0 != 0;
+                got_fdt_error.set(true_0 != 0);
             }
             curwin = save_curwin;
             curbuf = (*curwin).w_buffer;
             current_sctx = saved_sctx;
         }
-        last_lnum = lnum;
-        last_wp = wp;
+        last_lnum.set(lnum);
+        last_wp.set(wp);
         set_vim_var_string(
             VV_FOLDDASHES,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -3971,12 +3982,14 @@ unsafe extern "C" fn foldtext_cleanup(mut str: *mut ::core::ffi::c_char) {
     let mut s_0: *mut ::core::ffi::c_char = str;
     while *s_0 as ::core::ffi::c_int != NUL {
         let mut len: size_t = 0 as size_t;
-        if strncmp(s_0, (*curwin).w_onebuf_opt.wo_fmr, foldstartmarkerlen)
+        if strncmp(s_0, (*curwin).w_onebuf_opt.wo_fmr, foldstartmarkerlen.get())
             == 0 as ::core::ffi::c_int
         {
-            len = foldstartmarkerlen;
-        } else if strncmp(s_0, foldendmarker, foldendmarkerlen) == 0 as ::core::ffi::c_int {
-            len = foldendmarkerlen;
+            len = foldstartmarkerlen.get();
+        } else if strncmp(s_0, foldendmarker.get(), foldendmarkerlen.get())
+            == 0 as ::core::ffi::c_int
+        {
+            len = foldendmarkerlen.get();
         }
         if len > 0 as size_t {
             if ascii_isdigit(*s_0.offset(len as isize) as ::core::ffi::c_int) {
@@ -4028,7 +4041,7 @@ unsafe extern "C" fn foldtext_cleanup(mut str: *mut ::core::ffi::c_char) {
     }
 }
 unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
-    if invalid_top != 0 as linenr_T {
+    if invalid_top.get() != 0 as linenr_T {
         return;
     }
     if (*wp).w_foldinvalid {
@@ -4061,7 +4074,7 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
         end: 0,
         had_end: 0,
     };
-    fold_changed = false_0 != 0;
+    fold_changed.set(false_0 != 0);
     fline.wp = wp;
     fline.off = 0 as ::core::ffi::c_int as linenr_T;
     fline.lvl = 0 as ::core::ffi::c_int;
@@ -4069,8 +4082,8 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
     fline.start = 0 as ::core::ffi::c_int;
     fline.end = MAX_LEVEL + 1 as ::core::ffi::c_int;
     fline.had_end = MAX_LEVEL + 1 as ::core::ffi::c_int;
-    invalid_top = top;
-    invalid_bot = bot;
+    invalid_top.set(top);
+    invalid_bot.set(bot);
     let mut getlevel: LevelGetter = None;
     if foldmethodIsMarker(wp) {
         getlevel = Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
@@ -4180,8 +4193,8 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             }
         }
         if fline.lvl > 0 as ::core::ffi::c_int {
-            invalid_top = fline.lnum;
-            invalid_bot = end;
+            invalid_top.set(fline.lnum);
+            invalid_bot.set(end);
             end = foldUpdateIEMSRecurse(
                 &raw mut (*wp).w_folds,
                 1 as ::core::ffi::c_int,
@@ -4202,13 +4215,13 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
         }
     }
     foldRemove(wp, &raw mut (*wp).w_folds, start, end);
-    if fold_changed as ::core::ffi::c_int != 0 && (*wp).w_onebuf_opt.wo_fen != 0 {
+    if fold_changed.get() as ::core::ffi::c_int != 0 && (*wp).w_onebuf_opt.wo_fen != 0 {
         changed_window_setting(wp);
     }
     if end != bot {
         redraw_win_range_later(wp, top, end);
     }
-    invalid_top = 0 as ::core::ffi::c_int as linenr_T;
+    invalid_top.set(0 as ::core::ffi::c_int as linenr_T);
 }
 unsafe extern "C" fn foldUpdateIEMSRecurse(
     gap: *mut garray_T,
@@ -4332,7 +4345,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                                 (*fp).fd_len += (*fp).fd_top - firstlnum;
                                 (*fp).fd_top = firstlnum;
                                 (*fp).fd_small = kNone;
-                                fold_changed = true_0 != 0;
+                                fold_changed.set(true_0 != 0);
                             } else if (*flp).start != 0 as ::core::ffi::c_int && lvl == level
                                 || firstlnum != startlnum
                             {
@@ -4412,7 +4425,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                             MAXLNUM as ::core::ffi::c_int as linenr_T,
                             0 as linenr_T,
                         );
-                        fold_changed = true_0 != 0;
+                        fold_changed.set(true_0 != 0);
                     }
                 } else {
                     let mut i_2: ::core::ffi::c_int = 0;
@@ -4445,7 +4458,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                     {
                         finish = true_0 != 0;
                     }
-                    fold_changed = true_0 != 0;
+                    fold_changed.set(true_0 != 0);
                     break;
                 }
             }
@@ -4479,8 +4492,8 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
             let mut ll_0: ::core::ffi::c_int =
                 (*flp).lnum as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
             while !got_int {
-                prev_lnum = (*flp).lnum;
-                prev_lnum_lvl = (*flp).lvl;
+                prev_lnum.set((*flp).lnum);
+                prev_lnum_lvl.set((*flp).lvl);
                 (*flp).lnum += 1;
                 if (*flp).lnum > linecount {
                     break;
@@ -4491,7 +4504,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                     break;
                 }
             }
-            prev_lnum = 0 as ::core::ffi::c_int as linenr_T;
+            prev_lnum.set(0 as ::core::ffi::c_int as linenr_T);
             if (*flp).lnum > linecount {
                 break;
             }
@@ -4505,7 +4518,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
     if (*fp).fd_len < (*flp).lnum - (*fp).fd_top {
         (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
         (*fp).fd_small = kNone;
-        fold_changed = true_0 != 0;
+        fold_changed.set(true_0 != 0);
     } else if (*fp).fd_top + (*fp).fd_len > linecount {
         (*fp).fd_len = linecount - (*fp).fd_top + 1 as linenr_T;
     }
@@ -4533,7 +4546,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
             } else {
                 (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
             }
-            fold_changed = true_0 != 0;
+            fold_changed.set(true_0 != 0);
         }
     }
     loop {
@@ -4555,14 +4568,14 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                 );
                 (*fp2).fd_len -= (*flp).lnum - (*fp2).fd_top;
                 (*fp2).fd_top = (*flp).lnum;
-                fold_changed = true_0 != 0;
+                fold_changed.set(true_0 != 0);
             }
             if lvl >= level {
                 foldMerge((*flp).wp, fp, gap, fp2);
             }
             break;
         } else {
-            fold_changed = true_0 != 0;
+            fold_changed.set(true_0 != 0);
             deleteFoldEntry(
                 (*flp).wp,
                 gap,
@@ -4645,7 +4658,7 @@ unsafe extern "C" fn foldSplit(
         }
     }
     (*fp).fd_len = top - (*fp).fd_top;
-    fold_changed = true_0 != 0;
+    fold_changed.set(true_0 != 0);
 }
 unsafe extern "C" fn foldRemove(
     wp: *mut win_T,
@@ -4676,7 +4689,7 @@ unsafe extern "C" fn foldRemove(
             } else {
                 (*fp).fd_len = top - (*fp).fd_top;
             }
-            fold_changed = true_0 != 0;
+            fold_changed.set(true_0 != 0);
         } else {
             if (*gap).ga_data.is_null()
                 || fp >= ((*gap).ga_data as *mut fold_T).offset((*gap).ga_len as isize)
@@ -4687,7 +4700,7 @@ unsafe extern "C" fn foldRemove(
             if (*fp).fd_top < top {
                 continue;
             }
-            fold_changed = true_0 != 0;
+            fold_changed.set(true_0 != 0);
             if (*fp).fd_top + (*fp).fd_len - 1 as linenr_T > bot {
                 foldMarkAdjustRecurse(
                     wp,
@@ -4892,7 +4905,7 @@ unsafe extern "C" fn foldMerge(
         fp2.offset_from((*gap).ga_data as *mut fold_T) as ::core::ffi::c_int,
         true_0 != 0,
     );
-    fold_changed = true_0 != 0;
+    fold_changed.set(true_0 != 0);
 }
 unsafe extern "C" fn foldlevelIndent(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
@@ -5008,18 +5021,21 @@ unsafe extern "C" fn foldlevelExpr(mut flp: *mut fline_T) {
     curbuf = (*curwin).w_buffer;
 }
 unsafe extern "C" fn parseMarker(mut wp: *mut win_T) {
-    foldendmarker = vim_strchr((*wp).w_onebuf_opt.wo_fmr, ',' as ::core::ffi::c_int);
-    let c2rust_fresh0 = foldendmarker;
-    foldendmarker = foldendmarker.offset(1);
-    foldstartmarkerlen = c2rust_fresh0.offset_from((*wp).w_onebuf_opt.wo_fmr) as size_t;
-    foldendmarkerlen = strlen(foldendmarker);
+    foldendmarker.set(vim_strchr(
+        (*wp).w_onebuf_opt.wo_fmr,
+        ',' as ::core::ffi::c_int,
+    ));
+    let c2rust_fresh0 = foldendmarker.get();
+    foldendmarker.set((*foldendmarker.ptr()).offset(1));
+    foldstartmarkerlen.set(c2rust_fresh0.offset_from((*wp).w_onebuf_opt.wo_fmr) as size_t);
+    foldendmarkerlen.set(strlen(foldendmarker.get()));
 }
 unsafe extern "C" fn foldlevelMarker(mut flp: *mut fline_T) {
     let mut start_lvl: ::core::ffi::c_int = (*flp).lvl;
     let mut startmarker: *mut ::core::ffi::c_char = (*(*flp).wp).w_onebuf_opt.wo_fmr;
     let mut cstart: ::core::ffi::c_char = *startmarker;
     startmarker = startmarker.offset(1);
-    let mut cend: ::core::ffi::c_char = *foldendmarker;
+    let mut cend: ::core::ffi::c_char = *foldendmarker.get();
     (*flp).start = 0 as ::core::ffi::c_int;
     (*flp).lvl_next = (*flp).lvl;
     let mut s: *mut ::core::ffi::c_char =
@@ -5029,10 +5045,10 @@ unsafe extern "C" fn foldlevelMarker(mut flp: *mut fline_T) {
             && strncmp(
                 s.offset(1 as ::core::ffi::c_int as isize),
                 startmarker,
-                foldstartmarkerlen.wrapping_sub(1 as size_t),
+                (*foldstartmarkerlen.ptr()).wrapping_sub(1 as size_t),
             ) == 0 as ::core::ffi::c_int
         {
-            s = s.offset(foldstartmarkerlen as isize);
+            s = s.offset(foldstartmarkerlen.get() as isize);
             if ascii_isdigit(*s as ::core::ffi::c_int) {
                 let mut n: ::core::ffi::c_int = atoi(s);
                 if n > 0 as ::core::ffi::c_int {
@@ -5052,11 +5068,11 @@ unsafe extern "C" fn foldlevelMarker(mut flp: *mut fline_T) {
         } else if *s as ::core::ffi::c_int == cend as ::core::ffi::c_int
             && strncmp(
                 s.offset(1 as ::core::ffi::c_int as isize),
-                foldendmarker.offset(1 as ::core::ffi::c_int as isize),
-                foldendmarkerlen.wrapping_sub(1 as size_t),
+                (*foldendmarker.ptr()).offset(1 as ::core::ffi::c_int as isize),
+                (*foldendmarkerlen.ptr()).wrapping_sub(1 as size_t),
             ) == 0 as ::core::ffi::c_int
         {
-            s = s.offset(foldendmarkerlen as isize);
+            s = s.offset(foldendmarkerlen.get() as isize);
             if ascii_isdigit(*s as ::core::ffi::c_int) {
                 let mut n_0: ::core::ffi::c_int = atoi(s);
                 if n_0 > 0 as ::core::ffi::c_int {
@@ -5338,13 +5354,13 @@ pub unsafe extern "C" fn f_foldtextresult(
     mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 51] = [0; 51];
-    static mut entered: bool = false_0 != 0;
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if entered {
+    if entered.get() {
         return;
     }
-    entered = true_0 != 0;
+    entered.set(true_0 != 0);
     let mut lnum: linenr_T = tv_get_lnum(argvars);
     lnum = if lnum > 0 as linenr_T {
         lnum
@@ -5394,7 +5410,7 @@ pub unsafe extern "C" fn f_foldtextresult(
         clear_virttext(&raw mut vt);
         (*rettv).vval.v_string = text;
     }
-    entered = false_0 != 0;
+    entered.set(false_0 != 0);
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

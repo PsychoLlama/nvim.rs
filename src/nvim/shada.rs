@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -351,7 +352,7 @@ extern "C" {
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
-    static mut longVersion: *mut ::core::ffi::c_char;
+    static longVersion: GlobalCell<*mut ::core::ffi::c_char>;
 }
 pub type __uint64_t = u64;
 pub type __uid_t = ::core::ffi::c_uint;
@@ -2954,8 +2955,8 @@ pub const DEFAULT_POS: pos_T = pos_T {
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
 };
-static mut default_pos: pos_T = DEFAULT_POS;
-static mut sd_default_values: [ShadaEntry; 12] = [
+static default_pos: GlobalCell<pos_T> = GlobalCell::new(DEFAULT_POS);
+static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
     ShadaEntry {
         type_0: kSDItemMissing,
         can_free_entry: false,
@@ -3144,7 +3145,7 @@ static mut sd_default_values: [ShadaEntry; 12] = [
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     },
-];
+]);
 #[inline]
 unsafe extern "C" fn hmll_init(hmll: *mut HMLList, size: size_t) {
     *hmll = HMLList {
@@ -4388,22 +4389,22 @@ unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::f
         keys: ::core::ptr::null_mut::<cstr_t>(),
     };
 }
-static mut default_shada_file: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+static default_shada_file: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 unsafe extern "C" fn shada_get_default_file() -> *const ::core::ffi::c_char {
-    if default_shada_file.is_null() {
+    if (*default_shada_file.ptr()).is_null() {
         let mut shada_dir: *mut ::core::ffi::c_char = stdpaths_user_state_subpath(
             b"shada\0".as_ptr() as *const ::core::ffi::c_char,
             0 as size_t,
             false_0 != 0,
         );
-        default_shada_file = concat_fnames_realloc(
+        default_shada_file.set(concat_fnames_realloc(
             shada_dir,
             b"main.shada\0".as_ptr() as *const ::core::ffi::c_char,
             true_0 != 0,
-        );
+        ));
     }
-    return default_shada_file;
+    return default_shada_file.get();
 }
 unsafe extern "C" fn shada_filename(
     mut file: *const ::core::ffi::c_char,
@@ -4569,7 +4570,7 @@ unsafe extern "C" fn shada_pack_entry(
             2 => {
                 let mut entry_map_size: uint32_t = (1 as uint32_t)
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .magic as ::core::ffi::c_int
@@ -4577,7 +4578,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .is_last_used as ::core::ffi::c_int
@@ -4585,7 +4586,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .smartcase as ::core::ffi::c_int
@@ -4593,7 +4594,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .has_line_offset as ::core::ffi::c_int
@@ -4601,7 +4602,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .place_cursor_at_end as ::core::ffi::c_int
@@ -4609,7 +4610,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .is_substitute_pattern as ::core::ffi::c_int
@@ -4618,7 +4619,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .highlighted as ::core::ffi::c_int
@@ -4626,7 +4627,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .offset
@@ -4634,7 +4635,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .search_backward as ::core::ffi::c_int
@@ -4653,7 +4654,7 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf,
                 );
                 mpack_bin(entry.data.search_pattern.pat, &raw mut sbuf);
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .magic as ::core::ffi::c_int
@@ -4670,13 +4671,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .magic,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .is_last_used as ::core::ffi::c_int
@@ -4693,13 +4694,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .is_last_used,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .smartcase as ::core::ffi::c_int
@@ -4716,13 +4717,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .smartcase,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .has_line_offset as ::core::ffi::c_int
@@ -4739,13 +4740,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .has_line_offset,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .place_cursor_at_end as ::core::ffi::c_int
@@ -4762,13 +4763,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .place_cursor_at_end,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .is_substitute_pattern as ::core::ffi::c_int
@@ -4785,13 +4786,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .is_substitute_pattern,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .highlighted as ::core::ffi::c_int
@@ -4808,13 +4809,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .highlighted,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .search_backward as ::core::ffi::c_int
@@ -4831,13 +4832,13 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_bool(
                         &raw mut sbuf.ptr,
-                        !sd_default_values[entry.type_0 as usize]
+                        !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .search_backward,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
                     .offset
@@ -4859,7 +4860,7 @@ unsafe extern "C" fn shada_pack_entry(
             11 | 7 | 10 | 8 => {
                 let mut entry_map_size_0: size_t = (1 as uint32_t)
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .filemark
                             .mark
@@ -4868,7 +4869,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize]
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .filemark
                             .mark
@@ -4877,8 +4878,10 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize].data.filemark.name
-                            as ::core::ffi::c_int
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
+                            .data
+                            .filemark
+                            .name as ::core::ffi::c_int
                             == entry.data.filemark.name as ::core::ffi::c_int)
                             as ::core::ffi::c_int as uint32_t,
                     )
@@ -4895,7 +4898,7 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf,
                 );
                 mpack_bin(cstr_as_string(entry.data.filemark.fname), &raw mut sbuf);
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .filemark
                     .mark
@@ -4913,7 +4916,7 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_integer(&raw mut sbuf.ptr, entry.data.filemark.mark.lnum as Integer);
                 }
-                if !(sd_default_values[entry.type_0 as usize]
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .filemark
                     .mark
@@ -4935,8 +4938,10 @@ unsafe extern "C" fn shada_pack_entry(
                     if (if entry.type_0 as ::core::ffi::c_int == kSDItemJump as ::core::ffi::c_int
                         || entry.type_0 as ::core::ffi::c_int == kSDItemChange as ::core::ffi::c_int
                     {
-                        (sd_default_values[entry.type_0 as usize].data.filemark.name
-                            as ::core::ffi::c_int
+                        ((*sd_default_values.ptr())[entry.type_0 as usize]
+                            .data
+                            .filemark
+                            .name as ::core::ffi::c_int
                             == entry.data.filemark.name as ::core::ffi::c_int)
                             as ::core::ffi::c_int
                     } else {
@@ -4955,8 +4960,10 @@ unsafe extern "C" fn shada_pack_entry(
                         );
                     }
                 };
-                if !(sd_default_values[entry.type_0 as usize].data.filemark.name
-                    as ::core::ffi::c_int
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
+                    .data
+                    .filemark
+                    .name as ::core::ffi::c_int
                     == entry.data.filemark.name as ::core::ffi::c_int)
                 {
                     mpack_str(
@@ -4978,19 +4985,26 @@ unsafe extern "C" fn shada_pack_entry(
             5 => {
                 let mut entry_map_size_1: uint32_t = (2 as uint32_t)
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize].data.reg.type_0
-                            as ::core::ffi::c_int
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
+                            .data
+                            .reg
+                            .type_0 as ::core::ffi::c_int
                             == entry.data.reg.type_0 as ::core::ffi::c_int)
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize].data.reg.width
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
+                            .data
+                            .reg
+                            .width
                             == entry.data.reg.width) as ::core::ffi::c_int
                             as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize].data.reg.is_unnamed
-                            as ::core::ffi::c_int
+                        !((*sd_default_values.ptr())[entry.type_0 as usize]
+                            .data
+                            .reg
+                            .is_unnamed as ::core::ffi::c_int
                             == entry.data.reg.is_unnamed as ::core::ffi::c_int)
                             as ::core::ffi::c_int as uint32_t,
                     )
@@ -5024,7 +5038,10 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf.ptr,
                     entry.data.reg.name as uint8_t as uint32_t,
                 );
-                if !(sd_default_values[entry.type_0 as usize].data.reg.type_0 as ::core::ffi::c_int
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
+                    .data
+                    .reg
+                    .type_0 as ::core::ffi::c_int
                     == entry.data.reg.type_0 as ::core::ffi::c_int)
                 {
                     mpack_str(
@@ -5041,7 +5058,10 @@ unsafe extern "C" fn shada_pack_entry(
                         entry.data.reg.type_0 as uint8_t as uint32_t,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize].data.reg.width
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
+                    .data
+                    .reg
+                    .width
                     == entry.data.reg.width)
                 {
                     mpack_str(
@@ -5055,8 +5075,10 @@ unsafe extern "C" fn shada_pack_entry(
                     );
                     mpack_uint64(&raw mut sbuf.ptr, entry.data.reg.width as uint64_t);
                 }
-                if !(sd_default_values[entry.type_0 as usize].data.reg.is_unnamed
-                    as ::core::ffi::c_int
+                if !((*sd_default_values.ptr())[entry.type_0 as usize]
+                    .data
+                    .reg
+                    .is_unnamed as ::core::ffi::c_int
                     == entry.data.reg.is_unnamed as ::core::ffi::c_int)
                 {
                     mpack_str(
@@ -5081,14 +5103,14 @@ unsafe extern "C" fn shada_pack_entry(
                             ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
                                 .lnum
-                                != default_pos.lnum)
+                                != (*default_pos.ptr()).lnum)
                                 as ::core::ffi::c_int as size_t,
                         )
                         .wrapping_add(
                             ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
                                 .col
-                                != default_pos.col)
+                                != (*default_pos.ptr()).col)
                                 as ::core::ffi::c_int as size_t,
                         )
                         .wrapping_add(additional_data_len(
@@ -5801,7 +5823,7 @@ unsafe extern "C" fn add_search_pattern(
     search_highlighted: bool,
 ) {
     let defaults: ShadaEntry =
-        sd_default_values[kSDItemSearchPattern as ::core::ffi::c_int as usize];
+        (*sd_default_values.ptr())[kSDItemSearchPattern as ::core::ffi::c_int as usize];
     let mut pat: SearchPattern = SearchPattern {
         pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         patlen: 0,
@@ -6144,7 +6166,7 @@ unsafe extern "C" fn shada_write(
                 value: object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_1 {
-                        string: cstr_as_string(longVersion),
+                        string: cstr_as_string(longVersion.get()),
                     },
                 },
             },
@@ -7625,7 +7647,7 @@ unsafe extern "C" fn shada_read_next_item(
                         }) as *mut ::core::ffi::c_char;
                     return kSDReadStatusSuccess;
                 }
-                (*entry).data = sd_default_values[type_u64 as usize].data;
+                (*entry).data = (*sd_default_values.ptr())[type_u64 as usize].data;
                 's_900: {
                     match type_u64 as ShadaEntryType as ::core::ffi::c_int {
                         2 => {
@@ -8207,7 +8229,7 @@ unsafe extern "C" fn shada_read_next_item(
                                             (*entry).data.buffer_list.buffers.offset(i as isize)
                                                 as *mut buffer_list_buffer;
                                         (*e).additional_data = it_ad.items as *mut AdditionalData;
-                                        (*e).pos = default_pos;
+                                        (*e).pos = default_pos.get();
                                         if it_2.is_set___shada_buflist_item_
                                             as ::core::ffi::c_ulonglong
                                             & (1 as ::core::ffi::c_ulonglong)

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -207,9 +208,9 @@ extern "C" {
     fn line_breakcheck();
     fn profile_setlimit(msec: int64_t) -> proftime_T;
     fn profile_passed_limit(tm: proftime_T) -> bool;
-    static mut spelltab: spelltab_T;
-    static mut repl_from: *mut ::core::ffi::c_char;
-    static mut repl_to: *mut ::core::ffi::c_char;
+    static spelltab: GlobalCell<spelltab_T>;
+    static repl_from: GlobalCell<*mut ::core::ffi::c_char>;
+    static repl_to: GlobalCell<*mut ::core::ffi::c_char>;
     fn spell_check(
         wp: *mut win_T,
         ptr: *mut ::core::ffi::c_char,
@@ -2256,7 +2257,8 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2 as ::core::ffi::c_ulong;
 pub const WF_MIXCAP: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-static mut spell_suggest_timeout: ::core::ffi::c_int = 5000 as ::core::ffi::c_int;
+static spell_suggest_timeout: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(5000 as ::core::ffi::c_int);
 unsafe extern "C" fn can_be_compound(
     mut sp: *mut trystate_T,
     mut slang: *mut slang_T,
@@ -2335,7 +2337,7 @@ unsafe extern "C" fn badword_captype(
         if if c >= 128 as ::core::ffi::c_int {
             mb_isupper(c) as ::core::ffi::c_int
         } else {
-            spelltab.st_isu[c as usize] as ::core::ffi::c_int
+            (*spelltab.ptr()).st_isu[c as usize] as ::core::ffi::c_int
         } != 0
         {
             u += 1;
@@ -2399,13 +2401,13 @@ unsafe extern "C" fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::co
     *pp = p as *mut ::core::ffi::c_char;
     return nr;
 }
-static mut sps_flags: ::core::ffi::c_int = SPS_BEST as ::core::ffi::c_int;
-static mut sps_limit: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
+static sps_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(SPS_BEST as ::core::ffi::c_int);
+static sps_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(9999 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
-    sps_flags = 0 as ::core::ffi::c_int;
-    sps_limit = 9999 as ::core::ffi::c_int;
+    sps_flags.set(0 as ::core::ffi::c_int);
+    sps_limit.set(9999 as ::core::ffi::c_int);
     let mut p: *mut ::core::ffi::c_char = p_sps;
     while *p as ::core::ffi::c_int != NUL {
         copy_option_part(
@@ -2417,7 +2419,11 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
         let mut f: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if ascii_isdigit(*(&raw mut buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int) {
             let mut s: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
-            sps_limit = getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
+            sps_limit.set(getdigits_int(
+                &raw mut s,
+                true_0 != 0,
+                0 as ::core::ffi::c_int,
+            ));
             if *s as ::core::ffi::c_int != NUL && !ascii_isdigit(*s as ::core::ffi::c_int) {
                 f = -1 as ::core::ffi::c_int;
             }
@@ -2465,18 +2471,18 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
             f = -1 as ::core::ffi::c_int;
         }
         if f == -1 as ::core::ffi::c_int
-            || sps_flags != 0 as ::core::ffi::c_int && f != 0 as ::core::ffi::c_int
+            || sps_flags.get() != 0 as ::core::ffi::c_int && f != 0 as ::core::ffi::c_int
         {
-            sps_flags = SPS_BEST as ::core::ffi::c_int;
-            sps_limit = 9999 as ::core::ffi::c_int;
+            sps_flags.set(SPS_BEST as ::core::ffi::c_int);
+            sps_limit.set(9999 as ::core::ffi::c_int);
             return FAIL;
         }
         if f != 0 as ::core::ffi::c_int {
-            sps_flags = f;
+            sps_flags.set(f);
         }
     }
-    if sps_flags == 0 as ::core::ffi::c_int {
-        sps_flags = SPS_BEST as ::core::ffi::c_int;
+    if sps_flags.get() == 0 as ::core::ffi::c_int {
+        sps_flags.set(SPS_BEST as ::core::ffi::c_int);
     }
     return OK;
 }
@@ -2588,7 +2594,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
             need_cap = check_need_cap(curwin, (*curwin).w_cursor.lnum, (*curwin).w_cursor.col)
                 as ::core::ffi::c_int;
             line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-            spell_suggest_timeout = 5000 as ::core::ffi::c_int;
+            spell_suggest_timeout.set(5000 as ::core::ffi::c_int);
             sug = suginfo_T {
                 su_ga: garray_T {
                     ga_len: 0,
@@ -2627,8 +2633,8 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 },
                 su_sallang: ::core::ptr::null_mut::<slang_T>(),
             };
-            limit = if sps_limit < Rows - 2 as ::core::ffi::c_int {
-                sps_limit
+            limit = if sps_limit.get() < Rows - 2 as ::core::ffi::c_int {
+                sps_limit.get()
             } else {
                 Rows - 2 as ::core::ffi::c_int
             };
@@ -2752,7 +2758,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
                     }
                     if p_verbose > 0 as OptInt {
-                        if sps_flags
+                        if sps_flags.get()
                             & (SPS_DOUBLE as ::core::ffi::c_int | SPS_BEST as ::core::ffi::c_int)
                             != 0
                         {
@@ -2811,19 +2817,19 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 && u_save_cursor() == OK
             {
                 let mut ptr_: *mut *mut ::core::ffi::c_void =
-                    &raw mut repl_from as *mut *mut ::core::ffi::c_void;
+                    repl_from.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
                 let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                    &raw mut repl_to as *mut *mut ::core::ffi::c_void;
+                    repl_to.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL;
                 *ptr__0;
                 let mut stp_0: *mut suggest_T = (sug.su_ga.ga_data as *mut suggest_T)
                     .offset((selected - 1 as ::core::ffi::c_int) as isize);
                 if sug.su_badlen > (*stp_0).st_orglen {
-                    repl_from = xstrnsave(sug.su_badptr, sug.su_badlen as size_t);
+                    repl_from.set(xstrnsave(sug.su_badptr, sug.su_badlen as size_t));
                     vim_snprintf(
                         &raw mut IObuff as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
@@ -2832,10 +2838,10 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         sug.su_badlen - (*stp_0).st_orglen,
                         sug.su_badptr.offset((*stp_0).st_orglen as isize),
                     );
-                    repl_to = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+                    repl_to.set(xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char));
                 } else {
-                    repl_from = xstrnsave(sug.su_badptr, (*stp_0).st_orglen as size_t);
-                    repl_to = xstrdup((*stp_0).st_word);
+                    repl_from.set(xstrnsave(sug.su_badptr, (*stp_0).st_orglen as size_t));
+                    repl_to.set(xstrdup((*stp_0).st_word));
                 }
                 let mut p_0: *mut ::core::ffi::c_char = xmalloc(
                     strlen(line)
@@ -2972,7 +2978,7 @@ unsafe extern "C" fn spell_find_suggest(
     let mut attr: hlf_T = HLF_COUNT;
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut do_combine: bool = false_0 != 0;
-    static mut expr_busy: bool = false_0 != 0;
+    static expr_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut did_intern: bool = false_0 != 0;
     memset(
         su as *mut ::core::ffi::c_void,
@@ -3068,7 +3074,7 @@ unsafe extern "C" fn spell_find_suggest(
     if (if c >= 128 as ::core::ffi::c_int {
         mb_isupper(c) as ::core::ffi::c_int
     } else {
-        spelltab.st_isu[c as usize] as ::core::ffi::c_int
+        (*spelltab.ptr()).st_isu[c as usize] as ::core::ffi::c_int
     }) == 0
         && attr as ::core::ffi::c_uint == HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -3107,14 +3113,14 @@ unsafe extern "C" fn spell_find_suggest(
             5 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
-            if !expr_busy {
-                expr_busy = true_0 != 0;
+            if !expr_busy.get() {
+                expr_busy.set(true_0 != 0);
                 spell_suggest_expr(
                     su,
                     (&raw mut buf as *mut ::core::ffi::c_char)
                         .offset(5 as ::core::ffi::c_int as isize),
                 );
-                expr_busy = false_0 != 0;
+                expr_busy.set(false_0 != 0);
             }
         } else if strncmp(
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -3132,12 +3138,12 @@ unsafe extern "C" fn spell_find_suggest(
             8 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
-            spell_suggest_timeout = atoi(
+            spell_suggest_timeout.set(atoi(
                 (&raw mut buf as *mut ::core::ffi::c_char).offset(8 as ::core::ffi::c_int as isize),
-            );
+            ));
         } else if !did_intern {
             spell_suggest_intern(su, interactive);
-            if sps_flags & SPS_DOUBLE as ::core::ffi::c_int != 0 {
+            if sps_flags.get() & SPS_DOUBLE as ::core::ffi::c_int != 0 {
                 do_combine = true_0 != 0;
             }
             did_intern = true_0 != 0;
@@ -3260,11 +3266,11 @@ unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactiv
     suggest_load_files();
     suggest_try_special(su);
     suggest_try_change(su);
-    if sps_flags & SPS_DOUBLE as ::core::ffi::c_int != 0 {
+    if sps_flags.get() & SPS_DOUBLE as ::core::ffi::c_int != 0 {
         score_comp_sal(su);
     }
-    if sps_flags & SPS_FAST as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        if sps_flags & SPS_BEST as ::core::ffi::c_int != 0 {
+    if sps_flags.get() & SPS_FAST as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+        if sps_flags.get() & SPS_BEST as ::core::ffi::c_int != 0 {
             rescore_suggestions(su);
         }
         suggest_try_soundalike_prep();
@@ -3299,10 +3305,10 @@ unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactiv
         vgetc();
         got_int = false_0 != 0;
     }
-    if sps_flags & SPS_DOUBLE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    if sps_flags.get() & SPS_DOUBLE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
         && (*su).su_ga.ga_len != 0 as ::core::ffi::c_int
     {
-        if sps_flags & SPS_BEST as ::core::ffi::c_int != 0 {
+        if sps_flags.get() & SPS_BEST as ::core::ffi::c_int != 0 {
             rescore_suggestions(su);
         }
         check_suggestions(su, &raw mut (*su).su_ga);
@@ -4251,8 +4257,8 @@ unsafe extern "C" fn suggest_trie_walk(
         }
     }
     let mut time_limit: proftime_T = 0 as proftime_T;
-    if spell_suggest_timeout > 0 as ::core::ffi::c_int {
-        time_limit = profile_setlimit(spell_suggest_timeout as int64_t);
+    if spell_suggest_timeout.get() > 0 as ::core::ffi::c_int {
+        time_limit = profile_setlimit(spell_suggest_timeout.get() as int64_t);
     }
     while depth >= 0 as ::core::ffi::c_int && !got_int {
         sp = (&raw mut stack as *mut trystate_T).offset(depth as isize);
@@ -5573,7 +5579,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     if breakcheckcount == 0 as ::core::ffi::c_int {
                                         os_breakcheck();
                                         breakcheckcount = 1000 as ::core::ffi::c_int;
-                                        if spell_suggest_timeout > 0 as ::core::ffi::c_int
+                                        if spell_suggest_timeout.get() > 0 as ::core::ffi::c_int
                                             && profile_passed_limit(time_limit)
                                                 as ::core::ffi::c_int
                                                 != 0
@@ -6271,10 +6277,10 @@ unsafe extern "C" fn stp_sal_score(
     );
     return soundalike_score(&raw mut goodsound as *mut ::core::ffi::c_char, pbad);
 }
-static mut dumsft: sftword_T = sftword_T {
+static dumsft: GlobalCell<sftword_T> = GlobalCell::new(sftword_T {
     sft_score: 0,
     sft_word: [],
-};
+});
 unsafe extern "C" fn suggest_try_soundalike_prep() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
@@ -6324,8 +6330,8 @@ unsafe extern "C" fn suggest_try_soundalike_finish() {
                 if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
                     xfree(
                         (*hi).hi_key.offset(
-                            -((&raw mut dumsft.sft_word as *mut uint8_t)
-                                .offset_from(&raw mut dumsft as *mut uint8_t)
+                            -((&raw mut (*dumsft.ptr()).sft_word as *mut uint8_t)
+                                .offset_from(dumsft.ptr() as *mut uint8_t)
                                 as isize),
                         ) as *mut sftword_T as *mut ::core::ffi::c_void,
                     );
@@ -6377,8 +6383,8 @@ unsafe extern "C" fn add_sound_suggest(
         );
     } else {
         sft = (*hi).hi_key.offset(
-            -((&raw mut dumsft.sft_word as *mut uint8_t)
-                .offset_from(&raw mut dumsft as *mut uint8_t) as isize),
+            -((&raw mut (*dumsft.ptr()).sft_word as *mut uint8_t)
+                .offset_from(dumsft.ptr() as *mut uint8_t) as isize),
         ) as *mut sftword_T;
         if score >= (*sft).sft_score as ::core::ffi::c_int {
             return;
@@ -6462,7 +6468,7 @@ unsafe extern "C" fn add_sound_suggest(
                         p = &raw mut theword as *mut ::core::ffi::c_char;
                     }
                 }
-                if sps_flags & SPS_DOUBLE as ::core::ffi::c_int != 0 {
+                if sps_flags.get() & SPS_DOUBLE as ::core::ffi::c_int != 0 {
                     if score <= (*su).su_maxscore {
                         add_suggestion(
                             su,
@@ -6490,7 +6496,7 @@ unsafe extern "C" fn add_sound_suggest(
                     if if gc >= 128 as ::core::ffi::c_int {
                         mb_isupper(gc) as ::core::ffi::c_int
                     } else {
-                        spelltab.st_isu[gc as usize] as ::core::ffi::c_int
+                        (*spelltab.ptr()).st_isu[gc as usize] as ::core::ffi::c_int
                     } != 0
                     {
                         let mut bc: ::core::ffi::c_int =
@@ -6498,16 +6504,16 @@ unsafe extern "C" fn add_sound_suggest(
                         if (if bc >= 128 as ::core::ffi::c_int {
                             mb_isupper(bc) as ::core::ffi::c_int
                         } else {
-                            spelltab.st_isu[bc as usize] as ::core::ffi::c_int
+                            (*spelltab.ptr()).st_isu[bc as usize] as ::core::ffi::c_int
                         }) == 0
                             && (if bc >= 128 as ::core::ffi::c_int {
                                 utf_fold(bc)
                             } else {
-                                spelltab.st_fold[bc as usize] as ::core::ffi::c_int
+                                (*spelltab.ptr()).st_fold[bc as usize] as ::core::ffi::c_int
                             }) != (if gc >= 128 as ::core::ffi::c_int {
                                 utf_fold(gc)
                             } else {
-                                spelltab.st_fold[gc as usize] as ::core::ffi::c_int
+                                (*spelltab.ptr()).st_fold[gc as usize] as ::core::ffi::c_int
                             })
                         {
                             goodscore +=
@@ -7262,11 +7268,11 @@ unsafe extern "C" fn spell_edit_score(
                 if (if bc >= 128 as ::core::ffi::c_int {
                     utf_fold(bc)
                 } else {
-                    spelltab.st_fold[bc as usize] as ::core::ffi::c_int
+                    (*spelltab.ptr()).st_fold[bc as usize] as ::core::ffi::c_int
                 }) == (if gc >= 128 as ::core::ffi::c_int {
                     utf_fold(gc)
                 } else {
-                    spelltab.st_fold[gc as usize] as ::core::ffi::c_int
+                    (*spelltab.ptr()).st_fold[gc as usize] as ::core::ffi::c_int
                 }) {
                     *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
                         SCORE_ICASE as ::core::ffi::c_int
@@ -7482,11 +7488,11 @@ unsafe extern "C" fn spell_edit_score_limit_w(
                     if (if bc >= 128 as ::core::ffi::c_int {
                         utf_fold(bc)
                     } else {
-                        spelltab.st_fold[bc as usize] as ::core::ffi::c_int
+                        (*spelltab.ptr()).st_fold[bc as usize] as ::core::ffi::c_int
                     }) == (if gc >= 128 as ::core::ffi::c_int {
                         utf_fold(gc)
                     } else {
-                        spelltab.st_fold[gc as usize] as ::core::ffi::c_int
+                        (*spelltab.ptr()).st_fold[gc as usize] as ::core::ffi::c_int
                     }) {
                         score += SCORE_ICASE as ::core::ffi::c_int;
                     } else if !slang.is_null()

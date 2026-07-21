@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     fn strncmp(
@@ -764,7 +765,7 @@ pub unsafe extern "C" fn os_sleep(mut ms: uint64_t) {
     }
     uv_sleep(ms as ::core::ffi::c_uint);
 }
-static mut tz_cache: [::core::ffi::c_char; 64] = [0; 64];
+static tz_cache: GlobalCell<[::core::ffi::c_char; 64]> = GlobalCell::new([0; 64]);
 #[no_mangle]
 pub unsafe extern "C" fn os_localtime_r(mut clock: *const time_t, mut result: *mut tm) -> *mut tm {
     let mut tz: *const ::core::ffi::c_char =
@@ -773,14 +774,14 @@ pub unsafe extern "C" fn os_localtime_r(mut clock: *const time_t, mut result: *m
         tz = b"\0".as_ptr() as *const ::core::ffi::c_char;
     }
     if strncmp(
-        &raw mut tz_cache as *mut ::core::ffi::c_char,
+        tz_cache.ptr() as *mut ::core::ffi::c_char,
         tz,
         ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(1 as size_t),
     ) != 0 as ::core::ffi::c_int
     {
         tzset();
         xstrlcpy(
-            &raw mut tz_cache as *mut ::core::ffi::c_char,
+            tz_cache.ptr() as *mut ::core::ffi::c_char,
             tz,
             ::core::mem::size_of::<[::core::ffi::c_char; 64]>(),
         );

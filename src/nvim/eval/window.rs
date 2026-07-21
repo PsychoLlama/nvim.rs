@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
     pub type terminal;
@@ -1791,11 +1792,12 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
     return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
 }
-static mut e_cannot_resize_window_in_another_tab_page: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
-        *b"E1308: Cannot resize a window in another tab page\0",
-    )
-};
+static e_cannot_resize_window_in_another_tab_page: GlobalCell<[::core::ffi::c_char; 50]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+            *b"E1308: Cannot resize a window in another tab page\0",
+        )
+    });
 #[no_mangle]
 pub unsafe extern "C" fn win_has_winnr(mut wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
     return wp
@@ -2658,7 +2660,8 @@ pub unsafe extern "C" fn f_win_move_separator(
     }
     if !win_valid(wp) {
         emsg(gettext(
-            &raw const e_cannot_resize_window_in_another_tab_page as *const ::core::ffi::c_char,
+            (e_cannot_resize_window_in_another_tab_page.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         ));
         return;
     }
@@ -2682,7 +2685,8 @@ pub unsafe extern "C" fn f_win_move_statusline(
     }
     if !win_valid(wp) {
         emsg(gettext(
-            &raw const e_cannot_resize_window_in_another_tab_page as *const ::core::ffi::c_char,
+            (e_cannot_resize_window_in_another_tab_page.ptr() as *const _)
+                as *const ::core::ffi::c_char,
         ));
         return;
     }

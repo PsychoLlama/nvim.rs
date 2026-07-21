@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2895,7 +2896,7 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
     );
     restore_v_event(v_event, &raw mut save_v_event);
 }
-static mut was_safe: bool = false_0 != 0;
+static was_safe: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn is_safe_now() -> bool {
     return stuff_empty() as ::core::ffi::c_int != 0
         && typebuf.tb_len == 0 as ::core::ffi::c_int
@@ -2907,7 +2908,7 @@ unsafe extern "C" fn is_safe_now() -> bool {
 pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
     let mut is_safe: bool =
         safe as ::core::ffi::c_int != 0 && is_safe_now() as ::core::ffi::c_int != 0;
-    if was_safe as ::core::ffi::c_int != is_safe as ::core::ffi::c_int {
+    if was_safe.get() as ::core::ffi::c_int != is_safe as ::core::ffi::c_int {
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2930,11 +2931,11 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
             curbuf,
         );
     }
-    was_safe = is_safe;
+    was_safe.set(is_safe);
 }
 #[no_mangle]
 pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
-    if was_safe as ::core::ffi::c_int != 0 && !reason.is_null() {
+    if was_safe.get() as ::core::ffi::c_int != 0 && !reason.is_null() {
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2945,11 +2946,11 @@ pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_
             reason,
         );
     }
-    was_safe = false_0 != 0;
+    was_safe.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_was_safe_state() -> bool {
-    return was_safe;
+    return was_safe.get();
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

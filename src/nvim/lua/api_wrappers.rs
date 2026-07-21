@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
@@ -105,39 +106,39 @@ extern "C" {
     ) -> *mut KeySetLink;
     fn KeyDict_redraw_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_ns_opts_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
-    static mut empty_table: [KeySetLink; 1];
-    static mut context_table: [KeySetLink; 2];
-    static mut set_decoration_provider_table: [KeySetLink; 10];
-    static mut set_extmark_table: [KeySetLink; 36];
-    static mut get_extmark_table: [KeySetLink; 3];
-    static mut get_extmarks_table: [KeySetLink; 6];
-    static mut keymap_table: [KeySetLink; 10];
-    static mut get_commands_table: [KeySetLink; 2];
-    static mut user_command_table: [KeySetLink; 13];
-    static mut win_config_table: [KeySetLink; 25];
-    static mut tabpage_config_table: [KeySetLink; 2];
-    static mut runtime_table: [KeySetLink; 3];
-    static mut eval_statusline_table: [KeySetLink; 8];
-    static mut option_table: [KeySetLink; 5];
-    static mut highlight_table: [KeySetLink; 36];
-    static mut get_highlight_table: [KeySetLink; 5];
-    static mut get_ns_table: [KeySetLink; 2];
-    static mut win_text_height_table: [KeySetLink; 6];
-    static mut clear_autocmds_table: [KeySetLink; 6];
-    static mut create_autocmd_table: [KeySetLink; 10];
-    static mut exec_autocmds_table: [KeySetLink; 7];
-    static mut get_autocmds_table: [KeySetLink; 7];
-    static mut create_augroup_table: [KeySetLink; 2];
-    static mut cmd_table: [KeySetLink; 12];
-    static mut cmd_opts_table: [KeySetLink; 2];
-    static mut echo_opts_table: [KeySetLink; 11];
-    static mut exec_opts_table: [KeySetLink; 2];
-    static mut buf_attach_table: [KeySetLink; 8];
-    static mut buf_delete_table: [KeySetLink; 3];
-    static mut open_term_table: [KeySetLink; 3];
-    static mut complete_set_table: [KeySetLink; 2];
-    static mut redraw_table: [KeySetLink; 11];
-    static mut ns_opts_table: [KeySetLink; 2];
+    static empty_table: GlobalCell<[KeySetLink; 1]>;
+    static context_table: GlobalCell<[KeySetLink; 2]>;
+    static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]>;
+    static set_extmark_table: GlobalCell<[KeySetLink; 36]>;
+    static get_extmark_table: GlobalCell<[KeySetLink; 3]>;
+    static get_extmarks_table: GlobalCell<[KeySetLink; 6]>;
+    static keymap_table: GlobalCell<[KeySetLink; 10]>;
+    static get_commands_table: GlobalCell<[KeySetLink; 2]>;
+    static user_command_table: GlobalCell<[KeySetLink; 13]>;
+    static win_config_table: GlobalCell<[KeySetLink; 25]>;
+    static tabpage_config_table: GlobalCell<[KeySetLink; 2]>;
+    static runtime_table: GlobalCell<[KeySetLink; 3]>;
+    static eval_statusline_table: GlobalCell<[KeySetLink; 8]>;
+    static option_table: GlobalCell<[KeySetLink; 5]>;
+    static highlight_table: GlobalCell<[KeySetLink; 36]>;
+    static get_highlight_table: GlobalCell<[KeySetLink; 5]>;
+    static get_ns_table: GlobalCell<[KeySetLink; 2]>;
+    static win_text_height_table: GlobalCell<[KeySetLink; 6]>;
+    static clear_autocmds_table: GlobalCell<[KeySetLink; 6]>;
+    static create_autocmd_table: GlobalCell<[KeySetLink; 10]>;
+    static exec_autocmds_table: GlobalCell<[KeySetLink; 7]>;
+    static get_autocmds_table: GlobalCell<[KeySetLink; 7]>;
+    static create_augroup_table: GlobalCell<[KeySetLink; 2]>;
+    static cmd_table: GlobalCell<[KeySetLink; 12]>;
+    static cmd_opts_table: GlobalCell<[KeySetLink; 2]>;
+    static echo_opts_table: GlobalCell<[KeySetLink; 11]>;
+    static exec_opts_table: GlobalCell<[KeySetLink; 2]>;
+    static buf_attach_table: GlobalCell<[KeySetLink; 8]>;
+    static buf_delete_table: GlobalCell<[KeySetLink; 3]>;
+    static open_term_table: GlobalCell<[KeySetLink; 3]>;
+    static complete_set_table: GlobalCell<[KeySetLink; 2]>;
+    static redraw_table: GlobalCell<[KeySetLink; 11]>;
+    static ns_opts_table: GlobalCell<[KeySetLink; 2]>;
     fn api_free_string(value: String_0);
     fn api_free_object(value: Object);
     fn api_free_dict(value: Dict);
@@ -193,7 +194,7 @@ extern "C" {
     );
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_is_deferred_safe() -> bool;
-    static mut active_lstate: *mut lua_State;
+    static active_lstate: GlobalCell<*mut lua_State>;
     fn nvim_get_autocmds(
         opts: *mut KeyDict_get_autocmds,
         arena: *mut Arena,
@@ -1326,19 +1327,19 @@ unsafe extern "C" fn nlua_api_nvim_get_autocmds(mut lstate: *mut lua_State) -> :
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_autocmds(&raw mut arg1, &raw mut arena, &raw mut err);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut get_autocmds_table as *mut KeySetLink,
+            get_autocmds_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1466,8 +1467,8 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
                 err_param =
                     b"event\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_create_autocmd(
                     LUA_INTERNAL_CALL,
                     arg1,
@@ -1481,13 +1482,13 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_luarefs_free_object(arg1);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut create_autocmd_table as *mut KeySetLink,
+            create_autocmd_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1542,10 +1543,10 @@ unsafe extern "C" fn nlua_api_nvim_del_autocmd(mut lstate: *mut lua_State) -> ::
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_autocmd(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1643,14 +1644,14 @@ unsafe extern "C" fn nlua_api_nvim_clear_autocmds(
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_clear_autocmds(&raw mut arg1, &raw mut arena, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut clear_autocmds_table as *mut KeySetLink,
+            clear_autocmds_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1732,8 +1733,8 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_create_augroup(LUA_INTERNAL_CALL, arg1, &raw mut arg2, &raw mut err);
                 nlua_push_Integer(
                     lstate,
@@ -1741,12 +1742,12 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut create_augroup_table as *mut KeySetLink,
+            create_augroup_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1803,10 +1804,10 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_id(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_augroup_by_id(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1867,10 +1868,10 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_augroup_by_name(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -1977,16 +1978,16 @@ unsafe extern "C" fn nlua_api_nvim_exec_autocmds(mut lstate: *mut lua_State) -> 
                 err_param =
                     b"event\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_exec_autocmds(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_luarefs_free_object(arg1);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut exec_autocmds_table as *mut KeySetLink,
+            exec_autocmds_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -2044,15 +2045,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_line_count(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -2147,8 +2148,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(mut lstate: *mut lua_State) -> ::c
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret =
                         nvim_buf_attach(LUA_INTERNAL_CALL, arg1, arg2, &raw mut arg3, &raw mut err);
                     nlua_push_Boolean(
@@ -2157,13 +2158,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(mut lstate: *mut lua_State) -> ::c
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut buf_attach_table as *mut KeySetLink,
+            buf_attach_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -2242,8 +2243,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(mut lstate: *mut lua_State) -> 
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_buf_get_lines(
                             LUA_INTERNAL_CALL,
                             arg1,
@@ -2262,7 +2263,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(mut lstate: *mut lua_State) -> 
                                     | kNluaPushFreeRefs as ::core::ffi::c_int,
                             );
                         }
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
@@ -2360,8 +2361,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> 
                                 err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                     as *mut ::core::ffi::c_char;
                             } else {
-                                save_active_lstate = active_lstate;
-                                active_lstate = lstate;
+                                save_active_lstate = active_lstate.get();
+                                active_lstate.set(lstate);
                                 nvim_buf_set_lines(
                                     LUA_INTERNAL_CALL,
                                     arg1,
@@ -2372,7 +2373,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> 
                                     &raw mut arena,
                                     &raw mut err,
                                 );
-                                active_lstate = save_active_lstate;
+                                active_lstate.set(save_active_lstate);
                             }
                         }
                     }
@@ -2480,8 +2481,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> :
                                     err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                         as *mut ::core::ffi::c_char;
                                 } else {
-                                    save_active_lstate = active_lstate;
-                                    active_lstate = lstate;
+                                    save_active_lstate = active_lstate.get();
+                                    active_lstate.set(lstate);
                                     nvim_buf_set_text(
                                         LUA_INTERNAL_CALL,
                                         arg1,
@@ -2493,7 +2494,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> :
                                         &raw mut arena,
                                         &raw mut err,
                                     );
-                                    active_lstate = save_active_lstate;
+                                    active_lstate.set(save_active_lstate);
                                 }
                             }
                         }
@@ -2603,8 +2604,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> :
                                 err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                     as *mut ::core::ffi::c_char;
                             } else {
-                                save_active_lstate = active_lstate;
-                                active_lstate = lstate;
+                                save_active_lstate = active_lstate.get();
+                                active_lstate.set(lstate);
                                 ret = nvim_buf_get_text(
                                     LUA_INTERNAL_CALL,
                                     arg1,
@@ -2625,7 +2626,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> :
                                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                                     );
                                 }
-                                active_lstate = save_active_lstate;
+                                active_lstate.set(save_active_lstate);
                             }
                         }
                     }
@@ -2634,7 +2635,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> :
         }
         api_luarefs_free_keydict(
             &raw mut arg6 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -2699,8 +2700,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_offset(arg1, arg2, &raw mut err);
                 nlua_push_Integer(
                     lstate,
@@ -2708,7 +2709,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -2778,8 +2779,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_var(mut lstate: *mut lua_State) -> ::
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_var(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -2787,7 +2788,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_var(mut lstate: *mut lua_State) -> ::
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -2846,15 +2847,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_get_changedtick(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -2926,8 +2927,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_keymap(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Array(
                     lstate,
@@ -2935,7 +2936,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -3064,8 +3065,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             nvim_buf_set_keymap(
                                 LUA_INTERNAL_CALL,
                                 arg1,
@@ -3075,7 +3076,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
                                 &raw mut arg5,
                                 &raw mut err,
                             );
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                 }
@@ -3083,7 +3084,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
         }
         api_luarefs_free_keydict(
             &raw mut arg5 as *mut ::core::ffi::c_void,
-            &raw mut keymap_table as *mut KeySetLink,
+            keymap_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3158,10 +3159,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_buf_del_keymap(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -3237,10 +3238,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_var(mut lstate: *mut lua_State) -> ::
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_buf_set_var(arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_object(arg3);
@@ -3308,10 +3309,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_var(mut lstate: *mut lua_State) -> ::
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_buf_del_var(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -3371,15 +3372,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(mut lstate: *mut lua_State) -> :
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_get_name(arg1, &raw mut err);
             nlua_push_String(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3444,10 +3445,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_name(mut lstate: *mut lua_State) -> :
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_buf_set_name(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -3504,15 +3505,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(mut lstate: *mut lua_State) -> 
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_is_loaded(arg1);
             nlua_push_Boolean(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3601,15 +3602,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_delete(mut lstate: *mut lua_State) -> ::c
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_buf_delete(arg1, &raw mut arg2, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_keydict(
                 &raw mut arg2 as *mut ::core::ffi::c_void,
-                &raw mut buf_delete_table as *mut KeySetLink,
+                buf_delete_table.ptr() as *mut KeySetLink,
             );
         }
     }
@@ -3666,15 +3667,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(mut lstate: *mut lua_State) -> :
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_is_valid(arg1);
             nlua_push_Boolean(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3740,8 +3741,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(mut lstate: *mut lua_State) -> :
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_del_mark(arg1, arg2, &raw mut err);
                 nlua_push_Boolean(
                     lstate,
@@ -3749,7 +3750,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(mut lstate: *mut lua_State) -> :
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -3845,8 +3846,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> :
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             ret = nvim_buf_set_mark(
                                 arg1,
                                 arg2,
@@ -3861,7 +3862,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> :
                                 kNluaPushSpecial as ::core::ffi::c_int
                                     | kNluaPushFreeRefs as ::core::ffi::c_int,
                             );
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                 }
@@ -3869,7 +3870,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> :
         }
         api_luarefs_free_keydict(
             &raw mut arg5 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3939,8 +3940,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(mut lstate: *mut lua_State) -> :
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_mark(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Array(
                     lstate,
@@ -3948,7 +3949,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(mut lstate: *mut lua_State) -> :
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -4014,8 +4015,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(mut lstate: *mut lua_State) -> ::cor
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_call(arg1, arg2, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -4023,7 +4024,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(mut lstate: *mut lua_State) -> ::cor
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_free_luaref(arg2);
         }
@@ -4085,15 +4086,15 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(mut lstate: *mut lua_State) -> ::c
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__buf_stats(arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4206,20 +4207,20 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(mut lstate: *mut lua_State) -> ::co
                 err_param =
                     b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_parse_cmd(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_keydict(
                     lstate,
                     &raw mut ret as *mut ::core::ffi::c_void,
-                    &raw mut cmd_table as *mut KeySetLink,
+                    cmd_table.ptr() as *mut KeySetLink,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4392,8 +4393,8 @@ unsafe extern "C" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ff
                 &raw mut err,
             );
             if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_cmd(
                     LUA_INTERNAL_CALL,
                     &raw mut arg1,
@@ -4407,16 +4408,16 @@ unsafe extern "C" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ff
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_luarefs_free_keydict(
                 &raw mut arg1 as *mut ::core::ffi::c_void,
-                &raw mut cmd_table as *mut KeySetLink,
+                cmd_table.ptr() as *mut KeySetLink,
             );
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut cmd_opts_table as *mut KeySetLink,
+            cmd_opts_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4570,8 +4571,8 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
                     err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_create_user_command(
                         LUA_INTERNAL_CALL,
                         arg1,
@@ -4579,14 +4580,14 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
                         &raw mut arg3,
                         &raw mut err,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
                 api_luarefs_free_object(arg2);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut user_command_table as *mut KeySetLink,
+            user_command_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4647,10 +4648,10 @@ unsafe extern "C" fn nlua_api_nvim_del_user_command(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_user_command(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4810,8 +4811,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         nvim_buf_create_user_command(
                             LUA_INTERNAL_CALL,
                             arg1,
@@ -4820,7 +4821,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
                             &raw mut arg4,
                             &raw mut err,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
                 api_luarefs_free_object(arg3);
@@ -4828,7 +4829,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
         }
         api_luarefs_free_keydict(
             &raw mut arg4 as *mut ::core::ffi::c_void,
-            &raw mut user_command_table as *mut KeySetLink,
+            user_command_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4895,10 +4896,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_buf_del_user_command(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -4968,19 +4969,19 @@ unsafe extern "C" fn nlua_api_nvim_get_commands(mut lstate: *mut lua_State) -> :
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_commands(&raw mut arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut get_commands_table as *mut KeySetLink,
+            get_commands_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -5057,8 +5058,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_commands(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
@@ -5066,12 +5067,12 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut get_commands_table as *mut KeySetLink,
+            get_commands_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -5140,8 +5141,8 @@ unsafe extern "C" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::f
                 err_param =
                     b"src\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_exec(LUA_INTERNAL_CALL, arg1, arg2, &raw mut err);
                 nlua_push_String(
                     lstate,
@@ -5149,7 +5150,7 @@ unsafe extern "C" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::f
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_free_string(ret);
             }
         }
@@ -5216,15 +5217,15 @@ unsafe extern "C" fn nlua_api_nvim_command_output(
             err_param =
                 b"command\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_command_output(LUA_INTERNAL_CALL, arg1, &raw mut err);
             nlua_push_String(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
             api_free_string(ret);
         }
     }
@@ -5284,15 +5285,15 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_number(
             err_param =
                 b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_buf_get_number(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -5368,10 +5369,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
                         err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         nvim_buf_clear_highlight(arg1, arg2, arg3, arg4, &raw mut err);
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
@@ -5469,8 +5470,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
                                 err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                                     as *mut ::core::ffi::c_char;
                             } else {
-                                save_active_lstate = active_lstate;
-                                active_lstate = lstate;
+                                save_active_lstate = active_lstate.get();
+                                active_lstate.set(lstate);
                                 ret = nvim_buf_add_highlight(
                                     arg1,
                                     arg2,
@@ -5486,7 +5487,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
                                     kNluaPushSpecial as ::core::ffi::c_int
                                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                                 );
-                                active_lstate = save_active_lstate;
+                                active_lstate.set(save_active_lstate);
                             }
                         }
                     }
@@ -5589,8 +5590,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
                             err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             ret = nvim_buf_set_virtual_text(
                                 arg1,
                                 arg2,
@@ -5605,7 +5606,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
                                 kNluaPushSpecial as ::core::ffi::c_int
                                     | kNluaPushFreeRefs as ::core::ffi::c_int,
                             );
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                 }
@@ -5613,7 +5614,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
         }
         api_luarefs_free_keydict(
             &raw mut arg5 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -5679,8 +5680,8 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(mut lstate: *mut lua_State) -> :
                 err_param =
                     b"hl_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_hl_by_id(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
@@ -5688,7 +5689,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(mut lstate: *mut lua_State) -> :
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -5760,8 +5761,8 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_hl_by_name(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
@@ -5769,7 +5770,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -5836,15 +5837,15 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_option_info(arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -5912,10 +5913,10 @@ unsafe extern "C" fn nlua_api_nvim_set_option(mut lstate: *mut lua_State) -> ::c
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_option(LUA_INTERNAL_CALL, arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_luarefs_free_object(arg2);
         }
@@ -5980,15 +5981,15 @@ unsafe extern "C" fn nlua_api_nvim_get_option(mut lstate: *mut lua_State) -> ::c
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_option(arg1, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
             api_free_object(ret);
         }
     }
@@ -6060,8 +6061,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_option(
                 err_param =
                     b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_buf_get_option(arg1, arg2, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -6069,7 +6070,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_option(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_free_object(ret);
             }
         }
@@ -6147,10 +6148,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_option(
                     err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_buf_set_option(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_object(arg3);
@@ -6224,8 +6225,8 @@ unsafe extern "C" fn nlua_api_nvim_win_get_option(
                 err_param =
                     b"window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_win_get_option(arg1, arg2, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -6233,7 +6234,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_option(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_free_object(ret);
             }
         }
@@ -6311,10 +6312,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_option(
                     err_param = b"window\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_win_set_option(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_object(arg3);
@@ -6375,10 +6376,10 @@ unsafe extern "C" fn nlua_api_nvim_out_write(mut lstate: *mut lua_State) -> ::co
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_out_write(arg1);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -6436,10 +6437,10 @@ unsafe extern "C" fn nlua_api_nvim_err_write(mut lstate: *mut lua_State) -> ::co
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_err_write(arg1);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -6497,10 +6498,10 @@ unsafe extern "C" fn nlua_api_nvim_err_writeln(mut lstate: *mut lua_State) -> ::
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_err_writeln(arg1);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -6579,8 +6580,8 @@ unsafe extern "C" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core:
                     err_param =
                         b"msg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_notify(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Object(
                         lstate,
@@ -6588,7 +6589,7 @@ unsafe extern "C" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core:
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -6652,15 +6653,15 @@ unsafe extern "C" fn nlua_api_nvim_create_namespace(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_create_namespace(arg1);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -6717,15 +6718,15 @@ unsafe extern "C" fn nlua_api_nvim_get_namespaces(
                 b"nvim_get_namespaces\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_namespaces(&raw mut arena);
         nlua_push_Dict(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -6821,8 +6822,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_buf_get_extmark_by_id(
                             arg1,
                             arg2,
@@ -6837,14 +6838,14 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
                             kNluaPushSpecial as ::core::ffi::c_int
                                 | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg4 as *mut ::core::ffi::c_void,
-            &raw mut get_extmark_table as *mut KeySetLink,
+            get_extmark_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -6966,8 +6967,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             ret = nvim_buf_get_extmarks(
                                 arg1,
                                 arg2,
@@ -6983,7 +6984,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
                                 kNluaPushSpecial as ::core::ffi::c_int
                                     | kNluaPushFreeRefs as ::core::ffi::c_int,
                             );
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                     api_luarefs_free_object(arg3);
@@ -6993,7 +6994,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
         }
         api_luarefs_free_keydict(
             &raw mut arg5 as *mut ::core::ffi::c_void,
-            &raw mut get_extmarks_table as *mut KeySetLink,
+            get_extmarks_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7223,8 +7224,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             ret = nvim_buf_set_extmark(
                                 arg1,
                                 arg2,
@@ -7239,7 +7240,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
                                 kNluaPushSpecial as ::core::ffi::c_int
                                     | kNluaPushFreeRefs as ::core::ffi::c_int,
                             );
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                 }
@@ -7247,7 +7248,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
         }
         api_luarefs_free_keydict(
             &raw mut arg5 as *mut ::core::ffi::c_void,
-            &raw mut set_extmark_table as *mut KeySetLink,
+            set_extmark_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7317,8 +7318,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_buf_del_extmark(arg1, arg2, arg3, &raw mut err);
                     nlua_push_Boolean(
                         lstate,
@@ -7326,7 +7327,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -7404,10 +7405,10 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         nvim_buf_clear_namespace(arg1, arg2, arg3, arg4, &raw mut err);
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
@@ -7504,15 +7505,15 @@ unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
                 err_param =
                     b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_decoration_provider(arg1, &raw mut arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut set_decoration_provider_table as *mut KeySetLink,
+            set_decoration_provider_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7585,8 +7586,8 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim__buf_debug_extmarks(arg1, arg2, arg3, &raw mut err);
                     nlua_push_String(
                         lstate,
@@ -7594,7 +7595,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                     api_free_string(ret);
                 }
             }
@@ -7681,15 +7682,15 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(mut lstate: *mut lua_State) -> ::core
                 err_param =
                     b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim__ns_set(arg1, &raw mut arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut ns_opts_table as *mut KeySetLink,
+            ns_opts_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7753,15 +7754,15 @@ unsafe extern "C" fn nlua_api_nvim__ns_get(mut lstate: *mut lua_State) -> ::core
             err_param =
                 b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__ns_get(arg1, &raw mut arena, &raw mut err);
             nlua_push_keydict(
                 lstate,
                 &raw mut ret as *mut ::core::ffi::c_void,
-                &raw mut ns_opts_table as *mut KeySetLink,
+                ns_opts_table.ptr() as *mut KeySetLink,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7864,8 +7865,8 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_option_value(arg1, &raw mut arg2, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -7873,13 +7874,13 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_free_object(ret);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut option_table as *mut KeySetLink,
+            option_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -7987,8 +7988,8 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
                     err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_set_option_value(
                         LUA_INTERNAL_CALL,
                         arg1,
@@ -7996,14 +7997,14 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
                         &raw mut arg3,
                         &raw mut err,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
                 api_luarefs_free_object(arg2);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut option_table as *mut KeySetLink,
+            option_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8060,15 +8061,15 @@ unsafe extern "C" fn nlua_api_nvim_get_all_options_info(
                 b"nvim_get_all_options_info\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_all_options_info(&raw mut arena, &raw mut err);
         nlua_push_Dict(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -8171,20 +8172,20 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info2(
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_option_info2(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
                     0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut option_table as *mut KeySetLink,
+            option_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8247,15 +8248,15 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
             err_param =
                 b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_tabpage_list_wins(arg1, &raw mut arena, &raw mut err);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8326,8 +8327,8 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
                 err_param =
                     b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_tabpage_get_var(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -8335,7 +8336,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -8412,10 +8413,10 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_var(
                     err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_tabpage_set_var(arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_object(arg3);
@@ -8485,10 +8486,10 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_del_var(
                 err_param =
                     b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_tabpage_del_var(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -8548,15 +8549,15 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
             err_param =
                 b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_tabpage_get_win(arg1, &raw mut err);
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8619,10 +8620,10 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_win(
                 err_param =
                     b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_tabpage_set_win(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -8682,15 +8683,15 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
             err_param =
                 b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_tabpage_get_number(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8749,15 +8750,15 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
             err_param =
                 b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_tabpage_is_valid(arg1);
             nlua_push_Boolean(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8851,21 +8852,21 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(mut lstate: *mut lua_State) -> :
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_open_tabpage(arg1, arg2, &raw mut arg3, &raw mut err);
                         nlua_push_handle(
                             lstate,
                             ret as handle_T,
                             0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
             api_luarefs_free_keydict(
                 &raw mut arg3 as *mut ::core::ffi::c_void,
-                &raw mut tabpage_config_table as *mut KeySetLink,
+                tabpage_config_table.ptr() as *mut KeySetLink,
             );
         }
     }
@@ -8925,10 +8926,10 @@ unsafe extern "C" fn nlua_api_nvim_ui_send(mut lstate: *mut lua_State) -> ::core
             err_param =
                 b"content\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_ui_send(LUA_INTERNAL_CALL, arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -8990,15 +8991,15 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_hl_id_by_name(arg1);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9091,20 +9092,20 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(mut lstate: *mut lua_State) -> ::core:
                 err_param =
                     b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_hl(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
                     0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut get_highlight_table as *mut KeySetLink,
+            get_highlight_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9319,16 +9320,16 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(mut lstate: *mut lua_State) -> ::core:
                     err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_set_hl(LUA_INTERNAL_CALL, arg1, arg2, &raw mut arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut highlight_table as *mut KeySetLink,
+            highlight_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9399,19 +9400,19 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_ns(mut lstate: *mut lua_State) -> ::co
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_hl_ns(&raw mut arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut get_ns_table as *mut KeySetLink,
+            get_ns_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9467,10 +9468,10 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns(mut lstate: *mut lua_State) -> ::co
             err_param =
                 b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_set_hl_ns(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9521,10 +9522,10 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
             err_param =
                 b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_set_hl_ns_fast(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9598,10 +9599,10 @@ unsafe extern "C" fn nlua_api_nvim_feedkeys(mut lstate: *mut lua_State) -> ::cor
                     err_param = b"keys\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_feedkeys(arg1, arg2, arg3);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -9656,15 +9657,15 @@ unsafe extern "C" fn nlua_api_nvim_input(mut lstate: *mut lua_State) -> ::core::
             err_param =
                 b"keys\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_input(LUA_INTERNAL_CALL, arg1);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9754,10 +9755,10 @@ unsafe extern "C" fn nlua_api_nvim_input_mouse(mut lstate: *mut lua_State) -> ::
                                 err_param = b"button\0".as_ptr() as *const ::core::ffi::c_char
                                     as *mut ::core::ffi::c_char;
                             } else {
-                                save_active_lstate = active_lstate;
-                                active_lstate = lstate;
+                                save_active_lstate = active_lstate.get();
+                                active_lstate.set(lstate);
                                 nvim_input_mouse(arg1, arg2, arg3, arg4, arg5, arg6, &raw mut err);
-                                active_lstate = save_active_lstate;
+                                active_lstate.set(save_active_lstate);
                             }
                         }
                     }
@@ -9845,8 +9846,8 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
                         err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_replace_termcodes(arg1, arg2, arg3, arg4);
                         nlua_push_String(
                             lstate,
@@ -9854,7 +9855,7 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
                             kNluaPushSpecial as ::core::ffi::c_int
                                 | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                         api_free_string(ret);
                     }
                 }
@@ -9918,15 +9919,15 @@ unsafe extern "C" fn nlua_api_nvim_strwidth(mut lstate: *mut lua_State) -> ::cor
             err_param =
                 b"text\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_strwidth(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -9983,15 +9984,15 @@ unsafe extern "C" fn nlua_api_nvim_list_runtime_paths(
                 b"nvim_list_runtime_paths\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_runtime_paths(&raw mut arena, &raw mut err);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -10047,15 +10048,15 @@ unsafe extern "C" fn nlua_api_nvim__runtime_inspect(
                 b"nvim__runtime_inspect\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim__runtime_inspect(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -10118,8 +10119,8 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_runtime_file(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Array(
                     lstate,
@@ -10127,7 +10128,7 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -10182,15 +10183,15 @@ unsafe extern "C" fn nlua_api_nvim__get_lib_dir(mut lstate: *mut lua_State) -> :
                 b"nvim__get_lib_dir\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim__get_lib_dir();
         nlua_push_String(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
         api_free_string(ret);
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10274,8 +10275,8 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(mut lstate: *mut lua_State) -> :
                     err_param =
                         b"pat\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret =
                         nvim__get_runtime(arg1, arg2, &raw mut arg3, &raw mut arena, &raw mut err);
                     nlua_push_Array(
@@ -10284,13 +10285,13 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(mut lstate: *mut lua_State) -> :
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut runtime_table as *mut KeySetLink,
+            runtime_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10350,10 +10351,10 @@ unsafe extern "C" fn nlua_api_nvim_set_current_dir(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"dir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_set_current_dir(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10409,15 +10410,15 @@ unsafe extern "C" fn nlua_api_nvim_get_current_line(
                 b"nvim_get_current_line\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_current_line(&raw mut arena, &raw mut err);
         nlua_push_String(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -10485,10 +10486,10 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
                 err_param =
                     b"line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_current_line(arg1, &raw mut arena, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -10549,10 +10550,10 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
                 &raw const e_textlock as *const ::core::ffi::c_char,
             );
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_current_line(&raw mut arena, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10615,15 +10616,15 @@ unsafe extern "C" fn nlua_api_nvim_get_var(mut lstate: *mut lua_State) -> ::core
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_var(arg1, &raw mut arena, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10691,10 +10692,10 @@ unsafe extern "C" fn nlua_api_nvim_set_var(mut lstate: *mut lua_State) -> ::core
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_var(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_luarefs_free_object(arg2);
         }
@@ -10755,10 +10756,10 @@ unsafe extern "C" fn nlua_api_nvim_del_var(mut lstate: *mut lua_State) -> ::core
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_del_var(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10821,15 +10822,15 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(mut lstate: *mut lua_State) -> ::cor
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_vvar(arg1, &raw mut arena, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -10897,10 +10898,10 @@ unsafe extern "C" fn nlua_api_nvim_set_vvar(mut lstate: *mut lua_State) -> ::cor
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_vvar(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_luarefs_free_object(arg2);
         }
@@ -11048,8 +11049,8 @@ unsafe extern "C" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::f
                     err_param = b"chunks\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_echo(arg1, arg2, &raw mut arg3, &raw mut err);
                     nlua_push_Object(
                         lstate,
@@ -11057,13 +11058,13 @@ unsafe extern "C" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::f
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg3 as *mut ::core::ffi::c_void,
-            &raw mut echo_opts_table as *mut KeySetLink,
+            echo_opts_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -11118,15 +11119,15 @@ unsafe extern "C" fn nlua_api_nvim_list_bufs(mut lstate: *mut lua_State) -> ::co
                 b"nvim_list_bufs\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_bufs(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11178,15 +11179,15 @@ unsafe extern "C" fn nlua_api_nvim_get_current_buf(
                 b"nvim_get_current_buf\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_current_buf();
         nlua_push_handle(
             lstate,
             ret as handle_T,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11251,10 +11252,10 @@ unsafe extern "C" fn nlua_api_nvim_set_current_buf(
                 err_param =
                     b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_current_buf(arg1, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -11310,15 +11311,15 @@ unsafe extern "C" fn nlua_api_nvim_list_wins(mut lstate: *mut lua_State) -> ::co
                 b"nvim_list_wins\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_wins(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11370,15 +11371,15 @@ unsafe extern "C" fn nlua_api_nvim_get_current_win(
                 b"nvim_get_current_win\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_current_win();
         nlua_push_handle(
             lstate,
             ret as handle_T,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11443,10 +11444,10 @@ unsafe extern "C" fn nlua_api_nvim_set_current_win(
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_current_win(arg1, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -11510,8 +11511,8 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(mut lstate: *mut lua_State) -> ::c
                 err_param =
                     b"listed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_create_buf(arg1, arg2, &raw mut err);
                 nlua_push_handle(
                     lstate,
@@ -11519,7 +11520,7 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(mut lstate: *mut lua_State) -> ::c
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -11610,8 +11611,8 @@ unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::co
                     err_param =
                         b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_open_term(arg1, &raw mut arg2, &raw mut err);
                     nlua_push_Integer(
                         lstate,
@@ -11619,12 +11620,12 @@ unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::co
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_keydict(
                 &raw mut arg2 as *mut ::core::ffi::c_void,
-                &raw mut open_term_table as *mut KeySetLink,
+                open_term_table.ptr() as *mut KeySetLink,
             );
         }
     }
@@ -11690,10 +11691,10 @@ unsafe extern "C" fn nlua_api_nvim_chan_send(mut lstate: *mut lua_State) -> ::co
                 err_param =
                     b"chan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_chan_send(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -11749,15 +11750,15 @@ unsafe extern "C" fn nlua_api_nvim_list_tabpages(mut lstate: *mut lua_State) -> 
                 b"nvim_list_tabpages\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_tabpages(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11809,15 +11810,15 @@ unsafe extern "C" fn nlua_api_nvim_get_current_tabpage(
                 b"nvim_get_current_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_current_tabpage();
         nlua_push_handle(
             lstate,
             ret as handle_T,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -11882,10 +11883,10 @@ unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
                 err_param =
                     b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_set_current_tabpage(arg1, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -11966,8 +11967,8 @@ unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::
                         err_param = b"data\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_paste(
                             LUA_INTERNAL_CALL,
                             arg1,
@@ -11982,7 +11983,7 @@ unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::
                             kNluaPushSpecial as ::core::ffi::c_int
                                 | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
@@ -12075,10 +12076,10 @@ unsafe extern "C" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ff
                             err_param = b"lines\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
-                            save_active_lstate = active_lstate;
-                            active_lstate = lstate;
+                            save_active_lstate = active_lstate.get();
+                            active_lstate.set(lstate);
                             nvim_put(arg1, arg2, arg3, arg4, &raw mut arena, &raw mut err);
-                            active_lstate = save_active_lstate;
+                            active_lstate.set(save_active_lstate);
                         }
                     }
                 }
@@ -12144,15 +12145,15 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_color_by_name(arg1);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12207,15 +12208,15 @@ unsafe extern "C" fn nlua_api_nvim_get_color_map(mut lstate: *mut lua_State) -> 
                 b"nvim_get_color_map\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_color_map(&raw mut arena);
         nlua_push_Dict(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -12297,19 +12298,19 @@ unsafe extern "C" fn nlua_api_nvim_get_context(mut lstate: *mut lua_State) -> ::
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_context(&raw mut arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut context_table as *mut KeySetLink,
+            context_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12373,15 +12374,15 @@ unsafe extern "C" fn nlua_api_nvim_load_context(mut lstate: *mut lua_State) -> :
             err_param =
                 b"dict\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_load_context(arg1, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12429,15 +12430,15 @@ unsafe extern "C" fn nlua_api_nvim_get_mode(mut lstate: *mut lua_State) -> ::cor
             b"Expected 0 arguments\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_get_mode(&raw mut arena);
         nlua_push_Dict(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -12500,15 +12501,15 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(mut lstate: *mut lua_State) -> ::c
             err_param =
                 b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_keymap(arg1, &raw mut arena);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12627,8 +12628,8 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(mut lstate: *mut lua_State) -> ::c
                         err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         nvim_set_keymap(
                             LUA_INTERNAL_CALL,
                             arg1,
@@ -12637,14 +12638,14 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(mut lstate: *mut lua_State) -> ::c
                             &raw mut arg4,
                             &raw mut err,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg4 as *mut ::core::ffi::c_void,
-            &raw mut keymap_table as *mut KeySetLink,
+            keymap_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12711,10 +12712,10 @@ unsafe extern "C" fn nlua_api_nvim_del_keymap(mut lstate: *mut lua_State) -> ::c
                 err_param =
                     b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_del_keymap(LUA_INTERNAL_CALL, arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -12776,15 +12777,15 @@ unsafe extern "C" fn nlua_api_nvim_get_chan_info(mut lstate: *mut lua_State) -> 
             err_param =
                 b"chan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_chan_info(LUA_INTERNAL_CALL, arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -12839,15 +12840,15 @@ unsafe extern "C" fn nlua_api_nvim_list_chans(mut lstate: *mut lua_State) -> ::c
                 b"nvim_list_chans\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_chans(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -12908,15 +12909,15 @@ unsafe extern "C" fn nlua_api_nvim__id(mut lstate: *mut lua_State) -> ::core::ff
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"obj\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__id(arg1, &raw mut arena);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
             api_luarefs_free_object(arg1);
         }
     }
@@ -12981,15 +12982,15 @@ unsafe extern "C" fn nlua_api_nvim__id_array(mut lstate: *mut lua_State) -> ::co
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"arr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__id_array(arg1, &raw mut arena);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13053,15 +13054,15 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(mut lstate: *mut lua_State) -> ::cor
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"dct\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__id_dict(arg1, &raw mut arena);
             nlua_push_Dict(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13117,15 +13118,15 @@ unsafe extern "C" fn nlua_api_nvim__id_float(mut lstate: *mut lua_State) -> ::co
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"flt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__id_float(arg1);
             nlua_push_Float(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13180,15 +13181,15 @@ unsafe extern "C" fn nlua_api_nvim__stats(mut lstate: *mut lua_State) -> ::core:
                 b"nvim__stats\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim__stats(&raw mut arena);
         nlua_push_Dict(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -13242,15 +13243,15 @@ unsafe extern "C" fn nlua_api_nvim_list_uis(mut lstate: *mut lua_State) -> ::cor
                 b"nvim_list_uis\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         ret = nvim_list_uis(&raw mut arena);
         nlua_push_Array(
             lstate,
             ret,
             kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -13311,15 +13312,15 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_proc_children(arg1, &raw mut arena, &raw mut err);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13378,15 +13379,15 @@ unsafe extern "C" fn nlua_api_nvim_get_proc(mut lstate: *mut lua_State) -> ::cor
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_get_proc(arg1, &raw mut arena, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13472,17 +13473,17 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
                         err_param = b"item\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         nvim_select_popupmenu_item(arg1, arg2, arg3, &raw mut arg4, &raw mut err);
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg4 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13554,8 +13555,8 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(mut lstate: *mut lua_State) -> 
                     err_param = b"grid\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim__inspect_cell(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Array(
                         lstate,
@@ -13563,7 +13564,7 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(mut lstate: *mut lua_State) -> 
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -13617,10 +13618,10 @@ unsafe extern "C" fn nlua_api_nvim__screenshot(mut lstate: *mut lua_State) -> ::
             err_param =
                 b"path\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim__screenshot(arg1);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13672,10 +13673,10 @@ unsafe extern "C" fn nlua_api_nvim__invalidate_glyph_cache(
                 b"nvim__invalidate_glyph_cache\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        save_active_lstate = active_lstate;
-        active_lstate = lstate;
+        save_active_lstate = active_lstate.get();
+        active_lstate.set(lstate);
         nvim__invalidate_glyph_cache();
-        active_lstate = save_active_lstate;
+        active_lstate.set(save_active_lstate);
     }
     arena_mem_free(arena_finish(&raw mut arena));
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -13729,15 +13730,15 @@ unsafe extern "C" fn nlua_api_nvim__unpack(mut lstate: *mut lua_State) -> ::core
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim__unpack(arg1, &raw mut arena, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13797,15 +13798,15 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(mut lstate: *mut lua_State) -> ::cor
             err_param =
                 b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_del_mark(arg1, &raw mut err);
             nlua_push_Boolean(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13885,8 +13886,8 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(mut lstate: *mut lua_State) -> ::cor
                 err_param =
                     b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_get_mark(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Array(
                     lstate,
@@ -13894,12 +13895,12 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(mut lstate: *mut lua_State) -> ::cor
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut empty_table as *mut KeySetLink,
+            empty_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -13996,8 +13997,8 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
                 err_param =
                     b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_eval_statusline(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
@@ -14005,12 +14006,12 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut eval_statusline_table as *mut KeySetLink,
+            eval_statusline_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14097,8 +14098,8 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(mut lstate: *mut lua_State) -> 
                 err_param =
                     b"index\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim__complete_set(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
@@ -14106,12 +14107,12 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(mut lstate: *mut lua_State) -> 
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut complete_set_table as *mut KeySetLink,
+            complete_set_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14207,14 +14208,14 @@ unsafe extern "C" fn nlua_api_nvim__redraw(mut lstate: *mut lua_State) -> ::core
             &raw mut err,
         );
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim__redraw(&raw mut arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
         api_luarefs_free_keydict(
             &raw mut arg1 as *mut ::core::ffi::c_void,
-            &raw mut redraw_table as *mut KeySetLink,
+            redraw_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14292,21 +14293,21 @@ unsafe extern "C" fn nlua_api_nvim_exec2(mut lstate: *mut lua_State) -> ::core::
                 err_param =
                     b"src\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_exec2(LUA_INTERNAL_CALL, arg1, &raw mut arg2, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
                     0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
                 api_free_dict(ret);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut exec_opts_table as *mut KeySetLink,
+            exec_opts_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14364,10 +14365,10 @@ unsafe extern "C" fn nlua_api_nvim_command(mut lstate: *mut lua_State) -> ::core
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             nvim_command(arg1, &raw mut err);
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14430,15 +14431,15 @@ unsafe extern "C" fn nlua_api_nvim_eval(mut lstate: *mut lua_State) -> ::core::f
             err_param =
                 b"expr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_eval(arg1, &raw mut arena, &raw mut err);
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -14511,8 +14512,8 @@ unsafe extern "C" fn nlua_api_nvim_call_function(mut lstate: *mut lua_State) -> 
                 err_param =
                     b"fn\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_call_function(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -14520,7 +14521,7 @@ unsafe extern "C" fn nlua_api_nvim_call_function(mut lstate: *mut lua_State) -> 
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -14605,8 +14606,8 @@ unsafe extern "C" fn nlua_api_nvim_call_dict_function(
                     err_param = b"dict\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_call_dict_function(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Object(
                         lstate,
@@ -14614,7 +14615,7 @@ unsafe extern "C" fn nlua_api_nvim_call_dict_function(
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                     api_luarefs_free_object(arg1);
                 }
             }
@@ -14690,8 +14691,8 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
                     err_param = b"expr\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     ret = nvim_parse_expression(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Dict(
                         lstate,
@@ -14699,7 +14700,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
                         kNluaPushSpecial as ::core::ffi::c_int
                             | kNluaPushFreeRefs as ::core::ffi::c_int,
                     );
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -14903,8 +14904,8 @@ unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::cor
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
-                        save_active_lstate = active_lstate;
-                        active_lstate = lstate;
+                        save_active_lstate = active_lstate.get();
+                        active_lstate.set(lstate);
                         ret = nvim_open_win(arg1, arg2, &raw mut arg3, &raw mut err);
                         nlua_push_handle(
                             lstate,
@@ -14912,13 +14913,13 @@ unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::cor
                             kNluaPushSpecial as ::core::ffi::c_int
                                 | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
-                        active_lstate = save_active_lstate;
+                        active_lstate.set(save_active_lstate);
                     }
                 }
             }
             api_luarefs_free_keydict(
                 &raw mut arg3 as *mut ::core::ffi::c_void,
-                &raw mut win_config_table as *mut KeySetLink,
+                win_config_table.ptr() as *mut KeySetLink,
             );
         }
     }
@@ -15105,15 +15106,15 @@ unsafe extern "C" fn nlua_api_nvim_win_set_config(
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_set_config(arg1, &raw mut arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut win_config_table as *mut KeySetLink,
+            win_config_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15228,15 +15229,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_config(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_config(arg1, &raw mut arena, &raw mut err);
             nlua_push_keydict(
                 lstate,
                 &raw mut ret as *mut ::core::ffi::c_void,
-                &raw mut win_config_table as *mut KeySetLink,
+                win_config_table.ptr() as *mut KeySetLink,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15292,15 +15293,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(mut lstate: *mut lua_State) -> ::
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_buf(arg1, &raw mut err);
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15370,10 +15371,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(mut lstate: *mut lua_State) -> ::
                     err_param =
                         b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_win_set_buf(arg1, arg2, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -15437,15 +15438,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_cursor(arg1, &raw mut arena, &raw mut err);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15512,10 +15513,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_cursor(
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_set_cursor(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -15574,15 +15575,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_height(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_height(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15646,10 +15647,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_height(
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_set_height(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -15706,15 +15707,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(mut lstate: *mut lua_State) -> 
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_width(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -15776,10 +15777,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_width(mut lstate: *mut lua_State) -> 
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_set_width(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -15849,8 +15850,8 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(mut lstate: *mut lua_State) -> ::
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_win_get_var(arg1, arg2, &raw mut arena, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -15858,7 +15859,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(mut lstate: *mut lua_State) -> ::
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -15933,10 +15934,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_var(mut lstate: *mut lua_State) -> ::
                     err_param =
                         b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_win_set_var(arg1, arg2, arg3, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
             api_luarefs_free_object(arg3);
@@ -16004,10 +16005,10 @@ unsafe extern "C" fn nlua_api_nvim_win_del_var(mut lstate: *mut lua_State) -> ::
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_del_var(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -16070,15 +16071,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_position(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_position(arg1, &raw mut arena, &raw mut err);
             nlua_push_Array(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -16136,15 +16137,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_tabpage(arg1, &raw mut err);
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -16202,15 +16203,15 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_get_number(arg1, &raw mut err);
             nlua_push_Integer(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -16266,15 +16267,15 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(mut lstate: *mut lua_State) -> :
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            save_active_lstate = active_lstate;
-            active_lstate = lstate;
+            save_active_lstate = active_lstate.get();
+            active_lstate.set(lstate);
             ret = nvim_win_is_valid(arg1);
             nlua_push_Boolean(
                 lstate,
                 ret,
                 kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
-            active_lstate = save_active_lstate;
+            active_lstate.set(save_active_lstate);
         }
     }
     arena_mem_free(arena_finish(&raw mut arena));
@@ -16338,10 +16339,10 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(mut lstate: *mut lua_State) -> ::cor
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_hide(arg1, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -16412,10 +16413,10 @@ unsafe extern "C" fn nlua_api_nvim_win_close(mut lstate: *mut lua_State) -> ::co
                     err_param =
                         b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
-                    save_active_lstate = active_lstate;
-                    active_lstate = lstate;
+                    save_active_lstate = active_lstate.get();
+                    active_lstate.set(lstate);
                     nvim_win_close(arg1, arg2, &raw mut err);
-                    active_lstate = save_active_lstate;
+                    active_lstate.set(save_active_lstate);
                 }
             }
         }
@@ -16482,8 +16483,8 @@ unsafe extern "C" fn nlua_api_nvim_win_call(mut lstate: *mut lua_State) -> ::cor
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_win_call(arg1, arg2, &raw mut err);
                 nlua_push_Object(
                     lstate,
@@ -16491,7 +16492,7 @@ unsafe extern "C" fn nlua_api_nvim_win_call(mut lstate: *mut lua_State) -> ::cor
                     kNluaPushSpecial as ::core::ffi::c_int
                         | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
             api_free_luaref(arg2);
         }
@@ -16555,10 +16556,10 @@ unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(mut lstate: *mut lua_State) -> 
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 nvim_win_set_hl_ns(arg1, arg2, &raw mut err);
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
     }
@@ -16650,20 +16651,20 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
                 err_param =
                     b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                save_active_lstate = active_lstate;
-                active_lstate = lstate;
+                save_active_lstate = active_lstate.get();
+                active_lstate.set(lstate);
                 ret = nvim_win_text_height(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
                     0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                 );
-                active_lstate = save_active_lstate;
+                active_lstate.set(save_active_lstate);
             }
         }
         api_luarefs_free_keydict(
             &raw mut arg2 as *mut ::core::ffi::c_void,
-            &raw mut win_text_height_table as *mut KeySetLink,
+            win_text_height_table.ptr() as *mut KeySetLink,
         );
     }
     arena_mem_free(arena_finish(&raw mut arena));

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2660,16 +2661,17 @@ pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
 pub const CPO_DOTTAG: ::core::ffi::c_int = 'd' as ::core::ffi::c_int;
-static mut ff_expand_buffer: String_0 = String_0 {
+static ff_expand_buffer: GlobalCell<String_0> = GlobalCell::new(String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
-};
+});
 pub const FF_MAX_STAR_STAR_EXPAND: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
-static mut e_path_too_long_for_completion: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E854: Path too long for completion\0",
-    )
-};
+static e_path_too_long_for_completion: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E854: Path too long for completion\0",
+        )
+    });
 #[no_mangle]
 pub unsafe extern "C" fn vim_findfile_init(
     mut path: *mut ::core::ffi::c_char,
@@ -2718,9 +2720,10 @@ pub unsafe extern "C" fn vim_findfile_init(
                 }
             }
         }
-        if ff_expand_buffer.data.is_null() {
-            ff_expand_buffer.size = 0 as size_t;
-            ff_expand_buffer.data = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
+        if (*ff_expand_buffer.ptr()).data.is_null() {
+            (*ff_expand_buffer.ptr()).size = 0 as size_t;
+            (*ff_expand_buffer.ptr()).data =
+                xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
         }
         if *path.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '.' as ::core::ffi::c_int
@@ -2734,13 +2737,13 @@ pub unsafe extern "C" fn vim_findfile_init(
             let mut len: size_t = path_tail(rel_fname).offset_from(rel_fname) as size_t;
             if !vim_isAbsName(rel_fname) && len.wrapping_add(1 as size_t) < MAXPATHL as size_t {
                 xmemcpyz(
-                    ff_expand_buffer.data as *mut ::core::ffi::c_void,
+                    (*ff_expand_buffer.ptr()).data as *mut ::core::ffi::c_void,
                     rel_fname as *const ::core::ffi::c_void,
                     len,
                 );
-                ff_expand_buffer.size = len;
+                (*ff_expand_buffer.ptr()).size = len;
                 (*search_ctx).ffsc_start_dir =
-                    cstr_as_string(FullName_save(ff_expand_buffer.data, false_0 != 0));
+                    cstr_as_string(FullName_save((*ff_expand_buffer.ptr()).data, false_0 != 0));
             } else {
                 (*search_ctx).ffsc_start_dir = cbuf_to_string(rel_fname, len);
             }
@@ -2749,12 +2752,12 @@ pub unsafe extern "C" fn vim_findfile_init(
                 path = path.offset(1);
             }
         } else if *path as ::core::ffi::c_int == NUL || !vim_isAbsName(path) {
-            if os_dirname(ff_expand_buffer.data, MAXPATHL as size_t) == FAIL {
+            if os_dirname((*ff_expand_buffer.ptr()).data, MAXPATHL as size_t) == FAIL {
                 break '_error_return;
             } else {
-                ff_expand_buffer.size = strlen(ff_expand_buffer.data);
+                (*ff_expand_buffer.ptr()).size = strlen((*ff_expand_buffer.ptr()).data);
                 (*search_ctx).ffsc_start_dir =
-                    copy_string(ff_expand_buffer, ::core::ptr::null_mut::<Arena>());
+                    copy_string(ff_expand_buffer.get(), ::core::ptr::null_mut::<Arena>());
             }
         }
         if !stopdirs.is_null() {
@@ -2799,11 +2802,11 @@ pub unsafe extern "C" fn vim_findfile_init(
                     && len_0.wrapping_add(1 as size_t) < MAXPATHL as size_t
                 {
                     xmemcpyz(
-                        ff_expand_buffer.data as *mut ::core::ffi::c_void,
+                        (*ff_expand_buffer.ptr()).data as *mut ::core::ffi::c_void,
                         helper as *const ::core::ffi::c_void,
                         len_0,
                     );
-                    ff_expand_buffer.size = len_0;
+                    (*ff_expand_buffer.ptr()).size = len_0;
                     *(*search_ctx)
                         .ffsc_stopdirs_v
                         .offset(dircount.wrapping_sub(1 as size_t) as isize) =
@@ -2846,11 +2849,12 @@ pub unsafe extern "C" fn vim_findfile_init(
                 }
             };
             (*search_ctx).ffsc_fix_path = cbuf_to_string(path, wc_part.offset_from(path) as size_t);
-            ff_expand_buffer.size = 0 as size_t;
+            (*ff_expand_buffer.ptr()).size = 0 as size_t;
             while *wc_part as ::core::ffi::c_int != NUL {
-                if ff_expand_buffer.size.wrapping_add(5 as size_t) >= MAXPATHL as size_t {
+                if (*ff_expand_buffer.ptr()).size.wrapping_add(5 as size_t) >= MAXPATHL as size_t {
                     emsg(gettext(
-                        &raw const e_path_too_long_for_completion as *const ::core::ffi::c_char,
+                        (e_path_too_long_for_completion.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
                     ));
                     break;
                 } else if strncmp(
@@ -2861,26 +2865,36 @@ pub unsafe extern "C" fn vim_findfile_init(
                 {
                     let c2rust_fresh0 = wc_part;
                     wc_part = wc_part.offset(1);
-                    let c2rust_fresh1 = ff_expand_buffer.size;
-                    ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(1);
-                    *ff_expand_buffer.data.offset(c2rust_fresh1 as isize) = *c2rust_fresh0;
+                    let c2rust_fresh1 = (*ff_expand_buffer.ptr()).size;
+                    (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr()).size.wrapping_add(1);
+                    *(*ff_expand_buffer.ptr())
+                        .data
+                        .offset(c2rust_fresh1 as isize) = *c2rust_fresh0;
                     let c2rust_fresh2 = wc_part;
                     wc_part = wc_part.offset(1);
-                    let c2rust_fresh3 = ff_expand_buffer.size;
-                    ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(1);
-                    *ff_expand_buffer.data.offset(c2rust_fresh3 as isize) = *c2rust_fresh2;
+                    let c2rust_fresh3 = (*ff_expand_buffer.ptr()).size;
+                    (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr()).size.wrapping_add(1);
+                    *(*ff_expand_buffer.ptr())
+                        .data
+                        .offset(c2rust_fresh3 as isize) = *c2rust_fresh2;
                     llevel = strtol(wc_part, &raw mut errpt, 10 as ::core::ffi::c_int) as int64_t;
                     if errpt != wc_part && llevel > 0 as int64_t && llevel < 255 as int64_t {
-                        let c2rust_fresh4 = ff_expand_buffer.size;
-                        ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(1);
-                        *ff_expand_buffer.data.offset(c2rust_fresh4 as isize) =
-                            llevel as ::core::ffi::c_char;
+                        let c2rust_fresh4 = (*ff_expand_buffer.ptr()).size;
+                        (*ff_expand_buffer.ptr()).size =
+                            (*ff_expand_buffer.ptr()).size.wrapping_add(1);
+                        *(*ff_expand_buffer.ptr())
+                            .data
+                            .offset(c2rust_fresh4 as isize) = llevel as ::core::ffi::c_char;
                     } else if errpt != wc_part && llevel == 0 as int64_t {
-                        ff_expand_buffer.size = ff_expand_buffer.size.wrapping_sub(2 as size_t);
+                        (*ff_expand_buffer.ptr()).size =
+                            (*ff_expand_buffer.ptr()).size.wrapping_sub(2 as size_t);
                     } else {
-                        let c2rust_fresh5 = ff_expand_buffer.size;
-                        ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(1);
-                        *ff_expand_buffer.data.offset(c2rust_fresh5 as isize) =
+                        let c2rust_fresh5 = (*ff_expand_buffer.ptr()).size;
+                        (*ff_expand_buffer.ptr()).size =
+                            (*ff_expand_buffer.ptr()).size.wrapping_add(1);
+                        *(*ff_expand_buffer.ptr())
+                            .data
+                            .offset(c2rust_fresh5 as isize) =
                             FF_MAX_STAR_STAR_EXPAND as ::core::ffi::c_char;
                     }
                     wc_part = errpt;
@@ -2900,15 +2914,18 @@ pub unsafe extern "C" fn vim_findfile_init(
                 } else {
                     let c2rust_fresh6 = wc_part;
                     wc_part = wc_part.offset(1);
-                    let c2rust_fresh7 = ff_expand_buffer.size;
-                    ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(1);
-                    *ff_expand_buffer.data.offset(c2rust_fresh7 as isize) = *c2rust_fresh6;
+                    let c2rust_fresh7 = (*ff_expand_buffer.ptr()).size;
+                    (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr()).size.wrapping_add(1);
+                    *(*ff_expand_buffer.ptr())
+                        .data
+                        .offset(c2rust_fresh7 as isize) = *c2rust_fresh6;
                 }
             }
-            *ff_expand_buffer.data.offset(ff_expand_buffer.size as isize) =
-                NUL as ::core::ffi::c_char;
+            *(*ff_expand_buffer.ptr())
+                .data
+                .offset((*ff_expand_buffer.ptr()).size as isize) = NUL as ::core::ffi::c_char;
             (*search_ctx).ffsc_wc_path =
-                copy_string(ff_expand_buffer, ::core::ptr::null_mut::<Arena>());
+                copy_string(ff_expand_buffer.get(), ::core::ptr::null_mut::<Arena>());
         } else {
             (*search_ctx).ffsc_fix_path = cstr_to_string(path);
         }
@@ -2931,7 +2948,7 @@ pub unsafe extern "C" fn vim_findfile_init(
             >= MAXPATHL as size_t
         {
             emsg(gettext(
-                &raw const e_path_too_long_for_completion as *const ::core::ffi::c_char,
+                (e_path_too_long_for_completion.ptr() as *const _) as *const ::core::ffi::c_char,
             ));
         } else {
             add_sep = after_pathsep(
@@ -2941,8 +2958,8 @@ pub unsafe extern "C" fn vim_findfile_init(
                     .data
                     .offset((*search_ctx).ffsc_start_dir.size as isize),
             ) == 0;
-            ff_expand_buffer.size = vim_snprintf(
-                ff_expand_buffer.data,
+            (*ff_expand_buffer.ptr()).size = vim_snprintf(
+                (*ff_expand_buffer.ptr()).data,
                 MAXPATHL as size_t,
                 b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
                 (*search_ctx).ffsc_start_dir.data,
@@ -2953,7 +2970,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                 },
             ) as size_t;
             '_c2rust_label_1: {
-                if ff_expand_buffer.size < 4096 as size_t {
+                if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
                 } else {
                     __assert_fail(
                         b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
@@ -2966,7 +2983,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                     );
                 }
             };
-            let mut bufsize: size_t = ff_expand_buffer
+            let mut bufsize: size_t = (*ff_expand_buffer.ptr())
                 .size
                 .wrapping_add((*search_ctx).ffsc_fix_path.size)
                 .wrapping_add(1 as size_t);
@@ -2975,7 +2992,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                 buf,
                 bufsize,
                 b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                ff_expand_buffer.data,
+                (*ff_expand_buffer.ptr()).data,
                 (*search_ctx).ffsc_fix_path.data,
             );
             if os_isdir(buf) {
@@ -2987,20 +3004,23 @@ pub unsafe extern "C" fn vim_findfile_init(
                             .data
                             .offset((*search_ctx).ffsc_fix_path.size as isize),
                     ) == 0;
-                    ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(vim_snprintf(
-                        ff_expand_buffer.data.offset(ff_expand_buffer.size as isize),
-                        (MAXPATHL as size_t).wrapping_sub(ff_expand_buffer.size),
-                        b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        (*search_ctx).ffsc_fix_path.data,
-                        if add_sep as ::core::ffi::c_int != 0 {
-                            PATHSEPSTR.as_ptr()
-                        } else {
-                            b"\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                    )
-                        as size_t);
+                    (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr()).size.wrapping_add(
+                        vim_snprintf(
+                            (*ff_expand_buffer.ptr())
+                                .data
+                                .offset((*ff_expand_buffer.ptr()).size as isize),
+                            (MAXPATHL as size_t).wrapping_sub((*ff_expand_buffer.ptr()).size),
+                            b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            (*search_ctx).ffsc_fix_path.data,
+                            if add_sep as ::core::ffi::c_int != 0 {
+                                PATHSEPSTR.as_ptr()
+                            } else {
+                                b"\0".as_ptr() as *const ::core::ffi::c_char
+                            },
+                        ) as size_t,
+                    );
                     '_c2rust_label_2: {
-                        if ff_expand_buffer.size < 4096 as size_t {
+                        if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
                         } else {
                             __assert_fail(
                                 b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
@@ -3045,21 +3065,24 @@ pub unsafe extern "C" fn vim_findfile_init(
                                 .data
                                 .offset((*search_ctx).ffsc_fix_path.size as isize),
                         ) == 0;
-                        ff_expand_buffer.size = ff_expand_buffer.size.wrapping_add(vim_snprintf(
-                            ff_expand_buffer.data.offset(ff_expand_buffer.size as isize),
-                            (MAXPATHL as size_t).wrapping_sub(ff_expand_buffer.size),
-                            b"%.*s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            len_1,
-                            (*search_ctx).ffsc_fix_path.data,
-                            if add_sep as ::core::ffi::c_int != 0 {
-                                PATHSEPSTR.as_ptr()
-                            } else {
-                                b"\0".as_ptr() as *const ::core::ffi::c_char
-                            },
-                        )
-                            as size_t);
+                        (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr())
+                            .size
+                            .wrapping_add(vim_snprintf(
+                                (*ff_expand_buffer.ptr())
+                                    .data
+                                    .offset((*ff_expand_buffer.ptr()).size as isize),
+                                (MAXPATHL as size_t).wrapping_sub((*ff_expand_buffer.ptr()).size),
+                                b"%.*s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                                len_1,
+                                (*search_ctx).ffsc_fix_path.data,
+                                if add_sep as ::core::ffi::c_int != 0 {
+                                    PATHSEPSTR.as_ptr()
+                                } else {
+                                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                                },
+                            ) as size_t);
                         '_c2rust_label_3: {
-                            if ff_expand_buffer.size < 4096 as size_t {
+                            if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
                             } else {
                                 __assert_fail(
                                     b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
@@ -3110,8 +3133,8 @@ pub unsafe extern "C" fn vim_findfile_init(
             }
             xfree(buf as *mut ::core::ffi::c_void);
             sptr = ff_create_stack_element(
-                ff_expand_buffer.data,
-                ff_expand_buffer.size,
+                (*ff_expand_buffer.ptr()).data,
+                (*ff_expand_buffer.ptr()).size,
                 (*search_ctx).ffsc_wc_path.data,
                 (*search_ctx).ffsc_wc_path.size,
                 level,
@@ -3548,16 +3571,17 @@ pub unsafe extern "C" fn vim_findfile(
                                                                 simplify_filename(file_path.data);
                                                         }
                                                         if os_dirname(
-                                                            ff_expand_buffer.data,
+                                                            (*ff_expand_buffer.ptr()).data,
                                                             MAXPATHL as size_t,
                                                         ) == OK
                                                         {
-                                                            ff_expand_buffer.size =
-                                                                strlen(ff_expand_buffer.data);
+                                                            (*ff_expand_buffer.ptr()).size = strlen(
+                                                                (*ff_expand_buffer.ptr()).data,
+                                                            );
                                                             let mut p_0: *mut ::core::ffi::c_char =
                                                                 path_shorten_fname(
                                                                     file_path.data,
-                                                                    ff_expand_buffer.data,
+                                                                    (*ff_expand_buffer.ptr()).data,
                                                                 );
                                                             if !p_0.is_null() {
                                                                 memmove(
@@ -3861,17 +3885,17 @@ unsafe extern "C" fn ff_check_visited(
     };
     if path_with_url(fname) != 0 {
         xmemcpyz(
-            ff_expand_buffer.data as *mut ::core::ffi::c_void,
+            (*ff_expand_buffer.ptr()).data as *mut ::core::ffi::c_void,
             fname as *const ::core::ffi::c_void,
             fnamelen,
         );
-        ff_expand_buffer.size = fnamelen;
+        (*ff_expand_buffer.ptr()).size = fnamelen;
         url = true_0 != 0;
     } else {
-        *ff_expand_buffer
+        *(*ff_expand_buffer.ptr())
             .data
             .offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
-        ff_expand_buffer.size = 0 as size_t;
+        (*ff_expand_buffer.ptr()).size = 0 as size_t;
         if !os_fileid(fname, &raw mut file_id) {
             return FAIL;
         }
@@ -3881,7 +3905,7 @@ unsafe extern "C" fn ff_check_visited(
         if url as ::core::ffi::c_int != 0
             && path_fnamecmp(
                 &raw mut (*vp).ffv_fname as *mut ::core::ffi::c_char,
-                ff_expand_buffer.data,
+                (*ff_expand_buffer.ptr()).data,
             ) == 0 as ::core::ffi::c_int
             || !url
                 && (*vp).file_id_valid as ::core::ffi::c_int != 0
@@ -3896,7 +3920,7 @@ unsafe extern "C" fn ff_check_visited(
     }
     vp = xmalloc(
         (40 as size_t)
-            .wrapping_add(ff_expand_buffer.size)
+            .wrapping_add((*ff_expand_buffer.ptr()).size)
             .wrapping_add(1 as size_t),
     ) as *mut ff_visited_T;
     if !url {
@@ -3908,7 +3932,7 @@ unsafe extern "C" fn ff_check_visited(
         (*vp).file_id_valid = false_0 != 0;
         strcpy(
             &raw mut (*vp).ffv_fname as *mut ::core::ffi::c_char,
-            ff_expand_buffer.data,
+            (*ff_expand_buffer.ptr()).data,
         );
     }
     if !wc_path.is_null() {
@@ -4135,10 +4159,11 @@ pub unsafe extern "C" fn find_file_in_path_option(
     mut search_ctx_arg: *mut *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut search_ctx: *mut *mut ff_search_ctx_T = search_ctx_arg as *mut *mut ff_search_ctx_T;
-    static mut dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut did_findfile_init: bool = false_0 != 0;
+    static dir: GlobalCell<*mut ::core::ffi::c_char> =
+        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+    static did_findfile_init: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut file_to_findlen: size_t = 0 as size_t;
+    static file_to_findlen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
     if !rel_fname.is_null() && path_with_url(rel_fname) != 0 {
         rel_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
@@ -4148,19 +4173,19 @@ pub unsafe extern "C" fn find_file_in_path_option(
         }
         let mut save_char: ::core::ffi::c_char = *ptr.offset(len as isize);
         *ptr.offset(len as isize) = NUL as ::core::ffi::c_char;
-        file_to_findlen = expand_env_esc(
+        file_to_findlen.set(expand_env_esc(
             ptr,
             &raw mut NameBuff as *mut ::core::ffi::c_char,
             MAXPATHL,
             false_0 != 0,
             true_0 != 0,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        );
+        ));
         *ptr.offset(len as isize) = save_char;
         xfree(*file_to_find as *mut ::core::ffi::c_void);
         *file_to_find = xmemdupz(
             &raw mut NameBuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-            file_to_findlen,
+            file_to_findlen.get(),
         ) as *mut ::core::ffi::c_char;
         if options & FNAME_UNESC as ::core::ffi::c_int != 0 {
             ptr = *file_to_find;
@@ -4174,12 +4199,12 @@ pub unsafe extern "C" fn find_file_in_path_option(
                         ptr as *mut ::core::ffi::c_void,
                         ptr.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
                         ((*file_to_find)
-                            .offset(file_to_findlen as isize)
+                            .offset(file_to_findlen.get() as isize)
                             .offset_from(ptr.offset(1 as ::core::ffi::c_int as isize))
                             as size_t)
                             .wrapping_add(1 as size_t),
                     );
-                    file_to_findlen = file_to_findlen.wrapping_sub(1);
+                    file_to_findlen.set((*file_to_findlen.ptr()).wrapping_sub(1));
                 }
                 ptr = ptr.offset(1);
             }
@@ -4208,9 +4233,10 @@ pub unsafe extern "C" fn find_file_in_path_option(
             {
                 if first == true_0 {
                     if path_with_url(*file_to_find) != 0 {
-                        file_name =
-                            xmemdupz(*file_to_find as *const ::core::ffi::c_void, file_to_findlen)
-                                as *mut ::core::ffi::c_char;
+                        file_name = xmemdupz(
+                            *file_to_find as *const ::core::ffi::c_void,
+                            file_to_findlen.get(),
+                        ) as *mut ::core::ffi::c_char;
                         break '_theend;
                     } else {
                         let mut rel_fnamelen: size_t = if !rel_fname.is_null() {
@@ -4223,7 +4249,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                             if run > 2 as ::core::ffi::c_int {
                                 break 's_300;
                             }
-                            let mut l: size_t = file_to_findlen;
+                            let mut l: size_t = file_to_findlen.get();
                             if run == 1 as ::core::ffi::c_int
                                 && rel_to_curdir as ::core::ffi::c_int != 0
                                 && options & FNAME_REL as ::core::ffi::c_int != 0
@@ -4314,20 +4340,20 @@ pub unsafe extern "C" fn find_file_in_path_option(
             } else {
                 if first == true_0 {
                     vim_findfile_free_visited(*search_ctx as *mut ::core::ffi::c_void);
-                    dir = path_option;
-                    did_findfile_init = false_0 != 0;
+                    dir.set(path_option);
+                    did_findfile_init.set(false_0 != 0);
                 }
                 loop {
-                    if did_findfile_init {
+                    if did_findfile_init.get() {
                         file_name = vim_findfile(*search_ctx as *mut ::core::ffi::c_void);
                         if !file_name.is_null() {
                             break;
                         }
-                        did_findfile_init = false_0 != 0;
+                        did_findfile_init.set(false_0 != 0);
                     } else {
                         let mut r_ptr: *mut ::core::ffi::c_char =
                             ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        if dir.is_null() || *dir as ::core::ffi::c_int == NUL {
+                        if (*dir.ptr()).is_null() || *dir.get() as ::core::ffi::c_int == NUL {
                             vim_findfile_cleanup(*search_ctx as *mut ::core::ffi::c_void);
                             *search_ctx = ::core::ptr::null_mut::<ff_search_ctx_T>();
                             break;
@@ -4337,7 +4363,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                             *buf.offset(0 as ::core::ffi::c_int as isize) =
                                 NUL as ::core::ffi::c_char;
                             copy_option_part(
-                                &raw mut dir,
+                                dir.ptr(),
                                 buf,
                                 MAXPATHL as size_t,
                                 b" ,\0".as_ptr() as *const ::core::ffi::c_char
@@ -4347,7 +4373,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                             *search_ctx = vim_findfile_init(
                                 buf,
                                 *file_to_find,
-                                file_to_findlen,
+                                file_to_findlen.get(),
                                 r_ptr,
                                 100 as ::core::ffi::c_int,
                                 false_0,
@@ -4357,7 +4383,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                 rel_fname,
                             ) as *mut ff_search_ctx_T;
                             if !(*search_ctx).is_null() {
-                                did_findfile_init = true_0 != 0;
+                                did_findfile_init.set(true_0 != 0);
                             }
                             xfree(buf as *mut ::core::ffi::c_void);
                         }
@@ -4731,16 +4757,16 @@ pub unsafe extern "C" fn do_autocmd_dirchanged(
     mut cause: CdCause,
     mut pre: bool,
 ) {
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut event: event_T = (if pre as ::core::ffi::c_int != 0 {
         EVENT_DIRCHANGEDPRE as ::core::ffi::c_int
     } else {
         EVENT_DIRCHANGED as ::core::ffi::c_int
     }) as event_T;
-    if recursive as ::core::ffi::c_int != 0 || !has_event(event) {
+    if recursive.get() as ::core::ffi::c_int != 0 || !has_event(event) {
         return;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     let mut save_v_event: save_v_event_T = save_v_event_T {
         sve_did_save: false,
         sve_hashtab: hashtab_T {
@@ -4835,7 +4861,7 @@ pub unsafe extern "C" fn do_autocmd_dirchanged(
         curbuf,
     );
     restore_v_event(dict, &raw mut save_v_event);
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_chdirfile(

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -963,7 +964,7 @@ extern "C" {
     fn ex_cbuffer(eap: *mut exarg_T);
     fn ex_cexpr(eap: *mut exarg_T);
     fn ex_helpgrep(eap: *mut exarg_T);
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn save_last_search_pattern();
     fn restore_last_search_pattern();
     fn searchit(
@@ -6510,8 +6511,8 @@ pub unsafe extern "C" fn do_cmdline(
                 ) -> *mut ::core::ffi::c_char,
         ),
     ) {
-        fname = (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        fname = (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name;
         breakpoint = source_breakpoint(real_cookie);
         dbg_tick = source_dbg_tick(real_cookie);
@@ -6625,28 +6626,28 @@ pub unsafe extern "C" fn do_cmdline(
                             ),
                         ),
                         fname,
-                        (*(exestack.ga_data as *mut estack_T)
-                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        (*((*exestack.ptr()).ga_data as *mut estack_T)
+                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                     );
                     *dbg_tick = debug_tick;
                 }
                 next_cmdline =
                     (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).line;
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).lnum;
                 if !breakpoint.is_null()
                     && *breakpoint != 0 as linenr_T
                     && *breakpoint
-                        <= (*(exestack.ga_data as *mut estack_T)
-                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        <= (*((*exestack.ptr()).ga_data as *mut estack_T)
+                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum
                 {
                     dbg_breakpoint(
                         fname,
-                        (*(exestack.ga_data as *mut estack_T)
-                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        (*((*exestack.ptr()).ga_data as *mut estack_T)
+                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                     );
                     *breakpoint = dbg_find_breakpoint(
@@ -6665,8 +6666,8 @@ pub unsafe extern "C" fn do_cmdline(
                             ),
                         ),
                         fname,
-                        (*(exestack.ga_data as *mut estack_T)
-                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        (*((*exestack.ptr()).ga_data as *mut estack_T)
+                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                     );
                     *dbg_tick = debug_tick;
@@ -6831,15 +6832,15 @@ pub unsafe extern "C" fn do_cmdline(
             }
         }
         if p_verbose >= 15 as OptInt
-            && !(*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            && !(*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name
             .is_null()
             || p_verbose >= 16 as OptInt
         {
             msg_verbose_cmd(
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum,
                 cmdline_copy,
             );
@@ -6971,8 +6972,8 @@ pub unsafe extern "C" fn do_cmdline(
         }
         if cstack.cs_looplevel == 0 as ::core::ffi::c_int {
             if !(lines_ga.ga_len <= 0 as ::core::ffi::c_int) {
-                (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T)
                     .offset((lines_ga.ga_len - 1 as ::core::ffi::c_int) as isize))
                 .lnum;
@@ -7363,8 +7364,8 @@ pub unsafe extern "C" fn handle_did_throw() {
         xfree(p as *mut ::core::ffi::c_void);
     }
     xfree(
-        (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name as *mut ::core::ffi::c_void,
     );
     estack_pop();
@@ -7401,8 +7402,8 @@ unsafe extern "C" fn get_loop_line(
     (*cp).current_line += 1;
     let mut wp: *mut wcmd_T =
         ((*(*cp).lines_gap).ga_data as *mut wcmd_T).offset((*cp).current_line as isize);
-    (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum = (*wp).lnum;
     return xstrdup((*wp).line);
 }
@@ -7410,8 +7411,8 @@ unsafe extern "C" fn store_loop_line(mut gap: *mut garray_T, mut line: *mut ::co
     let mut p: *mut wcmd_T =
         ga_append_via_ptr(gap, ::core::mem::size_of::<wcmd_T>()) as *mut wcmd_T;
     (*p).line = xstrdup(line);
-    (*p).lnum = (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    (*p).lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
 }
 #[no_mangle]
@@ -15825,12 +15826,12 @@ pub unsafe extern "C" fn eval_vars(
                 resultbuf = result;
             }
             7 => {
-                if (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                if (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name
                 .is_null()
-                    || (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    || (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum
                         == 0 as linenr_T
                 {
@@ -15843,16 +15844,16 @@ pub unsafe extern "C" fn eval_vars(
                     &raw mut strbuf as *mut ::core::ffi::c_char,
                     ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum,
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
             13 => {
                 if current_sctx.sc_lnum
-                    + (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                    + (*((*exestack.ptr()).ga_data as *mut estack_T)
+                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum
                     == 0 as linenr_T
                 {
@@ -15866,8 +15867,8 @@ pub unsafe extern "C" fn eval_vars(
                     ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
                     current_sctx.sc_lnum
-                        + (*(exestack.ga_data as *mut estack_T)
-                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        + (*((*exestack.ptr()).ga_data as *mut estack_T)
+                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;

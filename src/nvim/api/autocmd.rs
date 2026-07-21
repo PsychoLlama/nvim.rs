@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2711,7 +2712,7 @@ pub const KEYSET_OPTIDX_create_augroup__clear: ::core::ffi::c_int = 1 as ::core:
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut next_autocmd_id: int64_t = 1 as int64_t;
+static next_autocmd_id: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_autocmds(
     mut opts: *mut KeyDict_get_autocmds,
@@ -3818,8 +3819,8 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                     b"event\0".as_ptr() as *const ::core::ffi::c_char,
                                 );
                             } else {
-                                let c2rust_fresh18 = next_autocmd_id;
-                                next_autocmd_id = next_autocmd_id + 1;
+                                let c2rust_fresh18 = next_autocmd_id.get();
+                                next_autocmd_id.set(next_autocmd_id.get() + 1);
                                 autocmd_id = c2rust_fresh18;
                                 let mut event_str_index: size_t = 0 as size_t;
                                 loop {

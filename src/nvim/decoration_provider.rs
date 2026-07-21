@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -1828,11 +1829,11 @@ pub const ARRAY_DICT_INIT: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-static mut decor_providers: C2Rust_Unnamed_19 = C2Rust_Unnamed_19 {
+static decor_providers: GlobalCell<C2Rust_Unnamed_19> = GlobalCell::new(C2Rust_Unnamed_19 {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<DecorProvider>(),
-};
+});
 unsafe extern "C" fn decor_provider_error(
     mut provider: *mut DecorProvider,
     mut name: *const ::core::ffi::c_char,
@@ -1887,7 +1888,8 @@ unsafe extern "C" fn decor_provider_invoke(
         &raw mut err,
     );
     textlock -= 1;
-    let mut provider: *mut DecorProvider = decor_providers.items.offset(provider_idx as isize);
+    let mut provider: *mut DecorProvider =
+        (*decor_providers.ptr()).items.offset(provider_idx as isize);
     if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         (*provider).error_count = 0 as uint8_t;
         if !res.is_null() {
@@ -1940,8 +1942,8 @@ pub unsafe extern "C" fn decor_providers_invoke_spell(
     mut end_col: ::core::ffi::c_int,
 ) {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).spell_nav != LUA_NOREF
@@ -2020,8 +2022,8 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
 ) -> bool {
     let mut keys: size_t = (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys;
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).conceal_line != LUA_NOREF
@@ -2073,8 +2075,8 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_start() {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).redraw_start != LUA_NOREF
@@ -2102,7 +2104,7 @@ pub unsafe extern "C" fn decor_providers_start() {
                 true_0 != 0,
                 ::core::ptr::null_mut::<Array>(),
             );
-            (*decor_providers.items.offset(i as isize)).state =
+            (*(*decor_providers.ptr()).items.offset(i as isize)).state =
                 (if active as ::core::ffi::c_int != 0 {
                     kDecorProviderActive as ::core::ffi::c_int
                 } else {
@@ -2111,7 +2113,7 @@ pub unsafe extern "C" fn decor_providers_start() {
         } else if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            (*decor_providers.items.offset(i as isize)).state = kDecorProviderActive;
+            (*(*decor_providers.ptr()).items.offset(i as isize)).state = kDecorProviderActive;
         }
         i = i.wrapping_add(1);
     }
@@ -2134,7 +2136,7 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
             );
         }
     };
-    if decor_providers.size > 0 as size_t {
+    if (*decor_providers.ptr()).size > 0 as size_t {
         validate_botline_win(wp);
     }
     let mut botline: linenr_T = if (*wp).w_botline < (*(*wp).w_buffer).b_ml.ml_line_count {
@@ -2143,8 +2145,8 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
         (*(*wp).w_buffer).b_ml.ml_line_count
     };
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             == kDecorProviderWinDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2203,7 +2205,8 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
                 true_0 != 0,
                 ::core::ptr::null_mut::<Array>(),
             ) {
-                (*decor_providers.items.offset(i as isize)).state = kDecorProviderWinDisabled;
+                (*(*decor_providers.ptr()).items.offset(i as isize)).state =
+                    kDecorProviderWinDisabled;
             }
         }
         i = i.wrapping_add(1);
@@ -2216,8 +2219,8 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
 ) {
     decor_state.running_decor_provider = true_0 != 0;
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).redraw_line != LUA_NOREF
@@ -2261,7 +2264,8 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
                 true_0 != 0,
                 ::core::ptr::null_mut::<Array>(),
             ) {
-                (*decor_providers.items.offset(i as isize)).state = kDecorProviderWinDisabled;
+                (*(*decor_providers.ptr()).items.offset(i as isize)).state =
+                    kDecorProviderWinDisabled;
             }
             hl_check_ns();
         }
@@ -2279,8 +2283,8 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
 ) {
     decor_state.running_decor_provider = true_0 != 0;
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).redraw_range != LUA_NOREF
@@ -2352,7 +2356,7 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
                     true_0 != 0,
                     &raw mut res,
                 );
-                p = decor_providers.items.offset(i as isize);
+                p = (*decor_providers.ptr()).items.offset(i as isize);
                 if !status {
                     (*p).state = kDecorProviderWinDisabled;
                 } else if res.size >= 1 as size_t {
@@ -2392,8 +2396,8 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).redraw_buf != LUA_NOREF
@@ -2436,8 +2440,8 @@ pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_end() {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+    while i < (*decor_providers.ptr()).size {
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*p).redraw_end != LUA_NOREF
@@ -2473,8 +2477,8 @@ pub unsafe extern "C" fn decor_providers_invoke_end() {
 #[no_mangle]
 pub unsafe extern "C" fn decor_provider_invalidate_hl() {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        (*decor_providers.items.offset(i as isize)).hl_cached = false_0 != 0;
+    while i < (*decor_providers.ptr()).size {
+        (*(*decor_providers.ptr()).items.offset(i as isize)).hl_cached = false_0 != 0;
         i = i.wrapping_add(1);
     }
     if ns_hl_active != 0 {
@@ -2496,10 +2500,10 @@ pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *
             );
         }
     };
-    let mut len: size_t = decor_providers.size;
+    let mut len: size_t = (*decor_providers.ptr()).size;
     let mut i: size_t = 0 as size_t;
     while i < len {
-        let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
+        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
         if (*p).ns_id == ns_id {
             return p;
         }
@@ -2508,28 +2512,33 @@ pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *
     if !force {
         return ::core::ptr::null_mut::<DecorProvider>();
     }
-    if decor_providers.capacity <= len {
-        decor_providers.size = len.wrapping_add(1 as size_t);
-        decor_providers.capacity = decor_providers.size;
-        decor_providers.capacity = decor_providers.capacity.wrapping_sub(1);
-        decor_providers.capacity |= decor_providers.capacity >> 1 as ::core::ffi::c_int;
-        decor_providers.capacity |= decor_providers.capacity >> 2 as ::core::ffi::c_int;
-        decor_providers.capacity |= decor_providers.capacity >> 4 as ::core::ffi::c_int;
-        decor_providers.capacity |= decor_providers.capacity >> 8 as ::core::ffi::c_int;
-        decor_providers.capacity |= decor_providers.capacity >> 16 as ::core::ffi::c_int;
-        decor_providers.capacity = decor_providers.capacity.wrapping_add(1);
-        decor_providers.capacity = decor_providers.capacity;
-        decor_providers.items = xrealloc(
-            decor_providers.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<DecorProvider>().wrapping_mul(decor_providers.capacity),
+    if (*decor_providers.ptr()).capacity <= len {
+        (*decor_providers.ptr()).size = len.wrapping_add(1 as size_t);
+        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).size;
+        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity.wrapping_sub(1);
+        (*decor_providers.ptr()).capacity |=
+            (*decor_providers.ptr()).capacity >> 1 as ::core::ffi::c_int;
+        (*decor_providers.ptr()).capacity |=
+            (*decor_providers.ptr()).capacity >> 2 as ::core::ffi::c_int;
+        (*decor_providers.ptr()).capacity |=
+            (*decor_providers.ptr()).capacity >> 4 as ::core::ffi::c_int;
+        (*decor_providers.ptr()).capacity |=
+            (*decor_providers.ptr()).capacity >> 8 as ::core::ffi::c_int;
+        (*decor_providers.ptr()).capacity |=
+            (*decor_providers.ptr()).capacity >> 16 as ::core::ffi::c_int;
+        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity.wrapping_add(1);
+        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity;
+        (*decor_providers.ptr()).items = xrealloc(
+            (*decor_providers.ptr()).items as *mut ::core::ffi::c_void,
+            ::core::mem::size_of::<DecorProvider>().wrapping_mul((*decor_providers.ptr()).capacity),
         ) as *mut DecorProvider;
     } else {
-        if decor_providers.size <= len {
-            decor_providers.size = len.wrapping_add(1 as size_t);
+        if (*decor_providers.ptr()).size <= len {
+            (*decor_providers.ptr()).size = len.wrapping_add(1 as size_t);
         } else {
         };
     };
-    let mut item: *mut DecorProvider = decor_providers.items.offset(len as isize);
+    let mut item: *mut DecorProvider = (*decor_providers.ptr()).items.offset(len as isize);
     *item = DecorProvider {
         ns_id: ns_id,
         state: kDecorProviderDisabled,
@@ -2592,14 +2601,14 @@ pub unsafe extern "C" fn decor_provider_clear(mut p: *mut DecorProvider) {
 #[no_mangle]
 pub unsafe extern "C" fn decor_free_all_mem() {
     let mut i: size_t = 0 as size_t;
-    while i < decor_providers.size {
-        decor_provider_clear(decor_providers.items.offset(i as isize));
+    while i < (*decor_providers.ptr()).size {
+        decor_provider_clear((*decor_providers.ptr()).items.offset(i as isize));
         i = i.wrapping_add(1);
     }
-    xfree(decor_providers.items as *mut ::core::ffi::c_void);
-    decor_providers.capacity = 0 as size_t;
-    decor_providers.size = decor_providers.capacity;
-    decor_providers.items = ::core::ptr::null_mut::<DecorProvider>();
+    xfree((*decor_providers.ptr()).items as *mut ::core::ffi::c_void);
+    (*decor_providers.ptr()).capacity = 0 as size_t;
+    (*decor_providers.ptr()).size = (*decor_providers.ptr()).capacity;
+    (*decor_providers.ptr()).items = ::core::ptr::null_mut::<DecorProvider>();
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

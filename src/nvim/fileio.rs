@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -4187,8 +4188,9 @@ pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut e_auchangedbuf: *const ::core::ffi::c_char =
-    b"E812: Autocommands changed buffer or buffer name\0".as_ptr() as *const ::core::ffi::c_char;
+static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+    b"E812: Autocommands changed buffer or buffer name\0".as_ptr() as *const ::core::ffi::c_char,
+);
 pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
     .wrapping_div(0xff as uint64_t)
     .wrapping_mul(0x80 as uint64_t);
@@ -4376,8 +4378,9 @@ pub unsafe extern "C" fn readfile(
     let mut old_b_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut using_b_ffname: ::core::ffi::c_int = 0;
     let mut using_b_fname: ::core::ffi::c_int = 0;
-    static mut msg_is_a_directory: *mut ::core::ffi::c_char =
-        b"is a directory\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    static msg_is_a_directory: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+        b"is a directory\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+    );
     (*curbuf).b_au_did_filetype = false_0 != 0;
     (*curbuf).b_no_eol_lnum = 0 as ::core::ffi::c_int as linenr_T;
     '_theend: {
@@ -4473,7 +4476,7 @@ pub unsafe extern "C" fn readfile(
                 break '_theend;
             } else if after_pathsep(fname, fname.offset(fnamelen as isize)) != 0 {
                 if !silent {
-                    filemess(curbuf, fname, gettext(msg_is_a_directory));
+                    filemess(curbuf, fname, gettext(msg_is_a_directory.get()));
                 }
                 msg_end();
                 msg_scroll = msg_save;
@@ -4493,7 +4496,7 @@ pub unsafe extern "C" fn readfile(
             {
                 if perm & __S_IFMT == 0o40000 as ::core::ffi::c_int {
                     if !silent {
-                        filemess(curbuf, fname, gettext(msg_is_a_directory));
+                        filemess(curbuf, fname, gettext(msg_is_a_directory.get()));
                     }
                     retval = NOTDONE;
                 } else {
@@ -4553,7 +4556,7 @@ pub unsafe extern "C" fn readfile(
                             || using_b_ffname != 0 && old_b_ffname != (*curbuf).b_ffname
                             || using_b_fname != 0 && old_b_fname != (*curbuf).b_fname
                         {
-                            emsg(gettext(e_auchangedbuf));
+                            emsg(gettext(e_auchangedbuf.get()));
                             break '_theend;
                         }
                     }
@@ -4626,7 +4629,7 @@ pub unsafe extern "C" fn readfile(
                         || using_b_ffname != 0 && old_b_ffname != (*curbuf).b_ffname
                         || using_b_fname != 0 && old_b_fname != (*curbuf).b_fname)
                 {
-                    emsg(gettext(e_auchangedbuf));
+                    emsg(gettext(e_auchangedbuf.get()));
                     if !read_buffer {
                         close(fd);
                     }
@@ -6521,7 +6524,7 @@ pub unsafe extern "C" fn set_rw_fname(
         return FAIL;
     }
     if curbuf != buf {
-        emsg(gettext(e_auchangedbuf));
+        emsg(gettext(e_auchangedbuf.get()));
         return FAIL;
     }
     if setfname(curbuf, fname, sfname, false_0 != 0) == OK {
@@ -7317,7 +7320,7 @@ pub unsafe extern "C" fn vim_copyfile(
     }
     return OK;
 }
-static mut already_warned: bool = false_0 != 0;
+static already_warned: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn check_timestamps(mut focus: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if no_check_timestamps > 0 as ::core::ffi::c_int {
@@ -7339,7 +7342,7 @@ pub unsafe extern "C" fn check_timestamps(mut focus: ::core::ffi::c_int) -> ::co
     } else {
         no_wait_return += 1;
         did_check_timestamps = true_0 != 0;
-        already_warned = false_0 != 0;
+        already_warned.set(false_0 != 0);
         let mut buf: *mut buf_T = firstbuf;
         while !buf.is_null() {
             if (*buf).b_nwindows > 0 as ::core::ffi::c_int {
@@ -7414,7 +7417,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
     let mut can_reload: bool = false_0 != 0;
     let mut orig_size: uint64_t = (*buf).b_orig_size;
     let mut orig_mode: ::core::ffi::c_int = (*buf).b_orig_mode;
-    static mut busy: bool = false_0 != 0;
+    static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut bufref: bufref_T = bufref_T {
         br_buf: ::core::ptr::null_mut::<buf_T>(),
         br_fnum: 0,
@@ -7426,7 +7429,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
         || (*buf).b_ml.ml_mfp.is_null()
         || !bt_normal(buf)
         || (*buf).b_saving as ::core::ffi::c_int != 0
-        || busy as ::core::ffi::c_int != 0
+        || busy.get() as ::core::ffi::c_int != 0
     {
         return 0 as ::core::ffi::c_int;
     }
@@ -7522,7 +7525,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
                     reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                         .wrapping_sub(1 as usize) as size_t;
                 }
-                busy = true_0 != 0;
+                busy.set(true_0 != 0);
                 set_vim_var_string(
                     VV_FCS_REASON,
                     reason,
@@ -7542,7 +7545,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
                     buf,
                 );
                 allbuf_lock -= 1;
-                busy = false_0 != 0;
+                busy.set(false_0 != 0);
                 if n {
                     if !bufref_valid(&raw mut bufref) {
                         emsg(gettext(
@@ -7665,7 +7668,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
             }
         } else if State > MODE_NORMAL_BUSY as ::core::ffi::c_int
             || State & MODE_CMDLINE as ::core::ffi::c_int != 0
-            || already_warned as ::core::ffi::c_int != 0
+            || already_warned.get() as ::core::ffi::c_int != 0
         {
             if *mesg2 as ::core::ffi::c_int != NUL {
                 snprintf(
@@ -7694,7 +7697,7 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
                     redraw_cmdline = false_0 != 0;
                 }
             }
-            already_warned = true_0 != 0;
+            already_warned.set(true_0 != 0);
         }
         xfree(tbuf as *mut ::core::ffi::c_void);
         xfree(path as *mut ::core::ffi::c_void);
@@ -7939,11 +7942,12 @@ pub unsafe extern "C" fn write_lnum_adjust(mut offset: linenr_T) {
         (*curbuf).b_no_eol_lnum += offset;
     }
 }
-static mut vim_tempdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static vim_tempdir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut vim_tempdir_dp: *mut DIR = ::core::ptr::null_mut::<DIR>();
+pub static vim_tempdir_dp: GlobalCell<*mut DIR> = GlobalCell::new(::core::ptr::null_mut::<DIR>());
 unsafe extern "C" fn vim_mktempdir() {
-    static mut temp_dirs: [*const ::core::ffi::c_char; 4] = TEMP_DIR_NAMES;
+    static temp_dirs: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new(TEMP_DIR_NAMES);
     let mut tmp: [::core::ffi::c_char; 256] = [0; 256];
     let mut path: [::core::ffi::c_char; 256] = [0; 256];
     let mut user: [::core::ffi::c_char; 40] = [
@@ -8015,14 +8019,14 @@ unsafe extern "C" fn vim_mktempdir() {
         )
     {
         let mut tmplen: size_t = expand_env(
-            temp_dirs[i as usize] as *mut ::core::ffi::c_char,
+            (*temp_dirs.ptr())[i as usize] as *mut ::core::ffi::c_char,
             &raw mut tmp as *mut ::core::ffi::c_char,
             TEMP_FILE_PATH_MAXLEN - 64 as ::core::ffi::c_int,
         );
         if !os_isdir(&raw mut tmp as *mut ::core::ffi::c_char) {
             if strequal(
                 b"$TMPDIR\0".as_ptr() as *const ::core::ffi::c_char,
-                temp_dirs[i as usize],
+                (*temp_dirs.ptr())[i as usize],
             ) {
                 if !os_env_exists(
                     b"TMPDIR\0".as_ptr() as *const ::core::ffi::c_char,
@@ -8387,44 +8391,45 @@ pub unsafe extern "C" fn delete_recursive(
     return result;
 }
 unsafe extern "C" fn vim_opentempdir() {
-    if !vim_tempdir_dp.is_null() {
+    if !(*vim_tempdir_dp.ptr()).is_null() {
         return;
     }
-    let mut dp: *mut DIR = opendir(vim_tempdir);
+    let mut dp: *mut DIR = opendir(vim_tempdir.get());
     if dp.is_null() {
         return;
     }
-    vim_tempdir_dp = dp;
-    flock(dirfd(vim_tempdir_dp), LOCK_SH);
+    vim_tempdir_dp.set(dp);
+    flock(dirfd(vim_tempdir_dp.get()), LOCK_SH);
 }
 unsafe extern "C" fn vim_closetempdir() {
-    if vim_tempdir_dp.is_null() {
+    if (*vim_tempdir_dp.ptr()).is_null() {
         return;
     }
-    closedir(vim_tempdir_dp);
-    vim_tempdir_dp = ::core::ptr::null_mut::<DIR>();
+    closedir(vim_tempdir_dp.get());
+    vim_tempdir_dp.set(::core::ptr::null_mut::<DIR>());
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_deltempdir() {
-    if vim_tempdir.is_null() {
+    if (*vim_tempdir.ptr()).is_null() {
         return;
     }
     vim_closetempdir();
-    *path_tail(vim_tempdir).offset(-1 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
-    delete_recursive(vim_tempdir);
+    *path_tail(vim_tempdir.get()).offset(-1 as ::core::ffi::c_int as isize) =
+        NUL as ::core::ffi::c_char;
+    delete_recursive(vim_tempdir.get());
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut vim_tempdir as *mut *mut ::core::ffi::c_void;
+        vim_tempdir.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_gettempdir() -> *mut ::core::ffi::c_char {
-    static mut notfound: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if vim_tempdir.is_null() || !os_isdir(vim_tempdir) {
-        if !vim_tempdir.is_null() {
-            notfound += 1;
-            if notfound == 1 as ::core::ffi::c_int {
+    static notfound: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if (*vim_tempdir.ptr()).is_null() || !os_isdir(vim_tempdir.get()) {
+        if !(*vim_tempdir.ptr()).is_null() {
+            (*notfound.ptr()) += 1;
+            if notfound.get() == 1 as ::core::ffi::c_int {
                 logmsg(
                     LOGLVL_ERR,
                     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -8433,25 +8438,25 @@ pub unsafe extern "C" fn vim_gettempdir() -> *mut ::core::ffi::c_char {
                     true_0 != 0,
                     b"tempdir disappeared (antivirus or broken cleanup job?): %s\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    vim_tempdir,
+                    vim_tempdir.get(),
                 );
             }
-            if notfound > 1 as ::core::ffi::c_int {
+            if notfound.get() > 1 as ::core::ffi::c_int {
                 msg_schedule_semsg(
                     b"E5431: tempdir disappeared (%d times)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    notfound,
+                    notfound.get(),
                 );
             }
             let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut vim_tempdir as *mut *mut ::core::ffi::c_void;
+                vim_tempdir.ptr() as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
         }
         vim_mktempdir();
     }
-    return vim_tempdir;
+    return vim_tempdir.get();
 }
 unsafe extern "C" fn vim_settempdir(mut tempdir: *mut ::core::ffi::c_char) -> bool {
     let mut buf: *mut ::core::ffi::c_char =
@@ -8469,21 +8474,22 @@ unsafe extern "C" fn vim_settempdir(mut tempdir: *mut ::core::ffi::c_char) -> bo
                 as ::core::ffi::c_ulong,
         ) as size_t;
     }
-    vim_tempdir = xmemdupz(buf as *const ::core::ffi::c_void, buflen) as *mut ::core::ffi::c_char;
+    vim_tempdir
+        .set(xmemdupz(buf as *const ::core::ffi::c_void, buflen) as *mut ::core::ffi::c_char);
     vim_opentempdir();
     xfree(buf as *mut ::core::ffi::c_void);
     return true_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_tempname() -> *mut ::core::ffi::c_char {
-    static mut temp_count: uint64_t = 0;
+    static temp_count: GlobalCell<uint64_t> = GlobalCell::new(0);
     let mut tempdir: *mut ::core::ffi::c_char = vim_gettempdir();
     if tempdir.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut templ: [::core::ffi::c_char; 256] = [0; 256];
-    let c2rust_fresh8 = temp_count;
-    temp_count = temp_count.wrapping_add(1);
+    let c2rust_fresh8 = temp_count.get();
+    temp_count.set((*temp_count.ptr()).wrapping_add(1));
     let mut itmplen: ::core::ffi::c_int = snprintf(
         &raw mut templ as *mut ::core::ffi::c_char,
         TEMP_FILE_PATH_MAXLEN as size_t,

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(
@@ -770,8 +771,8 @@ pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KILL_TIMEOUT_MS: ::core::ffi::c_int = 2000 as ::core::ffi::c_int;
-static mut proc_is_tearing_down: bool = false_0 != 0;
-static mut exit_need_delay: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static proc_is_tearing_down: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static exit_need_delay: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn proc_spawn(
     mut proc: *mut Proc,
@@ -932,7 +933,7 @@ pub unsafe extern "C" fn proc_spawn(
 }
 #[no_mangle]
 pub unsafe extern "C" fn proc_teardown(mut loop_0: *mut Loop) {
-    proc_is_tearing_down = true_0 != 0;
+    proc_is_tearing_down.set(true_0 != 0);
     let mut i: size_t = 0 as size_t;
     while i < (*loop_0).children.size {
         let mut proc: *mut Proc = *(*loop_0).children.items.offset(i as isize);
@@ -1239,7 +1240,7 @@ unsafe extern "C" fn decref(mut proc: *mut Proc) {
     };
 }
 unsafe extern "C" fn proc_close(mut proc: *mut Proc) {
-    if proc_is_tearing_down as ::core::ffi::c_int != 0
+    if proc_is_tearing_down.get() as ::core::ffi::c_int != 0
         && (*proc).closed as ::core::ffi::c_int != 0
         && ((*proc).detach as ::core::ffi::c_int != 0
             || (*proc).type_0 as ::core::ffi::c_uint
@@ -1283,7 +1284,7 @@ unsafe extern "C" fn flush_stream(mut proc: *mut Proc, mut stream: *mut RStream)
     let mut max_bytes: size_t = SIZE_MAX as size_t;
     if (*proc).type_0 as ::core::ffi::c_uint
         != kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-        || proc_is_tearing_down as ::core::ffi::c_int != 0
+        || proc_is_tearing_down.get() as ::core::ffi::c_int != 0
     {
         let mut system_buffer_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut err: ::core::ffi::c_int = uv_recv_buffer_size(
@@ -1326,12 +1327,12 @@ unsafe extern "C" fn flush_stream(mut proc: *mut Proc, mut stream: *mut RStream)
 }
 unsafe extern "C" fn proc_close_handles(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut proc: *mut Proc = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Proc;
-    exit_need_delay += 1;
+    (*exit_need_delay.ptr()) += 1;
     flush_stream(proc, &raw mut (*proc).out);
     flush_stream(proc, &raw mut (*proc).err);
     proc_close_streams(proc);
     proc_close(proc);
-    exit_need_delay -= 1;
+    (*exit_need_delay.ptr()) -= 1;
 }
 unsafe extern "C" fn exit_delay_cb(mut _handle: *mut uv_timer_t) {
     uv_timer_stop(&raw mut main_loop.exit_delay_timer);
@@ -1357,7 +1358,7 @@ unsafe extern "C" fn exit_delay_cb(mut _handle: *mut uv_timer_t) {
 unsafe extern "C" fn exit_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut status: ::core::ffi::c_int = (*argv.offset(0 as ::core::ffi::c_int as isize))
         .expose_addr() as intptr_t as ::core::ffi::c_int;
-    if exit_need_delay != 0 {
+    if exit_need_delay.get() != 0 {
         main_loop.exit_delay_timer.data = *argv.offset(0 as ::core::ffi::c_int as isize);
         uv_timer_start(
             &raw mut main_loop.exit_delay_timer,

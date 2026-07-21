@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -3624,8 +3625,8 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-static mut diff_busy: bool = false_0 != 0;
-static mut diff_need_update: bool = false_0 != 0;
+static diff_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static diff_need_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DIFF_FILLER: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const DIFF_IBLANK: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const DIFF_ICASE: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -3648,15 +3649,16 @@ pub const ALL_WHITE_DIFF: ::core::ffi::c_int = DIFF_IWHITE | DIFF_IWHITEALL | DI
 pub const ALL_INLINE: ::core::ffi::c_int =
     DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
 pub const ALL_INLINE_DIFF: ::core::ffi::c_int = DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
-static mut diff_flags: ::core::ffi::c_int =
-    DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR;
-static mut diff_algorithm: ::core::ffi::c_int = XDF_INDENT_HEURISTIC;
-static mut diff_word_gap: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-static mut linematch_lines: ::core::ffi::c_int = 40 as ::core::ffi::c_int;
+static diff_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
+    DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR,
+);
+static diff_algorithm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(XDF_INDENT_HEURISTIC);
+static diff_word_gap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(5 as ::core::ffi::c_int);
+static linematch_lines: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as ::core::ffi::c_int);
 pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
-static mut diff_a_works: TriState = kNone;
+static diff_a_works: GlobalCell<TriState> = GlobalCell::new(kNone);
 unsafe extern "C" fn clear_diffblock(mut dp: *mut diff_T) {
     ga_clear(&raw mut (*dp).df_changes);
     xfree(dp as *mut ::core::ffi::c_void);
@@ -3821,7 +3823,7 @@ unsafe extern "C" fn diff_mark_adjust_tp(
                 && (*dp).df_lnum[idx as usize] > line1)
             && (dprev.is_null()
                 || (*dprev).df_lnum[idx as usize] + (*dprev).df_count[idx as usize] < line1)
-            && !diff_busy
+            && !diff_busy.get()
         {
             let mut dnext: *mut diff_T = diff_alloc_new(tp, dprev, dp);
             (*dnext).df_lnum[idx as usize] = line1;
@@ -3847,7 +3849,7 @@ unsafe extern "C" fn diff_mark_adjust_tp(
         let mut last: linenr_T =
             (*dp).df_lnum[idx as usize] + (*dp).df_count[idx as usize] - 1 as linenr_T;
         if last >= line1 - 1 as linenr_T {
-            if diff_busy {
+            if diff_busy.get() {
                 if (*dp).df_lnum[idx as usize] > line2 {
                     (*dp).df_lnum[idx as usize] += amount_after;
                 }
@@ -3935,7 +3937,7 @@ unsafe extern "C" fn diff_mark_adjust_tp(
         }
         if !dprev.is_null()
             && !(*dp).is_linematched
-            && !diff_busy
+            && !diff_busy.get()
             && (*dprev).df_lnum[idx as usize] + (*dprev).df_count[idx as usize]
                 == (*dp).df_lnum[idx as usize]
         {
@@ -4198,7 +4200,7 @@ unsafe extern "C" fn diff_write_buffer(
     let mut lnum_0: linenr_T = start;
     while lnum_0 <= end {
         let mut s: *mut ::core::ffi::c_char = ml_get_buf(buf, lnum_0);
-        if diff_flags & DIFF_ICASE != 0 {
+        if diff_flags.get() & DIFF_ICASE != 0 {
             while *s as ::core::ffi::c_int != NUL {
                 let mut c: ::core::ffi::c_int = 0;
                 let mut c_len: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -4357,7 +4359,7 @@ unsafe extern "C" fn diff_try_update(
             0 as ::core::ffi::c_int,
             ::core::mem::size_of::<[[linenr_T; 20]; 8]>(),
         );
-        if diff_flags & DIFF_ANCHOR != 0 {
+        if diff_flags.get() & DIFF_ANCHOR != 0 {
             let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while idx < DB_COUNT {
                 if !(*curtab).tp_diffbuf[idx as usize].is_null() {
@@ -4506,7 +4508,7 @@ unsafe extern "C" fn diff_try_update(
 }
 #[no_mangle]
 pub unsafe extern "C" fn diff_internal() -> ::core::ffi::c_int {
-    return (diff_flags & DIFF_INTERNAL != 0 as ::core::ffi::c_int
+    return (diff_flags.get() & DIFF_INTERNAL != 0 as ::core::ffi::c_int
         && *p_dex as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -4539,8 +4541,8 @@ pub unsafe extern "C" fn ex_diffupdate(mut eap: *mut exarg_T) {
         },
         dio_internal: 0,
     };
-    if diff_busy {
-        diff_need_update = true_0 != 0;
+    if diff_busy.get() {
+        diff_need_update.set(true_0 != 0);
         return;
     }
     let mut had_diffs: ::core::ffi::c_int =
@@ -4685,10 +4687,10 @@ unsafe extern "C" fn check_external_diff(mut diffio: *mut diffio_T) -> ::core::f
         if *p_dex as ::core::ffi::c_int != NUL {
             break;
         }
-        if diff_a_works as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+        if diff_a_works.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
             break;
         }
-        diff_a_works = ok;
+        diff_a_works.set(ok);
         if ok as u64 != 0 {
             break;
         }
@@ -4702,7 +4704,7 @@ unsafe extern "C" fn check_external_diff(mut diffio: *mut diffio_T) -> ::core::f
         emsg(gettext(
             b"E97: Cannot create diffs\0".as_ptr() as *const ::core::ffi::c_char
         ));
-        diff_a_works = kNone;
+        diff_a_works.set(kNone);
         return FAIL;
     }
     return OK;
@@ -4741,17 +4743,17 @@ unsafe extern "C" fn diff_file_internal(mut diffio: *mut diffio_T) -> ::core::ff
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<xdemitcb_t>(),
     );
-    param.flags = diff_algorithm as ::core::ffi::c_ulong;
-    if diff_flags & DIFF_IWHITE != 0 {
+    param.flags = diff_algorithm.get() as ::core::ffi::c_ulong;
+    if diff_flags.get() & DIFF_IWHITE != 0 {
         param.flags |= XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_ulong;
     }
-    if diff_flags & DIFF_IWHITEALL != 0 {
+    if diff_flags.get() & DIFF_IWHITEALL != 0 {
         param.flags |= XDF_IGNORE_WHITESPACE as ::core::ffi::c_ulong;
     }
-    if diff_flags & DIFF_IWHITEEOL != 0 {
+    if diff_flags.get() & DIFF_IWHITEEOL != 0 {
         param.flags |= XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_ulong;
     }
-    if diff_flags & DIFF_IBLANK != 0 {
+    if diff_flags.get() & DIFF_IBLANK != 0 {
         param.flags |= XDF_IGNORE_BLANK_LINES as ::core::ffi::c_ulong;
     }
     emit_cfg.ctxlen = 0 as ::core::ffi::c_long;
@@ -4816,33 +4818,33 @@ unsafe extern "C" fn diff_file(mut dio: *mut diffio_T) -> ::core::ffi::c_int {
         cmd,
         len,
         b"diff %s%s%s%s%s%s%s%s %s\0".as_ptr() as *const ::core::ffi::c_char,
-        if diff_a_works as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
+        if diff_a_works.get() as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"-a \0".as_ptr() as *const ::core::ffi::c_char
         },
         b"\0".as_ptr() as *const ::core::ffi::c_char,
-        if diff_flags & DIFF_IWHITE != 0 {
+        if diff_flags.get() & DIFF_IWHITE != 0 {
             b"-b \0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         },
-        if diff_flags & DIFF_IWHITEALL != 0 {
+        if diff_flags.get() & DIFF_IWHITEALL != 0 {
             b"-w \0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         },
-        if diff_flags & DIFF_IWHITEEOL != 0 {
+        if diff_flags.get() & DIFF_IWHITEEOL != 0 {
             b"-Z \0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         },
-        if diff_flags & DIFF_IBLANK != 0 {
+        if diff_flags.get() & DIFF_IBLANK != 0 {
             b"-B \0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         },
-        if diff_flags & DIFF_ICASE != 0 {
+        if diff_flags.get() & DIFF_ICASE != 0 {
             b"-i \0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
@@ -5043,7 +5045,7 @@ pub unsafe extern "C" fn ex_diffpatch(mut eap: *mut exarg_T) {
                 cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
                 if win_split(
                     0 as ::core::ffi::c_int,
-                    if diff_flags & DIFF_VERTICAL != 0 {
+                    if diff_flags.get() & DIFF_VERTICAL != 0 {
                         WSP_VERT as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
@@ -5098,7 +5100,7 @@ pub unsafe extern "C" fn ex_diffsplit(mut eap: *mut exarg_T) {
     cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
     if win_split(
         0 as ::core::ffi::c_int,
-        if diff_flags & DIFF_VERTICAL != 0 {
+        if diff_flags.get() & DIFF_VERTICAL != 0 {
             WSP_VERT as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
@@ -5160,7 +5162,7 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
         (*wp).w_onebuf_opt.wo_crb_save = (*wp).w_onebuf_opt.wo_crb;
     }
     (*wp).w_onebuf_opt.wo_crb = true_0;
-    if diff_flags & DIFF_FOLLOWWRAP == 0 {
+    if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
         if (*wp).w_onebuf_opt.wo_diff == 0 {
             (*wp).w_onebuf_opt.wo_wrap_save = (*wp).w_onebuf_opt.wo_wrap;
         }
@@ -5257,7 +5259,7 @@ pub unsafe extern "C" fn ex_diffoff(mut eap: *mut exarg_T) {
                 if (*wp).w_onebuf_opt.wo_crb != 0 {
                     (*wp).w_onebuf_opt.wo_crb = (*wp).w_onebuf_opt.wo_crb_save;
                 }
-                if diff_flags & DIFF_FOLLOWWRAP == 0 {
+                if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
                     if (*wp).w_onebuf_opt.wo_wrap == 0 && (*wp).w_onebuf_opt.wo_wrap_save != 0 {
                         (*wp).w_onebuf_opt.wo_wrap = true_0;
                         (*wp).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
@@ -5303,7 +5305,7 @@ pub unsafe extern "C" fn ex_diffoff(mut eap: *mut exarg_T) {
         diff_buf_clear();
     }
     if !diffwin {
-        diff_need_update = false_0 != 0;
+        diff_need_update.set(false_0 != 0);
         (*curtab).tp_diff_invalid = false_0;
         (*curtab).tp_diff_update = false_0;
         diff_clear(curtab);
@@ -5626,7 +5628,7 @@ pub unsafe extern "C" fn diff_clear(mut tp: *mut tabpage_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn diff_linematch(mut dp: *mut diff_T) -> bool {
-    if diff_flags & DIFF_LINEMATCH == 0 {
+    if diff_flags.get() & DIFF_LINEMATCH == 0 {
         return false_0 != 0;
     }
     let mut tsize: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5640,7 +5642,7 @@ pub unsafe extern "C" fn diff_linematch(mut dp: *mut diff_T) -> bool {
         }
         i += 1;
     }
-    return tsize <= linematch_lines;
+    return tsize <= linematch_lines.get();
 }
 unsafe extern "C" fn get_max_diff_length(mut dp: *const diff_T) -> ::core::ffi::c_int {
     let mut maxlength: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5763,7 +5765,7 @@ unsafe extern "C" fn calculate_topfill_and_topline(
             break;
         }
     }
-    if diff_flags & DIFF_FILLER != 0 {
+    if diff_flags.get() & DIFF_FILLER != 0 {
         *topfill = max_virt_lines - virtual_lines_passed;
     }
     *topline = curlinenum_to as linenr_T;
@@ -5846,7 +5848,7 @@ unsafe extern "C" fn run_linematch_algorithm(mut dp: *mut diff_T) {
         i += 1;
     }
     let mut decisions: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    let iwhite: bool = diff_flags & (DIFF_IWHITEALL | DIFF_IWHITE) > 0 as ::core::ffi::c_int;
+    let iwhite: bool = diff_flags.get() & (DIFF_IWHITEALL | DIFF_IWHITE) > 0 as ::core::ffi::c_int;
     let mut decisions_length: size_t = linematch_nbuffers(
         &raw mut diffbufs as *mut *const mmfile_t,
         &raw mut diff_length as *mut ::core::ffi::c_int,
@@ -5927,7 +5929,7 @@ pub unsafe extern "C" fn diff_check_with_linestatus(
     }
     let mut num_fill: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lnum == (*dp).df_lnum[idx as usize] + (*dp).df_count[idx as usize] {
-        if diff_flags & DIFF_FILLER != 0 {
+        if diff_flags.get() & DIFF_FILLER != 0 {
             let mut maxcount: ::core::ffi::c_int = get_max_diff_length(dp);
             num_fill += (maxcount as linenr_T - (*dp).df_count[idx as usize]) as ::core::ffi::c_int;
         }
@@ -5992,7 +5994,7 @@ pub unsafe extern "C" fn diff_check_fill(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
 ) -> ::core::ffi::c_int {
-    if diff_flags & DIFF_FILLER == 0 {
+    if diff_flags.get() & DIFF_FILLER == 0 {
         return 0 as ::core::ffi::c_int;
     }
     let mut n: ::core::ffi::c_int =
@@ -6046,7 +6048,7 @@ unsafe extern "C" fn diff_equal_char(
     }
     if l > 1 as ::core::ffi::c_int {
         if strncmp(p1, p2, l as size_t) != 0 as ::core::ffi::c_int
-            && (diff_flags & DIFF_ICASE == 0
+            && (diff_flags.get() & DIFF_ICASE == 0
                 || utf_fold(utf_ptr2char(p1)) != utf_fold(utf_ptr2char(p2)))
         {
             return false_0 != 0;
@@ -6054,7 +6056,7 @@ unsafe extern "C" fn diff_equal_char(
         *len = l;
     } else {
         if *p1 as ::core::ffi::c_int != *p2 as ::core::ffi::c_int
-            && (diff_flags & DIFF_ICASE == 0
+            && (diff_flags.get() & DIFF_ICASE == 0
                 || tolower(*p1 as uint8_t as ::core::ffi::c_int)
                     != tolower(*p2 as uint8_t as ::core::ffi::c_int))
         {
@@ -6068,25 +6070,25 @@ unsafe extern "C" fn diff_cmp(
     mut s1: *mut ::core::ffi::c_char,
     mut s2: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if diff_flags & DIFF_IBLANK != 0
+    if diff_flags.get() & DIFF_IBLANK != 0
         && (*skipwhite(s1) as ::core::ffi::c_int == NUL
             || *skipwhite(s2) as ::core::ffi::c_int == NUL)
     {
         return 0 as ::core::ffi::c_int;
     }
-    if diff_flags & (DIFF_ICASE | ALL_WHITE_DIFF) == 0 as ::core::ffi::c_int {
+    if diff_flags.get() & (DIFF_ICASE | ALL_WHITE_DIFF) == 0 as ::core::ffi::c_int {
         return strcmp(s1, s2);
     }
-    if diff_flags & DIFF_ICASE != 0 && diff_flags & ALL_WHITE_DIFF == 0 {
+    if diff_flags.get() & DIFF_ICASE != 0 && diff_flags.get() & ALL_WHITE_DIFF == 0 {
         return mb_stricmp(s1, s2);
     }
     let mut p1: *mut ::core::ffi::c_char = s1;
     let mut p2: *mut ::core::ffi::c_char = s2;
     while *p1 as ::core::ffi::c_int != NUL && *p2 as ::core::ffi::c_int != NUL {
-        if diff_flags & DIFF_IWHITE != 0
+        if diff_flags.get() & DIFF_IWHITE != 0
             && ascii_iswhite(*p1 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
             && ascii_iswhite(*p2 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            || diff_flags & DIFF_IWHITEALL != 0
+            || diff_flags.get() & DIFF_IWHITEALL != 0
                 && (ascii_iswhite(*p1 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                     || ascii_iswhite(*p2 as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
         {
@@ -6269,7 +6271,7 @@ pub unsafe extern "C" fn diffanchors_changed(mut buflocal: bool) -> ::core::ffi:
         ::core::ptr::null_mut::<linenr_T>(),
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     );
-    if result == OK && diff_flags & DIFF_ANCHOR != 0 {
+    if result == OK && diff_flags.get() & DIFF_ANCHOR != 0 {
         let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
         while !tp.is_null() {
             if !buflocal {
@@ -6548,45 +6550,45 @@ pub unsafe extern "C" fn diffopt_changed() -> ::core::ffi::c_int {
     if diff_flags_new & DIFF_HORIZONTAL != 0 && diff_flags_new & DIFF_VERTICAL != 0 {
         return FAIL;
     }
-    if diff_flags != diff_flags_new || diff_algorithm != diff_algorithm_new {
+    if diff_flags.get() != diff_flags_new || diff_algorithm.get() != diff_algorithm_new {
         let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
         while !tp.is_null() {
             (*tp).tp_diff_invalid = true_0;
             tp = (*tp).tp_next as *mut tabpage_T;
         }
     }
-    diff_flags = diff_flags_new;
+    diff_flags.set(diff_flags_new);
     diff_context = if diff_context_new == 0 as ::core::ffi::c_int {
         1 as ::core::ffi::c_int
     } else {
         diff_context_new
     };
-    linematch_lines = linematch_lines_new;
+    linematch_lines.set(linematch_lines_new);
     diff_foldcolumn = diff_foldcolumn_new;
-    diff_algorithm = diff_algorithm_new;
+    diff_algorithm.set(diff_algorithm_new);
     diff_redraw(true_0 != 0);
     check_scrollbind(0 as linenr_T, 0 as ::core::ffi::c_int);
     return OK;
 }
 #[no_mangle]
 pub unsafe extern "C" fn diffopt_horizontal() -> bool {
-    return diff_flags & DIFF_HORIZONTAL != 0 as ::core::ffi::c_int;
+    return diff_flags.get() & DIFF_HORIZONTAL != 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn diffopt_hiddenoff() -> bool {
-    return diff_flags & DIFF_HIDDEN_OFF != 0 as ::core::ffi::c_int;
+    return diff_flags.get() & DIFF_HIDDEN_OFF != 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn diffopt_closeoff() -> bool {
-    return diff_flags & DIFF_CLOSE_OFF != 0 as ::core::ffi::c_int;
+    return diff_flags.get() & DIFF_CLOSE_OFF != 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn diffopt_filler() -> bool {
-    return diff_flags & DIFF_FILLER != 0 as ::core::ffi::c_int;
+    return diff_flags.get() & DIFF_FILLER != 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn diff_update_line(mut lnum: linenr_T) {
-    if diff_flags & ALL_INLINE_DIFF == 0 {
+    if diff_flags.get() & ALL_INLINE_DIFF == 0 {
         return;
     }
     let mut idx: ::core::ffi::c_int = diff_buf_idx(curbuf, curtab);
@@ -6606,12 +6608,12 @@ pub unsafe extern "C" fn diff_update_line(mut lnum: linenr_T) {
         (*dp).df_changes.ga_len = 0 as ::core::ffi::c_int;
     }
 }
-static mut simple_diffline_change: diffline_change_T = diffline_change_T {
+static simple_diffline_change: GlobalCell<diffline_change_T> = GlobalCell::new(diffline_change_T {
     dc_start: [0; 8],
     dc_end: [0; 8],
     dc_start_lnum_off: [0; 8],
     dc_end_lnum_off: [0; 8],
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn diff_change_parse(
     mut diffline: *mut diffline_T,
@@ -6629,7 +6631,7 @@ pub unsafe extern "C" fn diff_change_parse(
     } else {
         *change_end = (*change).dc_end[(*diffline).bufidx as usize] as ::core::ffi::c_int;
     }
-    if change == &raw mut simple_diffline_change {
+    if change == simple_diffline_change.ptr() {
         return false_0 != 0;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6654,7 +6656,7 @@ unsafe extern "C" fn diff_find_change_simple(
     mut endp: *mut ::core::ffi::c_int,
 ) -> bool {
     let mut line_org: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if diff_flags & DIFF_INLINE_NONE != 0 {
+    if diff_flags.get() & DIFF_INLINE_NONE != 0 {
         line_org = ::core::ptr::null_mut::<::core::ffi::c_char>();
     } else {
         line_org = xstrdup(ml_get_buf((*wp).w_buffer, lnum));
@@ -6670,7 +6672,7 @@ unsafe extern "C" fn diff_find_change_simple(
         if !(*curtab).tp_diffbuf[i as usize].is_null() && i != idx {
             if off < (*dp).df_count[i as usize] {
                 added = false_0 != 0;
-                if diff_flags & DIFF_INLINE_NONE != 0 {
+                if diff_flags.get() & DIFF_INLINE_NONE != 0 {
                     break;
                 }
                 let mut line_new: *mut ::core::ffi::c_char = ml_get_buf(
@@ -6680,14 +6682,14 @@ unsafe extern "C" fn diff_find_change_simple(
                 si_new = 0 as ::core::ffi::c_int;
                 si_org = si_new;
                 while *line_org.offset(si_org as isize) as ::core::ffi::c_int != NUL {
-                    if diff_flags & DIFF_IWHITE != 0
+                    if diff_flags.get() & DIFF_IWHITE != 0
                         && ascii_iswhite(*line_org.offset(si_org as isize) as ::core::ffi::c_int)
                             as ::core::ffi::c_int
                             != 0
                         && ascii_iswhite(*line_new.offset(si_new as isize) as ::core::ffi::c_int)
                             as ::core::ffi::c_int
                             != 0
-                        || diff_flags & DIFF_IWHITEALL != 0
+                        || diff_flags.get() & DIFF_IWHITEALL != 0
                             && (ascii_iswhite(
                                 *line_org.offset(si_org as isize) as ::core::ffi::c_int
                             ) as ::core::ffi::c_int
@@ -6727,14 +6729,14 @@ unsafe extern "C" fn diff_find_change_simple(
                         && ei_org >= 0 as ::core::ffi::c_int
                         && ei_new >= 0 as ::core::ffi::c_int
                     {
-                        if diff_flags & DIFF_IWHITE != 0
+                        if diff_flags.get() & DIFF_IWHITE != 0
                             && ascii_iswhite(*line_org.offset(ei_org as isize) as ::core::ffi::c_int)
                                 as ::core::ffi::c_int
                                 != 0
                             && ascii_iswhite(*line_new.offset(ei_new as isize) as ::core::ffi::c_int)
                                 as ::core::ffi::c_int
                                 != 0
-                            || diff_flags & DIFF_IWHITEALL != 0
+                            || diff_flags.get() & DIFF_IWHITEALL != 0
                                 && (ascii_iswhite(
                                     *line_org.offset(ei_org as isize) as ::core::ffi::c_int
                                 ) as ::core::ffi::c_int
@@ -6902,7 +6904,7 @@ unsafe extern "C" fn diff_refine_inline_word_highlight(
                     let mut gap_end: ::core::ffi::c_int =
                         (*entry2).byte_start as ::core::ffi::c_int;
                     let mut gap_size: ::core::ffi::c_int = gap_end - gap_start;
-                    if gap_size <= 0 as ::core::ffi::c_int || gap_size > diff_word_gap {
+                    if gap_size <= 0 as ::core::ffi::c_int || gap_size > diff_word_gap.get() {
                         dp = (*dp).df_next;
                     } else {
                         let mut line: *mut ::core::ffi::c_char = ml_get_buf(
@@ -7009,7 +7011,7 @@ unsafe extern "C" fn diff_refine_inline_word_highlight(
 }
 unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
     let mut new_diff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-    let save_diff_algorithm: ::core::ffi::c_int = diff_algorithm;
+    let save_diff_algorithm: ::core::ffi::c_int = diff_algorithm.get();
     let mut dio: diffio_T = diffio_T {
         dio_orig: diffin_T {
             din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -7043,7 +7045,7 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
         1000 as ::core::ffi::c_int,
     );
     dio.dio_internal = true_0;
-    diff_algorithm |= XDF_INDENT_HEURISTIC;
+    (*diff_algorithm.ptr()) |= XDF_INDENT_HEURISTIC;
     let mut orig_diff: *mut diff_T = (*curtab).tp_first_diff;
     (*curtab).tp_first_diff = ::core::ptr::null_mut::<diff_T>();
     let mut orig_diffbuf: [*mut buf_T; 8] = [::core::ptr::null_mut::<buf_T>(); 8];
@@ -7126,7 +7128,7 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
                         let mut s: *mut ::core::ffi::c_char = curline;
                         while *s as ::core::ffi::c_int != NUL {
                             let mut new_in_keyword: bool = false_0 != 0;
-                            if diff_flags & DIFF_INLINE_WORD != 0 {
+                            if diff_flags.get() & DIFF_INLINE_WORD != 0 {
                                 new_in_keyword = mb_get_class_tab(
                                     s,
                                     &raw mut (**(&raw mut (*curtab).tp_diffbuf as *mut *mut buf_T)
@@ -7139,12 +7141,12 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
                                 numlines += 1;
                             }
                             if ascii_iswhite(*s as ::core::ffi::c_int) {
-                                if diff_flags & DIFF_IWHITEALL != 0 {
+                                if diff_flags.get() & DIFF_IWHITEALL != 0 {
                                     in_keyword = false_0 != 0;
                                     s = skipwhite(s);
                                     continue;
-                                } else if diff_flags & DIFF_IWHITEEOL != 0
-                                    || diff_flags & DIFF_IWHITE != 0
+                                } else if diff_flags.get() & DIFF_IWHITEEOL != 0
+                                    || diff_flags.get() & DIFF_IWHITE != 0
                                 {
                                     if !last_white {
                                         eol_ga_len = (*curstr).ga_len;
@@ -7153,8 +7155,8 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
                                         last_white = true_0 != 0;
                                     }
                                 }
-                            } else if diff_flags & DIFF_IWHITEEOL != 0
-                                || diff_flags & DIFF_IWHITE != 0
+                            } else if diff_flags.get() & DIFF_IWHITEEOL != 0
+                                || diff_flags.get() & DIFF_IWHITE != 0
                             {
                                 last_white = false_0 != 0;
                                 eol_ga_len = -1 as ::core::ffi::c_int;
@@ -7168,11 +7170,11 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
                                 char_len = utfc_ptr2len(s);
                                 if ascii_iswhite(*s as ::core::ffi::c_int) as ::core::ffi::c_int
                                     != 0
-                                    && diff_flags & DIFF_IWHITE != 0
+                                    && diff_flags.get() & DIFF_IWHITE != 0
                                 {
                                     char_len = skipwhite(s).offset_from(s) as ::core::ffi::c_int;
                                 }
-                                if diff_flags & DIFF_ICASE != 0 {
+                                if diff_flags.get() & DIFF_ICASE != 0 {
                                     let mut c: ::core::ffi::c_int = utf_ptr2char(s);
                                     let mut c_len: ::core::ffi::c_int = utf_char2len(c);
                                     c = utf_fold(c);
@@ -7231,14 +7233,16 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
                             ga_append(curstr, NL as uint8_t);
                             numlines += 1;
                         }
-                        if diff_flags & DIFF_IWHITEEOL != 0 || diff_flags & DIFF_IWHITE != 0 {
+                        if diff_flags.get() & DIFF_IWHITEEOL != 0
+                            || diff_flags.get() & DIFF_IWHITE != 0
+                        {
                             if eol_ga_len != -1 as ::core::ffi::c_int {
                                 (*curstr).ga_len = eol_ga_len;
                                 linemap[i_0 as usize].ga_len = eol_linemap_len;
                                 numlines = eol_numlines as linenr_T;
                             }
                         }
-                        if diff_flags & DIFF_IWHITEALL == 0 {
+                        if diff_flags.get() & DIFF_IWHITEALL == 0 {
                             ga_append(curstr, NL as uint8_t);
                             numlines += 1;
                             let mut linemap_entry_0: linemap_entry_T = linemap_entry_T {
@@ -7276,14 +7280,15 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
             i_0 += 1;
         }
         new_diff = (*curtab).tp_first_diff;
-        if diff_flags & DIFF_INLINE_WORD != 0 && file1_idx != -1 as ::core::ffi::c_int {
+        if diff_flags.get() & DIFF_INLINE_WORD != 0 && file1_idx != -1 as ::core::ffi::c_int {
             diff_refine_inline_word_highlight(
                 new_diff,
                 &raw mut linemap as *mut garray_T,
                 file1_idx,
                 (*dp).df_lnum[file1_idx as usize],
             );
-        } else if diff_flags & DIFF_INLINE_CHAR != 0 && file1_idx != -1 as ::core::ffi::c_int {
+        } else if diff_flags.get() & DIFF_INLINE_CHAR != 0 && file1_idx != -1 as ::core::ffi::c_int
+        {
             diff_refine_inline_char_highlight(
                 new_diff,
                 &raw mut linemap as *mut garray_T,
@@ -7349,7 +7354,7 @@ unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
             new_diff = (*new_diff).df_next;
         }
     }
-    diff_algorithm = save_diff_algorithm;
+    diff_algorithm.set(save_diff_algorithm);
     (*dp).has_changes = true_0 != 0;
     diff_clear(curtab);
     (*curtab).tp_first_diff = orig_diff;
@@ -7390,7 +7395,7 @@ pub unsafe extern "C" fn diff_find_change(
     }
     let mut off: ::core::ffi::c_int =
         lnum as ::core::ffi::c_int - (*dp).df_lnum[idx as usize] as ::core::ffi::c_int;
-    if diff_flags & ALL_INLINE_DIFF == 0 {
+    if diff_flags.get() & ALL_INLINE_DIFF == 0 {
         let mut change_start: ::core::ffi::c_int = MAXCOL as ::core::ffi::c_int;
         let mut change_end: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut ret: ::core::ffi::c_int = diff_find_change_simple(
@@ -7403,18 +7408,18 @@ pub unsafe extern "C" fn diff_find_change(
         ) as ::core::ffi::c_int;
         change_end += 1 as ::core::ffi::c_int;
         memset(
-            &raw mut simple_diffline_change as *mut ::core::ffi::c_void,
+            simple_diffline_change.ptr() as *mut ::core::ffi::c_void,
             0 as ::core::ffi::c_int,
             ::core::mem::size_of::<diffline_change_T>(),
         );
-        (*diffline).changes = &raw mut simple_diffline_change;
+        (*diffline).changes = simple_diffline_change.ptr();
         (*diffline).num_changes = 1 as ::core::ffi::c_int;
         (*diffline).bufidx = idx;
         (*diffline).lineoff = (lnum - (*dp).df_lnum[idx as usize]) as ::core::ffi::c_int;
-        simple_diffline_change.dc_start[idx as usize] = change_start as colnr_T;
-        simple_diffline_change.dc_end[idx as usize] = change_end as colnr_T;
-        simple_diffline_change.dc_start_lnum_off[idx as usize] = off;
-        simple_diffline_change.dc_end_lnum_off[idx as usize] = off;
+        (*simple_diffline_change.ptr()).dc_start[idx as usize] = change_start as colnr_T;
+        (*simple_diffline_change.ptr()).dc_end[idx as usize] = change_end as colnr_T;
+        (*simple_diffline_change.ptr()).dc_start_lnum_off[idx as usize] = off;
+        (*simple_diffline_change.ptr()).dc_end_lnum_off[idx as usize] = off;
         return ret != 0;
     }
     if !(*dp).has_changes {
@@ -7677,7 +7682,7 @@ pub unsafe extern "C" fn ex_diffgetput(mut eap: *mut exarg_T) {
             return;
         }
     }
-    diff_busy = true_0 != 0;
+    diff_busy.set(true_0 != 0);
     if (*eap).addr_count == 0 as ::core::ffi::c_int {
         let mut linestatus: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if (*eap).line1 == (*curbuf).b_ml.ml_line_count
@@ -7755,8 +7760,8 @@ pub unsafe extern "C" fn ex_diffgetput(mut eap: *mut exarg_T) {
             aucmd_restbuf(&raw mut aco);
         }
     }
-    diff_busy = false_0 != 0;
-    if diff_need_update {
+    diff_busy.set(false_0 != 0);
+    if diff_need_update.get() {
         ex_diffupdate(::core::ptr::null_mut::<exarg_T>());
     }
     check_cursor(curwin);
@@ -7782,8 +7787,8 @@ pub unsafe extern "C" fn ex_diffgetput(mut eap: *mut exarg_T) {
             wp = (*wp).w_next;
         }
     }
-    if diff_need_update {
-        diff_need_update = false_0 != 0;
+    if diff_need_update.get() {
+        diff_need_update.set(false_0 != 0);
     } else {
         diff_redraw(false_0 != 0);
         apply_autocmds(
@@ -8328,95 +8333,102 @@ pub unsafe extern "C" fn f_diff_hlID(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    static mut prev_lnum: linenr_T = 0 as linenr_T;
-    static mut changedtick: varnumber_T = 0 as varnumber_T;
-    static mut fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut prev_diff_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut change_start: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut change_end: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut hlID: hlf_T = HLF_NONE;
+    static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+    static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0 as varnumber_T);
+    static fnum: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static prev_diff_flags: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static change_start: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static change_end: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static hlID: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
     let mut diffline: diffline_T = diffline_S {
         changes: ::core::ptr::null_mut::<diffline_change_T>(),
         num_changes: 0,
         bufidx: 0,
         lineoff: 0,
     };
-    let cache_results: bool = diff_flags & ALL_INLINE_DIFF == 0;
+    let cache_results: bool = diff_flags.get() & ALL_INLINE_DIFF == 0;
     let mut lnum: linenr_T = tv_get_lnum(argvars);
     if lnum < 0 as linenr_T {
         lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
     if !cache_results
-        || lnum != prev_lnum
-        || changedtick != buf_get_changedtick(curbuf)
-        || fnum != (*curbuf).handle
-        || diff_flags != prev_diff_flags
+        || lnum != prev_lnum.get()
+        || changedtick.get() != buf_get_changedtick(curbuf)
+        || fnum.get() != (*curbuf).handle
+        || diff_flags.get() != prev_diff_flags.get()
     {
         let mut linestatus: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         diff_check_with_linestatus(curwin, lnum, &raw mut linestatus);
         if linestatus < 0 as ::core::ffi::c_int {
             if linestatus == -1 as ::core::ffi::c_int {
-                change_start = MAXCOL as ::core::ffi::c_int;
-                change_end = -1 as ::core::ffi::c_int;
+                change_start.set(MAXCOL as ::core::ffi::c_int);
+                change_end.set(-1 as ::core::ffi::c_int);
                 if diff_find_change(curwin, lnum, &raw mut diffline) {
-                    hlID = HLF_ADD;
+                    hlID.set(HLF_ADD);
                 } else {
-                    hlID = HLF_CHD;
+                    hlID.set(HLF_CHD);
                     if diffline.num_changes > 0 as ::core::ffi::c_int
                         && cache_results as ::core::ffi::c_int != 0
                     {
-                        change_start = (*diffline.changes.offset(0 as ::core::ffi::c_int as isize))
-                            .dc_start[diffline.bufidx as usize]
-                            as ::core::ffi::c_int;
-                        change_end = (*diffline.changes.offset(0 as ::core::ffi::c_int as isize))
-                            .dc_end[diffline.bufidx as usize]
-                            as ::core::ffi::c_int;
+                        change_start.set(
+                            (*diffline.changes.offset(0 as ::core::ffi::c_int as isize)).dc_start
+                                [diffline.bufidx as usize]
+                                as ::core::ffi::c_int,
+                        );
+                        change_end.set(
+                            (*diffline.changes.offset(0 as ::core::ffi::c_int as isize)).dc_end
+                                [diffline.bufidx as usize]
+                                as ::core::ffi::c_int,
+                        );
                     }
                 }
             } else {
-                hlID = HLF_ADD;
+                hlID.set(HLF_ADD);
             }
         } else {
-            hlID = HLF_NONE;
+            hlID.set(HLF_NONE);
         }
         if cache_results {
-            prev_lnum = lnum;
-            changedtick = buf_get_changedtick(curbuf);
-            fnum = (*curbuf).handle as ::core::ffi::c_int;
-            prev_diff_flags = diff_flags;
+            prev_lnum.set(lnum);
+            changedtick.set(buf_get_changedtick(curbuf));
+            fnum.set((*curbuf).handle as ::core::ffi::c_int);
+            prev_diff_flags.set(diff_flags.get());
         }
     }
-    if hlID as ::core::ffi::c_uint == HLF_CHD as ::core::ffi::c_int as ::core::ffi::c_uint
-        || hlID as ::core::ffi::c_uint == HLF_TXD as ::core::ffi::c_int as ::core::ffi::c_uint
+    if hlID.get() as ::core::ffi::c_uint == HLF_CHD as ::core::ffi::c_int as ::core::ffi::c_uint
+        || hlID.get() as ::core::ffi::c_uint == HLF_TXD as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut col: ::core::ffi::c_int =
             tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                 - 1 as ::core::ffi::c_int;
         if cache_results {
-            if col >= change_start && col < change_end {
-                hlID = HLF_TXD;
+            if col >= change_start.get() && col < change_end.get() {
+                hlID.set(HLF_TXD);
             } else {
-                hlID = HLF_CHD;
+                hlID.set(HLF_CHD);
             }
         } else {
-            hlID = HLF_CHD;
+            hlID.set(HLF_CHD);
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < diffline.num_changes {
                 let mut added: bool = diff_change_parse(
                     &raw mut diffline,
                     diffline.changes.offset(i as isize),
-                    &raw mut change_start,
-                    &raw mut change_end,
+                    change_start.ptr(),
+                    change_end.ptr(),
                 );
-                if col >= change_start && col < change_end {
-                    hlID = (if added as ::core::ffi::c_int != 0 {
-                        HLF_TXA as ::core::ffi::c_int
-                    } else {
-                        HLF_TXD as ::core::ffi::c_int
-                    }) as hlf_T;
+                if col >= change_start.get() && col < change_end.get() {
+                    hlID.set(
+                        (if added as ::core::ffi::c_int != 0 {
+                            HLF_TXA as ::core::ffi::c_int
+                        } else {
+                            HLF_TXD as ::core::ffi::c_int
+                        }) as hlf_T,
+                    );
                     break;
                 } else {
-                    if col < change_start {
+                    if col < change_start.get() {
                         break;
                     }
                     i += 1;
@@ -8424,7 +8436,7 @@ pub unsafe extern "C" fn f_diff_hlID(
             }
         }
     }
-    (*rettv).vval.v_number = hlID as varnumber_T;
+    (*rettv).vval.v_number = hlID.get() as varnumber_T;
 }
 pub const XDF_NEED_MINIMAL: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;

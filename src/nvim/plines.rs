@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -1945,7 +1946,7 @@ pub unsafe extern "C" fn linetabsize_eol(
             0 as ::core::ffi::c_int
         });
 }
-static mut inline_filter: [uint32_t; 5] = [kMTFilterSelect, 0, 0, 0, 0];
+static inline_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([kMTFilterSelect, 0, 0, 0, 0]);
 #[no_mangle]
 pub unsafe extern "C" fn init_charsize_arg(
     mut csarg: *mut CharsizeArg,
@@ -1968,7 +1969,7 @@ pub unsafe extern "C" fn init_charsize_arg(
             0 as ::core::ffi::c_int,
             lnum as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            &raw const inline_filter as MetaFilter,
+            (inline_filter.ptr() as *const _) as MetaFilter,
             &raw mut (*csarg).iter as *mut MarkTreeIter,
         ) {
             (*csarg).virt_row = (lnum - 1 as linenr_T) as ::core::ffi::c_int;
@@ -2065,7 +2066,7 @@ pub unsafe extern "C" fn charsize_regular(
                 &raw mut (*csarg).iter as *mut MarkTreeIter,
                 (*csarg).virt_row + 1 as ::core::ffi::c_int,
                 0 as ::core::ffi::c_int,
-                &raw const inline_filter as MetaFilter,
+                (inline_filter.ptr() as *const _) as MetaFilter,
             );
         }
     }

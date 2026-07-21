@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::SharedCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -78,7 +79,8 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 36] = unsafe {
         *b"void set_number_format(char *, int)\0",
     )
 };
-static mut locale_decimal_point: ::core::ffi::c_char = '.' as ::core::ffi::c_char;
+static locale_decimal_point: SharedCell<::core::ffi::c_char> =
+    SharedCell::new('.' as ::core::ffi::c_char);
 unsafe extern "C" fn fpconv_update_locale() {
     let mut buf: [::core::ffi::c_char; 8] = [0; 8];
     snprintf(
@@ -98,7 +100,7 @@ unsafe extern "C" fn fpconv_update_locale() {
         );
         abort();
     }
-    locale_decimal_point = buf[1 as ::core::ffi::c_int as usize];
+    locale_decimal_point.set(buf[1 as ::core::ffi::c_int as usize]);
 }
 #[inline]
 unsafe extern "C" fn valid_number_character(mut ch: ::core::ffi::c_char) -> ::core::ffi::c_int {
@@ -140,7 +142,7 @@ pub unsafe extern "C" fn fpconv_strtod(
     let mut dp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut buflen: ::core::ffi::c_int = 0;
     let mut value: ::core::ffi::c_double = 0.;
-    if locale_decimal_point as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
+    if locale_decimal_point.get() as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
         return strtod(nptr, endptr);
     }
     buflen = strtod_buffer_size(nptr);
@@ -168,7 +170,7 @@ pub unsafe extern "C" fn fpconv_strtod(
     *buf.offset(buflen as isize) = 0 as ::core::ffi::c_char;
     dp = strchr(buf, '.' as ::core::ffi::c_int);
     if !dp.is_null() {
-        *dp = locale_decimal_point;
+        *dp = locale_decimal_point.get();
     }
     value = strtod(buf, &raw mut endbuf);
     *endptr = nptr.offset(endbuf.offset_from(buf) as isize) as *mut ::core::ffi::c_char;
@@ -225,7 +227,7 @@ pub unsafe extern "C" fn fpconv_g_fmt(
     let mut len: ::core::ffi::c_int = 0;
     let mut b: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     set_number_format(&raw mut fmt as *mut ::core::ffi::c_char, precision);
-    if locale_decimal_point as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
+    if locale_decimal_point.get() as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
         return snprintf(
             str,
             FPCONV_G_FMT_BUFSIZE as size_t,
@@ -243,12 +245,12 @@ pub unsafe extern "C" fn fpconv_g_fmt(
     loop {
         let c2rust_fresh0 = str;
         str = str.offset(1);
-        *c2rust_fresh0 = (if *b as ::core::ffi::c_int == locale_decimal_point as ::core::ffi::c_int
-        {
-            '.' as ::core::ffi::c_int
-        } else {
-            *b as ::core::ffi::c_int
-        }) as ::core::ffi::c_char;
+        *c2rust_fresh0 =
+            (if *b as ::core::ffi::c_int == locale_decimal_point.get() as ::core::ffi::c_int {
+                '.' as ::core::ffi::c_int
+            } else {
+                *b as ::core::ffi::c_int
+            }) as ::core::ffi::c_char;
         let c2rust_fresh1 = b;
         b = b.offset(1);
         if *c2rust_fresh1 == 0 {

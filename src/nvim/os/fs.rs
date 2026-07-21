@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -787,22 +788,22 @@ pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_NORMAL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut e_xattr_erange: [::core::ffi::c_char; 51] = unsafe {
+static e_xattr_erange: GlobalCell<[::core::ffi::c_char; 51]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
         *b"E1506: Buffer too small to copy xattr value or key\0",
     )
-};
-static mut e_xattr_e2big: [::core::ffi::c_char; 84] = unsafe {
+});
+static e_xattr_e2big: GlobalCell<[::core::ffi::c_char; 84]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 84], [::core::ffi::c_char; 84]>(
         *b"E1508: Size of the extended attribute value is larger than the maximum size allowed\0",
     )
-};
-static mut e_xattr_other: [::core::ffi::c_char; 65] = unsafe {
+});
+static e_xattr_other: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"E1509: Error occurred when reading or writing extended attribute\0",
     )
-};
-static mut kLibuvSuccess: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+});
+static kLibuvSuccess: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn os_chdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if p_verbose >= 5 as OptInt {
@@ -827,7 +828,7 @@ pub unsafe extern "C" fn os_dirname(
 ) -> ::core::ffi::c_int {
     let mut error_number: ::core::ffi::c_int = 0;
     error_number = uv_cwd(buf, &raw mut len);
-    if error_number != kLibuvSuccess {
+    if error_number != kLibuvSuccess.get() {
         xstrlcpy(buf, uv_strerror(error_number), len);
         return FAIL;
     }
@@ -905,7 +906,7 @@ pub unsafe extern "C" fn os_isrealdir(mut name: *const ::core::ffi::c_char) -> b
         &raw mut request,
         name,
         None,
-    ) != kLibuvSuccess
+    ) != kLibuvSuccess.get()
     {
         return false_0 != 0;
     }
@@ -1853,7 +1854,7 @@ unsafe extern "C" fn os_stat(
         name,
         None,
     );
-    if result == kLibuvSuccess {
+    if result == kLibuvSuccess.get() {
         *statbuf = request.statbuf;
     }
     uv_fs_req_cleanup(&raw mut request);
@@ -1892,7 +1893,7 @@ pub unsafe extern "C" fn os_getperm(mut name: *const ::core::ffi::c_char) -> int
         },
     };
     let mut stat_result: ::core::ffi::c_int = os_stat(name, &raw mut statbuf);
-    if stat_result == kLibuvSuccess {
+    if stat_result == kLibuvSuccess.get() {
         return statbuf.st_mode as int32_t;
     }
     return stat_result as int32_t;
@@ -1976,7 +1977,7 @@ pub unsafe extern "C" fn os_setperm(
         None,
     );
     uv_fs_req_cleanup(&raw mut req);
-    return if r == kLibuvSuccess { OK } else { FAIL };
+    return if r == kLibuvSuccess.get() { OK } else { FAIL };
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_copy_xattr(
@@ -2032,16 +2033,19 @@ pub unsafe extern "C" fn os_copy_xattr(
                 if *__errno_location() != 0 {
                     match *__errno_location() {
                         E2BIG => {
-                            errmsg = &raw const e_xattr_e2big as *const ::core::ffi::c_char;
+                            errmsg =
+                                (e_xattr_e2big.ptr() as *const _) as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                         ENOTSUP | EACCES | EPERM => {}
                         ERANGE => {
-                            errmsg = &raw const e_xattr_erange as *const ::core::ffi::c_char;
+                            errmsg =
+                                (e_xattr_erange.ptr() as *const _) as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                         _ => {
-                            errmsg = &raw const e_xattr_other as *const ::core::ffi::c_char;
+                            errmsg =
+                                (e_xattr_other.ptr() as *const _) as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                     }
@@ -2322,7 +2326,7 @@ pub unsafe extern "C" fn os_path_exists(mut path: *const ::core::ffi::c_char) ->
             tv_nsec: 0,
         },
     };
-    return os_stat(path, &raw mut statbuf) == kLibuvSuccess;
+    return os_stat(path, &raw mut statbuf) == kLibuvSuccess.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_file_settime(
@@ -2651,7 +2655,7 @@ pub unsafe extern "C" fn os_rename(
         None,
     );
     uv_fs_req_cleanup(&raw mut req);
-    return if r == kLibuvSuccess { OK } else { FAIL };
+    return if r == kLibuvSuccess.get() { OK } else { FAIL };
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_mkdir(
@@ -2900,7 +2904,7 @@ pub unsafe extern "C" fn os_mkdtemp(
         templ,
         None,
     );
-    if result == kLibuvSuccess {
+    if result == kLibuvSuccess.get() {
         xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t);
     }
     uv_fs_req_cleanup(&raw mut request);
@@ -3101,7 +3105,7 @@ pub unsafe extern "C" fn os_fileinfo(
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<FileInfo>(),
     );
-    return os_stat(path, &raw mut (*file_info).stat) == kLibuvSuccess;
+    return os_stat(path, &raw mut (*file_info).stat) == kLibuvSuccess.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_fileinfo_link(
@@ -3186,7 +3190,7 @@ pub unsafe extern "C" fn os_fileinfo_link(
         &raw mut request,
         path,
         None,
-    ) == kLibuvSuccess;
+    ) == kLibuvSuccess.get();
     if ok {
         (*file_info).stat = request.statbuf;
     }
@@ -3273,7 +3277,7 @@ pub unsafe extern "C" fn os_fileinfo_fd(
         &raw mut request,
         file_descriptor as uv_file,
         None,
-    ) == kLibuvSuccess;
+    ) == kLibuvSuccess.get();
     if ok {
         (*file_info).stat = request.statbuf;
     }
@@ -3344,7 +3348,7 @@ pub unsafe extern "C" fn os_fileid(
             tv_nsec: 0,
         },
     };
-    if os_stat(path, &raw mut statbuf) == kLibuvSuccess {
+    if os_stat(path, &raw mut statbuf) == kLibuvSuccess.get() {
         (*file_id).inode = statbuf.st_ino;
         (*file_id).device_id = statbuf.st_dev;
         return true_0 != 0;
@@ -3444,14 +3448,14 @@ pub unsafe extern "C" fn os_realpath(
         name,
         None,
     );
-    if result == kLibuvSuccess {
+    if result == kLibuvSuccess.get() {
         if buf.is_null() {
             buf = xmalloc(len) as *mut ::core::ffi::c_char;
         }
         xstrlcpy(buf, request.ptr as *const ::core::ffi::c_char, len);
     }
     uv_fs_req_cleanup(&raw mut request);
-    return if result == kLibuvSuccess {
+    return if result == kLibuvSuccess.get() {
         buf
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()

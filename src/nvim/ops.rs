@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2994,7 +2995,7 @@ unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> S
 }
 pub const OPF_LINES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OPF_CHANGE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut opchars: [[::core::ffi::c_char; 3]; 30] = [
+static opchars: GlobalCell<[[::core::ffi::c_char; 3]; 30]> = GlobalCell::new([
     [
         NUL as ::core::ffi::c_char,
         NUL as ::core::ffi::c_char,
@@ -3145,7 +3146,7 @@ static mut opchars: [[::core::ffi::c_char; 3]; 30] = [
         NUL as ::core::ffi::c_char,
         OPF_CHANGE as ::core::ffi::c_char,
     ],
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn get_op_type(
     mut char1: ::core::ffi::c_int,
@@ -3168,8 +3169,10 @@ pub unsafe extern "C" fn get_op_type(
         return OP_YANK as ::core::ffi::c_int;
     }
     i = 0 as ::core::ffi::c_int;
-    while !(opchars[i as usize][0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == char1
-        && opchars[i as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == char2)
+    while !((*opchars.ptr())[i as usize][0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+        == char1
+        && (*opchars.ptr())[i as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+            == char2)
     {
         if i == ::core::mem::size_of::<[[::core::ffi::c_char; 3]; 30]>()
             .wrapping_div(::core::mem::size_of::<[::core::ffi::c_char; 3]>())
@@ -3190,21 +3193,23 @@ pub unsafe extern "C" fn get_op_type(
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_on_lines(mut op: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return opchars[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+    return (*opchars.ptr())[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         & OPF_LINES;
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_is_change(mut op: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return opchars[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+    return (*opchars.ptr())[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         & OPF_CHANGE;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_op_char(mut optype: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return opchars[optype as usize][0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
+    return (*opchars.ptr())[optype as usize][0 as ::core::ffi::c_int as usize]
+        as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_extra_op_char(mut optype: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return opchars[optype as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
+    return (*opchars.ptr())[optype as usize][1 as ::core::ffi::c_int as usize]
+        as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_shift(
@@ -5829,7 +5834,7 @@ pub unsafe extern "C" fn do_addsub(
 ) -> bool {
     let mut firstdigit: ::core::ffi::c_int = 0;
     let mut pre: ::core::ffi::c_int = 0;
-    static mut hexupper: bool = false_0 != 0;
+    static hexupper: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut n: uvarnumber_T = 0;
     let mut blank_unsigned: bool = false_0 != 0;
     let mut negative: bool = false_0 != 0;
@@ -6230,10 +6235,12 @@ pub unsafe extern "C" fn do_addsub(
                                     as ::core::ffi::c_int
                                 != 0
                         {
-                            hexupper = *(*__ctype_b_loc()).offset(c as isize) as ::core::ffi::c_int
-                                & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                                    as ::core::ffi::c_int
-                                != 0;
+                            hexupper.set(
+                                *(*__ctype_b_loc()).offset(c as isize) as ::core::ffi::c_int
+                                    & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
+                                        as ::core::ffi::c_int
+                                    != 0,
+                            );
                         }
                         del_char(false_0 != 0);
                         c = gchar_cursor();
@@ -6322,7 +6329,7 @@ pub unsafe extern "C" fn do_addsub(
                             b"%lo\0".as_ptr() as *const ::core::ffi::c_char,
                             n,
                         );
-                    } else if hexupper {
+                    } else if hexupper.get() {
                         buf2len = vim_snprintf(
                             &raw mut buf2 as *mut ::core::ffi::c_char,
                             ::core::mem::size_of::<[::core::ffi::c_char; 65]>()
@@ -6914,17 +6921,17 @@ unsafe extern "C" fn op_colon(mut oap: *mut oparg_T) {
         stuffReadbuff(b"\n']\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-static mut opfunc_cb: Callback = Callback {
+static opfunc_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_5 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn did_set_operatorfunc(
     mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    if option_set_callback_func(p_opfunc, &raw mut opfunc_cb) == FAIL {
+    if option_set_callback_func(p_opfunc, opfunc_cb.ptr()) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -6932,7 +6939,7 @@ pub unsafe extern "C" fn did_set_operatorfunc(
 #[no_mangle]
 pub unsafe extern "C" fn set_ref_in_opfunc(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_callback(
-        &raw mut opfunc_cb,
+        opfunc_cb.ptr(),
         copyID,
         ::core::ptr::null_mut::<*mut ht_stack_T>(),
         ::core::ptr::null_mut::<*mut list_stack_T>(),
@@ -6976,7 +6983,7 @@ unsafe extern "C" fn op_function(mut oap: *const oparg_T) {
             vval: typval_vval_union { v_number: 0 },
         };
         if callback_call(
-            &raw mut opfunc_cb,
+            opfunc_cb.ptr(),
             1 as ::core::ffi::c_int,
             &raw mut argv as *mut typval_T,
             &raw mut rettv,
@@ -7081,13 +7088,13 @@ pub unsafe extern "C" fn do_pending_operator(
 ) {
     let mut oap: *mut oparg_T = (*cap).oap;
     let mut lbr_saved: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_lbr;
-    static mut redo_VIsual: redo_VIsual_T = redo_VIsual_T {
+    static redo_VIsual: GlobalCell<redo_VIsual_T> = GlobalCell::new(redo_VIsual_T {
         rv_mode: NUL,
         rv_line_count: 0 as linenr_T,
         rv_vcol: 0 as colnr_T,
         rv_count: 0 as ::core::ffi::c_int,
         rv_arg: 0 as ::core::ffi::c_int,
-    };
+    });
     let mut old_cursor: pos_T = (*curwin).w_cursor;
     if (finish_op as ::core::ffi::c_int != 0 || VIsual_active as ::core::ffi::c_int != 0)
         && (*oap).op_type != OP_NOP as ::core::ffi::c_int
@@ -7177,33 +7184,33 @@ pub unsafe extern "C" fn do_pending_operator(
         if redo_VIsual_busy {
             (*oap).start = (*curwin).w_cursor;
             (*curwin).w_cursor.lnum = ((*curwin).w_cursor.lnum as ::core::ffi::c_int
-                + (redo_VIsual.rv_line_count - 1 as linenr_T) as ::core::ffi::c_int)
+                + ((*redo_VIsual.ptr()).rv_line_count - 1 as linenr_T) as ::core::ffi::c_int)
                 as linenr_T;
             (*curwin).w_cursor.lnum = if (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count {
                 (*curwin).w_cursor.lnum
             } else {
                 (*curbuf).b_ml.ml_line_count
             };
-            VIsual_mode = redo_VIsual.rv_mode;
-            if redo_VIsual.rv_vcol == MAXCOL as ::core::ffi::c_int
+            VIsual_mode = (*redo_VIsual.ptr()).rv_mode;
+            if (*redo_VIsual.ptr()).rv_vcol == MAXCOL as ::core::ffi::c_int
                 || VIsual_mode == 'v' as ::core::ffi::c_int
             {
                 if VIsual_mode == 'v' as ::core::ffi::c_int {
-                    if redo_VIsual.rv_line_count <= 1 as linenr_T {
+                    if (*redo_VIsual.ptr()).rv_line_count <= 1 as linenr_T {
                         validate_virtcol(curwin);
                         (*curwin).w_curswant = ((*curwin).w_virtcol as ::core::ffi::c_int
-                            + redo_VIsual.rv_vcol as ::core::ffi::c_int
+                            + (*redo_VIsual.ptr()).rv_vcol as ::core::ffi::c_int
                             - 1 as ::core::ffi::c_int)
                             as colnr_T;
                     } else {
-                        (*curwin).w_curswant = redo_VIsual.rv_vcol;
+                        (*curwin).w_curswant = (*redo_VIsual.ptr()).rv_vcol;
                     }
                 } else {
                     (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
                 }
                 coladvance(curwin, (*curwin).w_curswant);
             }
-            (*cap).count0 = redo_VIsual.rv_count;
+            (*cap).count0 = (*redo_VIsual.ptr()).rv_count;
             (*cap).count1 = if (*cap).count0 == 0 as ::core::ffi::c_int {
                 1 as ::core::ffi::c_int
             } else {
@@ -7295,7 +7302,7 @@ pub unsafe extern "C" fn do_pending_operator(
         (*oap).line_count = (*oap).end.lnum - (*oap).start.lnum + 1 as linenr_T;
         virtual_op = virtual_active(curwin) as TriState;
         if VIsual_active as ::core::ffi::c_int != 0 || redo_VIsual_busy as ::core::ffi::c_int != 0 {
-            get_op_vcol(oap, redo_VIsual.rv_vcol, true_0 != 0);
+            get_op_vcol(oap, (*redo_VIsual.ptr()).rv_vcol, true_0 != 0);
             if !redo_VIsual_busy && !gui_yank {
                 resel_VIsual_mode = VIsual_mode;
                 if (*curwin).w_curswant == MAXCOL as ::core::ffi::c_int {
@@ -7399,11 +7406,11 @@ pub unsafe extern "C" fn do_pending_operator(
                     }
                 }
                 if !redo_VIsual_busy {
-                    redo_VIsual.rv_mode = resel_VIsual_mode;
-                    redo_VIsual.rv_vcol = resel_VIsual_vcol;
-                    redo_VIsual.rv_line_count = resel_VIsual_line_count;
-                    redo_VIsual.rv_count = (*cap).count0;
-                    redo_VIsual.rv_arg = (*cap).arg;
+                    (*redo_VIsual.ptr()).rv_mode = resel_VIsual_mode;
+                    (*redo_VIsual.ptr()).rv_vcol = resel_VIsual_vcol;
+                    (*redo_VIsual.ptr()).rv_line_count = resel_VIsual_line_count;
+                    (*redo_VIsual.ptr()).rv_count = (*cap).count0;
+                    (*redo_VIsual.ptr()).rv_arg = (*cap).arg;
                 }
             }
             if (*oap).motion_force == NUL
@@ -7621,10 +7628,10 @@ pub unsafe extern "C" fn do_pending_operator(
                     break 's_1511;
                 }
                 27 => {
-                    let mut save_redo_VIsual: redo_VIsual_T = redo_VIsual;
+                    let mut save_redo_VIsual: redo_VIsual_T = redo_VIsual.get();
                     restore_lbr(lbr_saved != 0);
                     op_function(oap);
-                    redo_VIsual = save_redo_VIsual;
+                    redo_VIsual.set(save_redo_VIsual);
                     break 's_1511;
                 }
                 17 | 18 => {
@@ -7698,7 +7705,11 @@ pub unsafe extern "C" fn do_pending_operator(
                     } else {
                         VIsual_active = true_0 != 0;
                         restore_lbr(lbr_saved != 0);
-                        op_addsub(oap, (*cap).count1 as linenr_T, redo_VIsual.rv_arg != 0);
+                        op_addsub(
+                            oap,
+                            (*cap).count1 as linenr_T,
+                            (*redo_VIsual.ptr()).rv_arg != 0,
+                        );
                         VIsual_active = false_0 != 0;
                     }
                     check_cursor_col(curwin);

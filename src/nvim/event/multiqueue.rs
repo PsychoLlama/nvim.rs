@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -84,7 +85,7 @@ unsafe extern "C" fn QUEUE_REMOVE(q: *mut QUEUE) {
     (*(*q).prev).next = (*q).next;
     (*(*q).next).prev = (*q).prev;
 }
-static mut NILEVENT: Event = Event {
+static NILEVENT: GlobalCell<Event> = GlobalCell::new(Event {
     handler: None,
     argv: [
         NULL,
@@ -98,7 +99,7 @@ static mut NILEVENT: Event = Event {
         ::core::ptr::null_mut::<::core::ffi::c_void>(),
         ::core::ptr::null_mut::<::core::ffi::c_void>(),
     ],
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn multiqueue_new(
     mut on_put: PutCallback,
@@ -167,7 +168,7 @@ pub unsafe extern "C" fn multiqueue_free(mut self_0: *mut MultiQueue) {
 #[no_mangle]
 pub unsafe extern "C" fn multiqueue_get(mut self_0: *mut MultiQueue) -> Event {
     return if multiqueue_empty(self_0) as ::core::ffi::c_int != 0 {
-        NILEVENT
+        NILEVENT.get()
     } else {
         multiqueue_remove(self_0)
     };

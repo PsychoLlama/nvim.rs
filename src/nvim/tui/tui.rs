@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     pub type _IO_wide_data;
@@ -148,7 +149,7 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    static mut shape_table: [cursorentry_T; 18];
+    static shape_table: GlobalCell<[cursorentry_T; 18]>;
     fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
     fn loop_purge(loop_0: *mut Loop);
     fn loop_size(loop_0: *mut Loop) -> size_t;
@@ -1535,9 +1536,9 @@ pub const LINUXSET0C: [::core::ffi::c_char; 6] =
     unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"\x1B[?0c\0") };
 pub const LINUXSET1C: [::core::ffi::c_char; 6] =
     unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"\x1B[?1c\0") };
-static mut cursor_style_enabled: bool = false_0 != 0;
+static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TERMINFO_SEQ_LIMIT: ::core::ffi::c_int = 128 as ::core::ffi::c_int;
-static mut urls: Set_cstr_t = SET_INIT;
+static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(SET_INIT);
 #[no_mangle]
 pub unsafe extern "C" fn tui_start(
     mut tui_p: *mut *mut TUIData,
@@ -2564,7 +2565,7 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
     if (*tui).url as int32_t != attrs.url {
         if attrs.url >= 0 as int32_t {
             let mut url: *const ::core::ffi::c_char =
-                *urls.keys.offset(attrs.url as isize) as *const ::core::ffi::c_char;
+                *(*urls.ptr()).keys.offset(attrs.url as isize) as *const ::core::ffi::c_char;
             (*tui).urlbuf.size = 0 as size_t;
             let id: uint64_t =
                 (0xe1ea0000 as uint32_t).wrapping_add(attrs.url as uint32_t) as uint64_t;
@@ -3076,7 +3077,7 @@ unsafe extern "C" fn tui_cursor_reset_style(mut tui: *mut TUIData) {
     terminfo_out(tui, kTerm_reset_cursor_style);
 }
 unsafe extern "C" fn decode_cursor_entry(mut args: Dict) -> cursorentry_T {
-    let mut r: cursorentry_T = shape_table[0 as ::core::ffi::c_int as usize];
+    let mut r: cursorentry_T = (*shape_table.ptr())[0 as ::core::ffi::c_int as usize];
     let mut i: size_t = 0 as size_t;
     while i < args.size {
         let mut key: *mut ::core::ffi::c_char = (*args.items.offset(i as isize)).key.data;
@@ -3104,7 +3105,7 @@ pub unsafe extern "C" fn tui_mode_info_set(
     mut guicursor_enabled: bool,
     mut args: Array,
 ) {
-    cursor_style_enabled = guicursor_enabled;
+    cursor_style_enabled.set(guicursor_enabled);
     if !guicursor_enabled {
         tui_cursor_reset_style(tui);
         return;
@@ -3177,7 +3178,7 @@ pub unsafe extern "C" fn tui_mouse_off(mut tui: *mut TUIData) {
     }
 }
 unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
-    if !cursor_style_enabled {
+    if !cursor_style_enabled.get() {
         tui_cursor_reset_style(tui);
         return;
     }
@@ -3410,9 +3411,9 @@ pub unsafe extern "C" fn tui_add_url(
         return -1 as int32_t;
     }
     let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_cstr_t(&raw mut urls, url as cstr_t, &raw mut status);
+    let mut k: uint32_t = mh_put_cstr_t(urls.ptr(), url as cstr_t, &raw mut status);
     if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        *urls.keys.offset(k as isize) = xstrdup(url) as cstr_t;
+        *(*urls.ptr()).keys.offset(k as isize) = xstrdup(url) as cstr_t;
     }
     return k as int32_t;
 }
@@ -5301,7 +5302,8 @@ unsafe extern "C" fn flush_buf(mut tui: *mut TUIData) {
     (*tui).bufpos = 0 as size_t;
 }
 unsafe extern "C" fn tui_get_stty_erase(mut input: *mut TermInput) -> *const ::core::ffi::c_char {
-    static mut stty_erase: [::core::ffi::c_char; 2] = [0 as ::core::ffi::c_char, 0];
+    static stty_erase: GlobalCell<[::core::ffi::c_char; 2]> =
+        GlobalCell::new([0 as ::core::ffi::c_char, 0]);
     let mut t: termios = termios {
         c_iflag: 0,
         c_oflag: 0,
@@ -5313,9 +5315,9 @@ unsafe extern "C" fn tui_get_stty_erase(mut input: *mut TermInput) -> *const ::c
         c_ospeed: 0,
     };
     if tcgetattr((*input).in_fd, &raw mut t) != -1 as ::core::ffi::c_int {
-        stty_erase[0 as ::core::ffi::c_int as usize] =
+        (*stty_erase.ptr())[0 as ::core::ffi::c_int as usize] =
             t.c_cc[VERASE as usize] as ::core::ffi::c_char;
-        stty_erase[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        (*stty_erase.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -5323,10 +5325,10 @@ unsafe extern "C" fn tui_get_stty_erase(mut input: *mut TermInput) -> *const ::c
             2557 as ::core::ffi::c_int,
             true_0 != 0,
             b"stty/termios:erase=%s\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw mut stty_erase as *mut ::core::ffi::c_char,
+            stty_erase.ptr() as *mut ::core::ffi::c_char,
         );
     }
-    return &raw mut stty_erase as *mut ::core::ffi::c_char;
+    return stty_erase.ptr() as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn tui_tk_ti_getstr(
     mut name: *const ::core::ffi::c_char,
@@ -5334,9 +5336,10 @@ unsafe extern "C" fn tui_tk_ti_getstr(
     mut data: *mut ::core::ffi::c_void,
 ) -> *const ::core::ffi::c_char {
     let mut input: *mut TermInput = data as *mut TermInput;
-    static mut stty_erase: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    if stty_erase.is_null() {
-        stty_erase = tui_get_stty_erase(input);
+    static stty_erase: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+    if (*stty_erase.ptr()).is_null() {
+        stty_erase.set(tui_get_stty_erase(input));
     }
     if strequal(
         name,
@@ -5351,10 +5354,10 @@ unsafe extern "C" fn tui_tk_ti_getstr(
             b"libtermkey:kbs=%s\0".as_ptr() as *const ::core::ffi::c_char,
             value,
         );
-        if *stty_erase.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        if *(*stty_erase.ptr()).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             != 0 as ::core::ffi::c_int
         {
-            return stty_erase;
+            return stty_erase.get();
         }
     } else if strequal(name, b"key_dc\0".as_ptr() as *const ::core::ffi::c_char) {
         logmsg(
@@ -5371,9 +5374,10 @@ unsafe extern "C" fn tui_tk_ti_getstr(
                 != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(
                     -1 as ::core::ffi::c_int as usize,
                 ) as *const ::core::ffi::c_char
-            && strequal(stty_erase, value) as ::core::ffi::c_int != 0
+            && strequal(stty_erase.get(), value) as ::core::ffi::c_int != 0
         {
-            return if *stty_erase.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            return if *(*stty_erase.ptr()).offset(0 as ::core::ffi::c_int as isize)
+                as ::core::ffi::c_int
                 == DEL
             {
                 CTRL_H_STR.as_ptr()

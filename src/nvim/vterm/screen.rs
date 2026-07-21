@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     pub type _IO_wide_data;
@@ -1962,7 +1963,7 @@ unsafe extern "C" fn sb_clear(mut user: *mut ::core::ffi::c_void) -> ::core::ffi
     }
     return 0 as ::core::ffi::c_int;
 }
-static mut state_cbs: VTermStateCallbacks = VTermStateCallbacks {
+static state_cbs: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermStateCallbacks {
     putglyph: Some(
         putglyph
             as unsafe extern "C" fn(
@@ -2040,7 +2041,7 @@ static mut state_cbs: VTermStateCallbacks = VTermStateCallbacks {
     sb_clear: Some(
         sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
-};
+});
 unsafe extern "C" fn screen_new(mut vt: *mut VTerm) -> *mut VTermScreen {
     let mut state: *mut VTermState = vterm_obtain_state(vt);
     if state.is_null() {
@@ -2070,7 +2071,7 @@ unsafe extern "C" fn screen_new(mut vt: *mut VTerm) -> *mut VTermScreen {
     ) as *mut VTermScreenCell;
     vterm_state_set_callbacks(
         (*screen).state,
-        &raw mut state_cbs,
+        state_cbs.ptr(),
         screen as *mut ::core::ffi::c_void,
     );
     return screen;

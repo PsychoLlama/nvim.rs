@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::SharedCell;
 extern "C" {
     pub type lua_State;
     fn __assert_fail(
@@ -309,11 +310,11 @@ pub const DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH: ::core::ffi::c_int = 1 as ::core:
 pub const DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_INDENT: *mut ::core::ffi::c_void = NULL;
 pub const DEFAULT_ENCODE_SORT_KEYS: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut json_empty_array: *const *const ::core::ffi::c_char =
-    ::core::ptr::null::<*const ::core::ffi::c_char>();
-static mut json_array: *const *const ::core::ffi::c_char =
-    ::core::ptr::null::<*const ::core::ffi::c_char>();
-static mut json_token_type_name: [*const ::core::ffi::c_char; 16] = [
+static json_empty_array: SharedCell<*const *const ::core::ffi::c_char> =
+    SharedCell::new(::core::ptr::null::<*const ::core::ffi::c_char>());
+static json_array: SharedCell<*const *const ::core::ffi::c_char> =
+    SharedCell::new(::core::ptr::null::<*const ::core::ffi::c_char>());
+static json_token_type_name: SharedCell<[*const ::core::ffi::c_char; 16]> = SharedCell::new([
     b"T_OBJ_BEGIN\0".as_ptr() as *const ::core::ffi::c_char,
     b"T_OBJ_END\0".as_ptr() as *const ::core::ffi::c_char,
     b"T_ARR_BEGIN\0".as_ptr() as *const ::core::ffi::c_char,
@@ -330,9 +331,9 @@ static mut json_token_type_name: [*const ::core::ffi::c_char; 16] = [
     b"T_ERROR\0".as_ptr() as *const ::core::ffi::c_char,
     b"T_UNKNOWN\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 pub const KEYBUF_DEFAULT_CAPACITY: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-static mut char2escape: [*const ::core::ffi::c_char; 256] = [
+static char2escape: SharedCell<[*const ::core::ffi::c_char; 256]> = SharedCell::new([
     b"\\u0000\0".as_ptr() as *const ::core::ffi::c_char,
     b"\\u0001\0".as_ptr() as *const ::core::ffi::c_char,
     b"\\u0002\0".as_ptr() as *const ::core::ffi::c_char,
@@ -589,7 +590,7 @@ static mut char2escape: [*const ::core::ffi::c_char; 256] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 unsafe extern "C" fn json_fetch_config(mut l: *mut lua_State) -> *mut json_config_t {
     let mut cfg: *mut json_config_t = ::core::ptr::null_mut::<json_config_t>();
     cfg = lua_touserdata(l, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int) as *mut json_config_t;
@@ -1221,7 +1222,7 @@ unsafe extern "C" fn json_append_data(
                         lua_pushlightuserdata(
                             l,
                             ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                                ((&raw mut json_array).expose_addr() as uintptr_t
+                                ((json_array.ptr()).expose_addr() as uintptr_t
                                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                                     as usize,
@@ -1271,7 +1272,7 @@ unsafe extern "C" fn json_append_data(
                             lua_pushlightuserdata(
                                 l,
                                 ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                                    ((&raw mut json_empty_array).expose_addr() as uintptr_t
+                                    ((json_empty_array.ptr()).expose_addr() as uintptr_t
                                         & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                             .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                                         as usize,
@@ -1303,7 +1304,7 @@ unsafe extern "C" fn json_append_data(
             }
             LUA_TLIGHTUSERDATA => {
                 if lua_touserdata(l, -1 as ::core::ffi::c_int)
-                    == &raw mut json_array as *mut ::core::ffi::c_void
+                    == json_array.ptr() as *mut ::core::ffi::c_void
                 {
                     json_append_array(
                         l,
@@ -1347,7 +1348,7 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
     let mut cfg: *mut json_config_t = json_fetch_config(l);
     let mut options: json_encode_options_t = json_encode_options_t {
         char2escape: [
-            &raw mut char2escape as *mut *const ::core::ffi::c_char,
+            char2escape.ptr() as *mut *const ::core::ffi::c_char,
             ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
             ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
             ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
@@ -1655,7 +1656,7 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
                     memcpy(
                         &raw mut customChar2escape as *mut *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_void,
-                        &raw mut char2escape as *mut *const ::core::ffi::c_char
+                        char2escape.ptr() as *mut *const ::core::ffi::c_char
                             as *const ::core::ffi::c_void,
                         ::core::mem::size_of::<[*const ::core::ffi::c_char; 256]>(),
                     );
@@ -2169,7 +2170,7 @@ unsafe extern "C" fn json_throw_parse_error(
     {
         found = (*token).value.string;
     } else {
-        found = json_token_type_name[(*token).type_0 as usize];
+        found = (*json_token_type_name.ptr())[(*token).type_0 as usize];
     }
     luaL_error(
         l,
@@ -2282,7 +2283,7 @@ unsafe extern "C" fn json_parse_array_context(mut l: *mut lua_State, mut json: *
         lua_pushlightuserdata(
             l,
             ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((&raw mut json_array).expose_addr() as uintptr_t
+                ((json_array.ptr()).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,
@@ -2550,7 +2551,7 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
     lua_pushlightuserdata(
         l,
         ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-            ((&raw mut json_empty_array).expose_addr() as uintptr_t
+            ((json_empty_array.ptr()).expose_addr() as uintptr_t
                 & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                     .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
         ),
@@ -2561,7 +2562,7 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
         lua_pushlightuserdata(
             l,
             ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((&raw mut json_empty_array).expose_addr() as uintptr_t
+                ((json_empty_array.ptr()).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,
@@ -2572,7 +2573,7 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
         lua_pushlightuserdata(
             l,
             ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((&raw mut json_array).expose_addr() as uintptr_t
+                ((json_array.ptr()).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     fn vterm_get_attr_type(attr: VTermAttr) -> VTermValueType;
@@ -777,7 +778,7 @@ pub const VTERM_UNDERLINE_OFF: C2Rust_Unnamed_16 = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut ansi_colors: [VTermRGB; 16] = [
+static ansi_colors: GlobalCell<[VTermRGB; 16]> = GlobalCell::new([
     VTermRGB {
         red: 0 as uint8_t,
         green: 0 as uint8_t,
@@ -858,16 +859,16 @@ static mut ansi_colors: [VTermRGB; 16] = [
         green: 255 as uint8_t,
         blue: 255 as uint8_t,
     },
-];
-static mut ramp6: [uint8_t; 6] = [
+]);
+static ramp6: GlobalCell<[uint8_t; 6]> = GlobalCell::new([
     0 as uint8_t,
     0x33 as uint8_t,
     0x66 as uint8_t,
     0x99 as uint8_t,
     0xcc as uint8_t,
     0xff as uint8_t,
-];
-static mut ramp24: [uint8_t; 24] = [
+]);
+static ramp24: GlobalCell<[uint8_t; 24]> = GlobalCell::new([
     0 as uint8_t,
     0xb as uint8_t,
     0x16 as uint8_t,
@@ -892,7 +893,7 @@ static mut ramp24: [uint8_t; 24] = [
     0xe8 as uint8_t,
     0xf3 as uint8_t,
     0xff as uint8_t,
-];
+]);
 unsafe extern "C" fn lookup_default_colour_ansi(
     mut idx: ::core::ffi::c_long,
     mut col: *mut VTermColor,
@@ -900,9 +901,9 @@ unsafe extern "C" fn lookup_default_colour_ansi(
     if idx >= 0 as ::core::ffi::c_long && idx < 16 as ::core::ffi::c_long {
         vterm_color_rgb(
             col,
-            ansi_colors[idx as usize].red,
-            ansi_colors[idx as usize].green,
-            ansi_colors[idx as usize].blue,
+            (*ansi_colors.ptr())[idx as usize].red,
+            (*ansi_colors.ptr())[idx as usize].green,
+            (*ansi_colors.ptr())[idx as usize].blue,
         );
     }
 }
@@ -928,19 +929,19 @@ unsafe extern "C" fn lookup_colour_palette(
         index -= 16 as ::core::ffi::c_long;
         vterm_color_rgb(
             col,
-            ramp6[(index / 6 as ::core::ffi::c_long / 6 as ::core::ffi::c_long
+            (*ramp6.ptr())[(index / 6 as ::core::ffi::c_long / 6 as ::core::ffi::c_long
                 % 6 as ::core::ffi::c_long) as usize],
-            ramp6[(index / 6 as ::core::ffi::c_long % 6 as ::core::ffi::c_long) as usize],
-            ramp6[(index % 6 as ::core::ffi::c_long) as usize],
+            (*ramp6.ptr())[(index / 6 as ::core::ffi::c_long % 6 as ::core::ffi::c_long) as usize],
+            (*ramp6.ptr())[(index % 6 as ::core::ffi::c_long) as usize],
         );
         return true_0 != 0;
     } else if index >= 232 as ::core::ffi::c_long && index < 256 as ::core::ffi::c_long {
         index -= 232 as ::core::ffi::c_long;
         vterm_color_rgb(
             col,
-            ramp24[index as usize],
-            ramp24[index as usize],
-            ramp24[index as usize],
+            (*ramp24.ptr())[index as usize],
+            (*ramp24.ptr())[index as usize],
+            (*ramp24.ptr())[index as usize],
         );
         return true_0 != 0;
     }

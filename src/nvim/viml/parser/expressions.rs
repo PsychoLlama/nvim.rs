@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -1461,7 +1462,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
     }
     return ret;
 }
-static mut eltkn_type_tab: [*const ::core::ffi::c_char; 27] = [
+static eltkn_type_tab: GlobalCell<[*const ::core::ffi::c_char; 27]> = GlobalCell::new([
     b"Invalid\0".as_ptr() as *const ::core::ffi::c_char,
     b"Missing\0".as_ptr() as *const ::core::ffi::c_char,
     b"Spacing\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1489,24 +1490,24 @@ static mut eltkn_type_tab: [*const ::core::ffi::c_char; 27] = [
     b"Comma\0".as_ptr() as *const ::core::ffi::c_char,
     b"Arrow\0".as_ptr() as *const ::core::ffi::c_char,
     b"Assignment\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut eltkn_cmp_type_tab: [*const ::core::ffi::c_char; 5] = [
+pub static eltkn_cmp_type_tab: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"Equal\0".as_ptr() as *const ::core::ffi::c_char,
     b"Matches\0".as_ptr() as *const ::core::ffi::c_char,
     b"Greater\0".as_ptr() as *const ::core::ffi::c_char,
     b"GreaterOrEqual\0".as_ptr() as *const ::core::ffi::c_char,
     b"Identical\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut expr_asgn_type_tab: [*const ::core::ffi::c_char; 4] = [
+pub static expr_asgn_type_tab: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"Plain\0".as_ptr() as *const ::core::ffi::c_char,
     b"Add\0".as_ptr() as *const ::core::ffi::c_char,
     b"Subtract\0".as_ptr() as *const ::core::ffi::c_char,
     b"Concat\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut ccs_tab: [*const ::core::ffi::c_char; 64] = [
+pub static ccs_tab: GlobalCell<[*const ::core::ffi::c_char; 64]> = GlobalCell::new([
     b"UseOption\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1571,13 +1572,13 @@ pub static mut ccs_tab: [*const ::core::ffi::c_char; 64] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"IgnoreCase\0".as_ptr() as *const ::core::ffi::c_char,
-];
-static mut eltkn_mul_type_tab: [*const ::core::ffi::c_char; 3] = [
+]);
+static eltkn_mul_type_tab: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"Mul\0".as_ptr() as *const ::core::ffi::c_char,
     b"Div\0".as_ptr() as *const ::core::ffi::c_char,
     b"Mod\0".as_ptr() as *const ::core::ffi::c_char,
-];
-static mut eltkn_opt_scope_tab: [*const ::core::ffi::c_char; 109] = [
+]);
+static eltkn_opt_scope_tab: GlobalCell<[*const ::core::ffi::c_char; 109]> = GlobalCell::new([
     b"Unspecified\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1687,26 +1688,26 @@ static mut eltkn_opt_scope_tab: [*const ::core::ffi::c_char; 109] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"Local\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn viml_pexpr_repr_token(
     pstate: *const ParserState,
     token: LexExprToken,
     ret_size: *mut size_t,
 ) -> *const ::core::ffi::c_char {
-    static mut ret: [::core::ffi::c_char; 1024] = [0; 1024];
-    let mut p: *mut ::core::ffi::c_char = &raw mut ret as *mut ::core::ffi::c_char;
-    let e: *const ::core::ffi::c_char = (&raw mut ret as *mut ::core::ffi::c_char)
+    static ret: GlobalCell<[::core::ffi::c_char; 1024]> = GlobalCell::new([0; 1024]);
+    let mut p: *mut ::core::ffi::c_char = ret.ptr() as *mut ::core::ffi::c_char;
+    let e: *const ::core::ffi::c_char = (ret.ptr() as *mut ::core::ffi::c_char)
         .offset(1024 as ::core::ffi::c_int as isize)
         .offset(-(1 as ::core::ffi::c_int as isize));
     p = p.offset(snprintf(
         p,
         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-            .wrapping_sub(p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize),
+            .wrapping_sub(p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize),
         b"%zu:%zu:%s\0".as_ptr() as *const ::core::ffi::c_char,
         token.start.line,
         token.start.col,
-        eltkn_type_tab[token.type_0 as usize],
+        (*eltkn_type_tab.ptr())[token.type_0 as usize],
     ) as isize);
     '_viml_pexpr_repr_token_end: {
         if p < e as *mut ::core::ffi::c_char {
@@ -1715,11 +1716,11 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(type=%s,ccs=%s,inv=%i)\0".as_ptr() as *const ::core::ffi::c_char,
-                        eltkn_cmp_type_tab[token.data.cmp.type_0 as usize],
-                        ccs_tab[token.data.cmp.ccs as usize],
+                        (*eltkn_cmp_type_tab.ptr())[token.data.cmp.type_0 as usize],
+                        (*ccs_tab.ptr())[token.data.cmp.ccs as usize],
                         token.data.cmp.inv as ::core::ffi::c_int,
                     ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
@@ -1730,10 +1731,10 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                        eltkn_mul_type_tab[token.data.mul.type_0 as usize],
+                        (*eltkn_mul_type_tab.ptr())[token.data.mul.type_0 as usize],
                     ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
@@ -1743,10 +1744,10 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                        expr_asgn_type_tab[token.data.ass.type_0 as usize],
+                        (*expr_asgn_type_tab.ptr())[token.data.ass.type_0 as usize],
                     ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
@@ -1756,7 +1757,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(name=%s)\0".as_ptr() as *const ::core::ffi::c_char,
                         intchar2str(token.data.reg.name),
@@ -1769,7 +1770,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(closed=%i)\0".as_ptr() as *const ::core::ffi::c_char,
                         token.data.str.closed as ::core::ffi::c_int,
@@ -1782,10 +1783,10 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(scope=%s,name=%.*s)\0".as_ptr() as *const ::core::ffi::c_char,
-                        eltkn_opt_scope_tab[token.data.opt.scope as usize],
+                        (*eltkn_opt_scope_tab.ptr())[token.data.opt.scope as usize],
                         token.data.opt.len as ::core::ffi::c_int,
                         token.data.opt.name,
                     ) as isize);
@@ -1797,7 +1798,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(scope=%s,autoload=%i)\0".as_ptr() as *const ::core::ffi::c_char,
                         intchar2str(token.data.var.scope as ::core::ffi::c_int),
@@ -1811,7 +1812,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(is_float=%i,base=%i,val=%lg)\0".as_ptr() as *const ::core::ffi::c_char,
                         token.data.num.is_float as ::core::ffi::c_int,
@@ -1830,7 +1831,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                     p = p.offset(snprintf(
                         p,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
                         ),
                         b"(msg=%s)\0".as_ptr() as *const ::core::ffi::c_char,
                         token.data.err.msg,
@@ -1842,14 +1843,15 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                 _ => {}
             }
             if pstate.is_null() {
-                p = p.offset(snprintf(
-                    p,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
-                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
-                    ),
-                    b"::%zu\0".as_ptr() as *const ::core::ffi::c_char,
-                    token.len,
-                ) as isize);
+                p =
+                    p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"::%zu\0".as_ptr() as *const ::core::ffi::c_char,
+                        token.len,
+                    ) as isize);
                 p >= e as *mut ::core::ffi::c_char;
             } else {
                 let c2rust_fresh0 = p;
@@ -1873,12 +1875,12 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
         }
     }
     if !ret_size.is_null() {
-        *ret_size = p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as size_t;
+        *ret_size = p.offset_from(ret.ptr() as *mut ::core::ffi::c_char) as size_t;
     }
-    return &raw mut ret as *mut ::core::ffi::c_char;
+    return ret.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub static mut east_node_type_tab: [*const ::core::ffi::c_char; 39] = [
+pub static east_node_type_tab: GlobalCell<[*const ::core::ffi::c_char; 39]> = GlobalCell::new([
     b"Missing\0".as_ptr() as *const ::core::ffi::c_char,
     b"OpMissing\0".as_ptr() as *const ::core::ffi::c_char,
     b"Ternary\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1918,31 +1920,31 @@ pub static mut east_node_type_tab: [*const ::core::ffi::c_char; 39] = [
     b"Option\0".as_ptr() as *const ::core::ffi::c_char,
     b"Environment\0".as_ptr() as *const ::core::ffi::c_char,
     b"Assignment\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 unsafe extern "C" fn intchar2str(ch: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
-    static mut buf: [::core::ffi::c_char; 13] = [0; 13];
+    static buf: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new([0; 13]);
     if ' ' as ::core::ffi::c_int <= ch && ch < 0x7f as ::core::ffi::c_int {
         if ascii_isdigit(ch) {
-            buf[0 as ::core::ffi::c_int as usize] = '\'' as ::core::ffi::c_char;
-            buf[1 as ::core::ffi::c_int as usize] = ch as ::core::ffi::c_char;
-            buf[2 as ::core::ffi::c_int as usize] = '\'' as ::core::ffi::c_char;
-            buf[3 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+            (*buf.ptr())[0 as ::core::ffi::c_int as usize] = '\'' as ::core::ffi::c_char;
+            (*buf.ptr())[1 as ::core::ffi::c_int as usize] = ch as ::core::ffi::c_char;
+            (*buf.ptr())[2 as ::core::ffi::c_int as usize] = '\'' as ::core::ffi::c_char;
+            (*buf.ptr())[3 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         } else {
-            buf[0 as ::core::ffi::c_int as usize] = ch as ::core::ffi::c_char;
-            buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+            (*buf.ptr())[0 as ::core::ffi::c_int as usize] = ch as ::core::ffi::c_char;
+            (*buf.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         }
     } else {
         snprintf(
-            &raw mut buf as *mut ::core::ffi::c_char,
+            buf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 13]>(),
             b"%i\0".as_ptr() as *const ::core::ffi::c_char,
             ch,
         );
     }
-    return &raw mut buf as *mut ::core::ffi::c_char;
+    return buf.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub static mut node_maxchildren: [uint8_t; 39] = [
+pub static node_maxchildren: GlobalCell<[uint8_t; 39]> = GlobalCell::new([
     0 as uint8_t,
     2 as uint8_t,
     2 as uint8_t,
@@ -1982,7 +1984,7 @@ pub static mut node_maxchildren: [uint8_t; 39] = [
     0 as uint8_t,
     0 as uint8_t,
     2 as uint8_t,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
     let mut ast_stack: ExprASTStack = ExprASTStack {
@@ -2108,7 +2110,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
             };
             ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
         } else if !(**cur_node).children.is_null() {
-            let maxchildren: uint8_t = node_maxchildren[(**cur_node).type_0 as usize];
+            let maxchildren: uint8_t = (*node_maxchildren.ptr())[(**cur_node).type_0 as usize];
             '_c2rust_label_1: {
                 if maxchildren as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
                 } else {
@@ -2330,7 +2332,7 @@ unsafe extern "C" fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprAS
     (*ret).next = ::core::ptr::null_mut::<ExprASTNode>();
     return ret;
 }
-static mut node_type_to_node_props: [C2Rust_Unnamed_34; 39] = [
+static node_type_to_node_props: GlobalCell<[C2Rust_Unnamed_34; 39]> = GlobalCell::new([
     C2Rust_Unnamed_34 {
         lvl: kEOpLvlInvalid,
         ass: kEOpAssNo,
@@ -2487,14 +2489,14 @@ static mut node_type_to_node_props: [C2Rust_Unnamed_34; 39] = [
         lvl: kEOpLvlAssignment,
         ass: kEOpAssLeft,
     },
-];
+]);
 #[inline(always)]
 unsafe extern "C" fn node_lvl(node: ExprASTNode) -> ExprOpLvl {
-    return node_type_to_node_props[node.type_0 as usize].lvl;
+    return (*node_type_to_node_props.ptr())[node.type_0 as usize].lvl;
 }
 #[inline(always)]
 unsafe extern "C" fn node_ass(node: ExprASTNode) -> ExprOpAssociativity {
-    return node_type_to_node_props[node.type_0 as usize].ass;
+    return (*node_type_to_node_props.ptr())[node.type_0 as usize].ass;
 }
 unsafe extern "C" fn viml_pexpr_handle_bop(
     pstate: *const ParserState,
@@ -3743,11 +3745,11 @@ unsafe extern "C" fn parse_quoted_string(
         *ptr_;
     }
 }
-static mut want_node_to_lexer_flags: [::core::ffi::c_int; 2] = [
+static want_node_to_lexer_flags: GlobalCell<[::core::ffi::c_int; 2]> = GlobalCell::new([
     kELFlagForbidScope as ::core::ffi::c_int,
     kELFlagIsNotCmp as ::core::ffi::c_int,
-];
-static mut base_to_prefix_length: [uint8_t; 17] = [
+]);
+static base_to_prefix_length: GlobalCell<[uint8_t; 17]> = GlobalCell::new([
     0,
     0,
     2 as uint8_t,
@@ -3765,7 +3767,7 @@ static mut base_to_prefix_length: [uint8_t; 17] = [
     0,
     0,
     2 as uint8_t,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn viml_pexpr_parse(
     pstate: *mut ParserState,
@@ -4088,7 +4090,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             });
         let mut cur_token: LexExprToken = viml_pexpr_next_token(
             pstate,
-            want_node_to_lexer_flags[want_node as usize] | lexer_additional_flags,
+            (*want_node_to_lexer_flags.ptr())[want_node as usize] | lexer_additional_flags,
         );
         if cur_token.type_0 as ::core::ffi::c_uint
             == kExprLexEOC as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -4105,7 +4107,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     loop {
                         cur_token = viml_pexpr_next_token(
                             pstate,
-                            want_node_to_lexer_flags[want_node as usize] | lexer_additional_flags,
+                            (*want_node_to_lexer_flags.ptr())[want_node as usize]
+                                | lexer_additional_flags,
                         );
                         if tok_type as ::core::ffi::c_uint
                             == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -10528,7 +10531,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             }
                                             (*cur_node).data.num.value =
                                                 cur_token.data.num.val.integer;
-                                            let prefix_length: uint8_t = base_to_prefix_length
+                                            let prefix_length: uint8_t = (*base_to_prefix_length
+                                                .ptr())
                                                 [cur_token.data.num.base as usize];
                                             viml_parser_highlight(
                                                 pstate,

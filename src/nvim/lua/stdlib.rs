@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     pub type terminal;
@@ -1987,7 +1988,7 @@ pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const LUA_TNIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_int_ptr_t(
@@ -1996,7 +1997,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -2143,7 +2144,7 @@ unsafe extern "C" fn regex_tostring(mut lstate: *mut lua_State) -> ::core::ffi::
     lua_pushstring(lstate, b"<regex>\0".as_ptr() as *const ::core::ffi::c_char);
     return 1 as ::core::ffi::c_int;
 }
-static mut regex_meta: [luaL_Reg; 5] = [
+static regex_meta: GlobalCell<[luaL_Reg; 5]> = GlobalCell::new([
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(regex_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
@@ -2164,7 +2165,7 @@ static mut regex_meta: [luaL_Reg; 5] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn nlua_str_utfindex(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
@@ -2999,7 +3000,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(lstate: *mut lua_State, mut is_th
         luaL_register(
             lstate,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            &raw mut regex_meta as *mut luaL_Reg,
+            regex_meta.ptr() as *mut luaL_Reg,
         );
         lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
         lua_setfield(

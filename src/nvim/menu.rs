@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
     pub type terminal;
@@ -2900,8 +2901,8 @@ unsafe extern "C" fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
 }
 pub const MNU_HIDDEN_CHAR: ::core::ffi::c_int = ']' as ::core::ffi::c_int;
 pub const MENUDEPTH: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-static mut menus_locked: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut menu_mode_chars: [*mut ::core::ffi::c_char; 8] = [
+static menus_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static menu_mode_chars: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"v\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"s\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2910,15 +2911,15 @@ static mut menu_mode_chars: [*mut ::core::ffi::c_char; 8] = [
     b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"tl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
-static mut e_notsubmenu: [::core::ffi::c_char; 45] = unsafe {
+]);
+static e_notsubmenu: GlobalCell<[::core::ffi::c_char; 45]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
         *b"E327: Part of menu-item path is not sub-menu\0",
     )
-};
-static mut e_nomenu: [::core::ffi::c_char; 19] = unsafe {
+});
+static e_nomenu: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E329: No menu \"%s\"\0")
-};
+});
 unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
     return strncmp(
         name,
@@ -2930,7 +2931,7 @@ unsafe extern "C" fn get_root_menu(_name: *const ::core::ffi::c_char) -> *mut *m
     return &raw mut root_menu;
 }
 unsafe extern "C" fn is_menus_locked() -> ::core::ffi::c_int {
-    if menus_locked > 0 as ::core::ffi::c_int {
+    if menus_locked.get() > 0 as ::core::ffi::c_int {
         emsg(gettext(
             &raw const e_cannot_change_menus_while_listing as *const ::core::ffi::c_char,
         ));
@@ -3293,7 +3294,7 @@ unsafe extern "C" fn add_menu_path(
                             }
                             if !sys_menu {
                                 emsg(gettext(
-                                    &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                                    (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                                 ));
                             }
                             break '_erret;
@@ -3485,7 +3486,7 @@ unsafe extern "C" fn menu_enable_recurse(
             if *p as ::core::ffi::c_int != NUL {
                 if (*menu).children.is_null() {
                     emsg(gettext(
-                        &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     return FAIL;
                 }
@@ -3510,7 +3511,7 @@ unsafe extern "C" fn menu_enable_recurse(
         && menu.is_null()
     {
         semsg(
-            gettext(&raw const e_nomenu as *const ::core::ffi::c_char),
+            gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
             name,
         );
         return FAIL;
@@ -3539,7 +3540,7 @@ unsafe extern "C" fn remove_menu(
             if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
                 if !silent {
                     emsg(gettext(
-                        &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                 }
                 return FAIL;
@@ -3576,7 +3577,7 @@ unsafe extern "C" fn remove_menu(
         if menu.is_null() {
             if !silent {
                 semsg(
-                    gettext(&raw const e_nomenu as *const ::core::ffi::c_char),
+                    gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
                     name,
                 );
             }
@@ -3735,7 +3736,12 @@ unsafe extern "C" fn menu_get_recursive(
                         0 as ::core::ffi::c_int
                     }) as varnumber_T,
                 );
-                tv_dict_add_dict(commands, menu_mode_chars[bit as usize], 1 as size_t, impl_0);
+                tv_dict_add_dict(
+                    commands,
+                    (*menu_mode_chars.ptr())[bit as usize],
+                    1 as size_t,
+                    impl_0,
+                );
             }
             bit += 1;
         }
@@ -3809,7 +3815,7 @@ unsafe extern "C" fn find_menu(
             if menu_name_equal(name, menu) {
                 if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
                     emsg(gettext(
-                        &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                     break '_theend;
@@ -3830,7 +3836,7 @@ unsafe extern "C" fn find_menu(
         }
         if menu.is_null() {
             semsg(
-                gettext(&raw const e_nomenu as *const ::core::ffi::c_char),
+                gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
                 name,
             );
             break;
@@ -3865,12 +3871,12 @@ unsafe extern "C" fn show_menus(
             return FAIL;
         }
     }
-    menus_locked += 1;
+    (*menus_locked.ptr()) += 1;
     msg_puts_title(gettext(
         b"\n--- Menus ---\0".as_ptr() as *const ::core::ffi::c_char
     ));
     show_menus_recursive(menu, modes, 0 as ::core::ffi::c_int);
-    menus_locked -= 1;
+    (*menus_locked.ptr()) -= 1;
     return OK;
 }
 unsafe extern "C" fn show_menus_recursive(
@@ -3910,7 +3916,7 @@ unsafe extern "C" fn show_menus_recursive(
                     msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
                     i_0 += 1;
                 }
-                msg_puts(menu_mode_chars[bit as usize]);
+                msg_puts((*menu_mode_chars.ptr())[bit as usize]);
                 if (*menu).noremap[bit as usize] == REMAP_NONE as ::core::ffi::c_int {
                     msg_putchar('*' as ::core::ffi::c_int);
                 } else if (*menu).noremap[bit as usize] == REMAP_SCRIPT as ::core::ffi::c_int {
@@ -3962,9 +3968,10 @@ unsafe extern "C" fn show_menus_recursive(
         }
     };
 }
-static mut expand_menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-static mut expand_modes: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut expand_emenu: ::core::ffi::c_int = 0;
+static expand_menu: GlobalCell<*mut vimmenu_T> =
+    GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
+static expand_modes: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static expand_emenu: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
 pub unsafe extern "C" fn set_context_in_menu_cmd(
     mut xp: *mut expand_T,
@@ -4038,19 +4045,20 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
             == 'e' as ::core::ffi::c_int
         || *cmd as ::core::ffi::c_int == 'p' as ::core::ffi::c_int)
         as ::core::ffi::c_int;
-    expand_emenu = (*cmd as ::core::ffi::c_int == 'e' as ::core::ffi::c_int) as ::core::ffi::c_int;
+    expand_emenu
+        .set((*cmd as ::core::ffi::c_int == 'e' as ::core::ffi::c_int) as ::core::ffi::c_int);
     if expand_menus != 0 && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if *p as ::core::ffi::c_int == NUL {
-        expand_modes = get_menu_cmd_modes(
+        expand_modes.set(get_menu_cmd_modes(
             cmd,
             forceit,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             &raw mut unmenu,
-        );
+        ));
         if !unmenu {
-            expand_modes = MENU_ALL_MODES as ::core::ffi::c_int;
+            expand_modes.set(MENU_ALL_MODES as ::core::ffi::c_int);
         }
         menu = root_menu;
         if after_dot > arg {
@@ -4064,7 +4072,7 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
             while !menu.is_null() {
                 if menu_name_equal(name, menu) {
                     if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null()
-                        || (*menu).modes & expand_modes == 0 as ::core::ffi::c_int
+                        || (*menu).modes & expand_modes.get() == 0 as ::core::ffi::c_int
                     {
                         xfree(path_name as *mut ::core::ffi::c_void);
                         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4088,7 +4096,7 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
             EXPAND_MENUS as ::core::ffi::c_int
         };
         (*xp).xp_pattern = after_dot;
-        expand_menu = menu;
+        expand_menu.set(menu);
     } else {
         (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
     }
@@ -4099,39 +4107,39 @@ pub unsafe extern "C" fn get_menu_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
+    static menu: GlobalCell<*mut vimmenu_T> = GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
     let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut should_advance: bool = false_0 != 0;
+    static should_advance: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if idx == 0 as ::core::ffi::c_int {
-        menu = expand_menu;
-        should_advance = false_0 != 0;
+        menu.set(expand_menu.get());
+        should_advance.set(false_0 != 0);
     }
-    while !menu.is_null()
-        && (menu_is_hidden((*menu).dname) as ::core::ffi::c_int != 0
-            || menu_is_separator((*menu).dname) as ::core::ffi::c_int != 0
-            || (*menu).children.is_null())
+    while !(*menu.ptr()).is_null()
+        && (menu_is_hidden((*menu.get()).dname) as ::core::ffi::c_int != 0
+            || menu_is_separator((*menu.get()).dname) as ::core::ffi::c_int != 0
+            || (*menu.get()).children.is_null())
     {
-        menu = (*menu).next;
+        menu.set((*menu.get()).next);
     }
-    if menu.is_null() {
+    if (*menu.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if (*menu).modes & expand_modes != 0 {
-        if should_advance {
-            str = (*menu).en_dname;
+    if (*menu.get()).modes & expand_modes.get() != 0 {
+        if should_advance.get() {
+            str = (*menu.get()).en_dname;
         } else {
-            str = (*menu).dname;
-            if (*menu).en_dname.is_null() {
-                should_advance = true_0 != 0;
+            str = (*menu.get()).dname;
+            if (*menu.get()).en_dname.is_null() {
+                should_advance.set(true_0 != 0);
             }
         }
     } else {
         str = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
-    if should_advance {
-        menu = (*menu).next;
+    if should_advance.get() {
+        menu.set((*menu.get()).next);
     }
-    should_advance = !should_advance;
+    should_advance.set(!should_advance.get());
     return str;
 }
 #[no_mangle]
@@ -4139,66 +4147,67 @@ pub unsafe extern "C" fn get_menu_names(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-    static mut tbuffer: [::core::ffi::c_char; 256] = [0; 256];
+    static menu: GlobalCell<*mut vimmenu_T> = GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
+    static tbuffer: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
     let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut should_advance: bool = false_0 != 0;
+    static should_advance: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if idx == 0 as ::core::ffi::c_int {
-        menu = expand_menu;
-        should_advance = false_0 != 0;
+        menu.set(expand_menu.get());
+        should_advance.set(false_0 != 0);
     }
-    while !menu.is_null()
-        && (menu_is_hidden((*menu).dname) as ::core::ffi::c_int != 0
-            || expand_emenu != 0 && menu_is_separator((*menu).dname) as ::core::ffi::c_int != 0
-            || *(*menu)
+    while !(*menu.ptr()).is_null()
+        && (menu_is_hidden((*menu.get()).dname) as ::core::ffi::c_int != 0
+            || expand_emenu.get() != 0
+                && menu_is_separator((*menu.get()).dname) as ::core::ffi::c_int != 0
+            || *(*menu.get())
                 .dname
-                .offset(strlen((*menu).dname).wrapping_sub(1 as size_t) as isize)
+                .offset(strlen((*menu.get()).dname).wrapping_sub(1 as size_t) as isize)
                 as ::core::ffi::c_int
                 == '.' as ::core::ffi::c_int)
     {
-        menu = (*menu).next;
+        menu.set((*menu.get()).next);
     }
-    if menu.is_null() {
+    if (*menu.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if (*menu).modes & expand_modes != 0 {
-        if !(*menu).children.is_null() {
-            if should_advance {
+    if (*menu.get()).modes & expand_modes.get() != 0 {
+        if !(*menu.get()).children.is_null() {
+            if should_advance.get() {
                 xstrlcpy(
-                    &raw mut tbuffer as *mut ::core::ffi::c_char,
-                    (*menu).en_dname,
+                    tbuffer.ptr() as *mut ::core::ffi::c_char,
+                    (*menu.get()).en_dname,
                     TBUFFER_LEN as size_t,
                 );
             } else {
                 xstrlcpy(
-                    &raw mut tbuffer as *mut ::core::ffi::c_char,
-                    (*menu).dname,
+                    tbuffer.ptr() as *mut ::core::ffi::c_char,
+                    (*menu.get()).dname,
                     TBUFFER_LEN as size_t,
                 );
-                if (*menu).en_dname.is_null() {
-                    should_advance = true_0 != 0;
+                if (*menu.get()).en_dname.is_null() {
+                    should_advance.set(true_0 != 0);
                 }
             }
             strcat(
-                &raw mut tbuffer as *mut ::core::ffi::c_char,
+                tbuffer.ptr() as *mut ::core::ffi::c_char,
                 b"\x01\0".as_ptr() as *const ::core::ffi::c_char,
             );
-            str = &raw mut tbuffer as *mut ::core::ffi::c_char;
-        } else if should_advance {
-            str = (*menu).en_dname;
+            str = tbuffer.ptr() as *mut ::core::ffi::c_char;
+        } else if should_advance.get() {
+            str = (*menu.get()).en_dname;
         } else {
-            str = (*menu).dname;
-            if (*menu).en_dname.is_null() {
-                should_advance = true_0 != 0;
+            str = (*menu.get()).dname;
+            if (*menu.get()).en_dname.is_null() {
+                should_advance.set(true_0 != 0);
             }
         }
     } else {
         str = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
-    if should_advance {
-        menu = (*menu).next;
+    if should_advance.get() {
+        menu.set((*menu.get()).next);
     }
-    should_advance = !should_advance;
+    should_advance.set(!should_advance.get());
     return str;
 }
 pub const TBUFFER_LEN: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
@@ -4429,7 +4438,7 @@ unsafe extern "C" fn popup_mode_name(
             );
         }
     };
-    let mut mode_chars: *mut ::core::ffi::c_char = menu_mode_chars[idx as usize];
+    let mut mode_chars: *mut ::core::ffi::c_char = (*menu_mode_chars.ptr())[idx as usize];
     let mut mode_chars_len: size_t = strlen(mode_chars);
     let mut p: *mut ::core::ffi::c_char = xstrnsave(name, len.wrapping_add(mode_chars_len));
     memmove(
@@ -4441,7 +4450,7 @@ unsafe extern "C" fn popup_mode_name(
     let mut i: size_t = 0 as size_t;
     while i < mode_chars_len {
         *p.offset((5 as size_t).wrapping_add(i) as isize) =
-            *menu_mode_chars[idx as usize].offset(i as isize);
+            *(*menu_mode_chars.ptr())[idx as usize].offset(i as isize);
         i = i.wrapping_add(1);
     }
     return p;
@@ -4580,7 +4589,7 @@ pub unsafe extern "C" fn show_popupmenu() {
     if menu_mode == MENU_INDEX_INVALID as ::core::ffi::c_int {
         return;
     }
-    let mut mode: *mut ::core::ffi::c_char = menu_mode_chars[menu_mode as usize];
+    let mut mode: *mut ::core::ffi::c_char = (*menu_mode_chars.ptr())[menu_mode as usize];
     let mut mode_len: size_t = strlen(mode);
     apply_autocmds(
         EVENT_MENUPOPUP,
@@ -4797,7 +4806,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                 } else if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
                     emsg(gettext(
-                        &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                     ));
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                 }
@@ -4889,7 +4898,7 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
                             ));
                         } else {
                             emsg(gettext(
-                                &raw const e_notsubmenu as *const ::core::ffi::c_char,
+                                (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                             ));
                         }
                         menu = ::core::ptr::null_mut::<vimmenu_T>();
@@ -4918,13 +4927,13 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
     xfree(saved_name as *mut ::core::ffi::c_void);
     return menu;
 }
-static mut menutrans_ga: garray_T = GA_EMPTY_INIT_VALUE;
+static menutrans_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 #[no_mangle]
 pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    if menutrans_ga.ga_itemsize == 0 as ::core::ffi::c_int {
+    if (*menutrans_ga.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
         ga_init(
-            &raw mut menutrans_ga,
+            menutrans_ga.ptr(),
             ::core::mem::size_of::<menutrans_T>() as ::core::ffi::c_int,
             5 as ::core::ffi::c_int,
         );
@@ -4937,7 +4946,7 @@ pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
         && ends_excmd(*skipwhite(arg.offset(5 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int)
             != 0
     {
-        let mut _gap: *mut garray_T = &raw mut menutrans_ga;
+        let mut _gap: *mut garray_T = menutrans_ga.ptr();
         if !(*_gap).ga_data.is_null() {
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < (*_gap).ga_len {
@@ -4988,7 +4997,7 @@ pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
             menu_unescape_name(from);
             menu_unescape_name(to);
             let mut tp: *mut menutrans_T =
-                ga_append_via_ptr(&raw mut menutrans_ga, ::core::mem::size_of::<menutrans_T>())
+                ga_append_via_ptr(menutrans_ga.ptr(), ::core::mem::size_of::<menutrans_T>())
                     as *mut menutrans_T;
             (*tp).from = from;
             (*tp).from_noamp = from_noamp;
@@ -5015,9 +5024,9 @@ unsafe extern "C" fn menutrans_lookup(
     mut name: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut tp: *mut menutrans_T = menutrans_ga.ga_data as *mut menutrans_T;
+    let mut tp: *mut menutrans_T = (*menutrans_ga.ptr()).ga_data as *mut menutrans_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < menutrans_ga.ga_len {
+    while i < (*menutrans_ga.ptr()).ga_len {
         if strncasecmp(name, (*tp.offset(i as isize)).from, len as size_t)
             == 0 as ::core::ffi::c_int
             && *(*tp.offset(i as isize)).from.offset(len as isize) as ::core::ffi::c_int == NUL
@@ -5035,7 +5044,7 @@ unsafe extern "C" fn menutrans_lookup(
     );
     *name.offset(len as isize) = c;
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < menutrans_ga.ga_len {
+    while i_0 < (*menutrans_ga.ptr()).ga_len {
         if strcasecmp(dname, (*tp.offset(i_0 as isize)).from_noamp) == 0 as ::core::ffi::c_int {
             xfree(dname as *mut ::core::ffi::c_void);
             return (*tp.offset(i_0 as isize)).to;

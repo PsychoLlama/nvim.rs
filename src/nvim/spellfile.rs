@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -314,11 +315,11 @@ extern "C" {
         lnum: linenr_T,
     ) -> *mut estack_T;
     fn estack_pop();
-    static mut first_lang: *mut slang_T;
-    static mut int_wordlist: *mut ::core::ffi::c_char;
-    static mut spelltab: spelltab_T;
-    static mut did_set_spelltab: bool;
-    static mut e_format: *mut ::core::ffi::c_char;
+    static first_lang: GlobalCell<*mut slang_T>;
+    static int_wordlist: GlobalCell<*mut ::core::ffi::c_char>;
+    static spelltab: GlobalCell<spelltab_T>;
+    static did_set_spelltab: GlobalCell<bool>;
+    static e_format: GlobalCell<*mut ::core::ffi::c_char>;
     fn spell_enc() -> *mut ::core::ffi::c_char;
     fn slang_alloc(lang: *mut ::core::ffi::c_char) -> *mut slang_T;
     fn slang_free(lp: *mut slang_T);
@@ -3683,26 +3684,29 @@ pub const VIMSPELLMAGICL: usize =
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
-static mut e_spell_trunc: *const ::core::ffi::c_char =
-    b"E758: Truncated spell file\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_error_while_reading_sug_file_str: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-        *b"E782: Error while reading .sug file: %s\0",
-    )
-};
-static mut e_duplicate_char_in_map_entry: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E783: Duplicate char in MAP entry\0",
-    )
-};
-static mut e_illegal_character_in_word: *const ::core::ffi::c_char =
-    b"E1280: Illegal character in word\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_afftrailing: *const ::core::ffi::c_char =
-    b"Trailing text in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char;
-static mut e_affname: *const ::core::ffi::c_char =
-    b"Affix name too long in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char;
-static mut msg_compressing: *const ::core::ffi::c_char =
-    b"Compressing word tree...\0".as_ptr() as *const ::core::ffi::c_char;
+static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E758: Truncated spell file\0".as_ptr() as *const ::core::ffi::c_char);
+static e_error_while_reading_sug_file_str: GlobalCell<[::core::ffi::c_char; 40]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+            *b"E782: Error while reading .sug file: %s\0",
+        )
+    });
+static e_duplicate_char_in_map_entry: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E783: Duplicate char in MAP entry\0",
+        )
+    });
+static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"E1280: Illegal character in word\0".as_ptr() as *const ::core::ffi::c_char);
+static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Trailing text in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char);
+static e_affname: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+    b"Affix name too long in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
+);
+static msg_compressing: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Compressing word tree...\0".as_ptr() as *const ::core::ffi::c_char);
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -3857,8 +3861,8 @@ pub unsafe extern "C" fn spell_load_file(
                                                 );
                                                 if res == 0 as ::core::ffi::c_int {
                                                     if old_lp.is_null() && !lang.is_null() {
-                                                        (*lp).sl_next = first_lang;
-                                                        first_lang = lp;
+                                                        (*lp).sl_next = first_lang.get();
+                                                        first_lang.set(lp);
                                                     }
                                                     break '_endOK;
                                                 }
@@ -3978,7 +3982,7 @@ pub unsafe extern "C" fn spell_load_file(
                                     }
                                 }
                                 if res == SP_FORMERROR as ::core::ffi::c_int {
-                                    emsg(gettext(e_format));
+                                    emsg(gettext(e_format.get()));
                                     break '_endFAIL;
                                 } else {
                                     if res == SP_TRUNCERROR as ::core::ffi::c_int {
@@ -3989,7 +3993,7 @@ pub unsafe extern "C" fn spell_load_file(
                                     }
                                 }
                             }
-                            emsg(gettext(e_spell_trunc));
+                            emsg(gettext(e_spell_trunc.get()));
                         }
                     }
                 }
@@ -4209,7 +4213,7 @@ pub unsafe extern "C" fn suggest_load_files() {
                                     }
                                     semsg(
                                         gettext(
-                                            &raw const e_error_while_reading_sug_file_str
+                                            (e_error_while_reading_sug_file_str.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         (*slang).sl_fname,
@@ -5123,7 +5127,7 @@ unsafe extern "C" fn read_tree_node(
 pub const SHARED_MASK: ::core::ffi::c_int = 0x8000000 as ::core::ffi::c_int;
 unsafe extern "C" fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut added_word: bool) {
     let mut didit: bool = false_0 != 0;
-    let mut slang: *mut slang_T = first_lang;
+    let mut slang: *mut slang_T = first_lang.get();
     while !slang.is_null() {
         if path_full_compare(fname, (*slang).sl_fname, false_0 != 0, true_0 != 0)
             as ::core::ffi::c_uint
@@ -5154,9 +5158,11 @@ pub const CONDIT_COMB: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CONDIT_CFIX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CONDIT_SUF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONDIT_AFF: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-static mut compress_start: ::core::ffi::c_int = 30000 as ::core::ffi::c_int;
-static mut compress_inc: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-static mut compress_added: ::core::ffi::c_int = 500000 as ::core::ffi::c_int;
+static compress_start: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(30000 as ::core::ffi::c_int);
+static compress_inc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(100 as ::core::ffi::c_int);
+static compress_added: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(500000 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = p_msm;
@@ -5196,9 +5202,9 @@ pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     {
         return FAIL;
     }
-    compress_start = start;
-    compress_inc = incr;
-    compress_added = added;
+    compress_start.set(start);
+    compress_inc.set(incr);
+    compress_added.set(added);
     return OK;
 }
 unsafe extern "C" fn spell_read_aff(
@@ -6083,7 +6089,7 @@ unsafe extern "C" fn spell_read_aff(
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(e_afftrailing),
+                        gettext(e_afftrailing.get()),
                         fname,
                         lnum,
                         items[lasti as usize],
@@ -6149,7 +6155,7 @@ unsafe extern "C" fn spell_read_aff(
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(e_afftrailing),
+                        gettext(e_afftrailing.get()),
                         fname,
                         lnum,
                         items[lasti_0 as usize],
@@ -6247,7 +6253,7 @@ unsafe extern "C" fn spell_read_aff(
                             let mut c_up: ::core::ffi::c_int = if c >= 128 as ::core::ffi::c_int {
                                 mb_toupper(c)
                             } else {
-                                spelltab.st_upper[c as usize] as ::core::ffi::c_int
+                                (*spelltab.ptr()).st_upper[c as usize] as ::core::ffi::c_int
                             };
                             if c_up != c
                                 && ((*aff_entry).ae_cond.is_null()
@@ -6437,7 +6443,7 @@ unsafe extern "C" fn spell_read_aff(
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(e_afftrailing),
+                        gettext(e_afftrailing.get()),
                         fname,
                         lnum,
                         items[3 as ::core::ffi::c_int as usize],
@@ -6870,7 +6876,7 @@ unsafe extern "C" fn affitem2flag(
     if *p as ::core::ffi::c_int != NUL {
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(e_affname),
+            gettext(e_affname.get()),
             fname,
             lnum,
             item,
@@ -8377,20 +8383,20 @@ unsafe extern "C" fn tree_add_word(
     if (*spin).si_compress_cnt > 1 as ::core::ffi::c_int {
         (*spin).si_compress_cnt -= 1;
         if (*spin).si_compress_cnt == 1 as ::core::ffi::c_int {
-            (*spin).si_blocks_cnt += compress_inc;
+            (*spin).si_blocks_cnt += compress_inc.get();
         }
     }
     if if (*spin).si_compress_cnt == 1 as ::core::ffi::c_int {
         ((*spin).si_free_count < MAXWLEN as ::core::ffi::c_int) as ::core::ffi::c_int
     } else {
-        ((*spin).si_blocks_cnt >= compress_start) as ::core::ffi::c_int
+        ((*spin).si_blocks_cnt >= compress_start.get()) as ::core::ffi::c_int
     } != 0
     {
-        (*spin).si_blocks_cnt -= compress_inc;
-        (*spin).si_compress_cnt = compress_added;
+        (*spin).si_blocks_cnt -= compress_inc.get();
+        (*spin).si_compress_cnt = compress_added.get();
         if (*spin).si_verbose != 0 {
             msg_start();
-            msg_puts(gettext(msg_compressing));
+            msg_puts(gettext(msg_compressing.get()));
             msg_clr_eos();
             msg_didout = false_0 != 0;
             msg_col = 0 as ::core::ffi::c_int;
@@ -8695,7 +8701,7 @@ unsafe extern "C" fn write_vim_spell(
             let mut i_0: size_t = 128 as size_t;
             while i_0 < 256 as size_t {
                 l_0 = l_0.wrapping_add(utf_char2bytes(
-                    spelltab.st_fold[i_0 as usize] as ::core::ffi::c_int,
+                    (*spelltab.ptr()).st_fold[i_0 as usize] as ::core::ffi::c_int,
                     (&raw mut folchars as *mut ::core::ffi::c_char).offset(l_0 as isize),
                 ) as size_t);
                 i_0 = i_0.wrapping_add(1);
@@ -8711,10 +8717,10 @@ unsafe extern "C" fn write_vim_spell(
             let mut i_1: size_t = 128 as size_t;
             while i_1 < 256 as size_t {
                 let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                if spelltab.st_isw[i_1 as usize] {
+                if (*spelltab.ptr()).st_isw[i_1 as usize] {
                     flags |= CF_WORD as ::core::ffi::c_int;
                 }
-                if spelltab.st_isu[i_1 as usize] {
+                if (*spelltab.ptr()).st_isu[i_1 as usize] {
                     flags |= CF_UPPER as ::core::ffi::c_int;
                 }
                 fputc(flags, fd);
@@ -9265,7 +9271,7 @@ unsafe extern "C" fn spell_make_sugfile(
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
     let mut free_slang: bool = false_0 != 0;
-    slang = first_lang;
+    slang = first_lang.get();
     while !slang.is_null() {
         if path_full_compare(wfname, (*slang).sl_fname, false_0 != 0, true_0 != 0)
             as ::core::ffi::c_uint
@@ -9309,7 +9315,7 @@ unsafe extern "C" fn spell_make_sugfile(
                     as *const ::core::ffi::c_char),
                 (*(*spin).si_spellbuf).b_ml.ml_line_count as int64_t,
             );
-            spell_message(spin, gettext(msg_compressing));
+            spell_message(spin, gettext(msg_compressing.get()));
             wordtree_compress(
                 spin,
                 (*spin).si_foldroot,
@@ -10021,7 +10027,7 @@ unsafe extern "C" fn mkspell(
                 );
             }
             if !error && !got_int {
-                spell_message(&raw mut spin, gettext(msg_compressing));
+                spell_message(&raw mut spin, gettext(msg_compressing.get()));
                 wordtree_compress(
                     &raw mut spin,
                     spin.si_foldroot,
@@ -10137,17 +10143,17 @@ pub unsafe extern "C" fn spell_add_word(
     let mut line: [::core::ffi::c_char; 508] = [0; 508];
     let mut spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !valid_spell_word(word, word.offset(len as isize)) {
-        emsg(gettext(e_illegal_character_in_word));
+        emsg(gettext(e_illegal_character_in_word.get()));
         return;
     }
     if idx == 0 as ::core::ffi::c_int {
-        if int_wordlist.is_null() {
-            int_wordlist = vim_tempname();
-            if int_wordlist.is_null() {
+        if (*int_wordlist.ptr()).is_null() {
+            int_wordlist.set(vim_tempname());
+            if (*int_wordlist.ptr()).is_null() {
                 return;
             }
         }
-        fname = int_wordlist;
+        fname = int_wordlist.get();
     } else {
         let mut i: ::core::ffi::c_int = 0;
         if *(*(*curwin).w_s).b_p_spf as ::core::ffi::c_int == NUL {
@@ -10485,16 +10491,16 @@ unsafe extern "C" fn set_spell_charflags(
     set_spell_finish(&raw mut new_st);
 }
 unsafe extern "C" fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
-    if did_set_spelltab {
+    if did_set_spelltab.get() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 256 as ::core::ffi::c_int {
-            if spelltab.st_isw[i as usize] as ::core::ffi::c_int
+            if (*spelltab.ptr()).st_isw[i as usize] as ::core::ffi::c_int
                 != (*new_st).st_isw[i as usize] as ::core::ffi::c_int
-                || spelltab.st_isu[i as usize] as ::core::ffi::c_int
+                || (*spelltab.ptr()).st_isu[i as usize] as ::core::ffi::c_int
                     != (*new_st).st_isu[i as usize] as ::core::ffi::c_int
-                || spelltab.st_fold[i as usize] as ::core::ffi::c_int
+                || (*spelltab.ptr()).st_fold[i as usize] as ::core::ffi::c_int
                     != (*new_st).st_fold[i as usize] as ::core::ffi::c_int
-                || spelltab.st_upper[i as usize] as ::core::ffi::c_int
+                || (*spelltab.ptr()).st_upper[i as usize] as ::core::ffi::c_int
                     != (*new_st).st_upper[i as usize] as ::core::ffi::c_int
             {
                 emsg(gettext(
@@ -10506,8 +10512,8 @@ unsafe extern "C" fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ff
             i += 1;
         }
     } else {
-        spelltab = *new_st;
-        did_set_spelltab = true_0 != 0;
+        spelltab.set(*new_st);
+        did_set_spelltab.set(true_0 != 0);
     }
     return OK;
 }
@@ -10621,7 +10627,8 @@ unsafe extern "C" fn set_map_str(mut lp: *mut slang_T, mut map: *const ::core::f
                     hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash);
                 } else {
                     emsg(gettext(
-                        &raw const e_duplicate_char_in_map_entry as *const ::core::ffi::c_char,
+                        (e_duplicate_char_in_map_entry.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
                     ));
                     xfree(b as *mut ::core::ffi::c_void);
                 }

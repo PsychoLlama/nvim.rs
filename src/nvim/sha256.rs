@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -3102,7 +3103,7 @@ pub unsafe extern "C" fn sha256_update(
         );
     }
 }
-static mut sha256_padding: [uint8_t; 64] = [
+static sha256_padding: GlobalCell<[uint8_t; 64]> = GlobalCell::new([
     0x80 as uint8_t,
     0 as uint8_t,
     0 as uint8_t,
@@ -3167,7 +3168,7 @@ static mut sha256_padding: [uint8_t; 64] = [
     0 as uint8_t,
     0 as uint8_t,
     0 as uint8_t,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn sha256_finish(mut ctx: *mut context_sha256_T, mut digest: *mut uint8_t) {
     let mut high: uint32_t = (*ctx).total[0 as ::core::ffi::c_int as usize]
@@ -3194,7 +3195,7 @@ pub unsafe extern "C" fn sha256_finish(mut ctx: *mut context_sha256_T, mut diges
     } else {
         (120 as uint32_t).wrapping_sub(last)
     };
-    sha256_update(ctx, &raw mut sha256_padding as *mut uint8_t, padn as size_t);
+    sha256_update(ctx, sha256_padding.ptr() as *mut uint8_t, padn as size_t);
     sha256_update(ctx, &raw mut msglen as *mut uint8_t, 8 as size_t);
     *digest.offset(0 as ::core::ffi::c_int as isize) =
         ((*ctx).state[0 as ::core::ffi::c_int as usize] >> 24 as ::core::ffi::c_int) as uint8_t;
@@ -3269,7 +3270,7 @@ pub unsafe extern "C" fn sha256_bytes(
     mut salt: *const uint8_t,
     mut salt_len: size_t,
 ) -> *const ::core::ffi::c_char {
-    static mut hexit: [::core::ffi::c_char; 65] = [0; 65];
+    static hexit: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
     sha256_self_test();
     let mut ctx: context_sha256_T = context_sha256_T {
         total: [0; 2],
@@ -3286,7 +3287,7 @@ pub unsafe extern "C" fn sha256_bytes(
     let mut j: size_t = 0 as size_t;
     while j < SHA256_SUM_SIZE as size_t {
         snprintf(
-            (&raw mut hexit as *mut ::core::ffi::c_char)
+            (hexit.ptr() as *mut ::core::ffi::c_char)
                 .offset(j.wrapping_mul(SHA_STEP as size_t) as isize),
             (SHA_STEP + 1 as ::core::ffi::c_int) as size_t,
             b"%02x\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3294,24 +3295,25 @@ pub unsafe extern "C" fn sha256_bytes(
         );
         j = j.wrapping_add(1);
     }
-    hexit[::core::mem::size_of::<[::core::ffi::c_char; 65]>().wrapping_sub(1 as usize) as usize] =
+    (*hexit.ptr())
+        [::core::mem::size_of::<[::core::ffi::c_char; 65]>().wrapping_sub(1 as usize) as usize] =
         NUL as ::core::ffi::c_char;
-    return &raw mut hexit as *mut ::core::ffi::c_char;
+    return hexit.ptr() as *mut ::core::ffi::c_char;
 }
-static mut sha_self_test_msg: [*mut ::core::ffi::c_char; 3] = [
+static sha_self_test_msg: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"abc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq\0".as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-];
-static mut sha_self_test_vector: [*mut ::core::ffi::c_char; 3] = [
+]);
+static sha_self_test_vector: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\0".as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1\0".as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0\0".as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn sha256_self_test() -> bool {
     let mut output: [::core::ffi::c_char; 65] = [0; 65];
@@ -3323,18 +3325,18 @@ pub unsafe extern "C" fn sha256_self_test() -> bool {
     let mut buf: [uint8_t; 1000] = [0; 1000];
     let mut sha256sum: [uint8_t; 32] = [0; 32];
     let mut hexit: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    static mut sha256_self_tested: bool = false_0 != 0;
-    static mut failures: bool = false_0 != 0;
-    if sha256_self_tested {
-        return failures as ::core::ffi::c_int == false_0;
+    static sha256_self_tested: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    static failures: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if sha256_self_tested.get() {
+        return failures.get() as ::core::ffi::c_int == false_0;
     }
-    sha256_self_tested = true_0 != 0;
+    sha256_self_tested.set(true_0 != 0);
     let mut i: size_t = 0 as size_t;
     while i < 3 as size_t {
         if i < 2 as size_t {
             hexit = sha256_bytes(
-                sha_self_test_msg[i as usize] as *mut uint8_t,
-                strlen(sha_self_test_msg[i as usize]),
+                (*sha_self_test_msg.ptr())[i as usize] as *mut uint8_t,
+                strlen((*sha_self_test_msg.ptr())[i as usize]),
                 ::core::ptr::null::<uint8_t>(),
                 0 as size_t,
             );
@@ -3369,15 +3371,15 @@ pub unsafe extern "C" fn sha256_self_test() -> bool {
         }
         if memcmp(
             &raw mut output as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-            sha_self_test_vector[i as usize] as *const ::core::ffi::c_void,
+            (*sha_self_test_vector.ptr())[i as usize] as *const ::core::ffi::c_void,
             SHA256_BUFFER_SIZE as size_t,
         ) != 0 as ::core::ffi::c_int
         {
-            failures = true_0 != 0;
+            failures.set(true_0 != 0);
             output[::core::mem::size_of::<[::core::ffi::c_char; 65]>().wrapping_sub(1 as usize)
                 as usize] = NUL as ::core::ffi::c_char;
         }
         i = i.wrapping_add(1);
     }
-    return failures as ::core::ffi::c_int == false_0;
+    return failures.get() as ::core::ffi::c_int == false_0;
 }

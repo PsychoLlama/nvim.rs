@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -143,7 +144,7 @@ extern "C" {
     fn aborting() -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    static mut ucmds: garray_T;
+    static ucmds: GlobalCell<garray_T>;
     fn get_user_command_name(
         idx: ::core::ffi::c_int,
         cmdidx: ::core::ffi::c_int,
@@ -3246,7 +3247,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         }
         cmd = ::core::ptr::null_mut::<ucmd_T>();
         if ea.cmdidx as ::core::ffi::c_int == CMD_USER as ::core::ffi::c_int {
-            cmd = (ucmds.ga_data as *mut ucmd_T).offset(ea.useridx as isize);
+            cmd = ((*ucmds.ptr()).ga_data as *mut ucmd_T).offset(ea.useridx as isize);
         } else if ea.cmdidx as ::core::ffi::c_int == CMD_USER_BUF as ::core::ffi::c_int {
             cmd = ((*curbuf).b_ucmds.ga_data as *mut ucmd_T).offset(ea.useridx as isize);
         }
@@ -6006,7 +6007,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
 ) {
     let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
     if buf == -1 as ::core::ffi::c_int {
-        gap = &raw mut ucmds;
+        gap = ucmds.ptr();
     } else {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     pub type terminal;
@@ -1785,7 +1786,7 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
     (*curwin).w_onebuf_opt.wo_spell = wo_spell_save;
     return 1 as ::core::ffi::c_int;
 }
-static mut spell_functions: [luaL_Reg; 2] = [
+static spell_functions: GlobalCell<[luaL_Reg; 2]> = GlobalCell::new([
     luaL_Reg {
         name: b"check\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(nlua_spell_check as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
@@ -1794,14 +1795,14 @@ static mut spell_functions: [luaL_Reg; 2] = [
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn luaopen_spell(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     luaL_register(
         L,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        &raw const spell_functions as *const luaL_Reg,
+        (spell_functions.ptr() as *const _) as *const luaL_Reg,
     );
     return 1 as ::core::ffi::c_int;
 }

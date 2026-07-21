@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type multiqueue;
@@ -1313,7 +1314,7 @@ pub const ARENA_EMPTY: Arena = Arena {
     size: 0 as size_t,
 };
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -1357,17 +1358,17 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
 }
 pub const UI_BUF_SIZE: ::core::ffi::c_int = ARENA_BLOCK_SIZE;
 pub const EVENT_BUF_SIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-static mut connected_uis: Map_uint64_t_ptr_t = MAP_INIT;
+static connected_uis: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(MAP_INIT);
 unsafe extern "C" fn get_ui_or_err(mut chan_id: uint64_t, mut err: *mut Error) -> *mut RemoteUI {
     let mut ui: *mut RemoteUI =
-        map_get_uint64_t_ptr_t(&raw mut connected_uis, chan_id) as *mut RemoteUI;
+        map_get_uint64_t_ptr_t(connected_uis.ptr(), chan_id) as *mut RemoteUI;
     if ui.is_null() && !err.is_null() {
         api_set_error(
             err,
@@ -1462,7 +1463,7 @@ pub unsafe extern "C" fn remote_ui_disconnect(
         ui_flush_buf(ui, false_0 != 0);
     }
     map_del_uint64_t_ptr_t(
-        &raw mut connected_uis,
+        connected_uis.ptr(),
         channel_id,
         ::core::ptr::null_mut::<uint64_t>(),
     );
@@ -1509,7 +1510,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
     mut options: Dict,
     mut err: *mut Error,
 ) {
-    if set_has_uint64_t(&raw mut connected_uis.set, channel_id) {
+    if set_has_uint64_t(&raw mut (*connected_uis.ptr()).set, channel_id) {
         api_set_error(
             err,
             kErrorTypeException,
@@ -1590,7 +1591,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
         packer_flush: Some(ui_flush_callback as unsafe extern "C" fn(*mut PackerBuffer) -> ()),
     };
     (*ui).wildmenu_active = false_0 != 0;
-    map_put_uint64_t_ptr_t(&raw mut connected_uis, channel_id, ui as ptr_t);
+    map_put_uint64_t_ptr_t(connected_uis.ptr(), channel_id, ui as ptr_t);
     current_ui = channel_id;
     ui_attach_impl(ui, channel_id);
     let mut chan: *mut Channel = find_channel(channel_id);

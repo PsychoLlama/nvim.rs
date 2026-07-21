@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2977,35 +2978,42 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 126] = unsafe {
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-static mut err_readonly: *const ::core::ffi::c_char =
+static err_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"is read-only (cannot override: \"W\" in 'cpoptions')\0".as_ptr()
-        as *const ::core::ffi::c_char;
-static mut e_patchmode_cant_touch_empty_original_file: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E206: Patchmode: can't touch empty original file\0",
-    )
-};
-static mut e_write_error_conversion_failed_make_fenc_empty_to_override: [::core::ffi::c_char; 69] = unsafe {
+        as *const ::core::ffi::c_char,
+);
+static e_patchmode_cant_touch_empty_original_file: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E206: Patchmode: can't touch empty original file\0",
+        )
+    });
+static e_write_error_conversion_failed_make_fenc_empty_to_override: GlobalCell<
+    [::core::ffi::c_char; 69],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 69], [::core::ffi::c_char; 69]>(
         *b"E513: Write error, conversion failed (make 'fenc' empty to override)\0",
     )
-};
-static mut e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override:
-    [::core::ffi::c_char; 80] = unsafe {
+});
+static e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override: GlobalCell<
+    [::core::ffi::c_char; 80],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 80], [::core::ffi::c_char; 80]>(
         *b"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)\0",
     )
-};
-static mut e_write_error_file_system_full: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-        *b"E514: Write error (file system full?)\0",
-    )
-};
-static mut e_no_matching_autocommands_for_buftype_str_buffer: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-        *b"E676: No matching autocommands for buftype=%s buffer\0",
-    )
-};
+});
+static e_write_error_file_system_full: GlobalCell<[::core::ffi::c_char; 38]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+            *b"E514: Write error (file system full?)\0",
+        )
+    });
+static e_no_matching_autocommands_for_buftype_str_buffer: GlobalCell<[::core::ffi::c_char; 53]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+            *b"E676: No matching autocommands for buftype=%s buffer\0",
+        )
+    });
 pub const SMALLBUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 unsafe extern "C" fn ucs2bytes(
     mut c: ::core::ffi::c_uint,
@@ -3439,7 +3447,7 @@ unsafe extern "C" fn buf_write_do_autocmds(
         if nofile_err {
             semsg(
                 gettext(
-                    &raw const e_no_matching_autocommands_for_buftype_str_buffer
+                    (e_no_matching_autocommands_for_buftype_str_buffer.ptr() as *const _)
                         as *const ::core::ffi::c_char,
                 ),
                 (*curbuf).b_p_bt,
@@ -3689,7 +3697,7 @@ unsafe extern "C" fn get_fileinfo(
             if !vim_strchr(p_cpo, CPO_FWRITE).is_null() {
                 *err = set_err_num(
                     b"E504\0".as_ptr() as *const ::core::ffi::c_char,
-                    gettext(err_readonly),
+                    gettext(err_readonly.get()),
                 );
             } else {
                 *err = set_err_num(
@@ -4037,7 +4045,7 @@ unsafe extern "C" fn buf_write_make_backup(
         if file_readonly as ::core::ffi::c_int != 0 && !vim_strchr(p_cpo, CPO_FWRITE).is_null() {
             *err = set_err_num(
                 b"E504\0".as_ptr() as *const ::core::ffi::c_char,
-                gettext(err_readonly),
+                gettext(err_readonly.get()),
             );
             return FAIL;
         }
@@ -4861,7 +4869,7 @@ pub unsafe extern "C" fn buf_write(
                                         if write_info.bw_conv_error_lnum == 0 as linenr_T {
                                             err = set_err(
                                                 gettext(
-                                                    &raw const e_write_error_conversion_failed_make_fenc_empty_to_override
+                                                    (e_write_error_conversion_failed_make_fenc_empty_to_override.ptr() as *const _)
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                             );
@@ -4873,7 +4881,7 @@ pub unsafe extern "C" fn buf_write(
                                                 err.msg,
                                                 300 as size_t,
                                                 gettext(
-                                                    &raw const e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override
+                                                    (e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override.ptr() as *const _)
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 write_info.bw_conv_error_lnum,
@@ -4885,7 +4893,7 @@ pub unsafe extern "C" fn buf_write(
                                         ));
                                     } else {
                                         err = set_err(gettext(
-                                            &raw const e_write_error_file_system_full
+                                            (e_write_error_file_system_full.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
                                     }
@@ -5104,12 +5112,11 @@ pub unsafe extern "C" fn buf_write(
                                             );
                                             empty_fd < 0 as ::core::ffi::c_int
                                         } {
-                                            emsg(
-                                                gettext(
-                                                    &raw const e_patchmode_cant_touch_empty_original_file
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                            );
+                                            emsg(gettext(
+                                                (e_patchmode_cant_touch_empty_original_file.ptr()
+                                                    as *const _)
+                                                    as *const ::core::ffi::c_char,
+                                            ));
                                         } else {
                                             close(empty_fd);
                                         }

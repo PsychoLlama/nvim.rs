@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2558,43 +2559,49 @@ pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core:
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut e_illegal_character_after_chr: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E535: Illegal character after <%c>\0",
-    )
-};
-static mut e_comma_required: [::core::ffi::c_char; 21] = unsafe {
+static e_illegal_character_after_chr: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E535: Illegal character after <%c>\0",
+        )
+    });
+static e_comma_required: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E536: Comma required\0")
-};
-static mut e_unclosed_expression_sequence: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E540: Unclosed expression sequence\0",
-    )
-};
-static mut e_unbalanced_groups: [::core::ffi::c_char; 24] = unsafe {
+});
+static e_unclosed_expression_sequence: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E540: Unclosed expression sequence\0",
+        )
+    });
+static e_unbalanced_groups: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E542: Unbalanced groups\0")
-};
-static mut e_backupext_and_patchmode_are_equal: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E589: 'backupext' and 'patchmode' are equal\0",
-    )
-};
-static mut e_showbreak_contains_unprintable_or_wide_character: [::core::ffi::c_char; 57] = unsafe {
-    ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
-        *b"E595: 'showbreak' contains unprintable or wide character\0",
-    )
-};
-static mut e_wrong_number_of_characters_for_field_str: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E1511: Wrong number of characters for field \"%s\"\0",
-    )
-};
-static mut e_wrong_character_width_for_field_str: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E1512: Wrong character width for field \"%s\"\0",
-    )
-};
-static mut SHM_ALL: [::core::ffi::c_char; 23] = [
+});
+static e_backupext_and_patchmode_are_equal: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E589: 'backupext' and 'patchmode' are equal\0",
+        )
+    });
+static e_showbreak_contains_unprintable_or_wide_character: GlobalCell<[::core::ffi::c_char; 57]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
+            *b"E595: 'showbreak' contains unprintable or wide character\0",
+        )
+    });
+static e_wrong_number_of_characters_for_field_str: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E1511: Wrong number of characters for field \"%s\"\0",
+        )
+    });
+static e_wrong_character_width_for_field_str: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E1512: Wrong character width for field \"%s\"\0",
+        )
+    });
+static SHM_ALL: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new([
     SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
     SHM_MOD as ::core::ffi::c_int as ::core::ffi::c_char,
     SHM_LINES as ::core::ffi::c_int as ::core::ffi::c_char,
@@ -2618,7 +2625,7 @@ static mut SHM_ALL: [::core::ffi::c_char; 23] = [
     'x' as ::core::ffi::c_char,
     'i' as ::core::ffi::c_char,
     0 as ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn didset_string_options() {
     check_str_opt(
@@ -2718,7 +2725,7 @@ unsafe extern "C" fn illegal_char_after_chr(
     vim_snprintf(
         errbuf,
         errbuflen,
-        gettext(&raw const e_illegal_character_after_chr as *const ::core::ffi::c_char),
+        gettext((e_illegal_character_after_chr.ptr() as *const _) as *const ::core::ffi::c_char),
         c,
     );
     return errbuf;
@@ -2927,7 +2934,7 @@ pub unsafe extern "C" fn check_stl_option(
     mut s: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     let mut groupdepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut errbuf: [::core::ffi::c_char; 80] = [0; 80];
+    static errbuf: GlobalCell<[::core::ffi::c_char; 80]> = GlobalCell::new([0; 80]);
     while *s != 0 {
         while *s as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int != '%' as ::core::ffi::c_int
         {
@@ -3023,7 +3030,7 @@ pub unsafe extern "C" fn check_stl_option(
                 .is_null()
                 {
                     return illegal_char(
-                        &raw mut errbuf as *mut ::core::ffi::c_char,
+                        errbuf.ptr() as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 80]>(),
                         *s as uint8_t as ::core::ffi::c_int,
                     );
@@ -3037,7 +3044,7 @@ pub unsafe extern "C" fn check_stl_option(
                         *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
                     } {
                         return illegal_char(
-                            &raw mut errbuf as *mut ::core::ffi::c_char,
+                            errbuf.ptr() as *mut ::core::ffi::c_char,
                             ::core::mem::size_of::<[::core::ffi::c_char; 80]>(),
                             '}' as ::core::ffi::c_int,
                         );
@@ -3051,7 +3058,7 @@ pub unsafe extern "C" fn check_stl_option(
                         s = s.offset(1);
                     }
                     if *s as ::core::ffi::c_int != '}' as ::core::ffi::c_int {
-                        return &raw const e_unclosed_expression_sequence
+                        return (e_unclosed_expression_sequence.ptr() as *const _)
                             as *const ::core::ffi::c_char;
                     }
                 }
@@ -3059,7 +3066,7 @@ pub unsafe extern "C" fn check_stl_option(
         }
     }
     if groupdepth != 0 as ::core::ffi::c_int {
-        return &raw const e_unbalanced_groups as *const ::core::ffi::c_char;
+        return (e_unbalanced_groups.ptr() as *const _) as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -3222,23 +3229,23 @@ unsafe extern "C" fn expand_set_opt_string(
     *numMatches = count;
     return OK;
 }
-static mut set_opt_callback_orig_option: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut set_opt_callback_func: Option<
-    unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
-> = None;
+static set_opt_callback_orig_option: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static set_opt_callback_func: GlobalCell<
+    Option<unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>,
+> = GlobalCell::new(None);
 unsafe extern "C" fn expand_set_opt_callback(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
-        if !set_opt_callback_orig_option.is_null() {
-            return set_opt_callback_orig_option;
+        if !(*set_opt_callback_orig_option.ptr()).is_null() {
+            return set_opt_callback_orig_option.get();
         } else {
             return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     }
-    return set_opt_callback_func.expect("non-null function pointer")(
+    return (*set_opt_callback_func.ptr()).expect("non-null function pointer")(
         xp,
         idx - 1 as ::core::ffi::c_int,
     );
@@ -3249,14 +3256,16 @@ unsafe extern "C" fn expand_set_opt_generic(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    set_opt_callback_orig_option = if (*args).oe_include_orig_val as ::core::ffi::c_int != 0 {
+    set_opt_callback_orig_option.set(if (*args).oe_include_orig_val as ::core::ffi::c_int != 0 {
         (*args).oe_opt_value
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
-    };
-    set_opt_callback_func = func as Option<
-        unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
-    >;
+    });
+    set_opt_callback_func.set(
+        func as Option<
+            unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
+        >,
+    );
     ExpandGeneric(
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         (*args).oe_xp,
@@ -3272,8 +3281,8 @@ unsafe extern "C" fn expand_set_opt_generic(
         ),
         false_0 != 0,
     );
-    set_opt_callback_orig_option = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    set_opt_callback_func = None;
+    set_opt_callback_orig_option.set(::core::ptr::null_mut::<::core::ffi::c_char>());
+    set_opt_callback_func.set(None);
     return OK;
 }
 unsafe extern "C" fn expand_set_opt_listflag(
@@ -3466,7 +3475,8 @@ pub unsafe extern "C" fn did_set_backupext_or_patchmode(
         },
     ) == 0 as ::core::ffi::c_int
     {
-        return &raw const e_backupext_and_patchmode_are_equal as *const ::core::ffi::c_char;
+        return (e_backupext_and_patchmode_are_equal.ptr() as *const _)
+            as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -4209,7 +4219,7 @@ pub unsafe extern "C" fn did_set_eventignore(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-static mut expand_eiw: bool = false_0 != 0;
+static expand_eiw: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn get_eventignore_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -4221,7 +4231,7 @@ unsafe extern "C" fn get_eventignore_name(
     let mut name: *mut ::core::ffi::c_char = get_event_name_no_group(
         xp,
         idx - 1 as ::core::ffi::c_int + subtract as ::core::ffi::c_int,
-        expand_eiw,
+        expand_eiw.get(),
     );
     if name.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4245,7 +4255,7 @@ pub unsafe extern "C" fn expand_set_eventignore(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    expand_eiw = (*args).oe_varp != &raw mut p_ei as *mut ::core::ffi::c_char;
+    expand_eiw.set((*args).oe_varp != &raw mut p_ei as *mut ::core::ffi::c_char);
     return expand_set_opt_generic(
         args,
         Some(
@@ -4333,7 +4343,7 @@ pub unsafe extern "C" fn did_set_foldmarker(mut args: *mut optset_T) -> *const :
     let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut p: *mut ::core::ffi::c_char = vim_strchr(*varp, ',' as ::core::ffi::c_int);
     if p.is_null() {
-        return &raw const e_comma_required as *const ::core::ffi::c_char;
+        return (e_comma_required.ptr() as *const _) as *const ::core::ffi::c_char;
     }
     if p == *varp || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -4828,7 +4838,7 @@ pub unsafe extern "C" fn did_set_shortmess(mut args: *mut optset_T) -> *const ::
     let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
-        &raw mut SHM_ALL as *mut ::core::ffi::c_char,
+        SHM_ALL.ptr() as *mut ::core::ffi::c_char,
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );
@@ -4841,7 +4851,7 @@ pub unsafe extern "C" fn expand_set_shortmess(
 ) -> ::core::ffi::c_int {
     return expand_set_opt_listflag(
         args,
-        &raw mut SHM_ALL as *mut ::core::ffi::c_char,
+        SHM_ALL.ptr() as *mut ::core::ffi::c_char,
         numMatches,
         matches,
     );
@@ -4852,7 +4862,7 @@ pub unsafe extern "C" fn did_set_showbreak(mut args: *mut optset_T) -> *const ::
     let mut s: *mut ::core::ffi::c_char = *varp;
     while *s != 0 {
         if ptr2cells(s) != 1 as ::core::ffi::c_int {
-            return &raw const e_showbreak_contains_unprintable_or_wide_character
+            return (e_showbreak_contains_unprintable_or_wide_character.ptr() as *const _)
                 as *const ::core::ffi::c_char;
         }
         s = s.offset(utfc_ptr2len(s) as isize);
@@ -5400,16 +5410,18 @@ pub unsafe extern "C" fn check_ff_value(mut p: *mut ::core::ffi::c_char) -> ::co
         false_0 != 0,
     );
 }
-static mut e_conflicts_with_value_of_listchars: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-        *b"E834: Conflicts with value of 'listchars'\0",
-    )
-};
-static mut e_conflicts_with_value_of_fillchars: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-        *b"E835: Conflicts with value of 'fillchars'\0",
-    )
-};
+static e_conflicts_with_value_of_listchars: GlobalCell<[::core::ffi::c_char; 42]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+            *b"E834: Conflicts with value of 'listchars'\0",
+        )
+    });
+static e_conflicts_with_value_of_fillchars: GlobalCell<[::core::ffi::c_char; 42]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+            *b"E835: Conflicts with value of 'fillchars'\0",
+        )
+    });
 unsafe extern "C" fn get_encoded_char_adv(mut p: *mut *const ::core::ffi::c_char) -> schar_T {
     let mut s: *const ::core::ffi::c_char = *p;
     if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5462,7 +5474,7 @@ unsafe extern "C" fn get_encoded_char_adv(mut p: *mut *const ::core::ffi::c_char
         c
     };
 }
-static mut fcs_chars: fcs_chars_T = fcs_chars_T {
+static fcs_chars: GlobalCell<fcs_chars_T> = GlobalCell::new(fcs_chars_T {
     stl: 0,
     stlnc: 0,
     wbr: 0,
@@ -5484,17 +5496,19 @@ static mut fcs_chars: fcs_chars_T = fcs_chars_T {
     lastline: 0,
     trunc: 0,
     truncrl: 0,
-};
-static mut fcs_tab: [chars_tab; 21] = [chars_tab {
-    cp: ::core::ptr::null_mut::<schar_T>(),
-    name: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
-    def: ::core::ptr::null::<::core::ffi::c_char>(),
-    fallback: ::core::ptr::null::<::core::ffi::c_char>(),
-}; 21];
-static mut lcs_chars: lcs_chars_T = lcs_chars_T {
+});
+static fcs_tab: GlobalCell<[chars_tab; 21]> = GlobalCell::new(
+    [chars_tab {
+        cp: ::core::ptr::null_mut::<schar_T>(),
+        name: String_0 {
+            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            size: 0,
+        },
+        def: ::core::ptr::null::<::core::ffi::c_char>(),
+        fallback: ::core::ptr::null::<::core::ffi::c_char>(),
+    }; 21],
+);
+static lcs_chars: GlobalCell<lcs_chars_T> = GlobalCell::new(lcs_chars_T {
     eol: 0,
     ext: 0,
     prec: 0,
@@ -5511,16 +5525,18 @@ static mut lcs_chars: lcs_chars_T = lcs_chars_T {
     multispace: ::core::ptr::null_mut::<schar_T>(),
     leadmultispace: ::core::ptr::null_mut::<schar_T>(),
     conceal: 0,
-};
-static mut lcs_tab: [chars_tab; 12] = [chars_tab {
-    cp: ::core::ptr::null_mut::<schar_T>(),
-    name: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
-    def: ::core::ptr::null::<::core::ffi::c_char>(),
-    fallback: ::core::ptr::null::<::core::ffi::c_char>(),
-}; 12];
+});
+static lcs_tab: GlobalCell<[chars_tab; 12]> = GlobalCell::new(
+    [chars_tab {
+        cp: ::core::ptr::null_mut::<schar_T>(),
+        name: String_0 {
+            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            size: 0,
+        },
+        def: ::core::ptr::null::<::core::ffi::c_char>(),
+        fallback: ::core::ptr::null::<::core::ffi::c_char>(),
+    }; 12],
+);
 unsafe extern "C" fn field_value_err(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
@@ -5551,7 +5567,7 @@ pub unsafe extern "C" fn set_chars_option(
     let mut tab: *const chars_tab = ::core::ptr::null::<chars_tab>();
     let mut entries: ::core::ffi::c_int = 0;
     if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint {
-        tab = &raw const lcs_tab as *const chars_tab;
+        tab = (lcs_tab.ptr() as *const _) as *const chars_tab;
         entries = ::core::mem::size_of::<[chars_tab; 12]>()
             .wrapping_div(::core::mem::size_of::<chars_tab>())
             .wrapping_div(
@@ -5568,7 +5584,7 @@ pub unsafe extern "C" fn set_chars_option(
             value = p_lcs;
         }
     } else {
-        tab = &raw const fcs_tab as *const chars_tab;
+        tab = (fcs_tab.ptr() as *const _) as *const chars_tab;
         entries = ::core::mem::size_of::<[chars_tab; 21]>()
             .wrapping_div(::core::mem::size_of::<chars_tab>())
             .wrapping_div(
@@ -5614,31 +5630,33 @@ pub unsafe extern "C" fn set_chars_option(
             if what as ::core::ffi::c_uint
                 == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                lcs_chars.tab1 = NUL as schar_T;
-                lcs_chars.tab3 = NUL as schar_T;
-                lcs_chars.leadtab1 = NUL as schar_T;
-                lcs_chars.leadtab3 = NUL as schar_T;
+                (*lcs_chars.ptr()).tab1 = NUL as schar_T;
+                (*lcs_chars.ptr()).tab3 = NUL as schar_T;
+                (*lcs_chars.ptr()).leadtab1 = NUL as schar_T;
+                (*lcs_chars.ptr()).leadtab3 = NUL as schar_T;
                 if multispace_len > 0 as ::core::ffi::c_int {
-                    lcs_chars.multispace = xmalloc(
+                    (*lcs_chars.ptr()).multispace = xmalloc(
                         (multispace_len as size_t)
                             .wrapping_add(1 as size_t)
                             .wrapping_mul(::core::mem::size_of::<schar_T>()),
                     ) as *mut schar_T;
-                    *lcs_chars.multispace.offset(multispace_len as isize) = NUL as schar_T;
+                    *(*lcs_chars.ptr())
+                        .multispace
+                        .offset(multispace_len as isize) = NUL as schar_T;
                 } else {
-                    lcs_chars.multispace = ::core::ptr::null_mut::<schar_T>();
+                    (*lcs_chars.ptr()).multispace = ::core::ptr::null_mut::<schar_T>();
                 }
                 if lead_multispace_len > 0 as ::core::ffi::c_int {
-                    lcs_chars.leadmultispace = xmalloc(
+                    (*lcs_chars.ptr()).leadmultispace = xmalloc(
                         (lead_multispace_len as size_t)
                             .wrapping_add(1 as size_t)
                             .wrapping_mul(::core::mem::size_of::<schar_T>()),
                     ) as *mut schar_T;
-                    *lcs_chars
+                    *(*lcs_chars.ptr())
                         .leadmultispace
                         .offset(lead_multispace_len as isize) = NUL as schar_T;
                 } else {
-                    lcs_chars.leadmultispace = ::core::ptr::null_mut::<schar_T>();
+                    (*lcs_chars.ptr()).leadmultispace = ::core::ptr::null_mut::<schar_T>();
                 }
             }
         }
@@ -5679,7 +5697,7 @@ pub unsafe extern "C" fn set_chars_option(
                                     return field_value_err(
                                         errbuf,
                                         errbuflen,
-                                        &raw const e_wrong_character_width_for_field_str
+                                        (e_wrong_character_width_for_field_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                         (*tab.offset(i_0 as isize)).name.data,
                                     );
@@ -5690,7 +5708,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 return field_value_err(
                                     errbuf,
                                     errbuflen,
-                                    &raw const e_wrong_number_of_characters_for_field_str
+                                    (e_wrong_number_of_characters_for_field_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                     (*tab.offset(i_0 as isize)).name.data,
                                 );
@@ -5704,7 +5722,8 @@ pub unsafe extern "C" fn set_chars_option(
                                 if p == last_multispace {
                                     let c2rust_fresh2 = multispace_pos;
                                     multispace_pos = multispace_pos + 1;
-                                    *lcs_chars.multispace.offset(c2rust_fresh2 as isize) = c1_0;
+                                    *(*lcs_chars.ptr()).multispace.offset(c2rust_fresh2 as isize) =
+                                        c1_0;
                                 }
                             }
                         }
@@ -5728,7 +5747,7 @@ pub unsafe extern "C" fn set_chars_option(
                                     return field_value_err(
                                         errbuf,
                                         errbuflen,
-                                        &raw const e_wrong_character_width_for_field_str
+                                        (e_wrong_character_width_for_field_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                         (*tab.offset(i_0 as isize)).name.data,
                                     );
@@ -5739,7 +5758,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 return field_value_err(
                                     errbuf,
                                     errbuflen,
-                                    &raw const e_wrong_number_of_characters_for_field_str
+                                    (e_wrong_number_of_characters_for_field_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                     (*tab.offset(i_0 as isize)).name.data,
                                 );
@@ -5753,7 +5772,9 @@ pub unsafe extern "C" fn set_chars_option(
                                 if p == last_lmultispace {
                                     let c2rust_fresh3 = multispace_pos_0;
                                     multispace_pos_0 = multispace_pos_0 + 1;
-                                    *lcs_chars.leadmultispace.offset(c2rust_fresh3 as isize) = c1_2;
+                                    *(*lcs_chars.ptr())
+                                        .leadmultispace
+                                        .offset(c2rust_fresh3 as isize) = c1_2;
                                 }
                             }
                         }
@@ -5764,7 +5785,7 @@ pub unsafe extern "C" fn set_chars_option(
                             return field_value_err(
                                 errbuf,
                                 errbuflen,
-                                &raw const e_wrong_number_of_characters_for_field_str
+                                (e_wrong_number_of_characters_for_field_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                                 (*tab.offset(i_0 as isize)).name.data,
                             );
@@ -5774,21 +5795,22 @@ pub unsafe extern "C" fn set_chars_option(
                             return field_value_err(
                                 errbuf,
                                 errbuflen,
-                                &raw const e_wrong_character_width_for_field_str
+                                (e_wrong_character_width_for_field_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                                 (*tab.offset(i_0 as isize)).name.data,
                             );
                         }
                         let mut c2: schar_T = 0 as schar_T;
                         let mut c3: schar_T = 0 as schar_T;
-                        if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2
-                            || (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.leadtab2
+                        if (*tab.offset(i_0 as isize)).cp == &raw mut (*lcs_chars.ptr()).tab2
+                            || (*tab.offset(i_0 as isize)).cp
+                                == &raw mut (*lcs_chars.ptr()).leadtab2
                         {
                             if *s as ::core::ffi::c_int == NUL {
                                 return field_value_err(
                                     errbuf,
                                     errbuflen,
-                                    &raw const e_wrong_number_of_characters_for_field_str
+                                    (e_wrong_number_of_characters_for_field_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                     (*tab.offset(i_0 as isize)).name.data,
                                 );
@@ -5798,7 +5820,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 return field_value_err(
                                     errbuf,
                                     errbuflen,
-                                    &raw const e_wrong_character_width_for_field_str
+                                    (e_wrong_character_width_for_field_str.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                     (*tab.offset(i_0 as isize)).name.data,
                                 );
@@ -5811,13 +5833,13 @@ pub unsafe extern "C" fn set_chars_option(
                                     return field_value_err(
                                         errbuf,
                                         errbuflen,
-                                        &raw const e_wrong_character_width_for_field_str
+                                        (e_wrong_character_width_for_field_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                         (*tab.offset(i_0 as isize)).name.data,
                                     );
                                 }
                             }
-                            if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2 {
+                            if (*tab.offset(i_0 as isize)).cp == &raw mut (*lcs_chars.ptr()).tab2 {
                                 has_tab = true_0 != 0;
                             } else {
                                 has_leadtab = true_0 != 0;
@@ -5827,16 +5849,18 @@ pub unsafe extern "C" fn set_chars_option(
                             || *s as ::core::ffi::c_int == NUL
                         {
                             if round > 0 as ::core::ffi::c_int {
-                                if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2 {
-                                    lcs_chars.tab1 = c1_3;
-                                    lcs_chars.tab2 = c2;
-                                    lcs_chars.tab3 = c3;
-                                } else if (*tab.offset(i_0 as isize)).cp
-                                    == &raw mut lcs_chars.leadtab2
+                                if (*tab.offset(i_0 as isize)).cp
+                                    == &raw mut (*lcs_chars.ptr()).tab2
                                 {
-                                    lcs_chars.leadtab1 = c1_3;
-                                    lcs_chars.leadtab2 = c2;
-                                    lcs_chars.leadtab3 = c3;
+                                    (*lcs_chars.ptr()).tab1 = c1_3;
+                                    (*lcs_chars.ptr()).tab2 = c2;
+                                    (*lcs_chars.ptr()).tab3 = c3;
+                                } else if (*tab.offset(i_0 as isize)).cp
+                                    == &raw mut (*lcs_chars.ptr()).leadtab2
+                                {
+                                    (*lcs_chars.ptr()).leadtab1 = c1_3;
+                                    (*lcs_chars.ptr()).leadtab2 = c2;
+                                    (*lcs_chars.ptr()).leadtab3 = c3;
                                 } else if !(*tab.offset(i_0 as isize)).cp.is_null() {
                                     *(*tab.offset(i_0 as isize)).cp = c1_3;
                                 }
@@ -5847,7 +5871,7 @@ pub unsafe extern "C" fn set_chars_option(
                             return field_value_err(
                                 errbuf,
                                 errbuflen,
-                                &raw const e_wrong_number_of_characters_for_field_str
+                                (e_wrong_number_of_characters_for_field_str.ptr() as *const _)
                                     as *const ::core::ffi::c_char,
                                 (*tab.offset(i_0 as isize)).name.data,
                             );
@@ -5874,9 +5898,9 @@ pub unsafe extern "C" fn set_chars_option(
         if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint {
             xfree((*wp).w_p_lcs_chars.multispace as *mut ::core::ffi::c_void);
             xfree((*wp).w_p_lcs_chars.leadmultispace as *mut ::core::ffi::c_void);
-            (*wp).w_p_lcs_chars = lcs_chars;
+            (*wp).w_p_lcs_chars = lcs_chars.get();
         } else {
-            (*wp).w_p_fcs_chars = fcs_chars;
+            (*wp).w_p_fcs_chars = fcs_chars.get();
         }
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5898,7 +5922,7 @@ pub unsafe extern "C" fn get_fillchars_name(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return fcs_tab[idx as usize].name.data;
+    return (*fcs_tab.ptr())[idx as usize].name.data;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_listchars_name(
@@ -5917,7 +5941,7 @@ pub unsafe extern "C" fn get_listchars_name(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return lcs_tab[idx as usize].name.data;
+    return (*lcs_tab.ptr())[idx as usize].name.data;
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
@@ -5931,7 +5955,8 @@ pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
     )
     .is_null()
     {
-        return &raw const e_conflicts_with_value_of_listchars as *const ::core::ffi::c_char;
+        return (e_conflicts_with_value_of_listchars.ptr() as *const _)
+            as *const ::core::ffi::c_char;
     }
     if !set_chars_option(
         curwin,
@@ -5943,7 +5968,8 @@ pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
     )
     .is_null()
     {
-        return &raw const e_conflicts_with_value_of_fillchars as *const ::core::ffi::c_char;
+        return (e_conflicts_with_value_of_fillchars.ptr() as *const _)
+            as *const ::core::ffi::c_char;
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
@@ -5963,7 +5989,7 @@ pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
             )
             .is_null()
             {
-                return &raw const e_conflicts_with_value_of_listchars
+                return (e_conflicts_with_value_of_listchars.ptr() as *const _)
                     as *const ::core::ffi::c_char;
             }
             if !set_chars_option(
@@ -5976,7 +6002,7 @@ pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
             )
             .is_null()
             {
-                return &raw const e_conflicts_with_value_of_fillchars
+                return (e_conflicts_with_value_of_fillchars.ptr() as *const _)
                     as *const ::core::ffi::c_char;
             }
             wp = (*wp).w_next;
@@ -5990,9 +6016,9 @@ pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    fcs_tab = [
+    fcs_tab.set([
         chars_tab {
-            cp: &raw mut fcs_chars.stl,
+            cp: &raw mut (*fcs_chars.ptr()).stl,
             name: String_0 {
                 data: b"stl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
@@ -6001,7 +6027,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.stlnc,
+            cp: &raw mut (*fcs_chars.ptr()).stlnc,
             name: String_0 {
                 data: b"stlnc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
@@ -6010,7 +6036,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.wbr,
+            cp: &raw mut (*fcs_chars.ptr()).wbr,
             name: String_0 {
                 data: b"wbr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
@@ -6019,7 +6045,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.horiz,
+            cp: &raw mut (*fcs_chars.ptr()).horiz,
             name: String_0 {
                 data: b"horiz\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
@@ -6028,7 +6054,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.horizup,
+            cp: &raw mut (*fcs_chars.ptr()).horizup,
             name: String_0 {
                 data: b"horizup\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6038,7 +6064,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.horizdown,
+            cp: &raw mut (*fcs_chars.ptr()).horizdown,
             name: String_0 {
                 data: b"horizdown\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6048,7 +6074,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.vert,
+            cp: &raw mut (*fcs_chars.ptr()).vert,
             name: String_0 {
                 data: b"vert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
@@ -6057,7 +6083,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.vertleft,
+            cp: &raw mut (*fcs_chars.ptr()).vertleft,
             name: String_0 {
                 data: b"vertleft\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6067,7 +6093,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.vertright,
+            cp: &raw mut (*fcs_chars.ptr()).vertright,
             name: String_0 {
                 data: b"vertright\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6077,7 +6103,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.verthoriz,
+            cp: &raw mut (*fcs_chars.ptr()).verthoriz,
             name: String_0 {
                 data: b"verthoriz\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6087,7 +6113,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"+\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.fold,
+            cp: &raw mut (*fcs_chars.ptr()).fold,
             name: String_0 {
                 data: b"fold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
@@ -6096,7 +6122,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.foldopen,
+            cp: &raw mut (*fcs_chars.ptr()).foldopen,
             name: String_0 {
                 data: b"foldopen\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6106,7 +6132,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.foldclosed,
+            cp: &raw mut (*fcs_chars.ptr()).foldclosed,
             name: String_0 {
                 data: b"foldclose\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6116,7 +6142,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.foldsep,
+            cp: &raw mut (*fcs_chars.ptr()).foldsep,
             name: String_0 {
                 data: b"foldsep\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6126,7 +6152,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
         },
         chars_tab {
-            cp: &raw mut fcs_chars.foldinner,
+            cp: &raw mut (*fcs_chars.ptr()).foldinner,
             name: String_0 {
                 data: b"foldinner\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6136,7 +6162,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.diff,
+            cp: &raw mut (*fcs_chars.ptr()).diff,
             name: String_0 {
                 data: b"diff\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
@@ -6145,7 +6171,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.msgsep,
+            cp: &raw mut (*fcs_chars.ptr()).msgsep,
             name: String_0 {
                 data: b"msgsep\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6155,7 +6181,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.eob,
+            cp: &raw mut (*fcs_chars.ptr()).eob,
             name: String_0 {
                 data: b"eob\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
@@ -6164,7 +6190,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.lastline,
+            cp: &raw mut (*fcs_chars.ptr()).lastline,
             name: String_0 {
                 data: b"lastline\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6174,7 +6200,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.trunc,
+            cp: &raw mut (*fcs_chars.ptr()).trunc,
             name: String_0 {
                 data: b"trunc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
@@ -6183,7 +6209,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut fcs_chars.truncrl,
+            cp: &raw mut (*fcs_chars.ptr()).truncrl,
             name: String_0 {
                 data: b"truncrl\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6192,10 +6218,10 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             def: b"<\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
-    ];
-    lcs_tab = [
+    ]);
+    lcs_tab.set([
         chars_tab {
-            cp: &raw mut lcs_chars.eol,
+            cp: &raw mut (*lcs_chars.ptr()).eol,
             name: String_0 {
                 data: b"eol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
@@ -6204,7 +6230,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.ext,
+            cp: &raw mut (*lcs_chars.ptr()).ext,
             name: String_0 {
                 data: b"extends\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6214,7 +6240,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.nbsp,
+            cp: &raw mut (*lcs_chars.ptr()).nbsp,
             name: String_0 {
                 data: b"nbsp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
@@ -6223,7 +6249,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.prec,
+            cp: &raw mut (*lcs_chars.ptr()).prec,
             name: String_0 {
                 data: b"precedes\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6233,7 +6259,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.space,
+            cp: &raw mut (*lcs_chars.ptr()).space,
             name: String_0 {
                 data: b"space\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
@@ -6242,7 +6268,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.tab2,
+            cp: &raw mut (*lcs_chars.ptr()).tab2,
             name: String_0 {
                 data: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
@@ -6251,7 +6277,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.leadtab2,
+            cp: &raw mut (*lcs_chars.ptr()).leadtab2,
             name: String_0 {
                 data: b"leadtab\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6261,7 +6287,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.lead,
+            cp: &raw mut (*lcs_chars.ptr()).lead,
             name: String_0 {
                 data: b"lead\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
@@ -6270,7 +6296,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.trail,
+            cp: &raw mut (*lcs_chars.ptr()).trail,
             name: String_0 {
                 data: b"trail\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
@@ -6279,7 +6305,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
         chars_tab {
-            cp: &raw mut lcs_chars.conceal,
+            cp: &raw mut (*lcs_chars.ptr()).conceal,
             name: String_0 {
                 data: b"conceal\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
@@ -6308,7 +6334,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
         },
-    ];
+    ]);
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

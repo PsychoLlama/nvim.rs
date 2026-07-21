@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     fn snprintf(
@@ -818,16 +819,20 @@ unsafe extern "C" fn default_free(
 ) {
     xfree(ptr);
 }
-static mut default_allocator: VTermAllocatorFunctions = VTermAllocatorFunctions {
-    malloc: Some(
-        default_malloc
-            as unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
-    ),
-    free: Some(
-        default_free
-            as unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    ),
-};
+static default_allocator: GlobalCell<VTermAllocatorFunctions> =
+    GlobalCell::new(VTermAllocatorFunctions {
+        malloc: Some(
+            default_malloc
+                as unsafe extern "C" fn(
+                    size_t,
+                    *mut ::core::ffi::c_void,
+                ) -> *mut ::core::ffi::c_void,
+        ),
+        free: Some(
+            default_free
+                as unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
+        ),
+    });
 #[no_mangle]
 pub unsafe extern "C" fn vterm_new(
     mut rows: ::core::ffi::c_int,
@@ -849,7 +854,7 @@ pub unsafe extern "C" fn vterm_build(mut builder: *const VTermBuilder) -> *mut V
     let mut allocator: *const VTermAllocatorFunctions = if !(*builder).allocator.is_null() {
         (*builder).allocator
     } else {
-        &raw mut default_allocator as *const VTermAllocatorFunctions
+        default_allocator.ptr() as *const VTermAllocatorFunctions
     };
     let mut vt: *mut VTerm = Some((*allocator).malloc.expect("non-null function pointer"))
         .expect("non-null function pointer")(

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 use ::c2rust_bitfields;
 extern "C" {
     pub type multiqueue;
@@ -110,7 +111,7 @@ extern "C" {
     );
     fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
     fn parse_shape_opt(what: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    static mut shape_table: [cursorentry_T; 18];
+    static shape_table: GlobalCell<[cursorentry_T; 18]>;
     fn update_screen() -> ::core::ffi::c_int;
     fn setcursor();
     fn show_cursor_info_later(force: bool);
@@ -4735,7 +4736,7 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -4780,7 +4781,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -4800,7 +4801,7 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
 }
 pub const REFRESH_DELAY: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const SELECTIONBUF_SIZE: ::core::ffi::c_int = 0x400 as ::core::ffi::c_int;
-static mut refresh_timer: TimeWatcher = TimeWatcher {
+static refresh_timer: GlobalCell<TimeWatcher> = GlobalCell::new(TimeWatcher {
     uv: uv_timer_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -4826,76 +4827,80 @@ static mut refresh_timer: TimeWatcher = TimeWatcher {
     close_cb: None,
     events: ::core::ptr::null_mut::<MultiQueue>(),
     blockable: false,
-};
-static mut refresh_pending: bool = false_0 != 0;
-static mut vterm_screen_callbacks: VTermScreenCallbacks = VTermScreenCallbacks {
-    damage: Some(
-        term_damage
-            as unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-    moverect: Some(
-        term_moverect
-            as unsafe extern "C" fn(
-                VTermRect,
-                VTermRect,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    movecursor: Some(
-        term_movecursor
-            as unsafe extern "C" fn(
-                VTermPos,
-                VTermPos,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    settermprop: Some(
-        term_settermprop
-            as unsafe extern "C" fn(
-                VTermProp,
-                *mut VTermValue,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    bell: Some(term_bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int),
-    resize: None,
-    theme: Some(
-        term_theme
-            as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-    sb_pushline: Some(
-        term_sb_push
-            as unsafe extern "C" fn(
-                ::core::ffi::c_int,
-                *const VTermScreenCell,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    sb_popline: Some(
-        term_sb_pop
-            as unsafe extern "C" fn(
-                ::core::ffi::c_int,
-                *mut VTermScreenCell,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    sb_clear: Some(
-        term_sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-};
-static mut vterm_selection_callbacks: VTermSelectionCallbacks = VTermSelectionCallbacks {
-    set: Some(
-        term_selection_set
-            as unsafe extern "C" fn(
-                VTermSelectionMask,
-                VTermStringFragment,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    query: None,
-};
-static mut invalidated_terminals: Set_ptr_t = SET_INIT;
+});
+static refresh_pending: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static vterm_screen_callbacks: GlobalCell<VTermScreenCallbacks> =
+    GlobalCell::new(VTermScreenCallbacks {
+        damage: Some(
+            term_damage
+                as unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+        ),
+        moverect: Some(
+            term_moverect
+                as unsafe extern "C" fn(
+                    VTermRect,
+                    VTermRect,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        movecursor: Some(
+            term_movecursor
+                as unsafe extern "C" fn(
+                    VTermPos,
+                    VTermPos,
+                    ::core::ffi::c_int,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        settermprop: Some(
+            term_settermprop
+                as unsafe extern "C" fn(
+                    VTermProp,
+                    *mut VTermValue,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        bell: Some(
+            term_bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+        ),
+        resize: None,
+        theme: Some(
+            term_theme
+                as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+        ),
+        sb_pushline: Some(
+            term_sb_push
+                as unsafe extern "C" fn(
+                    ::core::ffi::c_int,
+                    *const VTermScreenCell,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        sb_popline: Some(
+            term_sb_pop
+                as unsafe extern "C" fn(
+                    ::core::ffi::c_int,
+                    *mut VTermScreenCell,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        sb_clear: Some(
+            term_sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+        ),
+    });
+static vterm_selection_callbacks: GlobalCell<VTermSelectionCallbacks> =
+    GlobalCell::new(VTermSelectionCallbacks {
+        set: Some(
+            term_selection_set
+                as unsafe extern "C" fn(
+                    VTermSelectionMask,
+                    VTermStringFragment,
+                    *mut ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ),
+        query: None,
+    });
+static invalidated_terminals: GlobalCell<Set_ptr_t> = GlobalCell::new(SET_INIT);
 unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut buf_handle: handle_T =
         (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
@@ -5411,7 +5416,7 @@ unsafe extern "C" fn on_apc(
     }
     return 1 as ::core::ffi::c_int;
 }
-static mut vterm_fallbacks: VTermStateFallbacks = VTermStateFallbacks {
+static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermStateFallbacks {
     control: None,
     csi: None,
     osc: Some(
@@ -5440,21 +5445,21 @@ static mut vterm_fallbacks: VTermStateFallbacks = VTermStateFallbacks {
     ),
     pm: None,
     sos: None,
-};
+});
 #[no_mangle]
 pub unsafe extern "C" fn terminal_init() {
-    time_watcher_init(&raw mut main_loop, &raw mut refresh_timer, NULL_0);
-    refresh_timer.events = multiqueue_new_child(main_loop.events);
+    time_watcher_init(&raw mut main_loop, refresh_timer.ptr(), NULL_0);
+    (*refresh_timer.ptr()).events = multiqueue_new_child(main_loop.events);
 }
 #[no_mangle]
 pub unsafe extern "C" fn terminal_teardown() {
-    time_watcher_stop(&raw mut refresh_timer);
-    multiqueue_free(refresh_timer.events);
-    time_watcher_close(&raw mut refresh_timer, None);
-    xfree(invalidated_terminals.keys as *mut ::core::ffi::c_void);
-    xfree(invalidated_terminals.h.hash as *mut ::core::ffi::c_void);
-    invalidated_terminals = SET_INIT;
-    invalidated_terminals = SET_INIT;
+    time_watcher_stop(refresh_timer.ptr());
+    multiqueue_free((*refresh_timer.ptr()).events);
+    time_watcher_close(refresh_timer.ptr(), None);
+    xfree((*invalidated_terminals.ptr()).keys as *mut ::core::ffi::c_void);
+    xfree((*invalidated_terminals.ptr()).h.hash as *mut ::core::ffi::c_void);
+    invalidated_terminals.set(SET_INIT);
+    invalidated_terminals.set(SET_INIT);
 }
 unsafe extern "C" fn term_output_callback(
     mut s: *const ::core::ffi::c_char,
@@ -5509,12 +5514,12 @@ pub unsafe extern "C" fn terminal_alloc(
     vterm_screen_enable_reflow((*term).vts, true_0 != 0);
     vterm_screen_set_callbacks(
         (*term).vts,
-        &raw mut vterm_screen_callbacks,
+        vterm_screen_callbacks.ptr(),
         term as *mut ::core::ffi::c_void,
     );
     vterm_screen_set_unrecognised_fallbacks(
         (*term).vts,
-        &raw mut vterm_fallbacks,
+        vterm_fallbacks.ptr(),
         term as *mut ::core::ffi::c_void,
     );
     vterm_screen_set_damage_merge((*term).vts, VTERM_DAMAGE_SCROLL);
@@ -5535,13 +5540,15 @@ pub unsafe extern "C" fn terminal_alloc(
         xcalloc(SELECTIONBUF_SIZE as size_t, 1 as size_t) as *mut ::core::ffi::c_char;
     vterm_state_set_selection_callbacks(
         state,
-        &raw mut vterm_selection_callbacks,
+        vterm_selection_callbacks.ptr(),
         term as *mut ::core::ffi::c_void,
         (*term).selection_buffer,
         SELECTIONBUF_SIZE as size_t,
     );
     let mut cursor_shape: VTermValue = VTermValue { boolean: 0 };
-    match shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape as ::core::ffi::c_uint {
+    match (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape
+        as ::core::ffi::c_uint
+    {
         0 => {
             cursor_shape.number = VTERM_PROP_CURSORSHAPE_BLOCK as ::core::ffi::c_int;
         }
@@ -5555,8 +5562,9 @@ pub unsafe extern "C" fn terminal_alloc(
     }
     vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape);
     let mut cursor_blink: VTermValue = VTermValue { boolean: 0 };
-    if shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon != 0 as ::core::ffi::c_int
-        && shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff
+    if (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon
+        != 0 as ::core::ffi::c_int
+        && (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff
             != 0 as ::core::ffi::c_int
     {
         cursor_blink.boolean = true_0;
@@ -5837,7 +5845,7 @@ unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi
 pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
     if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
         multiqueue_put_event(
-            refresh_timer.events,
+            (*refresh_timer.ptr()).events,
             Event {
                 handler: Some(
                     terminal_state_change_event
@@ -6425,11 +6433,11 @@ pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
         (*buf).terminal = ::core::ptr::null_mut::<Terminal>();
     }
     if (*term).refcount == 0 {
-        if set_has_ptr_t(&raw mut invalidated_terminals, term as ptr_t) {
+        if set_has_ptr_t(invalidated_terminals.ptr(), term as ptr_t) {
             block_autocmds();
             refresh_terminal(term);
             unblock_autocmds();
-            set_del_ptr_t(&raw mut invalidated_terminals, term as ptr_t);
+            set_del_ptr_t(invalidated_terminals.ptr(), term as ptr_t);
         }
         let mut i: size_t = 0 as size_t;
         while i < (*term).sb_current {
@@ -7221,7 +7229,7 @@ unsafe extern "C" fn term_sb_push(
     );
     if !(*term).synchronized_output {
         set_put_ptr_t(
-            &raw mut invalidated_terminals,
+            invalidated_terminals.ptr(),
             term as ptr_t,
             ::core::ptr::null_mut::<*mut ptr_t>(),
         );
@@ -7269,7 +7277,7 @@ unsafe extern "C" fn term_sb_pop(
     xfree(sbrow as *mut ::core::ffi::c_void);
     if !(*term).synchronized_output {
         set_put_ptr_t(
-            &raw mut invalidated_terminals,
+            invalidated_terminals.ptr(),
             term as ptr_t,
             ::core::ptr::null_mut::<*mut ptr_t>(),
         );
@@ -8048,13 +8056,13 @@ unsafe extern "C" fn invalidate_terminal(
         return;
     }
     set_put_ptr_t(
-        &raw mut invalidated_terminals,
+        invalidated_terminals.ptr(),
         term as ptr_t,
         ::core::ptr::null_mut::<*mut ptr_t>(),
     );
-    if !refresh_pending {
+    if !refresh_pending.get() {
         time_watcher_start(
-            &raw mut refresh_timer,
+            refresh_timer.ptr(),
             Some(
                 refresh_timer_cb
                     as unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> (),
@@ -8062,12 +8070,12 @@ unsafe extern "C" fn invalidate_terminal(
             REFRESH_DELAY as uint64_t,
             0 as uint64_t,
         );
-        refresh_pending = true_0 != 0;
+        refresh_pending.set(true_0 != 0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn terminal_check_refresh() {
-    multiqueue_process_events(refresh_timer.events);
+    multiqueue_process_events((*refresh_timer.ptr()).events);
 }
 unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
     let mut buf: *mut buf_T = map_get_int_ptr_t(
@@ -8121,28 +8129,28 @@ unsafe extern "C" fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible:
     }
     (*term).pending.cursor = false_0 != 0;
     if (*term).cursor.blink {
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
+        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
             500 as ::core::ffi::c_int;
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
+        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
             500 as ::core::ffi::c_int;
     } else {
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
+        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
             0 as ::core::ffi::c_int;
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
+        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
             0 as ::core::ffi::c_int;
     }
     match (*term).cursor.shape {
         1 => {
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_BLOCK;
+            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_BLOCK;
         }
         2 => {
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_HOR;
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
+            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_HOR;
+            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
                 20 as ::core::ffi::c_int;
         }
         3 => {
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_VER;
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
+            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_VER;
+            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
                 25 as ::core::ffi::c_int;
         }
         _ => {}
@@ -8153,13 +8161,13 @@ unsafe extern "C" fn refresh_timer_cb(
     mut _watcher: *mut TimeWatcher,
     mut _data: *mut ::core::ffi::c_void,
 ) {
-    refresh_pending = false_0 != 0;
+    refresh_pending.set(false_0 != 0);
     if exiting {
         return;
     }
     block_autocmds();
-    let mut to_refresh: Set_ptr_t = invalidated_terminals;
-    invalidated_terminals = SET_INIT;
+    let mut to_refresh: Set_ptr_t = invalidated_terminals.get();
+    invalidated_terminals.set(SET_INIT);
     let mut term: *mut Terminal = ::core::ptr::null_mut::<Terminal>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2023,14 +2024,14 @@ pub unsafe extern "C" fn startPS(
     }
     return false_0 != 0;
 }
-static mut cls_bigword: bool = false;
+static cls_bigword: GlobalCell<bool> = GlobalCell::new(false);
 unsafe extern "C" fn cls() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = gchar_cursor();
     if c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int || c == NUL {
         return 0 as ::core::ffi::c_int;
     }
     c = utf_class(c);
-    if c != 0 as ::core::ffi::c_int && cls_bigword as ::core::ffi::c_int != 0 {
+    if c != 0 as ::core::ffi::c_int && cls_bigword.get() as ::core::ffi::c_int != 0 {
         return 1 as ::core::ffi::c_int;
     }
     return c;
@@ -2042,7 +2043,7 @@ pub unsafe extern "C" fn fwd_word(
     mut eol: bool,
 ) -> ::core::ffi::c_int {
     (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    cls_bigword = bigword;
+    cls_bigword.set(bigword);
     loop {
         count -= 1;
         if count < 0 as ::core::ffi::c_int {
@@ -2107,7 +2108,7 @@ pub unsafe extern "C" fn bck_word(
 ) -> ::core::ffi::c_int {
     let mut sclass: ::core::ffi::c_int = 0;
     (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    cls_bigword = bigword;
+    cls_bigword.set(bigword);
     loop {
         count -= 1;
         if count < 0 as ::core::ffi::c_int {
@@ -2157,7 +2158,7 @@ pub unsafe extern "C" fn end_word(
 ) -> ::core::ffi::c_int {
     let mut sclass: ::core::ffi::c_int = 0;
     (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    cls_bigword = bigword;
+    cls_bigword.set(bigword);
     if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
         && VIsual_active as ::core::ffi::c_int != 0
         && VIsual_mode == 'v' as ::core::ffi::c_int
@@ -2216,7 +2217,7 @@ pub unsafe extern "C" fn bckend_word(
     mut eol: bool,
 ) -> ::core::ffi::c_int {
     (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    cls_bigword = bigword;
+    cls_bigword.set(bigword);
     loop {
         count -= 1;
         if count < 0 as ::core::ffi::c_int {
@@ -2326,7 +2327,7 @@ pub unsafe extern "C" fn current_word(
     };
     let mut inclusive: bool = true_0 != 0;
     let mut include_white: bool = false_0 != 0;
-    cls_bigword = bigword;
+    cls_bigword.set(bigword);
     clearpos(&raw mut start_pos);
     if VIsual_active as ::core::ffi::c_int != 0
         && *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int

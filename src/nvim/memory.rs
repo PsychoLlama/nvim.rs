@@ -13,6 +13,7 @@
 //! the terminator, because the C originals never read past it and the
 //! allocation may end there.
 
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use core::ffi::{c_char, c_int, c_long, c_void, CStr};
 use core::ptr;
 use core::slice;
@@ -55,24 +56,24 @@ pub type MemCalloc = Option<unsafe extern "C" fn(usize, usize) -> *mut c_void>;
 pub type MemRealloc = Option<unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void>;
 
 #[no_mangle]
-pub static mut mem_malloc: MemMalloc = Some(malloc);
+pub static mem_malloc: SharedCell<MemMalloc> = SharedCell::new(Some(malloc));
 #[no_mangle]
-pub static mut mem_free: MemFree = Some(free);
+pub static mem_free: SharedCell<MemFree> = SharedCell::new(Some(free));
 #[no_mangle]
-pub static mut mem_calloc: MemCalloc = Some(calloc);
+pub static mem_calloc: SharedCell<MemCalloc> = SharedCell::new(Some(calloc));
 #[no_mangle]
-pub static mut mem_realloc: MemRealloc = Some(realloc);
+pub static mem_realloc: SharedCell<MemRealloc> = SharedCell::new(Some(realloc));
 
 unsafe fn try_to_free_memory() {
-    static mut trying_to_free: bool = false;
-    if trying_to_free {
+    static trying_to_free: SharedCell<bool> = SharedCell::new(false);
+    if trying_to_free.get() {
         return;
     }
-    trying_to_free = true;
+    trying_to_free.set(true);
     clear_sb_text(true);
     mf_release_all();
     arena_free_reuse_blks();
-    trying_to_free = false;
+    trying_to_free.set(false);
 }
 
 unsafe fn do_outofmem_msg(size: usize) {
@@ -91,10 +92,10 @@ unsafe fn do_outofmem_msg(size: usize) {
 #[no_mangle]
 pub unsafe extern "C" fn try_malloc(size: usize) -> *mut c_void {
     let allocated_size = size.max(1);
-    let mut ret = mem_malloc.expect("non-null function pointer")(allocated_size);
+    let mut ret = (*mem_malloc.ptr()).expect("non-null function pointer")(allocated_size);
     if ret.is_null() {
         try_to_free_memory();
-        ret = mem_malloc.expect("non-null function pointer")(allocated_size);
+        ret = (*mem_malloc.ptr()).expect("non-null function pointer")(allocated_size);
     }
     ret
 }
@@ -119,7 +120,7 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
 
 #[no_mangle]
 pub unsafe extern "C" fn xfree(ptr: *mut c_void) {
-    mem_free.expect("non-null function pointer")(ptr);
+    (*mem_free.ptr()).expect("non-null function pointer")(ptr);
 }
 
 #[no_mangle]
@@ -129,10 +130,14 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     } else {
         (1, 1)
     };
-    let mut ret = mem_calloc.expect("non-null function pointer")(allocated_count, allocated_size);
+    let mut ret =
+        (*mem_calloc.ptr()).expect("non-null function pointer")(allocated_count, allocated_size);
     if ret.is_null() {
         try_to_free_memory();
-        ret = mem_calloc.expect("non-null function pointer")(allocated_count, allocated_size);
+        ret = (*mem_calloc.ptr()).expect("non-null function pointer")(
+            allocated_count,
+            allocated_size,
+        );
         if ret.is_null() {
             preserve_exit(&raw const e_outofmem as *const c_char);
         }
@@ -143,10 +148,10 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
 #[no_mangle]
 pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void {
     let allocated_size = size.max(1);
-    let mut ret = mem_realloc.expect("non-null function pointer")(ptr, allocated_size);
+    let mut ret = (*mem_realloc.ptr()).expect("non-null function pointer")(ptr, allocated_size);
     if ret.is_null() {
         try_to_free_memory();
-        ret = mem_realloc.expect("non-null function pointer")(ptr, allocated_size);
+        ret = (*mem_realloc.ptr()).expect("non-null function pointer")(ptr, allocated_size);
         if ret.is_null() {
             preserve_exit(&raw const e_outofmem as *const c_char);
         }
@@ -551,15 +556,15 @@ pub const ARENA_EMPTY: Arena = Arena {
     size: 0,
 };
 
-static mut arena_reuse_blk: *mut consumed_blk = ptr::null_mut();
-static mut arena_reuse_blk_count: usize = 0;
+static arena_reuse_blk: GlobalCell<*mut consumed_blk> = GlobalCell::new(ptr::null_mut());
+static arena_reuse_blk_count: GlobalCell<usize> = GlobalCell::new(0);
 
 unsafe fn arena_free_reuse_blks() {
-    while arena_reuse_blk_count > 0 {
-        let blk = arena_reuse_blk;
-        arena_reuse_blk = (*arena_reuse_blk).prev;
+    while arena_reuse_blk_count.get() > 0 {
+        let blk = arena_reuse_blk.get();
+        arena_reuse_blk.set((*arena_reuse_blk.get()).prev);
         xfree(blk as *mut c_void);
-        arena_reuse_blk_count -= 1;
+        (*arena_reuse_blk_count.ptr()) -= 1;
     }
 }
 
@@ -574,10 +579,10 @@ pub unsafe extern "C" fn arena_finish(arena: *mut Arena) -> ArenaMem {
 
 #[no_mangle]
 pub unsafe extern "C" fn alloc_block() -> *mut c_void {
-    if arena_reuse_blk_count > 0 {
-        let retval = arena_reuse_blk as *mut c_void;
-        arena_reuse_blk = (*arena_reuse_blk).prev;
-        arena_reuse_blk_count -= 1;
+    if arena_reuse_blk_count.get() > 0 {
+        let retval = arena_reuse_blk.get() as *mut c_void;
+        arena_reuse_blk.set((*arena_reuse_blk.get()).prev);
+        (*arena_reuse_blk_count.ptr()) -= 1;
         retval
     } else {
         arena_alloc_count = arena_alloc_count.wrapping_add(1);
@@ -662,11 +667,11 @@ pub unsafe extern "C" fn arena_alloc(arena: *mut Arena, size: usize, align: bool
 
 #[no_mangle]
 pub unsafe extern "C" fn free_block(block: *mut c_void) {
-    if arena_reuse_blk_count < REUSE_MAX {
+    if arena_reuse_blk_count.get() < REUSE_MAX {
         let reuse_blk = block as *mut consumed_blk;
-        (*reuse_blk).prev = arena_reuse_blk;
-        arena_reuse_blk = reuse_blk;
-        arena_reuse_blk_count += 1;
+        (*reuse_blk).prev = arena_reuse_blk.get();
+        arena_reuse_blk.set(reuse_blk);
+        (*arena_reuse_blk_count.ptr()) += 1;
     } else {
         xfree(block);
     }

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -113,7 +114,7 @@ extern "C" {
     static mut IObuff: [::core::ffi::c_char; 1025];
     static mut got_int: bool;
     fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
     fn vim_snprintf(
         str: *mut ::core::ffi::c_char,
@@ -890,44 +891,48 @@ unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     return (*l).lv_last;
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static mut e_assert_fails_second_arg: [::core::ffi::c_char; 90] = unsafe {
+static e_assert_fails_second_arg: GlobalCell<[::core::ffi::c_char; 90]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<
         [u8; 90],
         [::core::ffi::c_char; 90],
     >(
         *b"E856: \"assert_fails()\" second argument must be a string or a list with one or two strings\0",
     )
-};
-static mut e_assert_fails_fourth_argument: [::core::ffi::c_char; 57] = unsafe {
-    ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
-        *b"E1115: \"assert_fails()\" fourth argument must be a number\0",
-    )
-};
-static mut e_assert_fails_fifth_argument: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
-        *b"E1116: \"assert_fails()\" fifth argument must be a string\0",
-    )
-};
-static mut e_calling_test_garbagecollect_now_while_v_testing_is_not_set: [::core::ffi::c_char; 68] = unsafe {
+});
+static e_assert_fails_fourth_argument: GlobalCell<[::core::ffi::c_char; 57]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
+            *b"E1115: \"assert_fails()\" fourth argument must be a number\0",
+        )
+    });
+static e_assert_fails_fifth_argument: GlobalCell<[::core::ffi::c_char; 56]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+            *b"E1116: \"assert_fails()\" fifth argument must be a string\0",
+        )
+    });
+static e_calling_test_garbagecollect_now_while_v_testing_is_not_set: GlobalCell<
+    [::core::ffi::c_char; 68],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
         *b"E1142: Calling test_garbagecollect_now() while v:testing is not set\0",
     )
-};
+});
 unsafe extern "C" fn prepare_assert_error(mut gap: *mut garray_T) {
     let mut sname: *mut ::core::ffi::c_char = estack_sfile(ESTACK_NONE);
     ga_init(gap, 1 as ::core::ffi::c_int, 100 as ::core::ffi::c_int);
     if !sname.is_null() {
         ga_concat(gap, sname);
-        if (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        if (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum
             > 0 as linenr_T
         {
             ga_concat(gap, b" \0".as_ptr() as *const ::core::ffi::c_char);
         }
     }
-    if (*(exestack.ga_data as *mut estack_T)
-        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    if (*((*exestack.ptr()).ga_data as *mut estack_T)
+        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum
         > 0 as linenr_T
     {
@@ -942,15 +947,15 @@ unsafe extern "C" fn prepare_assert_error(mut gap: *mut garray_T) {
                         == 0) as ::core::ffi::c_int as size_t,
                 ),
             b"line %ld\0".as_ptr() as *const ::core::ffi::c_char,
-            (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum as int64_t,
         );
         ga_concat_len(gap, &raw mut buf as *mut ::core::ffi::c_char, buflen);
     }
     if !sname.is_null()
-        || (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        || (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum
             > 0 as linenr_T
     {
@@ -1844,7 +1849,7 @@ pub unsafe extern "C" fn f_assert_fails(
                     || tv_list_len(list) > 2 as ::core::ffi::c_int
                 {
                     wrong_arg_msg =
-                        &raw const e_assert_fails_second_arg as *const ::core::ffi::c_char;
+                        (e_assert_fails_second_arg.ptr() as *const _) as *const ::core::ffi::c_char;
                     break '_theend;
                 } else {
                     let mut tv: *const typval_T = &raw mut (*(tv_list_first
@@ -1877,7 +1882,8 @@ pub unsafe extern "C" fn f_assert_fails(
                     }
                 }
             } else {
-                wrong_arg_msg = &raw const e_assert_fails_second_arg as *const ::core::ffi::c_char;
+                wrong_arg_msg =
+                    (e_assert_fails_second_arg.ptr() as *const _) as *const ::core::ffi::c_char;
                 break '_theend;
             }
             if !error_found
@@ -1889,8 +1895,8 @@ pub unsafe extern "C" fn f_assert_fails(
                 if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                     != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    wrong_arg_msg =
-                        &raw const e_assert_fails_fourth_argument as *const ::core::ffi::c_char;
+                    wrong_arg_msg = (e_assert_fails_fourth_argument.ptr() as *const _)
+                        as *const ::core::ffi::c_char;
                     break '_theend;
                 } else {
                     if (*argvars.offset(3 as ::core::ffi::c_int as isize))
@@ -1914,7 +1920,7 @@ pub unsafe extern "C" fn f_assert_fails(
                             as ::core::ffi::c_uint
                             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            wrong_arg_msg = &raw const e_assert_fails_fifth_argument
+                            wrong_arg_msg = (e_assert_fails_fifth_argument.ptr() as *const _)
                                 as *const ::core::ffi::c_char;
                             break '_theend;
                         } else if !(*argvars.offset(4 as ::core::ffi::c_int as isize))
@@ -2164,7 +2170,7 @@ pub unsafe extern "C" fn f_test_garbagecollect_now(
 ) {
     if get_vim_var_nr(VV_TESTING) == 0 {
         emsg(gettext(
-            &raw const e_calling_test_garbagecollect_now_while_v_testing_is_not_set
+            (e_calling_test_garbagecollect_now_while_v_testing_is_not_set.ptr() as *const _)
                 as *const ::core::ffi::c_char,
         ));
     } else {

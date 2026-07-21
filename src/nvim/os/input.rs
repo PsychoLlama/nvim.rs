@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2478,7 +2479,7 @@ pub const MAX_KEY_CODE_LEN: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const READ_BUFFER_SIZE: ::core::ffi::c_int = 0xfff as ::core::ffi::c_int;
 pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int =
     READ_BUFFER_SIZE * 4 as ::core::ffi::c_int + MAX_KEY_CODE_LEN;
-static mut read_stream: RStream = rstream {
+static read_stream: GlobalCell<RStream> = GlobalCell::new(rstream {
     s: stream {
         closed: true_0 != 0,
         uv: C2Rust_Unnamed_25 {
@@ -2557,25 +2558,26 @@ static mut read_stream: RStream = rstream {
     },
     read_cb: None,
     num_bytes: 0,
-};
-static mut input_buffer: [::core::ffi::c_char; 16386] = [0; 16386];
-static mut input_read_pos: *mut ::core::ffi::c_char =
-    unsafe { &raw const input_buffer as *mut ::core::ffi::c_char };
-static mut input_write_pos: *mut ::core::ffi::c_char =
-    unsafe { &raw const input_buffer as *mut ::core::ffi::c_char };
-static mut input_eof: bool = false_0 != 0;
-static mut blocking: bool = false_0 != 0;
-static mut cursorhold_time: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut cursorhold_tb_change_cnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+});
+static input_buffer: GlobalCell<[::core::ffi::c_char; 16386]> = GlobalCell::new([0; 16386]);
+static input_read_pos: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(unsafe { (input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char });
+static input_write_pos: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(unsafe { (input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char });
+static input_eof: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static blocking: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static cursorhold_time: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static cursorhold_tb_change_cnt: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn input_start() {
-    if !read_stream.s.closed {
+    if !(*read_stream.ptr()).s.closed {
         return;
     }
     used_stdin = true_0 != 0;
-    rstream_init_fd(&raw mut main_loop, &raw mut read_stream, STDIN_FILENO);
+    rstream_init_fd(&raw mut main_loop, read_stream.ptr(), STDIN_FILENO);
     rstream_start(
-        &raw mut read_stream,
+        read_stream.ptr(),
         Some(
             input_read_cb
                 as unsafe extern "C" fn(
@@ -2591,11 +2593,11 @@ pub unsafe extern "C" fn input_start() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_stop() {
-    if read_stream.s.closed {
+    if (*read_stream.ptr()).s.closed {
         return;
     }
-    rstream_stop(&raw mut read_stream);
-    rstream_may_close(&raw mut read_stream);
+    rstream_stop(read_stream.ptr());
+    rstream_may_close(read_stream.ptr());
 }
 unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     let mut event: event_T = (if State & MODE_INSERT as ::core::ffi::c_int != 0 {
@@ -2647,8 +2649,8 @@ unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
     );
 }
 unsafe extern "C" fn reset_cursorhold_wait(mut tb_change_cnt: ::core::ffi::c_int) {
-    cursorhold_time = 0 as ::core::ffi::c_int;
-    cursorhold_tb_change_cnt = tb_change_cnt;
+    cursorhold_time.set(0 as ::core::ffi::c_int);
+    cursorhold_tb_change_cnt.set(tb_change_cnt);
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_get(
@@ -2658,7 +2660,7 @@ pub unsafe extern "C" fn input_get(
     mut tb_change_cnt: ::core::ffi::c_int,
     mut events: *mut MultiQueue,
 ) -> ::core::ffi::c_int {
-    if tb_change_cnt != cursorhold_tb_change_cnt {
+    if tb_change_cnt != cursorhold_tb_change_cnt.get() {
         reset_cursorhold_wait(tb_change_cnt);
     }
     if maxlen != 0 && input_available() != 0 {
@@ -2682,10 +2684,10 @@ pub unsafe extern "C" fn input_get(
         };
         memcpy(
             buf as *mut ::core::ffi::c_void,
-            input_read_pos as *const ::core::ffi::c_void,
+            input_read_pos.get() as *const ::core::ffi::c_void,
             to_read,
         );
-        input_read_pos = input_read_pos.offset(to_read as isize);
+        input_read_pos.set((*input_read_pos.ptr()).offset(to_read as isize));
         '_c2rust_label_0: {
             if to_read <= 2147483647 as ::core::ffi::c_int as size_t {
             } else {
@@ -2711,14 +2713,14 @@ pub unsafe extern "C" fn input_get(
         }
     } else {
         let mut wait_start: uint64_t = os_hrtime();
-        cursorhold_time = if cursorhold_time < p_ut as ::core::ffi::c_int {
-            cursorhold_time
+        cursorhold_time.set(if cursorhold_time.get() < p_ut as ::core::ffi::c_int {
+            cursorhold_time.get()
         } else {
             p_ut as ::core::ffi::c_int
-        };
-        result = inbuf_poll(p_ut as ::core::ffi::c_int - cursorhold_time, events);
+        });
+        result = inbuf_poll(p_ut as ::core::ffi::c_int - cursorhold_time.get(), events);
         if result as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
-            if read_stream.s.closed as ::core::ffi::c_int != 0
+            if (*read_stream.ptr()).s.closed as ::core::ffi::c_int != 0
                 && silent_mode as ::core::ffi::c_int != 0
             {
                 read_error_exit();
@@ -2731,7 +2733,7 @@ pub unsafe extern "C" fn input_get(
                 result = inbuf_poll(-1 as ::core::ffi::c_int, events);
             }
         } else {
-            cursorhold_time += os_hrtime()
+            (*cursorhold_time.ptr()) += os_hrtime()
                 .wrapping_sub(wait_start)
                 .wrapping_div(1000000 as uint64_t)
                 as ::core::ffi::c_int;
@@ -2762,10 +2764,10 @@ pub unsafe extern "C" fn input_get(
         };
         memcpy(
             buf as *mut ::core::ffi::c_void,
-            input_read_pos as *const ::core::ffi::c_void,
+            input_read_pos.get() as *const ::core::ffi::c_void,
             to_read_0,
         );
-        input_read_pos = input_read_pos.offset(to_read_0 as isize);
+        input_read_pos.set((*input_read_pos.ptr()).offset(to_read_0 as isize));
         '_c2rust_label_2: {
             if to_read_0 <= 2147483647 as ::core::ffi::c_int as size_t {
             } else {
@@ -2805,28 +2807,28 @@ pub unsafe extern "C" fn os_breakcheck() {
     loop_poll_events(&raw mut main_loop, 0 as int64_t);
 }
 pub const BREAKCHECK_SKIP: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-static mut breakcheck_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static breakcheck_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn line_breakcheck() {
-    breakcheck_count += 1;
-    if breakcheck_count >= BREAKCHECK_SKIP {
-        breakcheck_count = 0 as ::core::ffi::c_int;
+    (*breakcheck_count.ptr()) += 1;
+    if breakcheck_count.get() >= BREAKCHECK_SKIP {
+        breakcheck_count.set(0 as ::core::ffi::c_int);
         os_breakcheck();
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn fast_breakcheck() {
-    breakcheck_count += 1;
-    if breakcheck_count >= BREAKCHECK_SKIP * 10 as ::core::ffi::c_int {
-        breakcheck_count = 0 as ::core::ffi::c_int;
+    (*breakcheck_count.ptr()) += 1;
+    if breakcheck_count.get() >= BREAKCHECK_SKIP * 10 as ::core::ffi::c_int {
+        breakcheck_count.set(0 as ::core::ffi::c_int);
         os_breakcheck();
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn veryfast_breakcheck() {
-    breakcheck_count += 1;
-    if breakcheck_count >= BREAKCHECK_SKIP * 100 as ::core::ffi::c_int {
-        breakcheck_count = 0 as ::core::ffi::c_int;
+    (*breakcheck_count.ptr()) += 1;
+    if breakcheck_count.get() >= BREAKCHECK_SKIP * 100 as ::core::ffi::c_int {
+        breakcheck_count.set(0 as ::core::ffi::c_int);
         os_breakcheck();
     }
 }
@@ -2837,25 +2839,25 @@ pub unsafe extern "C" fn os_isatty(mut fd: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_available() -> size_t {
-    return input_write_pos.offset_from(input_read_pos) as size_t;
+    return (*input_write_pos.ptr()).offset_from(input_read_pos.get()) as size_t;
 }
 unsafe extern "C" fn input_space() -> size_t {
-    return (&raw mut input_buffer as *mut ::core::ffi::c_char)
+    return (input_buffer.ptr() as *mut ::core::ffi::c_char)
         .offset(INPUT_BUFFER_SIZE as isize)
-        .offset_from(input_write_pos) as size_t;
+        .offset_from(input_write_pos.get()) as size_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char, mut size: size_t) {
-    if input_read_pos > &raw mut input_buffer as *mut ::core::ffi::c_char {
+    if input_read_pos.get() > input_buffer.ptr() as *mut ::core::ffi::c_char {
         let mut available: size_t = input_available();
         memmove(
-            &raw mut input_buffer as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            input_read_pos as *const ::core::ffi::c_void,
+            input_buffer.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            input_read_pos.get() as *const ::core::ffi::c_void,
             available,
         );
-        input_read_pos = &raw mut input_buffer as *mut ::core::ffi::c_char;
-        input_write_pos =
-            (&raw mut input_buffer as *mut ::core::ffi::c_char).offset(available as isize);
+        input_read_pos.set(input_buffer.ptr() as *mut ::core::ffi::c_char);
+        input_write_pos
+            .set((input_buffer.ptr() as *mut ::core::ffi::c_char).offset(available as isize));
     }
     let mut to_write: size_t = if size < input_space() {
         size
@@ -2863,11 +2865,11 @@ pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char,
         input_space()
     };
     memcpy(
-        input_write_pos as *mut ::core::ffi::c_void,
+        input_write_pos.get() as *mut ::core::ffi::c_void,
         data as *const ::core::ffi::c_void,
         to_write,
     );
-    input_write_pos = input_write_pos.offset(to_write as isize);
+    input_write_pos.set((*input_write_pos.ptr()).offset(to_write as isize));
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_enqueue(mut chan_id: uint64_t, mut keys: String_0) -> size_t {
@@ -2960,17 +2962,22 @@ unsafe extern "C" fn check_multiclick(
     mut col: ::core::ffi::c_int,
     mut skip_event: *mut bool,
 ) -> uint8_t {
-    static mut orig_num_clicks: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut orig_mouse_code: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut orig_mouse_grid: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut orig_mouse_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut orig_mouse_row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut orig_mouse_time: uint64_t = 0 as uint64_t;
+    static orig_num_clicks: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static orig_mouse_code: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static orig_mouse_grid: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static orig_mouse_col: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static orig_mouse_row: GlobalCell<::core::ffi::c_int> =
+        GlobalCell::new(0 as ::core::ffi::c_int);
+    static orig_mouse_time: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
     if code >= KE_MOUSEDOWN as ::core::ffi::c_int && code <= KE_MOUSERIGHT as ::core::ffi::c_int {
         return 0 as uint8_t;
     }
     let mut no_move: bool =
-        orig_mouse_grid == grid && orig_mouse_col == col && orig_mouse_row == row;
+        orig_mouse_grid.get() == grid && orig_mouse_col.get() == col && orig_mouse_row.get() == row;
     if code == KE_MOUSEMOVE as ::core::ffi::c_int {
         if no_move {
             *skip_event = true_0 != 0;
@@ -2983,30 +2990,30 @@ unsafe extern "C" fn check_multiclick(
         || code == KE_X2MOUSE as ::core::ffi::c_int
     {
         let mut mouse_time: uint64_t = os_hrtime();
-        let mut timediff: uint64_t = mouse_time.wrapping_sub(orig_mouse_time);
+        let mut timediff: uint64_t = mouse_time.wrapping_sub(orig_mouse_time.get());
         let mut mouset: uint64_t = (p_mouset as uint64_t).wrapping_mul(1000000 as uint64_t);
-        if code == orig_mouse_code
+        if code == orig_mouse_code.get()
             && no_move as ::core::ffi::c_int != 0
             && timediff < mouset
-            && orig_num_clicks != 4 as ::core::ffi::c_int
+            && orig_num_clicks.get() != 4 as ::core::ffi::c_int
         {
-            orig_num_clicks += 1;
+            (*orig_num_clicks.ptr()) += 1;
         } else {
-            orig_num_clicks = 1 as ::core::ffi::c_int;
+            orig_num_clicks.set(1 as ::core::ffi::c_int);
         }
-        orig_mouse_code = code;
-        orig_mouse_time = mouse_time;
+        orig_mouse_code.set(code);
+        orig_mouse_time.set(mouse_time);
     }
-    orig_mouse_grid = grid;
-    orig_mouse_col = col;
-    orig_mouse_row = row;
+    orig_mouse_grid.set(grid);
+    orig_mouse_col.set(col);
+    orig_mouse_row.set(row);
     let mut modifiers: uint8_t = 0 as uint8_t;
     if code != KE_MOUSEMOVE as ::core::ffi::c_int {
-        if orig_num_clicks == 2 as ::core::ffi::c_int {
+        if orig_num_clicks.get() == 2 as ::core::ffi::c_int {
             modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_2CLICK) as uint8_t;
-        } else if orig_num_clicks == 3 as ::core::ffi::c_int {
+        } else if orig_num_clicks.get() == 3 as ::core::ffi::c_int {
             modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_3CLICK) as uint8_t;
-        } else if orig_num_clicks == 4 as ::core::ffi::c_int {
+        } else if orig_num_clicks.get() == 4 as ::core::ffi::c_int {
             modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_4CLICK) as uint8_t;
         }
     }
@@ -3130,7 +3137,7 @@ pub unsafe extern "C" fn input_enqueue_mouse(
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_blocking() -> bool {
-    return blocking;
+    return blocking.get();
 }
 unsafe extern "C" fn inbuf_poll(
     mut ms: ::core::ffi::c_int,
@@ -3144,9 +3151,9 @@ unsafe extern "C" fn inbuf_poll(
     }
     if (ms == -1 as ::core::ffi::c_int || ms > 0 as ::core::ffi::c_int)
         && events != main_loop.events
-        && !input_eof
+        && !input_eof.get()
     {
-        blocking = true_0 != 0;
+        blocking.set(true_0 != 0);
         multiqueue_process_events(ch_before_blocking_events);
     }
     logmsg(
@@ -3169,7 +3176,7 @@ unsafe extern "C" fn inbuf_poll(
         0 as uint64_t
     };
     while !(os_input_ready(events) as ::core::ffi::c_int != 0
-        || input_eof as ::core::ffi::c_int != 0)
+        || input_eof.get() as ::core::ffi::c_int != 0)
     {
         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
@@ -3191,14 +3198,14 @@ unsafe extern "C" fn inbuf_poll(
             break;
         }
     }
-    blocking = false_0 != 0;
+    blocking.set(false_0 != 0);
     if do_profiling == PROF_YES && ms != 0 {
         prof_input_end();
     }
     if os_input_ready(events) {
         return kTrue;
     }
-    return (if input_eof as ::core::ffi::c_int != 0 {
+    return (if input_eof.get() as ::core::ffi::c_int != 0 {
         kNone as ::core::ffi::c_int
     } else {
         kFalse as ::core::ffi::c_int
@@ -3212,7 +3219,7 @@ unsafe extern "C" fn input_read_cb(
     mut at_eof: bool,
 ) -> size_t {
     if at_eof {
-        input_eof = true_0 != 0;
+        input_eof.set(true_0 != 0);
     }
     '_c2rust_label: {
         if input_space() >= c {
@@ -3237,21 +3244,21 @@ unsafe extern "C" fn process_ctrl_c() {
     let mut i: ssize_t = 0;
     i = available as ssize_t - 1 as ssize_t;
     while i >= 0 as ssize_t {
-        let mut c: uint8_t = *input_read_pos.offset(i as isize) as uint8_t;
+        let mut c: uint8_t = *(*input_read_pos.ptr()).offset(i as isize) as uint8_t;
         if c as ::core::ffi::c_int == Ctrl_C
             || c as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
                 && i >= 3 as ssize_t
-                && *input_read_pos.offset((i - 3 as ssize_t) as isize) as uint8_t
+                && *(*input_read_pos.ptr()).offset((i - 3 as ssize_t) as isize) as uint8_t
                     as ::core::ffi::c_int
                     == K_SPECIAL
-                && *input_read_pos.offset((i - 2 as ssize_t) as isize) as uint8_t
+                && *(*input_read_pos.ptr()).offset((i - 2 as ssize_t) as isize) as uint8_t
                     as ::core::ffi::c_int
                     == KS_MODIFIER
-                && *input_read_pos.offset((i - 1 as ssize_t) as isize) as uint8_t
+                && *(*input_read_pos.ptr()).offset((i - 1 as ssize_t) as isize) as uint8_t
                     as ::core::ffi::c_int
                     == MOD_MASK_CTRL
         {
-            *input_read_pos.offset(i as isize) = Ctrl_C as ::core::ffi::c_char;
+            *(*input_read_pos.ptr()).offset(i as isize) = Ctrl_C as ::core::ffi::c_char;
             got_int = true_0 != 0;
             break;
         } else {
@@ -3259,28 +3266,28 @@ unsafe extern "C" fn process_ctrl_c() {
         }
     }
     if got_int as ::core::ffi::c_int != 0 && i > 0 as ssize_t {
-        input_read_pos = input_read_pos.offset(i as isize);
+        input_read_pos.set((*input_read_pos.ptr()).offset(i as isize));
     }
 }
 unsafe extern "C" fn push_event_key(
     mut buf: *mut uint8_t,
     mut maxlen: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    static mut key: [uint8_t; 3] = [
+    static key: GlobalCell<[uint8_t; 3]> = GlobalCell::new([
         K_SPECIAL as uint8_t,
         KS_EXTRA as uint8_t,
         KE_EVENT as ::core::ffi::c_int as uint8_t,
-    ];
-    static mut key_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    ]);
+    static key_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut buf_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     loop {
-        let c2rust_fresh0 = key_idx;
-        key_idx = key_idx + 1;
+        let c2rust_fresh0 = key_idx.get();
+        key_idx.set(key_idx.get() + 1);
         let c2rust_fresh1 = buf_idx;
         buf_idx = buf_idx + 1;
-        *buf.offset(c2rust_fresh1 as isize) = key[c2rust_fresh0 as usize];
-        key_idx %= 3 as ::core::ffi::c_int;
-        if !(key_idx > 0 as ::core::ffi::c_int && buf_idx < maxlen) {
+        *buf.offset(c2rust_fresh1 as isize) = (*key.ptr())[c2rust_fresh0 as usize];
+        (*key_idx.ptr()) %= 3 as ::core::ffi::c_int;
+        if !(key_idx.get() > 0 as ::core::ffi::c_int && buf_idx < maxlen) {
             break;
         }
     }

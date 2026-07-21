@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -2604,20 +2605,21 @@ unsafe extern "C" fn decor_redraw_col(
     }
     return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
 }
-static mut extra_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut extra_buf_size: size_t = 0 as size_t;
+static extra_buf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static extra_buf_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 unsafe extern "C" fn get_extra_buf(mut size: size_t) -> *mut ::core::ffi::c_char {
     size = if size > 64 as size_t {
         size
     } else {
         64 as size_t
     };
-    if extra_buf_size < size {
-        xfree(extra_buf as *mut ::core::ffi::c_void);
-        extra_buf = xmalloc(size) as *mut ::core::ffi::c_char;
-        extra_buf_size = size;
+    if extra_buf_size.get() < size {
+        xfree(extra_buf.get() as *mut ::core::ffi::c_void);
+        extra_buf.set(xmalloc(size) as *mut ::core::ffi::c_char);
+        extra_buf_size.set(size);
     }
-    return extra_buf;
+    return extra_buf.get();
 }
 unsafe extern "C" fn get_lcs_ext(mut wp: *mut win_T) -> schar_T {
     if (*wp).w_onebuf_opt.wo_wrap != 0 {
@@ -2647,22 +2649,22 @@ unsafe extern "C" fn margin_columns_win(
     mut left_col: *mut ::core::ffi::c_int,
     mut right_col: *mut ::core::ffi::c_int,
 ) {
-    static mut saved_w_virtcol: ::core::ffi::c_int = 0;
-    static mut prev_wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    static mut prev_width1: ::core::ffi::c_int = 0;
-    static mut prev_width2: ::core::ffi::c_int = 0;
-    static mut prev_left_col: ::core::ffi::c_int = 0;
-    static mut prev_right_col: ::core::ffi::c_int = 0;
+    static saved_w_virtcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static prev_wp: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+    static prev_width1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static prev_width2: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static prev_left_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+    static prev_right_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     let mut cur_col_off: ::core::ffi::c_int = win_col_off(wp);
     let mut width1: ::core::ffi::c_int = (*wp).w_view_width - cur_col_off;
     let mut width2: ::core::ffi::c_int = width1 + win_col_off2(wp);
-    if saved_w_virtcol == (*wp).w_virtcol
-        && prev_wp == wp
-        && prev_width1 == width1
-        && prev_width2 == width2
+    if saved_w_virtcol.get() == (*wp).w_virtcol
+        && prev_wp.get() == wp
+        && prev_width1.get() == width1
+        && prev_width2.get() == width2
     {
-        *right_col = prev_right_col;
-        *left_col = prev_left_col;
+        *right_col = prev_right_col.get();
+        *left_col = prev_left_col.get();
         return;
     }
     *left_col = 0 as ::core::ffi::c_int;
@@ -2675,12 +2677,12 @@ unsafe extern "C" fn margin_columns_win(
     if (*wp).w_virtcol >= width1 && width2 > 0 as ::core::ffi::c_int {
         *left_col = ((*wp).w_virtcol as ::core::ffi::c_int - width1) / width2 * width2 + width1;
     }
-    prev_left_col = *left_col;
-    prev_right_col = *right_col;
-    prev_wp = wp;
-    prev_width1 = width1;
-    prev_width2 = width2;
-    saved_w_virtcol = (*wp).w_virtcol as ::core::ffi::c_int;
+    prev_left_col.set(*left_col);
+    prev_right_col.set(*right_col);
+    prev_wp.set(wp);
+    prev_width1.set(width1);
+    prev_width2.set(width2);
+    saved_w_virtcol.set((*wp).w_virtcol as ::core::ffi::c_int);
 }
 unsafe extern "C" fn line_putchar(
     mut buf: *mut buf_T,

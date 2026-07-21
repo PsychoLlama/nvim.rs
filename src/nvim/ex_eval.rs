@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type regprog;
     fn __assert_fail(
@@ -143,7 +144,7 @@ extern "C" {
     static mut emsg_silent: ::core::ffi::c_int;
     static mut IObuff: [::core::ffi::c_char; 1025];
     static mut got_int: bool;
-    static mut exestack: garray_T;
+    static exestack: GlobalCell<garray_T>;
     fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
     fn stacktrace_create() -> *mut list_T;
     fn do_finish(eap: *mut exarg_T, reanimate: bool);
@@ -1533,17 +1534,17 @@ unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
     }
     (*l).lv_refcount += 1;
 }
-static mut e_multiple_else: [::core::ffi::c_char; 21] = unsafe {
+static e_multiple_else: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E583: Multiple :else\0")
-};
-static mut e_multiple_finally: [::core::ffi::c_char; 24] = unsafe {
+});
+static e_multiple_finally: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E607: Multiple :finally\0")
-};
+});
 pub const THROW_ON_ERROR: ::core::ffi::c_int = true_0;
 unsafe extern "C" fn discard_pending_return(mut p: *mut typval_T) {
     tv_free(p);
 }
-static mut cause_abort: bool = false_0 != 0;
+static cause_abort: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn aborting() -> bool {
     return did_emsg != 0 && force_abort as ::core::ffi::c_int != 0
@@ -1552,7 +1553,7 @@ pub unsafe extern "C" fn aborting() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn update_force_abort() {
-    if cause_abort {
+    if cause_abort.get() {
         force_abort = true_0 != 0;
     }
 }
@@ -1578,10 +1579,11 @@ pub unsafe extern "C" fn cause_errthrow(
         return false_0 != 0;
     }
     if did_emsg == 0 {
-        cause_abort = force_abort;
+        cause_abort.set(force_abort);
         force_abort = false_0 != 0;
     }
-    if (trylevel == 0 as ::core::ffi::c_int && !cause_abort || emsg_silent != 0) && !did_throw {
+    if (trylevel == 0 as ::core::ffi::c_int && !cause_abort.get() || emsg_silent != 0) && !did_throw
+    {
         return false_0 != 0;
     }
     if mesg
@@ -1590,7 +1592,7 @@ pub unsafe extern "C" fn cause_errthrow(
         *ignore = true_0 != 0;
         return true_0 != 0;
     }
-    cause_abort = true_0 != 0;
+    cause_abort.set(true_0 != 0);
     if did_throw {
         if (*current_exception).type_0 as ::core::ffi::c_uint
             == ET_INTERRUPT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -1650,8 +1652,8 @@ pub unsafe extern "C" fn cause_errthrow(
             }
         }
         (*elem).sfile = estack_sfile(ESTACK_NONE);
-        (*elem).slnum = (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        (*elem).slnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
+            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum;
     }
     return true_0 != 0;
@@ -1676,8 +1678,8 @@ pub unsafe extern "C" fn do_errthrow(
     mut cstack: *mut cstack_T,
     mut cmdname: *mut ::core::ffi::c_char,
 ) {
-    if cause_abort {
-        cause_abort = false_0 != 0;
+    if cause_abort.get() {
+        cause_abort.set(false_0 != 0);
         force_abort = true_0 != 0;
     }
     if msg_list.is_null() || (*msg_list).is_null() {
@@ -1864,8 +1866,8 @@ unsafe extern "C" fn throw_exception(
                 if (*excp).throw_name.is_null() {
                     (*excp).throw_name = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
                 }
-                (*excp).throw_lnum = (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                (*excp).throw_lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_lnum;
             }
             (*excp).stacktrace = stacktrace_create();
@@ -2349,7 +2351,8 @@ pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
         skip = true_0 != 0;
     } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ELSE as ::core::ffi::c_int != 0 {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_else as ::core::ffi::c_int {
-            (*eap).errmsg = gettext(&raw const e_multiple_else as *const ::core::ffi::c_char);
+            (*eap).errmsg =
+                gettext((e_multiple_else.ptr() as *const _) as *const ::core::ffi::c_char);
             return;
         }
         (*eap).errmsg =
@@ -2843,7 +2846,8 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         pending = CSTP_ERROR as ::core::ffi::c_int;
     }
     if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0 {
-        (*eap).errmsg = gettext(&raw const e_multiple_finally as *const ::core::ffi::c_char);
+        (*eap).errmsg =
+            gettext((e_multiple_finally.ptr() as *const _) as *const ::core::ffi::c_char);
         return;
     }
     rewind_conditionals(
@@ -3079,9 +3083,10 @@ pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
         } else {
             (*csp).exception = ::core::ptr::null_mut::<except_T>();
             if did_emsg != 0 {
-                force_abort =
-                    force_abort as ::core::ffi::c_int | cause_abort as ::core::ffi::c_int != 0;
-                cause_abort = false_0 != 0;
+                force_abort = force_abort as ::core::ffi::c_int
+                    | cause_abort.get() as ::core::ffi::c_int
+                    != 0;
+                cause_abort.set(false_0 != 0);
             }
         }
         need_rethrow = false_0 != 0;
@@ -3113,7 +3118,7 @@ pub unsafe extern "C" fn leave_cleanup(mut csp: *mut cleanup_T) {
         if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
             current_exception = (*csp).exception;
         } else if pending & CSTP_ERROR as ::core::ffi::c_int != 0 {
-            cause_abort = force_abort;
+            cause_abort.set(force_abort);
             force_abort = false_0 != 0;
         }
         if pending & CSTP_ERROR as ::core::ffi::c_int != 0 {
