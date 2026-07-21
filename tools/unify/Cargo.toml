@@ -1,0 +1,16 @@
+# Dev-time rewriter for phase 5a: collapse the per-module duplicated type
+# graph into one canonical `src/nvim/types/` tree. Not part of the nvim crate
+# (detached workspace): like globalize, it wants a modern rustc/syn. Build with
+#   nix shell nixpkgs#rustc nixpkgs#cargo -c cargo run --release -- --help
+[package]
+name = "unify"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "extra-traits", "printing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
