@@ -1,25 +1,5 @@
 use crate::src::nvim::global_cell::GlobalCell;
-pub type size_t = usize;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VTermEncoding {
-    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
-    pub decode: Option<
-        unsafe extern "C" fn(
-            *mut VTermEncoding,
-            *mut ::core::ffi::c_void,
-            *mut uint32_t,
-            *mut ::core::ffi::c_int,
-            ::core::ffi::c_int,
-            *const ::core::ffi::c_char,
-            *mut size_t,
-            size_t,
-        ) -> (),
-    >,
-}
-pub type VTermEncodingType = ::core::ffi::c_uint;
+pub use crate::src::nvim::types::{size_t, uint32_t, uint8_t, VTermEncoding, VTermEncodingType};
 pub const ENC_SINGLE_94: VTermEncodingType = 1;
 pub const ENC_UTF8: VTermEncodingType = 0;
 #[derive(Copy, Clone)]

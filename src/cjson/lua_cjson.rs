@@ -1,6 +1,9 @@
 use crate::src::nvim::global_cell::SharedCell;
+pub use crate::src::nvim::types::{
+    LuaRef, __compar_fn_t, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, ptrdiff_t,
+    size_t, strbuf_t, uintptr_t,
+};
 extern "C" {
-    pub type lua_State;
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
         __file: *const ::core::ffi::c_char,
@@ -133,35 +136,6 @@ extern "C" {
         _: *const ::core::ffi::c_char,
         _: *mut *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_double;
-}
-pub type uintptr_t = usize;
-pub type size_t = usize;
-pub type ptrdiff_t = isize;
-pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
-pub type lua_Number = ::core::ffi::c_double;
-pub type lua_Integer = ptrdiff_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct luaL_Reg {
-    pub name: *const ::core::ffi::c_char,
-    pub func: lua_CFunction,
-}
-pub type __compar_fn_t = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_void,
-        *const ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
-pub type LuaRef = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct strbuf_t {
-    pub buf: *mut ::core::ffi::c_char,
-    pub size: size_t,
-    pub length: size_t,
-    pub dynamic: ::core::ffi::c_int,
-    pub reallocs: ::core::ffi::c_int,
-    pub debug: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

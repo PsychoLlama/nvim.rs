@@ -1,5 +1,9 @@
+pub use crate::src::nvim::types::{
+    cmd_addr_T, cmdidx_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem,
+    exarg, exarg_T, int32_t, linenr_T, lua_Number, lua_State, size_t, uint32_t, CMD_index,
+    LineGetter,
+};
 extern "C" {
-    pub type lua_State;
     fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
     fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -40,39 +44,6 @@ extern "C" {
     fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
 }
-pub type size_t = usize;
-pub type lua_Number = ::core::ffi::c_double;
-pub type int32_t = i32;
-pub type uint32_t = u32;
-pub type linenr_T = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct eslist_elem {
-    pub saved_emsg_silent: ::core::ffi::c_int,
-    pub next: *mut eslist_T,
-}
-pub type eslist_T = eslist_elem;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cstack_T {
-    pub cs_flags: [::core::ffi::c_int; 50],
-    pub cs_pending: [::core::ffi::c_char; 50],
-    pub cs_pend: C2Rust_Unnamed,
-    pub cs_forinfo: [*mut ::core::ffi::c_void; 50],
-    pub cs_line: [::core::ffi::c_int; 50],
-    pub cs_idx: ::core::ffi::c_int,
-    pub cs_looplevel: ::core::ffi::c_int,
-    pub cs_trylevel: ::core::ffi::c_int,
-    pub cs_emsg_silent_list: *mut eslist_T,
-    pub cs_lflags: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub csp_rv: [*mut ::core::ffi::c_void; 50],
-    pub csp_ex: [*mut ::core::ffi::c_void; 50],
-}
-pub type CMD_index = ::core::ffi::c_int;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;
@@ -633,8 +604,6 @@ pub const CMD_aboveleft: CMD_index = 3;
 pub const CMD_abclear: CMD_index = 2;
 pub const CMD_abbreviate: CMD_index = 1;
 pub const CMD_append: CMD_index = 0;
-pub type cmdidx_T = CMD_index;
-pub type cmd_addr_T = ::core::ffi::c_uint;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_UNSIGNED: cmd_addr_T = 9;
@@ -647,53 +616,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct exarg {
-    pub arg: *mut ::core::ffi::c_char,
-    pub args: *mut *mut ::core::ffi::c_char,
-    pub arglens: *mut size_t,
-    pub argc: size_t,
-    pub nextcmd: *mut ::core::ffi::c_char,
-    pub cmd: *mut ::core::ffi::c_char,
-    pub cmdlinep: *mut *mut ::core::ffi::c_char,
-    pub cmdline_tofree: *mut ::core::ffi::c_char,
-    pub cmdidx: cmdidx_T,
-    pub argt: uint32_t,
-    pub skip: ::core::ffi::c_int,
-    pub forceit: ::core::ffi::c_int,
-    pub addr_count: ::core::ffi::c_int,
-    pub line1: linenr_T,
-    pub line2: linenr_T,
-    pub addr_type: cmd_addr_T,
-    pub flags: ::core::ffi::c_int,
-    pub do_ecmd_cmd: *mut ::core::ffi::c_char,
-    pub do_ecmd_lnum: linenr_T,
-    pub append: ::core::ffi::c_int,
-    pub usefilter: ::core::ffi::c_int,
-    pub amount: ::core::ffi::c_int,
-    pub regname: ::core::ffi::c_int,
-    pub force_bin: ::core::ffi::c_int,
-    pub read_edit: ::core::ffi::c_int,
-    pub mkdir_p: ::core::ffi::c_int,
-    pub force_ff: ::core::ffi::c_int,
-    pub force_enc: ::core::ffi::c_int,
-    pub bad_char: ::core::ffi::c_int,
-    pub useridx: ::core::ffi::c_int,
-    pub errmsg: *mut ::core::ffi::c_char,
-    pub ea_getline: LineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
-    pub cstack: *mut cstack_T,
-}
-pub type LineGetter = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-        ::core::ffi::c_int,
-        bool,
-    ) -> *mut ::core::ffi::c_char,
->;
-pub type exarg_T = exarg;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

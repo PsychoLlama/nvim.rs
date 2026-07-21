@@ -1,3 +1,7 @@
+pub use crate::src::nvim::types::{
+    mpack_sintmax_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed, mpack_token_t,
+    mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -7,15 +11,6 @@ extern "C" {
     ) -> !;
 }
 pub type mpack_sint32_t = ::core::ffi::c_int;
-pub type mpack_uint32_t = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_value_s {
-    pub lo: mpack_uint32_t,
-    pub hi: mpack_uint32_t,
-}
-pub type mpack_value_t = mpack_value_s;
-pub type mpack_token_type_t = ::core::ffi::c_uint;
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
@@ -27,23 +22,6 @@ pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_token_s {
-    pub type_0: mpack_token_type_t,
-    pub length: mpack_uint32_t,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub value: mpack_value_t,
-    pub chunk_ptr: *const ::core::ffi::c_char,
-    pub ext_type: ::core::ffi::c_int,
-}
-pub type mpack_token_t = mpack_token_s;
-pub type mpack_sintmax_t = ::core::ffi::c_longlong;
-pub type mpack_uintmax_t = ::core::ffi::c_ulonglong;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_0 {

@@ -1,4 +1,5 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{size_t, StringBuilder, XDGVarType};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -71,15 +72,6 @@ extern "C" {
         ...
     ) -> ::core::ffi::c_int;
 }
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct StringBuilder {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
-}
-pub type XDGVarType = ::core::ffi::c_int;
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

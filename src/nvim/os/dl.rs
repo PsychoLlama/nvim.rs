@@ -1,3 +1,4 @@
+pub use crate::src::nvim::types::{intptr_t, uv_lib_t};
 extern "C" {
     fn uv_dlopen(filename: *const ::core::ffi::c_char, lib: *mut uv_lib_t) -> ::core::ffi::c_int;
     fn uv_dlclose(lib: *mut uv_lib_t);
@@ -9,13 +10,6 @@ extern "C" {
     fn uv_dlerror(lib: *const uv_lib_t) -> *const ::core::ffi::c_char;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-}
-pub type intptr_t = isize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_lib_t {
-    pub handle: *mut ::core::ffi::c_void,
-    pub errmsg: *mut ::core::ffi::c_char,
 }
 pub type int_int_fn = Option<unsafe extern "C" fn(::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type gen_fn = Option<unsafe extern "C" fn() -> ()>;

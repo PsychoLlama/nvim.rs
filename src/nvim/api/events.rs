@@ -1,3 +1,8 @@
+pub use crate::src::nvim::types::{
+    int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
+    Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
+    ObjectType, String_0, VimVarIndex,
+};
 extern "C" {
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn logmsg(
@@ -19,70 +24,9 @@ extern "C" {
     fn do_termresponse_autocmd(sequence: String_0);
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
 }
-pub type int64_t = i64;
-pub type uint64_t = u64;
-pub type ptrdiff_t = isize;
-pub type size_t = usize;
-pub type LuaRef = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Error {
-    pub type_0: ErrorType,
-    pub msg: *mut ::core::ffi::c_char,
-}
-pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type Float = ::core::ffi::c_double;
-pub type Integer = int64_t;
-pub type Boolean = bool;
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -94,7 +38,6 @@ pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
-pub type VimVarIndex = ::core::ffi::c_uint;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;

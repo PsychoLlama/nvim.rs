@@ -1,4 +1,8 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, Array, Boolean, Dict,
+    Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0,
+};
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -17,68 +21,9 @@ extern "C" {
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
 }
-pub type int64_t = i64;
-pub type size_t = usize;
-pub type LuaRef = ::core::ffi::c_int;
-pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Error {
-    pub type_0: ErrorType,
-    pub msg: *mut ::core::ffi::c_char,
-}
-pub type Boolean = bool;
-pub type Integer = int64_t;
-pub type Float = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;

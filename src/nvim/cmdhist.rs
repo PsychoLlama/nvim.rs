@@ -1,7 +1,17 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    blob_T, blobvar_S, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_0, dict_T, dictvar_S, eslist_T, eslist_elem, exarg, exarg_T,
+    expand_T, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T,
+    hash_T, hashitem_T, hashtab_T, histentry_T, int32_t, int64_t, linenr_T, list_T, listitem_S,
+    listitem_T, listvar_S, listwatch_S, listwatch_T, partial_S, partial_T, pos_T, proftime_T,
+    queue, regmatch_T, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union,
+    ufunc_S, ufunc_T, uint32_t, uint64_t, uint8_t, varnumber_T, xp_prefix_T, AdditionalData,
+    BoolVarValue, CMD_index, Direction, EvalFuncData, HistoryType, LineGetter, LuaRef,
+    MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType, SpecialVarValue, Timestamp,
+    VarLockStatus, VarType, QUEUE,
+};
 extern "C" {
-    pub type MsgpackRpcRequestHandler;
-    pub type regprog;
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
         __file: *const ::core::ffi::c_char,
@@ -101,179 +111,15 @@ extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-pub type size_t = usize;
-pub type LuaRef = ::core::ffi::c_int;
-pub type float_T = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union EvalFuncData {
-    pub float_func: Option<unsafe extern "C" fn(float_T) -> float_T>,
-    pub api_handler: *const MsgpackRpcRequestHandler,
-    pub null: *mut ::core::ffi::c_void,
-}
-pub type proftime_T = uint64_t;
-pub type OptInt = int64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct AdditionalData {
-    pub nitems: uint32_t,
-    pub nbytes: uint32_t,
-    pub data: [::core::ffi::c_char; 0],
-}
-pub type regprog_T = regprog;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct garray_T {
-    pub ga_len: ::core::ffi::c_int,
-    pub ga_maxlen: ::core::ffi::c_int,
-    pub ga_itemsize: ::core::ffi::c_int,
-    pub ga_growsize: ::core::ffi::c_int,
-    pub ga_data: *mut ::core::ffi::c_void,
-}
-pub type linenr_T = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashtab_T {
-    pub ht_mask: hash_T,
-    pub ht_used: size_t,
-    pub ht_filled: size_t,
-    pub ht_changed: ::core::ffi::c_int,
-    pub ht_locked: ::core::ffi::c_int,
-    pub ht_array: *mut hashitem_T,
-    pub ht_smallarray: [hashitem_T; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashitem_T {
-    pub hi_hash: hash_T,
-    pub hi_key: *mut ::core::ffi::c_char,
-}
-pub type hash_T = size_t;
-pub type colnr_T = ::core::ffi::c_int;
-pub type Timestamp = uint64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct pos_T {
-    pub lnum: linenr_T,
-    pub col: colnr_T,
-    pub coladd: colnr_T,
-}
-pub type partial_T = partial_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct partial_S {
-    pub pt_refcount: ::core::ffi::c_int,
-    pub pt_copyID: ::core::ffi::c_int,
-    pub pt_name: *mut ::core::ffi::c_char,
-    pub pt_func: *mut ufunc_T,
-    pub pt_auto: bool,
-    pub pt_argc: ::core::ffi::c_int,
-    pub pt_argv: *mut typval_T,
-    pub pt_dict: *mut dict_T,
-}
-pub type dict_T = dictvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct dictvar_S {
-    pub dv_lock: VarLockStatus,
-    pub dv_scope: ScopeType,
-    pub dv_refcount: ::core::ffi::c_int,
-    pub dv_copyID: ::core::ffi::c_int,
-    pub dv_hashtab: hashtab_T,
-    pub dv_copydict: *mut dict_T,
-    pub dv_used_next: *mut dict_T,
-    pub dv_used_prev: *mut dict_T,
-    pub watchers: QUEUE,
-    pub lua_table_ref: LuaRef,
-}
-pub type QUEUE = queue;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct queue {
-    pub next: *mut queue,
-    pub prev: *mut queue,
-}
-pub type ScopeType = ::core::ffi::c_uint;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
-pub type VarLockStatus = ::core::ffi::c_uint;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct typval_T {
-    pub v_type: VarType,
-    pub v_lock: VarLockStatus,
-    pub vval: typval_vval_union,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union typval_vval_union {
-    pub v_number: varnumber_T,
-    pub v_bool: BoolVarValue,
-    pub v_special: SpecialVarValue,
-    pub v_float: float_T,
-    pub v_string: *mut ::core::ffi::c_char,
-    pub v_list: *mut list_T,
-    pub v_dict: *mut dict_T,
-    pub v_partial: *mut partial_T,
-    pub v_blob: *mut blob_T,
-}
-pub type blob_T = blobvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct blobvar_S {
-    pub bv_ga: garray_T,
-    pub bv_refcount: ::core::ffi::c_int,
-    pub bv_lock: VarLockStatus,
-}
-pub type list_T = listvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listvar_S {
-    pub lv_first: *mut listitem_T,
-    pub lv_last: *mut listitem_T,
-    pub lv_watch: *mut listwatch_T,
-    pub lv_idx_item: *mut listitem_T,
-    pub lv_copylist: *mut list_T,
-    pub lv_used_next: *mut list_T,
-    pub lv_used_prev: *mut list_T,
-    pub lv_refcount: ::core::ffi::c_int,
-    pub lv_len: ::core::ffi::c_int,
-    pub lv_idx: ::core::ffi::c_int,
-    pub lv_copyID: ::core::ffi::c_int,
-    pub lv_lock: VarLockStatus,
-    pub lua_table_ref: LuaRef,
-}
-pub type listitem_T = listitem_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listitem_S {
-    pub li_next: *mut listitem_T,
-    pub li_prev: *mut listitem_T,
-    pub li_tv: typval_T,
-}
-pub type listwatch_T = listwatch_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listwatch_S {
-    pub lw_item: *mut listitem_T,
-    pub lw_next: *mut listwatch_T,
-}
-pub type SpecialVarValue = ::core::ffi::c_uint;
 pub const kSpecialVarNull: SpecialVarValue = 0;
-pub type BoolVarValue = ::core::ffi::c_uint;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub type varnumber_T = int64_t;
-pub type VarType = ::core::ffi::c_uint;
 pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
@@ -285,156 +131,14 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub type ufunc_T = ufunc_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ufunc_S {
-    pub uf_varargs: ::core::ffi::c_int,
-    pub uf_flags: ::core::ffi::c_int,
-    pub uf_calls: ::core::ffi::c_int,
-    pub uf_cleared: bool,
-    pub uf_args: garray_T,
-    pub uf_def_args: garray_T,
-    pub uf_lines: garray_T,
-    pub uf_profiling: ::core::ffi::c_int,
-    pub uf_prof_initialized: ::core::ffi::c_int,
-    pub uf_luaref: LuaRef,
-    pub uf_tm_count: ::core::ffi::c_int,
-    pub uf_tm_total: proftime_T,
-    pub uf_tm_self: proftime_T,
-    pub uf_tm_children: proftime_T,
-    pub uf_tml_count: *mut ::core::ffi::c_int,
-    pub uf_tml_total: *mut proftime_T,
-    pub uf_tml_self: *mut proftime_T,
-    pub uf_tml_start: proftime_T,
-    pub uf_tml_children: proftime_T,
-    pub uf_tml_wait: proftime_T,
-    pub uf_tml_idx: ::core::ffi::c_int,
-    pub uf_tml_execed: ::core::ffi::c_int,
-    pub uf_script_ctx: sctx_T,
-    pub uf_refcount: ::core::ffi::c_int,
-    pub uf_scoped: *mut funccall_T,
-    pub uf_name_exp: *mut ::core::ffi::c_char,
-    pub uf_namelen: size_t,
-    pub uf_name: [::core::ffi::c_char; 0],
-}
-pub type funccall_T = funccall_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct funccall_S {
-    pub fc_func: *mut ufunc_T,
-    pub fc_linenr: ::core::ffi::c_int,
-    pub fc_returned: ::core::ffi::c_int,
-    pub fc_fixvar: [C2Rust_Unnamed; 12],
-    pub fc_l_vars: dict_T,
-    pub fc_l_vars_var: ScopeDictDictItem,
-    pub fc_l_avars: dict_T,
-    pub fc_l_avars_var: ScopeDictDictItem,
-    pub fc_l_varlist: list_T,
-    pub fc_l_listitems: [listitem_T; 20],
-    pub fc_rettv: *mut typval_T,
-    pub fc_breakpoint: linenr_T,
-    pub fc_dbg_tick: ::core::ffi::c_int,
-    pub fc_level: ::core::ffi::c_int,
-    pub fc_defer: garray_T,
-    pub fc_prof_child: proftime_T,
-    pub fc_caller: *mut funccall_T,
-    pub fc_refcount: ::core::ffi::c_int,
-    pub fc_copyID: ::core::ffi::c_int,
-    pub fc_ufuncs: garray_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ScopeDictDictItem {
-    pub di_tv: typval_T,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 1],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed {
-    pub di_tv: typval_T,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 21],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sctx_T {
-    pub sc_sid: scid_T,
-    pub sc_seq: ::core::ffi::c_int,
-    pub sc_lnum: linenr_T,
-    pub sc_chan: uint64_t,
-}
-pub type scid_T = ::core::ffi::c_int;
-pub type Direction = ::core::ffi::c_int;
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
-pub type xp_prefix_T = ::core::ffi::c_uint;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expand_T {
-    pub xp_pattern: *mut ::core::ffi::c_char,
-    pub xp_context: ::core::ffi::c_int,
-    pub xp_pattern_len: size_t,
-    pub xp_prefix: xp_prefix_T,
-    pub xp_arg: *mut ::core::ffi::c_char,
-    pub xp_luaref: LuaRef,
-    pub xp_script_ctx: sctx_T,
-    pub xp_backslash: ::core::ffi::c_int,
-    pub xp_shell: bool,
-    pub xp_numfiles: ::core::ffi::c_int,
-    pub xp_col: ::core::ffi::c_int,
-    pub xp_selected: ::core::ffi::c_int,
-    pub xp_orig: *mut ::core::ffi::c_char,
-    pub xp_files: *mut *mut ::core::ffi::c_char,
-    pub xp_line: *mut ::core::ffi::c_char,
-    pub xp_buf: [::core::ffi::c_char; 256],
-    pub xp_search_dir: Direction,
-    pub xp_pre_incsearch_pos: pos_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct eslist_elem {
-    pub saved_emsg_silent: ::core::ffi::c_int,
-    pub next: *mut eslist_T,
-}
-pub type eslist_T = eslist_elem;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cstack_T {
-    pub cs_flags: [::core::ffi::c_int; 50],
-    pub cs_pending: [::core::ffi::c_char; 50],
-    pub cs_pend: C2Rust_Unnamed_0,
-    pub cs_forinfo: [*mut ::core::ffi::c_void; 50],
-    pub cs_line: [::core::ffi::c_int; 50],
-    pub cs_idx: ::core::ffi::c_int,
-    pub cs_looplevel: ::core::ffi::c_int,
-    pub cs_trylevel: ::core::ffi::c_int,
-    pub cs_emsg_silent_list: *mut eslist_T,
-    pub cs_lflags: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_0 {
-    pub csp_rv: [*mut ::core::ffi::c_void; 50],
-    pub csp_ex: [*mut ::core::ffi::c_void; 50],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regmatch_T {
-    pub regprog: *mut regprog_T,
-    pub startp: [*mut ::core::ffi::c_char; 10],
-    pub endp: [*mut ::core::ffi::c_char; 10],
-    pub rm_matchcol: colnr_T,
-    pub rm_ic: bool,
-}
-pub type CMD_index = ::core::ffi::c_int;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;
@@ -995,8 +699,6 @@ pub const CMD_aboveleft: CMD_index = 3;
 pub const CMD_abclear: CMD_index = 2;
 pub const CMD_abbreviate: CMD_index = 1;
 pub const CMD_append: CMD_index = 0;
-pub type cmdidx_T = CMD_index;
-pub type cmd_addr_T = ::core::ffi::c_uint;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_UNSIGNED: cmd_addr_T = 9;
@@ -1009,53 +711,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct exarg {
-    pub arg: *mut ::core::ffi::c_char,
-    pub args: *mut *mut ::core::ffi::c_char,
-    pub arglens: *mut size_t,
-    pub argc: size_t,
-    pub nextcmd: *mut ::core::ffi::c_char,
-    pub cmd: *mut ::core::ffi::c_char,
-    pub cmdlinep: *mut *mut ::core::ffi::c_char,
-    pub cmdline_tofree: *mut ::core::ffi::c_char,
-    pub cmdidx: cmdidx_T,
-    pub argt: uint32_t,
-    pub skip: ::core::ffi::c_int,
-    pub forceit: ::core::ffi::c_int,
-    pub addr_count: ::core::ffi::c_int,
-    pub line1: linenr_T,
-    pub line2: linenr_T,
-    pub addr_type: cmd_addr_T,
-    pub flags: ::core::ffi::c_int,
-    pub do_ecmd_cmd: *mut ::core::ffi::c_char,
-    pub do_ecmd_lnum: linenr_T,
-    pub append: ::core::ffi::c_int,
-    pub usefilter: ::core::ffi::c_int,
-    pub amount: ::core::ffi::c_int,
-    pub regname: ::core::ffi::c_int,
-    pub force_bin: ::core::ffi::c_int,
-    pub read_edit: ::core::ffi::c_int,
-    pub mkdir_p: ::core::ffi::c_int,
-    pub force_ff: ::core::ffi::c_int,
-    pub force_enc: ::core::ffi::c_int,
-    pub bad_char: ::core::ffi::c_int,
-    pub useridx: ::core::ffi::c_int,
-    pub errmsg: *mut ::core::ffi::c_char,
-    pub ea_getline: LineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
-    pub cstack: *mut cstack_T,
-}
-pub type LineGetter = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-        ::core::ffi::c_int,
-        bool,
-    ) -> *mut ::core::ffi::c_char,
->;
-pub type exarg_T = exarg;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_1 = 8192;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_1 = 4096;
@@ -1071,24 +726,6 @@ pub const CMOD_UNSILENT: C2Rust_Unnamed_1 = 8;
 pub const CMOD_ERRSILENT: C2Rust_Unnamed_1 = 4;
 pub const CMOD_SILENT: C2Rust_Unnamed_1 = 2;
 pub const CMOD_SANDBOX: C2Rust_Unnamed_1 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cmdmod_T {
-    pub cmod_flags: ::core::ffi::c_int,
-    pub cmod_split: ::core::ffi::c_int,
-    pub cmod_tab: ::core::ffi::c_int,
-    pub cmod_filter_pat: *mut ::core::ffi::c_char,
-    pub cmod_filter_regmatch: regmatch_T,
-    pub cmod_filter_force: bool,
-    pub cmod_verbose: ::core::ffi::c_int,
-    pub cmod_save_ei: *mut ::core::ffi::c_char,
-    pub cmod_did_sandbox: ::core::ffi::c_int,
-    pub cmod_verbose_save: OptInt,
-    pub cmod_save_msg_silent: ::core::ffi::c_int,
-    pub cmod_save_msg_scroll: ::core::ffi::c_int,
-    pub cmod_did_esilent: ::core::ffi::c_int,
-}
-pub type HistoryType = ::core::ffi::c_int;
 pub const HIST_DEBUG: HistoryType = 4;
 pub const HIST_INPUT: HistoryType = 3;
 pub const HIST_EXPR: HistoryType = 2;
@@ -1098,15 +735,6 @@ pub const HIST_INVALID: HistoryType = -1;
 pub const HIST_DEFAULT: HistoryType = -2;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const HIST_COUNT: C2Rust_Unnamed_2 = 5;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct histentry_T {
-    pub hisnum: ::core::ffi::c_int,
-    pub hisstr: *mut ::core::ffi::c_char,
-    pub hisstrlen: size_t,
-    pub timestamp: Timestamp,
-    pub additional_data: *mut AdditionalData,
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]

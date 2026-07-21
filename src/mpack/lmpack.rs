@@ -1,6 +1,14 @@
 use crate::src::nvim::global_cell::SharedCell;
+pub use crate::src::nvim::types::{
+    luaL_Buffer, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, mpack_data_t,
+    mpack_node_s, mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_rpc_header_s,
+    mpack_rpc_header_t, mpack_rpc_message_s, mpack_rpc_message_t, mpack_rpc_one_session_t,
+    mpack_rpc_session_t, mpack_rpc_slot_s, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t,
+    mpack_token_s, mpack_token_s_data as C2Rust_Unnamed, mpack_token_t, mpack_token_type_t,
+    mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, ptrdiff_t,
+    size_t,
+};
 extern "C" {
-    pub type lua_State;
     fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
     fn free(__ptr: *mut ::core::ffi::c_void);
     fn memcpy(
@@ -147,25 +155,6 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn mpack_rpc_session_copy(d: *mut mpack_rpc_session_t, s: *mut mpack_rpc_session_t);
 }
-pub type size_t = usize;
-pub type ptrdiff_t = isize;
-pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
-pub type lua_Number = ::core::ffi::c_double;
-pub type lua_Integer = ptrdiff_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct luaL_Reg {
-    pub name: *const ::core::ffi::c_char,
-    pub func: lua_CFunction,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct luaL_Buffer {
-    pub p: *mut ::core::ffi::c_char,
-    pub lvl: ::core::ffi::c_int,
-    pub L: *mut lua_State,
-    pub buffer: [::core::ffi::c_char; 8192],
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Packer {
@@ -179,60 +168,6 @@ pub struct Packer {
     pub is_bin: ::core::ffi::c_int,
     pub is_bin_fn: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_parser_t {
-    pub data: mpack_data_t,
-    pub size: mpack_uint32_t,
-    pub capacity: mpack_uint32_t,
-    pub status: ::core::ffi::c_int,
-    pub exiting: ::core::ffi::c_int,
-    pub tokbuf: mpack_tokbuf_t,
-    pub items: [mpack_node_t; 33],
-}
-pub type mpack_node_t = mpack_node_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_node_s {
-    pub tok: mpack_token_t,
-    pub pos: size_t,
-    pub key_visited: ::core::ffi::c_int,
-    pub data: [mpack_data_t; 2],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union mpack_data_t {
-    pub p: *mut ::core::ffi::c_void,
-    pub u: mpack_uintmax_t,
-    pub i: mpack_sintmax_t,
-    pub d: ::core::ffi::c_double,
-}
-pub type mpack_sintmax_t = ::core::ffi::c_longlong;
-pub type mpack_uintmax_t = ::core::ffi::c_ulonglong;
-pub type mpack_token_t = mpack_token_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_token_s {
-    pub type_0: mpack_token_type_t,
-    pub length: mpack_uint32_t,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub value: mpack_value_t,
-    pub chunk_ptr: *const ::core::ffi::c_char,
-    pub ext_type: ::core::ffi::c_int,
-}
-pub type mpack_value_t = mpack_value_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_value_s {
-    pub lo: mpack_uint32_t,
-    pub hi: mpack_uint32_t,
-}
-pub type mpack_uint32_t = ::core::ffi::c_uint;
-pub type mpack_token_type_t = ::core::ffi::c_uint;
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
@@ -244,19 +179,8 @@ pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-pub type mpack_tokbuf_t = mpack_tokbuf_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_tokbuf_s {
-    pub pending: [::core::ffi::c_char; 9],
-    pub pending_tok: mpack_token_t,
-    pub ppos: size_t,
-    pub plen: size_t,
-    pub passthrough: mpack_uint32_t,
-}
 pub const MPACK_EOF: C2Rust_Unnamed_1 = 1;
 pub const MPACK_NOMEM: C2Rust_Unnamed_2 = 3;
-pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
 pub const MPACK_OK: C2Rust_Unnamed_1 = 0;
 pub const MPACK_ERROR: C2Rust_Unnamed_1 = 2;
 #[derive(Copy, Clone)]
@@ -287,62 +211,9 @@ pub struct C2Rust_Unnamed_0 {
     pub method_or_error: ::core::ffi::c_int,
     pub args_or_result: ::core::ffi::c_int,
 }
-pub type mpack_rpc_message_t = mpack_rpc_message_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_rpc_message_s {
-    pub id: mpack_uint32_t,
-    pub data: mpack_data_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_rpc_session_t {
-    pub reader: mpack_tokbuf_t,
-    pub writer: mpack_tokbuf_t,
-    pub receive: mpack_rpc_header_t,
-    pub send: mpack_rpc_header_t,
-    pub request_id: mpack_uint32_t,
-    pub capacity: mpack_uint32_t,
-    pub slots: [mpack_rpc_slot_s; 32],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_rpc_slot_s {
-    pub used: ::core::ffi::c_int,
-    pub msg: mpack_rpc_message_t,
-}
-pub type mpack_rpc_header_t = mpack_rpc_header_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_rpc_header_s {
-    pub toks: [mpack_token_t; 3],
-    pub index: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_rpc_one_session_t {
-    pub reader: mpack_tokbuf_t,
-    pub writer: mpack_tokbuf_t,
-    pub receive: mpack_rpc_header_t,
-    pub send: mpack_rpc_header_t,
-    pub request_id: mpack_uint32_t,
-    pub capacity: mpack_uint32_t,
-    pub slots: [mpack_rpc_slot_s; 1],
-}
 pub const MPACK_RPC_NOTIFICATION: C2Rust_Unnamed_3 = 6;
 pub const MPACK_RPC_RESPONSE: C2Rust_Unnamed_3 = 5;
 pub const MPACK_RPC_REQUEST: C2Rust_Unnamed_3 = 4;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_one_parser_t {
-    pub data: mpack_data_t,
-    pub size: mpack_uint32_t,
-    pub capacity: mpack_uint32_t,
-    pub status: ::core::ffi::c_int,
-    pub exiting: ::core::ffi::c_int,
-    pub tokbuf: mpack_tokbuf_t,
-    pub items: [mpack_node_t; 1],
-}
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_int;
 pub const MPACK_EXCEPTION: C2Rust_Unnamed_2 = -1;

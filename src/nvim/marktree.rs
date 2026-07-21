@@ -1,4 +1,13 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    colnr_T, garray_T, int16_t, int32_t, mtnode_inner_s, mtnode_s, ptr_t, schar_T, size_t, ssize_t,
+    uint16_t, uint32_t, uint64_t, uint8_t, virt_line, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed,
+    Intersection, MTDamage, MTDamagePair, MTKey, MTNode, MTPair, MTPos, MapHash, Map_ptr_t_ptr_t,
+    Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t, String_0, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -67,209 +76,12 @@ extern "C" {
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
 }
-pub type int16_t = i16;
-pub type int32_t = i32;
-pub type uint8_t = u8;
-pub type uint16_t = u16;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-pub type size_t = usize;
-pub type ssize_t = isize;
-pub type schar_T = uint32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MapHash {
-    pub n_buckets: uint32_t,
-    pub size: uint32_t,
-    pub n_occupied: uint32_t,
-    pub upper_bound: uint32_t,
-    pub n_keys: uint32_t,
-    pub keys_capacity: uint32_t,
-    pub hash: *mut uint32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MarkTree {
-    pub root: *mut MTNode,
-    pub meta_root: [uint32_t; 5],
-    pub n_keys: size_t,
-    pub n_nodes: size_t,
-    pub id2node: [Map_uint64_t_ptr_t; 1],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint64_t_ptr_t {
-    pub set: Set_uint64_t,
-    pub values: *mut ptr_t,
-}
-pub type ptr_t = *mut ::core::ffi::c_void;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_uint64_t {
-    pub h: MapHash,
-    pub keys: *mut uint64_t,
-}
-pub type MTNode = mtnode_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mtnode_s {
-    pub n: int32_t,
-    pub level: int16_t,
-    pub p_idx: int16_t,
-    pub intersect: Intersection,
-    pub parent: *mut MTNode,
-    pub key: [MTKey; 19],
-    pub s: [mtnode_inner_s; 0],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mtnode_inner_s {
-    pub i_ptr: [*mut MTNode; 20],
-    pub i_meta: [[uint32_t; 5]; 20],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTKey {
-    pub pos: MTPos,
-    pub ns: uint32_t,
-    pub id: uint32_t,
-    pub flags: uint16_t,
-    pub decor_data: DecorInlineData,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union DecorInlineData {
-    pub hl: DecorHighlightInline,
-    pub ext: DecorExt,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorExt {
-    pub sh_idx: uint32_t,
-    pub vt: *mut DecorVirtText,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorVirtText {
-    pub flags: uint8_t,
-    pub hl_mode: uint8_t,
-    pub priority: DecorPriority,
-    pub width: ::core::ffi::c_int,
-    pub col: ::core::ffi::c_int,
-    pub pos: VirtTextPos,
-    pub data: C2Rust_Unnamed,
-    pub next: *mut DecorVirtText,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub virt_text: VirtText,
-    pub virt_lines: VirtLines,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VirtLines {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut virt_line,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct virt_line {
-    pub line: VirtText,
-    pub flags: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VirtText {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut VirtTextChunk,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VirtTextChunk {
-    pub text: *mut ::core::ffi::c_char,
-    pub hl_id: ::core::ffi::c_int,
-}
-pub type VirtTextPos = ::core::ffi::c_uint;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub type DecorPriority = uint16_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorHighlightInline {
-    pub flags: uint16_t,
-    pub priority: DecorPriority,
-    pub hl_id: ::core::ffi::c_int,
-    pub conceal_char: schar_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTPos {
-    pub row: int32_t,
-    pub col: int32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Intersection {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut uint64_t,
-    pub init_array: [uint64_t; 4],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct garray_T {
-    pub ga_len: ::core::ffi::c_int,
-    pub ga_maxlen: ::core::ffi::c_int,
-    pub ga_itemsize: ::core::ffi::c_int,
-    pub ga_growsize: ::core::ffi::c_int,
-    pub ga_data: *mut ::core::ffi::c_void,
-}
-pub type colnr_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTDamage {
-    pub old: *mut MTNode,
-    pub new: *mut MTNode,
-    pub old_i: ::core::ffi::c_int,
-    pub new_i: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTDamagePair {
-    pub start: MTDamage,
-    pub end: MTDamage,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_ptr_t {
-    pub h: MapHash,
-    pub keys: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_ptr_t_ptr_t {
-    pub set: Set_ptr_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint64_t_MTDamagePair {
-    pub set: Set_uint64_t,
-    pub values: *mut MTDamagePair,
-}
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const MT_LOG2_BRANCH: C2Rust_Unnamed_0 = 5;
 pub const MT_BRANCH_FACTOR: C2Rust_Unnamed_0 = 10;
@@ -281,32 +93,6 @@ pub const kMTMetaSignText: C2Rust_Unnamed_1 = 3;
 pub const kMTMetaSignHL: C2Rust_Unnamed_1 = 2;
 pub const kMTMetaLines: C2Rust_Unnamed_1 = 1;
 pub const kMTMetaInline: C2Rust_Unnamed_1 = 0;
-pub type MetaFilter = *const uint32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MarkTreeIter {
-    pub pos: MTPos,
-    pub lvl: ::core::ffi::c_int,
-    pub x: *mut MTNode,
-    pub i: ::core::ffi::c_int,
-    pub s: [C2Rust_Unnamed_2; 20],
-    pub intersect_idx: size_t,
-    pub intersect_pos: MTPos,
-    pub intersect_pos_x: MTPos,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_2 {
-    pub oldcol: ::core::ffi::c_int,
-    pub i: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTPair {
-    pub start: MTKey,
-    pub end_pos: MTPos,
-    pub end_right_gravity: bool,
-}
 pub type MTDamageMap = Map_uint64_t_MTDamagePair;
 #[derive(Copy, Clone)]
 #[repr(C)]

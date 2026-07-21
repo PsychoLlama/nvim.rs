@@ -1,4 +1,5 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{context_sha256_T, size_t, uint32_t, uint8_t};
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -26,16 +27,6 @@ extern "C" {
         __src: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-}
-pub type size_t = usize;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct context_sha256_T {
-    pub total: [uint32_t; 2],
-    pub state: [uint32_t; 8],
-    pub buffer: [uint8_t; 64],
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -1,6 +1,14 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    cstr_t, int16_t, int32_t, int64_t, mtnode_s, ptr_t, size_t, ssize_t, uint32_t, uint64_t,
+    uint8_t, ColorItem, ColorKey, HlAttrs, HlEntry, HlKind, MHPutStatus, MTDamage, MTDamagePair,
+    MTNode, MapHash, Map_ColorKey_ColorItem, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_String, Map_int_ptr_t, Map_ptr_t_ptr_t,
+    Map_uint32_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int,
+    Map_uint64_t_ptr_t, RgbValue, Set_ColorKey, Set_HlEntry, Set_String, Set_cstr_t, Set_int,
+    Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, String_0,
+};
 extern "C" {
-    pub type mtnode_s;
     fn memset(
         __s: *mut ::core::ffi::c_void,
         __c: ::core::ffi::c_int,
@@ -17,50 +25,6 @@ extern "C" {
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
 }
-pub type size_t = usize;
-pub type int16_t = i16;
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-pub type ssize_t = isize;
-pub type MTNode = mtnode_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTDamage {
-    pub old: *mut MTNode,
-    pub new: *mut MTNode,
-    pub old_i: ::core::ffi::c_int,
-    pub new_i: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MTDamagePair {
-    pub start: MTDamage,
-    pub end: MTDamage,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type RgbValue = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct HlAttrs {
-    pub rgb_ae_attr: int32_t,
-    pub cterm_ae_attr: int32_t,
-    pub rgb_fg_color: RgbValue,
-    pub rgb_bg_color: RgbValue,
-    pub rgb_sp_color: RgbValue,
-    pub cterm_fg_color: int16_t,
-    pub cterm_bg_color: int16_t,
-    pub hl_blend: int32_t,
-    pub url: int32_t,
-}
-pub type HlKind = ::core::ffi::c_uint;
 pub const kHlInvalid: HlKind = 7;
 pub const kHlBlendThrough: HlKind = 6;
 pub const kHlBlend: HlKind = 5;
@@ -69,142 +33,14 @@ pub const kHlTerminal: HlKind = 3;
 pub const kHlSyntax: HlKind = 2;
 pub const kHlUI: HlKind = 1;
 pub const kHlUnknown: HlKind = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct HlEntry {
-    pub attr: HlAttrs,
-    pub kind: HlKind,
-    pub id1: ::core::ffi::c_int,
-    pub id2: ::core::ffi::c_int,
-    pub winid: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ColorKey {
-    pub ns_id: ::core::ffi::c_int,
-    pub syn_id: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ColorItem {
-    pub attr_id: ::core::ffi::c_int,
-    pub link_id: ::core::ffi::c_int,
-    pub version: ::core::ffi::c_int,
-    pub is_default: bool,
-    pub link_global: bool,
-}
-pub type cstr_t = *const ::core::ffi::c_char;
-pub type ptr_t = *mut ::core::ffi::c_void;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MapHash {
-    pub n_buckets: uint32_t,
-    pub size: uint32_t,
-    pub n_occupied: uint32_t,
-    pub upper_bound: uint32_t,
-    pub n_keys: uint32_t,
-    pub keys_capacity: uint32_t,
-    pub hash: *mut uint32_t,
-}
-pub type MHPutStatus = ::core::ffi::c_uint;
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Set_int {
-    pub h: MapHash,
-    pub keys: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_cstr_t {
-    pub h: MapHash,
-    pub keys: *mut cstr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_ptr_t {
-    pub h: MapHash,
-    pub keys: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_uint64_t {
-    pub h: MapHash,
-    pub keys: *mut uint64_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_int64_t {
-    pub h: MapHash,
-    pub keys: *mut int64_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_uint32_t {
-    pub h: MapHash,
-    pub keys: *mut uint32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_String {
-    pub h: MapHash,
-    pub keys: *mut String_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_HlEntry {
-    pub h: MapHash,
-    pub keys: *mut HlEntry,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_ColorKey {
-    pub h: MapHash,
-    pub keys: *mut ColorKey,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Map_int_int {
     pub set: Set_int,
     pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_int_ptr_t {
-    pub set: Set_int,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_cstr_t_ptr_t {
-    pub set: Set_cstr_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_cstr_t_int {
-    pub set: Set_cstr_t,
-    pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_ptr_t_ptr_t {
-    pub set: Set_ptr_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint32_t_ptr_t {
-    pub set: Set_uint32_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint64_t_ptr_t {
-    pub set: Set_uint64_t,
-    pub values: *mut ptr_t,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -217,54 +53,6 @@ pub struct Map_uint64_t_ssize_t {
 pub struct Map_uint64_t_uint64_t {
     pub set: Set_uint64_t,
     pub values: *mut uint64_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint64_t_int {
-    pub set: Set_uint64_t,
-    pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_int64_t_int64_t {
-    pub set: Set_int64_t,
-    pub values: *mut int64_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_int64_t_ptr_t {
-    pub set: Set_int64_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint32_t_uint32_t {
-    pub set: Set_uint32_t,
-    pub values: *mut uint32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_String_int {
-    pub set: Set_String,
-    pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_int_String {
-    pub set: Set_int,
-    pub values: *mut String_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_ColorKey_ColorItem {
-    pub set: Set_ColorKey,
-    pub values: *mut ColorItem,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Map_uint64_t_MTDamagePair {
-    pub set: Set_uint64_t,
-    pub values: *mut MTDamagePair,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

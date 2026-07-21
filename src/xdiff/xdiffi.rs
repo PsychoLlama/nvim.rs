@@ -1,7 +1,11 @@
+pub use crate::src::nvim::types::{
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, chanode_t, chastore_t,
+    find_func_t, mmbuffer_t, mmfile_t, s_chanode, s_chastore, s_mmbuffer, s_mmfile, s_xdchange,
+    s_xdemitcb, s_xdemitconf, s_xdfenv, s_xdfile, s_xpparam, s_xrecord, size_t, xdchange_t,
+    xdemitcb_t, xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t, xpparam_t,
+    xrecord_t, FILE, _IO_FILE,
+};
 extern "C" {
-    pub type _IO_wide_data;
-    pub type _IO_codecvt;
-    pub type _IO_marker;
     fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
     static mut stderr: *mut FILE;
     fn fprintf(
@@ -52,8 +56,6 @@ extern "C" {
         flags: ::core::ffi::c_long,
     ) -> ::core::ffi::c_int;
 }
-pub type __off_t = ::core::ffi::c_long;
-pub type __off64_t = ::core::ffi::c_long;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
@@ -67,179 +69,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct _IO_FILE {
-    pub _flags: ::core::ffi::c_int,
-    pub _IO_read_ptr: *mut ::core::ffi::c_char,
-    pub _IO_read_end: *mut ::core::ffi::c_char,
-    pub _IO_read_base: *mut ::core::ffi::c_char,
-    pub _IO_write_base: *mut ::core::ffi::c_char,
-    pub _IO_write_ptr: *mut ::core::ffi::c_char,
-    pub _IO_write_end: *mut ::core::ffi::c_char,
-    pub _IO_buf_base: *mut ::core::ffi::c_char,
-    pub _IO_buf_end: *mut ::core::ffi::c_char,
-    pub _IO_save_base: *mut ::core::ffi::c_char,
-    pub _IO_backup_base: *mut ::core::ffi::c_char,
-    pub _IO_save_end: *mut ::core::ffi::c_char,
-    pub _markers: *mut _IO_marker,
-    pub _chain: *mut _IO_FILE,
-    pub _fileno: ::core::ffi::c_int,
-    pub _flags2: ::core::ffi::c_int,
-    pub _old_offset: __off_t,
-    pub _cur_column: ::core::ffi::c_ushort,
-    pub _vtable_offset: ::core::ffi::c_schar,
-    pub _shortbuf: [::core::ffi::c_char; 1],
-    pub _lock: *mut ::core::ffi::c_void,
-    pub _offset: __off64_t,
-    pub _codecvt: *mut _IO_codecvt,
-    pub _wide_data: *mut _IO_wide_data,
-    pub _freeres_list: *mut _IO_FILE,
-    pub _freeres_buf: *mut ::core::ffi::c_void,
-    pub _prevchain: *mut *mut _IO_FILE,
-    pub _mode: ::core::ffi::c_int,
-    pub _unused2: [::core::ffi::c_char; 20],
-}
-pub type _IO_lock_t = ();
-pub type FILE = _IO_FILE;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmfile {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmfile_t = s_mmfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmbuffer {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmbuffer_t = s_mmbuffer;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xpparam {
-    pub flags: ::core::ffi::c_ulong,
-    pub anchors: *mut *mut ::core::ffi::c_char,
-    pub anchors_nr: size_t,
-}
-pub type xpparam_t = s_xpparam;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitcb {
-    pub priv_0: *mut ::core::ffi::c_void,
-    pub out_hunk: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            *const ::core::ffi::c_char,
-            ::core::ffi::c_long,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub out_line: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            *mut mmbuffer_t,
-            ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
-}
-pub type xdemitcb_t = s_xdemitcb;
-pub type find_func_t = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_long,
->;
-pub type xdl_emit_hunk_consume_func_t = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitconf {
-    pub ctxlen: ::core::ffi::c_long,
-    pub interhunkctxlen: ::core::ffi::c_long,
-    pub flags: ::core::ffi::c_ulong,
-    pub find_func: find_func_t,
-    pub find_func_priv: *mut ::core::ffi::c_void,
-    pub hunk_func: xdl_emit_hunk_consume_func_t,
-}
-pub type xdemitconf_t = s_xdemitconf;
-pub type xdfenv_t = s_xdfenv;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfenv {
-    pub xdf1: xdfile_t,
-    pub xdf2: xdfile_t,
-}
-pub type xdfile_t = s_xdfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfile {
-    pub rcha: chastore_t,
-    pub nrec: ::core::ffi::c_long,
-    pub hbits: ::core::ffi::c_uint,
-    pub rhash: *mut *mut xrecord_t,
-    pub dstart: ::core::ffi::c_long,
-    pub dend: ::core::ffi::c_long,
-    pub recs: *mut *mut xrecord_t,
-    pub rchg: *mut ::core::ffi::c_char,
-    pub rindex: *mut ::core::ffi::c_long,
-    pub nreff: ::core::ffi::c_long,
-    pub ha: *mut ::core::ffi::c_ulong,
-}
-pub type xrecord_t = s_xrecord;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xrecord {
-    pub next: *mut s_xrecord,
-    pub ptr: *const ::core::ffi::c_char,
-    pub size: ::core::ffi::c_long,
-    pub ha: ::core::ffi::c_ulong,
-}
-pub type chastore_t = s_chastore;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chastore {
-    pub head: *mut chanode_t,
-    pub tail: *mut chanode_t,
-    pub isize: ::core::ffi::c_long,
-    pub nsize: ::core::ffi::c_long,
-    pub ancur: *mut chanode_t,
-    pub sncur: *mut chanode_t,
-    pub scurr: ::core::ffi::c_long,
-}
-pub type chanode_t = s_chanode;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chanode {
-    pub next: *mut s_chanode,
-    pub icurr: ::core::ffi::c_long,
-}
-pub type xdchange_t = s_xdchange;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdchange {
-    pub next: *mut s_xdchange,
-    pub i1: ::core::ffi::c_long,
-    pub i2: ::core::ffi::c_long,
-    pub chg1: ::core::ffi::c_long,
-    pub chg2: ::core::ffi::c_long,
-    pub ignore: ::core::ffi::c_int,
-}
 pub type emit_func_t = Option<
     unsafe extern "C" fn(
         *mut xdfenv_t,

@@ -1,5 +1,12 @@
+pub use crate::src::nvim::types::{
+    find_func_t, int32_t, int64_t, key_value_pair, linenr_T, luaL_Buffer, lua_Integer, lua_Number,
+    lua_State, mmbuffer_t, mmfile_t, object, object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer,
+    s_mmfile, s_xdemitcb, s_xdemitconf, s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t,
+    xdl_emit_hunk_consume_func_t, xpparam_t, Arena, Array, Boolean, Dict, Error, ErrorType,
+    FieldHashfn, Float, Integer, KeySetLink, KeyValuePair, LuaRef, Object, ObjectType,
+    OptionalKeys, String_0,
+};
 extern "C" {
-    pub type lua_State;
     fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
     fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
@@ -76,88 +83,9 @@ extern "C" {
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
 }
-pub type ptrdiff_t = isize;
-pub type size_t = usize;
-pub type lua_Number = ::core::ffi::c_double;
-pub type lua_Integer = ptrdiff_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct luaL_Buffer {
-    pub p: *mut ::core::ffi::c_char,
-    pub lvl: ::core::ffi::c_int,
-    pub L: *mut lua_State,
-    pub buffer: [::core::ffi::c_char; 8192],
-}
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint64_t = u64;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Arena {
-    pub cur_blk: *mut ::core::ffi::c_char,
-    pub pos: size_t,
-    pub size: size_t,
-}
-pub type LuaRef = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Error {
-    pub type_0: ErrorType,
-    pub msg: *mut ::core::ffi::c_char,
-}
-pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type Float = ::core::ffi::c_double;
-pub type Integer = int64_t;
-pub type Boolean = bool;
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -169,19 +97,6 @@ pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
-pub type linenr_T = int32_t;
-pub type OptionalKeys = uint64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeySetLink {
-    pub str: *mut ::core::ffi::c_char,
-    pub ptr_off: size_t,
-    pub type_0: ::core::ffi::c_int,
-    pub opt_index: ::core::ffi::c_int,
-    pub is_hlgroup: bool,
-}
-pub type FieldHashfn =
-    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_xdl_diff {
@@ -199,81 +114,6 @@ pub struct KeyDict_xdl_diff {
     pub ignore_blank_lines: Boolean,
     pub indent_heuristic: Boolean,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmfile {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmfile_t = s_mmfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmbuffer {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmbuffer_t = s_mmbuffer;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xpparam {
-    pub flags: ::core::ffi::c_ulong,
-    pub anchors: *mut *mut ::core::ffi::c_char,
-    pub anchors_nr: size_t,
-}
-pub type xpparam_t = s_xpparam;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitcb {
-    pub priv_0: *mut ::core::ffi::c_void,
-    pub out_hunk: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            *const ::core::ffi::c_char,
-            ::core::ffi::c_long,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub out_line: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            *mut mmbuffer_t,
-            ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
-}
-pub type xdemitcb_t = s_xdemitcb;
-pub type find_func_t = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_long,
->;
-pub type xdl_emit_hunk_consume_func_t = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitconf {
-    pub ctxlen: ::core::ffi::c_long,
-    pub interhunkctxlen: ::core::ffi::c_long,
-    pub flags: ::core::ffi::c_ulong,
-    pub find_func: find_func_t,
-    pub find_func_priv: *mut ::core::ffi::c_void,
-    pub hunk_func: xdl_emit_hunk_consume_func_t,
-}
-pub type xdemitconf_t = s_xdemitconf;
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;
 pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;

@@ -1,4 +1,9 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    cursorentry_T, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
+    Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
+    ObjectType, String_0,
+};
 extern "C" {
     fn strcmp(
         __s1: *const ::core::ffi::c_char,
@@ -42,66 +47,6 @@ extern "C" {
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ui_mode_info_set();
 }
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Arena {
-    pub cur_blk: *mut ::core::ffi::c_char,
-    pub pos: size_t,
-    pub size: size_t,
-}
-pub type LuaRef = ::core::ffi::c_int;
-pub type Boolean = bool;
-pub type Integer = int64_t;
-pub type Float = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -133,25 +78,9 @@ pub const SHAPE_IDX_R: C2Rust_Unnamed_0 = 3;
 pub const SHAPE_IDX_I: C2Rust_Unnamed_0 = 2;
 pub const SHAPE_IDX_V: C2Rust_Unnamed_0 = 1;
 pub const SHAPE_IDX_N: C2Rust_Unnamed_0 = 0;
-pub type CursorShape = ::core::ffi::c_uint;
 pub const SHAPE_VER: CursorShape = 2;
 pub const SHAPE_HOR: CursorShape = 1;
 pub const SHAPE_BLOCK: CursorShape = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cursorentry_T {
-    pub full_name: *mut ::core::ffi::c_char,
-    pub shape: CursorShape,
-    pub mshape: ::core::ffi::c_int,
-    pub percentage: ::core::ffi::c_int,
-    pub blinkwait: ::core::ffi::c_int,
-    pub blinkon: ::core::ffi::c_int,
-    pub blinkoff: ::core::ffi::c_int,
-    pub id: ::core::ffi::c_int,
-    pub id_lm: ::core::ffi::c_int,
-    pub name: *mut ::core::ffi::c_char,
-    pub used_for: ::core::ffi::c_char,
-}
 pub const MODE_CMDLINE: C2Rust_Unnamed_1 = 8;
 pub const MODE_INSERT: C2Rust_Unnamed_1 = 16;
 pub const REPLACE_FLAG: C2Rust_Unnamed_1 = 256;

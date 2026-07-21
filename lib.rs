@@ -217,6 +217,7 @@ pub mod src {
             pub mod tui;
             pub mod ugrid;
         } // mod tui
+        pub mod types;
         pub mod ui;
         pub mod ui_client;
         pub mod ui_compositor;

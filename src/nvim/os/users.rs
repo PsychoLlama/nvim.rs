@@ -1,4 +1,8 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    Direction, LuaRef, __gid_t, __uid_t, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T,
+    scid_T, sctx_T, size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T,
+};
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -33,12 +37,6 @@ extern "C" {
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
-pub type size_t = usize;
-pub type __uid_t = ::core::ffi::c_uint;
-pub type __gid_t = ::core::ffi::c_uint;
-pub type int32_t = i32;
-pub type uint64_t = u64;
-pub type uid_t = __uid_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct passwd {
@@ -50,67 +48,14 @@ pub struct passwd {
     pub pw_dir: *mut ::core::ffi::c_char,
     pub pw_shell: *mut ::core::ffi::c_char,
 }
-pub type uv_uid_t = uid_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct garray_T {
-    pub ga_len: ::core::ffi::c_int,
-    pub ga_maxlen: ::core::ffi::c_int,
-    pub ga_itemsize: ::core::ffi::c_int,
-    pub ga_growsize: ::core::ffi::c_int,
-    pub ga_data: *mut ::core::ffi::c_void,
-}
-pub type linenr_T = int32_t;
-pub type colnr_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct pos_T {
-    pub lnum: linenr_T,
-    pub col: colnr_T,
-    pub coladd: colnr_T,
-}
-pub type LuaRef = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sctx_T {
-    pub sc_sid: scid_T,
-    pub sc_seq: ::core::ffi::c_int,
-    pub sc_lnum: linenr_T,
-    pub sc_chan: uint64_t,
-}
-pub type scid_T = ::core::ffi::c_int;
-pub type Direction = ::core::ffi::c_int;
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
-pub type xp_prefix_T = ::core::ffi::c_uint;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expand_T {
-    pub xp_pattern: *mut ::core::ffi::c_char,
-    pub xp_context: ::core::ffi::c_int,
-    pub xp_pattern_len: size_t,
-    pub xp_prefix: xp_prefix_T,
-    pub xp_arg: *mut ::core::ffi::c_char,
-    pub xp_luaref: LuaRef,
-    pub xp_script_ctx: sctx_T,
-    pub xp_backslash: ::core::ffi::c_int,
-    pub xp_shell: bool,
-    pub xp_numfiles: ::core::ffi::c_int,
-    pub xp_col: ::core::ffi::c_int,
-    pub xp_selected: ::core::ffi::c_int,
-    pub xp_orig: *mut ::core::ffi::c_char,
-    pub xp_files: *mut *mut ::core::ffi::c_char,
-    pub xp_line: *mut ::core::ffi::c_char,
-    pub xp_buf: [::core::ffi::c_char; 256],
-    pub xp_search_dir: Direction,
-    pub xp_pre_incsearch_pos: pos_T,
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {

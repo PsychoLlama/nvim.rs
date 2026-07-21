@@ -1,4 +1,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    argv_callback, multiqueue, queue, size_t, Event, MultiQueue, PutCallback, QUEUE,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -9,33 +12,6 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
 }
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct queue {
-    pub next: *mut queue,
-    pub prev: *mut queue,
-}
-pub type QUEUE = queue;
-pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Event {
-    pub handler: argv_callback,
-    pub argv: [*mut ::core::ffi::c_void; 10],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct multiqueue {
-    pub parent: *mut MultiQueue,
-    pub headtail: QUEUE,
-    pub on_put: PutCallback,
-    pub data: *mut ::core::ffi::c_void,
-    pub size: size_t,
-}
-pub type PutCallback =
-    Option<unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()>;
-pub type MultiQueue = multiqueue;
 pub type MultiQueueItem = multiqueue_item;
 #[derive(Copy, Clone)]
 #[repr(C)]

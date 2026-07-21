@@ -14,6 +14,7 @@
 //! allocation may end there.
 
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+pub use crate::src::nvim::types::{consumed_blk, ArenaMem};
 use core::ffi::{c_char, c_int, c_long, c_void, CStr};
 use core::ptr;
 use core::slice;
@@ -33,14 +34,6 @@ extern "C" {
     fn semsg(fmt: *const c_char, ...) -> bool;
     fn clear_sb_text(all: bool);
 }
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct consumed_blk {
-    pub prev: *mut consumed_blk,
-}
-
-pub type ArenaMem = *mut consumed_blk;
 
 #[derive(Copy, Clone)]
 #[repr(C)]

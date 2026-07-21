@@ -1,4 +1,8 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    int32_t, int64_t, key_extra, linenr_T, scid_T, sctx_T, size_t, ssize_t, uint16_t, uint64_t,
+    uint8_t, uintmax_t, uvarnumber_T, varnumber_T, String_0,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -67,32 +71,6 @@ extern "C" {
     static e_invarg: [::core::ffi::c_char; 0];
     static e_usingsid: [::core::ffi::c_char; 0];
 }
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type uint16_t = u16;
-pub type uint64_t = u64;
-pub type uintmax_t = ::libc::uintmax_t;
-pub type size_t = usize;
-pub type ssize_t = isize;
-pub type linenr_T = int32_t;
-pub type varnumber_T = int64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sctx_T {
-    pub sc_sid: scid_T,
-    pub sc_seq: ::core::ffi::c_int,
-    pub sc_lnum: linenr_T,
-    pub sc_chan: uint64_t,
-}
-pub type scid_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type uvarnumber_T = uint64_t;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;
 pub const STR2NR_NO_OCT: C2Rust_Unnamed = 13;
@@ -103,7 +81,6 @@ pub const STR2NR_HEX: C2Rust_Unnamed = 4;
 pub const STR2NR_OCT: C2Rust_Unnamed = 2;
 pub const STR2NR_BIN: C2Rust_Unnamed = 1;
 pub const STR2NR_DEC: C2Rust_Unnamed = 0;
-pub type key_extra = ::core::ffi::c_uint;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;

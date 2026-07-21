@@ -1,3 +1,11 @@
+pub use crate::src::nvim::types::{
+    iconv_t, size_t, vimconv_T, ParserHighlight, ParserHighlightChunk, ParserInputReader,
+    ParserInputReader_lines as C2Rust_Unnamed_4, ParserLine, ParserLineGetter, ParserPosition,
+    ParserState, ParserStateItem, ParserStateItem_data as C2Rust_Unnamed_0,
+    ParserStateItem_data_expr as C2Rust_Unnamed_1,
+    ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_2,
+    ParserStateItem_type_0 as C2Rust_Unnamed_3, ParserState_stack as C2Rust_Unnamed_5,
+};
 extern "C" {
     fn memcpy(
         __dest: *mut ::core::ffi::c_void,
@@ -19,8 +27,6 @@ extern "C" {
         __function: *const ::core::ffi::c_char,
     ) -> !;
 }
-pub type size_t = usize;
-pub type iconv_t = *mut ::core::ffi::c_void;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const CONV_ICONV: C2Rust_Unnamed = 5;
 pub const CONV_TO_LATIN9: C2Rust_Unnamed = 4;
@@ -28,98 +34,9 @@ pub const CONV_TO_LATIN1: C2Rust_Unnamed = 3;
 pub const CONV_9_TO_UTF8: C2Rust_Unnamed = 2;
 pub const CONV_TO_UTF8: C2Rust_Unnamed = 1;
 pub const CONV_NONE: C2Rust_Unnamed = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct vimconv_T {
-    pub vc_type: ::core::ffi::c_int,
-    pub vc_factor: ::core::ffi::c_int,
-    pub vc_fd: iconv_t,
-    pub vc_fail: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserLine {
-    pub data: *const ::core::ffi::c_char,
-    pub size: size_t,
-    pub allocated: bool,
-}
-pub type ParserLineGetter =
-    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserPosition {
-    pub line: size_t,
-    pub col: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserStateItem {
-    pub type_0: C2Rust_Unnamed_3,
-    pub data: C2Rust_Unnamed_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_0 {
-    pub expr: C2Rust_Unnamed_1,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_1 {
-    pub type_0: C2Rust_Unnamed_2,
-}
-pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const kExprUnknown: C2Rust_Unnamed_2 = 0;
-pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
 pub const kPTopStateParsingExpression: C2Rust_Unnamed_3 = 1;
 pub const kPTopStateParsingCommand: C2Rust_Unnamed_3 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserInputReader {
-    pub get_line: ParserLineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
-    pub lines: C2Rust_Unnamed_4,
-    pub conv: vimconv_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_4 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserLine,
-    pub init_array: [ParserLine; 4],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserHighlightChunk {
-    pub start: ParserPosition,
-    pub end_col: size_t,
-    pub group: *const ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserHighlight {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserHighlightChunk,
-    pub init_array: [ParserHighlightChunk; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserState {
-    pub reader: ParserInputReader,
-    pub pos: ParserPosition,
-    pub stack: C2Rust_Unnamed_5,
-    pub colors: *mut ParserHighlight,
-    pub can_continuate: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_5 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserStateItem,
-    pub init_array: [ParserStateItem; 16],
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[inline(always)]

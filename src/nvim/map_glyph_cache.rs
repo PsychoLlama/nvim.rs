@@ -1,3 +1,6 @@
+pub use crate::src::nvim::types::{
+    size_t, uint32_t, uint8_t, MHPutStatus, MapHash, Set_glyph, String_0,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -21,36 +24,9 @@ extern "C" {
     fn mh_realloc(h: *mut MapHash, n_min_buckets: uint32_t);
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
 }
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MapHash {
-    pub n_buckets: uint32_t,
-    pub size: uint32_t,
-    pub n_occupied: uint32_t,
-    pub upper_bound: uint32_t,
-    pub n_keys: uint32_t,
-    pub keys_capacity: uint32_t,
-    pub hash: *mut uint32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type MHPutStatus = ::core::ffi::c_uint;
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_glyph {
-    pub h: MapHash,
-    pub keys: *mut ::core::ffi::c_char,
-}
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
     ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
         *b"uint32_t mh_put_glyph(Set_glyph *, String, MHPutStatus *)\0",

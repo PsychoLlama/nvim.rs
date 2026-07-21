@@ -1,4 +1,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    size_t, ssize_t, Arena, StringBuilder, String_0, TerminfoEntry, TPVAR,
+};
 extern "C" {
     pub type unibi_term;
     fn memset(
@@ -44,8 +47,6 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn kv_transstr(str: *mut StringBuilder, s: *const ::core::ffi::c_char, untab: bool) -> size_t;
 }
-pub type size_t = usize;
-pub type ssize_t = isize;
 pub type unibi_boolean = ::core::ffi::c_uint;
 pub const unibi_boolean_end_: unibi_boolean = 45;
 pub const unibi_return_does_clr_eol: unibi_boolean = 44;
@@ -552,13 +553,6 @@ pub const unibi_carriage_return: unibi_string = 88;
 pub const unibi_bell: unibi_string = 87;
 pub const unibi_back_tab: unibi_string = 86;
 pub const unibi_string_begin_: unibi_string = 85;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Arena {
-    pub cur_blk: *mut ::core::ffi::c_char,
-    pub pos: size_t,
-    pub size: size_t,
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
@@ -572,19 +566,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct StringBuilder {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const kTermCount: C2Rust_Unnamed_0 = 49;
 pub const kTerm_set_underline_style: C2Rust_Unnamed_0 = 48;
@@ -636,25 +617,6 @@ pub const kTerm_clr_eol: C2Rust_Unnamed_0 = 3;
 pub const kTerm_clear_screen: C2Rust_Unnamed_0 = 2;
 pub const kTerm_change_scroll_region: C2Rust_Unnamed_0 = 1;
 pub const kTerm_carriage_return: C2Rust_Unnamed_0 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TerminfoEntry {
-    pub bce: bool,
-    pub has_Tc_or_RGB: bool,
-    pub Su: bool,
-    pub max_colors: ::core::ffi::c_int,
-    pub lines: ::core::ffi::c_int,
-    pub columns: ::core::ffi::c_int,
-    pub defs: [*const ::core::ffi::c_char; 49],
-    pub keys: [[*const ::core::ffi::c_char; 2]; 16],
-    pub f_keys: [*const ::core::ffi::c_char; 63],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TPVAR {
-    pub num: ::core::ffi::c_long,
-    pub string: *mut ::core::ffi::c_char,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TPSTACK {

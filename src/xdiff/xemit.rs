@@ -1,3 +1,8 @@
+pub use crate::src::nvim::types::{
+    chanode_t, chastore_t, find_func_t, mmbuffer_t, s_chanode, s_chastore, s_mmbuffer, s_xdchange,
+    s_xdemitcb, s_xdemitconf, s_xdfenv, s_xdfile, s_xrecord, size_t, xdchange_t, xdemitcb_t,
+    xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t, xrecord_t,
+};
 extern "C" {
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xdl_emit_diffrec(
@@ -17,129 +22,6 @@ extern "C" {
         ecb: *mut xdemitcb_t,
     ) -> ::core::ffi::c_int;
 }
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmbuffer {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmbuffer_t = s_mmbuffer;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitcb {
-    pub priv_0: *mut ::core::ffi::c_void,
-    pub out_hunk: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            *const ::core::ffi::c_char,
-            ::core::ffi::c_long,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub out_line: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            *mut mmbuffer_t,
-            ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
-}
-pub type xdemitcb_t = s_xdemitcb;
-pub type find_func_t = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_char,
-        ::core::ffi::c_long,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_long,
->;
-pub type xdl_emit_hunk_consume_func_t = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitconf {
-    pub ctxlen: ::core::ffi::c_long,
-    pub interhunkctxlen: ::core::ffi::c_long,
-    pub flags: ::core::ffi::c_ulong,
-    pub find_func: find_func_t,
-    pub find_func_priv: *mut ::core::ffi::c_void,
-    pub hunk_func: xdl_emit_hunk_consume_func_t,
-}
-pub type xdemitconf_t = s_xdemitconf;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chanode {
-    pub next: *mut s_chanode,
-    pub icurr: ::core::ffi::c_long,
-}
-pub type chanode_t = s_chanode;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chastore {
-    pub head: *mut chanode_t,
-    pub tail: *mut chanode_t,
-    pub isize: ::core::ffi::c_long,
-    pub nsize: ::core::ffi::c_long,
-    pub ancur: *mut chanode_t,
-    pub sncur: *mut chanode_t,
-    pub scurr: ::core::ffi::c_long,
-}
-pub type chastore_t = s_chastore;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xrecord {
-    pub next: *mut s_xrecord,
-    pub ptr: *const ::core::ffi::c_char,
-    pub size: ::core::ffi::c_long,
-    pub ha: ::core::ffi::c_ulong,
-}
-pub type xrecord_t = s_xrecord;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfile {
-    pub rcha: chastore_t,
-    pub nrec: ::core::ffi::c_long,
-    pub hbits: ::core::ffi::c_uint,
-    pub rhash: *mut *mut xrecord_t,
-    pub dstart: ::core::ffi::c_long,
-    pub dend: ::core::ffi::c_long,
-    pub recs: *mut *mut xrecord_t,
-    pub rchg: *mut ::core::ffi::c_char,
-    pub rindex: *mut ::core::ffi::c_long,
-    pub nreff: ::core::ffi::c_long,
-    pub ha: *mut ::core::ffi::c_ulong,
-}
-pub type xdfile_t = s_xdfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfenv {
-    pub xdf1: xdfile_t,
-    pub xdf2: xdfile_t,
-}
-pub type xdfenv_t = s_xdfenv;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdchange {
-    pub next: *mut s_xdchange,
-    pub i1: ::core::ffi::c_long,
-    pub i2: ::core::ffi::c_long,
-    pub chg1: ::core::ffi::c_long,
-    pub chg2: ::core::ffi::c_long,
-    pub ignore: ::core::ffi::c_int,
-}
-pub type xdchange_t = s_xdchange;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct func_line {

@@ -1,3 +1,8 @@
+pub use crate::src::nvim::types::{
+    chanode_t, chastore_t, mmbuffer_t, mmfile_t, s_chanode, s_chastore, s_mmbuffer, s_mmfile,
+    s_xdemitcb, s_xdfenv, s_xdfile, s_xpparam, s_xrecord, size_t, xdemitcb_t, xdfenv_t, xdfile_t,
+    xpparam_t, xrecord_t,
+};
 extern "C" {
     fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
     fn memcpy(
@@ -39,104 +44,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmfile {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmfile_t = s_mmfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmbuffer {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmbuffer_t = s_mmbuffer;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xpparam {
-    pub flags: ::core::ffi::c_ulong,
-    pub anchors: *mut *mut ::core::ffi::c_char,
-    pub anchors_nr: size_t,
-}
-pub type xpparam_t = s_xpparam;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdemitcb {
-    pub priv_0: *mut ::core::ffi::c_void,
-    pub out_hunk: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            ::core::ffi::c_long,
-            *const ::core::ffi::c_char,
-            ::core::ffi::c_long,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub out_line: Option<
-        unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            *mut mmbuffer_t,
-            ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
-}
-pub type xdemitcb_t = s_xdemitcb;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chanode {
-    pub next: *mut s_chanode,
-    pub icurr: ::core::ffi::c_long,
-}
-pub type chanode_t = s_chanode;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chastore {
-    pub head: *mut chanode_t,
-    pub tail: *mut chanode_t,
-    pub isize: ::core::ffi::c_long,
-    pub nsize: ::core::ffi::c_long,
-    pub ancur: *mut chanode_t,
-    pub sncur: *mut chanode_t,
-    pub scurr: ::core::ffi::c_long,
-}
-pub type chastore_t = s_chastore;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xrecord {
-    pub next: *mut s_xrecord,
-    pub ptr: *const ::core::ffi::c_char,
-    pub size: ::core::ffi::c_long,
-    pub ha: ::core::ffi::c_ulong,
-}
-pub type xrecord_t = s_xrecord;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfile {
-    pub rcha: chastore_t,
-    pub nrec: ::core::ffi::c_long,
-    pub hbits: ::core::ffi::c_uint,
-    pub rhash: *mut *mut xrecord_t,
-    pub dstart: ::core::ffi::c_long,
-    pub dend: ::core::ffi::c_long,
-    pub recs: *mut *mut xrecord_t,
-    pub rchg: *mut ::core::ffi::c_char,
-    pub rindex: *mut ::core::ffi::c_long,
-    pub nreff: ::core::ffi::c_long,
-    pub ha: *mut ::core::ffi::c_ulong,
-}
-pub type xdfile_t = s_xdfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfenv {
-    pub xdf1: xdfile_t,
-    pub xdf2: xdfile_t,
-}
-pub type xdfenv_t = s_xdfenv;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;

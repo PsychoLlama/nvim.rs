@@ -1,3 +1,7 @@
+pub use crate::src::nvim::types::{
+    chanode_t, chastore_t, mmfile_t, s_chanode, s_chastore, s_mmfile, s_xdfenv, s_xdfile,
+    s_xpparam, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
+};
 extern "C" {
     fn memset(
         __s: *mut ::core::ffi::c_void,
@@ -36,73 +40,6 @@ extern "C" {
         xe: *mut xdfenv_t,
     ) -> ::core::ffi::c_int;
 }
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmfile {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmfile_t = s_mmfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xpparam {
-    pub flags: ::core::ffi::c_ulong,
-    pub anchors: *mut *mut ::core::ffi::c_char,
-    pub anchors_nr: size_t,
-}
-pub type xpparam_t = s_xpparam;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chanode {
-    pub next: *mut s_chanode,
-    pub icurr: ::core::ffi::c_long,
-}
-pub type chanode_t = s_chanode;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_chastore {
-    pub head: *mut chanode_t,
-    pub tail: *mut chanode_t,
-    pub isize: ::core::ffi::c_long,
-    pub nsize: ::core::ffi::c_long,
-    pub ancur: *mut chanode_t,
-    pub sncur: *mut chanode_t,
-    pub scurr: ::core::ffi::c_long,
-}
-pub type chastore_t = s_chastore;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xrecord {
-    pub next: *mut s_xrecord,
-    pub ptr: *const ::core::ffi::c_char,
-    pub size: ::core::ffi::c_long,
-    pub ha: ::core::ffi::c_ulong,
-}
-pub type xrecord_t = s_xrecord;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfile {
-    pub rcha: chastore_t,
-    pub nrec: ::core::ffi::c_long,
-    pub hbits: ::core::ffi::c_uint,
-    pub rhash: *mut *mut xrecord_t,
-    pub dstart: ::core::ffi::c_long,
-    pub dend: ::core::ffi::c_long,
-    pub recs: *mut *mut xrecord_t,
-    pub rchg: *mut ::core::ffi::c_char,
-    pub rindex: *mut ::core::ffi::c_long,
-    pub nreff: ::core::ffi::c_long,
-    pub ha: *mut ::core::ffi::c_ulong,
-}
-pub type xdfile_t = s_xdfile;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdfenv {
-    pub xdf1: xdfile_t,
-    pub xdf2: xdfile_t,
-}
-pub type xdfenv_t = s_xdfenv;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct region {

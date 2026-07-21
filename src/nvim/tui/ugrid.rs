@@ -1,3 +1,4 @@
+pub use crate::src::nvim::types::{int32_t, sattr_T, schar_T, size_t, uint32_t, UCell, UGrid};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -13,26 +14,6 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-}
-pub type size_t = usize;
-pub type int32_t = i32;
-pub type uint32_t = u32;
-pub type schar_T = uint32_t;
-pub type sattr_T = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct UCell {
-    pub data: schar_T,
-    pub attr: sattr_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct UGrid {
-    pub row: ::core::ffi::c_int,
-    pub col: ::core::ffi::c_int,
-    pub width: ::core::ffi::c_int,
-    pub height: ::core::ffi::c_int,
-    pub cells: *mut *mut UCell,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 52] = unsafe {
     ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(

@@ -1,8 +1,12 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    TermKey, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
+    TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType,
+    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_0, TerminfoEntry, _IO_codecvt,
+    _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t, __time_t,
+    __uid_t, cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios, FILE, _IO_FILE,
+};
 extern "C" {
-    pub type _IO_wide_data;
-    pub type _IO_codecvt;
-    pub type _IO_marker;
     static mut stderr: *mut FILE;
     fn fprintf(
         __stream: *mut FILE,
@@ -32,55 +36,12 @@ extern "C" {
         __function: *const ::core::ffi::c_char,
     ) -> !;
 }
-pub type size_t = usize;
 pub type __dev_t = ::core::ffi::c_ulong;
-pub type __uid_t = ::core::ffi::c_uint;
-pub type __gid_t = ::core::ffi::c_uint;
 pub type __ino_t = ::core::ffi::c_ulong;
-pub type __mode_t = ::core::ffi::c_uint;
 pub type __nlink_t = ::core::ffi::c_ulong;
-pub type __off_t = ::core::ffi::c_long;
-pub type __off64_t = ::core::ffi::c_long;
-pub type __time_t = ::core::ffi::c_long;
 pub type __blksize_t = ::core::ffi::c_long;
 pub type __blkcnt_t = ::core::ffi::c_long;
 pub type __syscall_slong_t = ::core::ffi::c_long;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct _IO_FILE {
-    pub _flags: ::core::ffi::c_int,
-    pub _IO_read_ptr: *mut ::core::ffi::c_char,
-    pub _IO_read_end: *mut ::core::ffi::c_char,
-    pub _IO_read_base: *mut ::core::ffi::c_char,
-    pub _IO_write_base: *mut ::core::ffi::c_char,
-    pub _IO_write_ptr: *mut ::core::ffi::c_char,
-    pub _IO_write_end: *mut ::core::ffi::c_char,
-    pub _IO_buf_base: *mut ::core::ffi::c_char,
-    pub _IO_buf_end: *mut ::core::ffi::c_char,
-    pub _IO_save_base: *mut ::core::ffi::c_char,
-    pub _IO_backup_base: *mut ::core::ffi::c_char,
-    pub _IO_save_end: *mut ::core::ffi::c_char,
-    pub _markers: *mut _IO_marker,
-    pub _chain: *mut _IO_FILE,
-    pub _fileno: ::core::ffi::c_int,
-    pub _flags2: ::core::ffi::c_int,
-    pub _old_offset: __off_t,
-    pub _cur_column: ::core::ffi::c_ushort,
-    pub _vtable_offset: ::core::ffi::c_schar,
-    pub _shortbuf: [::core::ffi::c_char; 1],
-    pub _lock: *mut ::core::ffi::c_void,
-    pub _offset: __off64_t,
-    pub _codecvt: *mut _IO_codecvt,
-    pub _wide_data: *mut _IO_wide_data,
-    pub _freeres_list: *mut _IO_FILE,
-    pub _freeres_buf: *mut ::core::ffi::c_void,
-    pub _prevchain: *mut *mut _IO_FILE,
-    pub _mode: ::core::ffi::c_int,
-    pub _unused2: [::core::ffi::c_char; 20],
-}
-pub type _IO_lock_t = ();
-pub type FILE = _IO_FILE;
-pub type ssize_t = isize;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct timespec {
@@ -105,21 +66,6 @@ pub struct stat {
     pub st_mtim: timespec,
     pub st_ctim: timespec,
     pub __glibc_reserved: [__syscall_slong_t; 3],
-}
-pub type cc_t = ::core::ffi::c_uchar;
-pub type speed_t = ::core::ffi::c_uint;
-pub type tcflag_t = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct termios {
-    pub c_iflag: tcflag_t,
-    pub c_oflag: tcflag_t,
-    pub c_cflag: tcflag_t,
-    pub c_lflag: tcflag_t,
-    pub c_line: cc_t,
-    pub c_cc: [cc_t; 32],
-    pub c_ispeed: speed_t,
-    pub c_ospeed: speed_t,
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const kTermCount: C2Rust_Unnamed = 49;
@@ -190,82 +136,10 @@ pub const kTermKey_clear: TerminfoKey = 3;
 pub const kTermKey_btab: TerminfoKey = 2;
 pub const kTermKey_beg: TerminfoKey = 1;
 pub const kTermKey_backspace: TerminfoKey = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TerminfoEntry {
-    pub bce: bool,
-    pub has_Tc_or_RGB: bool,
-    pub Su: bool,
-    pub max_colors: ::core::ffi::c_int,
-    pub lines: ::core::ffi::c_int,
-    pub columns: ::core::ffi::c_int,
-    pub defs: [*const ::core::ffi::c_char; 49],
-    pub keys: [[*const ::core::ffi::c_char; 2]; 16],
-    pub f_keys: [*const ::core::ffi::c_char; 63],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermKey {
-    pub fd: ::core::ffi::c_int,
-    pub flags: ::core::ffi::c_int,
-    pub canonflags: ::core::ffi::c_int,
-    pub buffer: *mut ::core::ffi::c_uchar,
-    pub buffstart: size_t,
-    pub buffcount: size_t,
-    pub buffsize: size_t,
-    pub hightide: size_t,
-    pub restore_termios: termios,
-    pub restore_termios_valid: ::core::ffi::c_char,
-    pub ti_getstr_hook: Option<TermKey_Terminfo_Getstr_Hook>,
-    pub ti_getstr_hook_data: *mut ::core::ffi::c_void,
-    pub waittime: ::core::ffi::c_int,
-    pub is_closed: ::core::ffi::c_char,
-    pub is_started: ::core::ffi::c_char,
-    pub nkeynames: ::core::ffi::c_int,
-    pub keynames: *mut *const ::core::ffi::c_char,
-    pub c0: [keyinfo; 32],
-    pub drivers: *mut TermKeyDriverNode,
-    pub method: C2Rust_Unnamed_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_0 {
-    pub emit_codepoint:
-        Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>,
-    pub peekkey_simple: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut TermKeyKey,
-            ::core::ffi::c_int,
-            *mut size_t,
-        ) -> TermKeyResult,
-    >,
-    pub peekkey_mouse:
-        Option<unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult>,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermKeyKey {
-    pub type_0: TermKeyType,
-    pub code: C2Rust_Unnamed_1,
-    pub modifiers: ::core::ffi::c_int,
-    pub event: TermKeyEvent,
-    pub utf8: [::core::ffi::c_char; 7],
-}
-pub type TermKeyEvent = ::core::ffi::c_uint;
 pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
 pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
 pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_1 {
-    pub codepoint: ::core::ffi::c_int,
-    pub number: ::core::ffi::c_int,
-    pub sym: TermKeySym,
-    pub mouse: [::core::ffi::c_char; 4],
-}
-pub type TermKeySym = ::core::ffi::c_int;
 pub const TERMKEY_N_SYMS: TermKeySym = 60;
 pub const TERMKEY_SYM_KPEQUALS: TermKeySym = 59;
 pub const TERMKEY_SYM_KPPERIOD: TermKeySym = 58;
@@ -328,7 +202,6 @@ pub const TERMKEY_SYM_TAB: TermKeySym = 2;
 pub const TERMKEY_SYM_BACKSPACE: TermKeySym = 1;
 pub const TERMKEY_SYM_NONE: TermKeySym = 0;
 pub const TERMKEY_SYM_UNKNOWN: TermKeySym = -1;
-pub type TermKeyType = ::core::ffi::c_int;
 pub const TERMKEY_TYPE_UNKNOWN_CSI: TermKeyType = -1;
 pub const TERMKEY_TYPE_APC: TermKeyType = 8;
 pub const TERMKEY_TYPE_OSC: TermKeyType = 7;
@@ -339,53 +212,11 @@ pub const TERMKEY_TYPE_MOUSE: TermKeyType = 3;
 pub const TERMKEY_TYPE_KEYSYM: TermKeyType = 2;
 pub const TERMKEY_TYPE_FUNCTION: TermKeyType = 1;
 pub const TERMKEY_TYPE_UNICODE: TermKeyType = 0;
-pub type TermKeyResult = ::core::ffi::c_uint;
 pub const TERMKEY_RES_ERROR: TermKeyResult = 4;
 pub const TERMKEY_RES_AGAIN: TermKeyResult = 3;
 pub const TERMKEY_RES_EOF: TermKeyResult = 2;
 pub const TERMKEY_RES_KEY: TermKeyResult = 1;
 pub const TERMKEY_RES_NONE: TermKeyResult = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermKeyDriverNode {
-    pub driver: *mut TermKeyDriver,
-    pub info: *mut ::core::ffi::c_void,
-    pub next: *mut TermKeyDriverNode,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermKeyDriver {
-    pub name: *const ::core::ffi::c_char,
-    pub new_driver:
-        Option<unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void>,
-    pub free_driver: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>,
-    pub start_driver:
-        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
-    pub stop_driver:
-        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
-    pub peekkey: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut ::core::ffi::c_void,
-            *mut TermKeyKey,
-            ::core::ffi::c_int,
-            *mut size_t,
-        ) -> TermKeyResult,
-    >,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct keyinfo {
-    pub type_0: TermKeyType,
-    pub sym: TermKeySym,
-    pub modifier_mask: ::core::ffi::c_int,
-    pub modifier_set: ::core::ffi::c_int,
-}
-pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    *const ::core::ffi::c_char,
-    *mut ::core::ffi::c_void,
-) -> *const ::core::ffi::c_char;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const TERMKEY_KEYMOD_CTRL: C2Rust_Unnamed_2 = 4;
 pub const TERMKEY_KEYMOD_ALT: C2Rust_Unnamed_2 = 2;

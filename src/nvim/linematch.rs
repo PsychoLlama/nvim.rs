@@ -1,3 +1,4 @@
+pub use crate::src::nvim::types::{int32_t, linenr_T, mmfile_t, s_mmfile, size_t};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -14,16 +15,6 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
 }
-pub type size_t = usize;
-pub type int32_t = i32;
-pub type linenr_T = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_mmfile {
-    pub ptr: *mut ::core::ffi::c_char,
-    pub size: ::core::ffi::c_int,
-}
-pub type mmfile_t = s_mmfile;
 pub type diffcmppath_T = diffcmppath_S;
 #[derive(Copy, Clone)]
 #[repr(C)]

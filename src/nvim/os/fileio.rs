@@ -1,3 +1,6 @@
+pub use crate::src::nvim::types::{
+    int32_t, iovec, ptrdiff_t, size_t, uint64_t, FileDescriptor, TriState,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -52,16 +55,6 @@ extern "C" {
     fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn os_file_mkdir(fname: *mut ::core::ffi::c_char, mode: int32_t) -> ::core::ffi::c_int;
 }
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct iovec {
-    pub iov_base: *mut ::core::ffi::c_void,
-    pub iov_len: size_t,
-}
-pub type ptrdiff_t = isize;
-pub type int32_t = i32;
-pub type uint64_t = u64;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
 pub const UV_ENOEXEC: C2Rust_Unnamed = -8;
@@ -149,18 +142,6 @@ pub const UV_EADDRNOTAVAIL: C2Rust_Unnamed = -99;
 pub const UV_EADDRINUSE: C2Rust_Unnamed = -98;
 pub const UV_EACCES: C2Rust_Unnamed = -13;
 pub const UV_E2BIG: C2Rust_Unnamed = -7;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct FileDescriptor {
-    pub fd: ::core::ffi::c_int,
-    pub buffer: *mut ::core::ffi::c_char,
-    pub read_pos: *mut ::core::ffi::c_char,
-    pub write_pos: *mut ::core::ffi::c_char,
-    pub wr: bool,
-    pub eof: bool,
-    pub non_blocking: bool,
-    pub bytes_read: uint64_t,
-}
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const kFileMkDir: C2Rust_Unnamed_0 = 256;
 pub const kFileNonBlocking: C2Rust_Unnamed_0 = 128;
@@ -171,7 +152,6 @@ pub const kFileNoSymlink: C2Rust_Unnamed_0 = 8;
 pub const kFileWriteOnly: C2Rust_Unnamed_0 = 4;
 pub const kFileCreate: C2Rust_Unnamed_0 = 2;
 pub const kFileReadOnly: C2Rust_Unnamed_0 = 1;
-pub type TriState = ::core::ffi::c_int;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

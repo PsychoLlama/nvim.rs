@@ -1,8 +1,17 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    VimVarIndex, XDGVarType, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list,
+    __gnuc_va_list, __off64_t, __off_t, __pthread_internal_list, __pthread_list_t,
+    __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, int16_t, int32_t, int64_t,
+    nvim_stats_s, pthread_mutex_t, pthread_rwlock_t, size_t, tm, uint64_t, uv__io_cb, uv__io_s,
+    uv__io_t, uv__queue, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t,
+    uv_close_cb, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type,
+    uv_loop_s, uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2,
+    uv_loop_t, uv_mutex_t, uv_rwlock_t, uv_signal_cb, uv_signal_s,
+    uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
+    va_list, FILE, _IO_FILE,
+};
 extern "C" {
-    pub type _IO_wide_data;
-    pub type _IO_codecvt;
-    pub type _IO_marker;
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
         __file: *const ::core::ffi::c_char,
@@ -113,230 +122,6 @@ extern "C" {
         __size: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
 }
-pub type __builtin_va_list = [__va_list_tag; 1];
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct __va_list_tag {
-    pub gp_offset: ::core::ffi::c_uint,
-    pub fp_offset: ::core::ffi::c_uint,
-    pub overflow_arg_area: *mut ::core::ffi::c_void,
-    pub reg_save_area: *mut ::core::ffi::c_void,
-}
-pub type __off_t = ::core::ffi::c_long;
-pub type __off64_t = ::core::ffi::c_long;
-pub type int16_t = i16;
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint64_t = u64;
-pub type __gnuc_va_list = __builtin_va_list;
-pub type va_list = __gnuc_va_list;
-pub type size_t = usize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct _IO_FILE {
-    pub _flags: ::core::ffi::c_int,
-    pub _IO_read_ptr: *mut ::core::ffi::c_char,
-    pub _IO_read_end: *mut ::core::ffi::c_char,
-    pub _IO_read_base: *mut ::core::ffi::c_char,
-    pub _IO_write_base: *mut ::core::ffi::c_char,
-    pub _IO_write_ptr: *mut ::core::ffi::c_char,
-    pub _IO_write_end: *mut ::core::ffi::c_char,
-    pub _IO_buf_base: *mut ::core::ffi::c_char,
-    pub _IO_buf_end: *mut ::core::ffi::c_char,
-    pub _IO_save_base: *mut ::core::ffi::c_char,
-    pub _IO_backup_base: *mut ::core::ffi::c_char,
-    pub _IO_save_end: *mut ::core::ffi::c_char,
-    pub _markers: *mut _IO_marker,
-    pub _chain: *mut _IO_FILE,
-    pub _fileno: ::core::ffi::c_int,
-    pub _flags2: ::core::ffi::c_int,
-    pub _old_offset: __off_t,
-    pub _cur_column: ::core::ffi::c_ushort,
-    pub _vtable_offset: ::core::ffi::c_schar,
-    pub _shortbuf: [::core::ffi::c_char; 1],
-    pub _lock: *mut ::core::ffi::c_void,
-    pub _offset: __off64_t,
-    pub _codecvt: *mut _IO_codecvt,
-    pub _wide_data: *mut _IO_wide_data,
-    pub _freeres_list: *mut _IO_FILE,
-    pub _freeres_buf: *mut ::core::ffi::c_void,
-    pub _prevchain: *mut *mut _IO_FILE,
-    pub _mode: ::core::ffi::c_int,
-    pub _unused2: [::core::ffi::c_char; 20],
-}
-pub type _IO_lock_t = ();
-pub type FILE = _IO_FILE;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct __pthread_internal_list {
-    pub __prev: *mut __pthread_internal_list,
-    pub __next: *mut __pthread_internal_list,
-}
-pub type __pthread_list_t = __pthread_internal_list;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct __pthread_mutex_s {
-    pub __lock: ::core::ffi::c_int,
-    pub __count: ::core::ffi::c_uint,
-    pub __owner: ::core::ffi::c_int,
-    pub __nusers: ::core::ffi::c_uint,
-    pub __kind: ::core::ffi::c_int,
-    pub __spins: ::core::ffi::c_short,
-    pub __elision: ::core::ffi::c_short,
-    pub __list: __pthread_list_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct __pthread_rwlock_arch_t {
-    pub __readers: ::core::ffi::c_uint,
-    pub __writers: ::core::ffi::c_uint,
-    pub __wrphase_futex: ::core::ffi::c_uint,
-    pub __writers_futex: ::core::ffi::c_uint,
-    pub __pad3: ::core::ffi::c_uint,
-    pub __pad4: ::core::ffi::c_uint,
-    pub __cur_writer: ::core::ffi::c_int,
-    pub __shared: ::core::ffi::c_int,
-    pub __rwelision: ::core::ffi::c_schar,
-    pub __pad1: [::core::ffi::c_uchar; 7],
-    pub __pad2: ::core::ffi::c_ulong,
-    pub __flags: ::core::ffi::c_uint,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union pthread_mutex_t {
-    pub __data: __pthread_mutex_s,
-    pub __size: [::core::ffi::c_char; 40],
-    pub __align: ::core::ffi::c_long,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union pthread_rwlock_t {
-    pub __data: __pthread_rwlock_arch_t,
-    pub __size: [::core::ffi::c_char; 56],
-    pub __align: ::core::ffi::c_long,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct tm {
-    pub tm_sec: ::core::ffi::c_int,
-    pub tm_min: ::core::ffi::c_int,
-    pub tm_hour: ::core::ffi::c_int,
-    pub tm_mday: ::core::ffi::c_int,
-    pub tm_mon: ::core::ffi::c_int,
-    pub tm_year: ::core::ffi::c_int,
-    pub tm_wday: ::core::ffi::c_int,
-    pub tm_yday: ::core::ffi::c_int,
-    pub tm_isdst: ::core::ffi::c_int,
-    pub tm_gmtoff: ::core::ffi::c_long,
-    pub tm_zone: *const ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv__queue {
-    pub next: *mut uv__queue,
-    pub prev: *mut uv__queue,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_loop_s {
-    pub data: *mut ::core::ffi::c_void,
-    pub active_handles: ::core::ffi::c_uint,
-    pub handle_queue: uv__queue,
-    pub active_reqs: C2Rust_Unnamed_4,
-    pub internal_fields: *mut ::core::ffi::c_void,
-    pub stop_flag: ::core::ffi::c_uint,
-    pub flags: ::core::ffi::c_ulong,
-    pub backend_fd: ::core::ffi::c_int,
-    pub pending_queue: uv__queue,
-    pub watcher_queue: uv__queue,
-    pub watchers: *mut *mut uv__io_t,
-    pub nwatchers: ::core::ffi::c_uint,
-    pub nfds: ::core::ffi::c_uint,
-    pub wq: uv__queue,
-    pub wq_mutex: uv_mutex_t,
-    pub wq_async: uv_async_t,
-    pub cloexec_lock: uv_rwlock_t,
-    pub closing_handles: *mut uv_handle_t,
-    pub process_handles: uv__queue,
-    pub prepare_handles: uv__queue,
-    pub check_handles: uv__queue,
-    pub idle_handles: uv__queue,
-    pub async_handles: uv__queue,
-    pub async_unused: Option<unsafe extern "C" fn() -> ()>,
-    pub async_io_watcher: uv__io_t,
-    pub async_wfd: ::core::ffi::c_int,
-    pub timer_heap: C2Rust_Unnamed_2,
-    pub timer_counter: uint64_t,
-    pub time: uint64_t,
-    pub signal_pipefd: [::core::ffi::c_int; 2],
-    pub signal_io_watcher: uv__io_t,
-    pub child_watcher: uv_signal_t,
-    pub emfile_fd: ::core::ffi::c_int,
-    pub inotify_read_watcher: uv__io_t,
-    pub inotify_watchers: *mut ::core::ffi::c_void,
-    pub inotify_fd: ::core::ffi::c_int,
-}
-pub type uv__io_t = uv__io_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv__io_s {
-    pub cb: uv__io_cb,
-    pub pending_queue: uv__queue,
-    pub watcher_queue: uv__queue,
-    pub pevents: ::core::ffi::c_uint,
-    pub events: ::core::ffi::c_uint,
-    pub fd: ::core::ffi::c_int,
-}
-pub type uv__io_cb =
-    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
-pub type uv_signal_t = uv_signal_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_signal_s {
-    pub data: *mut ::core::ffi::c_void,
-    pub loop_0: *mut uv_loop_t,
-    pub type_0: uv_handle_type,
-    pub close_cb: uv_close_cb,
-    pub handle_queue: uv__queue,
-    pub u: C2Rust_Unnamed_1,
-    pub next_closing: *mut uv_handle_t,
-    pub flags: ::core::ffi::c_uint,
-    pub signal_cb: uv_signal_cb,
-    pub signum: ::core::ffi::c_int,
-    pub tree_entry: C2Rust_Unnamed,
-    pub caught_signals: ::core::ffi::c_uint,
-    pub dispatched_signals: ::core::ffi::c_uint,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed {
-    pub rbe_left: *mut uv_signal_s,
-    pub rbe_right: *mut uv_signal_s,
-    pub rbe_parent: *mut uv_signal_s,
-    pub rbe_color: ::core::ffi::c_int,
-}
-pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
-pub type uv_handle_t = uv_handle_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_handle_s {
-    pub data: *mut ::core::ffi::c_void,
-    pub loop_0: *mut uv_loop_t,
-    pub type_0: uv_handle_type,
-    pub close_cb: uv_close_cb,
-    pub handle_queue: uv__queue,
-    pub u: C2Rust_Unnamed_0,
-    pub next_closing: *mut uv_handle_t,
-    pub flags: ::core::ffi::c_uint,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_0 {
-    pub fd: ::core::ffi::c_int,
-    pub reserved: [*mut ::core::ffi::c_void; 4],
-}
-pub type uv_close_cb = Option<unsafe extern "C" fn(*mut uv_handle_t) -> ()>;
-pub type uv_handle_type = ::core::ffi::c_uint;
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;
@@ -356,57 +141,12 @@ pub const UV_FS_EVENT: uv_handle_type = 3;
 pub const UV_CHECK: uv_handle_type = 2;
 pub const UV_ASYNC: uv_handle_type = 1;
 pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub type uv_loop_t = uv_loop_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_1 {
-    pub fd: ::core::ffi::c_int,
-    pub reserved: [*mut ::core::ffi::c_void; 4],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_2 {
-    pub min: *mut ::core::ffi::c_void,
-    pub nelts: ::core::ffi::c_uint,
-}
-pub type uv_rwlock_t = pthread_rwlock_t;
-pub type uv_async_t = uv_async_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_async_s {
-    pub data: *mut ::core::ffi::c_void,
-    pub loop_0: *mut uv_loop_t,
-    pub type_0: uv_handle_type,
-    pub close_cb: uv_close_cb,
-    pub handle_queue: uv__queue,
-    pub u: C2Rust_Unnamed_3,
-    pub next_closing: *mut uv_handle_t,
-    pub flags: ::core::ffi::c_uint,
-    pub async_cb: uv_async_cb,
-    pub queue: uv__queue,
-    pub pending: ::core::ffi::c_int,
-}
-pub type uv_async_cb = Option<unsafe extern "C" fn(*mut uv_async_t) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_3 {
-    pub fd: ::core::ffi::c_int,
-    pub reserved: [*mut ::core::ffi::c_void; 4],
-}
-pub type uv_mutex_t = pthread_mutex_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_4 {
-    pub unused: *mut ::core::ffi::c_void,
-    pub count: ::core::ffi::c_uint,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_timeval64_t {
     pub tv_sec: int64_t,
     pub tv_usec: int32_t,
 }
-pub type VimVarIndex = ::core::ffi::c_uint;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -513,14 +253,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct nvim_stats_s {
-    pub fsync: int64_t,
-    pub redraw: int64_t,
-    pub log_skip: int16_t,
-}
-pub type XDGVarType = ::core::ffi::c_int;
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

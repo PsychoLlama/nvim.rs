@@ -1,4 +1,17 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
+    funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
+    int32_t, int64_t, int8_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
+    listwatch_T, packer_buffer_t, partial_S, partial_T, proftime_T, ptrdiff_t, queue, scid_T,
+    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint32_t, uint64_t, uint8_t,
+    varnumber_T, BoolVarValue, Integer, ListReaderState, LuaRef, MPConvPartialStage, MPConvStack,
+    MPConvStackVal, MPConvStackValType, MPConvStackVal_data as C2Rust_Unnamed_0,
+    MPConvStackVal_data_a as C2Rust_Unnamed_1, MPConvStackVal_data_d as C2Rust_Unnamed_4,
+    MPConvStackVal_data_l as C2Rust_Unnamed_3, MPConvStackVal_data_p as C2Rust_Unnamed_2,
+    MessagePackType, PackerBuffer, PackerBufferFlush, ScopeDictDictItem, ScopeType,
+    SpecialVarValue, String_0, VarLockStatus, VarType, QUEUE,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -80,163 +93,15 @@ extern "C" {
     ) -> size_t;
     static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
 }
-pub type int8_t = i8;
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-pub type ptrdiff_t = isize;
-pub type size_t = usize;
-pub type LuaRef = ::core::ffi::c_int;
-pub type float_T = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type Integer = int64_t;
-pub type proftime_T = uint64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct garray_T {
-    pub ga_len: ::core::ffi::c_int,
-    pub ga_maxlen: ::core::ffi::c_int,
-    pub ga_itemsize: ::core::ffi::c_int,
-    pub ga_growsize: ::core::ffi::c_int,
-    pub ga_data: *mut ::core::ffi::c_void,
-}
-pub type linenr_T = int32_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashtab_T {
-    pub ht_mask: hash_T,
-    pub ht_used: size_t,
-    pub ht_filled: size_t,
-    pub ht_changed: ::core::ffi::c_int,
-    pub ht_locked: ::core::ffi::c_int,
-    pub ht_array: *mut hashitem_T,
-    pub ht_smallarray: [hashitem_T; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashitem_T {
-    pub hi_hash: hash_T,
-    pub hi_key: *mut ::core::ffi::c_char,
-}
-pub type hash_T = size_t;
-pub type partial_T = partial_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct partial_S {
-    pub pt_refcount: ::core::ffi::c_int,
-    pub pt_copyID: ::core::ffi::c_int,
-    pub pt_name: *mut ::core::ffi::c_char,
-    pub pt_func: *mut ufunc_T,
-    pub pt_auto: bool,
-    pub pt_argc: ::core::ffi::c_int,
-    pub pt_argv: *mut typval_T,
-    pub pt_dict: *mut dict_T,
-}
-pub type dict_T = dictvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct dictvar_S {
-    pub dv_lock: VarLockStatus,
-    pub dv_scope: ScopeType,
-    pub dv_refcount: ::core::ffi::c_int,
-    pub dv_copyID: ::core::ffi::c_int,
-    pub dv_hashtab: hashtab_T,
-    pub dv_copydict: *mut dict_T,
-    pub dv_used_next: *mut dict_T,
-    pub dv_used_prev: *mut dict_T,
-    pub watchers: QUEUE,
-    pub lua_table_ref: LuaRef,
-}
-pub type QUEUE = queue;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct queue {
-    pub next: *mut queue,
-    pub prev: *mut queue,
-}
-pub type ScopeType = ::core::ffi::c_uint;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
-pub type VarLockStatus = ::core::ffi::c_uint;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct typval_T {
-    pub v_type: VarType,
-    pub v_lock: VarLockStatus,
-    pub vval: typval_vval_union,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union typval_vval_union {
-    pub v_number: varnumber_T,
-    pub v_bool: BoolVarValue,
-    pub v_special: SpecialVarValue,
-    pub v_float: float_T,
-    pub v_string: *mut ::core::ffi::c_char,
-    pub v_list: *mut list_T,
-    pub v_dict: *mut dict_T,
-    pub v_partial: *mut partial_T,
-    pub v_blob: *mut blob_T,
-}
-pub type blob_T = blobvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct blobvar_S {
-    pub bv_ga: garray_T,
-    pub bv_refcount: ::core::ffi::c_int,
-    pub bv_lock: VarLockStatus,
-}
-pub type list_T = listvar_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listvar_S {
-    pub lv_first: *mut listitem_T,
-    pub lv_last: *mut listitem_T,
-    pub lv_watch: *mut listwatch_T,
-    pub lv_idx_item: *mut listitem_T,
-    pub lv_copylist: *mut list_T,
-    pub lv_used_next: *mut list_T,
-    pub lv_used_prev: *mut list_T,
-    pub lv_refcount: ::core::ffi::c_int,
-    pub lv_len: ::core::ffi::c_int,
-    pub lv_idx: ::core::ffi::c_int,
-    pub lv_copyID: ::core::ffi::c_int,
-    pub lv_lock: VarLockStatus,
-    pub lua_table_ref: LuaRef,
-}
-pub type listitem_T = listitem_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listitem_S {
-    pub li_next: *mut listitem_T,
-    pub li_prev: *mut listitem_T,
-    pub li_tv: typval_T,
-}
-pub type listwatch_T = listwatch_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct listwatch_S {
-    pub lw_item: *mut listitem_T,
-    pub lw_next: *mut listwatch_T,
-}
-pub type SpecialVarValue = ::core::ffi::c_uint;
 pub const kSpecialVarNull: SpecialVarValue = 0;
-pub type BoolVarValue = ::core::ffi::c_uint;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub type varnumber_T = int64_t;
-pub type VarType = ::core::ffi::c_uint;
 pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
@@ -248,95 +113,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub type ufunc_T = ufunc_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ufunc_S {
-    pub uf_varargs: ::core::ffi::c_int,
-    pub uf_flags: ::core::ffi::c_int,
-    pub uf_calls: ::core::ffi::c_int,
-    pub uf_cleared: bool,
-    pub uf_args: garray_T,
-    pub uf_def_args: garray_T,
-    pub uf_lines: garray_T,
-    pub uf_profiling: ::core::ffi::c_int,
-    pub uf_prof_initialized: ::core::ffi::c_int,
-    pub uf_luaref: LuaRef,
-    pub uf_tm_count: ::core::ffi::c_int,
-    pub uf_tm_total: proftime_T,
-    pub uf_tm_self: proftime_T,
-    pub uf_tm_children: proftime_T,
-    pub uf_tml_count: *mut ::core::ffi::c_int,
-    pub uf_tml_total: *mut proftime_T,
-    pub uf_tml_self: *mut proftime_T,
-    pub uf_tml_start: proftime_T,
-    pub uf_tml_children: proftime_T,
-    pub uf_tml_wait: proftime_T,
-    pub uf_tml_idx: ::core::ffi::c_int,
-    pub uf_tml_execed: ::core::ffi::c_int,
-    pub uf_script_ctx: sctx_T,
-    pub uf_refcount: ::core::ffi::c_int,
-    pub uf_scoped: *mut funccall_T,
-    pub uf_name_exp: *mut ::core::ffi::c_char,
-    pub uf_namelen: size_t,
-    pub uf_name: [::core::ffi::c_char; 0],
-}
-pub type funccall_T = funccall_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct funccall_S {
-    pub fc_func: *mut ufunc_T,
-    pub fc_linenr: ::core::ffi::c_int,
-    pub fc_returned: ::core::ffi::c_int,
-    pub fc_fixvar: [C2Rust_Unnamed; 12],
-    pub fc_l_vars: dict_T,
-    pub fc_l_vars_var: ScopeDictDictItem,
-    pub fc_l_avars: dict_T,
-    pub fc_l_avars_var: ScopeDictDictItem,
-    pub fc_l_varlist: list_T,
-    pub fc_l_listitems: [listitem_T; 20],
-    pub fc_rettv: *mut typval_T,
-    pub fc_breakpoint: linenr_T,
-    pub fc_dbg_tick: ::core::ffi::c_int,
-    pub fc_level: ::core::ffi::c_int,
-    pub fc_defer: garray_T,
-    pub fc_prof_child: proftime_T,
-    pub fc_caller: *mut funccall_T,
-    pub fc_refcount: ::core::ffi::c_int,
-    pub fc_copyID: ::core::ffi::c_int,
-    pub fc_ufuncs: garray_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ScopeDictDictItem {
-    pub di_tv: typval_T,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 1],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed {
-    pub di_tv: typval_T,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 21],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sctx_T {
-    pub sc_sid: scid_T,
-    pub sc_seq: ::core::ffi::c_int,
-    pub sc_lnum: linenr_T,
-    pub sc_chan: uint64_t,
-}
-pub type scid_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct dictitem_T {
-    pub di_tv: typval_T,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 0],
-}
-pub type MessagePackType = ::core::ffi::c_uint;
 pub const kMPExt: MessagePackType = 7;
 pub const kMPMap: MessagePackType = 6;
 pub const kMPArray: MessagePackType = 5;
@@ -345,87 +121,14 @@ pub const kMPFloat: MessagePackType = 3;
 pub const kMPInteger: MessagePackType = 2;
 pub const kMPBoolean: MessagePackType = 1;
 pub const kMPNil: MessagePackType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct packer_buffer_t {
-    pub startptr: *mut ::core::ffi::c_char,
-    pub ptr: *mut ::core::ffi::c_char,
-    pub endptr: *mut ::core::ffi::c_char,
-    pub anydata: *mut ::core::ffi::c_void,
-    pub anyint: int64_t,
-    pub packer_flush: PackerBufferFlush,
-}
-pub type PackerBufferFlush = Option<unsafe extern "C" fn(*mut PackerBuffer) -> ()>;
-pub type PackerBuffer = packer_buffer_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MPConvStackVal {
-    pub type_0: MPConvStackValType,
-    pub tv: *mut typval_T,
-    pub saved_copyID: ::core::ffi::c_int,
-    pub data: C2Rust_Unnamed_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_0 {
-    pub d: C2Rust_Unnamed_4,
-    pub l: C2Rust_Unnamed_3,
-    pub p: C2Rust_Unnamed_2,
-    pub a: C2Rust_Unnamed_1,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_1 {
-    pub arg: *mut typval_T,
-    pub argv: *mut typval_T,
-    pub todo: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_2 {
-    pub stage: MPConvPartialStage,
-    pub pt: *mut partial_T,
-}
-pub type MPConvPartialStage = ::core::ffi::c_uint;
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;
 pub const kMPConvPartialArgs: MPConvPartialStage = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_3 {
-    pub list: *mut list_T,
-    pub li: *mut listitem_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_4 {
-    pub dict: *mut dict_T,
-    pub dictp: *mut *mut dict_T,
-    pub hi: *mut hashitem_T,
-    pub todo: size_t,
-}
-pub type MPConvStackValType = ::core::ffi::c_uint;
 pub const kMPConvPartialList: MPConvStackValType = 4;
 pub const kMPConvPartial: MPConvStackValType = 3;
 pub const kMPConvPairs: MPConvStackValType = 2;
 pub const kMPConvList: MPConvStackValType = 1;
 pub const kMPConvDict: MPConvStackValType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MPConvStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut MPConvStackVal,
-    pub init_array: [MPConvStackVal; 8],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ListReaderState {
-    pub list: *const list_T,
-    pub li: *const listitem_T,
-    pub offset: size_t,
-    pub li_length: size_t,
-}
 pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
 pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

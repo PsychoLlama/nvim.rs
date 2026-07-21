@@ -1,4 +1,15 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    consumed_blk, int32_t, int64_t, key_value_pair, mpack_data_t, mpack_node_s, mpack_node_t,
+    mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
+    mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
+    mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, object,
+    object_data as C2Rust_Unnamed_1, sattr_T, schar_T, size_t, ssize_t, uint32_t, uint64_t,
+    AdditionalData, AdditionalDataBuilder, ApiDispatchWrapper, Arena, ArenaMem, Array, Boolean,
+    Dict, Error, ErrorType, FieldHashfn, Float, GridLineEvent, Integer, KeySetLink, KeyValuePair,
+    LuaRef, MessageType, MsgpackRpcRequestHandler, Object, ObjectType, OptKeySet, OptionalKeys,
+    StringArray, String_0, UIClientHandler,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -65,38 +76,10 @@ extern "C" {
     ) -> Object;
     fn ui_client_event_grid_line(args: Array) -> !;
 }
-pub type size_t = usize;
-pub type ssize_t = isize;
-pub type int32_t = i32;
-pub type int64_t = i64;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct consumed_blk {
-    pub prev: *mut consumed_blk,
-}
-pub type ArenaMem = *mut consumed_blk;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Arena {
-    pub cur_blk: *mut ::core::ffi::c_char,
-    pub pos: size_t,
-    pub size: size_t,
-}
-pub type mpack_uint32_t = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_value_s {
-    pub lo: mpack_uint32_t,
-    pub hi: mpack_uint32_t,
-}
-pub type mpack_value_t = mpack_value_s;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
 pub const MPACK_EOF: C2Rust_Unnamed = 1;
 pub const MPACK_OK: C2Rust_Unnamed = 0;
-pub type mpack_token_type_t = ::core::ffi::c_uint;
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
@@ -108,105 +91,9 @@ pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_token_s {
-    pub type_0: mpack_token_type_t,
-    pub length: mpack_uint32_t,
-    pub data: C2Rust_Unnamed_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_0 {
-    pub value: mpack_value_t,
-    pub chunk_ptr: *const ::core::ffi::c_char,
-    pub ext_type: ::core::ffi::c_int,
-}
-pub type mpack_token_t = mpack_token_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_tokbuf_s {
-    pub pending: [::core::ffi::c_char; 9],
-    pub pending_tok: mpack_token_t,
-    pub ppos: size_t,
-    pub plen: size_t,
-    pub passthrough: mpack_uint32_t,
-}
-pub type mpack_tokbuf_t = mpack_tokbuf_s;
-pub type mpack_sintmax_t = ::core::ffi::c_longlong;
-pub type mpack_uintmax_t = ::core::ffi::c_ulonglong;
-pub type schar_T = uint32_t;
-pub type sattr_T = int32_t;
-pub type LuaRef = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MsgpackRpcRequestHandler {
-    pub name: *const ::core::ffi::c_char,
-    pub fn_0: ApiDispatchWrapper,
-    pub fast: bool,
-    pub ret_alloc: bool,
-}
-pub type ApiDispatchWrapper =
-    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Error {
-    pub type_0: ErrorType,
-    pub msg: *mut ::core::ffi::c_char,
-}
-pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed_1,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_1 {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-pub type Float = ::core::ffi::c_double;
-pub type Integer = int64_t;
-pub type Boolean = bool;
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -218,62 +105,13 @@ pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct AdditionalData {
-    pub nitems: uint32_t,
-    pub nbytes: uint32_t,
-    pub data: [::core::ffi::c_char; 0],
-}
-pub type MessageType = ::core::ffi::c_int;
 pub const kMessageTypeRedrawEvent: MessageType = 3;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;
 pub const kMessageTypeRequest: MessageType = 0;
 pub const kMessageTypeUnknown: MessageType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct StringArray {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut String_0,
-}
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_int;
 pub const kUnpackTypeStringArray: C2Rust_Unnamed_2 = -1;
-pub type OptionalKeys = uint64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct OptKeySet {
-    pub is_set_: OptionalKeys,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeySetLink {
-    pub str: *mut ::core::ffi::c_char,
-    pub ptr_off: size_t,
-    pub type_0: ::core::ffi::c_int,
-    pub opt_index: ::core::ffi::c_int,
-    pub is_hlgroup: bool,
-}
-pub type FieldHashfn =
-    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct GridLineEvent {
-    pub args: [::core::ffi::c_int; 3],
-    pub icell: ::core::ffi::c_int,
-    pub ncells: ::core::ffi::c_int,
-    pub coloff: ::core::ffi::c_int,
-    pub cur_attr: ::core::ffi::c_int,
-    pub clear_width: ::core::ffi::c_int,
-    pub wrap: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct UIClientHandler {
-    pub name: *const ::core::ffi::c_char,
-    pub fn_0: Option<unsafe extern "C" fn(Array) -> ()>,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Unpacker {
@@ -297,45 +135,9 @@ pub struct Unpacker {
     pub grid_line_event: GridLineEvent,
     pub has_grid_line_event: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_parser_t {
-    pub data: mpack_data_t,
-    pub size: mpack_uint32_t,
-    pub capacity: mpack_uint32_t,
-    pub status: ::core::ffi::c_int,
-    pub exiting: ::core::ffi::c_int,
-    pub tokbuf: mpack_tokbuf_t,
-    pub items: [mpack_node_t; 33],
-}
-pub type mpack_node_t = mpack_node_s;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct mpack_node_s {
-    pub tok: mpack_token_t,
-    pub pos: size_t,
-    pub key_visited: ::core::ffi::c_int,
-    pub data: [mpack_data_t; 2],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union mpack_data_t {
-    pub p: *mut ::core::ffi::c_void,
-    pub u: mpack_uintmax_t,
-    pub i: mpack_sintmax_t,
-    pub d: ::core::ffi::c_double,
-}
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_int;
 pub const MPACK_NOMEM: C2Rust_Unnamed_3 = 3;
 pub const MPACK_EXCEPTION: C2Rust_Unnamed_3 = -1;
-pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct AdditionalDataBuilder {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),

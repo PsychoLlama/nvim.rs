@@ -1,3 +1,8 @@
+pub use crate::src::nvim::types::{
+    handle_T, int64_t, int8_t, key_value_pair, object, object_data as C2Rust_Unnamed,
+    packer_buffer_t, ptrdiff_t, size_t, uint32_t, uint64_t, Array, Boolean, Dict, Float, Integer,
+    KeyValuePair, LuaRef, Object, ObjectType, PackerBuffer, PackerBufferFlush, String_0,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -16,63 +21,6 @@ extern "C" {
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn api_free_luaref(ref_0: LuaRef);
 }
-pub type ptrdiff_t = isize;
-pub type size_t = usize;
-pub type int8_t = i8;
-pub type int64_t = i64;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
-pub type handle_T = ::core::ffi::c_int;
-pub type LuaRef = ::core::ffi::c_int;
-pub type Boolean = bool;
-pub type Integer = int64_t;
-pub type Float = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: C2Rust_Unnamed,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dict {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut KeyValuePair,
-}
-pub type KeyValuePair = key_value_pair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct key_value_pair {
-    pub key: String_0,
-    pub value: Object,
-}
-pub type Object = object;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Array {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-}
-pub type ObjectType = ::core::ffi::c_uint;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -84,18 +32,6 @@ pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct packer_buffer_t {
-    pub startptr: *mut ::core::ffi::c_char,
-    pub ptr: *mut ::core::ffi::c_char,
-    pub endptr: *mut ::core::ffi::c_char,
-    pub anydata: *mut ::core::ffi::c_void,
-    pub anyint: int64_t,
-    pub packer_flush: PackerBufferFlush,
-}
-pub type PackerBufferFlush = Option<unsafe extern "C" fn(*mut PackerBuffer) -> ()>;
-pub type PackerBuffer = packer_buffer_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ContainerStackItem {

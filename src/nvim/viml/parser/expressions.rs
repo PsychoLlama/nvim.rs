@@ -1,4 +1,22 @@
 use crate::src::nvim::global_cell::GlobalCell;
+pub use crate::src::nvim::types::{
+    expr_ast_node, expr_ast_node_data as C2Rust_Unnamed_21,
+    expr_ast_node_data_ass as C2Rust_Unnamed_22, expr_ast_node_data_cmp as C2Rust_Unnamed_28,
+    expr_ast_node_data_env as C2Rust_Unnamed_23, expr_ast_node_data_fig as C2Rust_Unnamed_31,
+    expr_ast_node_data_fig_type_guesses as C2Rust_Unnamed_32,
+    expr_ast_node_data_flt as C2Rust_Unnamed_26, expr_ast_node_data_num as C2Rust_Unnamed_27,
+    expr_ast_node_data_opt as C2Rust_Unnamed_24, expr_ast_node_data_reg as C2Rust_Unnamed_33,
+    expr_ast_node_data_str as C2Rust_Unnamed_25, expr_ast_node_data_ter as C2Rust_Unnamed_29,
+    expr_ast_node_data_var as C2Rust_Unnamed_30, float_T, iconv_t, int64_t, size_t, uint64_t,
+    uint8_t, uvarnumber_T, varnumber_T, vimconv_T, ExprAST, ExprASTError, ExprASTNode,
+    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
+    ExprParserFlags, ExprVarScope, ParserHighlight, ParserHighlightChunk, ParserInputReader,
+    ParserInputReader_lines as C2Rust_Unnamed_5, ParserLine, ParserLineGetter, ParserPosition,
+    ParserState, ParserStateItem, ParserStateItem_data as C2Rust_Unnamed_1,
+    ParserStateItem_data_expr as C2Rust_Unnamed_2,
+    ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
+    ParserStateItem_type_0 as C2Rust_Unnamed_4, ParserState_stack as C2Rust_Unnamed_6,
+};
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -70,13 +88,6 @@ extern "C" {
     fn viml_parser_get_remaining_line(pstate: *mut ParserState, ret_pline: *mut ParserLine)
         -> bool;
 }
-pub type size_t = usize;
-pub type int64_t = i64;
-pub type uint8_t = u8;
-pub type uint64_t = u64;
-pub type float_T = ::core::ffi::c_double;
-pub type varnumber_T = int64_t;
-pub type uvarnumber_T = uint64_t;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;
 pub const STR2NR_NO_OCT: C2Rust_Unnamed = 13;
@@ -87,105 +98,14 @@ pub const STR2NR_HEX: C2Rust_Unnamed = 4;
 pub const STR2NR_OCT: C2Rust_Unnamed = 2;
 pub const STR2NR_BIN: C2Rust_Unnamed = 1;
 pub const STR2NR_DEC: C2Rust_Unnamed = 0;
-pub type iconv_t = *mut ::core::ffi::c_void;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct vimconv_T {
-    pub vc_type: ::core::ffi::c_int,
-    pub vc_factor: ::core::ffi::c_int,
-    pub vc_fd: iconv_t,
-    pub vc_fail: bool,
-}
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const FSK_SIMPLIFY: C2Rust_Unnamed_0 = 8;
 pub const FSK_IN_STRING: C2Rust_Unnamed_0 = 4;
 pub const FSK_KEEP_X_KEY: C2Rust_Unnamed_0 = 2;
 pub const FSK_KEYCODE: C2Rust_Unnamed_0 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserLine {
-    pub data: *const ::core::ffi::c_char,
-    pub size: size_t,
-    pub allocated: bool,
-}
-pub type ParserLineGetter =
-    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserPosition {
-    pub line: size_t,
-    pub col: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserStateItem {
-    pub type_0: C2Rust_Unnamed_4,
-    pub data: C2Rust_Unnamed_1,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_1 {
-    pub expr: C2Rust_Unnamed_2,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_2 {
-    pub type_0: C2Rust_Unnamed_3,
-}
-pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
 pub const kExprUnknown: C2Rust_Unnamed_3 = 0;
-pub type C2Rust_Unnamed_4 = ::core::ffi::c_uint;
 pub const kPTopStateParsingExpression: C2Rust_Unnamed_4 = 1;
 pub const kPTopStateParsingCommand: C2Rust_Unnamed_4 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserInputReader {
-    pub get_line: ParserLineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
-    pub lines: C2Rust_Unnamed_5,
-    pub conv: vimconv_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_5 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserLine,
-    pub init_array: [ParserLine; 4],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserHighlightChunk {
-    pub start: ParserPosition,
-    pub end_col: size_t,
-    pub group: *const ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserHighlight {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserHighlightChunk,
-    pub init_array: [ParserHighlightChunk; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserState {
-    pub reader: ParserInputReader,
-    pub pos: ParserPosition,
-    pub stack: C2Rust_Unnamed_6,
-    pub colors: *mut ParserHighlight,
-    pub can_continuate: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_6 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserStateItem,
-    pub init_array: [ParserStateItem; 16],
-}
-pub type ExprCaseCompareStrategy = ::core::ffi::c_uint;
 pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
 pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;
 pub const kCCStrategyUseOption: ExprCaseCompareStrategy = 0;
@@ -217,22 +137,18 @@ pub const kExprLexEOC: LexExprTokenType = 3;
 pub const kExprLexSpacing: LexExprTokenType = 2;
 pub const kExprLexMissing: LexExprTokenType = 1;
 pub const kExprLexInvalid: LexExprTokenType = 0;
-pub type ExprComparisonType = ::core::ffi::c_uint;
 pub const kExprCmpIdentical: ExprComparisonType = 4;
 pub const kExprCmpGreaterOrEqual: ExprComparisonType = 3;
 pub const kExprCmpGreater: ExprComparisonType = 2;
 pub const kExprCmpMatches: ExprComparisonType = 1;
 pub const kExprCmpEqual: ExprComparisonType = 0;
-pub type ExprOptScope = ::core::ffi::c_uint;
 pub const kExprOptScopeLocal: ExprOptScope = 108;
 pub const kExprOptScopeGlobal: ExprOptScope = 103;
 pub const kExprOptScopeUnspecified: ExprOptScope = 0;
-pub type ExprAssignmentType = ::core::ffi::c_uint;
 pub const kExprAsgnConcat: ExprAssignmentType = 3;
 pub const kExprAsgnSubtract: ExprAssignmentType = 2;
 pub const kExprAsgnAdd: ExprAssignmentType = 1;
 pub const kExprAsgnPlain: ExprAssignmentType = 0;
-pub type ExprVarScope = ::core::ffi::c_uint;
 pub const kExprVarScopeArguments: ExprVarScope = 97;
 pub const kExprVarScopeLocal: ExprVarScope = 108;
 pub const kExprVarScopeTabpage: ExprVarScope = 116;
@@ -338,7 +254,6 @@ pub const kELFlagIsNotCmp: C2Rust_Unnamed_20 = 8;
 pub const kELFlagAllowFloat: C2Rust_Unnamed_20 = 4;
 pub const kELFlagForbidScope: C2Rust_Unnamed_20 = 2;
 pub const kELFlagPeek: C2Rust_Unnamed_20 = 1;
-pub type ExprASTNodeType = ::core::ffi::c_uint;
 pub const kExprNodeAssignment: ExprASTNodeType = 38;
 pub const kExprNodeEnvironment: ExprASTNodeType = 37;
 pub const kExprNodeOption: ExprASTNodeType = 36;
@@ -378,120 +293,9 @@ pub const kExprNodeTernaryValue: ExprASTNodeType = 3;
 pub const kExprNodeTernary: ExprASTNodeType = 2;
 pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node {
-    pub type_0: ExprASTNodeType,
-    pub children: *mut ExprASTNode,
-    pub next: *mut ExprASTNode,
-    pub start: ParserPosition,
-    pub len: size_t,
-    pub data: C2Rust_Unnamed_21,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_21 {
-    pub reg: C2Rust_Unnamed_33,
-    pub fig: C2Rust_Unnamed_31,
-    pub var: C2Rust_Unnamed_30,
-    pub ter: C2Rust_Unnamed_29,
-    pub cmp: C2Rust_Unnamed_28,
-    pub num: C2Rust_Unnamed_27,
-    pub flt: C2Rust_Unnamed_26,
-    pub str: C2Rust_Unnamed_25,
-    pub opt: C2Rust_Unnamed_24,
-    pub env: C2Rust_Unnamed_23,
-    pub ass: C2Rust_Unnamed_22,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_22 {
-    pub type_0: ExprAssignmentType,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_23 {
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_24 {
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
-    pub scope: ExprOptScope,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_25 {
-    pub value: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_26 {
-    pub value: float_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_27 {
-    pub value: uvarnumber_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_28 {
-    pub type_0: ExprComparisonType,
-    pub ccs: ExprCaseCompareStrategy,
-    pub inv: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_29 {
-    pub got_colon: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_30 {
-    pub scope: ExprVarScope,
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_31 {
-    pub type_guesses: C2Rust_Unnamed_32,
-    pub opening_hl_idx: size_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_32 {
-    pub allow_dict: bool,
-    pub allow_lambda: bool,
-    pub allow_ident: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_33 {
-    pub name: ::core::ffi::c_int,
-}
-pub type ExprASTNode = expr_ast_node;
-pub type ExprParserFlags = ::core::ffi::c_uint;
 pub const kExprFlagsParseLet: ExprParserFlags = 4;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const kExprFlagsMulti: ExprParserFlags = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ExprASTError {
-    pub msg: *const ::core::ffi::c_char,
-    pub arg: *const ::core::ffi::c_char,
-    pub arg_len: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ExprAST {
-    pub err: ExprASTError,
-    pub root: *mut ExprASTNode,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ExprASTStack {
