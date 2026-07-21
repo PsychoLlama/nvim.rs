@@ -1,5 +1,6 @@
 {
   "internal_exports": 5585,
+  "warnings": 490,
   "files": {
     "src/cjson/fpconv.rs": {"no_mangle": 3, "static_mut": 1, "unsafe": 8},
     "src/cjson/lua_cjson.rs": {"lines": 2747, "no_mangle": 3, "unsafe": 60},
