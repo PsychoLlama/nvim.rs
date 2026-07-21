@@ -92,7 +92,7 @@
     "src/nvim/help.rs": {"lines": 4667, "no_mangle": 11, "unsafe": 24},
     "src/nvim/highlight.rs": {"lines": 4828, "no_mangle": 28, "unsafe": 48},
     "src/nvim/highlight_group.rs": {"lines": 10966, "no_mangle": 35, "unsafe": 53},
-    "src/nvim/indent.rs": {"lines": 5752, "no_mangle": 36, "unsafe": 56},
+    "src/nvim/indent.rs": {"lines": 5688, "no_mangle": 36, "unsafe": 56},
     "src/nvim/indent_c.rs": {"lines": 6009, "no_mangle": 9, "unsafe": 65},
     "src/nvim/input.rs": {"no_mangle": 3, "unsafe": 3},
     "src/nvim/insexpand.rs": {"lines": 10980, "no_mangle": 78, "unsafe": 226},

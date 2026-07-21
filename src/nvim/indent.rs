@@ -3,12 +3,6 @@ extern "C" {
     pub type terminal;
     pub type regprog;
     pub type qf_info_S;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
     fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn strtol(
         __nptr: *const ::core::ffi::c_char,
@@ -3624,18 +3618,7 @@ pub unsafe extern "C" fn tabstop_fromto(
     } else {
         ts_arg
     };
-    '_c2rust_label: {
-        if ts != 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"ts != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                223 as ::core::ffi::c_uint,
-                b"void tabstop_fromto(colnr_T, colnr_T, int, const colnr_T *, int *, int *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(ts != 0 as ::core::ffi::c_int);
     if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         let mut tabs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let initspc: ::core::ffi::c_int = ts - start_col as ::core::ffi::c_int % ts;
@@ -3838,18 +3821,7 @@ pub unsafe extern "C" fn indent_size_ts(
     mut ts: OptInt,
     mut vts: *mut colnr_T,
 ) -> ::core::ffi::c_int {
-    '_c2rust_label: {
-        if char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"char2cells(' ') == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                414 as ::core::ffi::c_uint,
-                b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int);
     let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tabstop_width: ::core::ffi::c_int = 0;
     let mut next_tab_vcol: ::core::ffi::c_int = 0;
@@ -3865,18 +3837,7 @@ pub unsafe extern "C" fn indent_size_ts(
             let c2rust_fresh1 = cur_tabstop;
             cur_tabstop = cur_tabstop.offset(1);
             vcol += *c2rust_fresh1 as ::core::ffi::c_int;
-            '_c2rust_label_0: {
-                if cur_vcol < vcol {
-                } else {
-                    __assert_fail(
-                        b"cur_vcol < vcol\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        430 as ::core::ffi::c_uint,
-                        b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            assert!(cur_vcol < vcol);
             loop {
                 let c2rust_fresh2 = ptr;
                 ptr = ptr.offset(1);
@@ -3897,18 +3858,7 @@ pub unsafe extern "C" fn indent_size_ts(
         tabstop_width = *last_tabstop as ::core::ffi::c_int;
         next_tab_vcol = vcol + tabstop_width;
     }
-    '_c2rust_label_1: {
-        if tabstop_width != 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"tabstop_width != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                448 as ::core::ffi::c_uint,
-                b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(tabstop_width != 0 as ::core::ffi::c_int);
     loop {
         let c2rust_fresh3 = ptr;
         ptr = ptr.offset(1);
@@ -4072,17 +4022,7 @@ pub unsafe extern "C" fn set_indent(
             );
             abort();
         }
-        '_c2rust_label: {
-            if newline_size >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"newline_size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    601 as ::core::ffi::c_uint,
-                    b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(newline_size >= 0 as ::core::ffi::c_int);
         newline = xmalloc(newline_size as size_t) as *mut ::core::ffi::c_char;
         todo = size - ind_done;
         ind_len = orig_char_len + todo;
@@ -4102,17 +4042,7 @@ pub unsafe extern "C" fn set_indent(
         }
     } else {
         todo = size;
-        '_c2rust_label_0: {
-            if ind_len + line_len >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    624 as ::core::ffi::c_uint,
-                    b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(ind_len + line_len >= 0 as ::core::ffi::c_int);
         let mut newline_size_0: size_t = 0;
         let (c2rust_result_2, c2rust_overflowed_2) =
             (ind_len as i128).overflowing_add(line_len as i128);
@@ -4384,102 +4314,118 @@ pub unsafe extern "C" fn get_breakindent_win(
     mut wp: *mut win_T,
     mut line: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    static prev_indent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static prev_ts: GlobalCell<OptInt> = GlobalCell::new(0 as OptInt);
-    static prev_vts: GlobalCell<*mut colnr_T> = GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
-    static prev_fnum: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static prev_line: GlobalCell<*mut ::core::ffi::c_char> =
-        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-    static prev_tick: GlobalCell<varnumber_T> = GlobalCell::new(0 as varnumber_T);
-    static prev_list: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static prev_listopt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static prev_no_ts: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-    static prev_dy_uhex: GlobalCell<::core::ffi::c_uint> =
-        GlobalCell::new(0 as ::core::ffi::c_uint);
-    static prev_flp: GlobalCell<*mut ::core::ffi::c_char> =
-        GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-    let mut bri: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    /// Cached result for the last (buffer, line, options) combination.
+    struct BreakindentCache {
+        indent: ::core::ffi::c_int,
+        ts: OptInt,
+        vts: *mut colnr_T,
+        fnum: ::core::ffi::c_int,
+        line: *mut ::core::ffi::c_char,
+        tick: varnumber_T,
+        list: ::core::ffi::c_int,
+        listopt: ::core::ffi::c_int,
+        no_ts: bool,
+        dy_uhex: ::core::ffi::c_uint,
+        flp: *mut ::core::ffi::c_char,
+    }
+    static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
+        indent: 0,
+        ts: 0,
+        vts: ::core::ptr::null_mut(),
+        fnum: 0,
+        line: ::core::ptr::null_mut(),
+        tick: 0,
+        list: 0,
+        listopt: 0,
+        no_ts: false,
+        dy_uhex: 0,
+        flp: ::core::ptr::null_mut(),
+    });
     let eff_wwidth: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
     let no_ts: bool = (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T;
-    if prev_fnum.get() != (*(*wp).w_buffer).handle
-        || prev_ts.get() != (*(*wp).w_buffer).b_p_ts
-        || prev_vts.get() != (*(*wp).w_buffer).b_p_vts_array
-        || prev_tick.get() != buf_get_changedtick((*wp).w_buffer)
-        || prev_listopt.get() != (*wp).w_briopt_list
-        || prev_no_ts.get() as ::core::ffi::c_int != no_ts as ::core::ffi::c_int
-        || prev_dy_uhex.get()
-            != dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*prev_flp.ptr()).is_null()
-        || strcmp(prev_flp.get(), get_flp_value((*wp).w_buffer)) != 0 as ::core::ffi::c_int
-        || (*prev_line.ptr()).is_null()
-        || strcmp(prev_line.get(), line) != 0 as ::core::ffi::c_int
-    {
-        prev_fnum.set((*(*wp).w_buffer).handle as ::core::ffi::c_int);
-        xfree(prev_line.get() as *mut ::core::ffi::c_void);
-        prev_line.set(xstrdup(line));
-        prev_ts.set((*(*wp).w_buffer).b_p_ts);
-        prev_vts.set((*(*wp).w_buffer).b_p_vts_array);
-        if (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int {
-            if no_ts {
-                prev_indent.set(indent_size_no_ts(line));
-            } else {
-                prev_indent.set(indent_size_ts(
-                    line,
-                    (*(*wp).w_buffer).b_p_ts,
-                    (*(*wp).w_buffer).b_p_vts_array,
-                ));
-            }
-        }
-        prev_tick.set(buf_get_changedtick((*wp).w_buffer));
-        prev_listopt.set((*wp).w_briopt_list);
-        prev_list.set(0 as ::core::ffi::c_int);
-        prev_no_ts.set(no_ts);
-        prev_dy_uhex
-            .set(dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint);
-        xfree(prev_flp.get() as *mut ::core::ffi::c_void);
-        prev_flp.set(xstrdup(get_flp_value((*wp).w_buffer)));
-        if (*wp).w_briopt_list != 0 as ::core::ffi::c_int
-            && (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int
+    // One exclusive borrow for the whole computation: nothing below calls
+    // back into this function (the regex engine and chartabsize helpers run
+    // no user code), and debug builds will catch it if that ever changes.
+    let mut bri: ::core::ffi::c_int = CACHE.with_mut(|prev| {
+        if prev.fnum != (*(*wp).w_buffer).handle
+            || prev.ts != (*(*wp).w_buffer).b_p_ts
+            || prev.vts != (*(*wp).w_buffer).b_p_vts_array
+            || prev.tick != buf_get_changedtick((*wp).w_buffer)
+            || prev.listopt != (*wp).w_briopt_list
+            || prev.no_ts != no_ts
+            || prev.dy_uhex
+                != dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
+            || prev.flp.is_null()
+            || strcmp(prev.flp, get_flp_value((*wp).w_buffer)) != 0 as ::core::ffi::c_int
+            || prev.line.is_null()
+            || strcmp(prev.line, line) != 0 as ::core::ffi::c_int
         {
-            let mut regmatch: regmatch_T = regmatch_T {
-                regprog: vim_regcomp(prev_flp.get(), RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
-                startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                rm_matchcol: 0,
-                rm_ic: false,
-            };
-            if !regmatch.regprog.is_null() {
-                regmatch.rm_ic = false_0 != 0;
-                if vim_regexec(&raw mut regmatch, line, 0 as colnr_T) {
-                    if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
-                        (*prev_list.ptr()) += (*wp).w_briopt_list;
-                    } else {
-                        let mut ptr: *mut ::core::ffi::c_char =
-                            *(&raw mut regmatch.startp as *mut *mut ::core::ffi::c_char);
-                        let mut end_ptr: *mut ::core::ffi::c_char =
-                            *(&raw mut regmatch.endp as *mut *mut ::core::ffi::c_char);
-                        let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        while ptr < end_ptr {
-                            indent += win_chartabsize(wp, ptr, indent as colnr_T);
-                            ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
-                        }
-                        prev_indent.set(indent);
-                    }
+            prev.fnum = (*(*wp).w_buffer).handle;
+            xfree(prev.line as *mut ::core::ffi::c_void);
+            prev.line = xstrdup(line);
+            prev.ts = (*(*wp).w_buffer).b_p_ts;
+            prev.vts = (*(*wp).w_buffer).b_p_vts_array;
+            if (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int {
+                if no_ts {
+                    prev.indent = indent_size_no_ts(line);
+                } else {
+                    prev.indent = indent_size_ts(
+                        line,
+                        (*(*wp).w_buffer).b_p_ts,
+                        (*(*wp).w_buffer).b_p_vts_array,
+                    );
                 }
-                vim_regfree(regmatch.regprog);
+            }
+            prev.tick = buf_get_changedtick((*wp).w_buffer);
+            prev.listopt = (*wp).w_briopt_list;
+            prev.list = 0 as ::core::ffi::c_int;
+            prev.no_ts = no_ts;
+            prev.dy_uhex =
+                dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint;
+            xfree(prev.flp as *mut ::core::ffi::c_void);
+            prev.flp = xstrdup(get_flp_value((*wp).w_buffer));
+            if (*wp).w_briopt_list != 0 as ::core::ffi::c_int
+                && (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int
+            {
+                let mut regmatch: regmatch_T = regmatch_T {
+                    regprog: vim_regcomp(prev.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
+                    startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
+                    endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
+                    rm_matchcol: 0,
+                    rm_ic: false,
+                };
+                if !regmatch.regprog.is_null() {
+                    regmatch.rm_ic = false_0 != 0;
+                    if vim_regexec(&raw mut regmatch, line, 0 as colnr_T) {
+                        if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
+                            prev.list += (*wp).w_briopt_list;
+                        } else {
+                            let mut ptr: *mut ::core::ffi::c_char = regmatch.startp[0];
+                            let end_ptr: *mut ::core::ffi::c_char = regmatch.endp[0];
+                            let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                            while ptr < end_ptr {
+                                indent += win_chartabsize(wp, ptr, indent as colnr_T);
+                                ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
+                            }
+                            prev.indent = indent;
+                        }
+                    }
+                    vim_regfree(regmatch.regprog);
+                }
             }
         }
-    }
-    if (*wp).w_briopt_vcol != 0 as ::core::ffi::c_int {
-        bri = (*wp).w_briopt_vcol;
-        prev_list.set(0 as ::core::ffi::c_int);
-    } else {
-        bri = prev_indent.get() + (*wp).w_briopt_shift;
-    }
-    bri += win_col_off2(wp);
-    if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
-        bri += prev_list.get();
-    }
+        let mut bri = if (*wp).w_briopt_vcol != 0 as ::core::ffi::c_int {
+            prev.list = 0 as ::core::ffi::c_int;
+            (*wp).w_briopt_vcol
+        } else {
+            prev.indent + (*wp).w_briopt_shift
+        };
+        bri += win_col_off2(wp);
+        if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
+            bri += prev.list;
+        }
+        bri
+    });
     if (*wp).w_briopt_sbr {
         bri -= vim_strsize(get_showbreak_value(wp));
     }
@@ -5023,17 +4969,7 @@ pub unsafe extern "C" fn copy_indent(
         }
         if p.is_null() {
             line_len = get_cursor_line_len() + 1 as ::core::ffi::c_int;
-            '_c2rust_label: {
-                if ind_len + line_len >= 0 as ::core::ffi::c_int {
-                } else {
-                    __assert_fail(
-                        b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/indent.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1441 as ::core::ffi::c_uint,
-                        b"_Bool copy_indent(int, char *)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            assert!(ind_len + line_len >= 0 as ::core::ffi::c_int);
             let mut line_size: size_t = 0;
             let (c2rust_result, c2rust_overflowed) =
                 (ind_len as i128).overflowing_add(line_len as i128);
