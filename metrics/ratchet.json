@@ -102,7 +102,7 @@
     "src/nvim/lua/api_wrappers.rs": {"lines": 18903, "no_mangle": 1, "unsafe": 409},
     "src/nvim/lua/base64.rs": {"no_mangle": 1, "unsafe": 6},
     "src/nvim/lua/converter.rs": {"lines": 4955, "no_mangle": 24, "unsafe": 48},
-    "src/nvim/lua/executor.rs": {"lines": 225156, "no_mangle": 43, "static_mut": 1, "unsafe": 151},
+    "src/nvim/lua/executor.rs": {"lines": 7600, "no_mangle": 43, "static_mut": 1, "unsafe": 151},
     "src/nvim/lua/secure.rs": {"no_mangle": 2, "unsafe": 4},
     "src/nvim/lua/spell.rs": {"lines": 1810, "no_mangle": 2, "unsafe": 5},
     "src/nvim/lua/stdlib.rs": {"lines": 3119, "no_mangle": 7, "unsafe": 43},

@@ -1,4 +1,5 @@
-//! Link the transpiled objects against neovim's bundled C dependencies.
+//! Link the transpiled objects against neovim's bundled C dependencies, and
+//! compile the builtin `vim.*` Lua modules to embeddable LuaJIT bytecode.
 //!
 //! The transpiled Rust supplies every symbol that used to come from neovim's
 //! `.c` sources; everything else (LuaJIT, libuv, tree-sitter, unibilium,
@@ -9,7 +10,80 @@
 //! the same `--export-dynamic` so dlopened Lua C modules can resolve back into
 //! the binary.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// The `vim.*` modules embedded in the binary as LuaJIT bytecode, in the
+/// order of executor.rs's `builtin_modules` table. Upstream CMake globbed
+/// `_core/*.lua` for the tail of this list; we pin it and verify the glob
+/// below so a new `_core` module can't silently ship un-embedded.
+const EMBEDDED_LUA_MODULES: &[&str] = &[
+    "vim._init_packages",
+    "vim.inspect",
+    "vim.filetype",
+    "vim.fs",
+    "vim.F",
+    "vim.keymap",
+    "vim.loader",
+    "vim.text",
+    "vim._core.defaults",
+    "vim._core.editor",
+    "vim._core.ex_cmd",
+    "vim._core.exrc",
+    "vim._core.help",
+    "vim._core.log",
+    "vim._core.options",
+    "vim._core.server",
+    "vim._core.shared",
+    "vim._core.stringbuffer",
+    "vim._core.system",
+    "vim._core.ui2",
+    "vim._core.util",
+];
+
+/// Compile `runtime/lua/vim/*` to bytecode in `$OUT_DIR/lua_modules/`, where
+/// executor.rs `include_bytes!`s it. This replaces the upstream CMake +
+/// `gen_char_blob.lua` step whose output c2rust transpiled as array
+/// literals: `runtime/lua` is the single source of truth again.
+fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
+    let script = manifest.join("scripts/compile-lua-modules.lua");
+    let outdir = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua_modules");
+    std::fs::create_dir_all(&outdir).unwrap();
+
+    // A `_core` module upstream would have globbed but our pinned list (and
+    // executor.rs's builtin_modules table) doesn't know about is a build
+    // error, not a silent omission.
+    let core_dir = manifest.join("runtime/lua/vim/_core");
+    for entry in std::fs::read_dir(&core_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().map_or(true, |ext| ext != "lua") {
+            continue;
+        }
+        let stem = path.file_stem().unwrap().to_str().unwrap().to_owned();
+        let modname = format!("vim._core.{stem}");
+        assert!(
+            EMBEDDED_LUA_MODULES.contains(&modname.as_str()),
+            "{} is not in build.rs's EMBEDDED_LUA_MODULES; add it there and \
+             to builtin_modules in src/nvim/lua/executor.rs",
+            path.display(),
+        );
+    }
+
+    let mut cmd = Command::new(deps_prefix.join("bin/luajit"));
+    cmd.arg(&script).arg(&outdir);
+    for modname in EMBEDDED_LUA_MODULES {
+        let source = manifest
+            .join("runtime/lua")
+            .join(modname.replace('.', "/"))
+            .with_extension("lua");
+        println!("cargo:rerun-if-changed={}", source.display());
+        cmd.arg(source).arg(modname);
+    }
+    println!("cargo:rerun-if-changed={}", script.display());
+
+    let status = cmd.status().expect("failed to run the deps-prefix luajit");
+    assert!(status.success(), "compile-lua-modules.lua failed: {status}");
+}
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -24,6 +98,8 @@ fn main() {
     ));
 
     println!("cargo:rerun-if-env-changed=NVIM_DEPS_PREFIX");
+
+    compile_lua_modules(&manifest, &prefix);
 
     for libdir in ["lib", "lib64"] {
         println!(
