@@ -43,6 +43,10 @@ functionaltest *args: build
   set -euo pipefail
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
   export NVIM_TEST_ASAN=1
+  # ASan frames are several times larger and the debug GlobalCell checks add
+  # non-inlined calls, so the deliberately-recursive specs (E169) overflow
+  # the default 8MB stack; give the whole tree headroom.
+  ulimit -s 65536
   # Tests run target/bin/nvim (the layout specs assert); prep-test-tree.sh
   # points it at $NVIM_BIN.
   export NVIM_BIN={{ bin }}
@@ -56,6 +60,7 @@ oldtest *args: build
   set -euo pipefail
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
   export NVIM_TEST_ASAN=1
+  ulimit -s 65536
   export NVIM_BIN={{ bin }}
   scripts/prep-test-tree.sh
   exec setarch "$(uname -m)" -R make -C test/old/testdir NVIM_PRG={{ justfile_directory() }}/target/bin/nvim {{ args }}
