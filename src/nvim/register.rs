@@ -1,3 +1,4 @@
+use crate::src::nvim::clipboard;
 use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
@@ -140,13 +141,6 @@ extern "C" {
     fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
     fn get_cursor_line_len() -> colnr_T;
     fn get_cursor_pos_len() -> colnr_T;
-    fn adjust_clipboard_name(
-        name: *mut ::core::ffi::c_int,
-        quiet: bool,
-        writing: bool,
-    ) -> *mut yankreg_T;
-    fn get_clipboard(name: ::core::ffi::c_int, target: *mut *mut yankreg_T, quiet: bool) -> bool;
-    fn set_clipboard(name: ::core::ffi::c_int, reg: *mut yankreg_T);
     fn update_screen() -> ::core::ffi::c_int;
     fn showmode() -> ::core::ffi::c_int;
     fn beginline(flags: ::core::ffi::c_int);
@@ -3664,7 +3658,7 @@ pub unsafe extern "C" fn valid_yank_reg(
 #[no_mangle]
 pub unsafe extern "C" fn get_default_register_name() -> ::core::ffi::c_int {
     let mut name: ::core::ffi::c_int = NUL;
-    adjust_clipboard_name(&raw mut name, true_0 != 0, false_0 != 0);
+    clipboard::adjust_clipboard_name(&mut name, true, false);
     return name;
 }
 #[no_mangle]
@@ -3806,7 +3800,7 @@ pub unsafe extern "C" fn get_yank_register(
 ) -> *mut yankreg_T {
     let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
     if (mode == YREG_PASTE as ::core::ffi::c_int || mode == YREG_PUT as ::core::ffi::c_int)
-        && get_clipboard(regname, &raw mut reg, false_0 != 0) as ::core::ffi::c_int != 0
+        && clipboard::get_clipboard(regname, &mut reg, false)
     {
         return reg;
     } else if mode == YREG_PUT as ::core::ffi::c_int
@@ -5065,7 +5059,7 @@ pub unsafe extern "C" fn op_yank(mut oap: *mut oparg_T, mut message: bool) -> bo
     let mut reg: *mut yankreg_T =
         get_yank_register((*oap).regname, YREG_YANK as ::core::ffi::c_int);
     op_yank_reg(oap, message, reg, is_append_register((*oap).regname));
-    set_clipboard((*oap).regname, reg);
+    clipboard::set_clipboard((*oap).regname, reg);
     do_autocmd_textyankpost(oap, reg);
     return true_0 != 0;
 }
@@ -6251,7 +6245,7 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
             } else {
                 yb = (y_regs.ptr() as *mut yankreg_T).offset(i as isize);
             }
-            get_clipboard(name, &raw mut yb, true_0 != 0);
+            clipboard::get_clipboard(name, &mut yb, true);
             if !(name == mb_tolower(redir_reg.get())
                 || redir_reg.get() == '"' as ::core::ffi::c_int && yb == y_previous.get())
             {
@@ -6732,7 +6726,7 @@ unsafe extern "C" fn finish_write_reg(
     mut reg: *mut yankreg_T,
     mut old_y_previous: *mut yankreg_T,
 ) {
-    set_clipboard(name, reg);
+    clipboard::set_clipboard(name, reg);
     if name != '"' as ::core::ffi::c_int {
         y_previous.set(old_y_previous);
     }

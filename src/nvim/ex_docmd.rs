@@ -320,8 +320,6 @@ extern "C" {
     fn putdigraph(str: *mut ::core::ffi::c_char);
     fn listdigraphs(use_headers: bool);
     fn ex_loadkeymap(eap: *mut exarg_T);
-    fn start_batch_changes();
-    fn end_batch_changes();
     fn screen_resize(width: ::core::ffi::c_int, height: ::core::ffi::c_int);
     fn update_screen() -> ::core::ffi::c_int;
     fn setcursor_mayforce(wp: *mut win_T, force: bool);
@@ -6374,7 +6372,7 @@ unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
         return FAIL;
     }
     (*cmdline_call_depth.ptr()) += 1;
-    start_batch_changes();
+    crate::src::nvim::clipboard::start_batch_changes();
     return OK;
 }
 unsafe extern "C" fn do_cmdline_end() {
@@ -6390,7 +6388,7 @@ unsafe extern "C" fn do_cmdline_end() {
             );
         }
     };
-    end_batch_changes();
+    crate::src::nvim::clipboard::end_batch_changes();
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_cmdline_cmd(mut cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int {

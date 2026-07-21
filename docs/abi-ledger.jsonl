@@ -113,7 +113,6 @@
 {"symbol":"add_win_cmd_modifiers","kind":"fn","file":"src/nvim/usercmd.rs","class":"internal","refs":[]}
 {"symbol":"addfile","kind":"fn","file":"src/nvim/path.rs","class":"internal","refs":[]}
 {"symbol":"addstar","kind":"fn","file":"src/nvim/cmdexpand.rs","class":"internal","refs":[]}
-{"symbol":"adjust_clipboard_name","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"adjust_cursor_col","kind":"fn","file":"src/nvim/cursor.rs","class":"internal","refs":[]}
 {"symbol":"adjust_cursor_eol","kind":"fn","file":"src/nvim/ops.rs","class":"internal","refs":[]}
 {"symbol":"adjust_skipcol","kind":"fn","file":"src/nvim/move.rs","class":"internal","refs":[]}
@@ -1237,7 +1236,6 @@
 {"symbol":"encode_vim_list_to_buf","kind":"fn","file":"src/nvim/eval/encode.rs","class":"internal","refs":[]}
 {"symbol":"encode_vim_to_echo","kind":"fn","file":"src/nvim/eval/encode.rs","class":"internal","refs":[]}
 {"symbol":"encode_vim_to_msgpack","kind":"fn","file":"src/nvim/eval/encode.rs","class":"internal","refs":[]}
-{"symbol":"end_batch_changes","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"end_comment_pending","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"end_search_hl","kind":"fn","file":"src/nvim/drawscreen.rs","class":"internal","refs":[]}
 {"symbol":"end_visual_mode","kind":"fn","file":"src/nvim/normal.rs","class":"internal","refs":[]}
@@ -1986,7 +1984,6 @@
 {"symbol":"get_can_cindent","kind":"fn","file":"src/nvim/edit.rs","class":"internal","refs":[]}
 {"symbol":"get_changelist","kind":"fn","file":"src/nvim/mark.rs","class":"internal","refs":[]}
 {"symbol":"get_client_info","kind":"fn","file":"src/nvim/msgpack_rpc/channel.rs","class":"internal","refs":[]}
-{"symbol":"get_clipboard","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"get_cmd_default_range","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
 {"symbol":"get_cmd_output","kind":"fn","file":"src/nvim/os/shell.rs","class":"internal","refs":[]}
 {"symbol":"get_cmdline_firstc","kind":"fn","file":"src/nvim/ex_getln.rs","class":"internal","refs":[]}
@@ -4430,7 +4427,6 @@
 {"symbol":"restart_VIsual_select","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"restart_edit","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"restoreRedobuff","kind":"fn","file":"src/nvim/getchar.rs","class":"internal","refs":[]}
-{"symbol":"restore_batch_count","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"restore_buffer","kind":"fn","file":"src/nvim/eval/buffer.rs","class":"internal","refs":[]}
 {"symbol":"restore_cterm_colors","kind":"fn","file":"src/nvim/highlight_group.rs","class":"internal","refs":[]}
 {"symbol":"restore_current_state","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
@@ -4483,7 +4479,6 @@
 {"symbol":"sandbox","kind":"static","file":"src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"saveRedobuff","kind":"fn","file":"src/nvim/getchar.rs","class":"internal","refs":[]}
 {"symbol":"save_abs_path","kind":"fn","file":"src/nvim/path.rs","class":"internal","refs":[]}
-{"symbol":"save_batch_count","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"save_current_state","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
 {"symbol":"save_file_ff","kind":"fn","file":"src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"save_funccal","kind":"fn","file":"src/nvim/eval/userfunc.rs","class":"internal","refs":[]}
@@ -4571,7 +4566,6 @@
 {"symbol":"set_bufref","kind":"fn","file":"src/nvim/buffer.rs","class":"internal","refs":[]}
 {"symbol":"set_can_cindent","kind":"fn","file":"src/nvim/edit.rs","class":"internal","refs":[]}
 {"symbol":"set_chars_option","kind":"fn","file":"src/nvim/optionstr.rs","class":"internal","refs":[]}
-{"symbol":"set_clipboard","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"set_cmd_addr_type","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
 {"symbol":"set_cmd_context","kind":"fn","file":"src/nvim/cmdexpand.rs","class":"internal","refs":[]}
 {"symbol":"set_cmd_count","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
@@ -4819,7 +4813,6 @@
 {"symbol":"stacktrace_create","kind":"fn","file":"src/nvim/runtime.rs","class":"internal","refs":[]}
 {"symbol":"startPS","kind":"fn","file":"src/nvim/textobject.rs","class":"internal","refs":[]}
 {"symbol":"start_arrow","kind":"fn","file":"src/nvim/edit.rs","class":"internal","refs":[]}
-{"symbol":"start_batch_changes","kind":"fn","file":"src/nvim/clipboard.rs","class":"internal","refs":[]}
 {"symbol":"start_driver_ti","kind":"fn","file":"src/nvim/tui/termkey/driver_ti.rs","class":"internal","refs":[]}
 {"symbol":"start_redo","kind":"fn","file":"src/nvim/getchar.rs","class":"internal","refs":[]}
 {"symbol":"start_redo_ins","kind":"fn","file":"src/nvim/getchar.rs","class":"internal","refs":[]}

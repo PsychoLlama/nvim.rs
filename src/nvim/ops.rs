@@ -135,7 +135,6 @@ extern "C" {
     fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
     fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
     fn get_cursor_line_len() -> colnr_T;
-    fn set_clipboard(name: ::core::ffi::c_int, reg: *mut yankreg_T);
     fn edit(cmdchar: ::core::ffi::c_int, startln: bool, count: ::core::ffi::c_int) -> bool;
     fn display_dollar(col_arg: colnr_T);
     fn beginline(flags: ::core::ffi::c_int);
@@ -4014,7 +4013,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                 if reg.is_null() {
                     abort();
                 }
-                set_clipboard((*oap).regname, reg);
+                crate::src::nvim::clipboard::set_clipboard((*oap).regname, reg as *mut _);
                 do_autocmd_textyankpost(oap, reg);
             }
         }

@@ -147,8 +147,6 @@ extern "C" {
         strict: bool,
         overflow: *mut bool,
     );
-    fn save_batch_count() -> ::core::ffi::c_int;
-    fn restore_batch_count(save_count: ::core::ffi::c_int);
     fn nextwild(
         xp: *mut expand_T,
         type_0: ::core::ffi::c_int,
@@ -11132,10 +11130,10 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     }
     i = RedrawingDisabled.get();
     RedrawingDisabled.set(0 as ::core::ffi::c_int);
-    let mut save_count: ::core::ffi::c_int = save_batch_count();
+    let mut save_count: ::core::ffi::c_int = crate::src::nvim::clipboard::save_batch_count();
     normal_enter(true_0 != 0, false_0 != 0);
     RedrawingDisabled.set(i);
-    restore_batch_count(save_count);
+    crate::src::nvim::clipboard::restore_batch_count(save_count);
     let save_KeyTyped: bool = KeyTyped.get();
     trigger_cmd_autocmd(cmdwin_type.get(), EVENT_CMDWINLEAVE);
     KeyTyped.set(save_KeyTyped);

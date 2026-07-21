@@ -1,12 +1,20 @@
+//! Clipboard-provider integration for the `*` and `+` registers: routing
+//! register access to the provider, and batching provider updates across
+//! script execution.
+//!
+//! Module state lives in one [`ClipboardState`] behind a [`GlobalCell`];
+//! borrows are scoped so they never span a call into the evaluator
+//! (`eval_has_provider`/`eval_call_provider` run user code that may
+//! reenter this module).
+
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::cb_flags;
+use crate::src::nvim::register::{
+    kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown, yankreg_T, AdditionalData, String_0,
+    PLUS_REGISTER, STAR_REGISTER,
+};
+
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
@@ -24,7 +32,6 @@ extern "C" {
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
     fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    static cb_flags: GlobalCell<::core::ffi::c_uint>;
     fn get_y_register(reg: ::core::ffi::c_int) -> *mut yankreg_T;
     fn get_y_previous() -> *mut yankreg_T;
     fn update_yankreg_width(reg: *mut yankreg_T);
@@ -40,20 +47,8 @@ pub type uint32_t = u32;
 pub type uint64_t = u64;
 pub type LuaRef = ::core::ffi::c_int;
 pub type float_T = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
 pub type proftime_T = uint64_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct AdditionalData {
-    pub nitems: uint32_t,
-    pub nbytes: uint32_t,
-    pub data: [::core::ffi::c_char; 0],
-}
+pub type linenr_T = int32_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct garray_T {
@@ -63,7 +58,6 @@ pub struct garray_T {
     pub ga_growsize: ::core::ffi::c_int,
     pub ga_data: *mut ::core::ffi::c_void,
 }
-pub type linenr_T = int32_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct hashtab_T {
@@ -82,7 +76,6 @@ pub struct hashitem_T {
     pub hi_key: *mut ::core::ffi::c_char,
 }
 pub type hash_T = size_t;
-pub type colnr_T = ::core::ffi::c_int;
 pub type Timestamp = uint64_t;
 pub type partial_T = partial_S;
 #[derive(Copy, Clone)]
@@ -120,13 +113,7 @@ pub struct queue {
     pub prev: *mut queue,
 }
 pub type ScopeType = ::core::ffi::c_uint;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub type VarLockStatus = ::core::ffi::c_uint;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct typval_T {
@@ -189,23 +176,12 @@ pub struct listwatch_S {
     pub lw_next: *mut listwatch_T,
 }
 pub type SpecialVarValue = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
 pub type BoolVarValue = ::core::ffi::c_uint;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type varnumber_T = int64_t;
 pub type VarType = ::core::ffi::c_uint;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
 pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type ufunc_T = ufunc_S;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -287,400 +263,362 @@ pub struct sctx_T {
     pub sc_chan: uint64_t,
 }
 pub type scid_T = ::core::ffi::c_int;
-pub type MotionType = ::core::ffi::c_int;
-pub const kMTUnknown: MotionType = -1;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const NUM_REGISTERS: C2Rust_Unnamed_0 = 39;
-pub const PLUS_REGISTER: C2Rust_Unnamed_0 = 38;
-pub const STAR_REGISTER: C2Rust_Unnamed_0 = 37;
-pub const NUM_SAVED_REGISTERS: C2Rust_Unnamed_0 = 37;
-pub const DELETION_REGISTER: C2Rust_Unnamed_0 = 36;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct yankreg_T {
-    pub y_array: *mut String_0,
-    pub y_size: size_t,
-    pub y_type: MotionType,
-    pub y_width: colnr_T,
-    pub timestamp: Timestamp,
-    pub additional_data: *mut AdditionalData,
-}
-pub const kOptCbFlagUnnamed: C2Rust_Unnamed_1 = 1;
-pub const kOptCbFlagUnnamedplus: C2Rust_Unnamed_1 = 2;
-pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+
+pub const kOptCbFlagUnnamed: ::core::ffi::c_uint = 1;
+pub const kOptCbFlagUnnamedplus: ::core::ffi::c_uint = 2;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22;
-static batch_change_count: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static clipboard_delay_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static clipboard_needs_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static clipboard_didwarn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
-pub unsafe extern "C" fn adjust_clipboard_name(
-    mut name: *mut ::core::ffi::c_int,
-    mut quiet: bool,
-    mut writing: bool,
-) -> *mut yankreg_T {
-    let mut target: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-    let mut explicit_cb_reg: bool =
-        *name == '*' as ::core::ffi::c_int || *name == '+' as ::core::ffi::c_int;
-    let mut implicit_cb_reg: bool = *name == NUL
-        && cb_flags.get()
-            & (kOptCbFlagUnnamed as ::core::ffi::c_int
-                | kOptCbFlagUnnamedplus as ::core::ffi::c_int) as ::core::ffi::c_uint
-            != 0;
-    if !(!explicit_cb_reg && !implicit_cb_reg) {
-        if !eval_has_provider(
-            b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        ) {
-            if batch_change_count.get() <= 1 as ::core::ffi::c_int
-                && !quiet
-                && (!clipboard_didwarn.get()
-                    || explicit_cb_reg as ::core::ffi::c_int != 0 && redirecting() == 0)
-            {
-                clipboard_didwarn.set(true_0 != 0);
-                msg(MSG_NO_CLIP.as_ptr(), 0 as ::core::ffi::c_int);
-            }
-        } else if explicit_cb_reg {
-            target = get_y_register(if *name == '*' as ::core::ffi::c_int {
-                STAR_REGISTER as ::core::ffi::c_int
-            } else {
-                PLUS_REGISTER as ::core::ffi::c_int
-            });
-            if writing as ::core::ffi::c_int != 0
-                && cb_flags.get()
-                    & (if *name == '*' as ::core::ffi::c_int {
-                        kOptCbFlagUnnamed as ::core::ffi::c_int
-                    } else {
-                        kOptCbFlagUnnamedplus as ::core::ffi::c_int
-                    }) as ::core::ffi::c_uint
-                    != 0
-            {
-                clipboard_needs_update.set(false_0 != 0);
-            }
-        } else if writing as ::core::ffi::c_int != 0
-            && clipboard_delay_update.get() as ::core::ffi::c_int != 0
-        {
-            clipboard_needs_update.set(true_0 != 0);
-        } else if !(!writing && clipboard_needs_update.get() as ::core::ffi::c_int != 0) {
-            if cb_flags.get() & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0
-            {
-                *name = if cb_flags.get()
-                    & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != 0
-                    && writing as ::core::ffi::c_int != 0
-                {
-                    '"' as ::core::ffi::c_int
-                } else {
-                    '+' as ::core::ffi::c_int
-                };
-                target = get_y_register(PLUS_REGISTER as ::core::ffi::c_int);
-            } else {
-                *name = '*' as ::core::ffi::c_int;
-                target = get_y_register(STAR_REGISTER as ::core::ffi::c_int);
-            }
-        }
-    }
-    return target;
+
+/// The module's mutable state, all of it.
+#[derive(Copy, Clone)]
+struct ClipboardState {
+    /// Depth of nested `start_batch_changes` scopes.
+    batch_change_count: ::core::ffi::c_int,
+    /// Defer provider "set" calls until the batch ends.
+    delay_update: bool,
+    /// A deferred update is pending.
+    needs_update: bool,
+    /// The "no provider" warning was already shown.
+    didwarn: bool,
 }
+
+static CLIPBOARD: GlobalCell<ClipboardState> = GlobalCell::new(ClipboardState {
+    batch_change_count: 0,
+    delay_update: false,
+    needs_update: false,
+    didwarn: false,
+});
+
+/// Resolve register `*name` to a clipboard register, or null when the
+/// clipboard is not involved (not a clipboard register, no provider, or
+/// the access is deferred/satisfied by a pending update).
+///
+/// # Safety
+///
+/// Main-thread editor call; may run the provider-detection vimscript.
+pub unsafe fn adjust_clipboard_name(
+    name: &mut ::core::ffi::c_int,
+    quiet: bool,
+    writing: bool,
+) -> *mut yankreg_T {
+    let explicit_cb_reg = *name == '*' as ::core::ffi::c_int || *name == '+' as ::core::ffi::c_int;
+    let implicit_cb_reg =
+        *name == NUL && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
+    if !explicit_cb_reg && !implicit_cb_reg {
+        return ::core::ptr::null_mut();
+    }
+
+    if !eval_has_provider(b"clipboard\0".as_ptr() as *const ::core::ffi::c_char, false) {
+        let warn = CLIPBOARD.with_mut(|st| {
+            if st.batch_change_count <= 1
+                && !quiet
+                && (!st.didwarn || (explicit_cb_reg && redirecting() == 0))
+            {
+                st.didwarn = true;
+                true
+            } else {
+                false
+            }
+        });
+        if warn {
+            // Do not use emsg here: it may interrupt other logic.
+            msg(MSG_NO_CLIP.as_ptr(), 0);
+        }
+        return ::core::ptr::null_mut();
+    }
+
+    if explicit_cb_reg {
+        let target = get_y_register(if *name == '*' as ::core::ffi::c_int {
+            STAR_REGISTER as ::core::ffi::c_int
+        } else {
+            PLUS_REGISTER as ::core::ffi::c_int
+        });
+        let flag = if *name == '*' as ::core::ffi::c_int {
+            kOptCbFlagUnnamed
+        } else {
+            kOptCbFlagUnnamedplus
+        };
+        if writing && cb_flags.get() & flag != 0 {
+            CLIPBOARD.with_mut(|st| st.needs_update = false);
+        }
+        return target;
+    }
+
+    // Unnamed register with clipboard= routing to "* or "+.
+    let st = CLIPBOARD.get();
+    if writing && st.delay_update {
+        CLIPBOARD.with_mut(|st| st.needs_update = true);
+        return ::core::ptr::null_mut();
+    }
+    if !writing && st.needs_update {
+        // The pending write hasn't reached the provider yet; read our own
+        // register instead of stale provider contents.
+        return ::core::ptr::null_mut();
+    }
+    if cb_flags.get() & kOptCbFlagUnnamedplus != 0 {
+        *name = if cb_flags.get() & kOptCbFlagUnnamed != 0 && writing {
+            '"' as ::core::ffi::c_int
+        } else {
+            '+' as ::core::ffi::c_int
+        };
+        get_y_register(PLUS_REGISTER as ::core::ffi::c_int)
+    } else {
+        *name = '*' as ::core::ffi::c_int;
+        get_y_register(STAR_REGISTER as ::core::ffi::c_int)
+    }
+}
+
 pub const MSG_NO_CLIP: [::core::ffi::c_char; 62] = unsafe {
     ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
         *b"clipboard: No provider. Try \":checkhealth\" or \":h clipboard\".\0",
     )
 };
-#[no_mangle]
-pub unsafe extern "C" fn get_clipboard(
+
+/// Fill `*target` with provider contents for register `name`. Returns
+/// false (with the register emptied) when the clipboard is not involved
+/// or the provider returned invalid data.
+///
+/// # Safety
+///
+/// Main-thread editor call; runs the clipboard provider.
+pub unsafe fn get_clipboard(
     mut name: ::core::ffi::c_int,
-    mut target: *mut *mut yankreg_T,
-    mut quiet: bool,
+    target: &mut *mut yankreg_T,
+    quiet: bool,
 ) -> bool {
-    let mut res: *mut list_T = ::core::ptr::null_mut::<list_T>();
-    let mut lines: *mut list_T = ::core::ptr::null_mut::<list_T>();
-    let mut tv_idx: size_t = 0;
-    let mut errmsg: bool = true_0 != 0;
-    let mut reg: *mut yankreg_T = adjust_clipboard_name(&raw mut name, quiet, false_0 != 0);
+    let reg = adjust_clipboard_name(&mut name, quiet, false);
     if reg.is_null() {
-        return false_0 != 0;
+        return false;
     }
     free_register(reg);
-    let args: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
-    let regname: ::core::ffi::c_char = name as ::core::ffi::c_char;
-    tv_list_append_string(args, &raw const regname, 1 as ssize_t);
-    let mut result: typval_T = eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"get\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+
+    let args = tv_list_alloc(1);
+    let regname = name as ::core::ffi::c_char;
+    tv_list_append_string(args, &raw const regname, 1);
+    let result = eval_call_provider(
+        b"clipboard\0".as_ptr() as *mut ::core::ffi::c_char,
+        b"get\0".as_ptr() as *mut ::core::ffi::c_char,
         args,
-        false_0 != 0,
+        false,
     );
-    '_err: {
-        if result.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if result.v_type as ::core::ffi::c_uint
-                == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-                && result.vval.v_number == 0 as varnumber_T
-            {
-                errmsg = false_0 != 0;
+
+    // Show a message on error unless the provider already indicated failure.
+    let mut errmsg = true;
+    'err: {
+        if result.v_type != VAR_LIST {
+            if result.v_type == VAR_NUMBER && result.vval.v_number == 0 {
+                errmsg = false;
             }
-        } else {
-            res = result.vval.v_list;
-            lines = ::core::ptr::null_mut::<list_T>();
-            if tv_list_len(res) == 2 as ::core::ffi::c_int
-                && (*tv_list_first(res)).li_tv.v_type as ::core::ffi::c_uint
-                    == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                lines = (*tv_list_first(res)).li_tv.vval.v_list;
-                if (*tv_list_last(res)).li_tv.v_type as ::core::ffi::c_uint
-                    != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    break '_err;
-                } else {
-                    let mut regtype: *mut ::core::ffi::c_char =
-                        (*tv_list_last(res)).li_tv.vval.v_string;
-                    if regtype.is_null() || strlen(regtype) > 1 as size_t {
-                        break '_err;
-                    } else {
-                        match *regtype.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                        {
-                            0 => {
-                                (*reg).y_type = kMTUnknown;
-                            }
-                            118 | 99 => {
-                                (*reg).y_type = kMTCharWise;
-                            }
-                            86 | 108 => {
-                                (*reg).y_type = kMTLineWise;
-                            }
-                            98 | Ctrl_V => {
-                                (*reg).y_type = kMTBlockWise;
-                            }
-                            _ => {
-                                break '_err;
-                            }
-                        }
-                    }
-                }
-            } else {
-                lines = res;
-                (*reg).y_type = kMTUnknown;
-            }
-            (*reg).y_array = xcalloc(
-                tv_list_len(lines) as size_t,
-                ::core::mem::size_of::<String_0>(),
-            ) as *mut String_0;
-            (*reg).y_size = tv_list_len(lines) as size_t;
-            (*reg).y_width = 0 as ::core::ffi::c_int as colnr_T;
-            (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
-            (*reg).timestamp = 0 as Timestamp;
-            tv_idx = 0 as size_t;
-            let l_: *const list_T = lines;
-            's_189: {
-                if !l_.is_null() {
-                    let mut li: *const listitem_T = (*l_).lv_first;
-                    loop {
-                        if li.is_null() {
-                            break 's_189;
-                        }
-                        if (*li).li_tv.v_type as ::core::ffi::c_uint
-                            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            break '_err;
-                        }
-                        let mut s: *const ::core::ffi::c_char = (*li).li_tv.vval.v_string;
-                        let c2rust_fresh0 = tv_idx;
-                        tv_idx = tv_idx.wrapping_add(1);
-                        *(*reg).y_array.offset(c2rust_fresh0 as isize) =
-                            cstr_to_string(if !s.is_null() {
-                                s
-                            } else {
-                                b"\0".as_ptr() as *const ::core::ffi::c_char
-                            });
-                        li = (*li).li_next;
-                    }
-                }
-            }
-            if (*reg).y_size > 0 as size_t
-                && (*(*reg)
-                    .y_array
-                    .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-                .size
-                    == 0 as size_t
-            {
-                if (*reg).y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int {
-                    xfree(
-                        (*(*reg)
-                            .y_array
-                            .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-                        .data as *mut ::core::ffi::c_void,
-                    );
-                    (*reg).y_size = (*reg).y_size.wrapping_sub(1);
-                    if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
-                        (*reg).y_type = kMTLineWise;
-                    }
-                }
-            } else if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
-                (*reg).y_type = kMTCharWise;
-            }
-            update_yankreg_width(reg);
-            *target = reg;
-            return true_0 != 0;
+            break 'err;
         }
+        let res = result.vval.v_list;
+        let lines;
+        if tv_list_len(res) == 2 && (*tv_list_first(res)).li_tv.v_type == VAR_LIST {
+            lines = (*tv_list_first(res)).li_tv.vval.v_list;
+            if (*tv_list_last(res)).li_tv.v_type != VAR_STRING {
+                break 'err;
+            }
+            let regtype = (*tv_list_last(res)).li_tv.vval.v_string;
+            if regtype.is_null() || strlen(regtype) > 1 {
+                break 'err;
+            }
+            (*reg).y_type = match *regtype as u8 {
+                0 => kMTUnknown,
+                b'v' | b'c' => kMTCharWise,
+                b'V' | b'l' => kMTLineWise,
+                b'b' | 22 => kMTBlockWise, // 22 == Ctrl_V
+                _ => break 'err,
+            };
+        } else {
+            lines = res;
+            // The provider did not specify a regtype; inferred below.
+            (*reg).y_type = kMTUnknown;
+        }
+
+        (*reg).y_array = xcalloc(
+            tv_list_len(lines) as size_t,
+            ::core::mem::size_of::<String_0>(),
+        ) as *mut String_0;
+        (*reg).y_size = tv_list_len(lines) as size_t;
+        (*reg).y_width = 0;
+        (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
+        // No timestamp: clipboard registers are not saved in the ShaDa file.
+        (*reg).timestamp = 0;
+
+        let mut tv_idx: size_t = 0;
+        if !lines.is_null() {
+            let mut li = (*lines).lv_first;
+            while !li.is_null() {
+                if (*li).li_tv.v_type != VAR_STRING {
+                    break 'err;
+                }
+                let s = (*li).li_tv.vval.v_string;
+                *(*reg).y_array.add(tv_idx) = cstr_to_string(if !s.is_null() {
+                    s
+                } else {
+                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                });
+                tv_idx += 1;
+                li = (*li).li_next;
+            }
+        }
+
+        if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).size == 0 {
+            // A known-to-be charwise yank might have a final linebreak, but
+            // otherwise there is no line after the final newline.
+            if (*reg).y_type != kMTCharWise {
+                xfree((*(*reg).y_array.add((*reg).y_size - 1)).data as *mut ::core::ffi::c_void);
+                (*reg).y_size -= 1;
+                if (*reg).y_type == kMTUnknown {
+                    (*reg).y_type = kMTLineWise;
+                }
+            }
+        } else if (*reg).y_type == kMTUnknown {
+            (*reg).y_type = kMTCharWise;
+        }
+
+        update_yankreg_width(reg);
+        *target = reg;
+        return true;
     }
+
+    // Error path: leave the register empty.
     if !(*reg).y_array.is_null() {
-        let mut i: size_t = 0 as size_t;
-        while i < (*reg).y_size {
-            xfree((*(*reg).y_array.offset(i as isize)).data as *mut ::core::ffi::c_void);
-            i = i.wrapping_add(1);
+        for i in 0..(*reg).y_size {
+            xfree((*(*reg).y_array.add(i)).data as *mut ::core::ffi::c_void);
         }
         xfree((*reg).y_array as *mut ::core::ffi::c_void);
     }
-    (*reg).y_array = ::core::ptr::null_mut::<String_0>();
-    (*reg).y_size = 0 as size_t;
-    (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
-    (*reg).timestamp = 0 as Timestamp;
+    (*reg).y_array = ::core::ptr::null_mut();
+    (*reg).y_size = 0;
+    (*reg).additional_data = ::core::ptr::null_mut();
+    (*reg).timestamp = 0;
     if errmsg {
         emsg(b"clipboard: provider returned invalid data\0".as_ptr() as *const ::core::ffi::c_char);
     }
     *target = reg;
-    return false_0 != 0;
+    false
 }
-#[no_mangle]
-pub unsafe extern "C" fn set_clipboard(mut name: ::core::ffi::c_int, mut reg: *mut yankreg_T) {
-    if adjust_clipboard_name(&raw mut name, false_0 != 0, true_0 != 0).is_null() {
+
+/// Send register `reg` to the provider as register `name`.
+///
+/// # Safety
+///
+/// Main-thread editor call; runs the clipboard provider. `reg` must point
+/// to a valid register whose y_type is known.
+pub unsafe fn set_clipboard(mut name: ::core::ffi::c_int, reg: *mut yankreg_T) {
+    if adjust_clipboard_name(&mut name, false, true).is_null() {
         return;
     }
-    let lines: *mut list_T = tv_list_alloc(
-        (*reg).y_size as ptrdiff_t
-            + ((*reg).y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int)
-                as ::core::ffi::c_int as ptrdiff_t,
-    );
-    let mut i: size_t = 0 as size_t;
-    while i < (*reg).y_size {
+
+    let lines =
+        tv_list_alloc((*reg).y_size as ptrdiff_t + ((*reg).y_type != kMTCharWise) as ptrdiff_t);
+    for i in 0..(*reg).y_size {
         tv_list_append_string(
             lines,
-            (*(*reg).y_array.offset(i as isize)).data,
-            (*(*reg).y_array.offset(i as isize)).size as ::core::ffi::c_int as ssize_t,
+            (*(*reg).y_array.add(i)).data,
+            (*(*reg).y_array.add(i)).size as ssize_t,
         );
-        i = i.wrapping_add(1);
     }
-    let mut regtype: ::core::ffi::c_char = 0;
-    match (*reg).y_type as ::core::ffi::c_int {
-        1 => {
-            regtype = 'V' as ::core::ffi::c_char;
-            tv_list_append_string(
-                lines,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as ssize_t,
-            );
+
+    let regtype: ::core::ffi::c_char = match (*reg).y_type {
+        kMTLineWise => {
+            tv_list_append_string(lines, ::core::ptr::null(), 0);
+            b'V' as ::core::ffi::c_char
         }
-        0 => {
-            regtype = 'v' as ::core::ffi::c_char;
+        kMTCharWise => b'v' as ::core::ffi::c_char,
+        kMTBlockWise => {
+            tv_list_append_string(lines, ::core::ptr::null(), 0);
+            b'b' as ::core::ffi::c_char
         }
-        2 => {
-            regtype = 'b' as ::core::ffi::c_char;
-            tv_list_append_string(
-                lines,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as ssize_t,
-            );
-        }
-        -1 => {
-            abort();
-        }
-        _ => {}
-    }
-    let mut args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-    tv_list_append_list(args, lines);
-    tv_list_append_string(args, &raw mut regtype, 1 as ssize_t);
-    let mut c2rust_lvalue: [::core::ffi::c_char; 1] = [name as ::core::ffi::c_char];
-    tv_list_append_string(
-        args,
-        &raw mut c2rust_lvalue as *mut ::core::ffi::c_char,
-        1 as ssize_t,
-    );
-    eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"set\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        args,
-        true_0 != 0,
-    );
-}
-#[no_mangle]
-pub unsafe extern "C" fn start_batch_changes() {
-    (*batch_change_count.ptr()) += 1;
-    if batch_change_count.get() > 1 as ::core::ffi::c_int {
-        return;
-    }
-    clipboard_delay_update.set(true_0 != 0);
-}
-#[no_mangle]
-pub unsafe extern "C" fn end_batch_changes() {
-    (*batch_change_count.ptr()) -= 1;
-    if batch_change_count.get() > 0 as ::core::ffi::c_int {
-        return;
-    }
-    clipboard_delay_update.set(false_0 != 0);
-    if clipboard_needs_update.get() {
-        clipboard_needs_update.set(false_0 != 0);
-        set_clipboard(NUL, get_y_previous());
-    }
-}
-#[no_mangle]
-pub unsafe extern "C" fn save_batch_count() -> ::core::ffi::c_int {
-    let mut save_count: ::core::ffi::c_int = batch_change_count.get();
-    batch_change_count.set(0 as ::core::ffi::c_int);
-    clipboard_delay_update.set(false_0 != 0);
-    if clipboard_needs_update.get() {
-        clipboard_needs_update.set(false_0 != 0);
-        set_clipboard(NUL, get_y_previous());
-    }
-    return save_count;
-}
-#[no_mangle]
-pub unsafe extern "C" fn restore_batch_count(mut save_count: ::core::ffi::c_int) {
-    '_c2rust_label: {
-        if batch_change_count.get() == 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"batch_change_count == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/clipboard.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                281 as ::core::ffi::c_uint,
-                b"void restore_batch_count(int)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
+        _ => ::std::process::abort(), // kMTUnknown
     };
-    batch_change_count.set(save_count);
-    if batch_change_count.get() > 0 as ::core::ffi::c_int {
-        clipboard_delay_update.set(true_0 != 0);
+
+    let args = tv_list_alloc(3);
+    tv_list_append_list(args, lines);
+    tv_list_append_string(args, &raw const regtype, 1);
+    let regname = [name as ::core::ffi::c_char];
+    tv_list_append_string(args, regname.as_ptr(), 1);
+    eval_call_provider(
+        b"clipboard\0".as_ptr() as *mut ::core::ffi::c_char,
+        b"set\0".as_ptr() as *mut ::core::ffi::c_char,
+        args,
+        true,
+    );
+}
+
+/// Start a batch: defer provider updates until the matching
+/// [`end_batch_changes`]. Nests.
+pub fn start_batch_changes() {
+    CLIPBOARD.with_mut(|st| {
+        st.batch_change_count += 1;
+        if st.batch_change_count > 1 {
+            return;
+        }
+        st.delay_update = true;
+    });
+}
+
+/// End a batch; flush a pending update once the outermost batch closes.
+pub fn end_batch_changes() {
+    let update = CLIPBOARD.with_mut(|st| {
+        st.batch_change_count -= 1;
+        if st.batch_change_count > 0 {
+            return false;
+        }
+        st.delay_update = false;
+        ::core::mem::replace(&mut st.needs_update, false)
+    });
+    if update {
+        // SAFETY: main-thread editor call, flushing the unnamed register.
+        unsafe { set_clipboard(NUL, get_y_previous()) };
     }
 }
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
+
+/// Suspend batching (flushing any pending update); returns the depth for
+/// [`restore_batch_count`].
+pub fn save_batch_count() -> ::core::ffi::c_int {
+    let (save_count, update) = CLIPBOARD.with_mut(|st| {
+        let save = st.batch_change_count;
+        st.batch_change_count = 0;
+        st.delay_update = false;
+        (save, ::core::mem::replace(&mut st.needs_update, false))
+    });
+    if update {
+        // SAFETY: main-thread editor call, flushing the unnamed register.
+        unsafe { set_clipboard(NUL, get_y_previous()) };
+    }
+    save_count
+}
+
+/// Resume batching at the depth returned by [`save_batch_count`].
+pub fn restore_batch_count(save_count: ::core::ffi::c_int) {
+    CLIPBOARD.with_mut(|st| {
+        assert!(st.batch_change_count == 0);
+        st.batch_change_count = save_count;
+        if st.batch_change_count > 0 {
+            st.delay_update = true;
+        }
+    });
+}
+
+unsafe fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     if l.is_null() {
-        return 0 as ::core::ffi::c_int;
+        return 0;
     }
-    return (*l).lv_len;
+    (*l).lv_len
 }
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
+
+unsafe fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
+        return ::core::ptr::null_mut();
     }
-    return (*l).lv_first;
+    (*l).lv_first
 }
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
+
+unsafe fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
+        return ::core::ptr::null_mut();
     }
-    return (*l).lv_last;
+    (*l).lv_last
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
