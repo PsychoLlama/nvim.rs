@@ -170,9 +170,6 @@
 {"symbol":"apply_cmdmod","kind":"fn","file":"src/nvim/ex_docmd.rs","class":"internal","refs":[]}
 {"symbol":"appname_is_valid","kind":"fn","file":"src/nvim/os/stdpaths.rs","class":"internal","refs":[]}
 {"symbol":"approximate_botline_win","kind":"fn","file":"src/nvim/move.rs","class":"internal","refs":[]}
-{"symbol":"arabic_combine","kind":"fn","file":"src/nvim/arabic.rs","class":"internal","refs":[]}
-{"symbol":"arabic_maycombine","kind":"fn","file":"src/nvim/arabic.rs","class":"internal","refs":[]}
-{"symbol":"arabic_shape","kind":"fn","file":"src/nvim/arabic.rs","class":"internal","refs":[]}
 {"symbol":"arena_alloc","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"arena_alloc_block","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"arena_alloc_count","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}

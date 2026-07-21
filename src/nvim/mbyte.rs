@@ -101,7 +101,6 @@ extern "C" {
     fn utf8proc_toupper(c: utf8proc_int32_t) -> utf8proc_int32_t;
     fn towlower(__wc: wint_t) -> wint_t;
     fn towupper(__wc: wint_t) -> wint_t;
-    fn arabic_combine(one: ::core::ffi::c_int, two: ::core::ffi::c_int) -> bool;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -4084,7 +4083,7 @@ pub unsafe extern "C" fn utf_composinglike(
     ) {
         return true_0 != 0;
     }
-    return arabic_combine(first, second);
+    return crate::src::nvim::arabic::arabic_combine(first, second);
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_iscomposing(
@@ -4096,7 +4095,7 @@ pub unsafe extern "C" fn utf_iscomposing(
         c1 as utf8proc_int32_t,
         c2 as utf8proc_int32_t,
         state as *mut utf8proc_int32_t,
-    ) || arabic_combine(c1, c2) as ::core::ffi::c_int != 0;
+    ) || crate::src::nvim::arabic::arabic_combine(c1, c2) as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn utfc_ptr2schar(
@@ -5271,7 +5270,7 @@ pub unsafe extern "C" fn utf_head_off(
                 (*utf8proc_get_property(prev_code as utf8proc_int32_t)).boundclass()
                     as ::core::ffi::c_int;
             if always_break_two(prev_bc, cur_bc) as ::core::ffi::c_int != 0
-                && !arabic_combine(
+                && !crate::src::nvim::arabic::arabic_combine(
                     prev_code as ::core::ffi::c_int,
                     cur_code as ::core::ffi::c_int,
                 )

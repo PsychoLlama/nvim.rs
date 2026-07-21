@@ -31,13 +31,6 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn arabic_shape(
-        c: ::core::ffi::c_int,
-        c1p: *mut ::core::ffi::c_int,
-        prev_c: ::core::ffi::c_int,
-        prev_c1: ::core::ffi::c_int,
-        next_c: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn logmsg(
         log_level: ::core::ffi::c_int,
         context: *const ::core::ffi::c_char,
@@ -2113,7 +2106,7 @@ pub unsafe extern "C" fn line_do_arabic_shape(mut buf: *mut schar_T, mut cols: :
         );
         if c0 & 0xff00 as ::core::ffi::c_int == 0x600 as ::core::ffi::c_int {
             c1new = c1;
-            c0new = arabic_shape(c0, &raw mut c1new, c0next, c1next, c0prev);
+            c0new = crate::src::nvim::arabic::arabic_shape(c0, &mut c1new, c0next, c1next, c0prev);
             if !(c0new == c0 && c1new == c1) {
                 scbuf = [0; 32];
                 schar_get(

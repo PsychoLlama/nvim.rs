@@ -1,5 +1,5 @@
 {
-  "internal_exports": 5595,
+  "internal_exports": 5592,
   "files": {
     "src/cjson/fpconv.rs": {"no_mangle": 3, "static_mut": 1, "unsafe": 8},
     "src/cjson/lua_cjson.rs": {"lines": 2747, "no_mangle": 3, "unsafe": 60},
@@ -27,7 +27,6 @@
     "src/nvim/api/vimscript.rs": {"lines": 4217, "no_mangle": 7, "unsafe": 14},
     "src/nvim/api/win_config.rs": {"lines": 5425, "no_mangle": 5, "unsafe": 20},
     "src/nvim/api/window.rs": {"lines": 2511, "no_mangle": 20, "unsafe": 20},
-    "src/nvim/arabic.rs": {"no_mangle": 3, "unsafe": 10},
     "src/nvim/arglist.rs": {"lines": 4022, "no_mangle": 29, "unsafe": 44},
     "src/nvim/autocmd.rs": {"lines": 9814, "no_mangle": 57, "unsafe": 102},
     "src/nvim/buffer.rs": {"lines": 8979, "no_mangle": 75, "unsafe": 109},
@@ -88,7 +87,7 @@
     "src/nvim/garray.rs": {"no_mangle": 11, "unsafe": 11},
     "src/nvim/getchar.rs": {"lines": 7310, "no_mangle": 59, "static_mut": 1, "unsafe": 123},
     "src/nvim/global_cell.rs": {"unsafe": 9},
-    "src/nvim/grid.rs": {"lines": 3561, "no_mangle": 39, "unsafe": 47},
+    "src/nvim/grid.rs": {"lines": 3554, "no_mangle": 39, "unsafe": 47},
     "src/nvim/hashtab.rs": {"no_mangle": 16, "unsafe": 14},
     "src/nvim/help.rs": {"lines": 4667, "no_mangle": 11, "unsafe": 24},
     "src/nvim/highlight.rs": {"lines": 4828, "no_mangle": 28, "unsafe": 48},
@@ -116,7 +115,7 @@
     "src/nvim/mark.rs": {"lines": 5928, "no_mangle": 48, "unsafe": 61},
     "src/nvim/marktree.rs": {"lines": 6010, "no_mangle": 42, "unsafe": 96},
     "src/nvim/match.rs": {"lines": 3983, "no_mangle": 15, "unsafe": 30},
-    "src/nvim/mbyte.rs": {"lines": 6901, "no_mangle": 77, "unsafe": 103},
+    "src/nvim/mbyte.rs": {"lines": 6900, "no_mangle": 77, "unsafe": 103},
     "src/nvim/memfile.rs": {"lines": 3021, "no_mangle": 17, "unsafe": 47},
     "src/nvim/memline.rs": {"lines": 9149, "no_mangle": 50, "unsafe": 89},
     "src/nvim/memory.rs": {"no_mangle": 41, "unsafe": 48},
