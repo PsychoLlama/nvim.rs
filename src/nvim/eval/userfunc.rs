@@ -91,9 +91,9 @@ extern "C" {
         force: bool,
         buf: *mut buf_T,
     ) -> bool;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut p_mfd: OptInt;
-    static mut p_verbose: OptInt;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static p_mfd: GlobalCell<OptInt>;
+    static p_verbose: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -128,7 +128,7 @@ extern "C" {
     static e_str_not_inside_function: [::core::ffi::c_char; 0];
     static e_not_callable_type_str: [::core::ffi::c_char; 0];
     static eval_lavars_used: GlobalCell<*mut bool>;
-    static mut EVALARG_EVALUATE: evalarg_T;
+    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
     fn fill_evalarg_from_eap(evalarg: *mut evalarg_T, eap: *mut exarg_T, skip: bool);
     fn skip_expr(pp: *mut *mut ::core::ffi::c_char, evalarg: *mut evalarg_T) -> ::core::ffi::c_int;
     fn get_lval(
@@ -216,7 +216,7 @@ extern "C" {
         rettv: *mut typval_T,
         basetv: *mut typval_T,
     ) -> ::core::ffi::c_int;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_find_len(
@@ -403,32 +403,32 @@ extern "C" {
     fn save_search_patterns();
     fn restore_search_patterns();
     fn ui_has(ext: UIExtension) -> bool;
-    static mut Rows: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut emsg_severe: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut ex_nesting_level: ::core::ffi::c_int;
-    static mut debug_tick: ::core::ffi::c_int;
-    static mut debug_backtrace_level: ::core::ffi::c_int;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut did_throw: bool;
-    static mut trylevel: ::core::ffi::c_int;
-    static mut want_garbage_collect: bool;
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut KeyTyped: bool;
-    static mut got_int: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static emsg_severe: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
+    static debug_tick: GlobalCell<::core::ffi::c_int>;
+    static debug_backtrace_level: GlobalCell<::core::ffi::c_int>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static did_throw: GlobalCell<bool>;
+    static trylevel: GlobalCell<::core::ffi::c_int>;
+    static want_garbage_collect: GlobalCell<bool>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static KeyTyped: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
 }
 pub type __time_t = ::core::ffi::c_long;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
@@ -4020,13 +4020,13 @@ pub unsafe extern "C" fn get_lambda_tv(
                     if prof_def_func() {
                         func_do_profile(fp);
                     }
-                    if sandbox != 0 {
+                    if sandbox.get() != 0 {
                         flags |= FC_SANDBOX;
                     }
                     (*fp).uf_varargs = true_0;
                     (*fp).uf_flags = flags;
                     (*fp).uf_calls = 0 as ::core::ffi::c_int;
-                    (*fp).uf_script_ctx = current_sctx;
+                    (*fp).uf_script_ctx = current_sctx.get();
                     (*fp).uf_script_ctx.sc_lnum = ((*fp).uf_script_ctx.sc_lnum
                         as ::core::ffi::c_int
                         + ((*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -4309,14 +4309,14 @@ unsafe extern "C" fn fname_trans_sid(
     let mut fname_buflen: size_t = 3 as size_t;
     if !eval_fname_sid(name) {
         *fname_buf.offset(fname_buflen as isize) = NUL as ::core::ffi::c_char;
-    } else if current_sctx.sc_sid <= 0 as ::core::ffi::c_int {
+    } else if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int {
         *error = FCERR_SCRIPT as ::core::ffi::c_int;
     } else {
         fname_buflen = fname_buflen.wrapping_add(snprintf(
             fname_buf.offset(fname_buflen as isize),
             ((FLEN_FIXED + 1 as ::core::ffi::c_int) as size_t).wrapping_sub(fname_buflen),
             b"%d_\0".as_ptr() as *const ::core::ffi::c_char,
-            current_sctx.sc_sid,
+            (*current_sctx.ptr()).sc_sid,
         ) as size_t);
     }
     let mut fnamelen: size_t = fname_buflen.wrapping_add(strlen(script_name));
@@ -4383,7 +4383,9 @@ pub unsafe extern "C" fn get_func_arity(
 #[no_mangle]
 pub unsafe extern "C" fn find_func(mut name: *const ::core::ffi::c_char) -> *mut ufunc_T {
     let mut hi: *mut hashitem_T = hash_find(func_hashtab.ptr(), name);
-    if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+    if !((*hi).hi_key.is_null()
+        || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+    {
         return (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
     }
     return ::core::ptr::null_mut::<ufunc_T>();
@@ -4511,7 +4513,9 @@ unsafe extern "C" fn cleanup_function_call(mut fc: *mut funccall_T) {
         let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
         let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
         while dihi_todo_ != 0 {
-            if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+            if !((*dihi_).hi_key.is_null()
+                || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 dihi_todo_ = dihi_todo_.wrapping_sub(1);
                 let di: *mut dictitem_T = (*dihi_)
                     .hi_key
@@ -4543,7 +4547,7 @@ unsafe extern "C" fn cleanup_function_call(mut fc: *mut funccall_T) {
         static made_copy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
         (*fc).fc_caller = previous_funccal.get();
         previous_funccal.set(fc);
-        if want_garbage_collect {
+        if want_garbage_collect.get() {
             made_copy.set(0 as ::core::ffi::c_int);
         } else {
             (*made_copy.ptr()) += 1;
@@ -4553,7 +4557,7 @@ unsafe extern "C" fn cleanup_function_call(mut fc: *mut funccall_T) {
                     as ::core::ffi::c_int
             {
                 made_copy.set(0 as ::core::ffi::c_int);
-                want_garbage_collect = true_0 != 0;
+                want_garbage_collect.set(true_0 != 0);
             }
         }
     };
@@ -4593,7 +4597,8 @@ unsafe extern "C" fn func_remove(mut fp: *mut ufunc_T) -> bool {
         func_hashtab.ptr(),
         &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
     );
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         return false_0 != 0;
     }
     hash_remove(func_hashtab.ptr(), hi);
@@ -4714,7 +4719,7 @@ pub unsafe extern "C" fn call_user_func(
             bh_create_newblock: false,
         },
     };
-    if depth.get() as OptInt >= p_mfd {
+    if depth.get() as OptInt >= p_mfd.get() {
         emsg(gettext(
             b"E132: Function call depth is higher than 'maxfuncdepth'\0".as_ptr()
                 as *const ::core::ffi::c_char,
@@ -4732,13 +4737,13 @@ pub unsafe extern "C" fn call_user_func(
     (*fp).uf_calls += 1;
     line_breakcheck();
     let mut fc: *mut funccall_T = create_funccal(fp, rettv);
-    (*fc).fc_level = ex_nesting_level;
+    (*fc).fc_level = ex_nesting_level.get();
     (*fc).fc_breakpoint = dbg_find_breakpoint(
         false_0 != 0,
         &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
         0 as linenr_T,
     );
-    (*fc).fc_dbg_tick = debug_tick;
+    (*fc).fc_dbg_tick = debug_tick.get();
     ga_init(
         &raw mut (*fc).fc_ufuncs,
         ::core::mem::size_of::<*mut ufunc_T>() as ::core::ffi::c_int,
@@ -4868,7 +4873,7 @@ pub unsafe extern "C" fn call_user_func(
                 if eval1(
                     &raw mut default_expr,
                     &raw mut def_rettv,
-                    &raw mut EVALARG_EVALUATE,
+                    EVALARG_EVALUATE.ptr(),
                 ) == FAIL
                 {
                     default_arg_err = true_0 != 0;
@@ -4937,14 +4942,14 @@ pub unsafe extern "C" fn call_user_func(
         }
         i += 1;
     }
-    RedrawingDisabled += 1;
+    (*RedrawingDisabled.ptr()) += 1;
     if (*fp).uf_flags & FC_SANDBOX != 0 {
         using_sandbox = true_0 != 0;
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
     }
     estack_push_ufunc(fp, 1 as linenr_T);
-    if p_verbose >= 12 as OptInt {
-        no_wait_return += 1;
+    if p_verbose.get() >= 12 as OptInt {
+        (*no_wait_return.ptr()) += 1;
         verbose_enter_scroll();
         smsg(
             0 as ::core::ffi::c_int,
@@ -4953,7 +4958,7 @@ pub unsafe extern "C" fn call_user_func(
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name,
         );
-        if p_verbose >= 14 as OptInt {
+        if p_verbose.get() >= 14 as OptInt {
             msg_puts(b"(\0".as_ptr() as *const ::core::ffi::c_char);
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < argcount {
@@ -4965,12 +4970,12 @@ pub unsafe extern "C" fn call_user_func(
                 {
                     msg_outnum((*argvars.offset(i_0 as isize)).vval.v_number as ::core::ffi::c_int);
                 } else {
-                    emsg_off += 1;
+                    (*emsg_off.ptr()) += 1;
                     let mut tofree: *mut ::core::ffi::c_char = encode_tv2string(
                         argvars.offset(i_0 as isize),
                         ::core::ptr::null_mut::<size_t>(),
                     );
-                    emsg_off -= 1;
+                    (*emsg_off.ptr()) -= 1;
                     if !tofree.is_null() {
                         let mut s: *mut ::core::ffi::c_char = tofree;
                         let mut buf: [::core::ffi::c_char; 480] = [0; 480];
@@ -4994,9 +4999,9 @@ pub unsafe extern "C" fn call_user_func(
         }
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
         verbose_leave_scroll();
-        no_wait_return -= 1;
+        (*no_wait_return.ptr()) -= 1;
     }
-    let do_profiling_yes: bool = do_profiling == PROF_YES;
+    let do_profiling_yes: bool = do_profiling.get() == PROF_YES;
     let mut func_not_yet_profiling_but_should: bool = do_profiling_yes as ::core::ffi::c_int != 0
         && (*fp).uf_profiling == 0
         && has_profiling(
@@ -5020,21 +5025,21 @@ pub unsafe extern "C" fn call_user_func(
     if do_profiling_yes {
         script_prof_save(&raw mut wait_start);
     }
-    let save_current_sctx: sctx_T = current_sctx;
-    current_sctx = (*fp).uf_script_ctx;
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    did_emsg = false_0;
+    let save_current_sctx: sctx_T = current_sctx.get();
+    current_sctx.set((*fp).uf_script_ctx);
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    did_emsg.set(false_0);
     if default_arg_err as ::core::ffi::c_int != 0
-        && ((*fp).uf_flags & FC_ABORT != 0 || trylevel > 0 as ::core::ffi::c_int)
+        && ((*fp).uf_flags & FC_ABORT != 0 || trylevel.get() > 0 as ::core::ffi::c_int)
     {
-        did_emsg = true_0;
+        did_emsg.set(true_0);
     } else if islambda {
         let mut p: *mut ::core::ffi::c_char = (*((*fp).uf_lines.ga_data
             as *mut *mut ::core::ffi::c_char))
             .offset(7 as ::core::ffi::c_int as isize);
-        ex_nesting_level += 1;
-        eval1(&raw mut p, rettv, &raw mut EVALARG_EVALUATE);
-        ex_nesting_level -= 1;
+        (*ex_nesting_level.ptr()) += 1;
+        eval1(&raw mut p, rettv, EVALARG_EVALUATE.ptr());
+        (*ex_nesting_level.ptr()) -= 1;
     } else {
         do_cmdline(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5054,8 +5059,8 @@ pub unsafe extern "C" fn call_user_func(
         );
     }
     handle_defer_one(current_funccal.get());
-    RedrawingDisabled -= 1;
-    if did_emsg != 0 && (*fp).uf_flags & FC_ABORT != 0
+    (*RedrawingDisabled.ptr()) -= 1;
+    if did_emsg.get() != 0 && (*fp).uf_flags & FC_ABORT != 0
         || (*rettv).v_type as ::core::ffi::c_uint
             == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -5078,8 +5083,8 @@ pub unsafe extern "C" fn call_user_func(
             (*fp).uf_profiling = false_0;
         }
     }
-    if p_verbose >= 12 as OptInt {
-        no_wait_return += 1;
+    if p_verbose.get() >= 12 as OptInt {
+        (*no_wait_return.ptr()) += 1;
         verbose_enter_scroll();
         if aborting() {
             smsg(
@@ -5102,11 +5107,11 @@ pub unsafe extern "C" fn call_user_func(
             );
         } else {
             let mut buf_0: [::core::ffi::c_char; 480] = [0; 480];
-            emsg_off += 1;
+            (*emsg_off.ptr()) += 1;
             let mut s_0: *mut ::core::ffi::c_char =
                 encode_tv2string((*fc).fc_rettv, ::core::ptr::null_mut::<size_t>());
             let mut tofree_0: *mut ::core::ffi::c_char = s_0;
-            emsg_off -= 1;
+            (*emsg_off.ptr()) -= 1;
             if !s_0.is_null() {
                 if vim_strsize(s_0) > MSG_BUF_CLEN {
                     trunc_string(
@@ -5130,23 +5135,23 @@ pub unsafe extern "C" fn call_user_func(
         }
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
         verbose_leave_scroll();
-        no_wait_return -= 1;
+        (*no_wait_return.ptr()) -= 1;
     }
     estack_pop();
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
     if do_profiling_yes {
         script_prof_restore(&raw mut wait_start);
     }
     if using_sandbox {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
     }
-    if p_verbose >= 12 as OptInt
+    if p_verbose.get() >= 12 as OptInt
         && !(*((*exestack.ptr()).ga_data as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
         .is_null()
     {
-        no_wait_return += 1;
+        (*no_wait_return.ptr()) += 1;
         verbose_enter_scroll();
         smsg(
             0 as ::core::ffi::c_int,
@@ -5157,9 +5162,9 @@ pub unsafe extern "C" fn call_user_func(
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
         verbose_leave_scroll();
-        no_wait_return -= 1;
+        (*no_wait_return.ptr()) -= 1;
     }
-    did_emsg |= save_did_emsg;
+    (*did_emsg.ptr()) |= save_did_emsg;
     (*depth.ptr()) -= 1;
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_1 < tv_to_free_len {
@@ -5346,8 +5351,8 @@ pub unsafe extern "C" fn func_call(
             }
         }
         funcexe = FUNCEXE_INIT;
-        funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-        funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+        funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+        funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
         funcexe.fe_evaluate = true_0 != 0;
         funcexe.fe_partial = partial;
         funcexe.fe_selfdict = selfdict;
@@ -5809,7 +5814,7 @@ unsafe extern "C" fn list_func_head(
         msg_puts(b" closure\0".as_ptr() as *const ::core::ffi::c_char);
     }
     msg_clr_eos();
-    if p_verbose > 0 as OptInt {
+    if p_verbose.get() > 0 as OptInt {
         last_set_msg((*fp).uf_script_ctx);
     }
     return OK;
@@ -6056,7 +6061,7 @@ pub unsafe extern "C" fn trans_function_name(
                         && eval_fname_sid(lv.ll_exp_name) as ::core::ffi::c_int != 0
                         || eval_fname_sid(*pp) as ::core::ffi::c_int != 0
                     {
-                        if current_sctx.sc_sid <= 0 as ::core::ffi::c_int {
+                        if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int {
                             emsg(gettext(&raw const e_usingsid as *const ::core::ffi::c_char));
                             break '_theend;
                         } else {
@@ -6064,7 +6069,7 @@ pub unsafe extern "C" fn trans_function_name(
                                 &raw mut sid_buf as *mut ::core::ffi::c_char,
                                 ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
                                 b"%d_\0".as_ptr() as *const ::core::ffi::c_char,
-                                current_sctx.sc_sid,
+                                (*current_sctx.ptr()).sc_sid,
                             ) as size_t;
                             lead += sid_buflen as ::core::ffi::c_int;
                         }
@@ -6157,8 +6162,8 @@ pub unsafe extern "C" fn get_scriptlocal_funcname(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if !(current_sctx.sc_sid > 0 as ::core::ffi::c_int
-        && current_sctx.sc_sid <= (*script_items.ptr()).ga_len)
+    if !((*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
+        && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len)
     {
         emsg(gettext(&raw const e_usingsid as *const ::core::ffi::c_char));
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6168,7 +6173,7 @@ pub unsafe extern "C" fn get_scriptlocal_funcname(
         &raw mut sid_buf as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 25]>(),
         b"<SNR>%d_\0".as_ptr() as *const ::core::ffi::c_char,
-        current_sctx.sc_sid,
+        (*current_sctx.ptr()).sc_sid,
     ) as size_t;
     let off: ::core::ffi::c_int = if *funcname as ::core::ffi::c_int == 's' as ::core::ffi::c_int {
         2 as ::core::ffi::c_int
@@ -6234,8 +6239,10 @@ unsafe extern "C" fn list_functions(mut regmatch: *mut regmatch_T) {
     let ht_array: *const hashitem_T = (*func_hashtab.ptr()).ht_array;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     let mut hi: *const hashitem_T = ht_array;
-    while todo > 0 as size_t && !got_int {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+    while todo > 0 as size_t && !got_int.get() {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             let mut fp: *mut ufunc_T =
                 (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
             todo = todo.wrapping_sub(1);
@@ -6293,7 +6300,7 @@ unsafe extern "C" fn list_functions_matching_pat(
         );
         *p = c;
         if !regmatch.regprog.is_null() {
-            regmatch.rm_ic = p_ic != 0;
+            regmatch.rm_ic = p_ic.get() != 0;
             list_functions(&raw mut regmatch);
             vim_regfree(regmatch.regprog);
         }
@@ -6319,7 +6326,7 @@ unsafe extern "C" fn list_one_function(
     if !(*eap).nextcmd.is_null() {
         *p = NUL as ::core::ffi::c_char;
     }
-    if (*eap).skip != 0 || got_int as ::core::ffi::c_int != 0 {
+    if (*eap).skip != 0 || got_int.get() as ::core::ffi::c_int != 0 {
         return ::core::ptr::null_mut::<ufunc_T>();
     }
     let mut fp: *mut ufunc_T = find_func(name);
@@ -6336,7 +6343,7 @@ unsafe extern "C" fn list_one_function(
         return fp;
     }
     let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while j < (*fp).uf_lines.ga_len && !got_int {
+    while j < (*fp).uf_lines.ga_len && !got_int.get() {
         if !(*((*fp).uf_lines.ga_data as *mut *mut ::core::ffi::c_char).offset(j as isize))
             .is_null()
         {
@@ -6361,7 +6368,7 @@ unsafe extern "C" fn list_one_function(
         }
         j += 1;
     }
-    if !got_int {
+    if !got_int.get() {
         msg_putchar('\n' as ::core::ffi::c_int);
         if function_list_modified(prev_ht_changed) == 0 {
             msg_puts(if (*eap).forceit != 0 {
@@ -6381,7 +6388,7 @@ unsafe extern "C" fn get_function_body(
     mut line_to_free: *mut *mut ::core::ffi::c_char,
     mut show_block: bool,
 ) -> ::core::ffi::c_int {
-    let mut saved_wait_return: bool = need_wait_return;
+    let mut saved_wait_return: bool = need_wait_return.get();
     let mut line_arg: *mut ::core::ffi::c_char = line_arg_in;
     let mut indent: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
     let mut nesting: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6394,11 +6401,11 @@ unsafe extern "C" fn get_function_body(
     let mut do_concat: bool = true_0 != 0;
     '_theend: {
         loop {
-            if KeyTyped {
-                msg_scroll = true_0;
+            if KeyTyped.get() {
+                msg_scroll.set(true_0);
                 saved_wait_return = false_0 != 0;
             }
-            need_wait_return = false_0 != 0;
+            need_wait_return.set(false_0 != 0);
             let mut theline: *mut ::core::ffi::c_char =
                 ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6431,8 +6438,8 @@ unsafe extern "C" fn get_function_body(
                 }
                 *line_to_free = theline;
             }
-            if KeyTyped {
-                lines_left = Rows - 1 as ::core::ffi::c_int;
+            if KeyTyped.get() {
+                lines_left.set(Rows.get() - 1 as ::core::ffi::c_int);
             }
             if theline.is_null() {
                 if !skip_until.is_null() {
@@ -6544,7 +6551,7 @@ unsafe extern "C" fn get_function_body(
                             nextcmd = line_arg;
                         } else if *p as ::core::ffi::c_int != NUL
                             && *p as ::core::ffi::c_int != '"' as ::core::ffi::c_int
-                            && p_verbose > 0 as OptInt
+                            && p_verbose.get() > 0 as OptInt
                         {
                             swmsg(
                                 true_0 != 0,
@@ -6985,14 +6992,15 @@ unsafe extern "C" fn get_function_body(
                 }
             }
         }
-        if did_emsg == 0 {
+        if did_emsg.get() == 0 {
             ret = OK;
         }
     }
     xfree(skip_until as *mut ::core::ffi::c_void);
     xfree(heredoc_trimmed as *mut ::core::ffi::c_void);
-    need_wait_return =
-        need_wait_return as ::core::ffi::c_int | saved_wait_return as ::core::ffi::c_int != 0;
+    need_wait_return.set(
+        need_wait_return.get() as ::core::ffi::c_int | saved_wait_return as ::core::ffi::c_int != 0,
+    );
     return ret;
 }
 #[no_mangle]
@@ -7070,8 +7078,8 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
         }
         (*eap).skip = true_0;
     }
-    let saved_did_emsg: ::core::ffi::c_int = did_emsg;
-    did_emsg = false_0;
+    let saved_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    did_emsg.set(false_0);
     '_ret_free: {
         if paren == 0 {
             fp = list_one_function(eap, name, p_0);
@@ -7155,7 +7163,7 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                     (*eap).skip != 0,
                 ) != FAIL
                 {
-                    if KeyTyped as ::core::ffi::c_int != 0
+                    if KeyTyped.get() as ::core::ffi::c_int != 0
                         && ui_has(kUICmdline) as ::core::ffi::c_int != 0
                     {
                         show_block = true_0 != 0;
@@ -7220,14 +7228,14 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                         } else if *p_0 as ::core::ffi::c_int != NUL
                             && *p_0 as ::core::ffi::c_int != '"' as ::core::ffi::c_int
                             && (*eap).skip == 0
-                            && did_emsg == 0
+                            && did_emsg.get() == 0
                         {
                             semsg(
                                 gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                                 p_0,
                             );
                         }
-                        if KeyTyped {
+                        if KeyTyped.get() {
                             if (*eap).skip == 0 && (*eap).forceit == 0 {
                                 if !fudi.fd_dict.is_null() && fudi.fd_newkey.is_null() {
                                     emsg(gettext(e_funcdict.get()));
@@ -7235,13 +7243,13 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                                     emsg_funcname(e_funcexts.get(), name);
                                 }
                             }
-                            if (*eap).skip == 0 && did_emsg != 0 {
+                            if (*eap).skip == 0 && did_emsg.get() != 0 {
                                 break '_erret;
                             } else {
                                 if !ui_has(kUICmdline) {
                                     msg_putchar('\n' as ::core::ffi::c_int);
                                 }
-                                cmdline_row = msg_row;
+                                cmdline_row.set(msg_row.get());
                             }
                         }
                         sourcing_lnum_top = (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -7275,9 +7283,10 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                                     fp = find_func(name);
                                     if !fp.is_null() {
                                         if (*eap).forceit == 0
-                                            && ((*fp).uf_script_ctx.sc_sid != current_sctx.sc_sid
+                                            && ((*fp).uf_script_ctx.sc_sid
+                                                != (*current_sctx.ptr()).sc_sid
                                                 || (*fp).uf_script_ctx.sc_seq
-                                                    == current_sctx.sc_seq)
+                                                    == (*current_sctx.ptr()).sc_seq)
                                         {
                                             emsg_funcname(e_funcexts.get(), name);
                                             break '_errret_keep;
@@ -7455,12 +7464,12 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                                 func_do_profile(fp);
                             }
                             (*fp).uf_varargs = varargs;
-                            if sandbox != 0 {
+                            if sandbox.get() != 0 {
                                 flags |= FC_SANDBOX;
                             }
                             (*fp).uf_flags = flags;
                             (*fp).uf_calls = 0 as ::core::ffi::c_int;
-                            (*fp).uf_script_ctx = current_sctx;
+                            (*fp).uf_script_ctx = current_sctx.get();
                             (*fp).uf_script_ctx.sc_lnum += sourcing_lnum_top;
                             nlua_set_sctx(&raw mut (*fp).uf_script_ctx);
                             break '_ret_free;
@@ -7504,7 +7513,7 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
     xfree(line_to_free as *mut ::core::ffi::c_void);
     xfree(fudi.fd_newkey as *mut ::core::ffi::c_void);
     xfree(name as *mut ::core::ffi::c_void);
-    did_emsg |= saved_did_emsg;
+    (*did_emsg.ptr()) |= saved_did_emsg;
     if show_block {
         ui_ext_cmdline_block_leave();
     }
@@ -7605,7 +7614,9 @@ pub unsafe extern "C" fn get_user_func_name(
         if c2rust_fresh16 > 0 as size_t {
             hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+        while (*hi.get()).hi_key.is_null()
+            || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi.set((*hi.ptr()).offset(1));
         }
         let mut fp: *mut ufunc_T = (*hi.get())
@@ -7625,26 +7636,26 @@ pub unsafe extern "C" fn get_user_func_name(
             return &raw mut (*fp).uf_name as *mut ::core::ffi::c_char;
         }
         let mut len: ::core::ffi::c_int = cat_func_name(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             fp,
         );
         if (*xp).xp_context != EXPAND_USER_FUNC as ::core::ffi::c_int {
             xstrlcpy(
-                (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                 b"(\0".as_ptr() as *const ::core::ffi::c_char,
                 (IOSIZE as size_t).wrapping_sub(len as size_t),
             );
             if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= 0 as ::core::ffi::c_int {
                 len += 1;
                 xstrlcpy(
-                    (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                    (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                     b")\0".as_ptr() as *const ::core::ffi::c_char,
                     (IOSIZE as size_t).wrapping_sub(len as size_t),
                 );
             }
         }
-        return &raw mut IObuff as *mut ::core::ffi::c_char;
+        return IObuff.ptr() as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -7840,7 +7851,7 @@ pub unsafe extern "C" fn ex_return(mut eap: *mut exarg_T) {
         eval_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     if (*eap).skip != 0 {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     (*eap).nextcmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *arg as ::core::ffi::c_int != NUL
@@ -7870,7 +7881,7 @@ pub unsafe extern "C" fn ex_return(mut eap: *mut exarg_T) {
         (*eap).nextcmd = check_nextcmd(arg);
     }
     if (*eap).skip != 0 {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     clear_evalarg(&raw mut evalarg, eap);
 }
@@ -7887,13 +7898,13 @@ unsafe extern "C" fn ex_call_inner(
     let mut lnum: linenr_T = (*eap).line1;
     while lnum <= (*eap).line2 {
         if (*eap).addr_count > 0 as ::core::ffi::c_int {
-            if lnum > (*curbuf).b_ml.ml_line_count {
+            if lnum > (*curbuf.get()).b_ml.ml_line_count {
                 emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
                 break;
             } else {
-                (*curwin).w_cursor.lnum = lnum;
-                (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+                (*curwin.get()).w_cursor.lnum = lnum;
+                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
             }
         }
         *arg = startarg;
@@ -7919,7 +7930,7 @@ unsafe extern "C" fn ex_call_inner(
         } else if handle_subscript(
             arg as *mut *const ::core::ffi::c_char,
             &raw mut rettv,
-            &raw mut EVALARG_EVALUATE,
+            EVALARG_EVALUATE.ptr(),
             true_0 != 0,
         ) == FAIL
         {
@@ -8154,11 +8165,11 @@ pub unsafe extern "C" fn ex_call(mut eap: *mut exarg_T) {
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
         if eval0((*eap).arg, &raw mut rettv, eap, &raw mut evalarg) != FAIL {
             tv_clear(&raw mut rettv);
         }
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
         clear_evalarg(&raw mut evalarg, eap);
         return;
     }
@@ -8222,12 +8233,12 @@ pub unsafe extern "C" fn ex_call(mut eap: *mut exarg_T) {
                 &raw mut evalarg,
             ) != 0;
         }
-        if (!aborting() || did_throw as ::core::ffi::c_int != 0)
+        if (!aborting() || did_throw.get() as ::core::ffi::c_int != 0)
             && (!failed || (*(*eap).cstack).cs_trylevel > 0 as ::core::ffi::c_int)
         {
             if ends_excmd(*arg as ::core::ffi::c_int) == 0 {
                 if !failed && !aborting() {
-                    emsg_severe = true_0 != 0;
+                    emsg_severe.set(true_0 != 0);
                     semsg(
                         gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                         arg,
@@ -8319,19 +8330,19 @@ pub unsafe extern "C" fn get_return_cmd(
         slen = strlen(s);
     }
     xstrlcpy(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         b":return \0".as_ptr() as *const ::core::ffi::c_char,
         IOSIZE as size_t,
     );
     xstrlcpy(
-        (&raw mut IObuff as *mut ::core::ffi::c_char).offset(8 as ::core::ffi::c_int as isize),
+        (IObuff.ptr() as *mut ::core::ffi::c_char).offset(8 as ::core::ffi::c_int as isize),
         s,
         (IOSIZE - 8 as ::core::ffi::c_int) as size_t,
     );
     let mut IObufflen: size_t = (8 as size_t).wrapping_add(slen);
     if IObufflen >= IOSIZE as size_t {
         strcpy(
-            (&raw mut IObuff as *mut ::core::ffi::c_char)
+            (IObuff.ptr() as *mut ::core::ffi::c_char)
                 .offset((1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
                 .offset(-(4 as ::core::ffi::c_int as isize)),
             b"...\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -8339,7 +8350,7 @@ pub unsafe extern "C" fn get_return_cmd(
         IObufflen = (IOSIZE - 1 as ::core::ffi::c_int) as size_t;
     }
     xfree(tofree as *mut ::core::ffi::c_void);
-    return xstrnsave(&raw mut IObuff as *mut ::core::ffi::c_char, IObufflen);
+    return xstrnsave(IObuff.ptr() as *mut ::core::ffi::c_char, IObufflen);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_func_line(
@@ -8351,7 +8362,7 @@ pub unsafe extern "C" fn get_func_line(
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
     let mut fp: *mut ufunc_T = (*fcp).fc_func;
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*fcp).fc_dbg_tick != debug_tick {
+    if (*fcp).fc_dbg_tick != debug_tick.get() {
         (*fcp).fc_breakpoint = dbg_find_breakpoint(
             false_0 != 0,
             &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
@@ -8359,13 +8370,13 @@ pub unsafe extern "C" fn get_func_line(
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
-        (*fcp).fc_dbg_tick = debug_tick;
+        (*fcp).fc_dbg_tick = debug_tick.get();
     }
-    if do_profiling == PROF_YES {
+    if do_profiling.get() == PROF_YES {
         func_line_end(cookie);
     }
     let mut gap: *mut garray_T = &raw mut (*fp).uf_lines;
-    if (*fp).uf_flags & FC_ABORT != 0 && did_emsg != 0 && !aborted_in_try()
+    if (*fp).uf_flags & FC_ABORT != 0 && did_emsg.get() != 0 && !aborted_in_try()
         || (*fcp).fc_returned != 0
     {
         retval = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -8388,7 +8399,7 @@ pub unsafe extern "C" fn get_func_line(
             (*((*exestack.ptr()).ga_data as *mut estack_T)
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum = (*fcp).fc_linenr as linenr_T;
-            if do_profiling == PROF_YES {
+            if do_profiling.get() == PROF_YES {
                 func_line_start(cookie);
             }
         }
@@ -8412,7 +8423,7 @@ pub unsafe extern "C" fn get_func_line(
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
-        (*fcp).fc_dbg_tick = debug_tick;
+        (*fcp).fc_dbg_tick = debug_tick.get();
     }
     return retval;
 }
@@ -8421,7 +8432,7 @@ pub unsafe extern "C" fn func_has_ended(
     mut cookie: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
-    return ((*(*fcp).fc_func).uf_flags & FC_ABORT != 0 && did_emsg != 0 && !aborted_in_try()
+    return ((*(*fcp).fc_func).uf_flags & FC_ABORT != 0 && did_emsg.get() != 0 && !aborted_in_try()
         || (*fcp).fc_returned != 0) as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -8562,14 +8573,14 @@ pub unsafe extern "C" fn free_unref_funccal(
 #[no_mangle]
 pub unsafe extern "C" fn get_funccal() -> *mut funccall_T {
     let mut funccal: *mut funccall_T = current_funccal.get();
-    if debug_backtrace_level > 0 as ::core::ffi::c_int {
+    if debug_backtrace_level.get() > 0 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < debug_backtrace_level {
+        while i < debug_backtrace_level.get() {
             let mut temp_funccal: *mut funccall_T = (*funccal).fc_caller;
             if !temp_funccal.is_null() {
                 funccal = temp_funccal;
             } else {
-                debug_backtrace_level = i;
+                debug_backtrace_level.set(i);
             }
             i += 1;
         }
@@ -8676,7 +8687,9 @@ pub unsafe extern "C" fn find_hi_in_scoped_ht(
                 varname,
                 namelen.wrapping_sub(varname.offset_from(name) as size_t),
             );
-            if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+            if !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 *pht = ht;
                 break;
             }
@@ -8817,8 +8830,10 @@ pub unsafe extern "C" fn set_ref_in_call_stack(mut copyID: ::core::ffi::c_int) -
 pub unsafe extern "C" fn set_ref_in_functions(mut copyID: ::core::ffi::c_int) -> bool {
     let mut todo: ::core::ffi::c_int = (*func_hashtab.ptr()).ht_used as ::core::ffi::c_int;
     let mut hi: *mut hashitem_T = (*func_hashtab.ptr()).ht_array;
-    while todo > 0 as ::core::ffi::c_int && !got_int {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+    while todo > 0 as ::core::ffi::c_int && !got_int.get() {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             todo -= 1;
             let mut fp: *mut ufunc_T =
                 (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
@@ -8892,7 +8907,7 @@ pub unsafe extern "C" fn register_luafunc(mut ref_0: LuaRef) -> *mut ::core::ffi
     (*fp).uf_varargs = true_0;
     (*fp).uf_flags = FC_LUAREF;
     (*fp).uf_calls = 0 as ::core::ffi::c_int;
-    (*fp).uf_script_ctx = current_sctx;
+    (*fp).uf_script_ctx = current_sctx.get();
     (*fp).uf_luaref = ref_0;
     hash_add(
         func_hashtab.ptr(),

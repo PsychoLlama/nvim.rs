@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -102,23 +102,23 @@ extern "C" {
     ) -> *mut ptr_t;
     fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    static mut autocmd_fname: *mut ::core::ffi::c_char;
-    static mut autocmd_fname_full: bool;
-    static mut autocmd_bufnr: ::core::ffi::c_int;
-    static mut autocmd_match: *mut ::core::ffi::c_char;
-    static mut aucmd_win_vec: C2Rust_Unnamed_35;
+    static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char>;
+    static autocmd_fname_full: GlobalCell<bool>;
+    static autocmd_bufnr: GlobalCell<::core::ffi::c_int>;
+    static autocmd_match: GlobalCell<*mut ::core::ffi::c_char>;
+    static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_35>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
     fn bt_prompt(buf: *mut buf_T) -> bool;
     fn appended_lines_mark(lnum: linenr_T, count: ::core::ffi::c_int);
-    static mut channels: Map_uint64_t_ptr_t;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn callback_reader_free(reader: *mut CallbackReader);
-    static mut empty_string_option: [::core::ffi::c_char; 0];
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut p_lpl: ::core::ffi::c_int;
-    static mut p_mfd: OptInt;
-    static mut p_verbose: OptInt;
+    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static p_lpl: GlobalCell<::core::ffi::c_int>;
+    static p_mfd: GlobalCell<OptInt>;
+    static p_verbose: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -172,7 +172,7 @@ extern "C" {
     static e_invalid_value_for_blob_nr: [::core::ffi::c_char; 0];
     static e_stray_closing_curly_str: [::core::ffi::c_char; 0];
     static line_msg: [::core::ffi::c_char; 0];
-    static mut EVALARG_EVALUATE: evalarg_T;
+    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
     fn encode_list_write(
         data: *mut ::core::ffi::c_void,
         buf: *const ::core::ffi::c_char,
@@ -182,7 +182,7 @@ extern "C" {
     fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
     static gc_first_dict: GlobalCell<*mut dict_T>;
     static gc_first_list: GlobalCell<*mut list_T>;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn eexe_mod_op(
         tv1: *mut typval_T,
         tv2: *const typval_T,
@@ -228,7 +228,7 @@ extern "C" {
     fn verbose_leave();
     fn verbose_enter_scroll();
     fn verbose_leave_scroll();
-    static mut msg_ext_skip_verbose: bool;
+    static msg_ext_skip_verbose: GlobalCell<bool>;
     static tv_empty_string: *const ::core::ffi::c_char;
     static tv_in_free_unref_items: GlobalCell<bool>;
     fn tv_list_watch_add(l: *mut list_T, lw: *mut listwatch_T);
@@ -551,33 +551,33 @@ extern "C" {
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn aborting() -> bool;
     fn discard_current_exception();
-    static mut msg_didout: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut need_clr_eos: bool;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut emsg_severe: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut did_throw: bool;
-    static mut force_abort: bool;
-    static mut may_garbage_collect: bool;
-    static mut want_garbage_collect: bool;
-    static mut garbage_collect_at_exit: bool;
-    static mut current_sctx: sctx_T;
-    static mut provider_caller_scope: caller_scope;
-    static mut provider_call_nesting: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut textlock: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut got_int: bool;
+    static msg_didout: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static need_clr_eos: GlobalCell<bool>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static emsg_severe: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static did_throw: GlobalCell<bool>;
+    static force_abort: GlobalCell<bool>;
+    static may_garbage_collect: GlobalCell<bool>;
+    static want_garbage_collect: GlobalCell<bool>;
+    static garbage_collect_at_exit: GlobalCell<bool>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static provider_caller_scope: GlobalCell<caller_scope>;
+    static provider_call_nesting: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
     fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn set_ref_in_cpt_callbacks(
         callbacks: *mut Callback,
@@ -600,7 +600,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
         did_simplify: *mut bool,
     ) -> ::core::ffi::c_int;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn nlua_call_ref(
         ref_0: LuaRef,
         name: *const ::core::ffi::c_char,
@@ -5293,7 +5293,7 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 pub const COPYID_INC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const COPYID_MASK: ::core::ffi::c_int = !(0x1 as ::core::ffi::c_int);
@@ -5463,7 +5463,7 @@ pub unsafe extern "C" fn eval_to_bool(
     };
     fill_evalarg_from_eap(&raw mut evalarg, eap, skip);
     if skip {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     let mut r: ::core::ffi::c_int = if use_simple_function as ::core::ffi::c_int != 0 {
         eval0_simple_funccal(arg, &raw mut tv, eap, &raw mut evalarg)
@@ -5480,7 +5480,7 @@ pub unsafe extern "C" fn eval_to_bool(
         }
     }
     if skip {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     clear_evalarg(&raw mut evalarg, eap);
     return retval;
@@ -5491,8 +5491,8 @@ unsafe extern "C" fn eval1_emsg(
     mut eap: *mut exarg_T,
 ) -> ::core::ffi::c_int {
     let start: *const ::core::ffi::c_char = *arg;
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut evalarg: evalarg_T = evalarg_T {
         eval_flags: 0,
         eval_getline: None,
@@ -5502,7 +5502,10 @@ unsafe extern "C" fn eval1_emsg(
     fill_evalarg_from_eap(&raw mut evalarg, eap, !eap.is_null() && (*eap).skip != 0);
     let ret: ::core::ffi::c_int = eval1(arg, rettv, &raw mut evalarg);
     if ret == FAIL {
-        if !aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
+        if !aborting()
+            && did_emsg.get() == did_emsg_before
+            && called_emsg.get() == called_emsg_before
+        {
             semsg(
                 gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
                 start,
@@ -5679,7 +5682,7 @@ pub unsafe extern "C" fn eval_to_string_skip(
     };
     fill_evalarg_from_eap(&raw mut evalarg, eap, skip);
     if skip {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     if eval0(arg, &raw mut tv, eap, &raw mut evalarg) == FAIL || skip as ::core::ffi::c_int != 0 {
         retval = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5688,7 +5691,7 @@ pub unsafe extern "C" fn eval_to_string_skip(
         tv_clear(&raw mut tv);
     }
     if skip {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     clear_evalarg(&raw mut evalarg, eap);
     return retval;
@@ -5830,14 +5833,14 @@ pub unsafe extern "C" fn eval_to_string_safe(
     };
     save_funccal(&raw mut funccal_entry);
     if use_sandbox {
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
     }
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     retval = eval_to_string(arg, false_0 != 0, use_simple_function);
     if use_sandbox {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
     }
-    textlock -= 1;
+    (*textlock.ptr()) -= 1;
     restore_funccal();
     return retval;
 }
@@ -5854,12 +5857,12 @@ pub unsafe extern "C" fn eval_to_number(
     let mut retval: varnumber_T = 0;
     let mut p: *mut ::core::ffi::c_char = skipwhite(expr);
     let mut r: ::core::ffi::c_int = NOTDONE;
-    emsg_off += 1;
+    (*emsg_off.ptr()) += 1;
     if use_simple_function {
         r = may_call_simple_func(expr, &raw mut rettv);
     }
     if r == NOTDONE {
-        r = eval1(&raw mut p, &raw mut rettv, &raw mut EVALARG_EVALUATE);
+        r = eval1(&raw mut p, &raw mut rettv, EVALARG_EVALUATE.ptr());
     }
     if r == FAIL {
         retval = -1 as varnumber_T;
@@ -5867,7 +5870,7 @@ pub unsafe extern "C" fn eval_to_number(
         retval = tv_get_number_chk(&raw mut rettv, ::core::ptr::null_mut::<bool>());
         tv_clear(&raw mut rettv);
     }
-    emsg_off -= 1;
+    (*emsg_off.ptr()) -= 1;
     return retval;
 }
 #[no_mangle]
@@ -5947,8 +5950,8 @@ pub unsafe extern "C" fn call_vim_function(
         }
         (*rettv).v_type = VAR_UNKNOWN;
         funcexe = FUNCEXE_INIT;
-        funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-        funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+        funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+        funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
         funcexe.fe_evaluate = true_0 != 0;
         funcexe.fe_partial = pt;
         ret = call_func(func, len, rettv, argc, argv, &raw mut funcexe);
@@ -6002,16 +6005,17 @@ pub unsafe extern "C" fn eval_foldexpr(
     mut wp: *mut win_T,
     mut cp: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     let use_sandbox: bool =
         was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL as ::core::ffi::c_int) != 0;
     let mut arg: *mut ::core::ffi::c_char = skipwhite((*wp).w_onebuf_opt.wo_fde);
-    current_sctx = (*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as ::core::ffi::c_int as usize];
-    emsg_off += 1;
+    current_sctx
+        .set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as ::core::ffi::c_int as usize]);
+    (*emsg_off.ptr()) += 1;
     if use_sandbox {
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
     }
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     *cp = NUL;
     let mut tv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
@@ -6023,7 +6027,7 @@ pub unsafe extern "C" fn eval_foldexpr(
         arg,
         &raw mut tv,
         ::core::ptr::null_mut::<exarg_T>(),
-        &raw mut EVALARG_EVALUATE,
+        EVALARG_EVALUATE.ptr(),
     ) == FAIL
     {
         retval = 0 as varnumber_T;
@@ -6051,16 +6055,13 @@ pub unsafe extern "C" fn eval_foldexpr(
         }
         tv_clear(&raw mut tv);
     }
-    emsg_off -= 1;
+    (*emsg_off.ptr()) -= 1;
     if use_sandbox {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
     }
-    textlock -= 1;
-    clear_evalarg(
-        &raw mut EVALARG_EVALUATE,
-        ::core::ptr::null_mut::<exarg_T>(),
-    );
-    current_sctx = saved_sctx;
+    (*textlock.ptr()) -= 1;
+    clear_evalarg(EVALARG_EVALUATE.ptr(), ::core::ptr::null_mut::<exarg_T>());
+    current_sctx.set(saved_sctx);
     return retval as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -6074,9 +6075,9 @@ pub unsafe extern "C" fn eval_foldtext(mut wp: *mut win_T) -> Object {
     };
     save_funccal(&raw mut funccal_entry);
     if use_sandbox {
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
     }
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     let mut tv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -6090,7 +6091,7 @@ pub unsafe extern "C" fn eval_foldtext(mut wp: *mut win_T) -> Object {
         arg,
         &raw mut tv,
         ::core::ptr::null_mut::<exarg_T>(),
-        &raw mut EVALARG_EVALUATE,
+        EVALARG_EVALUATE.ptr(),
     ) == FAIL
     {
         retval = object {
@@ -6116,14 +6117,11 @@ pub unsafe extern "C" fn eval_foldtext(mut wp: *mut win_T) -> Object {
         }
         tv_clear(&raw mut tv);
     }
-    clear_evalarg(
-        &raw mut EVALARG_EVALUATE,
-        ::core::ptr::null_mut::<exarg_T>(),
-    );
+    clear_evalarg(EVALARG_EVALUATE.ptr(), ::core::ptr::null_mut::<exarg_T>());
     if use_sandbox {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
     }
-    textlock -= 1;
+    (*textlock.ptr()) -= 1;
     restore_funccal();
     return retval;
 }
@@ -6447,7 +6445,7 @@ unsafe extern "C" fn get_lval_subscript(
                         empty1 = true_0 != 0;
                     } else {
                         empty1 = false_0 != 0;
-                        if eval1(&raw mut p, &raw mut var1, &raw mut EVALARG_EVALUATE) == FAIL {
+                        if eval1(&raw mut p, &raw mut var1, EVALARG_EVALUATE.ptr()) == FAIL {
                             break '_done;
                         }
                         if !tv_check_str(&raw mut var1) {
@@ -6487,8 +6485,7 @@ unsafe extern "C" fn get_lval_subscript(
                                 (*lp).ll_empty2 = true_0 != 0;
                             } else {
                                 (*lp).ll_empty2 = false_0 != 0;
-                                if eval1(&raw mut p, &raw mut var2, &raw mut EVALARG_EVALUATE)
-                                    == FAIL
+                                if eval1(&raw mut p, &raw mut var2, EVALARG_EVALUATE.ptr()) == FAIL
                                 {
                                     break '_done;
                                 }
@@ -6613,7 +6610,7 @@ pub unsafe extern "C" fn get_lval(
         (*lp).ll_name = (*lp).ll_exp_name;
         if (*lp).ll_exp_name.is_null() {
             if !aborting() && quiet == 0 {
-                emsg_severe = true_0 != 0;
+                emsg_severe.set(true_0 != 0);
                 semsg(
                     gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                     name,
@@ -6948,7 +6945,7 @@ pub unsafe extern "C" fn eval_for_line(
         return fi as *mut ::core::ffi::c_void;
     }
     if skip {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     expr = skipwhite(expr.offset(2 as ::core::ffi::c_int as isize));
     if eval0(expr as *mut ::core::ffi::c_char, &raw mut tv, eap, evalarg) == OK {
@@ -6998,7 +6995,7 @@ pub unsafe extern "C" fn eval_for_line(
         }
     }
     if skip {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     return fi as *mut ::core::ffi::c_void;
 }
@@ -7265,15 +7262,15 @@ pub unsafe extern "C" fn pattern_match(
         rm_matchcol: 0,
         rm_ic: false,
     };
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo;
-    p_cpo = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
+    p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
     regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
     if !regmatch.regprog.is_null() {
         regmatch.rm_ic = ic;
         matches = vim_regexec_nl(&raw mut regmatch, text, 0 as colnr_T) as ::core::ffi::c_int;
         vim_regfree(regmatch.regprog);
     }
-    p_cpo = save_cpo;
+    p_cpo.set(save_cpo);
     return matches;
 }
 unsafe extern "C" fn eval_func(
@@ -7302,8 +7299,8 @@ unsafe extern "C" fn eval_func(
     );
     s = xmemdupz(s as *const ::core::ffi::c_void, len as size_t) as *mut ::core::ffi::c_char;
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
-    funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-    funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+    funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+    funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
     funcexe.fe_partial = partial;
     funcexe.fe_basetv = basetv;
@@ -7349,8 +7346,8 @@ pub unsafe extern "C" fn eval0(
     mut eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
 ) -> ::core::ffi::c_int {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut end_error: bool = false_0 != 0;
     let mut p: *mut ::core::ffi::c_char = skipwhite(arg);
     let mut ret: ::core::ffi::c_int = eval1(&raw mut p, rettv, evalarg);
@@ -7361,7 +7358,10 @@ pub unsafe extern "C" fn eval0(
         if ret != FAIL {
             tv_clear(rettv);
         }
-        if !aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
+        if !aborting()
+            && did_emsg.get() == did_emsg_before
+            && called_emsg.get() == called_emsg_before
+        {
             if end_error {
                 semsg(
                     gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
@@ -7822,7 +7822,7 @@ unsafe extern "C" fn eval4(
             ic = false_0 != 0;
             len += 1;
         } else {
-            ic = p_ic != 0;
+            ic = p_ic.get() != 0;
         }
         *arg = skipwhite(p.offset(len as isize));
         if eval5(arg, &raw mut var2, evalarg) == FAIL {
@@ -8499,8 +8499,8 @@ unsafe extern "C" fn call_func_rettv(
             funcname = b"\0".as_ptr() as *const ::core::ffi::c_char;
         }
         funcexe = FUNCEXE_INIT;
-        funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-        funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+        funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+        funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
         funcexe.fe_evaluate = evaluate;
         funcexe.fe_partial = pt;
         funcexe.fe_selfdict = selfdict;
@@ -9872,9 +9872,9 @@ pub unsafe extern "C" fn get_copyID() -> ::core::ffi::c_int {
 pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
     let mut abort_0: bool = false_0 != 0;
     if !testing {
-        want_garbage_collect = false_0 != 0;
-        may_garbage_collect = false_0 != 0;
-        garbage_collect_at_exit = false_0 != 0;
+        want_garbage_collect.set(false_0 != 0);
+        may_garbage_collect.set(false_0 != 0);
+        garbage_collect_at_exit.set(false_0 != 0);
     }
     if (*exestack.ptr()).ga_maxlen - (*exestack.ptr()).ga_len > 500 as ::core::ffi::c_int {
         let mut n: ::core::ffi::c_int = (*exestack.ptr()).ga_len / 2 as ::core::ffi::c_int;
@@ -9895,7 +9895,7 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
         || set_ref_in_previous_funccal(copyID) as ::core::ffi::c_int != 0;
     abort_0 = abort_0 as ::core::ffi::c_int != 0
         || garbage_collect_scriptvars(copyID) as ::core::ffi::c_int != 0;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         abort_0 = abort_0 as ::core::ffi::c_int != 0
             || set_ref_in_item(
@@ -9977,10 +9977,10 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
         abort_0 as ::core::ffi::c_int != 0 || set_ref_in_tagfunc(copyID) as ::core::ffi::c_int != 0;
     abort_0 = abort_0 as ::core::ffi::c_int != 0
         || set_ref_in_findfunc(copyID) as ::core::ffi::c_int != 0;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -9998,11 +9998,14 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
         tp = (*tp).tp_next as *mut tabpage_T;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < aucmd_win_vec.size as ::core::ffi::c_int {
-        if !(*aucmd_win_vec.items.offset(i as isize)).auc_win.is_null() {
+    while i < (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
+        if !(*(*aucmd_win_vec.ptr()).items.offset(i as isize))
+            .auc_win
+            .is_null()
+        {
             abort_0 = abort_0 as ::core::ffi::c_int != 0
                 || set_ref_in_item(
-                    &raw mut (*(*aucmd_win_vec.items.offset(i as isize)).auc_win)
+                    &raw mut (*(*(*aucmd_win_vec.ptr()).items.offset(i as isize)).auc_win)
                         .w_winvar
                         .di_tv,
                     copyID,
@@ -10055,7 +10058,7 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
             break;
         }
     }
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
         abort_0 = abort_0 as ::core::ffi::c_int != 0
             || set_ref_in_item(
@@ -10075,8 +10078,8 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
     let mut data: *mut Channel = ::core::ptr::null_mut::<Channel>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < channels.set.h.n_keys {
-        data = *channels.values.offset(__i as isize) as *mut Channel;
+    while __i < (*channels.ptr()).set.h.n_keys {
+        data = *(*channels.ptr()).values.offset(__i as isize) as *mut Channel;
         set_ref_in_callback_reader(
             &raw mut (*data).on_data,
             copyID,
@@ -10122,7 +10125,7 @@ pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
         did_free = free_unref_funccal(copyID, testing as ::core::ffi::c_int) as ::core::ffi::c_int
             != 0
             || did_free as ::core::ffi::c_int != 0;
-    } else if p_verbose > 0 as OptInt {
+    } else if p_verbose.get() > 0 as OptInt {
         verb_msg(gettext(
             b"Not enough memory to set references, garbage collection aborted!\0".as_ptr()
                 as *const ::core::ffi::c_char,
@@ -10185,7 +10188,9 @@ pub unsafe extern "C" fn set_ref_in_ht(
             let mut hitodo_: size_t = (*hiht_).ht_used;
             let mut hi: *mut hashitem_T = (*hiht_).ht_array;
             while hitodo_ != 0 {
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     hitodo_ = hitodo_.wrapping_sub(1);
                     abort_0 = abort_0 as ::core::ffi::c_int != 0
                         || set_ref_in_item(
@@ -10712,7 +10717,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
     mut retlist: bool,
 ) {
     let mut wait_time: proftime_T = 0;
-    let mut profiling: bool = do_profiling == PROF_YES;
+    let mut profiling: bool = do_profiling.get() == PROF_YES;
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if check_secure() {
@@ -10753,7 +10758,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
         xfree(input as *mut ::core::ffi::c_void);
         return;
     }
-    if p_verbose > 3 as OptInt {
+    if p_verbose.get() > 3 as OptInt {
         let mut cmdstr: *mut ::core::ffi::c_char = shell_argv_to_str(argv);
         verbose_enter_scroll();
         smsg(
@@ -10912,7 +10917,7 @@ pub unsafe extern "C" fn callback_call(
     argvars_in: *mut typval_T,
     rettv: *mut typval_T,
 ) -> bool {
-    if callback_depth.get() as OptInt > p_mfd {
+    if callback_depth.get() as OptInt > p_mfd.get() {
         emsg(gettext(
             &raw const e_command_too_recursive as *const ::core::ffi::c_char,
         ));
@@ -10969,8 +10974,8 @@ pub unsafe extern "C" fn callback_call(
         _ => {}
     }
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
-    funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-    funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+    funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+    funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
     funcexe.fe_evaluate = true_0 != 0;
     funcexe.fe_partial = partial;
     (*callback_depth.ptr()) += 1;
@@ -11096,8 +11101,8 @@ pub unsafe extern "C" fn timer_due_cb(
     mut data: *mut ::core::ffi::c_void,
 ) {
     let mut timer: *mut timer_T = data as *mut timer_T;
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let save_ex_pressedreturn: bool = get_pressedreturn();
     if (*timer).stopped as ::core::ffi::c_int != 0 || (*timer).paused as ::core::ffi::c_int != 0 {
         return;
@@ -11134,13 +11139,13 @@ pub unsafe extern "C" fn timer_due_cb(
         &raw mut argv as *mut typval_T,
         &raw mut rettv,
     );
-    if called_emsg > called_emsg_before && did_emsg != 0 {
+    if called_emsg.get() > called_emsg_before && did_emsg.get() != 0 {
         (*timer).emsg_count += 1;
-        if did_throw {
+        if did_throw.get() {
             discard_current_exception();
         }
     }
-    did_emsg = save_did_emsg;
+    did_emsg.set(save_did_emsg);
     set_pressedreturn(save_ex_pressedreturn);
     if (*timer).emsg_count >= 3 as ::core::ffi::c_int {
         timer_stop(timer);
@@ -11177,11 +11182,11 @@ pub unsafe extern "C" fn timer_start(
     (*timer).timer_id = c2rust_fresh17 as ::core::ffi::c_int;
     (*timer).callback = *callback;
     time_watcher_init(
-        &raw mut main_loop,
+        main_loop.ptr(),
         &raw mut (*timer).tw,
         timer as *mut ::core::ffi::c_void,
     );
-    (*timer).tw.events = multiqueue_new_child(main_loop.events);
+    (*timer).tw.events = multiqueue_new_child((*main_loop.ptr()).events);
     (*timer).tw.blockable = true_0 != 0;
     time_watcher_start(
         &raw mut (*timer).tw,
@@ -11523,8 +11528,8 @@ pub unsafe extern "C" fn var2fpos(
         == 'v' as ::core::ffi::c_int
         && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
-        if VIsual_active as ::core::ffi::c_int != 0 && wp == curwin {
-            pos.set(VIsual);
+        if VIsual_active.get() as ::core::ffi::c_int != 0 && wp == curwin.get() {
+            pos.set(VIsual.get());
         } else {
             pos.set((*wp).w_cursor);
         }
@@ -11644,7 +11649,7 @@ pub unsafe extern "C" fn list2fpos(
             return FAIL;
         }
         if n == 0 as ::core::ffi::c_int {
-            n = (*curbuf).handle as ::core::ffi::c_int;
+            n = (*curbuf.get()).handle as ::core::ffi::c_int;
         }
         *fnump = n;
     }
@@ -11663,7 +11668,7 @@ pub unsafe extern "C" fn list2fpos(
     }
     if charcol {
         let mut buf: *mut buf_T = buflist_findnr(if fnump.is_null() {
-            (*curbuf).handle as ::core::ffi::c_int
+            (*curbuf.get()).handle as ::core::ffi::c_int
         } else {
             *fnump
         });
@@ -11673,7 +11678,7 @@ pub unsafe extern "C" fn list2fpos(
         n = buf_charidx_to_byteidx(
             buf,
             if (*posp).lnum == 0 as linenr_T {
-                (*curwin).w_cursor.lnum
+                (*curwin.get()).w_cursor.lnum
             } else {
                 (*posp).lnum
             },
@@ -12358,8 +12363,8 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
     };
     let mut atstart: bool = true_0 != 0;
     let mut need_clear: bool = true_0 != 0;
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut evalarg: evalarg_T = evalarg_T {
         eval_flags: 0,
         eval_getline: None,
@@ -12368,26 +12373,29 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
     };
     fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0);
     if (*eap).skip != 0 {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     while *arg as ::core::ffi::c_int != NUL
         && *arg as ::core::ffi::c_int != '|' as ::core::ffi::c_int
         && *arg as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-        && !got_int
+        && !got_int.get()
     {
-        need_clr_eos = true_0 != 0;
+        need_clr_eos.set(true_0 != 0);
         let mut p: *mut ::core::ffi::c_char = arg;
         if eval1(&raw mut arg, &raw mut rettv, &raw mut evalarg) == FAIL {
-            if !aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
+            if !aborting()
+                && did_emsg.get() == did_emsg_before
+                && called_emsg.get() == called_emsg_before
+            {
                 semsg(
                     gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
                     p,
                 );
             }
-            need_clr_eos = false_0 != 0;
+            need_clr_eos.set(false_0 != 0);
             break;
         } else {
-            need_clr_eos = false_0 != 0;
+            need_clr_eos.set(false_0 != 0);
             if (*eap).skip == 0 {
                 if atstart {
                     atstart = false_0 != 0;
@@ -12396,7 +12404,7 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
                     );
                     msg_ext_set_kind(b"echo\0".as_ptr() as *const ::core::ffi::c_char);
                     if (*eap).cmdidx as ::core::ffi::c_int == CMD_echo as ::core::ffi::c_int {
-                        if !msg_didout {
+                        if !msg_didout.get() {
                             msg_sb_eol();
                         }
                         msg_start();
@@ -12427,7 +12435,7 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
     clear_evalarg(&raw mut evalarg, eap);
     msg_ext_set_append(false_0 != 0);
     if (*eap).skip != 0 {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     } else {
         if ui_has(kUIMessages) as ::core::ffi::c_int != 0
             && (*(*eap).arg as ::core::ffi::c_int == NUL
@@ -12478,7 +12486,7 @@ pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
         80 as ::core::ffi::c_int,
     );
     if (*eap).skip != 0 {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     while *arg as ::core::ffi::c_int != NUL
         && *arg as ::core::ffi::c_int != '|' as ::core::ffi::c_int
@@ -12531,15 +12539,15 @@ pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
             msg_ext_set_kind(b"echomsg\0".as_ptr() as *const ::core::ffi::c_char);
             msg(ga.ga_data as *const ::core::ffi::c_char, echo_hl_id.get());
         } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_echoerr as ::core::ffi::c_int {
-            let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
+            let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
             emsg_multiline(
                 ga.ga_data as *const ::core::ffi::c_char,
                 b"echoerr\0".as_ptr() as *const ::core::ffi::c_char,
                 HLF_E as ::core::ffi::c_int,
                 true_0 != 0,
             );
-            if !force_abort {
-                did_emsg = save_did_emsg;
+            if !force_abort.get() {
+                did_emsg.set(save_did_emsg);
             }
         } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_execute as ::core::ffi::c_int {
             do_cmdline(
@@ -12552,7 +12560,7 @@ pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
     }
     ga_clear(&raw mut ga);
     if (*eap).skip != 0 {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     (*eap).nextcmd = check_nextcmd(arg);
 }
@@ -12621,7 +12629,7 @@ pub unsafe extern "C" fn last_set_msg(mut script_ctx: sctx_T) {
     }
     let mut should_free: bool = false;
     let mut p: *mut ::core::ffi::c_char = get_scriptname(script_ctx, &raw mut should_free);
-    msg_ext_skip_verbose = true_0 != 0;
+    msg_ext_skip_verbose.set(true_0 != 0);
     verbose_enter();
     msg_puts(gettext(
         b"\n\tLast set from \0".as_ptr() as *const ::core::ffi::c_char
@@ -12664,14 +12672,14 @@ pub unsafe extern "C" fn do_string_sub(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo;
-    p_cpo = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
+    p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
     ga_init(
         &raw mut ga,
         1 as ::core::ffi::c_int,
         200 as ::core::ffi::c_int,
     );
-    regmatch.rm_ic = p_ic != 0;
+    regmatch.rm_ic = p_ic.get() != 0;
     regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
     if !regmatch.regprog.is_null() {
         let mut tail: *mut ::core::ffi::c_char = str;
@@ -12764,10 +12772,10 @@ pub unsafe extern "C" fn do_string_sub(
     }
     let mut ret: *mut ::core::ffi::c_char = xstrnsave(str, len);
     ga_clear(&raw mut ga);
-    if p_cpo == &raw mut empty_string_option as *mut ::core::ffi::c_char {
-        p_cpo = save_cpo;
+    if p_cpo.get() == empty_string_option.ptr() as *mut ::core::ffi::c_char {
+        p_cpo.set(save_cpo);
     } else {
-        if *p_cpo as ::core::ffi::c_int == NUL {
+        if *p_cpo.get() as ::core::ffi::c_int == NUL {
             set_option_value_give_err(
                 kOptCpoptions,
                 OptVal {
@@ -12927,23 +12935,23 @@ pub unsafe extern "C" fn eval_call_provider(
         b"provider#%s#Call\0".as_ptr() as *const ::core::ffi::c_char,
         provider,
     );
-    let mut saved_provider_caller_scope: caller_scope = provider_caller_scope as caller_scope;
-    provider_caller_scope = caller_scope {
-        script_ctx: current_sctx,
+    let mut saved_provider_caller_scope: caller_scope = provider_caller_scope.get() as caller_scope;
+    provider_caller_scope.set(caller_scope {
+        script_ctx: current_sctx.get(),
         es_entry: *((*exestack.ptr()).ga_data as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize),
-        autocmd_fname: autocmd_fname,
-        autocmd_match: autocmd_match,
-        autocmd_fname_full: autocmd_fname_full,
-        autocmd_bufnr: autocmd_bufnr,
+        autocmd_fname: autocmd_fname.get(),
+        autocmd_match: autocmd_match.get(),
+        autocmd_fname_full: autocmd_fname_full.get(),
+        autocmd_bufnr: autocmd_bufnr.get(),
         funccalp: get_current_funccal() as *mut ::core::ffi::c_void,
-    } as caller_scope;
+    } as caller_scope);
     let mut funccal_entry: funccal_entry_T = funccal_entry_T {
         top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         next: ::core::ptr::null_mut::<funccal_entry_T>(),
     };
     save_funccal(&raw mut funccal_entry);
-    provider_call_nesting += 1;
+    (*provider_call_nesting.ptr()) += 1;
     let mut argvars: [typval_T; 3] = [
         typval_T {
             v_type: VAR_STRING,
@@ -12968,8 +12976,8 @@ pub unsafe extern "C" fn eval_call_provider(
     };
     tv_list_ref(arguments);
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
-    funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-    funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+    funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+    funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
     funcexe.fe_evaluate = true_0 != 0;
     call_func(
         &raw mut func as *mut ::core::ffi::c_char,
@@ -12981,10 +12989,10 @@ pub unsafe extern "C" fn eval_call_provider(
     );
     tv_list_unref(arguments);
     restore_funccal();
-    provider_caller_scope = saved_provider_caller_scope as caller_scope;
-    provider_call_nesting -= 1;
+    provider_caller_scope.set(saved_provider_caller_scope as caller_scope);
+    (*provider_call_nesting.ptr()) -= 1;
     '_c2rust_label: {
-        if provider_call_nesting >= 0 as ::core::ffi::c_int {
+        if provider_call_nesting.get() >= 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"provider_call_nesting >= 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -13093,7 +13101,7 @@ pub unsafe extern "C" fn eval_has_provider(
                 b"provider#%s#Call\0".as_ptr() as *const ::core::ffi::c_char,
                 &raw mut name as *mut ::core::ffi::c_char,
             );
-            if !find_func(&raw mut buf as *mut ::core::ffi::c_char).is_null() && p_lpl != 0 {
+            if !find_func(&raw mut buf as *mut ::core::ffi::c_char).is_null() && p_lpl.get() != 0 {
                 semsg(
                     b"provider: %s: missing required variable g:loaded_%s_provider\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -13191,8 +13199,8 @@ pub unsafe extern "C" fn prompt_invoke_callback() {
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     }; 2];
-    let mut lnum: linenr_T = (*curbuf).b_ml.ml_line_count;
-    let mut user_input: *mut ::core::ffi::c_char = prompt_get_input(curbuf);
+    let mut lnum: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
+    let mut user_input: *mut ::core::ffi::c_char = prompt_get_input(curbuf.get());
     if user_input.is_null() {
         return;
     }
@@ -13203,10 +13211,10 @@ pub unsafe extern "C" fn prompt_invoke_callback() {
         false_0 != 0,
     );
     appended_lines_mark(lnum, 1 as ::core::ffi::c_int);
-    (*curwin).w_cursor.lnum = lnum + 1 as linenr_T;
-    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    (*curbuf).b_prompt_start.mark.lnum = lnum + 1 as linenr_T;
-    if (*curbuf).b_prompt_callback.type_0 as ::core::ffi::c_uint
+    (*curwin.get()).w_cursor.lnum = lnum + 1 as linenr_T;
+    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+    (*curbuf.get()).b_prompt_start.mark.lnum = lnum + 1 as linenr_T;
+    if (*curbuf.get()).b_prompt_callback.type_0 as ::core::ffi::c_uint
         == kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         xfree(user_input as *mut ::core::ffi::c_void);
@@ -13215,7 +13223,7 @@ pub unsafe extern "C" fn prompt_invoke_callback() {
         argv[0 as ::core::ffi::c_int as usize].vval.v_string = user_input;
         argv[1 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
         callback_call(
-            &raw mut (*curbuf).b_prompt_callback,
+            &raw mut (*curbuf.get()).b_prompt_callback,
             1 as ::core::ffi::c_int,
             &raw mut argv as *mut typval_T,
             &raw mut rettv,
@@ -13223,9 +13231,9 @@ pub unsafe extern "C" fn prompt_invoke_callback() {
         tv_clear((&raw mut argv as *mut typval_T).offset(0 as ::core::ffi::c_int as isize));
         tv_clear(&raw mut rettv);
     }
-    u_clearallandblockfree(curbuf);
-    (*curbuf).b_prompt_start.mark.lnum = (*curbuf).b_ml.ml_line_count;
-    (*curbuf).b_prompt_append_new_line = true_0 != 0;
+    u_clearallandblockfree(curbuf.get());
+    (*curbuf.get()).b_prompt_start.mark.lnum = (*curbuf.get()).b_ml.ml_line_count;
+    (*curbuf.get()).b_prompt_append_new_line = true_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn invoke_prompt_interrupt() -> bool {
@@ -13239,15 +13247,15 @@ pub unsafe extern "C" fn invoke_prompt_interrupt() -> bool {
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     }; 1];
-    if (*curbuf).b_prompt_interrupt.type_0 as ::core::ffi::c_uint
+    if (*curbuf.get()).b_prompt_interrupt.type_0 as ::core::ffi::c_uint
         == kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return false_0 != 0;
     }
     argv[0 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
-    got_int = false_0 != 0;
+    got_int.set(false_0 != 0);
     let mut ret: ::core::ffi::c_int = callback_call(
-        &raw mut (*curbuf).b_prompt_interrupt,
+        &raw mut (*curbuf.get()).b_prompt_interrupt,
         0 as ::core::ffi::c_int,
         &raw mut argv as *mut typval_T,
         &raw mut rettv,

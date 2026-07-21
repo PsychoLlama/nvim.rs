@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -4679,7 +4680,7 @@ pub type C2Rust_Unnamed_49 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
-pub static mut arena_alloc_count: size_t = 0 as size_t;
+pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -4701,13 +4702,14 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut g_min_log_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static g_min_log_level: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 pub const SESSION_FILE: [::core::ffi::c_char; 12] =
     unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut global_opt_idx: [OptIndex; 264] = [
+pub static global_opt_idx: GlobalCell<[OptIndex; 264]> = GlobalCell::new([
     kOptAleph,
     kOptAllowrevins,
     kOptAmbiwidth,
@@ -4972,9 +4974,9 @@ pub static mut global_opt_idx: [OptIndex; 264] = [
     kOptWriteany,
     kOptWritebackup,
     kOptWritedelay,
-];
+]);
 #[no_mangle]
-pub static mut buf_opt_idx: [OptIndex; 92] = [
+pub static buf_opt_idx: GlobalCell<[OptIndex; 92]> = GlobalCell::new([
     kOptAutocomplete,
     kOptAutoindent,
     kOptAutoread,
@@ -5067,9 +5069,9 @@ pub static mut buf_opt_idx: [OptIndex; 92] = [
     kOptVarsofttabstop,
     kOptVartabstop,
     kOptWrapmargin,
-];
+]);
 #[no_mangle]
-pub static mut win_opt_idx: [OptIndex; 51] = [
+pub static win_opt_idx: GlobalCell<[OptIndex; 51]> = GlobalCell::new([
     kOptArabic,
     kOptBreakindent,
     kOptBreakindentopt,
@@ -5121,9 +5123,9 @@ pub static mut win_opt_idx: [OptIndex; 51] = [
     kOptWinfixwidth,
     kOptWinhighlight,
     kOptWrap,
-];
+]);
 #[no_mangle]
-pub static mut namespace_ids: Map_String_int = Map_String_int {
+pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MapHash {
             n_buckets: 0 as uint32_t,
@@ -5137,9 +5139,9 @@ pub static mut namespace_ids: Map_String_int = Map_String_int {
         keys: ::core::ptr::null_mut::<String_0>(),
     },
     values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-};
+});
 #[no_mangle]
-pub static mut namespace_localscope: Set_uint32_t = Set_uint32_t {
+pub static namespace_localscope: GlobalCell<Set_uint32_t> = GlobalCell::new(Set_uint32_t {
     h: MapHash {
         n_buckets: 0 as uint32_t,
         size: 0 as uint32_t,
@@ -5150,11 +5152,11 @@ pub static mut namespace_localscope: Set_uint32_t = Set_uint32_t {
         hash: ::core::ptr::null_mut::<uint32_t>(),
     },
     keys: ::core::ptr::null_mut::<uint32_t>(),
-};
+});
 #[no_mangle]
-pub static mut next_namespace_id: handle_T = 1 as handle_T;
+pub static next_namespace_id: GlobalCell<handle_T> = GlobalCell::new(1 as handle_T);
 #[no_mangle]
-pub static mut buffer_handles: Map_int_ptr_t = Map_int_ptr_t {
+pub static buffer_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
             n_buckets: 0 as uint32_t,
@@ -5168,9 +5170,9 @@ pub static mut buffer_handles: Map_int_ptr_t = Map_int_ptr_t {
         keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
-};
+});
 #[no_mangle]
-pub static mut window_handles: Map_int_ptr_t = Map_int_ptr_t {
+pub static window_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
             n_buckets: 0 as uint32_t,
@@ -5184,9 +5186,9 @@ pub static mut window_handles: Map_int_ptr_t = Map_int_ptr_t {
         keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
-};
+});
 #[no_mangle]
-pub static mut tabpage_handles: Map_int_ptr_t = Map_int_ptr_t {
+pub static tabpage_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
             n_buckets: 0 as uint32_t,
@@ -5200,9 +5202,9 @@ pub static mut tabpage_handles: Map_int_ptr_t = Map_int_ptr_t {
         keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
-};
+});
 #[no_mangle]
-pub static mut ui_ext_names: [*const ::core::ffi::c_char; 10] = [
+pub static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 10]> = GlobalCell::new([
     b"ext_cmdline\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext_popupmenu\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext_tabline\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5213,7 +5215,7 @@ pub static mut ui_ext_names: [*const ::core::ffi::c_char; 10] = [
     b"ext_hlstate\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext_termcolors\0".as_ptr() as *const ::core::ffi::c_char,
     b"_debug_float\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 #[inline(always)]
@@ -5221,61 +5223,69 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub static mut last_cursormoved_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static last_cursormoved_win: GlobalCell<*mut win_T> =
+    GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut last_cursormoved: pos_T = pos_T {
+pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0 as linenr_T,
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
-};
+});
 #[no_mangle]
-pub static mut autocmd_busy: bool = false;
+pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut autocmd_no_enter: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static autocmd_no_enter: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut autocmd_no_leave: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static autocmd_no_leave: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut au_new_curbuf: bufref_T = bufref_T {
+pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T {
     br_buf: ::core::ptr::null_mut::<buf_T>(),
     br_fnum: 0 as ::core::ffi::c_int,
     br_buf_free_count: 0 as ::core::ffi::c_int,
-};
+});
 #[no_mangle]
-pub static mut au_pending_free_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+pub static au_pending_free_buf: GlobalCell<*mut buf_T> =
+    GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
-pub static mut au_pending_free_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static au_pending_free_win: GlobalCell<*mut win_T> =
+    GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut autocmd_fname: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut autocmd_fname_full: bool = false;
+pub static autocmd_fname_full: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut autocmd_bufnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static autocmd_bufnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut autocmd_match: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static autocmd_match: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut did_cursorhold: bool = true;
+pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut aucmd_win_vec: C2Rust_Unnamed_31 = C2Rust_Unnamed_31 {
+pub static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_31> = GlobalCell::new(C2Rust_Unnamed_31 {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<aucmdwin_T>(),
-};
+});
 #[no_mangle]
-pub static mut deferred_events: *mut MultiQueue = ::core::ptr::null_mut::<MultiQueue>();
+pub static deferred_events: GlobalCell<*mut MultiQueue> =
+    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 #[no_mangle]
-pub static mut msg_loclist: *mut ::core::ffi::c_char =
-    b"[Location List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static msg_loclist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"[Location List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[no_mangle]
-pub static mut msg_qflist: *mut ::core::ffi::c_char =
-    b"[Quickfix List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static msg_qflist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b"[Quickfix List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
 #[no_mangle]
-pub static mut channels: Map_uint64_t_ptr_t = Map_uint64_t_ptr_t {
+pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64_t_ptr_t {
     set: Set_uint64_t {
         h: MapHash {
             n_buckets: 0 as uint32_t,
@@ -5289,32 +5299,32 @@ pub static mut channels: Map_uint64_t_ptr_t = Map_uint64_t_ptr_t {
         keys: ::core::ptr::null_mut::<uint64_t>(),
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
-};
+});
 #[no_mangle]
-pub static mut on_print: Callback = Callback {
+pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_5 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
-};
+});
 #[no_mangle]
-pub static mut virt_text_pos_str: [*const ::core::ffi::c_char; 6] = [
+pub static virt_text_pos_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"eol\0".as_ptr() as *const ::core::ffi::c_char,
     b"eol_right_align\0".as_ptr() as *const ::core::ffi::c_char,
     b"inline\0".as_ptr() as *const ::core::ffi::c_char,
     b"overlay\0".as_ptr() as *const ::core::ffi::c_char,
     b"right_align\0".as_ptr() as *const ::core::ffi::c_char,
     b"win_col\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut hl_mode_str: [*const ::core::ffi::c_char; 4] = [
+pub static hl_mode_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"replace\0".as_ptr() as *const ::core::ffi::c_char,
     b"combine\0".as_ptr() as *const ::core::ffi::c_char,
     b"blend\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut decor_state: DecorState = DecorState {
+pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     itr: [MarkTreeIter {
         pos: MTPos {
             row: 0 as int32_t,
@@ -5354,33 +5364,34 @@ pub static mut decor_state: DecorState = DecorState {
     spell: kFalse,
     running_decor_provider: false,
     itr_valid: false,
-};
+});
 #[no_mangle]
-pub static mut decor_items: C2Rust_Unnamed_36 = C2Rust_Unnamed_36 {
+pub static decor_items: GlobalCell<C2Rust_Unnamed_36> = GlobalCell::new(C2Rust_Unnamed_36 {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<DecorSignHighlight>(),
-};
+});
 #[no_mangle]
-pub static mut diff_context: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub static diff_context: GlobalCell<::core::ffi::c_int> = GlobalCell::new(6 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut diff_foldcolumn: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub static diff_foldcolumn: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(2 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut diff_need_scrollbind: bool = false;
+pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_diff_redraw: bool = false;
+pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut win_extmark_arr: C2Rust_Unnamed_37 = C2Rust_Unnamed_37 {
+pub static win_extmark_arr: GlobalCell<C2Rust_Unnamed_37> = GlobalCell::new(C2Rust_Unnamed_37 {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<WinExtmark>(),
-};
+});
 #[no_mangle]
-pub static mut updating_screen: bool = false;
+pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut redraw_not_allowed: bool = false;
+pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut screen_search_hl: match_T = match_T {
+pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
     rm: regmmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
         startpos: [lpos_T { lnum: 0, col: 0 }; 10],
@@ -5399,1046 +5410,1108 @@ pub static mut screen_search_hl: match_T = match_T {
     is_addpos: false,
     has_cursor: false,
     tm: 0,
-};
+});
 #[no_mangle]
-pub static mut search_hl_has_cursor_lnum: linenr_T = 0 as linenr_T;
+pub static search_hl_has_cursor_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 #[no_mangle]
-pub static mut e_abort: [::core::ffi::c_char; 22] = unsafe {
+pub static e_abort: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E470: Command aborted\0")
-};
+});
 #[no_mangle]
-pub static mut e_afterinit: [::core::ffi::c_char; 43] = unsafe {
+pub static e_afterinit: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E905: Cannot set this option after startup\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_api_spawn_failed: [::core::ffi::c_char; 30] = unsafe {
+pub static e_api_spawn_failed: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E903: Could not spawn API job\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_argreq: [::core::ffi::c_char; 24] = unsafe {
+pub static e_argreq: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E471: Argument required\0")
-};
+});
 #[no_mangle]
-pub static mut e_backslash: [::core::ffi::c_char; 39] = unsafe {
+pub static e_backslash: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E10: \\ should be followed by /, ? or &\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cmdwin: [::core::ffi::c_char; 65] = unsafe {
+pub static e_cmdwin: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_curdir: [::core::ffi::c_char; 69] = unsafe {
+pub static e_curdir: GlobalCell<[::core::ffi::c_char; 69]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 69], [::core::ffi::c_char; 69]>(
         *b"E12: Command not allowed in secure mode in current dir or tag search\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invalid_buffer_name_str: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
-        *b"E158: Invalid buffer name: %s\0",
-    )
-};
+pub static e_invalid_buffer_name_str: GlobalCell<[::core::ffi::c_char; 30]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+            *b"E158: Invalid buffer name: %s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_command_too_recursive: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E169: Command too recursive\0")
-};
+pub static e_command_too_recursive: GlobalCell<[::core::ffi::c_char; 28]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
+            *b"E169: Command too recursive\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_buffer_is_not_loaded: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E681: Buffer is not loaded\0")
-};
+pub static e_buffer_is_not_loaded: GlobalCell<[::core::ffi::c_char; 27]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(
+            *b"E681: Buffer is not loaded\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_endif: [::core::ffi::c_char; 21] = unsafe {
+pub static e_endif: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E171: Missing :endif\0")
-};
+});
 #[no_mangle]
-pub static mut e_endtry: [::core::ffi::c_char; 22] = unsafe {
+pub static e_endtry: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E600: Missing :endtry\0")
-};
+});
 #[no_mangle]
-pub static mut e_endwhile: [::core::ffi::c_char; 24] = unsafe {
+pub static e_endwhile: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E170: Missing :endwhile\0")
-};
+});
 #[no_mangle]
-pub static mut e_endfor: [::core::ffi::c_char; 22] = unsafe {
+pub static e_endfor: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E170: Missing :endfor\0")
-};
+});
 #[no_mangle]
-pub static mut e_while: [::core::ffi::c_char; 31] = unsafe {
+pub static e_while: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E588: :endwhile without :while\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_for: [::core::ffi::c_char; 27] = unsafe {
+pub static e_for: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E588: :endfor without :for\0")
-};
+});
 #[no_mangle]
-pub static mut e_exists: [::core::ffi::c_char; 37] = unsafe {
+pub static e_exists: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E13: File exists (add ! to override)\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_failed: [::core::ffi::c_char; 21] = unsafe {
+pub static e_failed: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E472: Command failed\0")
-};
+});
 #[no_mangle]
-pub static mut e_intern2: [::core::ffi::c_char; 25] = unsafe {
+pub static e_intern2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E685: Internal error: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_interr: [::core::ffi::c_char; 12] =
-    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Interrupted\0") };
+pub static e_interr: GlobalCell<[::core::ffi::c_char; 12]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Interrupted\0")
+});
 #[no_mangle]
-pub static mut e_invarg: [::core::ffi::c_char; 23] = unsafe {
+pub static e_invarg: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E474: Invalid argument\0")
-};
+});
 #[no_mangle]
-pub static mut e_invarg2: [::core::ffi::c_char; 27] = unsafe {
+pub static e_invarg2: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E475: Invalid argument: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_invargval: [::core::ffi::c_char; 36] = unsafe {
+pub static e_invargval: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E475: Invalid value for argument %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invargNval: [::core::ffi::c_char; 40] = unsafe {
+pub static e_invargNval: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E475: Invalid value for argument %s: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_duparg2: [::core::ffi::c_char; 29] = unsafe {
+pub static e_duparg2: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E983: Duplicate argument: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invexpr2: [::core::ffi::c_char; 30] = unsafe {
+pub static e_invexpr2: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E15: Invalid expression: \"%s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invrange: [::core::ffi::c_char; 19] = unsafe {
+pub static e_invrange: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E16: Invalid range\0")
-};
+});
 #[no_mangle]
-pub static mut e_internal_error_in_regexp: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E473: Internal error in regexp\0",
-    )
-};
+pub static e_internal_error_in_regexp: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E473: Internal error in regexp\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invcmd: [::core::ffi::c_char; 22] = unsafe {
+pub static e_invcmd: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E476: Invalid command\0")
-};
+});
 #[no_mangle]
-pub static mut e_isadir2: [::core::ffi::c_char; 25] = unsafe {
+pub static e_isadir2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E17: \"%s\" is a directory\0")
-};
+});
 #[no_mangle]
-pub static mut e_no_spell: [::core::ffi::c_char; 37] = unsafe {
+pub static e_no_spell: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E756: Spell checking is not possible\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invchan: [::core::ffi::c_char; 25] = unsafe {
+pub static e_invchan: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E900: Invalid channel id\0")
-};
+});
 #[no_mangle]
-pub static mut e_invchanjob: [::core::ffi::c_char; 36] = unsafe {
+pub static e_invchanjob: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E900: Invalid channel id: not a job\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_jobtblfull: [::core::ffi::c_char; 24] = unsafe {
+pub static e_jobtblfull: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E901: Job table is full\0")
-};
+});
 #[no_mangle]
-pub static mut e_jobspawn: [::core::ffi::c_char; 40] = unsafe {
+pub static e_jobspawn: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E903: Process failed to start: %s: \"%s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_channotpty: [::core::ffi::c_char; 27] = unsafe {
+pub static e_channotpty: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E904: channel is not a pty\0")
-};
+});
 #[no_mangle]
-pub static mut e_stdiochan2: [::core::ffi::c_char; 38] = unsafe {
+pub static e_stdiochan2: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E905: Couldn't open stdio channel: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invstream: [::core::ffi::c_char; 33] = unsafe {
+pub static e_invstream: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E906: invalid stream for channel\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invstreamrpc: [::core::ffi::c_char; 48] = unsafe {
+pub static e_invstreamrpc: GlobalCell<[::core::ffi::c_char; 48]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
         *b"E906: invalid stream for rpc channel, use 'rpc'\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_streamkey: [::core::ffi::c_char; 68] = unsafe {
+pub static e_streamkey: GlobalCell<[::core::ffi::c_char; 68]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
         *b"E5210: dict key '%s' already set for buffered stream in channel %lu\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_libcall: [::core::ffi::c_char; 37] = unsafe {
+pub static e_libcall: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E364: Library call failed for \"%s()\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_fsync: [::core::ffi::c_char; 23] = unsafe {
+pub static e_fsync: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E667: Fsync failed: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_mkdir: [::core::ffi::c_char; 37] = unsafe {
+pub static e_mkdir: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E739: Cannot create directory %s: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_markinval: [::core::ffi::c_char; 34] = unsafe {
+pub static e_markinval: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E19: Mark has invalid line number\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_marknotset: [::core::ffi::c_char; 18] = unsafe {
+pub static e_marknotset: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E20: Mark not set\0")
-};
+});
 #[no_mangle]
-pub static mut e_modifiable: [::core::ffi::c_char; 46] = unsafe {
+pub static e_modifiable: GlobalCell<[::core::ffi::c_char; 46]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 46], [::core::ffi::c_char; 46]>(
         *b"E21: Cannot make changes, 'modifiable' is off\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_nesting: [::core::ffi::c_char; 29] = unsafe {
+pub static e_nesting: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E22: Scripts nested too deep\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_noalt: [::core::ffi::c_char; 23] = unsafe {
+pub static e_noalt: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E23: No alternate file\0")
-};
+});
 #[no_mangle]
-pub static mut e_noabbr: [::core::ffi::c_char; 26] = unsafe {
+pub static e_noabbr: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E24: No such abbreviation\0")
-};
+});
 #[no_mangle]
-pub static mut e_nobang: [::core::ffi::c_char; 19] = unsafe {
+pub static e_nobang: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E477: No ! allowed\0")
-};
+});
 #[no_mangle]
-pub static mut e_nogroup: [::core::ffi::c_char; 38] = unsafe {
+pub static e_nogroup: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E28: No such highlight group name: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_noinstext: [::core::ffi::c_char; 26] = unsafe {
+pub static e_noinstext: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E29: No inserted text yet\0")
-};
+});
 #[no_mangle]
-pub static mut e_nolastcmd: [::core::ffi::c_char; 30] = unsafe {
+pub static e_nolastcmd: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E30: No previous command line\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_nomap: [::core::ffi::c_char; 21] = unsafe {
+pub static e_nomap: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E31: No such mapping\0")
-};
+});
 #[no_mangle]
-pub static mut e_noident: [::core::ffi::c_char; 33] = unsafe {
+pub static e_noident: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E349: No identifier under cursor\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_nomatch: [::core::ffi::c_char; 15] =
-    unsafe { ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E479: No match\0") };
+pub static e_nomatch: GlobalCell<[::core::ffi::c_char; 15]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E479: No match\0")
+});
 #[no_mangle]
-pub static mut e_nomatch2: [::core::ffi::c_char; 19] = unsafe {
+pub static e_nomatch2: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E480: No match: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_noname: [::core::ffi::c_char; 18] = unsafe {
+pub static e_noname: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E32: No file name\0")
-};
+});
 #[no_mangle]
-pub static mut e_nopresub: [::core::ffi::c_char; 47] = unsafe {
+pub static e_nopresub: GlobalCell<[::core::ffi::c_char; 47]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
         *b"E33: No previous substitute regular expression\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_noprev: [::core::ffi::c_char; 25] = unsafe {
+pub static e_noprev: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E34: No previous command\0")
-};
+});
 #[no_mangle]
-pub static mut e_noprevre: [::core::ffi::c_char; 36] = unsafe {
+pub static e_noprevre: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E35: No previous regular expression\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_norange: [::core::ffi::c_char; 23] = unsafe {
+pub static e_norange: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E481: No range allowed\0")
-};
+});
 #[no_mangle]
-pub static mut e_noroom: [::core::ffi::c_char; 21] = unsafe {
+pub static e_noroom: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E36: Not enough room\0")
-};
+});
 #[no_mangle]
-pub static mut e_notmp: [::core::ffi::c_char; 31] = unsafe {
+pub static e_notmp: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E483: Can't get temp file name\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_notopen: [::core::ffi::c_char; 25] = unsafe {
+pub static e_notopen: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E484: Can't open file %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_notopen_2: [::core::ffi::c_char; 29] = unsafe {
+pub static e_notopen_2: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E484: Can't open file %s: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cant_read_file_str: [::core::ffi::c_char; 25] = unsafe {
+pub static e_cant_read_file_str: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E485: Can't read file %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_null: [::core::ffi::c_char; 19] = unsafe {
+pub static e_null: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E38: Null argument\0")
-};
+});
 #[no_mangle]
-pub static mut e_number_exp: [::core::ffi::c_char; 21] = unsafe {
+pub static e_number_exp: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E39: Number expected\0")
-};
+});
 #[no_mangle]
-pub static mut e_openerrf: [::core::ffi::c_char; 29] = unsafe {
+pub static e_openerrf: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E40: Can't open errorfile %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_outofmem: [::core::ffi::c_char; 20] = unsafe {
+pub static e_outofmem: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E41: Out of memory!\0")
-};
+});
 #[no_mangle]
-pub static mut e_patnotf: [::core::ffi::c_char; 18] = unsafe {
+pub static e_patnotf: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"Pattern not found\0")
-};
+});
 #[no_mangle]
-pub static mut e_patnotf2: [::core::ffi::c_char; 28] = unsafe {
+pub static e_patnotf2: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E486: Pattern not found: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_positive: [::core::ffi::c_char; 32] = unsafe {
+pub static e_positive: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E487: Argument must be positive\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_prev_dir: [::core::ffi::c_char; 43] = unsafe {
+pub static e_prev_dir: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E459: Cannot go back to previous directory\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_no_errors: [::core::ffi::c_char; 15] =
-    unsafe { ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E42: No Errors\0") };
+pub static e_no_errors: GlobalCell<[::core::ffi::c_char; 15]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E42: No Errors\0")
+});
 #[no_mangle]
-pub static mut e_loclist: [::core::ffi::c_char; 23] = unsafe {
+pub static e_loclist: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E776: No location list\0")
-};
+});
 #[no_mangle]
-pub static mut e_re_damg: [::core::ffi::c_char; 26] = unsafe {
+pub static e_re_damg: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E43: Damaged match string\0")
-};
+});
 #[no_mangle]
-pub static mut e_re_corr: [::core::ffi::c_char; 30] = unsafe {
+pub static e_re_corr: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E44: Corrupted regexp program\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_readonly: [::core::ffi::c_char; 50] = unsafe {
+pub static e_readonly: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E45: 'readonly' option is set (add ! to override)\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_letwrong: [::core::ffi::c_char; 34] = unsafe {
+pub static e_letwrong: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E734: Wrong variable type for %s=\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_illvar: [::core::ffi::c_char; 32] = unsafe {
+pub static e_illvar: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E461: Illegal variable name: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cannot_mod: [::core::ffi::c_char; 38] = unsafe {
+pub static e_cannot_mod: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E995: Cannot modify existing variable\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cannot_change_readonly_variable_str: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E46: Cannot change read-only variable \"%.*s\"\0",
-    )
-};
+pub static e_cannot_change_readonly_variable_str: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E46: Cannot change read-only variable \"%.*s\"\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_dictreq: [::core::ffi::c_char; 26] = unsafe {
+pub static e_dictreq: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E715: Dictionary required\0")
-};
+});
 #[no_mangle]
-pub static mut e_blobidx: [::core::ffi::c_char; 35] = unsafe {
+pub static e_blobidx: GlobalCell<[::core::ffi::c_char; 35]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
         *b"E979: Blob index out of range: %ld\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invalblob: [::core::ffi::c_char; 33] = unsafe {
+pub static e_invalblob: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E978: Invalid operation for Blob\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_toomanyarg: [::core::ffi::c_char; 42] = unsafe {
+pub static e_toomanyarg: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E118: Too many arguments for function: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_toofewarg: [::core::ffi::c_char; 44] = unsafe {
+pub static e_toofewarg: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E119: Not enough arguments for function: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_dictkey: [::core::ffi::c_char; 42] = unsafe {
+pub static e_dictkey: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E716: Key not present in Dictionary: \"%s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_dictkey_len: [::core::ffi::c_char; 44] = unsafe {
+pub static e_dictkey_len: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E716: Key not present in Dictionary: \"%.*s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_listreq: [::core::ffi::c_char; 20] = unsafe {
+pub static e_listreq: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E714: List required\0")
-};
+});
 #[no_mangle]
-pub static mut e_listblobreq: [::core::ffi::c_char; 28] = unsafe {
+pub static e_listblobreq: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E897: List or Blob required\0")
-};
+});
 #[no_mangle]
-pub static mut e_listblobarg: [::core::ffi::c_char; 44] = unsafe {
+pub static e_listblobarg: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E899: Argument of %s must be a List or Blob\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_listdictarg: [::core::ffi::c_char; 50] = unsafe {
+pub static e_listdictarg: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E712: Argument of %s must be a List or Dictionary\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_listdictblobarg: [::core::ffi::c_char; 56] = unsafe {
+pub static e_listdictblobarg: GlobalCell<[::core::ffi::c_char; 56]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
         *b"E896: Argument of %s must be a List, Dictionary or Blob\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_readerrf: [::core::ffi::c_char; 35] = unsafe {
+pub static e_readerrf: GlobalCell<[::core::ffi::c_char; 35]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
         *b"E47: Error while reading errorfile\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_sandbox: [::core::ffi::c_char; 28] = unsafe {
+pub static e_sandbox: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E48: Not allowed in sandbox\0")
-};
+});
 #[no_mangle]
-pub static mut e_secure: [::core::ffi::c_char; 23] = unsafe {
+pub static e_secure: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E523: Not allowed here\0")
-};
+});
 #[no_mangle]
-pub static mut e_textlock: [::core::ffi::c_char; 50] = unsafe {
+pub static e_textlock: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E565: Not allowed to change text or change window\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_screenmode: [::core::ffi::c_char; 40] = unsafe {
+pub static e_screenmode: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E359: Screen mode setting not supported\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_scroll: [::core::ffi::c_char; 25] = unsafe {
+pub static e_scroll: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E49: Invalid scroll size\0")
-};
+});
 #[no_mangle]
-pub static mut e_shellempty: [::core::ffi::c_char; 29] = unsafe {
+pub static e_shellempty: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E91: 'shell' option is empty\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_signdata: [::core::ffi::c_char; 34] = unsafe {
+pub static e_signdata: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E255: Couldn't read in sign data!\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_swapclose: [::core::ffi::c_char; 30] = unsafe {
+pub static e_swapclose: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E72: Close error on swap file\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_toocompl: [::core::ffi::c_char; 25] = unsafe {
+pub static e_toocompl: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E74: Command too complex\0")
-};
+});
 #[no_mangle]
-pub static mut e_longname: [::core::ffi::c_char; 19] = unsafe {
+pub static e_longname: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E75: Name too long\0")
-};
+});
 #[no_mangle]
-pub static mut e_toomsbra: [::core::ffi::c_char; 16] =
-    unsafe { ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"E76: Too many [\0") };
+pub static e_toomsbra: GlobalCell<[::core::ffi::c_char; 16]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"E76: Too many [\0")
+});
 #[no_mangle]
-pub static mut e_toomany: [::core::ffi::c_char; 25] = unsafe {
+pub static e_toomany: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E77: Too many file names\0")
-};
+});
 #[no_mangle]
-pub static mut e_trailing: [::core::ffi::c_char; 26] = unsafe {
+pub static e_trailing: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E488: Trailing characters\0")
-};
+});
 #[no_mangle]
-pub static mut e_trailing_arg: [::core::ffi::c_char; 30] = unsafe {
+pub static e_trailing_arg: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E488: Trailing characters: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_umark: [::core::ffi::c_char; 18] = unsafe {
+pub static e_umark: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E78: Unknown mark\0")
-};
+});
 #[no_mangle]
-pub static mut e_wildexpand: [::core::ffi::c_char; 29] = unsafe {
+pub static e_wildexpand: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E79: Cannot expand wildcards\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_winheight: [::core::ffi::c_char; 56] = unsafe {
+pub static e_winheight: GlobalCell<[::core::ffi::c_char; 56]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
         *b"E591: 'winheight' cannot be smaller than 'winminheight'\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_winwidth: [::core::ffi::c_char; 54] = unsafe {
+pub static e_winwidth: GlobalCell<[::core::ffi::c_char; 54]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 54], [::core::ffi::c_char; 54]>(
         *b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_write: [::core::ffi::c_char; 25] = unsafe {
+pub static e_write: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E80: Error while writing\0")
-};
+});
 #[no_mangle]
-pub static mut e_zerocount: [::core::ffi::c_char; 30] = unsafe {
+pub static e_zerocount: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E939: Positive count required\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_usingsid: [::core::ffi::c_char; 41] = unsafe {
+pub static e_usingsid: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
         *b"E81: Using <SID> not in a script context\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_missingparen: [::core::ffi::c_char; 30] = unsafe {
+pub static e_missingparen: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E107: Missing parentheses: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_empty_buffer: [::core::ffi::c_char; 19] = unsafe {
+pub static e_empty_buffer: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E749: Empty buffer\0")
-};
+});
 #[no_mangle]
-pub static mut e_nobufnr: [::core::ffi::c_char; 31] = unsafe {
+pub static e_nobufnr: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E86: Buffer %ld does not exist\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_no_write_since_last_change: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E37: No write since last change\0",
-    )
-};
+pub static e_no_write_since_last_change: GlobalCell<[::core::ffi::c_char; 32]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+            *b"E37: No write since last change\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_no_write_since_last_change_add_bang_to_override: [::core::ffi::c_char; 52] = unsafe {
+pub static e_no_write_since_last_change_add_bang_to_override: GlobalCell<
+    [::core::ffi::c_char; 52],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
         *b"E37: No write since last change (add ! to override)\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_no_write_since_last_change_for_buffer_nr_add_bang_to_override:
-    [::core::ffi::c_char; 66] = unsafe {
+pub static e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: GlobalCell<
+    [::core::ffi::c_char; 66],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
         *b"E89: No write since last change for buffer %d (add ! to override)\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_buffer_nr_not_found: [::core::ffi::c_char; 25] = unsafe {
+pub static e_buffer_nr_not_found: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E92: Buffer %d not found\0")
-};
+});
 #[no_mangle]
-pub static mut e_unknown_function_str: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E117: Unknown function: %s\0")
-};
+pub static e_unknown_function_str: GlobalCell<[::core::ffi::c_char; 27]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(
+            *b"E117: Unknown function: %s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_str_not_inside_function: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E193: %s not inside a function\0",
-    )
-};
+pub static e_str_not_inside_function: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E193: %s not inside a function\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_job_still_running: [::core::ffi::c_char; 24] = unsafe {
+pub static e_job_still_running: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E948: Job still running\0")
-};
+});
 #[no_mangle]
-pub static mut e_job_still_running_add_bang_to_end_the_job: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-        *b"E948: Job still running (add ! to end the job)\0",
-    )
-};
+pub static e_job_still_running_add_bang_to_end_the_job: GlobalCell<[::core::ffi::c_char; 47]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+            *b"E948: Job still running (add ! to end the job)\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalpat: [::core::ffi::c_char; 42] = unsafe {
+pub static e_invalpat: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E682: Invalid search pattern or delimiter\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_bufloaded: [::core::ffi::c_char; 39] = unsafe {
+pub static e_bufloaded: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E139: File is loaded in another buffer\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_notset: [::core::ffi::c_char; 29] = unsafe {
+pub static e_notset: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E764: Option '%s' is not set\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_invalidreg: [::core::ffi::c_char; 28] = unsafe {
+pub static e_invalidreg: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E850: Invalid register name\0")
-};
+});
 #[no_mangle]
-pub static mut e_dirnotf: [::core::ffi::c_char; 40] = unsafe {
+pub static e_dirnotf: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E919: Directory not found in '%s': \"%s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_au_recursive: [::core::ffi::c_char; 44] = unsafe {
+pub static e_au_recursive: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E952: Autocommand caused recursive behavior\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_menu_only_exists_in_another_mode: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E328: Menu only exists in another mode\0",
-    )
-};
+pub static e_menu_only_exists_in_another_mode: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E328: Menu only exists in another mode\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_autocmd_close: [::core::ffi::c_char; 34] = unsafe {
+pub static e_autocmd_close: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E813: Cannot close autocmd window\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_list_index_out_of_range_nr: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E684: List index out of range: %ld\0",
-    )
-};
+pub static e_list_index_out_of_range_nr: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E684: List index out of range: %ld\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_listarg: [::core::ffi::c_char; 36] = unsafe {
+pub static e_listarg: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E686: Argument of %s must be a List\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_unsupportedoption: [::core::ffi::c_char; 27] = unsafe {
+pub static e_unsupportedoption: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E519: Option not supported\0")
-};
+});
 #[no_mangle]
-pub static mut e_fnametoolong: [::core::ffi::c_char; 24] = unsafe {
+pub static e_fnametoolong: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E856: Filename too long\0")
-};
+});
 #[no_mangle]
-pub static mut e_using_float_as_string: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E806: Using a Float as a String\0",
-    )
-};
+pub static e_using_float_as_string: GlobalCell<[::core::ffi::c_char; 32]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+            *b"E806: Using a Float as a String\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_edit_other_buf: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E788: Not allowed to edit another buffer now\0",
-    )
-};
+pub static e_cannot_edit_other_buf: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E788: Not allowed to edit another buffer now\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_using_number_as_bool_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E1023: Using a Number as a Bool: %d\0",
-    )
-};
+pub static e_using_number_as_bool_nr: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E1023: Using a Number as a Bool: %d\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_not_callable_type_str: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E1085: Not a callable type: %s\0",
-    )
-};
+pub static e_not_callable_type_str: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E1085: Not a callable type: %s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_auabort: [::core::ffi::c_char; 43] = unsafe {
+pub static e_auabort: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E855: Autocommands caused command to abort\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_api_error: [::core::ffi::c_char; 20] = unsafe {
+pub static e_api_error: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E5555: API call: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_fast_api_disabled: [::core::ffi::c_char; 53] = unsafe {
+pub static e_fast_api_disabled: GlobalCell<[::core::ffi::c_char; 53]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
         *b"E5560: %s must not be called in a fast event context\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_floatonly: [::core::ffi::c_char; 62] = unsafe {
+pub static e_floatonly: GlobalCell<[::core::ffi::c_char; 62]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
         *b"E5601: Cannot close window, only floating window would remain\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_floatexchange: [::core::ffi::c_char; 39] = unsafe {
+pub static e_floatexchange: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E5602: Cannot exchange or rotate float\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cant_find_directory_str_in_cdpath: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-        *b"E344: Can't find directory \"%s\" in cdpath\0",
-    )
-};
+pub static e_cant_find_directory_str_in_cdpath: GlobalCell<[::core::ffi::c_char; 42]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+            *b"E344: Can't find directory \"%s\" in cdpath\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cant_find_file_str_in_path: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-        *b"E345: Can't find file \"%s\" in path\0",
-    )
-};
+pub static e_cant_find_file_str_in_path: GlobalCell<[::core::ffi::c_char; 35]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+            *b"E345: Can't find file \"%s\" in path\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_no_more_directory_str_found_in_cdpath: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E346: No more directory \"%s\" found in cdpath\0",
-    )
-};
+pub static e_no_more_directory_str_found_in_cdpath: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E346: No more directory \"%s\" found in cdpath\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_no_more_file_str_found_in_path: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-        *b"E347: No more file \"%s\" found in path\0",
-    )
-};
+pub static e_no_more_file_str_found_in_path: GlobalCell<[::core::ffi::c_char; 38]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+            *b"E347: No more file \"%s\" found in path\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_value_is_locked: [::core::ffi::c_char; 22] = unsafe {
+pub static e_value_is_locked: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E741: Value is locked\0")
-};
+});
 #[no_mangle]
-pub static mut e_value_is_locked_str: [::core::ffi::c_char; 28] = unsafe {
+pub static e_value_is_locked_str: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E741: Value is locked: %.*s\0")
-};
+});
 #[no_mangle]
-pub static mut e_cannot_change_value: [::core::ffi::c_char; 26] = unsafe {
+pub static e_cannot_change_value: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E742: Cannot change value\0")
-};
+});
 #[no_mangle]
-pub static mut e_cannot_change_value_of_str: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E742: Cannot change value of %.*s\0",
-    )
-};
+pub static e_cannot_change_value_of_str: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E742: Cannot change value of %.*s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_set_variable_in_sandbox_str: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E794: Cannot set variable in the sandbox: \"%.*s\"\0",
-    )
-};
+pub static e_cannot_set_variable_in_sandbox_str: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E794: Cannot set variable in the sandbox: \"%.*s\"\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_delete_variable_str: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"E795: Cannot delete variable %.*s\0",
-    )
-};
+pub static e_cannot_delete_variable_str: GlobalCell<[::core::ffi::c_char; 34]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+            *b"E795: Cannot delete variable %.*s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalwindow: [::core::ffi::c_char; 28] = unsafe {
+pub static e_invalwindow: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E957: Invalid window number\0")
-};
+});
 #[no_mangle]
-pub static mut e_problem_creating_internal_diff: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E960: Problem creating the internal diff\0",
-    )
-};
+pub static e_problem_creating_internal_diff: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E960: Problem creating the internal diff\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_define_autocommands_for_all_events: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-        *b"E1155: Cannot define autocommands for ALL events\0",
-    )
-};
+pub static e_cannot_define_autocommands_for_all_events: GlobalCell<[::core::ffi::c_char; 49]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+            *b"E1155: Cannot define autocommands for ALL events\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_change_arglist_recursively: [::core::ffi::c_char; 51] = unsafe {
-    ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
-        *b"E1156: Cannot change the argument list recursively\0",
-    )
-};
+pub static e_cannot_change_arglist_recursively: GlobalCell<[::core::ffi::c_char; 51]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
+            *b"E1156: Cannot change the argument list recursively\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_resulting_text_too_long: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E1240: Resulting text too long\0",
-    )
-};
+pub static e_resulting_text_too_long: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E1240: Resulting text too long\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_line_number_out_of_range: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E1247: Line number out of range\0",
-    )
-};
+pub static e_line_number_out_of_range: GlobalCell<[::core::ffi::c_char; 32]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+            *b"E1247: Line number out of range\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_highlight_group_name_invalid_char: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E5248: Invalid character in group name\0",
-    )
-};
+pub static e_highlight_group_name_invalid_char: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E5248: Invalid character in group name\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_highlight_group_name_too_long: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E1249: Highlight group name too long\0",
-    )
-};
+pub static e_highlight_group_name_too_long: GlobalCell<[::core::ffi::c_char; 37]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+            *b"E1249: Highlight group name too long\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_string_required: [::core::ffi::c_char; 22] = unsafe {
+pub static e_string_required: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E928: String required\0")
-};
+});
 #[no_mangle]
-pub static mut e_invalid_column_number_nr: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-        *b"E964: Invalid column number: %ld\0",
-    )
-};
+pub static e_invalid_column_number_nr: GlobalCell<[::core::ffi::c_char; 33]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+            *b"E964: Invalid column number: %ld\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalid_line_number_nr: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"E966: Invalid line number: %ld\0",
-    )
-};
+pub static e_invalid_line_number_nr: GlobalCell<[::core::ffi::c_char; 31]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+            *b"E966: Invalid line number: %ld\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_reduce_of_an_empty_str_with_no_initial_value: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
-        *b"E998: Reduce of an empty %s with no initial value\0",
-    )
-};
+pub static e_reduce_of_an_empty_str_with_no_initial_value: GlobalCell<[::core::ffi::c_char; 50]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+            *b"E998: Reduce of an empty %s with no initial value\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalid_value_for_blob_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-        *b"E1239: Invalid value for blob: 0xlX\0",
-    )
-};
+pub static e_invalid_value_for_blob_nr: GlobalCell<[::core::ffi::c_char; 36]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+            *b"E1239: Invalid value for blob: 0xlX\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_stray_closing_curly_str: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E1278: Stray '}' without a matching '{': %s\0",
-    )
-};
+pub static e_stray_closing_curly_str: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E1278: Stray '}' without a matching '{': %s\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_missing_close_curly_str: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E1279: Missing '}': %s\0")
-};
+pub static e_missing_close_curly_str: GlobalCell<[::core::ffi::c_char; 23]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E1279: Missing '}': %s\0")
+    });
 #[no_mangle]
-pub static mut e_cannot_change_menus_while_listing: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E1310: Cannot change menus while listing\0",
-    )
-};
+pub static e_cannot_change_menus_while_listing: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E1310: Cannot change menus while listing\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_not_allowed_to_change_window_layout_in_this_autocmd: [::core::ffi::c_char; 63] = unsafe {
+pub static e_not_allowed_to_change_window_layout_in_this_autocmd: GlobalCell<
+    [::core::ffi::c_char; 63],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
         *b"E1312: Not allowed to change the window layout in this autocmd\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_val_too_large: [::core::ffi::c_char; 27] = unsafe {
+pub static e_val_too_large: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E1510: Value too large: %s\0")
-};
+});
 #[no_mangle]
-pub static mut e_val_too_large_len: [::core::ffi::c_char; 29] = unsafe {
+pub static e_val_too_large_len: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E1510: Value too large: %.*s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_undobang_cannot_redo_or_move_branch: [::core::ffi::c_char; 68] = unsafe {
-    ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
-        *b"E5767: Cannot use :undo! to redo or move to a different undo branch\0",
-    )
-};
+pub static e_undobang_cannot_redo_or_move_branch: GlobalCell<[::core::ffi::c_char; 68]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
+            *b"E5767: Cannot use :undo! to redo or move to a different undo branch\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_winfixbuf_cannot_go_to_buffer: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-        *b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
-    )
-};
+pub static e_winfixbuf_cannot_go_to_buffer: GlobalCell<[::core::ffi::c_char; 52]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+            *b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalid_return_type_from_findfunc: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E1514: 'findfunc' did not return a List type\0",
-    )
-};
+pub static e_invalid_return_type_from_findfunc: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E1514: 'findfunc' did not return a List type\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_switch_to_a_closing_buffer: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E1546: Cannot switch to a closing buffer\0",
-    )
-};
+pub static e_cannot_switch_to_a_closing_buffer: GlobalCell<[::core::ffi::c_char; 41]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+            *b"E1546: Cannot switch to a closing buffer\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_cannot_have_more_than_nr_diff_anchors: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E1549: Cannot have more than %d diff anchors\0",
-    )
-};
+pub static e_cannot_have_more_than_nr_diff_anchors: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+            *b"E1549: Cannot have more than %d diff anchors\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_failed_to_find_all_diff_anchors: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E1550: Failed to find all diff anchors\0",
-    )
-};
+pub static e_failed_to_find_all_diff_anchors: GlobalCell<[::core::ffi::c_char; 39]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+            *b"E1550: Failed to find all diff anchors\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_diff_anchors_with_hidden_windows: [::core::ffi::c_char; 60] = unsafe {
-    ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
-        *b"E1562: Diff anchors cannot be used with hidden diff windows\0",
-    )
-};
+pub static e_diff_anchors_with_hidden_windows: GlobalCell<[::core::ffi::c_char; 60]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
+            *b"E1562: Diff anchors cannot be used with hidden diff windows\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_leadtab_requires_tab: [::core::ffi::c_char; 66] = unsafe {
-    ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
-        *b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
-    )
-};
+pub static e_leadtab_requires_tab: GlobalCell<[::core::ffi::c_char; 66]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
+            *b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_invalid_format_string_single_percent_s: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
-        *b"E1577: Invalid format string, only one \"%s\" is allowed\0",
-    )
-};
+pub static e_invalid_format_string_single_percent_s: GlobalCell<[::core::ffi::c_char; 55]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+            *b"E1577: Invalid format string, only one \"%s\" is allowed\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_trustfile: [::core::ffi::c_char; 36] = unsafe {
+pub static e_trustfile: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E5570: Cannot update trust file: %s\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_cannot_read_from_str_2: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
-        *b"E282: Cannot read from \"%s\"\0",
-    )
-};
+pub static e_cannot_read_from_str_2: GlobalCell<[::core::ffi::c_char; 28]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
+            *b"E282: Cannot read from \"%s\"\0",
+        )
+    });
 #[no_mangle]
-pub static mut e_conflicting_configs: [::core::ffi::c_char; 38] = unsafe {
+pub static e_conflicting_configs: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E5422: Conflicting configs: \"%s\" \"%s\"\0",
     )
-};
+});
 #[no_mangle]
-pub static mut e_unknown_option2: [::core::ffi::c_char; 25] = unsafe {
+pub static e_unknown_option2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E355: Unknown option: %s\0")
-};
+});
 #[no_mangle]
-pub static mut top_bot_msg: [::core::ffi::c_char; 37] = unsafe {
+pub static top_bot_msg: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"search hit TOP, continuing at BOTTOM\0",
     )
-};
+});
 #[no_mangle]
-pub static mut bot_top_msg: [::core::ffi::c_char; 37] = unsafe {
+pub static bot_top_msg: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"search hit BOTTOM, continuing at TOP\0",
     )
-};
+});
 #[no_mangle]
-pub static mut line_msg: [::core::ffi::c_char; 7] =
-    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b" line \0") };
+pub static line_msg: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b" line \0")
+});
 #[no_mangle]
-pub static mut EVALARG_EVALUATE: evalarg_T = evalarg_T {
+pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
     eval_flags: EVAL_EVALUATE as ::core::ffi::c_int,
     eval_getline: None,
     eval_cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     eval_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
+});
 #[no_mangle]
-pub static mut msg_ext_need_clear: bool = false;
+pub static msg_ext_need_clear: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_ext_skip_flush: bool = false;
+pub static msg_ext_skip_flush: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_ext_overwrite: bool = false;
+pub static msg_ext_overwrite: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_ext_skip_verbose: bool = false;
+pub static msg_ext_skip_verbose: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_grid: ScreenGrid = ScreenGrid {
+pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
     attrs: ::core::ptr::null_mut::<sattr_T>(),
@@ -6459,21 +6532,24 @@ pub static mut msg_grid: ScreenGrid = ScreenGrid {
     comp_index: 0 as size_t,
     comp_disabled: false,
     pending_comp_index_update: true,
-};
+});
 #[no_mangle]
-pub static mut msg_grid_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_grid_pos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut msg_grid_adj: GridView = GridView {
+pub static msg_grid_adj: GlobalCell<GridView> = GlobalCell::new(GridView {
     target: ::core::ptr::null_mut::<ScreenGrid>(),
     row_offset: 0,
     col_offset: 0,
-};
+});
 #[no_mangle]
-pub static mut msg_scrolled_at_flush: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_scrolled_at_flush: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut msg_grid_scroll_discount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_grid_scroll_discount: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut msg_listdo_overwrite: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_listdo_overwrite: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[inline]
 unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     if l.is_null() {
@@ -6498,13 +6574,14 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
 // left 0, which is a valid pointer-sentinel value and would corrupt any
 // caller comparing against it (the unit tests do, via FFI).
 #[no_mangle]
-pub static mut kTVCstring: size_t = 18446744073709551614;
+pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 #[no_mangle]
-pub static mut kTVTranslate: size_t = 18446744073709551615 as size_t;
+pub static kTVTranslate: GlobalCell<size_t> = GlobalCell::new(18446744073709551615 as size_t);
 #[no_mangle]
-pub static mut disable_fold_update: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static disable_fold_update: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut test_disable_char_avail: bool = false;
+pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"$VIM/sysinit.vim\0")
@@ -6512,187 +6589,198 @@ pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
 pub const VIMRC_FILE: [::core::ffi::c_char; 8] =
     unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".nvimrc\0") };
 #[no_mangle]
-pub static mut g_stats: nvim_stats_s = nvim_stats_s {
+pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
     log_skip: 0 as int16_t,
-};
+});
 pub const NO_BUFFERS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut Rows: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
+pub static Rows: GlobalCell<::core::ffi::c_int> = GlobalCell::new(24 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut Columns: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
+pub static Columns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(80 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut mod_mask: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut vgetc_mod_mask: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static vgetc_mod_mask: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut vgetc_char: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static vgetc_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut cmdline_row: ::core::ffi::c_int = 0;
+pub static cmdline_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut redraw_cmdline: bool = false;
+pub static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut redraw_mode: bool = false;
+pub static redraw_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut clear_cmdline: bool = false;
+pub static clear_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut mode_displayed: bool = false;
+pub static mode_displayed: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut cmdline_star: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cmdline_star: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut redrawing_cmdline: bool = false;
+pub static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut cmdline_was_last_drawn: bool = false;
+pub static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut exec_from_reg: bool = false;
+pub static exec_from_reg: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut dollar_vcol: colnr_T = -1 as colnr_T;
+pub static dollar_vcol: GlobalCell<colnr_T> = GlobalCell::new(-1 as colnr_T);
 #[no_mangle]
-pub static mut edit_submode: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static edit_submode: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut edit_submode_pre: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static edit_submode_pre: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut edit_submode_extra: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static edit_submode_extra: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut edit_submode_highl: hlf_T = HLF_NONE;
+pub static edit_submode_highl: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
 #[no_mangle]
-pub static mut cmdmsg_rl: bool = false;
+pub static cmdmsg_rl: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_col: ::core::ffi::c_int = 0;
+pub static msg_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut msg_row: ::core::ffi::c_int = 0;
+pub static msg_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut msg_scrolled: ::core::ffi::c_int = 0;
+pub static msg_scrolled: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut msg_scrolled_ign: bool = false;
+pub static msg_scrolled_ign: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_did_scroll: bool = false;
+pub static msg_did_scroll: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut keep_msg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static keep_msg: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut keep_msg_hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static keep_msg_hl_id: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut need_fileinfo: bool = false;
+pub static need_fileinfo: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_scroll: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_scroll: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut msg_didout: bool = false;
+pub static msg_didout: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_didany: bool = false;
+pub static msg_didany: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_nowait: bool = false;
+pub static msg_nowait: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut emsg_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static emsg_off: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut info_message: bool = false;
+pub static info_message: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_hist_off: bool = false;
+pub static msg_hist_off: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_clr_eos: bool = false;
+pub static need_clr_eos: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut emsg_skip: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static emsg_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut emsg_severe: bool = false;
+pub static emsg_severe: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut emsg_assert_fails_msg: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut emsg_assert_fails_lnum: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
+pub static emsg_assert_fails_lnum: GlobalCell<::core::ffi::c_long> =
+    GlobalCell::new(0 as ::core::ffi::c_long);
 #[no_mangle]
-pub static mut emsg_assert_fails_context: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static emsg_assert_fails_context: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut did_endif: bool = false;
+pub static did_endif: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_emsg: ::core::ffi::c_int = 0;
+pub static did_emsg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut called_vim_beep: bool = false;
+pub static called_vim_beep: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_emsg_syntax: bool = false;
+pub static did_emsg_syntax: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut called_emsg: ::core::ffi::c_int = 0;
+pub static called_emsg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut ex_exitval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static ex_exitval: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut emsg_on_display: bool = false;
+pub static emsg_on_display: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut rc_did_emsg: bool = false;
+pub static rc_did_emsg: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut no_wait_return: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static no_wait_return: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut need_wait_return: bool = false;
+pub static need_wait_return: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_wait_return: bool = false;
+pub static did_wait_return: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_maketitle: bool = true;
+pub static need_maketitle: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut quit_more: bool = false;
+pub static quit_more: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut vgetc_busy: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static vgetc_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut didset_vim: bool = false;
+pub static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut didset_vimruntime: bool = false;
+pub static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut lines_left: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static lines_left: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut msg_no_more: bool = false;
+pub static msg_no_more: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ex_nesting_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static ex_nesting_level: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut debug_break_level: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static debug_break_level: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut debug_did_msg: bool = false;
+pub static debug_did_msg: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut debug_tick: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static debug_tick: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut debug_backtrace_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static debug_backtrace_level: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut do_profiling: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static do_profiling: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut current_exception: *mut except_T = ::core::ptr::null_mut::<except_T>();
+pub static current_exception: GlobalCell<*mut except_T> =
+    GlobalCell::new(::core::ptr::null_mut::<except_T>());
 #[no_mangle]
-pub static mut did_throw: bool = false;
+pub static did_throw: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_rethrow: bool = false;
+pub static need_rethrow: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut check_cstack: bool = false;
+pub static check_cstack: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut trylevel: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static trylevel: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut force_abort: bool = false;
+pub static force_abort: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut msg_list: *mut *mut msglist_T = ::core::ptr::null_mut::<*mut msglist_T>();
+pub static msg_list: GlobalCell<*mut *mut msglist_T> =
+    GlobalCell::new(::core::ptr::null_mut::<*mut msglist_T>());
 #[no_mangle]
-pub static mut suppress_errthrow: bool = false;
+pub static suppress_errthrow: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut caught_stack: *mut except_T = ::core::ptr::null_mut::<except_T>();
+pub static caught_stack: GlobalCell<*mut except_T> =
+    GlobalCell::new(::core::ptr::null_mut::<except_T>());
 #[no_mangle]
-pub static mut may_garbage_collect: bool = false;
+pub static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut want_garbage_collect: bool = false;
+pub static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut garbage_collect_at_exit: bool = false;
+pub static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
 pub const SID_CMDARG: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SID_CARG: ::core::ffi::c_int = -3 as ::core::ffi::c_int;
 pub const SID_ENV: ::core::ffi::c_int = -4 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut current_sctx: sctx_T = sctx_T {
+pub static current_sctx: GlobalCell<sctx_T> = GlobalCell::new(sctx_T {
     sc_sid: 0 as scid_T,
     sc_seq: 0 as ::core::ffi::c_int,
     sc_lnum: 0 as linenr_T,
     sc_chan: 0 as uint64_t,
-};
+});
 #[no_mangle]
-pub static mut current_ui: uint64_t = 0 as uint64_t;
+pub static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 #[no_mangle]
-pub static mut did_source_packages: bool = false;
+pub static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut provider_caller_scope: caller_scope = caller_scope {
+pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
     script_ctx: sctx_T {
         sc_sid: 0,
         sc_seq: 0,
@@ -6712,77 +6800,86 @@ pub static mut provider_caller_scope: caller_scope = caller_scope {
     autocmd_fname_full: false,
     autocmd_bufnr: 0,
     funccalp: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-};
+});
 #[no_mangle]
-pub static mut provider_call_nesting: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static provider_call_nesting: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut t_colors: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
+pub static t_colors: GlobalCell<::core::ffi::c_int> = GlobalCell::new(256 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut include_none: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static include_none: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut include_default: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static include_default: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut include_link: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static include_link: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut highlight_match: bool = false;
+pub static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut search_match_lines: linenr_T = 0;
+pub static search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut search_match_endcol: colnr_T = 0;
+pub static search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut search_first_line: linenr_T = 0 as linenr_T;
+pub static search_first_line: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 #[no_mangle]
-pub static mut search_last_line: linenr_T = MAXLNUM as ::core::ffi::c_int as linenr_T;
+pub static search_last_line: GlobalCell<linenr_T> =
+    GlobalCell::new(MAXLNUM as ::core::ffi::c_int as linenr_T);
 #[no_mangle]
-pub static mut no_smartcase: bool = false;
+pub static no_smartcase: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_check_timestamps: bool = false;
+pub static need_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_check_timestamps: bool = false;
+pub static did_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut no_check_timestamps: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static no_check_timestamps: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut mouse_grid: ::core::ffi::c_int = 0;
+pub static mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut mouse_row: ::core::ffi::c_int = 0;
+pub static mouse_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut mouse_col: ::core::ffi::c_int = 0;
+pub static mouse_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut mouse_past_bottom: bool = false;
+pub static mouse_past_bottom: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut mouse_past_eol: bool = false;
+pub static mouse_past_eol: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut mouse_dragging: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static mouse_dragging: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut root_menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
+pub static root_menu: GlobalCell<*mut vimmenu_T> =
+    GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 #[no_mangle]
-pub static mut sys_menu: bool = false;
+pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut firstwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static firstwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut lastwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static lastwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut prevwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut curwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut topframe: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
+pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
 #[no_mangle]
-pub static mut first_tabpage: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
+pub static first_tabpage: GlobalCell<*mut tabpage_T> =
+    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 #[no_mangle]
-pub static mut curtab: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
+pub static curtab: GlobalCell<*mut tabpage_T> =
+    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 #[no_mangle]
-pub static mut lastused_tabpage: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
+pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
+    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 #[no_mangle]
-pub static mut redraw_tabline: bool = false;
+pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut firstbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+pub static firstbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
-pub static mut lastbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+pub static lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
-pub static mut curbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
-pub static mut global_alist: alist_T = alist_T {
+pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -6792,172 +6889,180 @@ pub static mut global_alist: alist_T = alist_T {
     },
     al_refcount: 0,
     id: 0,
-};
+});
 #[no_mangle]
-pub static mut max_alist_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static max_alist_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut arg_had_last: bool = false;
+pub static arg_had_last: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ru_col: ::core::ffi::c_int = 0;
+pub static ru_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut ru_wid: ::core::ffi::c_int = 0;
+pub static ru_wid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut sc_col: ::core::ffi::c_int = 0;
+pub static sc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut starting: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub static starting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(2 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut exiting: bool = false;
+pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut v_dying: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static v_dying: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut stdin_isatty: bool = true;
+pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut stdout_isatty: bool = true;
+pub static stdout_isatty: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut stderr_isatty: bool = true;
+pub static stderr_isatty: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut stdin_fd: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static stdin_fd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut full_screen: bool = false;
+pub static full_screen: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut secure: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static secure: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut textlock: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static textlock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut allbuf_lock: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static allbuf_lock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut sandbox: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static sandbox: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut silent_mode: bool = false;
+pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut VIsual: pos_T = pos_T {
+pub static VIsual: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
-};
+});
 #[no_mangle]
-pub static mut VIsual_active: bool = false;
+pub static VIsual_active: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut VIsual_select: bool = false;
+pub static VIsual_select: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut VIsual_select_reg: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static VIsual_select_reg: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut VIsual_select_exclu_adj: bool = false;
+pub static VIsual_select_exclu_adj: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut restart_VIsual_select: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static restart_VIsual_select: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut VIsual_reselect: ::core::ffi::c_int = 0;
+pub static VIsual_reselect: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut VIsual_mode: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
+pub static VIsual_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new('v' as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut redo_VIsual_busy: bool = false;
+pub static redo_VIsual_busy: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut resel_VIsual_mode: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+pub static resel_VIsual_mode: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new('\0' as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut resel_VIsual_line_count: linenr_T = 0;
+pub static resel_VIsual_line_count: GlobalCell<linenr_T> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut resel_VIsual_vcol: colnr_T = 0;
+pub static resel_VIsual_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut where_paste_started: pos_T = pos_T {
+pub static where_paste_started: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
-};
+});
 #[no_mangle]
-pub static mut did_ai: bool = false;
+pub static did_ai: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ai_col: colnr_T = 0 as colnr_T;
+pub static ai_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
 #[no_mangle]
-pub static mut end_comment_pending: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+pub static end_comment_pending: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new('\0' as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut did_syncbind: bool = false;
+pub static did_syncbind: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_si: bool = false;
+pub static did_si: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut can_si: bool = false;
+pub static can_si: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut can_si_back: bool = false;
+pub static can_si_back: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut old_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static old_indent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut saved_cursor: pos_T = pos_T {
+pub static saved_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0 as linenr_T,
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
-};
+});
 #[no_mangle]
-pub static mut Insstart: pos_T = pos_T {
+pub static Insstart: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
-};
+});
 #[no_mangle]
-pub static mut Insstart_orig: pos_T = pos_T {
+pub static Insstart_orig: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
-};
+});
 #[no_mangle]
-pub static mut orig_line_count: linenr_T = 0 as linenr_T;
+pub static orig_line_count: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 #[no_mangle]
-pub static mut vr_lines_changed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static vr_lines_changed: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut inhibit_delete_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static inhibit_delete_count: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut fenc_default: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static fenc_default: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut State: ::core::ffi::c_int = MODE_NORMAL as ::core::ffi::c_int;
+pub static State: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(MODE_NORMAL as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut debug_mode: bool = false;
+pub static debug_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut finish_op: bool = false;
+pub static finish_op: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut opcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static opcount: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut motion_force: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static motion_force: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut exmode_active: bool = false;
+pub static exmode_active: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut pending_exmode_active: bool = false;
+pub static pending_exmode_active: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ex_no_reprint: bool = false;
+pub static ex_no_reprint: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut cmdpreview: bool = false;
+pub static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut reg_recording: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static reg_recording: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut reg_executing: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static reg_executing: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut pending_end_reg_executing: bool = false;
+pub static pending_end_reg_executing: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut reg_recorded: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static reg_recorded: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut no_mapping: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static no_mapping: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut no_zero_mapping: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static no_zero_mapping: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut allow_keys: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static allow_keys: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut no_u_sync: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static no_u_sync: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut u_sync_once: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static u_sync_once: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut force_restart_edit: bool = false;
+pub static force_restart_edit: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut restart_edit: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static restart_edit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut arrow_used: bool = false;
+pub static arrow_used: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ins_at_eol: bool = false;
+pub static ins_at_eol: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut no_abbr: bool = true;
+pub static no_abbr: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut mapped_ctrl_c: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static mapped_ctrl_c: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut ctrl_c_interrupts: bool = true;
+pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut cmdmod: cmdmod_T = cmdmod_T {
+pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_flags: 0,
     cmod_split: 0,
     cmod_tab: 0,
@@ -6977,40 +7082,42 @@ pub static mut cmdmod: cmdmod_T = cmdmod_T {
     cmod_save_msg_silent: 0,
     cmod_save_msg_scroll: 0,
     cmod_did_esilent: 0,
-};
+});
 #[no_mangle]
-pub static mut msg_silent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static msg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut emsg_silent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static emsg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut emsg_noredir: bool = false;
+pub static emsg_noredir: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut cmd_silent: bool = false;
+pub static cmd_silent: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut in_assert_fails: bool = false;
+pub static in_assert_fails: GlobalCell<bool> = GlobalCell::new(false);
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut swap_exists_action: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static swap_exists_action: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut swap_exists_did_quit: bool = false;
+pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut IObuff: [::core::ffi::c_char; 1025] = [0; 1025];
+pub static IObuff: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
 #[no_mangle]
-pub static mut NameBuff: [::core::ffi::c_char; 4096] = [0; 4096];
+pub static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
 #[no_mangle]
-pub static mut msg_buf: [::core::ffi::c_char; 480] = [0; 480];
+pub static msg_buf: GlobalCell<[::core::ffi::c_char; 480]> = GlobalCell::new([0; 480]);
 #[no_mangle]
-pub static mut os_buf: [::core::ffi::c_char; 4096] = [0; 4096];
+pub static os_buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
 #[no_mangle]
-pub static mut RedrawingDisabled: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static RedrawingDisabled: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut readonlymode: bool = false;
+pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut recoverymode: bool = false;
+pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut typebuf: typebuf_T = typebuf_T {
+pub static typebuf: GlobalCell<typebuf_T> = GlobalCell::new(typebuf_T {
     tb_buf: ::core::ptr::null_mut::<uint8_t>(),
     tb_noremap: ::core::ptr::null_mut::<uint8_t>(),
     tb_buflen: 0 as ::core::ffi::c_int,
@@ -7020,159 +7127,174 @@ pub static mut typebuf: typebuf_T = typebuf_T {
     tb_silent: 0 as ::core::ffi::c_int,
     tb_no_abbr_cnt: 0 as ::core::ffi::c_int,
     tb_change_cnt: 0 as ::core::ffi::c_int,
-};
+});
 #[no_mangle]
-pub static mut typebuf_was_empty: bool = false;
+pub static typebuf_was_empty: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ex_normal_busy: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static ex_normal_busy: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut expr_map_lock: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static expr_map_lock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut ignore_script: bool = false;
+pub static ignore_script: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut stop_insert_mode: bool = false;
+pub static stop_insert_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut KeyTyped: bool = false;
+pub static KeyTyped: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut KeyStuffed: ::core::ffi::c_int = 0;
+pub static KeyStuffed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut maptick: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static maptick: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut must_redraw: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static must_redraw: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut skip_redraw: bool = false;
+pub static skip_redraw: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut do_redraw: bool = false;
+pub static do_redraw: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut must_redraw_pum: bool = false;
+pub static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_highlight_changed: bool = true;
+pub static need_highlight_changed: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut scriptout: *mut FILE = ::core::ptr::null_mut::<FILE>();
+pub static scriptout: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 #[no_mangle]
-pub static mut got_int: bool = false;
+pub static got_int: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut bangredo: bool = false;
+pub static bangredo: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut searchcmdlen: ::core::ffi::c_int = 0;
+pub static searchcmdlen: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut reg_do_extmatch: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static reg_do_extmatch: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut re_extmatch_in: *mut reg_extmatch_T = ::core::ptr::null_mut::<reg_extmatch_T>();
+pub static re_extmatch_in: GlobalCell<*mut reg_extmatch_T> =
+    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
 #[no_mangle]
-pub static mut re_extmatch_out: *mut reg_extmatch_T = ::core::ptr::null_mut::<reg_extmatch_T>();
+pub static re_extmatch_out: GlobalCell<*mut reg_extmatch_T> =
+    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
 #[no_mangle]
-pub static mut did_outofmem_msg: bool = false;
+pub static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut did_swapwrite_msg: bool = false;
+pub static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut global_busy: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static global_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut listcmd_busy: bool = false;
+pub static listcmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut need_start_insertmode: bool = false;
+pub static need_start_insertmode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut last_mode: [::core::ffi::c_char; 4] =
-    unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"n\0\0\0") };
+pub static last_mode: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"n\0\0\0")
+});
 #[no_mangle]
-pub static mut last_cmdline: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static last_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut repeat_cmdline: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static repeat_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut new_last_cmdline: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static new_last_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut postponed_split: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static postponed_split: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut postponed_split_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static postponed_split_flags: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut postponed_split_tab: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static postponed_split_tab: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut g_do_tagpreview: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static g_do_tagpreview: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut g_tag_at_cursor: bool = false;
+pub static g_tag_at_cursor: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut replace_offset: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static replace_offset: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut escape_chars: *mut ::core::ffi::c_char =
-    b" \t\\\"|\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static escape_chars: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
+    b" \t\\\"|\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+);
 #[no_mangle]
-pub static mut keep_help_flag: bool = false;
+pub static keep_help_flag: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut redir_off: bool = false;
+pub static redir_off: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut redir_fd: *mut FILE = ::core::ptr::null_mut::<FILE>();
+pub static redir_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 #[no_mangle]
-pub static mut redir_reg: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static redir_reg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut redir_vname: bool = false;
+pub static redir_vname: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut capture_ga: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
+pub static capture_ga: GlobalCell<*mut garray_T> =
+    GlobalCell::new(::core::ptr::null_mut::<garray_T>());
 #[no_mangle]
-pub static mut langmap_mapchar: [uint8_t; 256] = [0; 256];
+pub static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 #[no_mangle]
-pub static mut save_p_ls: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static save_p_ls: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut save_p_wmh: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static save_p_wmh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut wild_menu_showing: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static wild_menu_showing: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut globaldir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static globaldir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut last_chdir_reason: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static last_chdir_reason: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut km_stopsel: bool = false;
+pub static km_stopsel: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut km_startsel: bool = false;
+pub static km_startsel: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut cmdwin_type: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cmdwin_type: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut cmdwin_result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cmdwin_result: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut cmdwin_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cmdwin_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut cmdwin_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+pub static cmdwin_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
-pub static mut cmdwin_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static cmdwin_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut cmdwin_old_curwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
+    GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut cmdline_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
+pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
-pub static mut no_lines_msg: [::core::ffi::c_char; 23] = unsafe {
+pub static no_lines_msg: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"--No lines in buffer--\0")
-};
+});
 #[no_mangle]
-pub static mut sub_nsubs: ::core::ffi::c_int = 0;
+pub static sub_nsubs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut sub_nlines: linenr_T = 0;
+pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut wim_flags: [uint8_t; 4] = [0; 4];
+pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
 #[no_mangle]
-pub static mut stl_syntax: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static stl_syntax: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut no_hlsearch: bool = false;
+pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut typebuf_was_filled: bool = false;
+pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut virtual_op: TriState = kNone;
+pub static virtual_op: GlobalCell<TriState> = GlobalCell::new(kNone);
 #[no_mangle]
-pub static mut display_tick: disptick_T = 0 as disptick_T;
+pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
 #[no_mangle]
-pub static mut spell_redraw_lnum: linenr_T = 0 as linenr_T;
+pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 #[no_mangle]
-pub static mut time_fd: *mut FILE = ::core::ptr::null_mut::<FILE>();
+pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 #[no_mangle]
-pub static mut vim_ignored: ::core::ffi::c_int = 0;
+pub static vim_ignored: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut embedded_mode: bool = false;
+pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut headless_mode: bool = false;
+pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut windowsVersion: [::core::ffi::c_char; 20] = [
+pub static windowsVersion: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new([
     0 as ::core::ffi::c_char,
     0,
     0,
@@ -7193,17 +7315,17 @@ pub static mut windowsVersion: [::core::ffi::c_char; 20] = [
     0,
     0,
     0,
-];
+]);
 #[no_mangle]
-pub static mut magic_overruled: optmagic_T = OPTION_MAGIC_NOT_SET;
+pub static magic_overruled: GlobalCell<optmagic_T> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
 #[no_mangle]
-pub static mut skip_win_fix_cursor: bool = false;
+pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut skip_win_fix_scroll: bool = false;
+pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut skip_update_topline: bool = false;
+pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut default_grid: ScreenGrid = ScreenGrid {
+pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
     attrs: ::core::ptr::null_mut::<sattr_T>(),
@@ -7224,57 +7346,60 @@ pub static mut default_grid: ScreenGrid = ScreenGrid {
     comp_index: 0 as size_t,
     comp_disabled: false,
     pending_comp_index_update: true,
-};
+});
 #[no_mangle]
-pub static mut default_gridview: GridView = unsafe {
+pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(unsafe {
     GridView {
-        target: &raw const default_grid as *mut ScreenGrid,
+        target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
         row_offset: 0,
         col_offset: 0,
     }
-};
+});
 #[no_mangle]
-pub static mut resizing_screen: bool = false;
+pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut linebuf_char: *mut schar_T = ::core::ptr::null_mut::<schar_T>();
+pub static linebuf_char: GlobalCell<*mut schar_T> =
+    GlobalCell::new(::core::ptr::null_mut::<schar_T>());
 #[no_mangle]
-pub static mut linebuf_attr: *mut sattr_T = ::core::ptr::null_mut::<sattr_T>();
+pub static linebuf_attr: GlobalCell<*mut sattr_T> =
+    GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
 #[no_mangle]
-pub static mut linebuf_vcol: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
+pub static linebuf_vcol: GlobalCell<*mut colnr_T> =
+    GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
 #[no_mangle]
-pub static mut linebuf_scratch: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static linebuf_scratch: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut opt_ambw_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_ambw_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"single\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bg_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_bg_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"light\0".as_ptr() as *const ::core::ffi::c_char,
     b"dark\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bs_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_bs_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"indent\0".as_ptr() as *const ::core::ffi::c_char,
     b"eol\0".as_ptr() as *const ::core::ffi::c_char,
     b"start\0".as_ptr() as *const ::core::ffi::c_char,
     b"nostop\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bkc_values: [*const ::core::ffi::c_char; 6] = [
+pub static opt_bkc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto\0".as_ptr() as *const ::core::ffi::c_char,
     b"no\0".as_ptr() as *const ::core::ffi::c_char,
     b"breaksymlink\0".as_ptr() as *const ::core::ffi::c_char,
     b"breakhardlink\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bo_values: [*const ::core::ffi::c_char; 21] = [
+pub static opt_bo_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     b"backspace\0".as_ptr() as *const ::core::ffi::c_char,
     b"cursor\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7296,27 +7421,27 @@ pub static mut opt_bo_values: [*const ::core::ffi::c_char; 21] = [
     b"term\0".as_ptr() as *const ::core::ffi::c_char,
     b"wildmode\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_briopt_values: [*const ::core::ffi::c_char; 6] = [
+pub static opt_briopt_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"shift:\0".as_ptr() as *const ::core::ffi::c_char,
     b"min:\0".as_ptr() as *const ::core::ffi::c_char,
     b"sbr\0".as_ptr() as *const ::core::ffi::c_char,
     b"list:\0".as_ptr() as *const ::core::ffi::c_char,
     b"column:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bh_values: [*const ::core::ffi::c_char; 6] = [
+pub static opt_bh_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"hide\0".as_ptr() as *const ::core::ffi::c_char,
     b"unload\0".as_ptr() as *const ::core::ffi::c_char,
     b"delete\0".as_ptr() as *const ::core::ffi::c_char,
     b"wipe\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_bt_values: [*const ::core::ffi::c_char; 9] = [
+pub static opt_bt_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"acwrite\0".as_ptr() as *const ::core::ffi::c_char,
     b"help\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7326,21 +7451,21 @@ pub static mut opt_bt_values: [*const ::core::ffi::c_char; 9] = [
     b"terminal\0".as_ptr() as *const ::core::ffi::c_char,
     b"prompt\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_cmp_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_cmp_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"internal\0".as_ptr() as *const ::core::ffi::c_char,
     b"keepascii\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_cb_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_cb_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"unnamed\0".as_ptr() as *const ::core::ffi::c_char,
     b"unnamedplus\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_cpt_values: [*const ::core::ffi::c_char; 16] = [
+pub static opt_cpt_values: GlobalCell<[*const ::core::ffi::c_char; 16]> = GlobalCell::new([
     b".\0".as_ptr() as *const ::core::ffi::c_char,
     b"w\0".as_ptr() as *const ::core::ffi::c_char,
     b"b\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7357,9 +7482,9 @@ pub static mut opt_cpt_values: [*const ::core::ffi::c_char; 16] = [
     b"F\0".as_ptr() as *const ::core::ffi::c_char,
     b"o\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_cot_values: [*const ::core::ffi::c_char; 12] = [
+pub static opt_cot_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = GlobalCell::new([
     b"menu\0".as_ptr() as *const ::core::ffi::c_char,
     b"menuone\0".as_ptr() as *const ::core::ffi::c_char,
     b"longest\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7372,31 +7497,31 @@ pub static mut opt_cot_values: [*const ::core::ffi::c_char; 12] = [
     b"preinsert\0".as_ptr() as *const ::core::ffi::c_char,
     b"nearest\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_csl_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_csl_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"slash\0".as_ptr() as *const ::core::ffi::c_char,
     b"backslash\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_culopt_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_culopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"line\0".as_ptr() as *const ::core::ffi::c_char,
     b"screenline\0".as_ptr() as *const ::core::ffi::c_char,
     b"number\0".as_ptr() as *const ::core::ffi::c_char,
     b"both\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_debug_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_debug_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"msg\0".as_ptr() as *const ::core::ffi::c_char,
     b"throw\0".as_ptr() as *const ::core::ffi::c_char,
     b"beep\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_dip_values: [*const ::core::ffi::c_char; 20] = [
+pub static opt_dip_values: GlobalCell<[*const ::core::ffi::c_char; 20]> = GlobalCell::new([
     b"filler\0".as_ptr() as *const ::core::ffi::c_char,
     b"anchor\0".as_ptr() as *const ::core::ffi::c_char,
     b"context:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7417,52 +7542,53 @@ pub static mut opt_dip_values: [*const ::core::ffi::c_char; 20] = [
     b"inline:\0".as_ptr() as *const ::core::ffi::c_char,
     b"linematch:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_dip_algorithm_values: [*const ::core::ffi::c_char; 5] = [
-    b"myers\0".as_ptr() as *const ::core::ffi::c_char,
-    b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
-    b"patience\0".as_ptr() as *const ::core::ffi::c_char,
-    b"histogram\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-];
+pub static opt_dip_algorithm_values: GlobalCell<[*const ::core::ffi::c_char; 5]> =
+    GlobalCell::new([
+        b"myers\0".as_ptr() as *const ::core::ffi::c_char,
+        b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
+        b"patience\0".as_ptr() as *const ::core::ffi::c_char,
+        b"histogram\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+    ]);
 #[no_mangle]
-pub static mut opt_dip_inline_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_dip_inline_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     b"simple\0".as_ptr() as *const ::core::ffi::c_char,
     b"char\0".as_ptr() as *const ::core::ffi::c_char,
     b"word\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_dy_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_dy_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"lastline\0".as_ptr() as *const ::core::ffi::c_char,
     b"truncate\0".as_ptr() as *const ::core::ffi::c_char,
     b"uhex\0".as_ptr() as *const ::core::ffi::c_char,
     b"msgsep\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_ead_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_ead_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"both\0".as_ptr() as *const ::core::ffi::c_char,
     b"ver\0".as_ptr() as *const ::core::ffi::c_char,
     b"hor\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_ff_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_ff_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"unix\0".as_ptr() as *const ::core::ffi::c_char,
     b"dos\0".as_ptr() as *const ::core::ffi::c_char,
     b"mac\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_fcl_values: [*const ::core::ffi::c_char; 2] = [
+pub static opt_fcl_values: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_fdc_values: [*const ::core::ffi::c_char; 21] = [
+pub static opt_fdc_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = GlobalCell::new([
     b"auto\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto:1\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto:2\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7484,9 +7610,9 @@ pub static mut opt_fdc_values: [*const ::core::ffi::c_char; 21] = [
     b"8\0".as_ptr() as *const ::core::ffi::c_char,
     b"9\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_fdm_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_fdm_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"manual\0".as_ptr() as *const ::core::ffi::c_char,
     b"expr\0".as_ptr() as *const ::core::ffi::c_char,
     b"marker\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7494,9 +7620,9 @@ pub static mut opt_fdm_values: [*const ::core::ffi::c_char; 7] = [
     b"syntax\0".as_ptr() as *const ::core::ffi::c_char,
     b"diff\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_fdo_values: [*const ::core::ffi::c_char; 12] = [
+pub static opt_fdo_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     b"block\0".as_ptr() as *const ::core::ffi::c_char,
     b"hor\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7509,56 +7635,56 @@ pub static mut opt_fdo_values: [*const ::core::ffi::c_char; 12] = [
     b"undo\0".as_ptr() as *const ::core::ffi::c_char,
     b"jump\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_icm_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_icm_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"nosplit\0".as_ptr() as *const ::core::ffi::c_char,
     b"split\0".as_ptr() as *const ::core::ffi::c_char,
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_jop_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_jop_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"stack\0".as_ptr() as *const ::core::ffi::c_char,
     b"view\0".as_ptr() as *const ::core::ffi::c_char,
     b"clean\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_km_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_km_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"startsel\0".as_ptr() as *const ::core::ffi::c_char,
     b"stopsel\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_lop_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_lop_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"expr:0\0".as_ptr() as *const ::core::ffi::c_char,
     b"expr:1\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_mopt_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_mopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"hit-enter\0".as_ptr() as *const ::core::ffi::c_char,
     b"wait:\0".as_ptr() as *const ::core::ffi::c_char,
     b"history:\0".as_ptr() as *const ::core::ffi::c_char,
     b"progress:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_mousem_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_mousem_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"extend\0".as_ptr() as *const ::core::ffi::c_char,
     b"popup\0".as_ptr() as *const ::core::ffi::c_char,
     b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_mousescroll_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_mousescroll_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"hor:\0".as_ptr() as *const ::core::ffi::c_char,
     b"ver:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_nf_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_nf_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"bin\0".as_ptr() as *const ::core::ffi::c_char,
     b"octal\0".as_ptr() as *const ::core::ffi::c_char,
     b"hex\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7566,9 +7692,9 @@ pub static mut opt_nf_values: [*const ::core::ffi::c_char; 7] = [
     b"unsigned\0".as_ptr() as *const ::core::ffi::c_char,
     b"blank\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_pumborder_values: [*const ::core::ffi::c_char; 9] = [
+pub static opt_pumborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
     b"single\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7578,9 +7704,9 @@ pub static mut opt_pumborder_values: [*const ::core::ffi::c_char; 9] = [
     b"bold\0".as_ptr() as *const ::core::ffi::c_char,
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_rdb_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_rdb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"compositor\0".as_ptr() as *const ::core::ffi::c_char,
     b"nothrottle\0".as_ptr() as *const ::core::ffi::c_char,
     b"invalid\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7588,35 +7714,35 @@ pub static mut opt_rdb_values: [*const ::core::ffi::c_char; 7] = [
     b"line\0".as_ptr() as *const ::core::ffi::c_char,
     b"flush\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_rlc_values: [*const ::core::ffi::c_char; 2] = [
+pub static opt_rlc_values: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"search\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_sbo_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_sbo_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"ver\0".as_ptr() as *const ::core::ffi::c_char,
     b"hor\0".as_ptr() as *const ::core::ffi::c_char,
     b"jump\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_sel_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_sel_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"inclusive\0".as_ptr() as *const ::core::ffi::c_char,
     b"exclusive\0".as_ptr() as *const ::core::ffi::c_char,
     b"old\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_slm_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_slm_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"mouse\0".as_ptr() as *const ::core::ffi::c_char,
     b"key\0".as_ptr() as *const ::core::ffi::c_char,
     b"cmd\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_ssop_values: [*const ::core::ffi::c_char; 19] = [
+pub static opt_ssop_values: GlobalCell<[*const ::core::ffi::c_char; 19]> = GlobalCell::new([
     b"buffers\0".as_ptr() as *const ::core::ffi::c_char,
     b"winpos\0".as_ptr() as *const ::core::ffi::c_char,
     b"resize\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7636,16 +7762,16 @@ pub static mut opt_ssop_values: [*const ::core::ffi::c_char; 19] = [
     b"terminal\0".as_ptr() as *const ::core::ffi::c_char,
     b"skiprtp\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_sloc_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_sloc_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"last\0".as_ptr() as *const ::core::ffi::c_char,
     b"statusline\0".as_ptr() as *const ::core::ffi::c_char,
     b"tabline\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_scl_values: [*const ::core::ffi::c_char; 23] = [
+pub static opt_scl_values: GlobalCell<[*const ::core::ffi::c_char; 23]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"no\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7669,15 +7795,15 @@ pub static mut opt_scl_values: [*const ::core::ffi::c_char; 23] = [
     b"yes:9\0".as_ptr() as *const ::core::ffi::c_char,
     b"number\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_spo_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_spo_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"camel\0".as_ptr() as *const ::core::ffi::c_char,
     b"noplainbuffer\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_sps_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_sps_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"best\0".as_ptr() as *const ::core::ffi::c_char,
     b"fast\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7685,16 +7811,16 @@ pub static mut opt_sps_values: [*const ::core::ffi::c_char; 7] = [
     b"file:\0".as_ptr() as *const ::core::ffi::c_char,
     b"timeout:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_spk_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_spk_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"cursor\0".as_ptr() as *const ::core::ffi::c_char,
     b"screen\0".as_ptr() as *const ::core::ffi::c_char,
     b"topline\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_swb_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_swb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"useopen\0".as_ptr() as *const ::core::ffi::c_char,
     b"usetab\0".as_ptr() as *const ::core::ffi::c_char,
     b"split\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7702,24 +7828,24 @@ pub static mut opt_swb_values: [*const ::core::ffi::c_char; 7] = [
     b"vsplit\0".as_ptr() as *const ::core::ffi::c_char,
     b"uselast\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_tcl_values: [*const ::core::ffi::c_char; 3] = [
+pub static opt_tcl_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"left\0".as_ptr() as *const ::core::ffi::c_char,
     b"uselast\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_tc_values: [*const ::core::ffi::c_char; 6] = [
+pub static opt_tc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"followic\0".as_ptr() as *const ::core::ffi::c_char,
     b"ignore\0".as_ptr() as *const ::core::ffi::c_char,
     b"match\0".as_ptr() as *const ::core::ffi::c_char,
     b"followscs\0".as_ptr() as *const ::core::ffi::c_char,
     b"smart\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_tpf_values: [*const ::core::ffi::c_char; 8] = [
+pub static opt_tpf_values: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"BS\0".as_ptr() as *const ::core::ffi::c_char,
     b"HT\0".as_ptr() as *const ::core::ffi::c_char,
     b"FF\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7728,9 +7854,9 @@ pub static mut opt_tpf_values: [*const ::core::ffi::c_char; 8] = [
     b"C0\0".as_ptr() as *const ::core::ffi::c_char,
     b"C1\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_ve_values: [*const ::core::ffi::c_char; 7] = [
+pub static opt_ve_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"block\0".as_ptr() as *const ::core::ffi::c_char,
     b"insert\0".as_ptr() as *const ::core::ffi::c_char,
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7738,33 +7864,33 @@ pub static mut opt_ve_values: [*const ::core::ffi::c_char; 7] = [
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_wim_values: [*const ::core::ffi::c_char; 6] = [
+pub static opt_wim_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"full\0".as_ptr() as *const ::core::ffi::c_char,
     b"longest\0".as_ptr() as *const ::core::ffi::c_char,
     b"list\0".as_ptr() as *const ::core::ffi::c_char,
     b"lastused\0".as_ptr() as *const ::core::ffi::c_char,
     b"noselect\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_wop_values: [*const ::core::ffi::c_char; 5] = [
+pub static opt_wop_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"fuzzy\0".as_ptr() as *const ::core::ffi::c_char,
     b"tagfile\0".as_ptr() as *const ::core::ffi::c_char,
     b"pum\0".as_ptr() as *const ::core::ffi::c_char,
     b"exacttext\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_wak_values: [*const ::core::ffi::c_char; 4] = [
+pub static opt_wak_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"menu\0".as_ptr() as *const ::core::ffi::c_char,
     b"no\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut opt_winborder_values: [*const ::core::ffi::c_char; 9] = [
+pub static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
     b"single\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7774,685 +7900,829 @@ pub static mut opt_winborder_values: [*const ::core::ffi::c_char; 9] = [
     b"bold\0".as_ptr() as *const ::core::ffi::c_char,
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
-];
+]);
 #[no_mangle]
-pub static mut empty_string_option: [::core::ffi::c_char; 1] =
-    unsafe { ::core::mem::transmute::<[u8; 1], [::core::ffi::c_char; 1]>(*b"\0") };
+pub static empty_string_option: GlobalCell<[::core::ffi::c_char; 1]> =
+    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 1], [::core::ffi::c_char; 1]>(*b"\0") });
 #[no_mangle]
-pub static mut p_ambw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ambw: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_acd: ::core::ffi::c_int = 0;
+pub static p_acd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ai: ::core::ffi::c_int = 0;
+pub static p_ai: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bin: ::core::ffi::c_int = 0;
+pub static p_bin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bomb: ::core::ffi::c_int = 0;
+pub static p_bomb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bl: ::core::ffi::c_int = 0;
+pub static p_bl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cin: ::core::ffi::c_int = 0;
+pub static p_cin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_channel: OptInt = 0;
+pub static p_channel: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cink: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cink: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cinsd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cinsd: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cinw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cinw: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cfu: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ofu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ofu: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tsrfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tsrfu: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ci: ::core::ffi::c_int = 0;
+pub static p_ci: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ar: ::core::ffi::c_int = 0;
+pub static p_ar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_aw: ::core::ffi::c_int = 0;
+pub static p_aw: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_awa: ::core::ffi::c_int = 0;
+pub static p_awa: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bs: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bg: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bk: ::core::ffi::c_int = 0;
+pub static p_bk: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bkc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bkc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut bkc_flags: ::core::ffi::c_uint = 0;
+pub static bkc_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bdir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bex: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut breakat_flags: [::core::ffi::c_char; 256] = [0; 256];
+pub static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
 #[no_mangle]
-pub static mut bo_flags: ::core::ffi::c_uint = 0;
+pub static bo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_bsk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bsk: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_breakat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_breakat: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bh: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_bt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_bt: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_busy: OptInt = 0;
+pub static p_busy: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cmp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut cmp_flags: ::core::ffi::c_uint = 0;
+pub static cmp_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_enc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_enc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_deco: ::core::ffi::c_int = 0;
+pub static p_deco: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ccv: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ccv: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cino: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cino: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cedit: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cedit: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cb: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut cb_flags: ::core::ffi::c_uint = 0;
+pub static cb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cwh: OptInt = 0;
+pub static p_cwh: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ch: OptInt = 0;
+pub static p_ch: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cms: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cms: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cpt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cpt: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cto: OptInt = 0;
+pub static p_cto: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_columns: OptInt = 0;
+pub static p_columns: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_confirm: ::core::ffi::c_int = 0;
+pub static p_confirm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cia: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut cia_flags: ::core::ffi::c_uint = 0;
+pub static cia_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cot: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cot: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut cot_flags: ::core::ffi::c_uint = 0;
+pub static cot_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ac: ::core::ffi::c_int = 0;
+pub static p_ac: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_act: OptInt = 0;
+pub static p_act: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_acl: OptInt = 0;
+pub static p_acl: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pumborder: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_pumborder: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_pb: OptInt = 0;
+pub static p_pb: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ph: OptInt = 0;
+pub static p_ph: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pw: OptInt = 0;
+pub static p_pw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pmw: OptInt = 0;
+pub static p_pmw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_com: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_com: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cpo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cpo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_debug: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_debug: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_def: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_def: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_inc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_inc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dia: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dip: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dip: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dex: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dict: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dict: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dg: ::core::ffi::c_int = 0;
+pub static p_dg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_dy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_dy: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut dy_flags: ::core::ffi::c_uint = 0;
+pub static dy_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ead: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ead: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_emoji: ::core::ffi::c_int = 0;
+pub static p_emoji: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ea: ::core::ffi::c_int = 0;
+pub static p_ea: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ep: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ep: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_eb: ::core::ffi::c_int = 0;
+pub static p_eb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ef: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_efm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_gefm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_gefm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_gp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_gp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_eof: ::core::ffi::c_int = 0;
+pub static p_eof: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_eol: ::core::ffi::c_int = 0;
+pub static p_eol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ei: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ei: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_et: ::core::ffi::c_int = 0;
+pub static p_et: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_exrc: ::core::ffi::c_int = 0;
+pub static p_exrc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_fenc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fenc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fencs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fencs: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ff: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ff: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ffs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ffs: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fic: ::core::ffi::c_int = 0;
+pub static p_fic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ft: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ft: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fcs: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ffu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ffu: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fixeol: ::core::ffi::c_int = 0;
+pub static p_fixeol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_fcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fcl: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fdls: OptInt = 0;
+pub static p_fdls: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_fdo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fdo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut fdo_flags: ::core::ffi::c_uint = 0;
+pub static fdo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_fex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fex: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_flp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_flp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_fp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_fs: ::core::ffi::c_int = 0;
+pub static p_fs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_gd: ::core::ffi::c_int = 0;
+pub static p_gd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_guicursor: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_guicursor: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_guifont: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_guifont: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_guifontwide: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_guifontwide: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_hf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_hf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_hh: OptInt = 0;
+pub static p_hh: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_hlg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_hlg: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_hid: ::core::ffi::c_int = 0;
+pub static p_hid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_hl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_hl: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_hls: ::core::ffi::c_int = 0;
+pub static p_hls: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_hi: OptInt = 0;
+pub static p_hi: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_arshape: ::core::ffi::c_int = 0;
+pub static p_arshape: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_icon: ::core::ffi::c_int = 0;
+pub static p_icon: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_iconstring: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_iconstring: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ic: ::core::ffi::c_int = 0;
+pub static p_ic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_iminsert: OptInt = 0;
+pub static p_iminsert: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_imsearch: OptInt = 0;
+pub static p_imsearch: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_inf: ::core::ffi::c_int = 0;
+pub static p_inf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_inex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_inex: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_is: ::core::ffi::c_int = 0;
+pub static p_is: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_inde: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_inde: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_indk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_indk: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_icm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_icm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_isf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_isf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_isi: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_isi: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_isk: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_isp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_isp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_js: ::core::ffi::c_int = 0;
+pub static p_js: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_jop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_jop: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut jop_flags: ::core::ffi::c_uint = 0;
+pub static jop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_keymap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_keymap: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_kp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_kp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_km: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_km: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_langmap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_langmap: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_lnr: ::core::ffi::c_int = 0;
+pub static p_lnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lrm: ::core::ffi::c_int = 0;
+pub static p_lrm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_lm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_lines: OptInt = 0;
+pub static p_lines: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_linespace: OptInt = 0;
+pub static p_linespace: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lisp: ::core::ffi::c_int = 0;
+pub static p_lisp: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_lop: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_lispwords: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_lispwords: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ls: OptInt = 0;
+pub static p_ls: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_stal: OptInt = 0;
+pub static p_stal: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_lcs: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_lz: ::core::ffi::c_int = 0;
+pub static p_lz: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_lpl: ::core::ffi::c_int = 0;
+pub static p_lpl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_magic: ::core::ffi::c_int = 0;
+pub static p_magic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_menc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_menc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mef: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mps: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mat: OptInt = 0;
+pub static p_mat: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mco: OptInt = 0;
+pub static p_mco: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mfd: OptInt = 0;
+pub static p_mfd: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mmd: OptInt = 0;
+pub static p_mmd: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mmp: OptInt = 0;
+pub static p_mmp: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mis: OptInt = 0;
+pub static p_mis: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mopt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mopt: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_msc: OptInt = 0;
+pub static p_msc: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_msm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_msm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ml: ::core::ffi::c_int = 0;
+pub static p_ml: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mle: ::core::ffi::c_int = 0;
+pub static p_mle: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mls: OptInt = 0;
+pub static p_mls: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ma: ::core::ffi::c_int = 0;
+pub static p_ma: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mod: ::core::ffi::c_int = 0;
+pub static p_mod: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mouse: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mouse: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mousem: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mousem: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mousemev: ::core::ffi::c_int = 0;
+pub static p_mousemev: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mousef: ::core::ffi::c_int = 0;
+pub static p_mousef: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mh: ::core::ffi::c_int = 0;
+pub static p_mh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_mousescroll: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_mousescroll: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_mousescroll_vert: OptInt = 3 as OptInt;
+pub static p_mousescroll_vert: GlobalCell<OptInt> = GlobalCell::new(3 as OptInt);
 #[no_mangle]
-pub static mut p_mousescroll_hor: OptInt = 6 as OptInt;
+pub static p_mousescroll_hor: GlobalCell<OptInt> = GlobalCell::new(6 as OptInt);
 #[no_mangle]
-pub static mut p_mouset: OptInt = 0;
+pub static p_mouset: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_more: ::core::ffi::c_int = 0;
+pub static p_more: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_nf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_nf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_opfunc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_opfunc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_para: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_para: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_paste: ::core::ffi::c_int = 0;
+pub static p_paste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_pex: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_pm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_pm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_path: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_cdpath: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_cdpath: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_pi: ::core::ffi::c_int = 0;
+pub static p_pi: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pyx: OptInt = 0;
+pub static p_pyx: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_qe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_qe: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ro: ::core::ffi::c_int = 0;
+pub static p_ro: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_rdb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_rdb: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut rdb_flags: ::core::ffi::c_uint = 0;
+pub static rdb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_rdt: OptInt = 0;
+pub static p_rdt: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_re: OptInt = 0;
+pub static p_re: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_report: OptInt = 0;
+pub static p_report: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_pvh: OptInt = 0;
+pub static p_pvh: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_chi: OptInt = 0;
+pub static p_chi: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ari: ::core::ffi::c_int = 0;
+pub static p_ari: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ri: ::core::ffi::c_int = 0;
+pub static p_ri: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ru: ::core::ffi::c_int = 0;
+pub static p_ru: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ruf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ruf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_pp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_pp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_qftf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_qftf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_rtp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_rtp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_scbk: OptInt = 0;
+pub static p_scbk: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sj: OptInt = 0;
+pub static p_sj: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_so: OptInt = 0;
+pub static p_so: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sbo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sbo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sections: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sections: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_secure: ::core::ffi::c_int = 0;
+pub static p_secure: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sel: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sel: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_slm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_slm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ssop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ssop: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut ssop_flags: ::core::ffi::c_uint = 0;
+pub static ssop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sh: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_shcf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_shcf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sp: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_shq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_shq: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sxq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sxq: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sxe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sxe: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_srr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_srr: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_stmp: ::core::ffi::c_int = 0;
+pub static p_stmp: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_stl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_stl: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_wbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_wbr: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sr: ::core::ffi::c_int = 0;
+pub static p_sr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sw: OptInt = 0;
+pub static p_sw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_shm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_shm: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sbr: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sc: ::core::ffi::c_int = 0;
+pub static p_sc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sloc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sloc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_sft: ::core::ffi::c_int = 0;
+pub static p_sft: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sm: ::core::ffi::c_int = 0;
+pub static p_sm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_smd: ::core::ffi::c_int = 0;
+pub static p_smd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ss: OptInt = 0;
+pub static p_ss: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_siso: OptInt = 0;
+pub static p_siso: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_scs: ::core::ffi::c_int = 0;
+pub static p_scs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_si: ::core::ffi::c_int = 0;
+pub static p_si: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sta: ::core::ffi::c_int = 0;
+pub static p_sta: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sts: OptInt = 0;
+pub static p_sts: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sb: ::core::ffi::c_int = 0;
+pub static p_sb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sua: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sua: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_swf: ::core::ffi::c_int = 0;
+pub static p_swf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_smc: OptInt = 0;
+pub static p_smc: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tpm: OptInt = 0;
+pub static p_tpm: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tal: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tal: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tpf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tpf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut tpf_flags: ::core::ffi::c_uint = 0;
+pub static tpf_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tfu: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_spc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_spc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_spf: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_spl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_spl: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_spo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_spo: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut spo_flags: ::core::ffi::c_uint = 0;
+pub static spo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_sps: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_spr: ::core::ffi::c_int = 0;
+pub static p_spr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_sol: ::core::ffi::c_int = 0;
+pub static p_sol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_su: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_su: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_swb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_swb: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut swb_flags: ::core::ffi::c_uint = 0;
+pub static swb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_spk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_spk: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_syn: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_syn: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tcl: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut tcl_flags: ::core::ffi::c_uint = 0;
+pub static tcl_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ts: OptInt = 0;
+pub static p_ts: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tbs: ::core::ffi::c_int = 0;
+pub static p_tbs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tc: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut tc_flags: ::core::ffi::c_uint = 0;
+pub static tc_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tl: OptInt = 0;
+pub static p_tl: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tr: ::core::ffi::c_int = 0;
+pub static p_tr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tags: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tgst: ::core::ffi::c_int = 0;
+pub static p_tgst: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tbidi: ::core::ffi::c_int = 0;
+pub static p_tbidi: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tw: OptInt = 0;
+pub static p_tw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_to: ::core::ffi::c_int = 0;
+pub static p_to: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_timeout: ::core::ffi::c_int = 0;
+pub static p_timeout: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tm: OptInt = 0;
+pub static p_tm: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_title: ::core::ffi::c_int = 0;
+pub static p_title: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_titlelen: OptInt = 0;
+pub static p_titlelen: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_titleold: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_titleold: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_titlestring: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_titlestring: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tsr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_tsr: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_tgc: ::core::ffi::c_int = 0;
+pub static p_tgc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ttimeout: ::core::ffi::c_int = 0;
+pub static p_ttimeout: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ttm: OptInt = 0;
+pub static p_ttm: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_tf: ::core::ffi::c_int = 0;
+pub static p_tf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_udir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_udir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_udf: ::core::ffi::c_int = 0;
+pub static p_udf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ul: OptInt = 0;
+pub static p_ul: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ur: OptInt = 0;
+pub static p_ur: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_uc: OptInt = 0;
+pub static p_uc: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ut: OptInt = 0;
+pub static p_ut: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_shada: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_shada: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_shadafile: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_shadafile: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_termsync: ::core::ffi::c_int = 0;
+pub static p_termsync: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_vsts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_vsts: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_vts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_vts: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_vdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_vdir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_vop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_vop: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut vop_flags: ::core::ffi::c_uint = 0;
+pub static vop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_vb: ::core::ffi::c_int = 0;
+pub static p_vb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ve: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ve: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut ve_flags: ::core::ffi::c_uint = 0;
+pub static ve_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_verbose: OptInt = 0;
+pub static p_verbose: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_warn: ::core::ffi::c_int = 0;
+pub static p_warn: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_wop: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut wop_flags: ::core::ffi::c_uint = 0;
+pub static wop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_window: OptInt = 0;
+pub static p_window: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wak: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_wak: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_wig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_wig: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_ww: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_ww: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_wc: OptInt = 0;
+pub static p_wc: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wcm: OptInt = 0;
+pub static p_wcm: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wic: ::core::ffi::c_int = 0;
+pub static p_wic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wim: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_wim: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_wmnu: ::core::ffi::c_int = 0;
+pub static p_wmnu: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_winborder: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub static p_winborder: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut p_wh: OptInt = 0;
+pub static p_wh: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wmh: OptInt = 0;
+pub static p_wmh: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wmw: OptInt = 0;
+pub static p_wmw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wiw: OptInt = 0;
+pub static p_wiw: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wm: OptInt = 0;
+pub static p_wm: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_ws: ::core::ffi::c_int = 0;
+pub static p_ws: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_write: ::core::ffi::c_int = 0;
+pub static p_write: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wa: ::core::ffi::c_int = 0;
+pub static p_wa: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wb: ::core::ffi::c_int = 0;
+pub static p_wb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_wd: OptInt = 0;
+pub static p_wd: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut p_cdh: ::core::ffi::c_int = 0;
+pub static p_cdh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
-pub static mut hlf_names: [*const ::core::ffi::c_char; 76] = [
+pub static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 76]> = GlobalCell::new([
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"SpecialKey\0".as_ptr() as *const ::core::ffi::c_char,
     b"EndOfBuffer\0".as_ptr() as *const ::core::ffi::c_char,
@@ -8529,46 +8799,49 @@ pub static mut hlf_names: [*const ::core::ffi::c_char; 76] = [
     b"StdoutMsg\0".as_ptr() as *const ::core::ffi::c_char,
     b"OkMsg\0".as_ptr() as *const ::core::ffi::c_char,
     b"PreInsert\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 #[no_mangle]
-pub static mut highlight_attr: [::core::ffi::c_int; 76] = [0; 76];
+pub static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]> = GlobalCell::new([0; 76]);
 #[no_mangle]
-pub static mut highlight_attr_last: [::core::ffi::c_int; 76] = [0; 76];
+pub static highlight_attr_last: GlobalCell<[::core::ffi::c_int; 76]> = GlobalCell::new([0; 76]);
 #[no_mangle]
-pub static mut highlight_user: [::core::ffi::c_int; 9] = [0; 9];
+pub static highlight_user: GlobalCell<[::core::ffi::c_int; 9]> = GlobalCell::new([0; 9]);
 #[no_mangle]
-pub static mut highlight_stlnc: [::core::ffi::c_int; 9] = [0; 9];
+pub static highlight_stlnc: GlobalCell<[::core::ffi::c_int; 9]> = GlobalCell::new([0; 9]);
 #[no_mangle]
-pub static mut cterm_normal_fg_color: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cterm_normal_fg_color: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut cterm_normal_bg_color: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut normal_fg: RgbValue = -1 as RgbValue;
+pub static normal_fg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
 #[no_mangle]
-pub static mut normal_bg: RgbValue = -1 as RgbValue;
+pub static normal_bg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
 #[no_mangle]
-pub static mut normal_sp: RgbValue = -1 as RgbValue;
+pub static normal_sp: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
 #[no_mangle]
-pub static mut ns_hl_global: NS = 0 as NS;
+pub static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
 #[no_mangle]
-pub static mut ns_hl_win: NS = -1 as NS;
+pub static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 #[no_mangle]
-pub static mut ns_hl_fast: NS = -1 as NS;
+pub static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 #[no_mangle]
-pub static mut ns_hl_active: NS = 0 as NS;
+pub static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
 #[no_mangle]
-pub static mut hl_attr_active: *mut ::core::ffi::c_int =
-    unsafe { &raw const highlight_attr as *mut ::core::ffi::c_int };
+pub static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int> =
+    GlobalCell::new(unsafe { (highlight_attr.as_raw() as *const _) as *mut ::core::ffi::c_int });
 #[no_mangle]
-pub static mut curbuf_splice_pending: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static curbuf_splice_pending: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut nlua_global_refs: *mut nlua_ref_state_t =
-    ::core::ptr::null_mut::<nlua_ref_state_t>();
+pub static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t> =
+    GlobalCell::new(::core::ptr::null_mut::<nlua_ref_state_t>());
 #[no_mangle]
-pub static mut nlua_disable_preload: bool = false;
+pub static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);
 #[no_mangle]
-pub static mut main_loop: Loop = Loop {
+pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
     uv: uv_loop_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         active_handles: 0,
@@ -8874,30 +9147,32 @@ pub static mut main_loop: Loop = Loop {
     },
     recursive: 0,
     closing: false,
-};
-static mut argv0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut err_arg_missing: *const ::core::ffi::c_char =
-    b"Argument missing after\0".as_ptr() as *const ::core::ffi::c_char;
-static mut err_opt_garbage: *const ::core::ffi::c_char =
-    b"Garbage after option argument\0".as_ptr() as *const ::core::ffi::c_char;
-static mut err_opt_unknown: *const ::core::ffi::c_char =
-    b"Unknown option argument\0".as_ptr() as *const ::core::ffi::c_char;
-static mut err_too_many_args: *const ::core::ffi::c_char =
-    b"Too many edit arguments\0".as_ptr() as *const ::core::ffi::c_char;
-static mut err_extra_cmd: *const ::core::ffi::c_char =
+});
+static argv0: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static err_arg_missing: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Argument missing after\0".as_ptr() as *const ::core::ffi::c_char);
+static err_opt_garbage: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Garbage after option argument\0".as_ptr() as *const ::core::ffi::c_char);
+static err_opt_unknown: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Unknown option argument\0".as_ptr() as *const ::core::ffi::c_char);
+static err_too_many_args: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"Too many edit arguments\0".as_ptr() as *const ::core::ffi::c_char);
+static err_extra_cmd: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments\0".as_ptr()
-        as *const ::core::ffi::c_char;
+        as *const ::core::ffi::c_char,
+);
 #[no_mangle]
 pub unsafe extern "C" fn event_init() {
-    loop_init(&raw mut main_loop, NULL_0);
+    loop_init(main_loop.ptr(), NULL_0);
     env_init();
-    resize_events = multiqueue_new_child(main_loop.events);
+    resize_events.set(multiqueue_new_child((*main_loop.ptr()).events));
     autocmd_init();
     signal_init();
     channel_init();
     terminal_init();
     ui_init();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"event init\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -8905,20 +9180,20 @@ pub unsafe extern "C" fn event_init() {
     }
 }
 unsafe extern "C" fn event_teardown() -> bool {
-    if main_loop.events.is_null() {
+    if (*main_loop.ptr()).events.is_null() {
         input_stop();
         return true_0 != 0;
     }
-    multiqueue_process_events(main_loop.events);
-    loop_poll_events(&raw mut main_loop, 0 as int64_t);
+    multiqueue_process_events((*main_loop.ptr()).events);
+    loop_poll_events(main_loop.ptr(), 0 as int64_t);
     input_stop();
     server_teardown();
     channel_teardown();
-    proc_teardown(&raw mut main_loop);
+    proc_teardown(main_loop.ptr());
     timer_teardown();
     signal_teardown();
     terminal_teardown();
-    return loop_close(&raw mut main_loop, true_0 != 0);
+    return loop_close(main_loop.ptr(), true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
@@ -8927,15 +9202,15 @@ pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
     cmdline_init();
     eval_init();
     set_vim_var_nr(VV_STARTTIME, os_realtime());
-    init_path(if !argv0.is_null() {
-        argv0 as *const ::core::ffi::c_char
+    init_path(if !(*argv0.ptr()).is_null() {
+        argv0.get() as *const ::core::ffi::c_char
     } else {
         b"nvim\0".as_ptr() as *const ::core::ffi::c_char
     });
     init_normal_cmds();
     runtime_init();
     highlight_init();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"early init\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -8944,14 +9219,14 @@ pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
     init_locale();
     set_init_tablocal();
     win_alloc_first();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"init first window\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
-    alist_init(&raw mut global_alist);
-    global_alist.id = 0 as ::core::ffi::c_int;
+    alist_init(global_alist.ptr());
+    (*global_alist.ptr()).id = 0 as ::core::ffi::c_int;
     init_homedir();
     set_init_1(
         if !paramp.is_null() {
@@ -8961,7 +9236,7 @@ pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
         } != 0,
     );
     log_init();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"inits 1\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -8974,7 +9249,7 @@ unsafe fn main_0(
     mut argc: ::core::ffi::c_int,
     mut argv: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    argv0 = *argv.offset(0 as ::core::ffi::c_int as isize);
+    argv0.set(*argv.offset(0 as ::core::ffi::c_int as isize));
     if !appname_is_valid() {
         fprintf(
             stderr,
@@ -8991,7 +9266,7 @@ unsafe fn main_0(
     {
         if argc == 2 as ::core::ffi::c_int {
             print_mainerr(
-                err_arg_missing,
+                err_arg_missing.get(),
                 *argv.offset(1 as ::core::ffi::c_int as isize),
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
@@ -9051,13 +9326,13 @@ unsafe fn main_0(
     command_line_scan(&raw mut params);
     set_argf_var();
     nlua_init(argv, argc, params.lua_arg0);
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"init lua interpreter\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
-    if embedded_mode {
+    if embedded_mode.get() {
         let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         if channel_from_stdio(
             true_0 != 0,
@@ -9081,17 +9356,19 @@ unsafe fn main_0(
             abort();
         }
     }
-    if global_alist.al_ga.ga_len > 0 as ::core::ffi::c_int {
+    if (*global_alist.ptr()).al_ga.ga_len > 0 as ::core::ffi::c_int {
         fname = get_fname(&raw mut params);
     }
-    if recoverymode as ::core::ffi::c_int != 0 && fname.is_null() {
-        headless_mode = true_0 != 0;
+    if recoverymode.get() as ::core::ffi::c_int != 0 && fname.is_null() {
+        headless_mode.set(true_0 != 0);
     }
-    let mut has_term: bool = stdin_isatty as ::core::ffi::c_int != 0
-        || stdout_isatty as ::core::ffi::c_int != 0
-        || stderr_isatty as ::core::ffi::c_int != 0;
-    let mut use_builtin_ui: bool =
-        has_term as ::core::ffi::c_int != 0 && !headless_mode && !embedded_mode && !silent_mode;
+    let mut has_term: bool = stdin_isatty.get() as ::core::ffi::c_int != 0
+        || stdout_isatty.get() as ::core::ffi::c_int != 0
+        || stderr_isatty.get() as ::core::ffi::c_int != 0;
+    let mut use_builtin_ui: bool = has_term as ::core::ffi::c_int != 0
+        && !headless_mode.get()
+        && !embedded_mode.get()
+        && !silent_mode.get();
     if params.remote != 0 {
         remote_request(
             &raw mut params,
@@ -9102,9 +9379,9 @@ unsafe fn main_0(
             use_builtin_ui,
         );
     }
-    let mut remote_ui: bool = ui_client_channel_id != 0 as uint64_t;
+    let mut remote_ui: bool = ui_client_channel_id.get() != 0 as uint64_t;
     if use_builtin_ui as ::core::ffi::c_int != 0 && !remote_ui {
-        ui_client_forward_stdin = !stdin_isatty;
+        ui_client_forward_stdin.set(!stdin_isatty.get());
         let mut rv: uint64_t = ui_client_start_server(
             get_vim_var_str(VV_PROGPATH),
             params.argc as size_t,
@@ -9117,13 +9394,13 @@ unsafe fn main_0(
             );
             os_exit(1 as ::core::ffi::c_int);
         }
-        ui_client_channel_id = rv;
+        ui_client_channel_id.set(rv);
     }
-    if ui_client_channel_id != 0 {
+    if ui_client_channel_id.get() != 0 {
         ui_client_run();
     }
     '_c2rust_label: {
-        if ui_client_channel_id == 0 && !use_builtin_ui {
+        if ui_client_channel_id.get() == 0 && !use_builtin_ui {
         } else {
             __assert_fail(
                 b"!ui_client_channel_id && !use_builtin_ui\0".as_ptr()
@@ -9136,12 +9413,12 @@ unsafe fn main_0(
     };
     if !server_init(params.listen_addr) {
         mainerr(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             ::core::ptr::null::<::core::ffi::c_char>(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
     }
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"expanding arguments\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9150,17 +9427,17 @@ unsafe fn main_0(
     if params.diff_mode != 0 && params.window_count == -1 as ::core::ffi::c_int {
         params.window_count = 0 as ::core::ffi::c_int;
     }
-    RedrawingDisabled += 1;
+    (*RedrawingDisabled.ptr()) += 1;
     setbuf(stdout, ::core::ptr::null_mut::<::core::ffi::c_char>());
-    full_screen = !silent_mode;
+    full_screen.set(!silent_mode.get());
     win_init_size();
     if params.diff_mode != 0 {
-        diff_win_options(firstwin, false_0 != 0);
+        diff_win_options(firstwin.get(), false_0 != 0);
     }
     '_c2rust_label_0: {
-        if p_ch >= 0 as OptInt
-            && Rows as OptInt >= p_ch
-            && Rows as OptInt - p_ch <= 2147483647 as OptInt
+        if p_ch.get() >= 0 as OptInt
+            && Rows.get() as OptInt >= p_ch.get()
+            && Rows.get() as OptInt - p_ch.get() <= 2147483647 as OptInt
         {
         } else {
             __assert_fail(
@@ -9172,55 +9449,56 @@ unsafe fn main_0(
             );
         }
     };
-    cmdline_row = Rows - p_ch as ::core::ffi::c_int;
-    msg_row = cmdline_row;
+    cmdline_row.set(Rows.get() - p_ch.get() as ::core::ffi::c_int);
+    msg_row.set(cmdline_row.get());
     default_grid_alloc();
-    set_init_2(headless_mode);
-    if !time_fd.is_null() {
+    set_init_2(headless_mode.get());
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"inits 2\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
-    msg_scroll = true_0;
-    no_wait_return = true_0;
+    msg_scroll.set(true_0);
+    no_wait_return.set(true_0);
     init_highlight(true_0 != 0, false_0 != 0);
     ui_comp_syn_init();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"init highlight\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
-    debug_break_level = params.use_debug_break_level;
-    if !stdin_isatty
+    debug_break_level.set(params.use_debug_break_level);
+    if !stdin_isatty.get()
         && !params.input_istext
-        && silent_mode as ::core::ffi::c_int != 0
-        && exmode_active as ::core::ffi::c_int != 0
+        && silent_mode.get() as ::core::ffi::c_int != 0
+        && exmode_active.get() as ::core::ffi::c_int != 0
     {
         input_start();
     }
-    let mut use_remote_ui: bool = embedded_mode as ::core::ffi::c_int != 0 && !headless_mode;
+    let mut use_remote_ui: bool =
+        embedded_mode.get() as ::core::ffi::c_int != 0 && !headless_mode.get();
     if use_remote_ui {
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"waiting for UI\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
         remote_ui_wait_for_attach();
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"done waiting for UI\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
-        (*firstwin).w_prev_height = (*firstwin).w_height;
+        (*firstwin.get()).w_prev_height = (*firstwin.get()).w_height;
     }
-    starting = NO_BUFFERS;
+    starting.set(NO_BUFFERS);
     screenclear();
     win_new_screensize();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"clear screen\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9235,15 +9513,15 @@ unsafe fn main_0(
         }
     }
     if !params.scriptout.is_null() {
-        scriptout = os_fopen(
+        scriptout.set(os_fopen(
             params.scriptout,
             if params.scriptout_append as ::core::ffi::c_int != 0 {
                 APPENDBIN.as_ptr()
             } else {
                 WRITEBIN.as_ptr()
             },
-        );
-        if scriptout.is_null() {
+        ));
+        if (*scriptout.ptr()).is_null() {
             fprintf(
                 stderr,
                 gettext(
@@ -9259,7 +9537,7 @@ unsafe fn main_0(
         }
     }
     nlua_init_defaults();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"init default mappings & autocommands\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9269,11 +9547,11 @@ unsafe fn main_0(
         params.use_vimrc,
         b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    p_lpl = if vimrc_none as ::core::ffi::c_int != 0 {
+    p_lpl.set(if vimrc_none as ::core::ffi::c_int != 0 {
         params.clean as ::core::ffi::c_int
     } else {
-        p_lpl
-    };
+        p_lpl.get()
+    });
     exe_pre_commands(&raw mut params);
     if !vimrc_none || params.clean as ::core::ffi::c_int != 0 {
         filetype_plugin_enable();
@@ -9286,7 +9564,7 @@ unsafe fn main_0(
     set_vim_var_nr(VV_VIM_DID_INIT, 1 as varnumber_T);
     load_plugins();
     set_window_layout(&raw mut params);
-    if recoverymode as ::core::ffi::c_int != 0 && fname.is_null() {
+    if recoverymode.get() as ::core::ffi::c_int != 0 && fname.is_null() {
         recover_names(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0 != 0,
@@ -9297,25 +9575,25 @@ unsafe fn main_0(
         os_exit(0 as ::core::ffi::c_int);
     }
     set_init_3();
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"inits 3\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
     if params.no_swap_file != 0 {
-        p_uc = 0 as OptInt;
+        p_uc.set(0 as OptInt);
     }
-    if silent_mode {
-        p_ut = 1 as OptInt;
+    if silent_mode.get() {
+        p_ut.set(1 as OptInt);
     }
-    if *p_shada as ::core::ffi::c_int != NUL {
+    if *p_shada.get() as ::core::ffi::c_int != NUL {
         shada_read_everything(
             ::core::ptr::null::<::core::ffi::c_char>(),
             false_0 != 0,
             true_0 != 0,
         );
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"reading ShaDa\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -9326,19 +9604,19 @@ unsafe fn main_0(
         set_vim_var_list(VV_OLDFILES, tv_list_alloc(0 as ptrdiff_t));
     }
     handle_quickfix(&raw mut params);
-    starting = NO_BUFFERS;
-    no_wait_return = false_0;
-    if !exmode_active {
-        msg_scroll = false_0;
+    starting.set(NO_BUFFERS);
+    no_wait_return.set(false_0);
+    if !exmode_active.get() {
+        msg_scroll.set(false_0);
     }
-    if params.edit_type == EDIT_STDIN as ::core::ffi::c_int && !recoverymode {
+    if params.edit_type == EDIT_STDIN as ::core::ffi::c_int && !recoverymode.get() {
         read_stdin();
     }
     setmouse();
-    redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
-    no_wait_return = true_0;
+    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+    no_wait_return.set(true_0);
     create_windows(&raw mut params);
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"opening buffers\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9349,17 +9627,17 @@ unsafe fn main_0(
         ::core::ptr::null::<::core::ffi::c_char>(),
         -1 as ptrdiff_t,
     );
-    if exmode_active {
-        (*curwin).w_cursor.lnum = (*curbuf).b_ml.ml_line_count;
+    if exmode_active.get() {
+        (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
     }
     apply_autocmds(
         EVENT_BUFENTER,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"BufEnter autocommands\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9373,7 +9651,7 @@ unsafe fn main_0(
             0 as ::core::ffi::c_int,
             false_0,
         );
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"jump to first error\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -9382,10 +9660,10 @@ unsafe fn main_0(
     }
     edit_buffers(&raw mut params);
     if params.diff_mode != 0 {
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_arg_idx_invalid == 0 {
@@ -9399,10 +9677,10 @@ unsafe fn main_0(
     if params.n_commands > 0 as ::core::ffi::c_int {
         exe_commands(&raw mut params);
     }
-    starting = 0 as ::core::ffi::c_int;
-    RedrawingDisabled = 0 as ::core::ffi::c_int;
+    starting.set(0 as ::core::ffi::c_int);
+    RedrawingDisabled.set(0 as ::core::ffi::c_int);
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-    no_wait_return = false_0;
+    no_wait_return.set(false_0);
     do_autochdir();
     set_vim_var_nr(VV_VIM_DID_ENTER, 1 as varnumber_T);
     apply_autocmds(
@@ -9410,9 +9688,9 @@ unsafe fn main_0(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"VimEnter autocommands\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9420,7 +9698,7 @@ unsafe fn main_0(
     }
     if use_remote_ui {
         do_autocmd_uienter_all();
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"UIEnter autocommands\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -9428,23 +9706,23 @@ unsafe fn main_0(
         }
     }
     set_reg_var(get_default_register_name());
-    if (*curwin).w_onebuf_opt.wo_diff != 0 && (*curwin).w_onebuf_opt.wo_scb != 0 {
-        update_topline(curwin);
+    if (*curwin.get()).w_onebuf_opt.wo_diff != 0 && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+        update_topline(curwin.get());
         check_scrollbind(0 as linenr_T, 0 as ::core::ffi::c_int);
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"diff scrollbinding\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
     }
-    if restart_edit != 0 as ::core::ffi::c_int {
+    if restart_edit.get() != 0 as ::core::ffi::c_int {
         stuffcharReadbuff(
             -(253 as ::core::ffi::c_int
                 + ((KE_NOP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         );
     }
-    if cb_flags
+    if cb_flags.get()
         & (kOptCbFlagUnnamed as ::core::ffi::c_int | kOptCbFlagUnnamedplus as ::core::ffi::c_int)
             as ::core::ffi::c_uint
         != 0
@@ -9455,7 +9733,7 @@ unsafe fn main_0(
         );
     }
     if !params.luaf.is_null() {
-        msg_scroll = true_0;
+        msg_scroll.set(true_0);
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -9465,15 +9743,15 @@ unsafe fn main_0(
             b"executing Lua -l script\0".as_ptr() as *const ::core::ffi::c_char,
         );
         let mut lua_ok: bool = nlua_exec_file(params.luaf);
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"executing Lua -l script\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
-        if msg_didout {
+        if msg_didout.get() {
             msg_putchar('\n' as ::core::ffi::c_int);
-            msg_didout = false_0 != 0;
+            msg_didout.set(false_0 != 0);
         }
         getout(if lua_ok as ::core::ffi::c_int != 0 {
             0 as ::core::ffi::c_int
@@ -9481,7 +9759,7 @@ unsafe fn main_0(
             1 as ::core::ffi::c_int
         });
     }
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"before starting main loop\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -9500,11 +9778,11 @@ unsafe fn main_0(
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
-    exiting = true_0 != 0;
-    if ui_client_channel_id != 0 {
+    exiting.set(true_0 != 0);
+    if ui_client_channel_id.get() != 0 {
         ui_client_stop();
         if r == 0 as ::core::ffi::c_int {
-            r = ui_client_exit_status;
+            r = ui_client_exit_status.get();
         }
     } else {
         ui_flush();
@@ -9513,17 +9791,17 @@ pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
     if !event_teardown() && r == 0 as ::core::ffi::c_int {
         r = 1 as ::core::ffi::c_int;
     }
-    if ui_client_channel_id != 0 {
-        if stdout_isatty {
+    if ui_client_channel_id.get() != 0 {
+        if stdout_isatty.get() {
             tcdrain(STDOUT_FILENO);
         }
-        if stderr_isatty {
+        if stderr_isatty.get() {
             tcdrain(STDERR_FILENO);
         }
     } else {
         ml_close_all(true_0 != 0);
     }
-    if used_stdin {
+    if used_stdin.get() {
         stream_set_blocking(STDIN_FILENO, true_0 != 0);
     }
     logmsg(
@@ -9540,7 +9818,7 @@ pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
 #[no_mangle]
 pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
     '_c2rust_label: {
-        if ui_client_channel_id == 0 {
+        if ui_client_channel_id.get() == 0 {
         } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
@@ -9550,10 +9828,10 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
             );
         }
     };
-    exiting = true_0 != 0;
+    exiting.set(true_0 != 0);
     time_finish();
-    if exmode_active {
-        exitval += ex_exitval;
+    if exmode_active.get() {
+        exitval += ex_exitval.get();
     }
     set_vim_var_type(VV_EXITING, VAR_NUMBER);
     set_vim_var_nr(VV_EXITING, exitval as varnumber_T);
@@ -9567,13 +9845,13 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
     }
     invoke_all_defer();
     hash_debug_results();
-    if v_dying <= 1 as ::core::ffi::c_int {
+    if v_dying.get() <= 1 as ::core::ffi::c_int {
         let mut next_tp: *const tabpage_T = ::core::ptr::null::<tabpage_T>();
-        let mut tp: *const tabpage_T = first_tabpage;
+        let mut tp: *const tabpage_T = first_tabpage.get();
         while !tp.is_null() {
             next_tp = (*tp).tp_next;
-            let mut wp: *mut win_T = if tp == curtab as *const tabpage_T {
-                firstwin
+            let mut wp: *mut win_T = if tp == curtab.get() as *const tabpage_T {
+                firstwin.get()
             } else {
                 (*tp).tp_firstwin
             };
@@ -9597,7 +9875,7 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
                         if bufref_valid(&raw mut bufref) {
                             buf_set_changedtick(buf, -1 as varnumber_T);
                         }
-                        next_tp = first_tabpage;
+                        next_tp = first_tabpage.get();
                         break;
                     }
                 }
@@ -9605,7 +9883,7 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
             }
             tp = next_tp;
         }
-        let mut buf_0: *mut buf_T = firstbuf;
+        let mut buf_0: *mut buf_T = firstbuf.get();
         while !buf_0.is_null() {
             if !(*buf_0).b_ml.ml_mfp.is_null() {
                 let mut bufref_0: bufref_T = bufref_T {
@@ -9637,16 +9915,16 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
         if unblock != 0 {
             block_autocmds();
         }
     }
-    if !p_shada.is_null() && *p_shada as ::core::ffi::c_int != NUL {
+    if !(*p_shada.ptr()).is_null() && *p_shada.get() as ::core::ffi::c_int != NUL {
         shada_write_file(::core::ptr::null::<::core::ffi::c_char>(), false_0 != 0);
     }
-    if v_dying <= 1 as ::core::ffi::c_int {
+    if v_dying.get() <= 1 as ::core::ffi::c_int {
         let mut unblock_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if is_autocmd_blocked() {
             unblock_autocmds();
@@ -9657,37 +9935,37 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
         if unblock_0 != 0 {
             block_autocmds();
         }
     }
     profile_dump();
-    if did_emsg != 0 {
-        no_wait_return = false_0;
+    if did_emsg.get() != 0 {
+        no_wait_return.set(false_0);
         wait_return(false_0);
     }
-    if p_title != 0 && *p_titleold as ::core::ffi::c_int != NUL {
-        ui_call_set_title(cstr_as_string(p_titleold));
+    if p_title.get() != 0 && *p_titleold.get() as ::core::ffi::c_int != NUL {
+        ui_call_set_title(cstr_as_string(p_titleold.get()));
     }
-    if garbage_collect_at_exit {
+    if garbage_collect_at_exit.get() {
         garbage_collect(false_0 != 0);
     }
     os_exit(exitval);
 }
 #[no_mangle]
 pub unsafe extern "C" fn preserve_exit(mut errmsg: *const ::core::ffi::c_char) -> ! {
-    static mut really_exiting: bool = false_0 != 0;
-    if really_exiting {
-        if used_stdin {
+    static really_exiting: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if really_exiting.get() {
+        if used_stdin.get() {
             stream_set_blocking(STDIN_FILENO, true_0 != 0);
         }
         exit(2 as ::core::ffi::c_int);
     }
-    really_exiting = true_0 != 0;
+    really_exiting.set(true_0 != 0);
     signal_reject_deadly();
-    if ui_client_channel_id != 0 {
+    if ui_client_channel_id.get() != 0 {
         ui_client_stop();
     }
     if !errmsg.is_null()
@@ -9706,11 +9984,11 @@ pub unsafe extern "C" fn preserve_exit(mut errmsg: *const ::core::ffi::c_char) -
             errmsg,
         );
     }
-    if ui_client_channel_id != 0 {
+    if ui_client_channel_id.get() != 0 {
         os_exit(1 as ::core::ffi::c_int);
     }
     ml_close_notmod();
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if !(*buf).b_ml.ml_mfp.is_null() && !(*(*buf).b_ml.ml_mfp).mf_fname.is_null() {
             if !errmsg.is_null() {
@@ -9831,7 +10109,7 @@ unsafe extern "C" fn remote_request(
             );
             os_exit(1 as ::core::ffi::c_int);
         }
-        ui_client_channel_id = chan;
+        ui_client_channel_id.set(chan);
         return;
     }
     let mut args: Array = ARRAY_DICT_INIT;
@@ -10050,10 +10328,11 @@ unsafe extern "C" fn remote_request(
     }
 }
 unsafe extern "C" fn edit_stdin(mut parmp: *mut mparm_T) -> bool {
-    let mut implicit: bool = !headless_mode
-        && !(embedded_mode as ::core::ffi::c_int != 0 && stdin_fd <= 0 as ::core::ffi::c_int)
-        && (!exmode_active || (*parmp).input_istext as ::core::ffi::c_int != 0)
-        && !stdin_isatty
+    let mut implicit: bool = !headless_mode.get()
+        && !(embedded_mode.get() as ::core::ffi::c_int != 0
+            && stdin_fd.get() <= 0 as ::core::ffi::c_int)
+        && (!exmode_active.get() || (*parmp).input_istext as ::core::ffi::c_int != 0)
+        && !stdin_isatty.get()
         && (*parmp).edit_type <= EDIT_STDIN as ::core::ffi::c_int
         && (*parmp).scriptin.is_null();
     return (*parmp).had_stdin_file as ::core::ffi::c_int != 0
@@ -10077,7 +10356,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
         {
             if (*parmp).n_commands >= MAX_ARG_CMDS {
                 mainerr(
-                    err_extra_cmd,
+                    err_extra_cmd.get(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
@@ -10113,13 +10392,13 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                 'c_49604: {
                     match c as ::core::ffi::c_int {
                         NUL => {
-                            if exmode_active {
-                                silent_mode = true_0 != 0;
+                            if exmode_active.get() {
+                                silent_mode.set(true_0 != 0);
                                 (*parmp).no_swap_file = true_0;
                             } else {
                                 if (*parmp).edit_type > EDIT_STDIN as ::core::ffi::c_int {
                                     mainerr(
-                                        err_too_many_args,
+                                        err_too_many_args.get(),
                                         *argv.offset(0 as ::core::ffi::c_int as isize),
                                         ::core::ptr::null::<::core::ffi::c_char>(),
                                     );
@@ -10174,7 +10453,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     as *mut ::core::ffi::c_char,
                             ) == 0 as ::core::ffi::c_int
                             {
-                                headless_mode = true_0 != 0;
+                                headless_mode.set(true_0 != 0);
                             } else if strcasecmp(
                                 (*argv.offset(0 as ::core::ffi::c_int as isize))
                                     .offset(argv_idx as isize),
@@ -10182,7 +10461,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     as *mut ::core::ffi::c_char,
                             ) == 0 as ::core::ffi::c_int
                             {
-                                embedded_mode = true_0 != 0;
+                                embedded_mode.set(true_0 != 0);
                             } else if strncasecmp(
                                 (*argv.offset(0 as ::core::ffi::c_int as isize))
                                     .offset(argv_idx as isize),
@@ -10228,7 +10507,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     8 as ::core::ffi::c_int as size_t,
                                 ) == 0 as ::core::ffi::c_int
                                 {
-                                    p_lpl = false_0;
+                                    p_lpl.set(false_0);
                                 } else if strncasecmp(
                                     (*argv.offset(0 as ::core::ffi::c_int as isize))
                                         .offset(argv_idx as isize),
@@ -10288,14 +10567,14 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     9 as ::core::ffi::c_int as size_t,
                                 ) == 0 as ::core::ffi::c_int
                                 {
-                                    nlua_disable_preload = true_0 != 0;
+                                    nlua_disable_preload.set(true_0 != 0);
                                 } else {
                                     if *(*argv.offset(0 as ::core::ffi::c_int as isize))
                                         .offset(argv_idx as isize)
                                         != 0
                                     {
                                         mainerr(
-                                            err_opt_unknown,
+                                            err_opt_unknown.get(),
                                             *argv.offset(0 as ::core::ffi::c_int as isize),
                                             ::core::ptr::null::<::core::ffi::c_char>(),
                                         );
@@ -10321,11 +10600,11 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         }
                         98 => {
                             set_options_bin(
-                                (*curbuf).b_p_bin,
+                                (*curbuf.get()).b_p_bin,
                                 1 as ::core::ffi::c_int,
                                 0 as ::core::ffi::c_int,
                             );
-                            (*curbuf).b_p_bin = 1 as ::core::ffi::c_int;
+                            (*curbuf.get()).b_p_bin = 1 as ::core::ffi::c_int;
                             break 's_747;
                         }
                         68 => {
@@ -10337,11 +10616,11 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             break 's_747;
                         }
                         101 => {
-                            exmode_active = true_0 != 0;
+                            exmode_active.set(true_0 != 0);
                             break 's_747;
                         }
                         69 => {
-                            exmode_active = true_0 != 0;
+                            exmode_active.set(true_0 != 0);
                             (*parmp).input_istext = true_0 != 0;
                             break 's_747;
                         }
@@ -10417,7 +10696,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         113 => {
                             if (*parmp).edit_type != EDIT_NONE as ::core::ffi::c_int {
                                 mainerr(
-                                    err_too_many_args,
+                                    err_too_many_args.get(),
                                     *argv.offset(0 as ::core::ffi::c_int as isize),
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                 );
@@ -10436,21 +10715,21 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             break 's_747;
                         }
                         82 => {
-                            readonlymode = true_0 != 0;
-                            (*curbuf).b_p_ro = true_0;
-                            p_uc = 10000 as OptInt;
+                            readonlymode.set(true_0 != 0);
+                            (*curbuf.get()).b_p_ro = true_0;
+                            p_uc.set(10000 as OptInt);
                             break 's_747;
                         }
                         114 | 76 => {
-                            recoverymode = true;
+                            recoverymode.set(true);
                             break 's_747;
                         }
                         115 => {
-                            if exmode_active {
-                                silent_mode = true_0 != 0;
+                            if exmode_active.get() {
+                                silent_mode.set(true_0 != 0);
                                 (*parmp).no_swap_file = true_0;
-                                if p_shadafile.is_null()
-                                    || *p_shadafile as ::core::ffi::c_int == NUL
+                                if (*p_shadafile.ptr()).is_null()
+                                    || *p_shadafile.get() as ::core::ffi::c_int == NUL
                                 {
                                     set_option_value_give_err(
                                         kOptShadafile,
@@ -10480,7 +10759,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         116 => {
                             if (*parmp).edit_type != EDIT_NONE as ::core::ffi::c_int {
                                 mainerr(
-                                    err_too_many_args,
+                                    err_too_many_args.get(),
                                     *argv.offset(0 as ::core::ffi::c_int as isize),
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                 );
@@ -10503,11 +10782,11 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             os_exit(0 as ::core::ffi::c_int);
                         }
                         86 => {
-                            p_verbose = get_number_arg(
+                            p_verbose.set(get_number_arg(
                                 *argv.offset(0 as ::core::ffi::c_int as isize),
                                 &raw mut argv_idx,
                                 10 as ::core::ffi::c_int,
-                            ) as OptInt;
+                            ) as OptInt);
                             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
                                 .offset(argv_idx as isize)
                                 as ::core::ffi::c_int
@@ -10566,7 +10845,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             {
                                 if (*parmp).n_commands >= MAX_ARG_CMDS {
                                     mainerr(
-                                        err_extra_cmd,
+                                        err_extra_cmd.get(),
                                         ::core::ptr::null::<::core::ffi::c_char>(),
                                         ::core::ptr::null::<::core::ffi::c_char>(),
                                     );
@@ -10589,13 +10868,13 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         }
                         _ => {
                             mainerr(
-                                err_opt_unknown,
+                                err_opt_unknown.get(),
                                 *argv.offset(0 as ::core::ffi::c_int as isize),
                                 ::core::ptr::null::<::core::ffi::c_char>(),
                             );
                         }
                     }
-                    p_write = false_0;
+                    p_write.set(false_0);
                     break 's_747;
                 }
                 want_argument = true_0 != 0;
@@ -10606,7 +10885,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                     != NUL
                 {
                     mainerr(
-                        err_opt_garbage,
+                        err_opt_garbage.get(),
                         *argv.offset(0 as ::core::ffi::c_int as isize),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
@@ -10616,7 +10895,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                     && c as ::core::ffi::c_int != 'S' as ::core::ffi::c_int
                 {
                     mainerr(
-                        err_arg_missing,
+                        err_arg_missing.get(),
                         *argv.offset(0 as ::core::ffi::c_int as isize),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
@@ -10630,7 +10909,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                 99 | 83 => {
                                     if (*parmp).n_commands >= MAX_ARG_CMDS {
                                         mainerr(
-                                            err_extra_cmd,
+                                            err_extra_cmd.get(),
                                             ::core::ptr::null::<::core::ffi::c_char>(),
                                             ::core::ptr::null::<::core::ffi::c_char>(),
                                         );
@@ -10685,7 +10964,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     ) {
                                         if (*parmp).n_pre_commands >= MAX_ARG_CMDS {
                                             mainerr(
-                                                err_extra_cmd,
+                                                err_extra_cmd.get(),
                                                 ::core::ptr::null::<::core::ffi::c_char>(),
                                                 ::core::ptr::null::<::core::ffi::c_char>(),
                                             );
@@ -10732,9 +11011,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     break 's_1075;
                                 }
                                 108 => {
-                                    headless_mode = true_0 != 0;
-                                    silent_mode = true_0 != 0;
-                                    p_verbose = 1 as OptInt;
+                                    headless_mode.set(true_0 != 0);
+                                    silent_mode.set(true_0 != 0);
+                                    p_verbose.set(1 as OptInt);
                                     (*parmp).no_swap_file = true_0;
                                     (*parmp).use_vimrc = (if !(*parmp).use_vimrc.is_null() {
                                         (*parmp).use_vimrc as *const ::core::ffi::c_char
@@ -10742,8 +11021,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         b"NONE\0".as_ptr() as *const ::core::ffi::c_char
                                     })
                                         as *mut ::core::ffi::c_char;
-                                    if p_shadafile.is_null()
-                                        || *p_shadafile as ::core::ffi::c_int == NUL
+                                    if (*p_shadafile.ptr()).is_null()
+                                        || *p_shadafile.get() as ::core::ffi::c_int == NUL
                                     {
                                         set_option_value_give_err(
                                             kOptShadafile,
@@ -10833,7 +11112,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         break 's_1076;
                     }
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         gettext(b"Attempt to open script file again: \"%s %s\"\n\0".as_ptr()
                             as *const ::core::ffi::c_char),
@@ -10843,7 +11122,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                     fprintf(
                         stderr,
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                     );
                     os_exit(2 as ::core::ffi::c_int);
                 }
@@ -10852,27 +11131,30 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
             argv_idx = -1 as ::core::ffi::c_int;
             if (*parmp).edit_type > EDIT_STDIN as ::core::ffi::c_int {
                 mainerr(
-                    err_too_many_args,
+                    err_too_many_args.get(),
                     *argv.offset(0 as ::core::ffi::c_int as isize),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
             }
             (*parmp).edit_type = EDIT_FILE as ::core::ffi::c_int;
-            ga_grow(&raw mut global_alist.al_ga, 1 as ::core::ffi::c_int);
+            ga_grow(
+                &raw mut (*global_alist.ptr()).al_ga,
+                1 as ::core::ffi::c_int,
+            );
             let mut p: *mut ::core::ffi::c_char =
                 xstrdup(*argv.offset(0 as ::core::ffi::c_int as isize));
             if (*parmp).diff_mode != 0
                 && os_isdir(p) as ::core::ffi::c_int != 0
-                && global_alist.al_ga.ga_len > 0 as ::core::ffi::c_int
+                && (*global_alist.ptr()).al_ga.ga_len > 0 as ::core::ffi::c_int
                 && !os_isdir(alist_name(
-                    (global_alist.al_ga.ga_data as *mut aentry_T)
+                    ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
                         .offset(0 as ::core::ffi::c_int as isize),
                 ))
             {
                 let mut r: *mut ::core::ffi::c_char = concat_fnames(
                     p,
                     path_tail(alist_name(
-                        (global_alist.al_ga.ga_data as *mut aentry_T)
+                        ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
                             .offset(0 as ::core::ffi::c_int as isize),
                     )),
                     true_0 != 0,
@@ -10886,7 +11168,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                 } else {
                     2 as ::core::ffi::c_int
                 };
-            alist_add(&raw mut global_alist, p, alist_fnum_flag);
+            alist_add(global_alist.ptr(), p, alist_fnum_flag);
         }
         if argv_idx <= 0 as ::core::ffi::c_int
             || *(*argv.offset(0 as ::core::ffi::c_int as isize)).offset(argv_idx as isize)
@@ -10898,8 +11180,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
             argv_idx = 1 as ::core::ffi::c_int;
         }
     }
-    if embedded_mode as ::core::ffi::c_int != 0
-        && (silent_mode as ::core::ffi::c_int != 0 || !(*parmp).luaf.is_null())
+    if embedded_mode.get() as ::core::ffi::c_int != 0
+        && (silent_mode.get() as ::core::ffi::c_int != 0 || !(*parmp).luaf.is_null())
     {
         mainerr(
             gettext(b"--embed conflicts with -es/-Es/-l\0".as_ptr() as *const ::core::ffi::c_char),
@@ -10921,7 +11203,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
         set_vim_var_string(VV_SWAPCOMMAND, swcmd, swcmd_len as ptrdiff_t);
         xfree(swcmd as *mut ::core::ffi::c_void);
     }
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"parsing arguments\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -10931,19 +11213,19 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
 unsafe extern "C" fn set_argf_var() {
     let mut list: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < global_alist.al_ga.ga_len {
+    while i < (*global_alist.ptr()).al_ga.ga_len {
         let mut fname: *mut ::core::ffi::c_char =
-            alist_name((global_alist.al_ga.ga_data as *mut aentry_T).offset(i as isize));
+            alist_name(((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T).offset(i as isize));
         if !fname.is_null() {
             vim_FullName(
                 fname,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
                 false_0 != 0,
             );
             tv_list_append_string(
                 list,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 -1 as ssize_t,
             );
         }
@@ -11012,10 +11294,10 @@ unsafe extern "C" fn init_startuptime(mut paramp: *mut mparm_T) {
     }
 }
 unsafe extern "C" fn check_and_set_isatty(mut _paramp: *mut mparm_T) {
-    stdin_isatty = os_isatty(STDIN_FILENO);
-    stdout_isatty = os_isatty(STDOUT_FILENO);
-    stderr_isatty = os_isatty(STDERR_FILENO);
-    if !time_fd.is_null() {
+    stdin_isatty.set(os_isatty(STDIN_FILENO));
+    stdout_isatty.set(os_isatty(STDOUT_FILENO));
+    stderr_isatty.set(os_isatty(STDERR_FILENO));
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"window checked\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15142,7 +15424,8 @@ unsafe extern "C" fn init_path(mut exename: *const ::core::ffi::c_char) {
 }
 unsafe extern "C" fn get_fname(mut _parmp: *mut mparm_T) -> *mut ::core::ffi::c_char {
     return alist_name(
-        (global_alist.al_ga.ga_data as *mut aentry_T).offset(0 as ::core::ffi::c_int as isize),
+        ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
+            .offset(0 as ::core::ffi::c_int as isize),
     );
 }
 unsafe extern "C" fn set_window_layout(mut paramp: *mut mparm_T) {
@@ -15170,24 +15453,24 @@ unsafe extern "C" fn handle_quickfix(mut paramp: *mut mparm_T) {
             );
         }
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             b"cfile %s\0".as_ptr() as *const ::core::ffi::c_char,
-            p_ef,
+            p_ef.get(),
         );
         if qf_init(
             ::core::ptr::null_mut::<win_T>(),
-            p_ef,
-            p_efm,
+            p_ef.get(),
+            p_efm.get(),
             true_0,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
-            p_menc,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
+            p_menc.get(),
         ) < 0 as ::core::ffi::c_int
         {
             msg_putchar('\n' as ::core::ffi::c_int);
             os_exit(3 as ::core::ffi::c_int);
         }
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"reading errorfile\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -15197,31 +15480,31 @@ unsafe extern "C" fn handle_quickfix(mut paramp: *mut mparm_T) {
 }
 unsafe extern "C" fn handle_tag(mut tagname: *mut ::core::ffi::c_char) {
     if !tagname.is_null() {
-        swap_exists_did_quit = false_0 != 0;
+        swap_exists_did_quit.set(false_0 != 0);
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             b"ta %s\0".as_ptr() as *const ::core::ffi::c_char,
             tagname,
         );
-        do_cmdline_cmd(&raw mut IObuff as *mut ::core::ffi::c_char);
-        if !time_fd.is_null() {
+        do_cmdline_cmd(IObuff.ptr() as *mut ::core::ffi::c_char);
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"jumping to tag\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
-        if swap_exists_did_quit {
+        if swap_exists_did_quit.get() {
             ui_call_error_exit(1 as Integer);
             getout(1 as ::core::ffi::c_int);
         }
     }
 }
 unsafe extern "C" fn read_stdin() {
-    swap_exists_action = SEA_DIALOG;
-    no_wait_return = true_0;
-    let mut save_msg_didany: bool = msg_didany;
-    if !(*curbuf).b_ffname.is_null() {
+    swap_exists_action.set(SEA_DIALOG);
+    no_wait_return.set(true_0);
+    let mut save_msg_didany: bool = msg_didany.get();
+    if !(*curbuf.get()).b_ffname.is_null() {
         let mut stdin_buf: *mut buf_T = buflist_new(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -15232,7 +15515,7 @@ unsafe extern "C" fn read_stdin() {
             semsg(b"Failed to create buffer for stdin\0".as_ptr() as *const ::core::ffi::c_char);
             return;
         }
-        let mut initial_buf_handle: handle_T = (*curbuf).handle;
+        let mut initial_buf_handle: handle_T = (*curbuf.get()).handle;
         set_curbuf(stdin_buf, 0 as ::core::ffi::c_int, false_0 != 0);
         readfile(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -15245,7 +15528,7 @@ unsafe extern "C" fn read_stdin() {
             true_0 != 0,
         );
         let mut stdin_buf_handle: handle_T = (*stdin_buf).handle;
-        let mut stdin_buf_empty: bool = buf_is_empty(curbuf);
+        let mut stdin_buf_empty: bool = buf_is_empty(curbuf.get());
         let mut buf: [::core::ffi::c_char; 100] = [0; 100];
         vim_snprintf(
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -15270,14 +15553,16 @@ unsafe extern "C" fn read_stdin() {
             ::core::ptr::null_mut::<exarg_T>(),
             0 as ::core::ffi::c_int,
         );
-        if buf_is_empty(curbuf) as ::core::ffi::c_int != 0 && !(*curbuf).b_next.is_null() {
+        if buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0
+            && !(*curbuf.get()).b_next.is_null()
+        {
             do_cmdline_cmd(b"silent! bnext\0".as_ptr() as *const ::core::ffi::c_char);
             do_cmdline_cmd(b"silent! bwipeout 1\0".as_ptr() as *const ::core::ffi::c_char);
         }
     }
-    no_wait_return = false_0;
-    msg_didany = save_msg_didany;
-    if !time_fd.is_null() {
+    no_wait_return.set(false_0);
+    msg_didany.set(save_msg_didany);
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"reading stdin\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15290,7 +15575,7 @@ unsafe extern "C" fn create_windows(mut parmp: *mut mparm_T) {
         (*parmp).window_count = 1 as ::core::ffi::c_int;
     }
     if (*parmp).window_count == 0 as ::core::ffi::c_int {
-        (*parmp).window_count = global_alist.al_ga.ga_len;
+        (*parmp).window_count = (*global_alist.ptr()).al_ga.ga_len;
     }
     if (*parmp).window_count > 1 as ::core::ffi::c_int {
         if (*parmp).window_layout == 0 as ::core::ffi::c_int {
@@ -15298,20 +15583,20 @@ unsafe extern "C" fn create_windows(mut parmp: *mut mparm_T) {
         }
         if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
             (*parmp).window_count = make_tabpages((*parmp).window_count);
-            if !time_fd.is_null() {
+            if !(*time_fd.ptr()).is_null() {
                 time_msg(
                     b"making tab pages\0".as_ptr() as *const ::core::ffi::c_char,
                     ::core::ptr::null::<proftime_T>(),
                 );
             }
-        } else if (*firstwin).w_next.is_null()
-            || (*(*firstwin).w_next).w_floating as ::core::ffi::c_int != 0
+        } else if (*firstwin.get()).w_next.is_null()
+            || (*(*firstwin.get()).w_next).w_floating as ::core::ffi::c_int != 0
         {
             (*parmp).window_count = make_windows(
                 (*parmp).window_count,
                 (*parmp).window_layout == WIN_VER as ::core::ffi::c_int,
             );
-            if !time_fd.is_null() {
+            if !(*time_fd.ptr()).is_null() {
                 time_msg(
                     b"making windows\0".as_ptr() as *const ::core::ffi::c_char,
                     ::core::ptr::null::<proftime_T>(),
@@ -15323,17 +15608,17 @@ unsafe extern "C" fn create_windows(mut parmp: *mut mparm_T) {
     } else {
         (*parmp).window_count = 1 as ::core::ffi::c_int;
     }
-    if recoverymode {
-        msg_scroll = true_0;
+    if recoverymode.get() {
+        msg_scroll.set(true_0);
         ml_recover(true_0 != 0);
-        if (*curbuf).b_ml.ml_mfp.is_null() {
+        if (*curbuf.get()).b_ml.ml_mfp.is_null() {
             getout(1 as ::core::ffi::c_int);
         }
         do_modelines(0 as ::core::ffi::c_int);
     } else {
         let mut done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        autocmd_no_enter += 1;
-        autocmd_no_leave += 1;
+        (*autocmd_no_enter.ptr()) += 1;
+        (*autocmd_no_leave.ptr()) += 1;
         let mut dorewind: bool = true_0 != 0;
         loop {
             let c2rust_fresh0 = done;
@@ -15345,55 +15630,55 @@ unsafe extern "C" fn create_windows(mut parmp: *mut mparm_T) {
                 if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
                     goto_tabpage(1 as ::core::ffi::c_int);
                 } else {
-                    curwin = firstwin;
+                    curwin.set(firstwin.get());
                 }
             } else if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
-                if (*curtab).tp_next.is_null() {
+                if (*curtab.get()).tp_next.is_null() {
                     break;
                 }
                 goto_tabpage(0 as ::core::ffi::c_int);
             } else {
-                if (*curwin).w_next.is_null() {
+                if (*curwin.get()).w_next.is_null() {
                     break;
                 }
-                curwin = (*curwin).w_next;
+                curwin.set((*curwin.get()).w_next);
             }
             dorewind = false_0 != 0;
-            curbuf = (*curwin).w_buffer;
-            if (*curbuf).b_ml.ml_mfp.is_null() {
-                if p_fdls >= 0 as OptInt {
-                    (*curwin).w_onebuf_opt.wo_fdl = p_fdls;
+            curbuf.set((*curwin.get()).w_buffer);
+            if (*curbuf.get()).b_ml.ml_mfp.is_null() {
+                if p_fdls.get() >= 0 as OptInt {
+                    (*curwin.get()).w_onebuf_opt.wo_fdl = p_fdls.get();
                 }
-                swap_exists_action = SEA_DIALOG;
+                swap_exists_action.set(SEA_DIALOG);
                 set_buflisted(true_0);
                 open_buffer(
                     false_0 != 0,
                     ::core::ptr::null_mut::<exarg_T>(),
                     0 as ::core::ffi::c_int,
                 );
-                if swap_exists_action == SEA_QUIT {
-                    if got_int as ::core::ffi::c_int != 0
+                if swap_exists_action.get() == SEA_QUIT {
+                    if got_int.get() as ::core::ffi::c_int != 0
                         || only_one_window() as ::core::ffi::c_int != 0
                     {
-                        did_emsg = false_0;
+                        did_emsg.set(false_0);
                         ui_call_error_exit(1 as Integer);
                         getout(1 as ::core::ffi::c_int);
                     }
                     setfname(
-                        curbuf,
+                        curbuf.get(),
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         false_0 != 0,
                     );
-                    (*curwin).w_arg_idx = -1 as ::core::ffi::c_int;
-                    swap_exists_action = SEA_NONE;
+                    (*curwin.get()).w_arg_idx = -1 as ::core::ffi::c_int;
+                    swap_exists_action.set(SEA_NONE);
                 } else {
                     handle_swap_exists(::core::ptr::null_mut::<bufref_T>());
                 }
                 dorewind = true_0 != 0;
             }
             os_breakcheck();
-            if !got_int {
+            if !got_int.get() {
                 continue;
             }
             vgetc();
@@ -15402,11 +15687,11 @@ unsafe extern "C" fn create_windows(mut parmp: *mut mparm_T) {
         if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
             goto_tabpage(1 as ::core::ffi::c_int);
         } else {
-            curwin = firstwin;
+            curwin.set(firstwin.get());
         }
-        curbuf = (*curwin).w_buffer;
-        autocmd_no_enter -= 1;
-        autocmd_no_leave -= 1;
+        curbuf.set((*curwin.get()).w_buffer);
+        (*autocmd_no_enter.ptr()) -= 1;
+        (*autocmd_no_leave.ptr()) -= 1;
     };
 }
 unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
@@ -15414,34 +15699,34 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
     let mut advance: bool = true_0 != 0;
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut p_shm_save: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    autocmd_no_enter += 1;
-    autocmd_no_leave += 1;
-    if (*curwin).w_arg_idx == -1 as ::core::ffi::c_int {
-        win_close(curwin, true_0 != 0, false_0 != 0);
+    (*autocmd_no_enter.ptr()) += 1;
+    (*autocmd_no_leave.ptr()) += 1;
+    if (*curwin.get()).w_arg_idx == -1 as ::core::ffi::c_int {
+        win_close(curwin.get(), true_0 != 0, false_0 != 0);
         advance = false_0 != 0;
     }
     arg_idx = 1 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i < (*parmp).window_count {
-        if (*curwin).w_arg_idx == -1 as ::core::ffi::c_int {
+        if (*curwin.get()).w_arg_idx == -1 as ::core::ffi::c_int {
             arg_idx += 1;
-            win_close(curwin, true_0 != 0, false_0 != 0);
+            win_close(curwin.get(), true_0 != 0, false_0 != 0);
             advance = false_0 != 0;
         } else {
             if advance {
                 if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
-                    if (*curtab).tp_next.is_null() {
+                    if (*curtab.get()).tp_next.is_null() {
                         break;
                     }
                     goto_tabpage(0 as ::core::ffi::c_int);
                     if i == 1 as ::core::ffi::c_int {
                         let mut buf: [::core::ffi::c_char; 100] = [0; 100];
-                        p_shm_save = xstrdup(p_shm);
+                        p_shm_save = xstrdup(p_shm.get());
                         snprintf(
                             &raw mut buf as *mut ::core::ffi::c_char,
                             ::core::mem::size_of::<[::core::ffi::c_char; 100]>(),
                             b"F%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            p_shm,
+                            p_shm.get(),
                         );
                         set_option_value_give_err(
                             kOptShortmess,
@@ -15457,21 +15742,22 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
                         );
                     }
                 } else {
-                    if (*curwin).w_next.is_null() {
+                    if (*curwin.get()).w_next.is_null() {
                         break;
                     }
-                    win_enter((*curwin).w_next, false_0 != 0);
+                    win_enter((*curwin.get()).w_next, false_0 != 0);
                 }
             }
             advance = true_0 != 0;
-            if curbuf == (*firstwin).w_buffer || (*curbuf).b_ffname.is_null() {
-                (*curwin).w_arg_idx = arg_idx;
-                swap_exists_did_quit = false_0 != 0;
+            if curbuf.get() == (*firstwin.get()).w_buffer || (*curbuf.get()).b_ffname.is_null() {
+                (*curwin.get()).w_arg_idx = arg_idx;
+                swap_exists_did_quit.set(false_0 != 0);
                 do_ecmd(
                     0 as ::core::ffi::c_int,
-                    if arg_idx < global_alist.al_ga.ga_len {
+                    if arg_idx < (*global_alist.ptr()).al_ga.ga_len {
                         alist_name(
-                            (global_alist.al_ga.ga_data as *mut aentry_T).offset(arg_idx as isize),
+                            ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
+                                .offset(arg_idx as isize),
                         )
                     } else {
                         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -15480,26 +15766,26 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
                     ::core::ptr::null_mut::<exarg_T>(),
                     ECMD_LASTL as ::core::ffi::c_int as linenr_T,
                     ECMD_HIDE as ::core::ffi::c_int,
-                    curwin,
+                    curwin.get(),
                 );
-                if swap_exists_did_quit {
-                    if got_int as ::core::ffi::c_int != 0
+                if swap_exists_did_quit.get() {
+                    if got_int.get() as ::core::ffi::c_int != 0
                         || only_one_window() as ::core::ffi::c_int != 0
                     {
-                        did_emsg = false_0;
+                        did_emsg.set(false_0);
                         ui_call_error_exit(1 as Integer);
                         getout(1 as ::core::ffi::c_int);
                     }
-                    win_close(curwin, true_0 != 0, false_0 != 0);
+                    win_close(curwin.get(), true_0 != 0, false_0 != 0);
                     advance = false_0 != 0;
                 }
-                if arg_idx == global_alist.al_ga.ga_len - 1 as ::core::ffi::c_int {
-                    arg_had_last = true_0 != 0;
+                if arg_idx == (*global_alist.ptr()).al_ga.ga_len - 1 as ::core::ffi::c_int {
+                    arg_had_last.set(true_0 != 0);
                 }
                 arg_idx += 1;
             }
             os_breakcheck();
-            if got_int {
+            if got_int.get() {
                 vgetc();
                 break;
             }
@@ -15522,19 +15808,19 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
     if (*parmp).window_layout == WIN_TABS as ::core::ffi::c_int {
         goto_tabpage(1 as ::core::ffi::c_int);
     }
-    autocmd_no_enter -= 1;
-    win = firstwin;
+    (*autocmd_no_enter.ptr()) -= 1;
+    win = firstwin.get();
     while (*win).w_onebuf_opt.wo_pvw != 0 {
         win = (*win).w_next;
         if !win.is_null() {
             continue;
         }
-        win = firstwin;
+        win = firstwin.get();
         break;
     }
     win_enter(win, false_0 != 0);
-    autocmd_no_leave -= 1;
-    if !time_fd.is_null() {
+    (*autocmd_no_leave.ptr()) -= 1;
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"editing files in windows\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15543,7 +15829,7 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
     if (*parmp).window_count > 1 as ::core::ffi::c_int
         && (*parmp).window_layout != WIN_TABS as ::core::ffi::c_int
     {
-        win_equal(curwin, false_0 != 0, 'b' as ::core::ffi::c_int);
+        win_equal(curwin.get(), false_0 != 0, 'b' as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn exe_pre_commands(mut parmp: *mut mparm_T) {
@@ -15553,21 +15839,21 @@ unsafe extern "C" fn exe_pre_commands(mut parmp: *mut mparm_T) {
     if cnt <= 0 as ::core::ffi::c_int {
         return;
     }
-    (*curwin).w_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
+    (*curwin.get()).w_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
     estack_push(
         ETYPE_ARGS,
         gettext(b"pre-vimrc command line\0".as_ptr() as *const ::core::ffi::c_char),
         0 as linenr_T,
     );
-    current_sctx.sc_sid = SID_CMDARG as scid_T;
+    (*current_sctx.ptr()).sc_sid = SID_CMDARG as scid_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < cnt {
         do_cmdline_cmd(*cmds.offset(i as isize));
         i += 1;
     }
     estack_pop();
-    current_sctx.sc_sid = 0 as ::core::ffi::c_int as scid_T;
-    if !time_fd.is_null() {
+    (*current_sctx.ptr()).sc_sid = 0 as ::core::ffi::c_int as scid_T;
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"--cmd commands\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15575,17 +15861,17 @@ unsafe extern "C" fn exe_pre_commands(mut parmp: *mut mparm_T) {
     }
 }
 unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
-    msg_scroll = true_0;
-    if (*parmp).tagname.is_null() && (*curwin).w_cursor.lnum <= 1 as linenr_T {
-        (*curwin).w_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
+    msg_scroll.set(true_0);
+    if (*parmp).tagname.is_null() && (*curwin.get()).w_cursor.lnum <= 1 as linenr_T {
+        (*curwin.get()).w_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
     estack_push(
         ETYPE_ARGS,
         b"command line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         0 as linenr_T,
     );
-    current_sctx.sc_sid = SID_CARG as scid_T;
-    current_sctx.sc_seq = 0 as ::core::ffi::c_int;
+    (*current_sctx.ptr()).sc_sid = SID_CARG as scid_T;
+    (*current_sctx.ptr()).sc_seq = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*parmp).n_commands {
         do_cmdline_cmd((*parmp).commands[i as usize]);
@@ -15595,12 +15881,12 @@ unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
         i += 1;
     }
     estack_pop();
-    current_sctx.sc_sid = 0 as ::core::ffi::c_int as scid_T;
-    if (*curwin).w_cursor.lnum == 0 as linenr_T {
-        (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
+    (*current_sctx.ptr()).sc_sid = 0 as ::core::ffi::c_int as scid_T;
+    if (*curwin.get()).w_cursor.lnum == 0 as linenr_T {
+        (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
     }
-    if !exmode_active {
-        msg_scroll = false_0;
+    if !exmode_active.get() {
+        msg_scroll.set(false_0);
     }
     if (*parmp).edit_type == EDIT_QF as ::core::ffi::c_int {
         qf_jump(
@@ -15610,7 +15896,7 @@ unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
             false_0,
         );
     }
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"executing command arguments\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15705,11 +15991,11 @@ unsafe extern "C" fn do_system_initialization() {
     );
 }
 unsafe extern "C" fn do_user_initialization() -> bool {
-    let mut do_exrc: bool = p_exrc != 0;
+    let mut do_exrc: bool = p_exrc.get() != 0;
     if execute_env(b"VIMINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char)
         == OK
     {
-        do_exrc = p_exrc != 0;
+        do_exrc = p_exrc.get() != 0;
         return do_exrc;
     }
     let mut init_lua_path: *mut ::core::ffi::c_char =
@@ -15726,14 +16012,14 @@ unsafe extern "C" fn do_user_initialization() -> bool {
     {
         if os_path_exists(user_vimrc) {
             semsg(
-                &raw const e_conflicting_configs as *const ::core::ffi::c_char,
+                (e_conflicting_configs.ptr() as *const _) as *const ::core::ffi::c_char,
                 init_lua_path,
                 user_vimrc,
             );
         }
         xfree(user_vimrc as *mut ::core::ffi::c_void);
         xfree(init_lua_path as *mut ::core::ffi::c_void);
-        do_exrc = p_exrc != 0;
+        do_exrc = p_exrc.get() != 0;
         return do_exrc;
     }
     xfree(init_lua_path as *mut ::core::ffi::c_void);
@@ -15744,7 +16030,7 @@ unsafe extern "C" fn do_user_initialization() -> bool {
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     ) != FAIL
     {
-        do_exrc = p_exrc != 0;
+        do_exrc = p_exrc.get() != 0;
         if do_exrc {
             do_exrc = path_full_compare(
                 VIMRC_FILE.as_ptr() as *mut ::core::ffi::c_char,
@@ -15868,7 +16154,7 @@ unsafe extern "C" fn do_user_initialization() -> bool {
             {
                 if os_path_exists(init_vim) {
                     semsg(
-                        &raw const e_conflicting_configs as *const ::core::ffi::c_char,
+                        (e_conflicting_configs.ptr() as *const _) as *const ::core::ffi::c_char,
                         init_lua,
                         init_vim,
                     );
@@ -15876,7 +16162,7 @@ unsafe extern "C" fn do_user_initialization() -> bool {
                 xfree(init_vim as *mut ::core::ffi::c_void);
                 xfree(init_lua as *mut ::core::ffi::c_void);
                 xfree(config_dirs as *mut ::core::ffi::c_void);
-                do_exrc = p_exrc != 0;
+                do_exrc = p_exrc.get() != 0;
                 return do_exrc;
             }
             xfree(init_lua as *mut ::core::ffi::c_void);
@@ -15887,7 +16173,7 @@ unsafe extern "C" fn do_user_initialization() -> bool {
                 ::core::ptr::null_mut::<::core::ffi::c_int>(),
             ) != FAIL
             {
-                do_exrc = p_exrc != 0;
+                do_exrc = p_exrc.get() != 0;
                 if do_exrc {
                     do_exrc = path_full_compare(
                         VIMRC_FILE.as_ptr() as *mut ::core::ffi::c_char,
@@ -15911,7 +16197,7 @@ unsafe extern "C" fn do_user_initialization() -> bool {
     if execute_env(b"EXINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char)
         == OK
     {
-        do_exrc = p_exrc != 0;
+        do_exrc = p_exrc.get() != 0;
         return do_exrc;
     }
     return do_exrc;
@@ -15971,18 +16257,20 @@ unsafe extern "C" fn source_startup_scripts(parmp: *const mparm_T) {
             ) != OK
             {
                 semsg(
-                    gettext(&raw const e_cannot_read_from_str_2 as *const ::core::ffi::c_char),
+                    gettext(
+                        (e_cannot_read_from_str_2.ptr() as *const _) as *const ::core::ffi::c_char,
+                    ),
                     (*parmp).use_vimrc,
                 );
             }
         }
-    } else if !silent_mode {
+    } else if !silent_mode.get() {
         do_system_initialization();
         if do_user_initialization() {
             do_exrc_initialization();
         }
     }
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"sourcing vimrc file(s)\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -15995,13 +16283,13 @@ unsafe extern "C" fn execute_env(mut env: *mut ::core::ffi::c_char) -> ::core::f
         return FAIL;
     }
     estack_push(ETYPE_ENV, env, 0 as linenr_T);
-    let save_current_sctx: sctx_T = current_sctx;
-    current_sctx.sc_sid = SID_ENV as scid_T;
-    current_sctx.sc_seq = 0 as ::core::ffi::c_int;
-    current_sctx.sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
+    let save_current_sctx: sctx_T = current_sctx.get();
+    (*current_sctx.ptr()).sc_sid = SID_ENV as scid_T;
+    (*current_sctx.ptr()).sc_seq = 0 as ::core::ffi::c_int;
+    (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
     do_cmdline_cmd(initstr);
     estack_pop();
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
     xfree(initstr as *mut ::core::ffi::c_void);
     return OK;
 }
@@ -16018,7 +16306,7 @@ unsafe extern "C" fn print_mainerr(
     mut msg2: *const ::core::ffi::c_char,
     mut msg3: *const ::core::ffi::c_char,
 ) {
-    let mut prgname: *mut ::core::ffi::c_char = path_tail(argv0);
+    let mut prgname: *mut ::core::ffi::c_char = path_tail(argv0.get());
     signal_stop();
     fprintf(
         stderr,
@@ -16056,10 +16344,10 @@ unsafe extern "C" fn version() {
         0 as ::core::ffi::c_int,
         -1 as ::core::ffi::c_int,
     );
-    info_message = true_0 != 0;
+    info_message.set(true_0 != 0);
     list_version();
     msg_putchar('\n' as ::core::ffi::c_int);
-    msg_didout = false_0 != 0;
+    msg_didout.set(false_0 != 0);
 }
 unsafe extern "C" fn usage() {
     signal_stop();
@@ -16176,17 +16464,17 @@ unsafe extern "C" fn usage() {
     ));
 }
 unsafe extern "C" fn check_swap_exists_action() {
-    if swap_exists_action == SEA_QUIT {
+    if swap_exists_action.get() == SEA_QUIT {
         ui_call_error_exit(1 as Integer);
         getout(1 as ::core::ffi::c_int);
     }
     handle_swap_exists(::core::ptr::null_mut::<bufref_T>());
 }
 #[no_mangle]
-pub static mut tslua_query_parse_count: uint64_t = 0 as uint64_t;
+pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub const MAX_ARG_CMDS: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut namedfm: [xfmark_T; 36] = [
+pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([
     xfmark_T {
         fmark: fmark_T {
             mark: pos_T {
@@ -16799,19 +17087,20 @@ pub static mut namedfm: [xfmark_T; 36] = [
         },
         fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
-];
+]);
 #[no_mangle]
-pub static mut ch_before_blocking_events: *mut MultiQueue = ::core::ptr::null_mut::<MultiQueue>();
+pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
+    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 #[no_mangle]
-pub static mut showcmd_buf: [::core::ffi::c_char; 41] = [0; 41];
+pub static showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new([0; 41]);
 #[no_mangle]
-pub static mut repeat_luaref: LuaRef = -2 as LuaRef;
+pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);
 #[no_mangle]
-pub static mut used_stdin: bool = false;
+pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut nvim_testing: bool = false;
+pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut pum_grid: ScreenGrid = ScreenGrid {
+pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
     attrs: ::core::ptr::null_mut::<sattr_T>(),
@@ -16832,56 +17121,62 @@ pub static mut pum_grid: ScreenGrid = ScreenGrid {
     comp_index: 0 as size_t,
     comp_disabled: false,
     pending_comp_index_update: true,
-};
+});
 #[no_mangle]
-pub static mut pum_want: C2Rust_Unnamed_46 = C2Rust_Unnamed_46 {
+pub static pum_want: GlobalCell<C2Rust_Unnamed_46> = GlobalCell::new(C2Rust_Unnamed_46 {
     active: false,
     item: 0,
     insert: false,
     finish: false,
-};
+});
 #[no_mangle]
-pub static mut tab_page_click_defs: *mut StlClickDefinition =
-    ::core::ptr::null_mut::<StlClickDefinition>();
+pub static tab_page_click_defs: GlobalCell<*mut StlClickDefinition> =
+    GlobalCell::new(::core::ptr::null_mut::<StlClickDefinition>());
 #[no_mangle]
-pub static mut tab_page_click_defs_size: size_t = 0 as size_t;
+pub static tab_page_click_defs_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 #[no_mangle]
-pub static mut noargs: Array = Array {
+pub static noargs: GlobalCell<Array> = GlobalCell::new(Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
-};
+});
 #[no_mangle]
-pub static mut ui_event_ns_id: uint32_t = 0 as uint32_t;
+pub static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
 #[no_mangle]
-pub static mut resize_events: *mut MultiQueue = ::core::ptr::null_mut::<MultiQueue>();
+pub static resize_events: GlobalCell<*mut MultiQueue> =
+    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 #[no_mangle]
-pub static mut ui_refresh_cmdheight: bool = true;
+pub static ui_refresh_cmdheight: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
-pub static mut grid_line_buf_size: size_t = 0 as size_t;
+pub static grid_line_buf_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 #[no_mangle]
-pub static mut grid_line_buf_char: *mut schar_T = ::core::ptr::null_mut::<schar_T>();
+pub static grid_line_buf_char: GlobalCell<*mut schar_T> =
+    GlobalCell::new(::core::ptr::null_mut::<schar_T>());
 #[no_mangle]
-pub static mut grid_line_buf_attr: *mut sattr_T = ::core::ptr::null_mut::<sattr_T>();
+pub static grid_line_buf_attr: GlobalCell<*mut sattr_T> =
+    GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
 #[no_mangle]
-pub static mut ui_client_channel_id: uint64_t = 0 as uint64_t;
+pub static ui_client_channel_id: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 #[no_mangle]
-pub static mut ui_client_error_exit: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+pub static ui_client_error_exit: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(-1 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut ui_client_exit_status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static ui_client_exit_status: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut ui_client_attached: bool = false;
+pub static ui_client_attached: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut ui_client_forward_stdin: bool = false;
+pub static ui_client_forward_stdin: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
-pub static mut tabpage_move_disallowed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub static tabpage_move_disallowed: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
-pub static mut float_anchor_str: [*const ::core::ffi::c_char; 4] = [
+pub static float_anchor_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"NW\0".as_ptr() as *const ::core::ffi::c_char,
     b"NE\0".as_ptr() as *const ::core::ffi::c_char,
     b"SW\0".as_ptr() as *const ::core::ffi::c_char,
     b"SE\0".as_ptr() as *const ::core::ffi::c_char,
-];
+]);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const WRITEBIN: [::core::ffi::c_char; 3] =
@@ -16909,7 +17204,7 @@ pub fn main() {
     }
 }
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    kTVCstring = (18446744073709551615 as size_t).wrapping_sub(1 as size_t);
+    kTVCstring.set((18446744073709551615 as size_t).wrapping_sub(1 as size_t));
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

@@ -29,7 +29,7 @@ extern "C" {
         __n: size_t,
     ) -> ::core::ffi::c_int;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    static mut arena_alloc_count: size_t;
+    static arena_alloc_count: GlobalCell<size_t>;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
@@ -169,7 +169,7 @@ extern "C" {
         helptail: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
     fn read_buffer_into(buf: *mut buf_T, start: linenr_T, end: linenr_T, sb: *mut StringBuilder);
-    static mut channels: Map_uint64_t_ptr_t;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel;
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);
@@ -234,43 +234,43 @@ extern "C" {
         silent: bool,
     ) -> ::core::ffi::c_int;
     fn paste_store(channel_id: uint64_t, state: TriState, str: String_0, crlf: bool);
-    static mut default_grid: ScreenGrid;
+    static default_grid: GlobalCell<ScreenGrid>;
     fn schar_cache_clear();
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn win_grid_alloc(wp: *mut win_T);
     fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
-    static mut g_stats: nvim_stats_s;
-    static mut Columns: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut msg_didany: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut vgetc_busy: ::core::ffi::c_int;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut msg_no_more: bool;
-    static mut current_sctx: sctx_T;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut redraw_tabline: bool;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut textlock: ::core::ffi::c_int;
-    static mut VIsual_active: bool;
-    static mut cmdpreview: bool;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut typebuf: typebuf_T;
-    static mut ex_normal_busy: ::core::ffi::c_int;
-    static mut must_redraw: ::core::ffi::c_int;
-    static mut cmdwin_buf: *mut buf_T;
-    static mut typebuf_was_filled: bool;
-    static mut ns_hl_global: NS;
-    static mut ns_hl_fast: NS;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_lz: ::core::ffi::c_int;
+    static g_stats: GlobalCell<nvim_stats_s>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static msg_didany: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static msg_no_more: GlobalCell<bool>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static redraw_tabline: GlobalCell<bool>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static VIsual_active: GlobalCell<bool>;
+    static cmdpreview: GlobalCell<bool>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static typebuf: GlobalCell<typebuf_T>;
+    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
+    static must_redraw: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
+    static typebuf_was_filled: GlobalCell<bool>;
+    static ns_hl_global: GlobalCell<NS>;
+    static ns_hl_fast: GlobalCell<NS>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lz: GlobalCell<::core::ffi::c_int>;
     fn highlight_use_hlstate() -> bool;
     fn ns_hl_def(
         ns_id: NS,
@@ -342,7 +342,7 @@ extern "C" {
         err: *mut Error,
     ) -> Object;
     fn nlua_is_deferred_safe() -> bool;
-    static mut tslua_query_parse_count: uint64_t;
+    static tslua_query_parse_count: GlobalCell<uint64_t>;
     fn modify_keymap(
         channel_id: uint64_t,
         buffer: Buffer,
@@ -399,7 +399,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn pum_set_info(selected: ::core::ffi::c_int, info: *mut ::core::ffi::c_char) -> *mut win_T;
     fn pum_ext_select_item(item: ::core::ffi::c_int, insert: bool, finish: bool);
-    static mut pum_grid: ScreenGrid;
+    static pum_grid: GlobalCell<ScreenGrid>;
     fn do_put(
         regname: ::core::ffi::c_int,
         reg: *mut yankreg_T,
@@ -4540,7 +4540,7 @@ pub unsafe extern "C" fn nvim_set_hl(
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
         ns_hl_def(ns_id as NS, hl_id, attrs, link_id, val);
-        current_sctx = save_current_sctx;
+        current_sctx.set(save_current_sctx);
     }
 }
 #[no_mangle]
@@ -4558,7 +4558,7 @@ pub unsafe extern "C" fn nvim_get_hl_ns(
         }
         return (*win).w_ns_hl as Integer;
     } else {
-        return ns_hl_global as Integer;
+        return ns_hl_global.get() as Integer;
     };
 }
 #[no_mangle]
@@ -4573,13 +4573,13 @@ pub unsafe extern "C" fn nvim_set_hl_ns(mut ns_id: Integer, mut err: *mut Error)
         );
         return;
     }
-    ns_hl_global = ns_id as NS;
+    ns_hl_global.set(ns_id as NS);
     hl_check_ns();
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_set_hl_ns_fast(mut ns_id: Integer, mut _err: *mut Error) {
-    ns_hl_fast = ns_id as NS;
+    ns_hl_fast.set(ns_id as NS);
     hl_check_ns();
 }
 #[no_mangle]
@@ -4644,29 +4644,29 @@ pub unsafe extern "C" fn nvim_feedkeys(
             if insert as ::core::ffi::c_int != 0 {
                 0 as ::core::ffi::c_int
             } else {
-                typebuf.tb_len
+                (*typebuf.ptr()).tb_len
             },
             !typed,
             false_0 != 0,
         );
-        if vgetc_busy != 0 {
-            typebuf_was_filled = true_0 != 0;
+        if vgetc_busy.get() != 0 {
+            typebuf_was_filled.set(true_0 != 0);
         }
     }
     if escape_ks {
         xfree(keys_esc as *mut ::core::ffi::c_void);
     }
     if execute {
-        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll;
-        msg_scroll = false_0;
+        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
+        msg_scroll.set(false_0);
         if !dangerous {
-            ex_normal_busy += 1;
+            (*ex_normal_busy.ptr()) += 1;
         }
         exec_normal(true_0 != 0, lowlevel);
         if !dangerous {
-            ex_normal_busy -= 1;
+            (*ex_normal_busy.ptr()) -= 1;
         }
-        msg_scroll |= save_msg_scroll;
+        (*msg_scroll.ptr()) |= save_msg_scroll;
     }
 }
 #[no_mangle]
@@ -4832,7 +4832,7 @@ pub unsafe extern "C" fn nvim_replace_termcodes(
         0 as scid_T,
         flags,
         ::core::ptr::null_mut::<bool>(),
-        p_cpo,
+        p_cpo.get(),
     );
     return cstr_as_string(ptr);
 }
@@ -5121,8 +5121,8 @@ pub unsafe extern "C" fn nvim_get_current_line(
     mut err: *mut Error,
 ) -> String_0 {
     return buffer_get_line(
-        (*curbuf).handle as Buffer,
-        ((*curwin).w_cursor.lnum - 1 as linenr_T) as Integer,
+        (*curbuf.get()).handle as Buffer,
+        ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
         arena,
         err,
     );
@@ -5134,8 +5134,8 @@ pub unsafe extern "C" fn nvim_set_current_line(
     mut err: *mut Error,
 ) {
     buffer_set_line(
-        (*curbuf).handle as Buffer,
-        ((*curwin).w_cursor.lnum - 1 as linenr_T) as Integer,
+        (*curbuf.get()).handle as Buffer,
+        ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
         line,
         arena,
         err,
@@ -5144,8 +5144,8 @@ pub unsafe extern "C" fn nvim_set_current_line(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_del_current_line(mut arena: *mut Arena, mut err: *mut Error) {
     buffer_del_line(
-        (*curbuf).handle as Buffer,
-        ((*curwin).w_cursor.lnum - 1 as linenr_T) as Integer,
+        (*curbuf.get()).handle as Buffer,
+        ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
         arena,
         err,
     );
@@ -5364,14 +5364,14 @@ pub unsafe extern "C" fn nvim_echo(
                 status: (*opts).status,
                 data: (*opts).data,
             };
-            save_nwr = need_wait_return;
-            save_lines_left = lines_left;
-            save_msg_didany = msg_didany;
+            save_nwr = need_wait_return.get();
+            save_lines_left = lines_left.get();
+            save_msg_didany = msg_didany.get();
             if (*opts)._truncate {
-                no_wait_return += 1;
-                lines_left = 0 as ::core::ffi::c_int;
-                msg_didany = true_0 != 0;
-                msg_no_more = true_0 != 0;
+                (*no_wait_return.ptr()) += 1;
+                lines_left.set(0 as ::core::ffi::c_int);
+                msg_didany.set(true_0 != 0);
+                msg_no_more.set(true_0 != 0);
             }
             id = msg_multihl(
                 (*opts).id,
@@ -5383,11 +5383,11 @@ pub unsafe extern "C" fn nvim_echo(
                 &raw mut needs_clear,
             );
             if (*opts)._truncate {
-                msg_no_more = false_0 != 0;
-                msg_didany = save_msg_didany;
-                lines_left = save_lines_left;
-                no_wait_return -= 1;
-                need_wait_return = save_nwr;
+                msg_no_more.set(false_0 != 0);
+                msg_didany.set(save_msg_didany);
+                lines_left.set(save_lines_left);
+                (*no_wait_return.ptr()) -= 1;
+                need_wait_return.set(save_nwr);
             }
             if (*opts).verbose {
                 verbose_leave();
@@ -5407,13 +5407,13 @@ pub unsafe extern "C" fn nvim_echo(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
     let mut n: size_t = 0 as size_t;
-    let mut b: *mut buf_T = firstbuf;
+    let mut b: *mut buf_T = firstbuf.get();
     while !b.is_null() {
         n = n.wrapping_add(1);
         b = (*b).b_next;
     }
     let mut rv: Array = arena_array(arena, n);
-    let mut b_0: *mut buf_T = firstbuf;
+    let mut b_0: *mut buf_T = firstbuf.get();
     while !b_0.is_null() {
         let c2rust_fresh1 = rv.size;
         rv.size = rv.size.wrapping_add(1);
@@ -5429,7 +5429,7 @@ pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_current_buf() -> Buffer {
-    return (*curbuf).handle as Buffer;
+    return (*curbuf.get()).handle as Buffer;
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_set_current_buf(mut buf: Buffer, mut err: *mut Error) {
@@ -5459,10 +5459,10 @@ pub unsafe extern "C" fn nvim_set_current_buf(mut buf: Buffer, mut err: *mut Err
 #[no_mangle]
 pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
     let mut n: size_t = 0 as size_t;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -5473,10 +5473,10 @@ pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
         tp = (*tp).tp_next as *mut tabpage_T;
     }
     let mut rv: Array = arena_array(arena, n);
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
-        let mut wp_0: *mut win_T = if tp_0 == curtab {
-            firstwin
+        let mut wp_0: *mut win_T = if tp_0 == curtab.get() {
+            firstwin.get()
         } else {
             (*tp_0).tp_firstwin
         };
@@ -5497,7 +5497,7 @@ pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_current_win() -> Window {
-    return (*curwin).handle as Window;
+    return (*curwin.get()).handle as Window;
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_set_current_win(mut win: Window, mut err: *mut Error) {
@@ -5515,7 +5515,7 @@ pub unsafe extern "C" fn nvim_set_current_win(mut win: Window, mut err: *mut Err
         did_emsg: 0,
     };
     try_enter(&raw mut tstate);
-    if (*w).w_buffer != curbuf {
+    if (*w).w_buffer != curbuf.get() {
         reset_VIsual_and_resel();
     }
     goto_tabpage_win(win_find_tabpage(w), w);
@@ -5669,7 +5669,7 @@ pub unsafe extern "C" fn nvim_open_term(
     if b.is_null() {
         return 0 as Integer;
     }
-    if b == cmdwin_buf {
+    if b == cmdwin_buf.get() {
         api_set_error(
             err,
             kErrorTypeException,
@@ -5705,12 +5705,14 @@ pub unsafe extern "C" fn nvim_open_term(
     (*chan).stream.internal.closed = false_0 != 0;
     let mut topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
-        width: (if (*curwin).w_view_width - win_col_off(curwin) > 0 as ::core::ffi::c_int {
-            (*curwin).w_view_width - win_col_off(curwin)
+        width: (if (*curwin.get()).w_view_width - win_col_off(curwin.get())
+            > 0 as ::core::ffi::c_int
+        {
+            (*curwin.get()).w_view_width - win_col_off(curwin.get())
         } else {
             0 as ::core::ffi::c_int
         }) as uint16_t,
-        height: (*curwin).w_view_height as uint16_t,
+        height: (*curwin.get()).w_view_height as uint16_t,
         read_pause_cb: Some(
             term_read_pause as unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> (),
         ),
@@ -5820,7 +5822,7 @@ unsafe extern "C" fn term_write(
             },
         },
     };
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     nlua_call_ref(
         cb,
         b"input\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5829,7 +5831,7 @@ unsafe extern "C" fn term_write(
         ::core::ptr::null_mut::<Arena>(),
         ::core::ptr::null_mut::<Error>(),
     );
-    textlock -= 1;
+    (*textlock.ptr()) -= 1;
 }
 unsafe extern "C" fn term_resize(
     mut _width: uint16_t,
@@ -5874,13 +5876,13 @@ pub unsafe extern "C" fn nvim_chan_send(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
     let mut n: size_t = 0 as size_t;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
         n = n.wrapping_add(1);
         tp = (*tp).tp_next as *mut tabpage_T;
     }
     let mut rv: Array = arena_array(arena, n);
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
         let c2rust_fresh6 = rv.size;
         rv.size = rv.size.wrapping_add(1);
@@ -5896,7 +5898,7 @@ pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_current_tabpage() -> Tabpage {
-    return (*curtab).handle as Tabpage;
+    return (*curtab.get()).handle as Tabpage;
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_set_current_tabpage(mut tabpage: Tabpage, mut err: *mut Error) {
@@ -5958,8 +5960,8 @@ pub unsafe extern "C" fn nvim_paste(
     's_151: {
         if phase == -1 as Integer || phase == 1 as Integer {
             cancelled.set(false_0 != 0);
-            if !(*curbuf).terminal.is_null() {
-                terminal_set_streamed_paste((*curbuf).terminal, true_0 != 0);
+            if !(*curbuf.get()).terminal.is_null() {
+                terminal_set_streamed_paste((*curbuf.get()).terminal, true_0 != 0);
             }
         } else if cancelled.get() {
             break 's_151;
@@ -6010,9 +6012,9 @@ pub unsafe extern "C" fn nvim_paste(
         if (phase == -1 as Integer
             || phase == 3 as Integer
             || cancelled.get() as ::core::ffi::c_int != 0)
-            && !(*curbuf).terminal.is_null()
+            && !(*curbuf.get()).terminal.is_null()
         {
-            terminal_set_streamed_paste((*curbuf).terminal, false_0 != 0);
+            terminal_set_streamed_paste((*curbuf.get()).terminal, false_0 != 0);
         }
         if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
             paste_store(channel_id, kFalse, NULL_STRING, crlf as bool);
@@ -6112,8 +6114,8 @@ pub unsafe extern "C" fn nvim_put(
         did_emsg: 0,
     };
     try_enter(&raw mut tstate);
-    let mut VIsual_was_active: bool = VIsual_active;
-    msg_silent += 1;
+    let mut VIsual_was_active: bool = VIsual_active.get();
+    (*msg_silent.ptr()) += 1;
     do_put(
         0 as ::core::ffi::c_int,
         &raw mut reg as *mut yankreg_T,
@@ -6129,8 +6131,8 @@ pub unsafe extern "C" fn nvim_put(
             0 as ::core::ffi::c_int
         },
     );
-    msg_silent -= 1;
-    VIsual_active = VIsual_was_active;
+    (*msg_silent.ptr()) -= 1;
+    VIsual_active.set(VIsual_was_active);
     try_leave(&raw mut tstate, err);
 }
 #[no_mangle]
@@ -6236,14 +6238,14 @@ pub unsafe extern "C" fn nvim_get_context(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_load_context(mut dict: Dict, mut err: *mut Error) -> Object {
     let mut ctx: Context = CONTEXT_INIT;
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    did_emsg = false_0;
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    did_emsg.set(false_0);
     ctx_from_dict(dict, &raw mut ctx, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         ctx_restore(&raw mut ctx, kCtxAll.get());
     }
     ctx_free(&raw mut ctx);
-    did_emsg = save_did_emsg;
+    did_emsg.set(save_did_emsg);
     return object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -6537,7 +6539,7 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: g_stats.fsync,
+                integer: (*g_stats.ptr()).fsync,
             },
         },
     };
@@ -6548,7 +6550,7 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: g_stats.log_skip as Integer,
+                integer: (*g_stats.ptr()).log_skip as Integer,
             },
         },
     };
@@ -6570,7 +6572,7 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: g_stats.redraw,
+                integer: (*g_stats.ptr()).redraw,
             },
         },
     };
@@ -6581,7 +6583,7 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: arena_alloc_count as Integer,
+                integer: arena_alloc_count.get() as Integer,
             },
         },
     };
@@ -6592,7 +6594,7 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: tslua_query_parse_count as Integer,
+                integer: tslua_query_parse_count.get() as Integer,
             },
         },
     };
@@ -6817,9 +6819,9 @@ pub unsafe extern "C" fn nvim__inspect_cell(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut g: *mut ScreenGrid = &raw mut default_grid;
-    if grid == pum_grid.handle as Integer {
-        g = &raw mut pum_grid;
+    let mut g: *mut ScreenGrid = default_grid.ptr();
+    if grid == (*pum_grid.ptr()).handle as Integer {
+        g = pum_grid.ptr();
     } else if grid > 1 as Integer {
         let mut wp: *mut win_T = get_win_by_grid_handle(grid as handle_T);
         if !(!wp.is_null() && !(*wp).w_grid_alloc.chars.is_null()) {
@@ -6883,7 +6885,7 @@ pub unsafe extern "C" fn nvim__screenshot(mut path: String_0) {
 #[no_mangle]
 pub unsafe extern "C" fn nvim__invalidate_glyph_cache() {
     schar_cache_clear();
-    must_redraw = UPD_CLEAR as ::core::ffi::c_int;
+    must_redraw.set(UPD_CLEAR as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim__unpack(
@@ -7081,7 +7083,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
     let mut use_bools: ::core::ffi::c_int =
         (*opts).use_winbar as ::core::ffi::c_int + (*opts).use_tabline as ::core::ffi::c_int;
     let mut wp: *mut win_T = if (*opts).use_tabline as ::core::ffi::c_int != 0 {
-        curwin
+        curwin.get()
     } else {
         find_window_by_handle(window, err)
     };
@@ -7249,7 +7251,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
         } else if (*opts).use_tabline as ::core::ffi::c_int != 0
             || !(*opts).use_winbar && global_stl_height() > 0 as ::core::ffi::c_int
         {
-            Columns
+            Columns.get()
         } else {
             (*wp).w_width
         };
@@ -7661,7 +7663,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
         } else if !buf.is_null() {
             buf
         } else {
-            curbuf
+            curbuf.get()
         };
         let mut line_count: linenr_T = (*rbuf).b_ml.ml_line_count;
         let mut begin: ::core::ffi::c_int = (if begin_raw < line_count as int64_t {
@@ -7710,8 +7712,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
     }
     let mut flush_ui: bool = (*opts).flush as bool;
     if (*opts).tabline {
-        if redraw_tabline as ::core::ffi::c_int != 0
-            && (*firstwin).w_lines_valid == 0 as ::core::ffi::c_int
+        if redraw_tabline.get() as ::core::ffi::c_int != 0
+            && (*firstwin.get()).w_lines_valid == 0 as ::core::ffi::c_int
         {
             (*opts).flush = true_0 != 0;
         } else {
@@ -7719,19 +7721,19 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
         }
         flush_ui = true_0 != 0;
     }
-    let mut save_lz: bool = p_lz != 0;
-    let mut save_rd: ::core::ffi::c_int = RedrawingDisabled;
-    RedrawingDisabled = 0 as ::core::ffi::c_int;
-    p_lz = false_0;
+    let mut save_lz: bool = p_lz.get() != 0;
+    let mut save_rd: ::core::ffi::c_int = RedrawingDisabled.get();
+    RedrawingDisabled.set(0 as ::core::ffi::c_int);
+    p_lz.set(false_0);
     if (*opts).statuscolumn as ::core::ffi::c_int != 0
         || (*opts).statusline as ::core::ffi::c_int != 0
         || (*opts).winbar as ::core::ffi::c_int != 0
     {
         if win.is_null() {
-            let mut wp: *mut win_T = if curtab == curtab {
-                firstwin
+            let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+                firstwin.get()
             } else {
-                (*curtab).tp_firstwin
+                (*curtab.get()).tp_firstwin
             };
             while !wp.is_null() {
                 if buf.is_null() || (*wp).w_buffer == buf {
@@ -7744,15 +7746,15 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
         }
         flush_ui = true_0 != 0;
     }
-    let mut cwin: *mut win_T = if !win.is_null() { win } else { curwin };
+    let mut cwin: *mut win_T = if !win.is_null() { win } else { curwin.get() };
     if (*opts).cursor as ::core::ffi::c_int != 0
         && ((*cwin).w_grid.target.is_null() || !(*(*cwin).w_grid.target).valid)
     {
         (*opts).flush = true_0 != 0;
     }
-    if (*opts).flush as ::core::ffi::c_int != 0 && !cmdpreview {
-        validate_cursor(curwin);
-        update_topline(curwin);
+    if (*opts).flush as ::core::ffi::c_int != 0 && !cmdpreview.get() {
+        validate_cursor(curwin.get());
+        update_topline(curwin.get());
         update_screen();
     }
     if (*opts).cursor {
@@ -7762,8 +7764,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
     if flush_ui {
         ui_flush();
     }
-    RedrawingDisabled = save_rd;
-    p_lz = save_lz as ::core::ffi::c_int;
+    RedrawingDisabled.set(save_rd);
+    p_lz.set(save_lz as ::core::ffi::c_int);
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -7777,7 +7779,7 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
 }
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 pub const CONTEXT_INIT: Context = Context {
     regs: STRING_INIT,

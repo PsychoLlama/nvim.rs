@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -49,12 +49,12 @@ extern "C" {
     fn signal_watcher_stop(watcher: *mut SignalWatcher);
     fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb);
     fn autowrite_all();
-    static mut curbuf: *mut buf_T;
-    static mut v_dying: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut main_loop: Loop;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static v_dying: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static main_loop: SharedCell<Loop>;
     fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
-    static mut p_awa: ::core::ffi::c_int;
+    static p_awa: GlobalCell<::core::ffi::c_int>;
     fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
 }
 pub type size_t = usize;
@@ -2707,15 +2707,15 @@ pub unsafe extern "C" fn signal_init() {
                 as *const ::core::ffi::c_char,
         );
     }
-    signal_watcher_init(&raw mut main_loop, spipe.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, shup.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, sint.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, squit.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, sterm.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, ststp.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, spwr.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, susr1.ptr(), NULL);
-    signal_watcher_init(&raw mut main_loop, swinch.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), spipe.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), shup.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), sint.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), squit.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), sterm.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), ststp.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), spwr.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), susr1.ptr(), NULL);
+    signal_watcher_init(main_loop.ptr(), swinch.ptr(), NULL);
     signal_start();
 }
 #[no_mangle]
@@ -2899,7 +2899,7 @@ unsafe extern "C" fn signal_name(mut signum: ::core::ffi::c_int) -> *mut ::core:
 }
 unsafe extern "C" fn deadly_signal(mut signum: ::core::ffi::c_int) -> ! {
     set_vim_var_nr(VV_DYING, 1 as varnumber_T);
-    v_dying = 1 as ::core::ffi::c_int;
+    v_dying.set(1 as ::core::ffi::c_int);
     logmsg(
         LOGLVL_INF,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2911,15 +2911,15 @@ unsafe extern "C" fn deadly_signal(mut signum: ::core::ffi::c_int) -> ! {
         signal_name(signum),
     );
     snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         b"Nvim: Caught deadly signal '%s'\n\0".as_ptr() as *const ::core::ffi::c_char,
         signal_name(signum),
     );
-    if p_awa != 0 && signum != SIGTERM && signum != SIGINT {
+    if p_awa.get() != 0 && signum != SIGTERM && signum != SIGINT {
         autowrite_all();
     }
-    preserve_exit(&raw mut IObuff as *mut ::core::ffi::c_char);
+    preserve_exit(IObuff.ptr() as *mut ::core::ffi::c_char);
 }
 unsafe extern "C" fn on_signal(
     mut _handle: *mut SignalWatcher,
@@ -2943,7 +2943,7 @@ unsafe extern "C" fn on_signal(
         }
         SIGPIPE => {}
         SIGTSTP => {
-            if p_awa != 0 {
+            if p_awa.get() != 0 {
                 autowrite_all();
             }
         }
@@ -2956,18 +2956,18 @@ unsafe extern "C" fn on_signal(
             apply_autocmds(
                 EVENT_SIGNAL,
                 b"SIGUSR1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                (*curbuf).b_fname,
+                (*curbuf.get()).b_fname,
                 true_0 != 0,
-                curbuf,
+                curbuf.get(),
             );
         }
         SIGWINCH => {
             apply_autocmds(
                 EVENT_SIGNAL,
                 b"SIGWINCH\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                (*curbuf).b_fname,
+                (*curbuf.get()).b_fname,
                 true_0 != 0,
-                curbuf,
+                curbuf.get(),
             );
         }
         _ => {

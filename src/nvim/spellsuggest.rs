@@ -83,8 +83,8 @@ extern "C" {
         old_col: ::core::ffi::c_int,
         new_col: ::core::ffi::c_int,
     );
-    static mut p_sps: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_sps: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -109,7 +109,7 @@ extern "C" {
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_no_spell: [::core::ffi::c_char; 0];
     static e_notopen: [::core::ffi::c_char; 0];
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
@@ -158,20 +158,20 @@ extern "C" {
     fn AppendToRedobuffLit(str: *const ::core::ffi::c_char, len: ::core::ffi::c_int);
     fn AppendCharToRedobuff(c: ::core::ffi::c_int);
     fn vgetc() -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut cmdmsg_rl: bool;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut mouse_row: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut got_int: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static cmdmsg_rl: GlobalCell<bool>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static mouse_row: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static got_int: GlobalCell<bool>;
     fn prompt_for_input(
         prompt: *mut ::core::ffi::c_char,
         hl_id: ::core::ffi::c_int,
@@ -2299,7 +2299,8 @@ unsafe extern "C" fn score_wordcount_adj(
 ) -> ::core::ffi::c_int {
     let mut bonus: ::core::ffi::c_int = 0;
     let mut hi: *mut hashitem_T = hash_find(&raw mut (*slang).sl_wordcount, word);
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         return score;
     }
     let mut wc: *mut wordcount_T = (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) as *mut wordcount_T;
@@ -2408,7 +2409,7 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     sps_flags.set(0 as ::core::ffi::c_int);
     sps_limit.set(9999 as ::core::ffi::c_int);
-    let mut p: *mut ::core::ffi::c_char = p_sps;
+    let mut p: *mut ::core::ffi::c_char = p_sps.get();
     while *p as ::core::ffi::c_int != NUL {
         copy_option_part(
             &raw mut p,
@@ -2530,69 +2531,72 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
     };
     let mut limit: ::core::ffi::c_int = 0;
     let mut selected: ::core::ffi::c_int = 0;
-    let mut prev_cursor: pos_T = (*curwin).w_cursor;
+    let mut prev_cursor: pos_T = (*curwin.get()).w_cursor;
     let mut mouse_used: bool = false_0 != 0;
     let mut badlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut msg_scroll_save: ::core::ffi::c_int = msg_scroll;
-    let wo_spell_save: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_spell;
-    if (*curwin).w_onebuf_opt.wo_spell == 0 {
-        parse_spelllang(curwin);
-        (*curwin).w_onebuf_opt.wo_spell = true_0;
+    let mut msg_scroll_save: ::core::ffi::c_int = msg_scroll.get();
+    let wo_spell_save: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_spell;
+    if (*curwin.get()).w_onebuf_opt.wo_spell == 0 {
+        parse_spelllang(curwin.get());
+        (*curwin.get()).w_onebuf_opt.wo_spell = true_0;
     }
     '_skip: {
-        if *(*(*curwin).w_s).b_p_spl as ::core::ffi::c_int == NUL {
+        if *(*(*curwin.get()).w_s).b_p_spl as ::core::ffi::c_int == NUL {
             emsg(gettext(&raw const e_no_spell as *const ::core::ffi::c_char));
         } else {
-            if VIsual_active {
-                if (*curwin).w_cursor.lnum != VIsual.lnum {
+            if VIsual_active.get() {
+                if (*curwin.get()).w_cursor.lnum != (*VIsual.ptr()).lnum {
                     vim_beep(kOptBoFlagSpell as ::core::ffi::c_int as ::core::ffi::c_uint);
                     break '_skip;
                 } else {
-                    badlen = (*curwin).w_cursor.col - VIsual.col;
+                    badlen = (*curwin.get()).w_cursor.col - (*VIsual.ptr()).col;
                     if badlen < 0 as ::core::ffi::c_int {
                         badlen = -badlen;
                     } else {
-                        (*curwin).w_cursor.col = VIsual.col;
+                        (*curwin.get()).w_cursor.col = (*VIsual.ptr()).col;
                     }
                     badlen += 1;
                     end_visual_mode();
-                    badlen = if badlen < get_cursor_line_len() - (*curwin).w_cursor.col {
+                    badlen = if badlen < get_cursor_line_len() - (*curwin.get()).w_cursor.col {
                         badlen
                     } else {
-                        get_cursor_line_len() - (*curwin).w_cursor.col as ::core::ffi::c_int
+                        get_cursor_line_len() - (*curwin.get()).w_cursor.col as ::core::ffi::c_int
                     };
                 }
             } else if spell_move_to(
-                curwin,
+                curwin.get(),
                 FORWARD as ::core::ffi::c_int,
                 SMT_ALL,
                 true_0 != 0,
                 ::core::ptr::null_mut::<hlf_T>(),
             ) == 0 as size_t
-                || (*curwin).w_cursor.col > prev_cursor.col
+                || (*curwin.get()).w_cursor.col > prev_cursor.col
             {
-                (*curwin).w_cursor = prev_cursor;
+                (*curwin.get()).w_cursor = prev_cursor;
                 let mut curline: *mut ::core::ffi::c_char = get_cursor_line_ptr();
                 let mut p: *mut ::core::ffi::c_char =
-                    curline.offset((*curwin).w_cursor.col as isize);
-                while p > curline && spell_iswordp_nmw(p, curwin) as ::core::ffi::c_int != 0 {
+                    curline.offset((*curwin.get()).w_cursor.col as isize);
+                while p > curline && spell_iswordp_nmw(p, curwin.get()) as ::core::ffi::c_int != 0 {
                     p = p.offset(
                         -((utf_head_off(curline, p.offset(-(1 as ::core::ffi::c_int as isize)))
                             + 1 as ::core::ffi::c_int) as isize),
                     );
                 }
-                while *p as ::core::ffi::c_int != NUL && !spell_iswordp_nmw(p, curwin) {
+                while *p as ::core::ffi::c_int != NUL && !spell_iswordp_nmw(p, curwin.get()) {
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }
-                if !spell_iswordp_nmw(p, curwin) {
+                if !spell_iswordp_nmw(p, curwin.get()) {
                     beep_flush();
                     break '_skip;
                 } else {
-                    (*curwin).w_cursor.col = p.offset_from(curline) as colnr_T;
+                    (*curwin.get()).w_cursor.col = p.offset_from(curline) as colnr_T;
                 }
             }
-            need_cap = check_need_cap(curwin, (*curwin).w_cursor.lnum, (*curwin).w_cursor.col)
-                as ::core::ffi::c_int;
+            need_cap = check_need_cap(
+                curwin.get(),
+                (*curwin.get()).w_cursor.lnum,
+                (*curwin.get()).w_cursor.col,
+            ) as ::core::ffi::c_int;
             line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
             spell_suggest_timeout.set(5000 as ::core::ffi::c_int);
             sug = suginfo_T {
@@ -2633,13 +2637,13 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 },
                 su_sallang: ::core::ptr::null_mut::<slang_T>(),
             };
-            limit = if sps_limit.get() < Rows - 2 as ::core::ffi::c_int {
+            limit = if sps_limit.get() < Rows.get() - 2 as ::core::ffi::c_int {
                 sps_limit.get()
             } else {
-                Rows - 2 as ::core::ffi::c_int
+                Rows.get() - 2 as ::core::ffi::c_int
             };
             spell_find_suggest(
-                line.offset((*curwin).w_cursor.col as isize),
+                line.offset((*curwin.get()).w_cursor.col as isize),
                 badlen,
                 &raw mut sug,
                 limit,
@@ -2663,13 +2667,13 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     );
                 }
             } else {
-                cmdmsg_rl = (*curwin).w_onebuf_opt.wo_rl != 0;
+                cmdmsg_rl.set((*curwin.get()).w_onebuf_opt.wo_rl != 0);
                 msg_start();
-                msg_row = Rows - 1 as ::core::ffi::c_int;
-                lines_left = Rows;
+                msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+                lines_left.set(Rows.get());
                 let mut fmt: *mut ::core::ffi::c_char =
                     gettext(b"Change \"%.*s\" to:\0".as_ptr() as *const ::core::ffi::c_char);
-                if cmdmsg_rl as ::core::ffi::c_int != 0
+                if cmdmsg_rl.get() as ::core::ffi::c_int != 0
                     && strncmp(
                         fmt,
                         b"Change\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2680,16 +2684,16 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         as *mut ::core::ffi::c_char;
                 }
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     fmt,
                     sug.su_badlen,
                     sug.su_badptr,
                 );
-                msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+                msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
                 msg_clr_eos();
                 msg_putchar('\n' as ::core::ffi::c_int);
-                msg_scroll = true_0;
+                msg_scroll.set(true_0);
                 let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i < sug.su_ga.ga_len {
                     let mut stp: *mut suggest_T =
@@ -2728,42 +2732,42 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         );
                     }
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"%2d\0".as_ptr() as *const ::core::ffi::c_char,
                         i + 1 as ::core::ffi::c_int,
                     );
-                    if cmdmsg_rl {
+                    if cmdmsg_rl.get() {
                         rl_mirror_ascii(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         );
                     }
-                    msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+                    msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b" \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                         &raw mut wcopy as *mut ::core::ffi::c_char,
                     );
-                    msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+                    msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
                     if sug.su_badlen < (*stp).st_orglen {
                         vim_snprintf(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             IOSIZE as size_t,
                             gettext(b" < \"%.*s\"\0".as_ptr() as *const ::core::ffi::c_char),
                             (*stp).st_orglen,
                             sug.su_badptr,
                         );
-                        msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+                        msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
                     }
-                    if p_verbose > 0 as OptInt {
+                    if p_verbose.get() > 0 as OptInt {
                         if sps_flags.get()
                             & (SPS_DOUBLE as ::core::ffi::c_int | SPS_BEST as ::core::ffi::c_int)
                             != 0
                         {
                             vim_snprintf(
-                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                 IOSIZE as size_t,
                                 b" (%s%d - %d)\0".as_ptr() as *const ::core::ffi::c_char,
                                 if (*stp).st_salscore as ::core::ffi::c_int != 0 {
@@ -2776,29 +2780,29 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                             );
                         } else {
                             vim_snprintf(
-                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                 IOSIZE as size_t,
                                 b" (%d)\0".as_ptr() as *const ::core::ffi::c_char,
                                 (*stp).st_score,
                             );
                         }
-                        if cmdmsg_rl {
+                        if cmdmsg_rl.get() {
                             rl_mirror_ascii(
-                                (&raw mut IObuff as *mut ::core::ffi::c_char)
+                                (IObuff.ptr() as *mut ::core::ffi::c_char)
                                     .offset(1 as ::core::ffi::c_int as isize),
                                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                             );
                         }
                         msg_advance(30 as ::core::ffi::c_int);
-                        msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+                        msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
                     }
                     if !ui_has(kUIMessages) || i < sug.su_ga.ga_len - 1 as ::core::ffi::c_int {
                         msg_putchar('\n' as ::core::ffi::c_int);
                     }
                     i += 1;
                 }
-                cmdmsg_rl = false_0 != 0;
-                msg_col = 0 as ::core::ffi::c_int;
+                cmdmsg_rl.set(false_0 != 0);
+                msg_col.set(0 as ::core::ffi::c_int);
                 selected = prompt_for_input(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     0 as ::core::ffi::c_int,
@@ -2806,11 +2810,11 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     &raw mut mouse_used,
                 );
                 if mouse_used {
-                    selected =
-                        sug.su_ga.ga_len + 1 as ::core::ffi::c_int - (cmdline_row - mouse_row);
+                    selected = sug.su_ga.ga_len + 1 as ::core::ffi::c_int
+                        - (cmdline_row.get() - mouse_row.get());
                 }
-                lines_left = Rows;
-                msg_scroll = msg_scroll_save;
+                lines_left.set(Rows.get());
+                msg_scroll.set(msg_scroll_save);
             }
             if selected > 0 as ::core::ffi::c_int
                 && selected <= sug.su_ga.ga_len
@@ -2831,14 +2835,14 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 if sug.su_badlen > (*stp_0).st_orglen {
                     repl_from.set(xstrnsave(sug.su_badptr, sug.su_badlen as size_t));
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"%s%.*s\0".as_ptr() as *const ::core::ffi::c_char,
                         (*stp_0).st_word,
                         sug.su_badlen - (*stp_0).st_orglen,
                         sug.su_badptr.offset((*stp_0).st_orglen as isize),
                     );
-                    repl_to.set(xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char));
+                    repl_to.set(xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char));
                 } else {
                     repl_from.set(xstrnsave(sug.su_badptr, (*stp_0).st_orglen as size_t));
                     repl_to.set(xstrdup((*stp_0).st_word));
@@ -2866,22 +2870,22 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     (*stp_0).st_wordlen + sug.su_badlen - (*stp_0).st_orglen,
                 );
                 AppendCharToRedobuff(ESC);
-                ml_replace((*curwin).w_cursor.lnum, p_0, false_0 != 0);
-                (*curwin).w_cursor.col = c as colnr_T;
+                ml_replace((*curwin.get()).w_cursor.lnum, p_0, false_0 != 0);
+                (*curwin.get()).w_cursor.col = c as colnr_T;
                 inserted_bytes(
-                    (*curwin).w_cursor.lnum,
+                    (*curwin.get()).w_cursor.lnum,
                     c as colnr_T,
                     (*stp_0).st_orglen,
                     (*stp_0).st_wordlen,
                 );
             } else {
-                (*curwin).w_cursor = prev_cursor;
+                (*curwin.get()).w_cursor = prev_cursor;
             }
             spell_find_cleanup(&raw mut sug);
             xfree(line as *mut ::core::ffi::c_void);
         }
     }
-    (*curwin).w_onebuf_opt.wo_spell = wo_spell_save;
+    (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
 }
 #[no_mangle]
 pub unsafe extern "C" fn spell_suggest_list(
@@ -3004,7 +3008,7 @@ unsafe extern "C" fn spell_find_suggest(
         (*su).su_badlen = badlen;
     } else {
         let mut tmplen: size_t = spell_check(
-            curwin,
+            curwin.get(),
             (*su).su_badptr,
             &raw mut attr,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
@@ -3037,7 +3041,7 @@ unsafe extern "C" fn spell_find_suggest(
         (*su).su_badlen as size_t,
     );
     spell_casefold(
-        curwin,
+        curwin.get(),
         (*su).su_badptr,
         (*su).su_badlen,
         &raw mut (*su).su_fbadword as *mut ::core::ffi::c_char,
@@ -3052,9 +3056,9 @@ unsafe extern "C" fn spell_find_suggest(
         (*su).su_badflags |= WF_ONECAP as ::core::ffi::c_int;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*curbuf).b_s.b_langp.ga_len {
+    while i < (*curbuf.get()).b_s.b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*curbuf).b_s.b_langp.ga_data as *mut langp_T).offset(i as isize);
+            ((*curbuf.get()).b_s.b_langp.ga_data as *mut langp_T).offset(i as isize);
         if !(*lp).lp_sallang.is_null() {
             (*su).su_sallang = (*lp).lp_sallang;
             break;
@@ -3098,7 +3102,7 @@ unsafe extern "C" fn spell_find_suggest(
     if banbadword {
         add_banned(su, &raw mut (*su).su_badword as *mut ::core::ffi::c_char);
     }
-    let mut sps_copy: *mut ::core::ffi::c_char = xstrdup(p_sps);
+    let mut sps_copy: *mut ::core::ffi::c_char = xstrdup(p_sps.get());
     let mut p: *mut ::core::ffi::c_char = sps_copy;
     while *p as ::core::ffi::c_int != NUL {
         copy_option_part(
@@ -3212,7 +3216,7 @@ unsafe extern "C" fn spell_suggest_file(
         &raw mut line as *mut ::core::ffi::c_char,
         MAXWLEN as ::core::ffi::c_int * 2 as ::core::ffi::c_int,
         fd,
-    ) && !got_int
+    ) && !got_int.get()
     {
         line_breakcheck();
         let mut p: *mut ::core::ffi::c_char = vim_strchr(
@@ -3301,9 +3305,9 @@ unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactiv
         suggest_try_soundalike_finish();
     }
     os_breakcheck();
-    if interactive as ::core::ffi::c_int != 0 && got_int as ::core::ffi::c_int != 0 {
+    if interactive as ::core::ffi::c_int != 0 && got_int.get() as ::core::ffi::c_int != 0 {
         vgetc();
-        got_int = false_0 != 0;
+        got_int.set(false_0 != 0);
     }
     if sps_flags.get() & SPS_DOUBLE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
         && (*su).su_ga.ga_len != 0 as ::core::ffi::c_int
@@ -3385,7 +3389,7 @@ unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
         strlen(&raw mut fword as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
     let mut p: *mut ::core::ffi::c_char = (*su).su_badptr.offset((*su).su_badlen as isize);
     spell_casefold(
-        curwin,
+        curwin.get(),
         p,
         strlen(p) as ::core::ffi::c_int,
         (&raw mut fword as *mut ::core::ffi::c_char).offset(n as isize),
@@ -3396,9 +3400,9 @@ unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
         fword[n as usize] = NUL as ::core::ffi::c_char;
     }
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !(*(*lp).lp_slang).sl_fbyts.is_null() {
             suggest_trie_walk(
                 su,
@@ -4260,7 +4264,7 @@ unsafe extern "C" fn suggest_trie_walk(
     if spell_suggest_timeout.get() > 0 as ::core::ffi::c_int {
         time_limit = profile_setlimit(spell_suggest_timeout.get() as int64_t);
     }
-    while depth >= 0 as ::core::ffi::c_int && !got_int {
+    while depth >= 0 as ::core::ffi::c_int && !got_int.get() {
         sp = (&raw mut stack as *mut trystate_T).offset(depth as isize);
         let mut len: ::core::ffi::c_int = 0;
         let mut flags_0: ::core::ffi::c_int = 0;
@@ -4380,7 +4384,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                             (*sp).ts_fidx as ::core::ffi::c_int
                                                                 as isize,
                                                         ),
-                                                        curwin,
+                                                        curwin.get(),
                                                     )
                                                         as ::core::ffi::c_int
                                                 }) != 0;
@@ -4654,7 +4658,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 }
                                                 c |= flags_0;
                                                 if !p.is_null()
-                                                    && spell_iswordp_nmw(p, curwin)
+                                                    && spell_iswordp_nmw(p, curwin.get())
                                                         as ::core::ffi::c_int
                                                         != 0
                                                 {
@@ -4713,7 +4717,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                                                 ),
                                                         ))
                                                         .hi_key
-                                                            == &raw mut hash_removed)
+                                                            == &raw const hash_removed
+                                                                as *mut ::core::ffi::c_char)
                                                     || !((*hash_find(
                                                         &raw mut (*su).su_banned,
                                                         &raw mut preword
@@ -4727,7 +4732,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                                                 as *mut ::core::ffi::c_char,
                                                         ))
                                                         .hi_key
-                                                            == &raw mut hash_removed)
+                                                            == &raw const hash_removed
+                                                                as *mut ::core::ffi::c_char)
                                                 {
                                                     if (*slang).sl_compprog.is_null() {
                                                         break 's_2231;
@@ -4796,7 +4802,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         ) + 1 as ::core::ffi::c_int)
                                                             as isize),
                                                     );
-                                                    if !spell_iswordp(p, curwin)
+                                                    if !spell_iswordp(p, curwin.get())
                                                         && *(&raw mut preword
                                                             as *mut ::core::ffi::c_char)
                                                             as ::core::ffi::c_int
@@ -4820,7 +4826,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                             ) + 1 as ::core::ffi::c_int)
                                                                 as isize),
                                                         );
-                                                        if spell_iswordp(p, curwin) {
+                                                        if spell_iswordp(p, curwin.get()) {
                                                             newscore_0 +=
                                                                 SCORE_NONWORD as ::core::ffi::c_int;
                                                         }
@@ -5076,7 +5082,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                                         as ::core::ffi::c_int
                                                                         as isize,
                                                                 ),
-                                                                curwin,
+                                                                curwin.get(),
                                                             )
                                                             || fword_ends as ::core::ffi::c_int
                                                                 != 0)
@@ -5275,7 +5281,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                         (*sp).ts_curi = (*sp).ts_curi + 1;
                                         n += c2rust_fresh8 as ::core::ffi::c_int;
                                         if byts == (*slang).sl_fbyts && n >= (*slang).sl_fbyts_len {
-                                            got_int = true_0 != 0;
+                                            got_int.set(true_0 != 0);
                                             break 's_2231;
                                         } else {
                                             c = *byts.offset(n as isize) as ::core::ffi::c_int;
@@ -5347,7 +5353,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     if c == NUL {
                                         (*sp).ts_state = STATE_FINAL;
                                         break 's_2231;
-                                    } else if !soundfold && !spell_iswordp(p, curwin) {
+                                    } else if !soundfold && !spell_iswordp(p, curwin.get()) {
                                         (*sp).ts_state = STATE_REP_INI;
                                         break 's_2231;
                                     } else {
@@ -5356,7 +5362,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                         if *p.offset(n as isize) as ::core::ffi::c_int == NUL {
                                             c2 = NUL;
                                         } else if !soundfold
-                                            && !spell_iswordp(p.offset(n as isize), curwin)
+                                            && !spell_iswordp(p.offset(n as isize), curwin.get())
                                         {
                                             c2 = c;
                                         } else {
@@ -5433,7 +5439,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     utf_char2bytes(c, p);
                                     utf_char2bytes(c2, p.offset(tl as isize));
                                     p = p.offset(tl as isize);
-                                    if !soundfold && !spell_iswordp(p, curwin) {
+                                    if !soundfold && !spell_iswordp(p, curwin.get()) {
                                         (*sp).ts_state = STATE_REP_INI;
                                         break 's_2231;
                                     } else {
@@ -5584,7 +5590,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 as ::core::ffi::c_int
                                                 != 0
                                         {
-                                            got_int = true_0 != 0;
+                                            got_int.set(true_0 != 0);
                                         }
                                     }
                                     break 's_2231;
@@ -5621,7 +5627,10 @@ unsafe extern "C" fn suggest_trie_walk(
                         fl = utf_ptr2len(p.offset(n as isize));
                         c2 = utf_ptr2char(p.offset(n as isize));
                         if !soundfold
-                            && !spell_iswordp(p.offset(n as isize).offset(fl as isize), curwin)
+                            && !spell_iswordp(
+                                p.offset(n as isize).offset(fl as isize),
+                                curwin.get(),
+                            )
                         {
                             c3 = c;
                         } else {
@@ -6029,9 +6038,9 @@ unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
     let mut badsound: [::core::ffi::c_char; 254] = [0; 254];
     ga_grow(&raw mut (*su).su_sga, (*su).su_ga.ga_len);
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !((*(*lp).lp_slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) {
             spell_soundfold(
                 (*lp).lp_slang,
@@ -6079,9 +6088,9 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
     let mut badsound: [::core::ffi::c_char; 254] = [0; 254];
     let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !((*(*lp).lp_slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) {
             slang = (*lp).lp_slang;
             spell_soundfold(
@@ -6217,7 +6226,7 @@ unsafe extern "C" fn stp_sal_score(
         pbad = badsound;
     } else {
         spell_casefold(
-            curwin,
+            curwin.get(),
             (*su).su_badptr,
             (*stp).st_orglen,
             &raw mut fword as *mut ::core::ffi::c_char,
@@ -6283,9 +6292,9 @@ static dumsft: GlobalCell<sftword_T> = GlobalCell::new(sftword_T {
 });
 unsafe extern "C" fn suggest_try_soundalike_prep() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
         if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
             hash_init(&raw mut (*slang).sl_sounddone);
@@ -6296,9 +6305,9 @@ unsafe extern "C" fn suggest_try_soundalike_prep() {
 unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
     let mut salword: [::core::ffi::c_char; 254] = [0; 254];
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
         if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
             spell_soundfold(
@@ -6319,15 +6328,17 @@ unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
 }
 unsafe extern "C" fn suggest_try_soundalike_finish() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
         if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
             let mut todo: ::core::ffi::c_int = (*slang).sl_sounddone.ht_used as ::core::ffi::c_int;
             let mut hi: *mut hashitem_T = (*slang).sl_sounddone.ht_array;
             while todo > 0 as ::core::ffi::c_int {
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     xfree(
                         (*hi).hi_key.offset(
                             -((&raw mut (*dumsft.ptr()).sft_word as *mut uint8_t)
@@ -6363,7 +6374,8 @@ unsafe extern "C" fn add_sound_suggest(
     let goodword_len: size_t = strlen(goodword);
     let mut hi: *mut hashitem_T =
         hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         sft = xmalloc(
             (2 as size_t)
                 .wrapping_add(goodword_len)
@@ -6636,7 +6648,9 @@ unsafe extern "C" fn similar_chars(
             &raw mut (*slang).sl_map_hash,
             &raw mut buf as *mut ::core::ffi::c_char,
         );
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+        if (*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             m1 = 0 as ::core::ffi::c_int;
         } else {
             m1 = utf_ptr2char(
@@ -6659,7 +6673,9 @@ unsafe extern "C" fn similar_chars(
             &raw mut (*slang).sl_map_hash,
             &raw mut buf as *mut ::core::ffi::c_char,
         );
-        if (*hi_0).hi_key.is_null() || (*hi_0).hi_key == &raw mut hash_removed {
+        if (*hi_0).hi_key.is_null()
+            || (*hi_0).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             m2 = 0 as ::core::ffi::c_int;
         } else {
             m2 = utf_ptr2char(
@@ -6835,7 +6851,7 @@ unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut gar
         );
         let mut attr: hlf_T = HLF_COUNT;
         spell_check(
-            curwin,
+            curwin.get(),
             &raw mut longword as *mut ::core::ffi::c_char,
             &raw mut attr,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
@@ -6861,7 +6877,9 @@ unsafe extern "C" fn add_banned(mut su: *mut suginfo_T, mut word: *mut ::core::f
     let mut hash: hash_T = hash_hash(word);
     let word_len: size_t = strlen(word);
     let mut hi: *mut hashitem_T = hash_lookup(&raw mut (*su).su_banned, word, word_len, hash);
-    if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+    if !((*hi).hi_key.is_null()
+        || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+    {
         return;
     }
     let mut s: *mut ::core::ffi::c_char =

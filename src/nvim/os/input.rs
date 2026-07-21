@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -27,7 +27,7 @@ extern "C" {
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
     fn uv_guess_handle(file: uv_file) -> uv_handle_type;
-    static mut did_cursorhold: bool;
+    static did_cursorhold: GlobalCell<bool>;
     fn logmsg(
         log_level: ::core::ffi::c_int,
         context: *const ::core::ffi::c_char,
@@ -57,20 +57,20 @@ extern "C" {
     fn typebuf_changed(tb_change_cnt: ::core::ffi::c_int) -> bool;
     fn before_blocking();
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut current_ui: uint64_t;
-    static mut mouse_grid: ::core::ffi::c_int;
-    static mut mouse_row: ::core::ffi::c_int;
-    static mut mouse_col: ::core::ffi::c_int;
-    static mut curbuf: *mut buf_T;
-    static mut silent_mode: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut mapped_ctrl_c: ::core::ffi::c_int;
-    static mut ctrl_c_interrupts: bool;
-    static mut got_int: bool;
-    static mut typebuf_was_filled: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static current_ui: GlobalCell<uint64_t>;
+    static mouse_grid: GlobalCell<::core::ffi::c_int>;
+    static mouse_row: GlobalCell<::core::ffi::c_int>;
+    static mouse_col: GlobalCell<::core::ffi::c_int>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static silent_mode: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
+    static ctrl_c_interrupts: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static typebuf_was_filled: GlobalCell<bool>;
     fn trans_special(
         srcp: *mut *const ::core::ffi::c_char,
         src_len: size_t,
@@ -79,13 +79,13 @@ extern "C" {
         escape_ks: bool,
         did_simplify: *mut bool,
     ) -> ::core::ffi::c_uint;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn getout(exitval: ::core::ffi::c_int) -> !;
     fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
-    static mut ch_before_blocking_events: *mut MultiQueue;
-    static mut p_mouset: OptInt;
-    static mut p_ut: OptInt;
-    static mut used_stdin: bool;
+    static ch_before_blocking_events: GlobalCell<*mut MultiQueue>;
+    static p_mouset: GlobalCell<OptInt>;
+    static p_ut: GlobalCell<OptInt>;
+    static used_stdin: GlobalCell<bool>;
     fn prof_input_start();
     fn prof_input_end();
     fn get_real_state() -> ::core::ffi::c_int;
@@ -2574,8 +2574,8 @@ pub unsafe extern "C" fn input_start() {
     if !(*read_stream.ptr()).s.closed {
         return;
     }
-    used_stdin = true_0 != 0;
-    rstream_init_fd(&raw mut main_loop, read_stream.ptr(), STDIN_FILENO);
+    used_stdin.set(true_0 != 0);
+    rstream_init_fd(main_loop.ptr(), read_stream.ptr(), STDIN_FILENO);
     rstream_start(
         read_stream.ptr(),
         Some(
@@ -2600,7 +2600,7 @@ pub unsafe extern "C" fn input_stop() {
     rstream_may_close(read_stream.ptr());
 }
 unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) {
-    let mut event: event_T = (if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+    let mut event: event_T = (if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
         EVENT_CURSORHOLDI as ::core::ffi::c_int
     } else {
         EVENT_CURSORHOLD as ::core::ffi::c_int
@@ -2610,13 +2610,14 @@ unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) 
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
-    did_cursorhold = true_0 != 0;
+    did_cursorhold.set(true_0 != 0);
 }
 unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
     '_c2rust_label: {
-        if !events_enabled || multiqueue_empty(main_loop.events) as ::core::ffi::c_int != 0 {
+        if !events_enabled || multiqueue_empty((*main_loop.ptr()).events) as ::core::ffi::c_int != 0
+        {
         } else {
             __assert_fail(
                 b"!events_enabled || multiqueue_empty(main_loop.events)\0".as_ptr()
@@ -2628,7 +2629,7 @@ unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
         }
     };
     multiqueue_put_event(
-        main_loop.events,
+        (*main_loop.ptr()).events,
         Event {
             handler: Some(
                 cursorhold_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -2702,8 +2703,8 @@ pub unsafe extern "C" fn input_get(
         };
         return to_read as ::core::ffi::c_int;
     }
-    if (mapped_ctrl_c | (*curbuf).b_mapped_ctrl_c) & get_real_state() != 0 {
-        ctrl_c_interrupts = false_0 != 0;
+    if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c) & get_real_state() != 0 {
+        ctrl_c_interrupts.set(false_0 != 0);
     }
     let mut result: TriState = kFalse;
     if ms >= 0 as ::core::ffi::c_int {
@@ -2713,21 +2714,26 @@ pub unsafe extern "C" fn input_get(
         }
     } else {
         let mut wait_start: uint64_t = os_hrtime();
-        cursorhold_time.set(if cursorhold_time.get() < p_ut as ::core::ffi::c_int {
-            cursorhold_time.get()
-        } else {
-            p_ut as ::core::ffi::c_int
-        });
-        result = inbuf_poll(p_ut as ::core::ffi::c_int - cursorhold_time.get(), events);
+        cursorhold_time.set(
+            if cursorhold_time.get() < p_ut.get() as ::core::ffi::c_int {
+                cursorhold_time.get()
+            } else {
+                p_ut.get() as ::core::ffi::c_int
+            },
+        );
+        result = inbuf_poll(
+            p_ut.get() as ::core::ffi::c_int - cursorhold_time.get(),
+            events,
+        );
         if result as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
             if (*read_stream.ptr()).s.closed as ::core::ffi::c_int != 0
-                && silent_mode as ::core::ffi::c_int != 0
+                && silent_mode.get() as ::core::ffi::c_int != 0
             {
                 read_error_exit();
             }
             reset_cursorhold_wait(tb_change_cnt);
             if trigger_cursorhold() as ::core::ffi::c_int != 0 && !typebuf_changed(tb_change_cnt) {
-                create_cursorhold_event(events == main_loop.events);
+                create_cursorhold_event(events == (*main_loop.ptr()).events);
             } else {
                 before_blocking();
                 result = inbuf_poll(-1 as ::core::ffi::c_int, events);
@@ -2739,7 +2745,7 @@ pub unsafe extern "C" fn input_get(
                 as ::core::ffi::c_int;
         }
     }
-    ctrl_c_interrupts = true_0 != 0;
+    ctrl_c_interrupts.set(true_0 != 0);
     if typebuf_changed(tb_change_cnt) {
         return 0 as ::core::ffi::c_int;
     }
@@ -2801,10 +2807,10 @@ pub unsafe extern "C" fn os_char_avail() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_breakcheck() {
-    if got_int {
+    if got_int.get() {
         return;
     }
-    loop_poll_events(&raw mut main_loop, 0 as int64_t);
+    loop_poll_events(main_loop.ptr(), 0 as int64_t);
 }
 pub const BREAKCHECK_SKIP: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 static breakcheck_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -2873,7 +2879,7 @@ pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char,
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_enqueue(mut chan_id: uint64_t, mut keys: String_0) -> size_t {
-    current_ui = chan_id;
+    current_ui.set(chan_id);
     let mut ptr: *const ::core::ffi::c_char = keys.data;
     let mut end: *const ::core::ffi::c_char = ptr.offset(keys.size as isize);
     while input_space() >= 19 as size_t && ptr < end {
@@ -2991,7 +2997,7 @@ unsafe extern "C" fn check_multiclick(
     {
         let mut mouse_time: uint64_t = os_hrtime();
         let mut timediff: uint64_t = mouse_time.wrapping_sub(orig_mouse_time.get());
-        let mut mouset: uint64_t = (p_mouset as uint64_t).wrapping_mul(1000000 as uint64_t);
+        let mut mouset: uint64_t = (p_mouset.get() as uint64_t).wrapping_mul(1000000 as uint64_t);
         if code == orig_mouse_code.get()
             && no_move as ::core::ffi::c_int != 0
             && timediff < mouset
@@ -3057,24 +3063,24 @@ unsafe extern "C" fn handle_mouse_event(
         && advance != 0
     {
         if col >= 0 as ::core::ffi::c_int && row >= 0 as ::core::ffi::c_int {
-            if col >= Columns {
-                col = Columns - 1 as ::core::ffi::c_int;
+            if col >= Columns.get() {
+                col = Columns.get() - 1 as ::core::ffi::c_int;
             }
-            if row >= Rows {
-                row = Rows - 1 as ::core::ffi::c_int;
+            if row >= Rows.get() {
+                row = Rows.get() - 1 as ::core::ffi::c_int;
             }
-            mouse_grid = 0 as ::core::ffi::c_int;
-            mouse_row = row;
-            mouse_col = col;
+            mouse_grid.set(0 as ::core::ffi::c_int);
+            mouse_row.set(row);
+            mouse_col.set(col);
         }
         *ptr = (*ptr).offset(advance as isize);
     }
     let mut skip_event: bool = false_0 != 0;
     let mut modifiers: uint8_t = check_multiclick(
         mouse_code,
-        mouse_grid,
-        mouse_row,
-        mouse_col,
+        mouse_grid.get(),
+        mouse_row.get(),
+        mouse_col.get(),
         &raw mut skip_event,
     );
     if skip_event {
@@ -3125,9 +3131,9 @@ pub unsafe extern "C" fn input_enqueue_mouse(
     *p.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as uint8_t;
     *p.offset(1 as ::core::ffi::c_int as isize) = KS_EXTRA as uint8_t;
     *p.offset(2 as ::core::ffi::c_int as isize) = code as uint8_t;
-    mouse_grid = grid;
-    mouse_row = row;
-    mouse_col = col;
+    mouse_grid.set(grid);
+    mouse_row.set(row);
+    mouse_col.set(col);
     let mut written: size_t =
         (3 as size_t).wrapping_add(p.offset_from(&raw mut buf as *mut uint8_t) as size_t);
     input_enqueue_raw(
@@ -3146,15 +3152,15 @@ unsafe extern "C" fn inbuf_poll(
     if os_input_ready(events) {
         return kTrue;
     }
-    if do_profiling == PROF_YES && ms != 0 {
+    if do_profiling.get() == PROF_YES && ms != 0 {
         prof_input_start();
     }
     if (ms == -1 as ::core::ffi::c_int || ms > 0 as ::core::ffi::c_int)
-        && events != main_loop.events
+        && events != (*main_loop.ptr()).events
         && !input_eof.get()
     {
         blocking.set(true_0 != 0);
-        multiqueue_process_events(ch_before_blocking_events);
+        multiqueue_process_events(ch_before_blocking_events.get());
     }
     logmsg(
         LOGLVL_DBG,
@@ -3183,7 +3189,7 @@ unsafe extern "C" fn inbuf_poll(
         {
             multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;
@@ -3199,7 +3205,7 @@ unsafe extern "C" fn inbuf_poll(
         }
     }
     blocking.set(false_0 != 0);
-    if do_profiling == PROF_YES && ms != 0 {
+    if do_profiling.get() == PROF_YES && ms != 0 {
         prof_input_end();
     }
     if os_input_ready(events) {
@@ -3237,7 +3243,7 @@ unsafe extern "C" fn input_read_cb(
     return c;
 }
 unsafe extern "C" fn process_ctrl_c() {
-    if !ctrl_c_interrupts {
+    if !ctrl_c_interrupts.get() {
         return;
     }
     let mut available: size_t = input_available();
@@ -3259,13 +3265,13 @@ unsafe extern "C" fn process_ctrl_c() {
                     == MOD_MASK_CTRL
         {
             *(*input_read_pos.ptr()).offset(i as isize) = Ctrl_C as ::core::ffi::c_char;
-            got_int = true_0 != 0;
+            got_int.set(true_0 != 0);
             break;
         } else {
             i -= 1;
         }
     }
-    if got_int as ::core::ffi::c_int != 0 && i > 0 as ssize_t {
+    if got_int.get() as ::core::ffi::c_int != 0 && i > 0 as ssize_t {
         input_read_pos.set((*input_read_pos.ptr()).offset(i as isize));
     }
 }
@@ -3295,12 +3301,12 @@ unsafe extern "C" fn push_event_key(
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_input_ready(mut events: *mut MultiQueue) -> bool {
-    return typebuf_was_filled as ::core::ffi::c_int != 0
+    return typebuf_was_filled.get() as ::core::ffi::c_int != 0
         || input_available() != 0
         || pending_events(events) as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn read_error_exit() -> ! {
-    if silent_mode {
+    if silent_mode.get() {
         getout(0 as ::core::ffi::c_int);
     }
     preserve_exit(gettext(

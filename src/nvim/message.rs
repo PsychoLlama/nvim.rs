@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -108,17 +108,17 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    static mut on_print: Callback;
-    static mut p_ch: OptInt;
-    static mut p_debug: *mut ::core::ffi::c_char;
-    static mut p_eb: ::core::ffi::c_int;
-    static mut p_lz: ::core::ffi::c_int;
-    static mut p_mopt: *mut ::core::ffi::c_char;
-    static mut p_more: ::core::ffi::c_int;
-    static mut rdb_flags: ::core::ffi::c_uint;
-    static mut p_report: OptInt;
-    static mut p_verbose: OptInt;
-    static mut p_vfile: *mut ::core::ffi::c_char;
+    static on_print: GlobalCell<Callback>;
+    static p_ch: GlobalCell<OptInt>;
+    static p_debug: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_eb: GlobalCell<::core::ffi::c_int>;
+    static p_lz: GlobalCell<::core::ffi::c_int>;
+    static p_mopt: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_more: GlobalCell<::core::ffi::c_int>;
+    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_report: GlobalCell<OptInt>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_vfile: GlobalCell<*mut ::core::ffi::c_char>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -172,14 +172,14 @@ extern "C" {
         argvars_in: *mut typval_T,
         rettv: *mut typval_T,
     ) -> bool;
-    static mut msg_ext_skip_flush: bool;
-    static mut msg_ext_overwrite: bool;
-    static mut msg_ext_skip_verbose: bool;
-    static mut msg_grid: ScreenGrid;
-    static mut msg_grid_pos: ::core::ffi::c_int;
-    static mut msg_grid_adj: GridView;
-    static mut msg_scrolled_at_flush: ::core::ffi::c_int;
-    static mut msg_grid_scroll_discount: ::core::ffi::c_int;
+    static msg_ext_skip_flush: GlobalCell<bool>;
+    static msg_ext_overwrite: GlobalCell<bool>;
+    static msg_ext_skip_verbose: GlobalCell<bool>;
+    static msg_grid: GlobalCell<ScreenGrid>;
+    static msg_grid_pos: GlobalCell<::core::ffi::c_int>;
+    static msg_grid_adj: GlobalCell<GridView>;
+    static msg_scrolled_at_flush: GlobalCell<::core::ffi::c_int>;
+    static msg_grid_scroll_discount: GlobalCell<::core::ffi::c_int>;
     fn tv_clear(tv: *mut typval_T);
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
@@ -210,84 +210,84 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn safe_vgetc() -> ::core::ffi::c_int;
     fn char_avail() -> bool;
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut vgetc_mod_mask: ::core::ffi::c_int;
-    static mut vgetc_char: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut clear_cmdline: bool;
-    static mut mode_displayed: bool;
-    static mut redrawing_cmdline: bool;
-    static mut cmdline_was_last_drawn: bool;
-    static mut cmdmsg_rl: bool;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scrolled: ::core::ffi::c_int;
-    static mut msg_scrolled_ign: bool;
-    static mut msg_did_scroll: bool;
-    static mut keep_msg: *mut ::core::ffi::c_char;
-    static mut keep_msg_hl_id: ::core::ffi::c_int;
-    static mut need_fileinfo: bool;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut msg_didout: bool;
-    static mut msg_didany: bool;
-    static mut msg_nowait: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut info_message: bool;
-    static mut msg_hist_off: bool;
-    static mut need_clr_eos: bool;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut emsg_severe: bool;
-    static mut emsg_assert_fails_msg: *mut ::core::ffi::c_char;
-    static mut emsg_assert_fails_lnum: ::core::ffi::c_long;
-    static mut emsg_assert_fails_context: *mut ::core::ffi::c_char;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut ex_exitval: ::core::ffi::c_int;
-    static mut emsg_on_display: bool;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut did_wait_return: bool;
-    static mut quit_more: bool;
-    static mut vgetc_busy: ::core::ffi::c_int;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut msg_no_more: bool;
-    static mut need_check_timestamps: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut sc_col: ::core::ffi::c_int;
-    static mut exiting: bool;
-    static mut full_screen: bool;
-    static mut silent_mode: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut exmode_active: bool;
-    static mut reg_recording: ::core::ffi::c_int;
-    static mut no_mapping: ::core::ffi::c_int;
-    static mut allow_keys: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut emsg_noredir: bool;
-    static mut cmd_silent: bool;
-    static mut in_assert_fails: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut msg_buf: [::core::ffi::c_char; 480];
-    static mut KeyTyped: bool;
-    static mut skip_redraw: bool;
-    static mut do_redraw: bool;
-    static mut need_highlight_changed: bool;
-    static mut scriptout: *mut FILE;
-    static mut got_int: bool;
-    static mut global_busy: ::core::ffi::c_int;
-    static mut redir_off: bool;
-    static mut redir_fd: *mut FILE;
-    static mut redir_reg: ::core::ffi::c_int;
-    static mut redir_vname: bool;
-    static mut capture_ga: *mut garray_T;
-    static mut embedded_mode: bool;
-    static mut headless_mode: bool;
-    static mut default_grid: ScreenGrid;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static vgetc_mod_mask: GlobalCell<::core::ffi::c_int>;
+    static vgetc_char: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static clear_cmdline: GlobalCell<bool>;
+    static mode_displayed: GlobalCell<bool>;
+    static redrawing_cmdline: GlobalCell<bool>;
+    static cmdline_was_last_drawn: GlobalCell<bool>;
+    static cmdmsg_rl: GlobalCell<bool>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
+    static msg_scrolled_ign: GlobalCell<bool>;
+    static msg_did_scroll: GlobalCell<bool>;
+    static keep_msg: GlobalCell<*mut ::core::ffi::c_char>;
+    static keep_msg_hl_id: GlobalCell<::core::ffi::c_int>;
+    static need_fileinfo: GlobalCell<bool>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static msg_didout: GlobalCell<bool>;
+    static msg_didany: GlobalCell<bool>;
+    static msg_nowait: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static info_message: GlobalCell<bool>;
+    static msg_hist_off: GlobalCell<bool>;
+    static need_clr_eos: GlobalCell<bool>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static emsg_severe: GlobalCell<bool>;
+    static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char>;
+    static emsg_assert_fails_lnum: GlobalCell<::core::ffi::c_long>;
+    static emsg_assert_fails_context: GlobalCell<*mut ::core::ffi::c_char>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static ex_exitval: GlobalCell<::core::ffi::c_int>;
+    static emsg_on_display: GlobalCell<bool>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static did_wait_return: GlobalCell<bool>;
+    static quit_more: GlobalCell<bool>;
+    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static msg_no_more: GlobalCell<bool>;
+    static need_check_timestamps: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static sc_col: GlobalCell<::core::ffi::c_int>;
+    static exiting: GlobalCell<bool>;
+    static full_screen: GlobalCell<bool>;
+    static silent_mode: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static exmode_active: GlobalCell<bool>;
+    static reg_recording: GlobalCell<::core::ffi::c_int>;
+    static no_mapping: GlobalCell<::core::ffi::c_int>;
+    static allow_keys: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_noredir: GlobalCell<bool>;
+    static cmd_silent: GlobalCell<bool>;
+    static in_assert_fails: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static msg_buf: GlobalCell<[::core::ffi::c_char; 480]>;
+    static KeyTyped: GlobalCell<bool>;
+    static skip_redraw: GlobalCell<bool>;
+    static do_redraw: GlobalCell<bool>;
+    static need_highlight_changed: GlobalCell<bool>;
+    static scriptout: GlobalCell<*mut FILE>;
+    static got_int: GlobalCell<bool>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
+    static redir_off: GlobalCell<bool>;
+    static redir_fd: GlobalCell<*mut FILE>;
+    static redir_reg: GlobalCell<::core::ffi::c_int>;
+    static redir_vname: GlobalCell<bool>;
+    static capture_ga: GlobalCell<*mut garray_T>;
+    static embedded_mode: GlobalCell<bool>;
+    static headless_mode: GlobalCell<bool>;
+    static default_grid: GlobalCell<ScreenGrid>;
     fn grid_adjust(
         grid: *mut GridView,
         row_off: *mut ::core::ffi::c_int,
@@ -339,7 +339,7 @@ extern "C" {
         col: ::core::ffi::c_int,
         width: ::core::ffi::c_int,
     );
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn hl_combine_attr(
         char_attr: ::core::ffi::c_int,
         prim_attr: ::core::ffi::c_int,
@@ -359,7 +359,7 @@ extern "C" {
         c: ::core::ffi::c_int,
         modifiers: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn utf_char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
@@ -389,7 +389,7 @@ extern "C" {
     fn shortmess(x: ::core::ffi::c_int) -> bool;
     fn os_breakcheck();
     fn input_available() -> size_t;
-    static mut nvim_testing: bool;
+    static nvim_testing: GlobalCell<bool>;
     fn home_replace_save(
         buf: *mut buf_T,
         src: *const ::core::ffi::c_char,
@@ -424,7 +424,7 @@ extern "C" {
     fn ui_flush();
     fn ui_has(ext: UIExtension) -> bool;
     fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
-    static mut resize_events: *mut MultiQueue;
+    static resize_events: GlobalCell<*mut MultiQueue>;
     fn ui_call_grid_resize(grid: Integer, width: Integer, height: Integer);
     fn ui_call_grid_scroll(
         grid: Integer,
@@ -4091,155 +4091,178 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static mut confirm_msg_used: ::core::ffi::c_int = false_0;
-static mut confirm_msg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut confirm_buttons: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+static confirm_msg_used: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
+static confirm_msg: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static confirm_buttons: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
-pub static mut msg_hist_last: *mut MessageHistoryEntry =
-    ::core::ptr::null_mut::<MessageHistoryEntry>();
-static mut msg_hist_first: *mut MessageHistoryEntry =
-    ::core::ptr::null_mut::<MessageHistoryEntry>();
-static mut msg_hist_temp: *mut MessageHistoryEntry = ::core::ptr::null_mut::<MessageHistoryEntry>();
-static mut msg_hist_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut msg_hist_max: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
+pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> =
+    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
+static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> =
+    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
+static msg_hist_temp: GlobalCell<*mut MessageHistoryEntry> =
+    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
+static msg_hist_len: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static msg_hist_max: GlobalCell<::core::ffi::c_int> = GlobalCell::new(500 as ::core::ffi::c_int);
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static mut msg_flags: ::core::ffi::c_int = kOptMoptFlagHitEnter as ::core::ffi::c_int
-    | kOptMoptFlagHistory as ::core::ffi::c_int
-    | kOptMoptFlagProgress as ::core::ffi::c_int;
-static mut msg_wait: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut progress_msg_target: ::core::ffi::c_int = PROGRESS_TARGET_CMD;
-static mut verbose_fd: *mut FILE = ::core::ptr::null_mut::<FILE>();
-static mut verbose_did_open: bool = false_0 != 0;
-static mut keep_msg_more: bool = false_0 != 0;
-static mut msg_ext_kind: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-static mut msg_ext_trigger: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-static mut msg_ext_id: Object = object {
+static msg_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
+    kOptMoptFlagHitEnter as ::core::ffi::c_int
+        | kOptMoptFlagHistory as ::core::ffi::c_int
+        | kOptMoptFlagProgress as ::core::ffi::c_int,
+);
+static msg_wait: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static progress_msg_target: GlobalCell<::core::ffi::c_int> = GlobalCell::new(PROGRESS_TARGET_CMD);
+static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
+static verbose_did_open: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+static msg_ext_id: GlobalCell<Object> = GlobalCell::new(object {
     type_0: kObjectTypeInteger,
     data: C2Rust_Unnamed_11 {
         integer: 1 as Integer,
     },
-};
-static mut msg_ext_chunks: *mut Array = ::core::ptr::null_mut::<Array>();
-static mut msg_ext_last_chunk: garray_T = garray_T {
+});
+static msg_ext_chunks: GlobalCell<*mut Array> = GlobalCell::new(::core::ptr::null_mut::<Array>());
+static msg_ext_last_chunk: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
     ga_growsize: 40 as ::core::ffi::c_int,
     ga_data: NULL,
-};
-static mut msg_ext_last_attr: sattr_T = -1 as sattr_T;
-static mut msg_ext_last_hl_id: ::core::ffi::c_int = 0;
-static mut msg_ext_history: bool = false_0 != 0;
-static mut msg_ext_append: bool = false_0 != 0;
-static mut msg_grid_pos_at_flush: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut msg_id_next: int64_t = 1 as int64_t;
+});
+static msg_ext_last_attr: GlobalCell<sattr_T> = GlobalCell::new(-1 as sattr_T);
+static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
 #[no_mangle]
 pub unsafe extern "C" fn msg_id_exists(mut id: int64_t) -> bool {
-    return id > 0 as int64_t && id < msg_id_next;
+    return id > 0 as int64_t && id < msg_id_next.get();
 }
 unsafe extern "C" fn ui_ext_msg_set_pos(mut row: ::core::ffi::c_int, mut scrolled: bool) {
     let mut buf: [::core::ffi::c_char; 32] = [0; 32];
     let mut size: size_t = schar_get(
         &raw mut buf as *mut ::core::ffi::c_char,
-        (*curwin).w_p_fcs_chars.msgsep,
+        (*curwin.get()).w_p_fcs_chars.msgsep,
     );
     ui_call_msg_set_pos(
-        msg_grid.handle as Integer,
+        (*msg_grid.ptr()).handle as Integer,
         row as Integer,
         scrolled as Boolean,
         String_0 {
             data: &raw mut buf as *mut ::core::ffi::c_char,
             size: size,
         },
-        msg_grid.zindex as Integer,
-        msg_grid.comp_index as ::core::ffi::c_int as Integer,
+        (*msg_grid.ptr()).zindex as Integer,
+        (*msg_grid.ptr()).comp_index as ::core::ffi::c_int as Integer,
     );
-    msg_grid.pending_comp_index_update = false_0 != 0;
+    (*msg_grid.ptr()).pending_comp_index_update = false_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_grid_set_pos(mut row: ::core::ffi::c_int, mut scrolled: bool) {
-    if !msg_grid.throttled {
+    if !(*msg_grid.ptr()).throttled {
         ui_ext_msg_set_pos(row, scrolled);
-        msg_grid_pos_at_flush = row;
+        msg_grid_pos_at_flush.set(row);
     }
-    msg_grid_pos = row;
-    if !msg_grid.chars.is_null() {
-        msg_grid_adj.row_offset = -row;
+    msg_grid_pos.set(row);
+    if !(*msg_grid.ptr()).chars.is_null() {
+        (*msg_grid_adj.ptr()).row_offset = -row;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_use_grid() -> bool {
-    return !default_grid.chars.is_null() && !ui_has(kUIMessages);
+    return !(*default_grid.ptr()).chars.is_null() && !ui_has(kUIMessages);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_grid_validate() {
-    grid_assign_handle(&raw mut msg_grid);
+    grid_assign_handle(msg_grid.ptr());
     let mut should_alloc: bool = msg_use_grid();
-    let mut max_rows: ::core::ffi::c_int = Rows - p_ch as ::core::ffi::c_int;
+    let mut max_rows: ::core::ffi::c_int = Rows.get() - p_ch.get() as ::core::ffi::c_int;
     if should_alloc as ::core::ffi::c_int != 0
-        && (msg_grid.rows != Rows || msg_grid.cols != Columns || msg_grid.chars.is_null())
+        && ((*msg_grid.ptr()).rows != Rows.get()
+            || (*msg_grid.ptr()).cols != Columns.get()
+            || (*msg_grid.ptr()).chars.is_null())
     {
-        grid_alloc(&raw mut msg_grid, Rows, Columns, false_0 != 0, true_0 != 0);
-        msg_grid.zindex = kZIndexMessages as ::core::ffi::c_int;
-        xfree(msg_grid.dirty_col as *mut ::core::ffi::c_void);
-        msg_grid.dirty_col = xcalloc(Rows as size_t, ::core::mem::size_of::<::core::ffi::c_int>())
-            as *mut ::core::ffi::c_int;
-        let mut pos: ::core::ffi::c_int = if State & MODE_ASKMORE as ::core::ffi::c_int != 0 {
+        grid_alloc(
+            msg_grid.ptr(),
+            Rows.get(),
+            Columns.get(),
+            false_0 != 0,
+            true_0 != 0,
+        );
+        (*msg_grid.ptr()).zindex = kZIndexMessages as ::core::ffi::c_int;
+        xfree((*msg_grid.ptr()).dirty_col as *mut ::core::ffi::c_void);
+        (*msg_grid.ptr()).dirty_col = xcalloc(
+            Rows.get() as size_t,
+            ::core::mem::size_of::<::core::ffi::c_int>(),
+        ) as *mut ::core::ffi::c_int;
+        let mut pos: ::core::ffi::c_int = if State.get() & MODE_ASKMORE as ::core::ffi::c_int != 0 {
             0 as ::core::ffi::c_int
-        } else if max_rows - msg_scrolled > 0 as ::core::ffi::c_int {
-            max_rows - msg_scrolled
+        } else if max_rows - msg_scrolled.get() > 0 as ::core::ffi::c_int {
+            max_rows - msg_scrolled.get()
         } else {
             0 as ::core::ffi::c_int
         };
-        msg_grid.throttled = false_0 != 0;
-        msg_grid_set_pos(pos, msg_scrolled != 0);
+        (*msg_grid.ptr()).throttled = false_0 != 0;
+        msg_grid_set_pos(pos, msg_scrolled.get() != 0);
         ui_comp_put_grid(
-            &raw mut msg_grid,
+            msg_grid.ptr(),
             pos,
             0 as ::core::ffi::c_int,
-            msg_grid.rows,
-            msg_grid.cols,
+            (*msg_grid.ptr()).rows,
+            (*msg_grid.ptr()).cols,
             false_0 != 0,
             true_0 != 0,
         );
         ui_call_grid_resize(
-            msg_grid.handle as Integer,
-            msg_grid.cols as Integer,
-            msg_grid.rows as Integer,
+            (*msg_grid.ptr()).handle as Integer,
+            (*msg_grid.ptr()).cols as Integer,
+            (*msg_grid.ptr()).rows as Integer,
         );
-        msg_scrolled_at_flush = msg_scrolled;
-        msg_grid.mouse_enabled = false_0 != 0;
-        msg_grid_adj.target = &raw mut msg_grid;
-    } else if !should_alloc && !msg_grid.chars.is_null() {
-        ui_comp_remove_grid(&raw mut msg_grid);
-        grid_free(&raw mut msg_grid);
+        msg_scrolled_at_flush.set(msg_scrolled.get());
+        (*msg_grid.ptr()).mouse_enabled = false_0 != 0;
+        (*msg_grid_adj.ptr()).target = msg_grid.ptr();
+    } else if !should_alloc && !(*msg_grid.ptr()).chars.is_null() {
+        ui_comp_remove_grid(msg_grid.ptr());
+        grid_free(msg_grid.ptr());
         let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut msg_grid.dirty_col as *mut *mut ::core::ffi::c_void;
+            &raw mut (*msg_grid.ptr()).dirty_col as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        ui_call_grid_destroy(msg_grid.handle as Integer);
-        msg_grid.throttled = false_0 != 0;
-        msg_grid_adj.row_offset = 0 as ::core::ffi::c_int;
-        msg_grid_adj.target = &raw mut default_grid;
-        redraw_cmdline = true_0 != 0;
-    } else if !msg_grid.chars.is_null() && msg_scrolled == 0 && msg_grid_pos != max_rows {
-        let mut diff: ::core::ffi::c_int = msg_grid_pos - max_rows;
+        ui_call_grid_destroy((*msg_grid.ptr()).handle as Integer);
+        (*msg_grid.ptr()).throttled = false_0 != 0;
+        (*msg_grid_adj.ptr()).row_offset = 0 as ::core::ffi::c_int;
+        (*msg_grid_adj.ptr()).target = default_grid.ptr();
+        redraw_cmdline.set(true_0 != 0);
+    } else if !(*msg_grid.ptr()).chars.is_null()
+        && msg_scrolled.get() == 0
+        && msg_grid_pos.get() != max_rows
+    {
+        let mut diff: ::core::ffi::c_int = msg_grid_pos.get() - max_rows;
         msg_grid_set_pos(max_rows, false_0 != 0);
         if diff > 0 as ::core::ffi::c_int {
             grid_clear(
-                &raw mut msg_grid_adj,
-                Rows - diff,
-                Rows,
+                msg_grid_adj.ptr(),
+                Rows.get() - diff,
+                Rows.get(),
                 0 as ::core::ffi::c_int,
-                Columns,
-                *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                Columns.get(),
+                *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
             );
         }
     }
-    if !msg_grid.chars.is_null() && msg_scrolled == 0 && cmdline_row < msg_grid_pos {
-        cmdline_row = msg_grid_pos;
+    if !(*msg_grid.ptr()).chars.is_null()
+        && msg_scrolled.get() == 0
+        && cmdline_row.get() < msg_grid_pos.get()
+    {
+        cmdline_row.set(msg_grid_pos.get());
     }
 }
 #[no_mangle]
@@ -4265,7 +4288,7 @@ pub unsafe extern "C" fn msg_multiline(
     let mut s: *const ::core::ffi::c_char = str.data;
     let mut chunk: *const ::core::ffi::c_char = s;
     while (s.offset_from(str.data) as size_t) < str.size {
-        if check_int as ::core::ffi::c_int != 0 && got_int as ::core::ffi::c_int != 0 {
+        if check_int as ::core::ffi::c_int != 0 && got_int.get() as ::core::ffi::c_int != 0 {
             return;
         }
         if *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
@@ -4301,7 +4324,7 @@ pub unsafe extern "C" fn msg_multiline(
         );
     }
 }
-static mut is_multihl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static is_multihl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 unsafe extern "C" fn format_progress_message(
     mut hl_msg: HlMessage,
     mut msg_data: *mut MessageData,
@@ -4462,8 +4485,8 @@ pub unsafe extern "C" fn msg_multihl(
     if id.type_0 as ::core::ffi::c_uint
         == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let c2rust_fresh8 = msg_id_next;
-        msg_id_next = msg_id_next + 1;
+        let c2rust_fresh8 = msg_id_next.get();
+        msg_id_next.set(msg_id_next.get() + 1);
         id = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed_11 {
@@ -4478,12 +4501,12 @@ pub unsafe extern "C" fn msg_multihl(
     }
     if strequal(kind, b"progress\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
         != 0
-        && progress_msg_target & PROGRESS_TARGET_CMD == 0 as ::core::ffi::c_int
+        && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 as ::core::ffi::c_int
     {
         *needs_msg_clear = true_0 != 0;
         return id;
     }
-    no_wait_return += 1;
+    (*no_wait_return.ptr()) += 1;
     msg_start();
     msg_clr_eos();
     let mut need_clear: bool = false_0 != 0;
@@ -4491,8 +4514,8 @@ pub unsafe extern "C" fn msg_multihl(
     if !kind.is_null() {
         msg_ext_set_kind(kind);
     }
-    msg_ext_skip_flush = true_0 != 0;
-    msg_ext_id = id;
+    msg_ext_skip_flush.set(true_0 != 0);
+    msg_ext_id.set(id);
     if strequal(kind, b"progress\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
         != 0
         && !msg_data.is_null()
@@ -4507,7 +4530,7 @@ pub unsafe extern "C" fn msg_multihl(
     let mut i: uint32_t = 0 as uint32_t;
     while (i as size_t) < hl_msg.size {
         let mut chunk: HlMessageChunk = *hl_msg.items.offset(i as isize);
-        is_multihl += 1;
+        (*is_multihl.ptr()) += 1;
         if err {
             emsg_multiline(chunk.text.data, kind, chunk.hl_id, true_0 != 0);
         } else {
@@ -4520,7 +4543,7 @@ pub unsafe extern "C" fn msg_multihl(
             );
         }
         '_c2rust_label: {
-            if !ui_has(kUIMessages) || kind.is_null() || msg_ext_kind == kind {
+            if !ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind {
             } else {
                 __assert_fail(
                     b"!ui_has(kUIMessages) || kind == NULL || msg_ext_kind == kind\0"
@@ -4538,9 +4561,9 @@ pub unsafe extern "C" fn msg_multihl(
     if history as ::core::ffi::c_int != 0 && hl_msg.size != 0 {
         msg_hist_add_multihl(hl_msg, false_0 != 0, msg_data);
     }
-    msg_ext_skip_flush = false_0 != 0;
-    is_multihl = 0 as ::core::ffi::c_int;
-    no_wait_return -= 1;
+    msg_ext_skip_flush.set(false_0 != 0);
+    is_multihl.set(0 as ::core::ffi::c_int);
+    (*no_wait_return.ptr()) -= 1;
     msg_end();
     if hl_msg_updated as ::core::ffi::c_int != 0
         && !(history as ::core::ffi::c_int != 0 && hl_msg.size != 0)
@@ -4556,27 +4579,27 @@ pub unsafe extern "C" fn msg_keep(
     mut keep: bool,
     mut multiline: bool,
 ) -> bool {
-    static mut entered: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static entered: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if keep as ::core::ffi::c_int != 0 && multiline as ::core::ffi::c_int != 0 {
         abort();
     }
-    if !emsg_on_display && message_filtered(s) as ::core::ffi::c_int != 0 {
+    if !emsg_on_display.get() && message_filtered(s) as ::core::ffi::c_int != 0 {
         return true_0 != 0;
     }
     if hl_id == 0 as ::core::ffi::c_int {
         set_vim_var_string(VV_STATUSMSG, s, -1 as ptrdiff_t);
     }
-    if entered >= 3 as ::core::ffi::c_int {
+    if entered.get() >= 3 as ::core::ffi::c_int {
         return true_0 != 0;
     }
-    entered += 1;
-    if is_multihl == 0
-        && (s != keep_msg as *const ::core::ffi::c_char
+    (*entered.ptr()) += 1;
+    if is_multihl.get() == 0
+        && (s != keep_msg.get() as *const ::core::ffi::c_char
             || *s as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-                && !msg_hist_last.is_null()
+                && !(*msg_hist_last.ptr()).is_null()
                 && strcmp(
                     s,
-                    (*(*msg_hist_last)
+                    (*(*msg_hist_last.get())
                         .msg
                         .items
                         .offset(0 as ::core::ffi::c_int as isize))
@@ -4586,7 +4609,7 @@ pub unsafe extern "C" fn msg_keep(
     {
         msg_hist_add(s, -1 as ::core::ffi::c_int, hl_id);
     }
-    if is_multihl == 0 {
+    if is_multihl.get() == 0 {
         msg_start();
     }
     let mut buf: *mut ::core::ffi::c_char = msg_strtrunc(s, false_0);
@@ -4609,18 +4632,20 @@ pub unsafe extern "C" fn msg_keep(
         msg_clr_eos();
     }
     let mut retval: bool = true_0 != 0;
-    if is_multihl == 0 {
+    if is_multihl.get() == 0 {
         retval = msg_end();
     }
     if keep as ::core::ffi::c_int != 0
         && retval as ::core::ffi::c_int != 0
-        && vim_strsize(s) < (Rows - cmdline_row - 1 as ::core::ffi::c_int) * Columns + sc_col
+        && vim_strsize(s)
+            < (Rows.get() - cmdline_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
+                + sc_col.get()
     {
         set_keep_msg(s, 0 as ::core::ffi::c_int);
     }
-    need_fileinfo = false_0 != 0;
+    need_fileinfo.set(false_0 != 0);
     xfree(buf as *mut ::core::ffi::c_void);
-    entered -= 1;
+    (*entered.ptr()) -= 1;
     return retval;
 }
 #[no_mangle]
@@ -4629,20 +4654,21 @@ pub unsafe extern "C" fn msg_strtrunc(
     mut force: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if msg_scroll == 0
-        && !need_wait_return
+    if msg_scroll.get() == 0
+        && !need_wait_return.get()
         && shortmess(SHM_TRUNCALL as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        && !exmode_active
-        && msg_silent == 0 as ::core::ffi::c_int
+        && !exmode_active.get()
+        && msg_silent.get() == 0 as ::core::ffi::c_int
         && !ui_has(kUIMessages)
         || force != 0
     {
         let mut room: ::core::ffi::c_int = 0;
         let mut len: ::core::ffi::c_int = vim_strsize(s);
-        if msg_scrolled != 0 as ::core::ffi::c_int {
-            room = (Rows - msg_row) * Columns - 1 as ::core::ffi::c_int;
+        if msg_scrolled.get() != 0 as ::core::ffi::c_int {
+            room = (Rows.get() - msg_row.get()) * Columns.get() - 1 as ::core::ffi::c_int;
         } else {
-            room = (Rows - msg_row - 1 as ::core::ffi::c_int) * Columns + sc_col
+            room = (Rows.get() - msg_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
+                + sc_col.get()
                 - 1 as ::core::ffi::c_int;
         }
         if len > room && room > 0 as ::core::ffi::c_int {
@@ -4765,12 +4791,12 @@ pub unsafe extern "C" fn smsg(
     let mut arglist: ::core::ffi::VaListImpl;
     arglist = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         s,
         arglist.as_va_list(),
     );
-    return msg(&raw mut IObuff as *mut ::core::ffi::c_char, hl_id) as ::core::ffi::c_int;
+    return msg(IObuff.ptr() as *mut ::core::ffi::c_char, hl_id) as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn smsg_keep(
@@ -4781,29 +4807,30 @@ pub unsafe extern "C" fn smsg_keep(
     let mut arglist: ::core::ffi::VaListImpl;
     arglist = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         s,
         arglist.as_va_list(),
     );
     return msg_keep(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         hl_id,
         true_0 != 0,
         false_0 != 0,
     ) as ::core::ffi::c_int;
 }
-static mut last_sourcing_lnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut last_sourcing_name: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+static last_sourcing_lnum: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static last_sourcing_name: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub unsafe extern "C" fn reset_last_sourcing() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut last_sourcing_name as *mut *mut ::core::ffi::c_void;
+        last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
-    last_sourcing_lnum = 0 as ::core::ffi::c_int;
+    last_sourcing_lnum.set(0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn other_sourcing_name() -> bool {
     if !(*exestack.ptr()).ga_data.is_null()
@@ -4813,12 +4840,12 @@ unsafe extern "C" fn other_sourcing_name() -> bool {
         .es_name
         .is_null()
     {
-        if !last_sourcing_name.is_null() {
+        if !(*last_sourcing_name.ptr()).is_null() {
             return strcmp(
                 (*((*exestack.ptr()).ga_data as *mut estack_T)
                     .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name,
-                last_sourcing_name,
+                last_sourcing_name.get(),
             ) != 0 as ::core::ffi::c_int;
         }
         return true_0 != 0;
@@ -4862,7 +4889,7 @@ unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
             || (*((*exestack.ptr()).ga_data as *mut estack_T)
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum
-                != last_sourcing_lnum as linenr_T)
+                != last_sourcing_lnum.get() as linenr_T)
         && (*((*exestack.ptr()).ga_data as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum
@@ -4886,15 +4913,15 @@ unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
-    static mut recursive: bool = false_0 != 0;
-    if recursive {
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+    if recursive.get() {
         return;
     }
-    recursive = true_0 != 0;
-    no_wait_return += 1;
+    recursive.set(true_0 != 0);
+    (*no_wait_return.ptr()) += 1;
     let mut p: *mut ::core::ffi::c_char = get_emsg_source();
     if !p.is_null() {
-        msg_scroll = true_0;
+        msg_scroll.set(true_0);
         msg(p, hl_id);
         xfree(p as *mut ::core::ffi::c_void);
     }
@@ -4902,9 +4929,11 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
     if !p.is_null() {
         msg(p, HLF_N as ::core::ffi::c_int);
         xfree(p as *mut ::core::ffi::c_void);
-        last_sourcing_lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum as ::core::ffi::c_int;
+        last_sourcing_lnum.set(
+            (*((*exestack.ptr()).ga_data as *mut estack_T)
+                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
+            .es_lnum as ::core::ffi::c_int,
+        );
     }
     if (*((*exestack.ptr()).ga_data as *mut estack_T)
         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
@@ -4913,7 +4942,7 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
         || other_sourcing_name() as ::core::ffi::c_int != 0
     {
         let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut last_sourcing_name as *mut *mut ::core::ffi::c_void;
+            last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -4922,24 +4951,24 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
         .es_name
         .is_null()
         {
-            last_sourcing_name = xstrdup(
+            last_sourcing_name.set(xstrdup(
                 (*((*exestack.ptr()).ga_data as *mut estack_T)
                     .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name,
-            );
+            ));
             if redirecting() == 0 {
                 msg_putchar_hl('\n' as ::core::ffi::c_int, hl_id);
             }
         }
     }
-    no_wait_return -= 1;
-    recursive = false_0 != 0;
+    (*no_wait_return.ptr()) -= 1;
+    recursive.set(false_0 != 0);
 }
 unsafe extern "C" fn emsg_not_now() -> ::core::ffi::c_int {
-    if emsg_off > 0 as ::core::ffi::c_int
-        && vim_strchr(p_debug, 'm' as ::core::ffi::c_int).is_null()
-        && vim_strchr(p_debug, 't' as ::core::ffi::c_int).is_null()
-        || emsg_skip > 0 as ::core::ffi::c_int
+    if emsg_off.get() > 0 as ::core::ffi::c_int
+        && vim_strchr(p_debug.get(), 'm' as ::core::ffi::c_int).is_null()
+        && vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null()
+        || emsg_skip.get() > 0 as ::core::ffi::c_int
     {
         return true_0;
     }
@@ -4956,29 +4985,33 @@ pub unsafe extern "C" fn emsg_multiline(
     if emsg_not_now() != 0 {
         return true_0 != 0;
     }
-    called_emsg += 1;
-    let mut severe: bool = emsg_severe;
-    emsg_severe = false_0 != 0;
-    if emsg_off == 0 || !vim_strchr(p_debug, 't' as ::core::ffi::c_int).is_null() {
+    (*called_emsg.ptr()) += 1;
+    let mut severe: bool = emsg_severe.get();
+    emsg_severe.set(false_0 != 0);
+    if emsg_off.get() == 0 || !vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null() {
         if cause_errthrow(
             s,
             multiline,
-            is_multihl > 1 as ::core::ffi::c_int,
+            is_multihl.get() > 1 as ::core::ffi::c_int,
             severe,
             &raw mut ignore,
         ) {
             if !ignore {
-                did_emsg += 1;
+                (*did_emsg.ptr()) += 1;
             }
             return true_0 != 0;
         }
-        if in_assert_fails as ::core::ffi::c_int != 0 && emsg_assert_fails_msg.is_null() {
-            emsg_assert_fails_msg = xstrdup(s);
-            emsg_assert_fails_lnum = (*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum as ::core::ffi::c_long;
-            xfree(emsg_assert_fails_context as *mut ::core::ffi::c_void);
-            emsg_assert_fails_context = xstrdup(
+        if in_assert_fails.get() as ::core::ffi::c_int != 0
+            && (*emsg_assert_fails_msg.ptr()).is_null()
+        {
+            emsg_assert_fails_msg.set(xstrdup(s));
+            emsg_assert_fails_lnum.set(
+                (*((*exestack.ptr()).ga_data as *mut estack_T)
+                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
+                .es_lnum as ::core::ffi::c_long,
+            );
+            xfree(emsg_assert_fails_context.get() as *mut ::core::ffi::c_void);
+            emsg_assert_fails_context.set(xstrdup(
                 if (*((*exestack.ptr()).ga_data as *mut estack_T)
                     .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                 .es_name
@@ -4990,11 +5023,11 @@ pub unsafe extern "C" fn emsg_multiline(
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_name as *const ::core::ffi::c_char
                 },
-            );
+            ));
         }
         set_vim_var_string(VV_ERRMSG, s, -1 as ptrdiff_t);
-        if emsg_silent != 0 as ::core::ffi::c_int {
-            if !emsg_noredir {
+        if emsg_silent.get() != 0 as ::core::ffi::c_int {
+            if !emsg_noredir.get() {
                 msg_start();
                 let mut p: *mut ::core::ffi::c_char = get_emsg_source();
                 if !p.is_null() {
@@ -5084,32 +5117,32 @@ pub unsafe extern "C" fn emsg_multiline(
                 s,
             );
         }
-        ex_exitval = 1 as ::core::ffi::c_int;
-        msg_silent = 0 as ::core::ffi::c_int;
-        cmd_silent = false_0 != 0;
-        if global_busy != 0 {
-            global_busy += 1;
+        ex_exitval.set(1 as ::core::ffi::c_int);
+        msg_silent.set(0 as ::core::ffi::c_int);
+        cmd_silent.set(false_0 != 0);
+        if global_busy.get() != 0 {
+            (*global_busy.ptr()) += 1;
         }
-        if p_eb != 0 {
+        if p_eb.get() != 0 {
             beep_flush();
         } else {
             flush_buffers(FLUSH_MINIMAL);
         }
-        did_emsg += 1;
+        (*did_emsg.ptr()) += 1;
     }
-    emsg_on_display = true_0 != 0;
-    if msg_scrolled != 0 as ::core::ffi::c_int {
-        need_wait_return = true_0 != 0;
+    emsg_on_display.set(true_0 != 0);
+    if msg_scrolled.get() != 0 as ::core::ffi::c_int {
+        need_wait_return.set(true_0 != 0);
     }
     msg_ext_set_kind(kind);
-    msg_scroll = true_0;
-    let mut save_msg_skip_flush: bool = msg_ext_skip_flush;
-    msg_ext_skip_flush = true_0 != 0;
+    msg_scroll.set(true_0);
+    let mut save_msg_skip_flush: bool = msg_ext_skip_flush.get();
+    msg_ext_skip_flush.set(true_0 != 0);
     msg_source(hl_id);
-    msg_nowait = false_0 != 0;
+    msg_nowait.set(false_0 != 0);
     let mut rv: ::core::ffi::c_int =
         msg_keep(s, hl_id, false_0 != 0, multiline) as ::core::ffi::c_int;
-    msg_ext_skip_flush = save_msg_skip_flush;
+    msg_ext_skip_flush.set(save_msg_skip_flush);
     return rv != 0;
 }
 #[no_mangle]
@@ -5144,19 +5177,19 @@ pub unsafe extern "C" fn semsg_multiline(
 ) -> bool {
     let mut ret: bool = false;
     let mut ap: ::core::ffi::VaListImpl;
-    static mut errbuf: [::core::ffi::c_char; 8192] = [0; 8192];
+    static errbuf: GlobalCell<[::core::ffi::c_char; 8192]> = GlobalCell::new([0; 8192]);
     if emsg_not_now() != 0 {
         return true_0 != 0;
     }
     ap = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut errbuf as *mut ::core::ffi::c_char,
+        errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8192]>(),
         fmt,
         ap.as_va_list(),
     );
     ret = emsg_multiline(
-        &raw mut errbuf as *mut ::core::ffi::c_char,
+        errbuf.ptr() as *mut ::core::ffi::c_char,
         kind,
         HLF_E as ::core::ffi::c_int,
         true_0 != 0,
@@ -5167,17 +5200,17 @@ unsafe extern "C" fn semsgv(
     mut fmt: *const ::core::ffi::c_char,
     mut ap: ::core::ffi::VaList,
 ) -> bool {
-    static mut errbuf: [::core::ffi::c_char; 1025] = [0; 1025];
+    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
     if emsg_not_now() != 0 {
         return true_0 != 0;
     }
     vim_vsnprintf(
-        &raw mut errbuf as *mut ::core::ffi::c_char,
+        errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         fmt,
         ap.as_va_list(),
     );
-    return emsg(&raw mut errbuf as *mut ::core::ffi::c_char);
+    return emsg(errbuf.ptr() as *mut ::core::ffi::c_char);
 }
 #[no_mangle]
 pub unsafe extern "C" fn iemsg(mut s: *const ::core::ffi::c_char) {
@@ -5213,14 +5246,14 @@ pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, mut
     let mut ap: ::core::ffi::VaListImpl;
     ap = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
         ap.as_va_list(),
     );
-    let mut s: *mut ::core::ffi::c_char = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+    let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     loop_schedule_deferred(
-        &raw mut main_loop,
+        main_loop.ptr(),
         Event {
             handler: Some(
                 msg_semsg_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -5259,14 +5292,14 @@ pub unsafe extern "C" fn msg_schedule_semsg_multiline(
     let mut ap: ::core::ffi::VaListImpl;
     ap = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
         ap.as_va_list(),
     );
-    let mut s: *mut ::core::ffi::c_char = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+    let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     loop_schedule_deferred(
-        &raw mut main_loop,
+        main_loop.ptr(),
         Event {
             handler: Some(
                 msg_semsg_multiline_event
@@ -5295,9 +5328,9 @@ pub unsafe extern "C" fn msg_trunc(
 ) -> *mut ::core::ffi::c_char {
     msg_hist_add(s, -1 as ::core::ffi::c_int, hl_id);
     let mut ts: *mut ::core::ffi::c_char = msg_may_trunc(force, s);
-    msg_hist_off = true_0 != 0;
+    msg_hist_off.set(true_0 != 0);
     let mut n: bool = msg(ts, hl_id);
-    msg_hist_off = false_0 != 0;
+    msg_hist_off.set(false_0 != 0);
     if n {
         return ts;
     }
@@ -5312,11 +5345,12 @@ pub unsafe extern "C" fn msg_may_trunc(
         return s;
     }
     let mut room: ::core::ffi::c_int =
-        (Rows - cmdline_row - 1 as ::core::ffi::c_int) * Columns + sc_col - 1 as ::core::ffi::c_int;
+        (Rows.get() - cmdline_row.get() - 1 as ::core::ffi::c_int) * Columns.get() + sc_col.get()
+            - 1 as ::core::ffi::c_int;
     if room > 0 as ::core::ffi::c_int
         && (force as ::core::ffi::c_int != 0
             || shortmess(SHM_TRUNC as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                && !exmode_active)
+                && !exmode_active.get())
         && strlen(s) as ::core::ffi::c_int - room > 0 as ::core::ffi::c_int
     {
         let mut size: ::core::ffi::c_int = vim_strsize(s);
@@ -5492,7 +5526,7 @@ unsafe extern "C" fn msg_hist_add(
     };
     msg_hist_add_multihl(msg_0, false_0 != 0, ::core::ptr::null_mut::<MessageData>());
 }
-static mut do_clear_hist_temp: bool = true_0 != 0;
+static do_clear_hist_temp: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn do_autocmd_progress(
     mut msg_id: Object,
@@ -5648,11 +5682,12 @@ unsafe extern "C" fn msg_hist_add_multihl(
     mut temp: bool,
     mut _msg_data: *mut MessageData,
 ) {
-    if do_clear_hist_temp {
+    if do_clear_hist_temp.get() {
         msg_hist_clear_temp();
-        do_clear_hist_temp = false_0 != 0;
+        do_clear_hist_temp.set(false_0 != 0);
     }
-    if msg_hist_off as ::core::ffi::c_int != 0 || msg_silent != 0 as ::core::ffi::c_int {
+    if msg_hist_off.get() as ::core::ffi::c_int != 0 || msg_silent.get() != 0 as ::core::ffi::c_int
+    {
         hl_msg_free(msg_0);
         return;
     }
@@ -5660,41 +5695,41 @@ unsafe extern "C" fn msg_hist_add_multihl(
         xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) as *mut MessageHistoryEntry;
     (*entry).msg = msg_0;
     (*entry).temp = temp;
-    (*entry).kind = if !msg_ext_kind.is_null() {
-        xstrdup(msg_ext_kind)
+    (*entry).kind = if !(*msg_ext_kind.ptr()).is_null() {
+        xstrdup(msg_ext_kind.get())
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
-    (*entry).prev = msg_hist_last as *mut msg_hist;
+    (*entry).prev = msg_hist_last.get() as *mut msg_hist;
     (*entry).next = ::core::ptr::null_mut::<msg_hist>();
-    (*entry).append = msg_ext_append;
-    if msg_hist_first.is_null() {
-        msg_hist_first = entry;
+    (*entry).append = msg_ext_append.get();
+    if (*msg_hist_first.ptr()).is_null() {
+        msg_hist_first.set(entry);
     }
-    if !msg_hist_last.is_null() {
-        (*msg_hist_last).next = entry as *mut msg_hist;
+    if !(*msg_hist_last.ptr()).is_null() {
+        (*msg_hist_last.get()).next = entry as *mut msg_hist;
     }
-    if msg_hist_temp.is_null() {
-        msg_hist_temp = entry;
+    if (*msg_hist_temp.ptr()).is_null() {
+        msg_hist_temp.set(entry);
     }
-    msg_hist_len += !temp as ::core::ffi::c_int;
-    msg_hist_last = entry;
-    msg_ext_history = true_0 != 0;
-    msg_hist_clear(msg_hist_max);
+    (*msg_hist_len.ptr()) += !temp as ::core::ffi::c_int;
+    msg_hist_last.set(entry);
+    msg_ext_history.set(true_0 != 0);
+    msg_hist_clear(msg_hist_max.get());
 }
 unsafe extern "C" fn msg_hist_free_msg(mut entry: *mut MessageHistoryEntry) {
     if (*entry).next.is_null() {
-        msg_hist_last = (*entry).prev as *mut MessageHistoryEntry;
+        msg_hist_last.set((*entry).prev as *mut MessageHistoryEntry);
     } else {
         (*(*entry).next).prev = (*entry).prev;
     }
     if (*entry).prev.is_null() {
-        msg_hist_first = (*entry).next as *mut MessageHistoryEntry;
+        msg_hist_first.set((*entry).next as *mut MessageHistoryEntry);
     } else {
         (*(*entry).prev).next = (*entry).next;
     }
-    if entry == msg_hist_temp {
-        msg_hist_temp = (*entry).next as *mut MessageHistoryEntry;
+    if entry == msg_hist_temp.get() {
+        msg_hist_temp.set((*entry).next as *mut MessageHistoryEntry);
     }
     hl_msg_free((*entry).msg);
     xfree((*entry).kind as *mut ::core::ffi::c_void);
@@ -5702,19 +5737,22 @@ unsafe extern "C" fn msg_hist_free_msg(mut entry: *mut MessageHistoryEntry) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_hist_clear(mut keep: ::core::ffi::c_int) {
-    while msg_hist_len > keep || keep == 0 as ::core::ffi::c_int && !msg_hist_first.is_null() {
-        msg_hist_len -= !(*msg_hist_first).temp as ::core::ffi::c_int;
-        msg_hist_free_msg(msg_hist_first);
+    while msg_hist_len.get() > keep
+        || keep == 0 as ::core::ffi::c_int && !(*msg_hist_first.ptr()).is_null()
+    {
+        (*msg_hist_len.ptr()) -= !(*msg_hist_first.get()).temp as ::core::ffi::c_int;
+        msg_hist_free_msg(msg_hist_first.get());
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_hist_clear_temp() {
-    while !msg_hist_temp.is_null() {
-        let mut next: *mut MessageHistoryEntry = (*msg_hist_temp).next as *mut MessageHistoryEntry;
-        if (*msg_hist_temp).temp {
-            msg_hist_free_msg(msg_hist_temp);
+    while !(*msg_hist_temp.ptr()).is_null() {
+        let mut next: *mut MessageHistoryEntry =
+            (*msg_hist_temp.get()).next as *mut MessageHistoryEntry;
+        if (*msg_hist_temp.get()).temp {
+            msg_hist_free_msg(msg_hist_temp.get());
         }
-        msg_hist_temp = next;
+        msg_hist_temp.set(next);
     }
 }
 #[no_mangle]
@@ -5723,7 +5761,7 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
     let mut messages_wait_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut messages_history_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut progress_target_flag: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = p_mopt;
+    let mut p: *mut ::core::ffi::c_char = p_mopt.get();
     while *p as ::core::ffi::c_int != NUL {
         if strnequal(
             p,
@@ -5831,11 +5869,11 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
     if messages_wait_new > 10000 as ::core::ffi::c_int {
         return FAIL;
     }
-    msg_flags = messages_flags_new;
-    msg_wait = messages_wait_new;
-    progress_msg_target = progress_target_flag;
-    msg_hist_max = messages_history_new;
-    msg_hist_clear(msg_hist_max);
+    msg_flags.set(messages_flags_new);
+    msg_wait.set(messages_wait_new);
+    progress_msg_target.set(progress_target_flag);
+    msg_hist_max.set(messages_history_new);
+    msg_hist_clear(msg_hist_max.get());
     return OK;
 }
 #[no_mangle]
@@ -5862,12 +5900,12 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
         items: ::core::ptr::null_mut::<Object>(),
     };
     let mut p: *mut MessageHistoryEntry = if (*eap).skip != 0 {
-        msg_hist_temp
+        msg_hist_temp.get()
     } else {
-        msg_hist_first
+        msg_hist_first.get()
     };
     let mut skip: ::core::ffi::c_int = if (*eap).addr_count != 0 {
-        msg_hist_len - (*eap).line2 as ::core::ffi::c_int
+        msg_hist_len.get() - (*eap).line2 as ::core::ffi::c_int
     } else {
         0 as ::core::ffi::c_int
     };
@@ -5877,7 +5915,7 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
             skip = skip - 1;
             c2rust_fresh24 > 0 as ::core::ffi::c_int
         }) {
-            if ui_has(kUIMessages) as ::core::ffi::c_int != 0 && msg_silent == 0 {
+            if ui_has(kUIMessages) as ::core::ffi::c_int != 0 && msg_silent.get() == 0 {
                 let mut entry: Array = Array {
                     size: 0 as size_t,
                     capacity: 0 as size_t,
@@ -6060,7 +6098,7 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                 };
             }
             if redirecting() != 0 || !ui_has(kUIMessages) {
-                msg_silent += ui_has(kUIMessages) as ::core::ffi::c_int;
+                (*msg_silent.ptr()) += ui_has(kUIMessages) as ::core::ffi::c_int;
                 let mut needs_clear: bool = false_0 != 0;
                 msg_multihl(
                     object {
@@ -6074,7 +6112,7 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                     ::core::ptr::null_mut::<MessageData>(),
                     &raw mut needs_clear,
                 );
-                msg_silent -= ui_has(kUIMessages) as ::core::ffi::c_int;
+                (*msg_silent.ptr()) -= ui_has(kUIMessages) as ::core::ffi::c_int;
             }
         }
         p = (*p).next as *mut MessageHistoryEntry;
@@ -6086,12 +6124,12 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_end_prompt() {
-    need_wait_return = false_0 != 0;
-    emsg_on_display = false_0 != 0;
-    cmdline_row = msg_row;
-    msg_col = 0 as ::core::ffi::c_int;
+    need_wait_return.set(false_0 != 0);
+    emsg_on_display.set(false_0 != 0);
+    cmdline_row.set(msg_row.get());
+    msg_col.set(0 as ::core::ffi::c_int);
     msg_clr_eos();
-    lines_left = -1 as ::core::ffi::c_int;
+    lines_left.set(-1 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
@@ -6111,66 +6149,66 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
         );
         return;
     }
-    if msg_silent != 0 as ::core::ffi::c_int {
+    if msg_silent.get() != 0 as ::core::ffi::c_int {
         return;
     }
-    if headless_mode as ::core::ffi::c_int != 0 && ui_active() == 0 {
+    if headless_mode.get() as ::core::ffi::c_int != 0 && ui_active() == 0 {
         return;
     }
-    if vgetc_busy > 0 as ::core::ffi::c_int {
+    if vgetc_busy.get() > 0 as ::core::ffi::c_int {
         return;
     }
-    need_wait_return = true_0 != 0;
-    if no_wait_return != 0 {
-        if !exmode_active {
-            cmdline_row = msg_row;
+    need_wait_return.set(true_0 != 0);
+    if no_wait_return.get() != 0 {
+        if !exmode_active.get() {
+            cmdline_row.set(msg_row.get());
         }
         return;
     }
-    redir_off = true_0 != 0;
-    let mut oldState: ::core::ffi::c_int = State;
-    if quit_more {
+    redir_off.set(true_0 != 0);
+    let mut oldState: ::core::ffi::c_int = State.get();
+    if quit_more.get() {
         c = CAR;
-        quit_more = false_0 != 0;
-        got_int = false_0 != 0;
-    } else if exmode_active {
+        quit_more.set(false_0 != 0);
+        got_int.set(false_0 != 0);
+    } else if exmode_active.get() {
         msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
         c = CAR;
-        got_int = false_0 != 0;
+        got_int.set(false_0 != 0);
     } else if !stuff_empty() {
         c = CAR;
     } else {
-        State = MODE_HITRETURN as ::core::ffi::c_int;
+        State.set(MODE_HITRETURN as ::core::ffi::c_int);
         setmouse();
-        cmdline_row = msg_row;
-        if need_check_timestamps {
+        cmdline_row.set(msg_row.get());
+        if need_check_timestamps.get() {
             check_timestamps(false_0);
         }
-        if p_ch == 0 as OptInt && !ui_has(kUIMessages) && msg_scrolled == 0 {
+        if p_ch.get() == 0 as OptInt && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
             msg_grid_validate();
             msg_scroll_up(false_0 != 0, true_0 != 0);
-            msg_scrolled += 1;
-            cmdline_row = Rows - 1 as ::core::ffi::c_int;
+            (*msg_scrolled.ptr()) += 1;
+            cmdline_row.set(Rows.get() - 1 as ::core::ffi::c_int);
         }
-        if msg_flags & kOptMoptFlagHitEnter as ::core::ffi::c_int != 0 {
+        if msg_flags.get() & kOptMoptFlagHitEnter as ::core::ffi::c_int != 0 {
             hit_return_msg(true_0 != 0);
             loop {
-                had_got_int = got_int as ::core::ffi::c_int;
-                no_mapping += 1;
-                allow_keys += 1;
-                let save_reg_recording: ::core::ffi::c_int = reg_recording;
-                save_scriptout = scriptout;
-                reg_recording = 0 as ::core::ffi::c_int;
-                scriptout = ::core::ptr::null_mut::<FILE>();
+                had_got_int = got_int.get() as ::core::ffi::c_int;
+                (*no_mapping.ptr()) += 1;
+                (*allow_keys.ptr()) += 1;
+                let save_reg_recording: ::core::ffi::c_int = reg_recording.get();
+                save_scriptout = scriptout.get();
+                reg_recording.set(0 as ::core::ffi::c_int);
+                scriptout.set(::core::ptr::null_mut::<FILE>());
                 c = safe_vgetc();
-                if had_got_int != 0 && global_busy == 0 {
-                    got_int = false_0 != 0;
+                if had_got_int != 0 && global_busy.get() == 0 {
+                    got_int.set(false_0 != 0);
                 }
-                no_mapping -= 1;
-                allow_keys -= 1;
-                reg_recording = save_reg_recording;
-                scriptout = save_scriptout;
-                if p_more != 0 {
+                (*no_mapping.ptr()) -= 1;
+                (*allow_keys.ptr()) -= 1;
+                reg_recording.set(save_reg_recording);
+                scriptout.set(save_scriptout);
+                if p_more.get() != 0 {
                     if c == 'b' as ::core::ffi::c_int
                         || c == Ctrl_B
                         || c == 'k' as ::core::ffi::c_int
@@ -6179,18 +6217,18 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
                         || c == K_UP
                         || c == K_PAGEUP
                     {
-                        if msg_scrolled > Rows {
+                        if msg_scrolled.get() > Rows.get() {
                             do_more_prompt(c);
                         } else {
-                            msg_didout = false_0 != 0;
+                            msg_didout.set(false_0 != 0);
                             c = -(253 as ::core::ffi::c_int
                                 + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-                            msg_col = 0 as ::core::ffi::c_int;
+                            msg_col.set(0 as ::core::ffi::c_int);
                         }
-                        if quit_more {
+                        if quit_more.get() {
                             c = CAR;
-                            quit_more = false_0 != 0;
-                            got_int = false_0 != 0;
+                            quit_more.set(false_0 != 0);
+                            got_int.set(false_0 != 0);
                         } else if c
                             != -(253 as ::core::ffi::c_int
                                 + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
@@ -6199,7 +6237,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
                                 + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
                             hit_return_msg(false_0 != 0);
                         }
-                    } else if msg_scrolled > Rows - 2 as ::core::ffi::c_int
+                    } else if msg_scrolled.get() > Rows.get() - 2 as ::core::ffi::c_int
                         && (c == 'j' as ::core::ffi::c_int
                             || c == 'd' as ::core::ffi::c_int
                             || c == 'f' as ::core::ffi::c_int
@@ -6261,64 +6299,65 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
                 && c != Ctrl_C
                 && c != 'q' as ::core::ffi::c_int
             {
-                ins_char_typebuf(vgetc_char, vgetc_mod_mask, true_0 != 0);
-                do_redraw = true_0 != 0;
+                ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true_0 != 0);
+                do_redraw.set(true_0 != 0);
             }
         } else {
             c = CAR;
-            do_sleep(msg_wait as int64_t, true_0 != 0);
+            do_sleep(msg_wait.get() as int64_t, true_0 != 0);
         }
     }
-    redir_off = false_0 != 0;
+    redir_off.set(false_0 != 0);
     if c == ':' as ::core::ffi::c_int
         || c == '?' as ::core::ffi::c_int
         || c == '/' as ::core::ffi::c_int
     {
-        if !exmode_active {
-            cmdline_row = msg_row;
+        if !exmode_active.get() {
+            cmdline_row.set(msg_row.get());
         }
-        skip_redraw = true_0 != 0;
-        do_redraw = false_0 != 0;
+        skip_redraw.set(true_0 != 0);
+        do_redraw.set(false_0 != 0);
     }
-    let mut tmpState: ::core::ffi::c_int = State;
-    State = oldState;
+    let mut tmpState: ::core::ffi::c_int = State.get();
+    State.set(oldState);
     setmouse();
     msg_check();
-    need_wait_return = false_0 != 0;
-    did_wait_return = true_0 != 0;
-    emsg_on_display = false_0 != 0;
-    lines_left = -1 as ::core::ffi::c_int;
+    need_wait_return.set(false_0 != 0);
+    did_wait_return.set(true_0 != 0);
+    emsg_on_display.set(false_0 != 0);
+    lines_left.set(-1 as ::core::ffi::c_int);
     reset_last_sourcing();
-    if !keep_msg.is_null()
-        && vim_strsize(keep_msg)
-            >= (Rows - cmdline_row - 1 as ::core::ffi::c_int) * Columns + sc_col
+    if !(*keep_msg.ptr()).is_null()
+        && vim_strsize(keep_msg.get())
+            >= (Rows.get() - cmdline_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
+                + sc_col.get()
     {
         let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut keep_msg as *mut *mut ::core::ffi::c_void;
+            keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
     }
     if tmpState == MODE_SETWSIZE as ::core::ffi::c_int {
         ui_refresh();
-    } else if !skip_redraw {
+    } else if !skip_redraw.get() {
         if redraw == true_0
-            || msg_scrolled != 0 as ::core::ffi::c_int && redraw != -1 as ::core::ffi::c_int
+            || msg_scrolled.get() != 0 as ::core::ffi::c_int && redraw != -1 as ::core::ffi::c_int
         {
-            redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
         }
     }
 }
 unsafe extern "C" fn hit_return_msg(mut newline_sb: bool) {
-    let mut save_p_more: ::core::ffi::c_int = p_more;
+    let mut save_p_more: ::core::ffi::c_int = p_more.get();
     if !newline_sb {
-        p_more = false_0;
+        p_more.set(false_0);
     }
-    if msg_didout {
+    if msg_didout.get() {
         msg_putchar('\n' as ::core::ffi::c_int);
     }
-    p_more = false_0;
-    if got_int {
+    p_more.set(false_0);
+    if got_int.get() {
         msg_puts(gettext(
             b"Interrupt: \0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -6331,7 +6370,7 @@ unsafe extern "C" fn hit_return_msg(mut newline_sb: bool) {
     if msg_use_printf() == 0 {
         msg_clr_eos();
     }
-    p_more = save_p_more;
+    p_more.set(save_p_more);
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_keep_msg(
@@ -6341,34 +6380,34 @@ pub unsafe extern "C" fn set_keep_msg(
     if ui_has(kUIMessages) {
         return;
     }
-    xfree(keep_msg as *mut ::core::ffi::c_void);
-    if !s.is_null() && msg_silent == 0 as ::core::ffi::c_int {
-        keep_msg = xstrdup(s);
+    xfree(keep_msg.get() as *mut ::core::ffi::c_void);
+    if !s.is_null() && msg_silent.get() == 0 as ::core::ffi::c_int {
+        keep_msg.set(xstrdup(s));
     } else {
-        keep_msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        keep_msg.set(::core::ptr::null_mut::<::core::ffi::c_char>());
     }
-    keep_msg_more = false_0 != 0;
-    keep_msg_hl_id = hl_id;
+    keep_msg_more.set(false_0 != 0);
+    keep_msg_hl_id.set(hl_id);
 }
 #[no_mangle]
 pub unsafe extern "C" fn messaging() -> bool {
-    return !(p_lz != 0 && char_avail() as ::core::ffi::c_int != 0 && !KeyTyped)
-        && (p_ch > 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0);
+    return !(p_lz.get() != 0 && char_avail() as ::core::ffi::c_int != 0 && !KeyTyped.get())
+        && (p_ch.get() > 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
     let mut pn: ::core::ffi::c_int = 0;
-    if global_busy != 0 || !messaging() {
+    if global_busy.get() != 0 || !messaging() {
         return;
     }
-    if !keep_msg.is_null() && !keep_msg_more {
+    if !(*keep_msg.ptr()).is_null() && !keep_msg_more.get() {
         return;
     }
     pn = abs(n);
-    if pn as OptInt > p_report {
+    if pn as OptInt > p_report.get() {
         if n > 0 as ::core::ffi::c_int {
             vim_snprintf(
-                &raw mut msg_buf as *mut ::core::ffi::c_char,
+                msg_buf.ptr() as *mut ::core::ffi::c_char,
                 MSG_BUF_LEN as size_t,
                 ngettext(
                     b"%d more line\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6379,7 +6418,7 @@ pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
             );
         } else {
             vim_snprintf(
-                &raw mut msg_buf as *mut ::core::ffi::c_char,
+                msg_buf.ptr() as *mut ::core::ffi::c_char,
                 MSG_BUF_LEN as size_t,
                 ngettext(
                     b"%d line less\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6389,83 +6428,84 @@ pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
                 pn,
             );
         }
-        if got_int {
+        if got_int.get() {
             xstrlcat(
-                &raw mut msg_buf as *mut ::core::ffi::c_char,
+                msg_buf.ptr() as *mut ::core::ffi::c_char,
                 gettext(b" (Interrupted)\0".as_ptr() as *const ::core::ffi::c_char),
                 MSG_BUF_LEN as size_t,
             );
         }
         if msg(
-            &raw mut msg_buf as *mut ::core::ffi::c_char,
+            msg_buf.ptr() as *mut ::core::ffi::c_char,
             0 as ::core::ffi::c_int,
         ) {
             set_keep_msg(
-                &raw mut msg_buf as *mut ::core::ffi::c_char,
+                msg_buf.ptr() as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
             );
-            keep_msg_more = true_0 != 0;
+            keep_msg_more.set(true_0 != 0);
         }
     }
 }
-static mut redir_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static redir_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_kind(mut msg_kind: *const ::core::ffi::c_char) {
     msg_ext_ui_flush();
-    msg_ext_kind = msg_kind;
-    redir_col = if msg_ext_append as ::core::ffi::c_int != 0 {
-        redir_col
+    msg_ext_kind.set(msg_kind);
+    redir_col.set(if msg_ext_append.get() as ::core::ffi::c_int != 0 {
+        redir_col.get()
     } else {
         0 as ::core::ffi::c_int
-    };
+    });
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_append(mut append: bool) {
     msg_ext_ui_flush();
-    msg_ext_append = append;
+    msg_ext_append.set(append);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_trigger(mut trigger: *const ::core::ffi::c_char) {
     msg_ext_ui_flush();
-    msg_ext_trigger = trigger;
+    msg_ext_trigger.set(trigger);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_start() {
     let mut did_return: bool = false_0 != 0;
-    msg_row = if msg_row > cmdline_row {
-        msg_row
+    msg_row.set(if msg_row.get() > cmdline_row.get() {
+        msg_row.get()
     } else {
-        cmdline_row
-    };
-    if msg_silent == 0 {
+        cmdline_row.get()
+    });
+    if msg_silent.get() == 0 {
         let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut keep_msg as *mut *mut ::core::ffi::c_void;
+            keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        need_fileinfo = false_0 != 0;
+        need_fileinfo.set(false_0 != 0);
     }
-    if need_highlight_changed {
+    if need_highlight_changed.get() {
         highlight_changed();
     }
-    if need_clr_eos as ::core::ffi::c_int != 0
-        || p_ch == 0 as OptInt && redrawing_cmdline as ::core::ffi::c_int != 0
+    if need_clr_eos.get() as ::core::ffi::c_int != 0
+        || p_ch.get() == 0 as OptInt && redrawing_cmdline.get() as ::core::ffi::c_int != 0
     {
-        need_clr_eos = false_0 != 0;
+        need_clr_eos.set(false_0 != 0);
         msg_clr_eos();
     }
-    if p_ch == 0 as OptInt && !ui_has(kUIMessages) && msg_scrolled == 0 {
+    if p_ch.get() == 0 as OptInt && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
         msg_grid_validate();
         msg_scroll_up(false_0 != 0, true_0 != 0);
-        msg_scrolled += 1;
-        cmdline_row = Rows - 1 as ::core::ffi::c_int;
+        (*msg_scrolled.ptr()) += 1;
+        cmdline_row.set(Rows.get() - 1 as ::core::ffi::c_int);
     }
-    if msg_scroll == 0 && full_screen as ::core::ffi::c_int != 0 {
-        msg_row = cmdline_row;
-        msg_col = 0 as ::core::ffi::c_int;
-    } else if (msg_didout as ::core::ffi::c_int != 0 || p_ch == 0 as OptInt) && !ui_has(kUIMessages)
+    if msg_scroll.get() == 0 && full_screen.get() as ::core::ffi::c_int != 0 {
+        msg_row.set(cmdline_row.get());
+        msg_col.set(0 as ::core::ffi::c_int);
+    } else if (msg_didout.get() as ::core::ffi::c_int != 0 || p_ch.get() == 0 as OptInt)
+        && !ui_has(kUIMessages)
     {
-        if p_ch == 0 as OptInt && !msg_didout && msg_use_printf() != 0 {
+        if p_ch.get() == 0 as OptInt && !msg_didout.get() && msg_use_printf() != 0 {
             msg_puts_display(
                 b"\n\0".as_ptr() as *const ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
@@ -6476,13 +6516,13 @@ pub unsafe extern "C" fn msg_start() {
             msg_putchar('\n' as ::core::ffi::c_int);
         }
         did_return = true_0 != 0;
-        cmdline_row = msg_row;
+        cmdline_row.set(msg_row.get());
     }
-    if !msg_didany || lines_left < 0 as ::core::ffi::c_int {
+    if !msg_didany.get() || lines_left.get() < 0 as ::core::ffi::c_int {
         msg_starthere();
     }
-    if msg_silent == 0 as ::core::ffi::c_int {
-        msg_didout = false_0 != 0;
+    if msg_silent.get() == 0 as ::core::ffi::c_int {
+        msg_didout.set(false_0 != 0);
     }
     if ui_has(kUIMessages) {
         msg_ext_ui_flush();
@@ -6496,8 +6536,8 @@ pub unsafe extern "C" fn msg_start() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_starthere() {
-    lines_left = cmdline_row;
-    msg_didany = false_0 != 0;
+    lines_left.set(cmdline_row.get());
+    msg_didany.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_putchar(mut c: ::core::ffi::c_int) {
@@ -6597,22 +6637,22 @@ pub unsafe extern "C" fn msg_outtrans_len(
     let mut plain_start: *const ::core::ffi::c_char = msgstr;
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut c: ::core::ffi::c_int = 0;
-    let mut save_got_int: ::core::ffi::c_int = got_int as ::core::ffi::c_int;
-    got_int = false_0 != 0;
+    let mut save_got_int: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
+    got_int.set(false_0 != 0);
     if hist {
         msg_hist_add(str, len, hl_id);
     }
-    if msg_silent == 0 as ::core::ffi::c_int
+    if msg_silent.get() == 0 as ::core::ffi::c_int
         && len > 0 as ::core::ffi::c_int
-        && msg_row >= cmdline_row
-        && msg_col == 0 as ::core::ffi::c_int
+        && msg_row.get() >= cmdline_row.get()
+        && msg_col.get() == 0 as ::core::ffi::c_int
     {
-        clear_cmdline = false_0 != 0;
-        mode_displayed = false_0 != 0;
+        clear_cmdline.set(false_0 != 0);
+        mode_displayed.set(false_0 != 0);
     }
     loop {
         len -= 1;
-        if !(len >= 0 as ::core::ffi::c_int && !got_int) {
+        if !(len >= 0 as ::core::ffi::c_int && !got_int.get()) {
             break;
         }
         let mut mb_l: ::core::ffi::c_int = utfc_ptr2len_len(str, len + 1 as ::core::ffi::c_int);
@@ -6664,24 +6704,27 @@ pub unsafe extern "C" fn msg_outtrans_len(
             str = str.offset(1);
         }
     }
-    if (str > plain_start || plain_start == msgstr) && !got_int {
+    if (str > plain_start || plain_start == msgstr) && !got_int.get() {
         msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist);
     }
-    got_int = got_int as ::core::ffi::c_int | save_got_int != 0;
+    got_int.set(got_int.get() as ::core::ffi::c_int | save_got_int != 0);
     return retval;
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_make(mut arg: *const ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0;
-    static mut str: *const ::core::ffi::c_char = b"eeffoc\0".as_ptr() as *const ::core::ffi::c_char;
-    static mut rs: *const ::core::ffi::c_char =
-        b"Plon#dqg#vxjduB\0".as_ptr() as *const ::core::ffi::c_char;
+    static str: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"eeffoc\0".as_ptr() as *const ::core::ffi::c_char);
+    static rs: GlobalCell<*const ::core::ffi::c_char> =
+        GlobalCell::new(b"Plon#dqg#vxjduB\0".as_ptr() as *const ::core::ffi::c_char);
     arg = skipwhite(arg);
     i = 5 as ::core::ffi::c_int;
     while *arg as ::core::ffi::c_int != 0 && i >= 0 as ::core::ffi::c_int {
         let c2rust_fresh33 = arg;
         arg = arg.offset(1);
-        if *c2rust_fresh33 as ::core::ffi::c_int != *str.offset(i as isize) as ::core::ffi::c_int {
+        if *c2rust_fresh33 as ::core::ffi::c_int
+            != *(*str.ptr()).offset(i as isize) as ::core::ffi::c_int
+        {
             break;
         }
         i -= 1;
@@ -6689,8 +6732,10 @@ pub unsafe extern "C" fn msg_make(mut arg: *const ::core::ffi::c_char) {
     if i < 0 as ::core::ffi::c_int {
         msg_putchar('\n' as ::core::ffi::c_int);
         i = 0 as ::core::ffi::c_int;
-        while *rs.offset(i as isize) != 0 {
-            msg_putchar(*rs.offset(i as isize) as ::core::ffi::c_int - 3 as ::core::ffi::c_int);
+        while *(*rs.ptr()).offset(i as isize) != 0 {
+            msg_putchar(
+                *(*rs.ptr()).offset(i as isize) as ::core::ffi::c_int - 3 as ::core::ffi::c_int,
+            );
             i += 1;
         }
     }
@@ -6806,7 +6851,7 @@ pub unsafe extern "C" fn str2special(
     replace_spaces: bool,
     replace_lt: bool,
 ) -> *const ::core::ffi::c_char {
-    static mut buf: [::core::ffi::c_char; 7] = [0; 7];
+    static buf: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new([0; 7]);
     let p: *const ::core::ffi::c_char = mb_unescape(sp);
     if !p.is_null() {
         return p;
@@ -6877,9 +6922,9 @@ pub unsafe extern "C" fn str2special(
     {
         return get_special_key_name(c, modifiers);
     }
-    buf[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-    buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-    return &raw mut buf as *mut ::core::ffi::c_char;
+    (*buf.ptr())[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
+    (*buf.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+    return buf.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn str2specialbuf(
@@ -6919,11 +6964,11 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
     let mut multispace_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut trail: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut l: ::core::ffi::c_int = 0;
-    if (*curwin).w_onebuf_opt.wo_list != 0 {
+    if (*curwin.get()).w_onebuf_opt.wo_list != 0 {
         list = true_0 != 0;
     }
     if list {
-        if (*curwin).w_p_lcs_chars.trail != 0 {
+        if (*curwin.get()).w_p_lcs_chars.trail != 0 {
             trail = s.offset(strlen(s) as isize);
             while trail > s
                 && ascii_iswhite(
@@ -6934,9 +6979,9 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                 trail = trail.offset(-1);
             }
         }
-        if (*curwin).w_p_lcs_chars.lead != 0
-            || !(*curwin).w_p_lcs_chars.leadmultispace.is_null()
-            || (*curwin).w_p_lcs_chars.leadtab1 != NUL as schar_T
+        if (*curwin.get()).w_p_lcs_chars.lead != 0
+            || !(*curwin.get()).w_p_lcs_chars.leadmultispace.is_null()
+            || (*curwin.get()).w_p_lcs_chars.leadtab1 != NUL as schar_T
         {
             lead = s;
             while ascii_iswhite(*lead.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
@@ -6949,11 +6994,11 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
         }
     }
     if *s as ::core::ffi::c_int == NUL
-        && !(list as ::core::ffi::c_int != 0 && (*curwin).w_p_lcs_chars.eol != NUL as schar_T)
+        && !(list as ::core::ffi::c_int != 0 && (*curwin.get()).w_p_lcs_chars.eol != NUL as schar_T)
     {
         msg_putchar(' ' as ::core::ffi::c_int);
     }
-    while !got_int {
+    while !got_int.get() {
         if n_extra > 0 as ::core::ffi::c_int {
             n_extra -= 1;
             if n_extra == 0 as ::core::ffi::c_int && sc_final != 0 {
@@ -6988,14 +7033,14 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                         b"?\0".as_ptr() as *const ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 22]>(),
                     );
-                } else if (*curwin).w_p_lcs_chars.nbsp != NUL as schar_T
+                } else if (*curwin.get()).w_p_lcs_chars.nbsp != NUL as schar_T
                     && list as ::core::ffi::c_int != 0
                     && (utf_ptr2char(s) == 160 as ::core::ffi::c_int
                         || utf_ptr2char(s) == 0x202f as ::core::ffi::c_int)
                 {
                     schar_get(
                         &raw mut buf as *mut ::core::ffi::c_char,
-                        (*curwin).w_p_lcs_chars.nbsp,
+                        (*curwin.get()).w_p_lcs_chars.nbsp,
                     );
                 } else {
                     memmove(
@@ -7031,26 +7076,26 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                             multispace_pos = 0 as ::core::ffi::c_int;
                         }
                     }
-                    if c == TAB && (!list || (*curwin).w_p_lcs_chars.tab1 != 0) {
+                    if c == TAB && (!list || (*curwin.get()).w_p_lcs_chars.tab1 != 0) {
                         n_extra = tabstop_padding(
                             col as colnr_T,
-                            (*curbuf).b_p_ts,
-                            (*curbuf).b_p_vts_array,
+                            (*curbuf.get()).b_p_ts,
+                            (*curbuf.get()).b_p_vts_array,
                         ) - 1 as ::core::ffi::c_int;
                         if !list {
                             sc = ' ' as ::core::ffi::c_int as schar_T;
                             sc_extra = ' ' as ::core::ffi::c_int as schar_T;
                         } else {
-                            let mut lcs_tab1: schar_T = (*curwin).w_p_lcs_chars.tab1;
-                            let mut lcs_tab2: schar_T = (*curwin).w_p_lcs_chars.tab2;
-                            let mut lcs_tab3: schar_T = (*curwin).w_p_lcs_chars.tab3;
+                            let mut lcs_tab1: schar_T = (*curwin.get()).w_p_lcs_chars.tab1;
+                            let mut lcs_tab2: schar_T = (*curwin.get()).w_p_lcs_chars.tab2;
+                            let mut lcs_tab3: schar_T = (*curwin.get()).w_p_lcs_chars.tab3;
                             if !lead.is_null()
                                 && s <= lead
-                                && (*curwin).w_p_lcs_chars.leadtab1 != NUL as schar_T
+                                && (*curwin.get()).w_p_lcs_chars.leadtab1 != NUL as schar_T
                             {
-                                lcs_tab1 = (*curwin).w_p_lcs_chars.leadtab1;
-                                lcs_tab2 = (*curwin).w_p_lcs_chars.leadtab2;
-                                lcs_tab3 = (*curwin).w_p_lcs_chars.leadtab3;
+                                lcs_tab1 = (*curwin.get()).w_p_lcs_chars.leadtab1;
+                                lcs_tab2 = (*curwin.get()).w_p_lcs_chars.leadtab2;
+                                lcs_tab3 = (*curwin.get()).w_p_lcs_chars.leadtab3;
                             }
                             sc = if n_extra == 0 as ::core::ffi::c_int && lcs_tab3 != 0 {
                                 lcs_tab3
@@ -7063,11 +7108,11 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                         }
                     } else if c == NUL
                         && list as ::core::ffi::c_int != 0
-                        && (*curwin).w_p_lcs_chars.eol != NUL as schar_T
+                        && (*curwin.get()).w_p_lcs_chars.eol != NUL as schar_T
                     {
                         p_extra = b"\0".as_ptr() as *const ::core::ffi::c_char;
                         n_extra = 1 as ::core::ffi::c_int;
-                        sc = (*curwin).w_p_lcs_chars.eol;
+                        sc = (*curwin.get()).w_p_lcs_chars.eol;
                         hl_id = HLF_AT as ::core::ffi::c_int;
                         s = s.offset(-1);
                     } else if c != NUL && {
@@ -7084,15 +7129,15 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                         if !lead.is_null()
                             && s <= lead
                             && in_multispace as ::core::ffi::c_int != 0
-                            && !(*curwin).w_p_lcs_chars.leadmultispace.is_null()
+                            && !(*curwin.get()).w_p_lcs_chars.leadmultispace.is_null()
                         {
                             let c2rust_fresh37 = multispace_pos;
                             multispace_pos = multispace_pos + 1;
-                            sc = *(*curwin)
+                            sc = *(*curwin.get())
                                 .w_p_lcs_chars
                                 .leadmultispace
                                 .offset(c2rust_fresh37 as isize);
-                            if *(*curwin)
+                            if *(*curwin.get())
                                 .w_p_lcs_chars
                                 .leadmultispace
                                 .offset(multispace_pos as isize)
@@ -7103,23 +7148,23 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                             hl_id = HLF_0 as ::core::ffi::c_int;
                         } else if !lead.is_null()
                             && s <= lead
-                            && (*curwin).w_p_lcs_chars.lead != NUL as schar_T
+                            && (*curwin.get()).w_p_lcs_chars.lead != NUL as schar_T
                         {
-                            sc = (*curwin).w_p_lcs_chars.lead;
+                            sc = (*curwin.get()).w_p_lcs_chars.lead;
                             hl_id = HLF_0 as ::core::ffi::c_int;
                         } else if !trail.is_null() && s > trail {
-                            sc = (*curwin).w_p_lcs_chars.trail;
+                            sc = (*curwin.get()).w_p_lcs_chars.trail;
                             hl_id = HLF_0 as ::core::ffi::c_int;
                         } else if in_multispace as ::core::ffi::c_int != 0
-                            && !(*curwin).w_p_lcs_chars.multispace.is_null()
+                            && !(*curwin.get()).w_p_lcs_chars.multispace.is_null()
                         {
                             let c2rust_fresh38 = multispace_pos;
                             multispace_pos = multispace_pos + 1;
-                            sc = *(*curwin)
+                            sc = *(*curwin.get())
                                 .w_p_lcs_chars
                                 .multispace
                                 .offset(c2rust_fresh38 as isize);
-                            if *(*curwin)
+                            if *(*curwin.get())
                                 .w_p_lcs_chars
                                 .multispace
                                 .offset(multispace_pos as isize)
@@ -7129,9 +7174,9 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
                             }
                             hl_id = HLF_0 as ::core::ffi::c_int;
                         } else if list as ::core::ffi::c_int != 0
-                            && (*curwin).w_p_lcs_chars.space != NUL as schar_T
+                            && (*curwin.get()).w_p_lcs_chars.space != NUL as schar_T
                         {
-                            sc = (*curwin).w_p_lcs_chars.space;
+                            sc = (*curwin.get()).w_p_lcs_chars.space;
                             hl_id = HLF_0 as ::core::ffi::c_int;
                         } else {
                             sc = ' ' as ::core::ffi::c_int as schar_T;
@@ -7176,7 +7221,7 @@ pub unsafe extern "C" fn msg_outtrans_long(
 ) {
     let mut len: ::core::ffi::c_int = strlen(longstr) as ::core::ffi::c_int;
     let mut slen: ::core::ffi::c_int = len;
-    let mut room: ::core::ffi::c_int = Columns - msg_col;
+    let mut room: ::core::ffi::c_int = Columns.get() - msg_col.get();
     if !ui_has(kUIMessages) && len > room && room >= 20 as ::core::ffi::c_int {
         slen = (room - 3 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int;
         msg_outtrans_len(longstr, slen, hl_id, false_0 != 0);
@@ -7229,7 +7274,7 @@ pub unsafe extern "C" fn msg_puts_len(
         }
     };
     redir_write(str, len);
-    if msg_silent != 0 as ::core::ffi::c_int || *str as ::core::ffi::c_int == NUL {
+    if msg_silent.get() != 0 as ::core::ffi::c_int || *str as ::core::ffi::c_int == NUL {
         if *str as ::core::ffi::c_int == NUL && ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
             msg_ext_ui_flush();
             ui_call_msg_show(
@@ -7253,7 +7298,7 @@ pub unsafe extern "C" fn msg_puts_len(
                     size: 0 as size_t,
                 },
             );
-            cmdline_was_last_drawn = false_0 != 0;
+            cmdline_was_last_drawn.set(false_0 != 0);
         }
         return;
     }
@@ -7261,38 +7306,38 @@ pub unsafe extern "C" fn msg_puts_len(
         msg_hist_add(str, len as ::core::ffi::c_int, hl_id);
     }
     let mut overflow: bool = !ui_has(kUIMessages)
-        && msg_scrolled
-            > (if p_ch == 0 as OptInt {
+        && msg_scrolled.get()
+            > (if p_ch.get() == 0 as OptInt {
                 1 as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             });
     if overflow as ::core::ffi::c_int != 0
-        && !msg_scrolled_ign
+        && !msg_scrolled_ign.get()
         && strcmp(str, b"\r\0".as_ptr() as *const ::core::ffi::c_char) != 0 as ::core::ffi::c_int
     {
-        need_wait_return = true_0 != 0;
+        need_wait_return.set(true_0 != 0);
     }
-    msg_didany = true_0 != 0;
+    msg_didany.set(true_0 != 0);
     if msg_use_printf() != 0 {
-        let mut saved_msg_col: ::core::ffi::c_int = msg_col;
+        let mut saved_msg_col: ::core::ffi::c_int = msg_col.get();
         msg_puts_printf(str, len);
-        if headless_mode {
-            msg_col = saved_msg_col;
+        if headless_mode.get() {
+            msg_col.set(saved_msg_col);
         }
     }
     if msg_use_printf() == 0
-        || headless_mode as ::core::ffi::c_int != 0 && !default_grid.chars.is_null()
+        || headless_mode.get() as ::core::ffi::c_int != 0 && !(*default_grid.ptr()).chars.is_null()
     {
         msg_puts_display(str, len as ::core::ffi::c_int, hl_id, false_0);
     }
-    need_fileinfo = false_0 != 0;
+    need_fileinfo.set(false_0 != 0);
 }
 unsafe extern "C" fn msg_ext_emit_chunk() {
-    if msg_ext_chunks.is_null() {
+    if (*msg_ext_chunks.ptr()).is_null() {
         msg_ext_init_chunks();
     }
-    if msg_ext_last_attr == -1 as sattr_T {
+    if msg_ext_last_attr.get() == -1 as sattr_T {
         return;
     }
     let mut chunk: Array = Array {
@@ -7317,11 +7362,11 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
     *chunk.items.offset(c2rust_fresh1 as isize) = object {
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed_11 {
-            integer: msg_ext_last_attr as Integer,
+            integer: msg_ext_last_attr.get() as Integer,
         },
     };
-    msg_ext_last_attr = -1 as ::core::ffi::c_int as sattr_T;
-    let mut text: String_0 = ga_take_string(&raw mut msg_ext_last_chunk);
+    msg_ext_last_attr.set(-1 as ::core::ffi::c_int as sattr_T);
+    let mut text: String_0 = ga_take_string(msg_ext_last_chunk.ptr());
     if chunk.size == chunk.capacity {
         chunk.capacity = if chunk.capacity != 0 {
             chunk.capacity << 1 as ::core::ffi::c_int
@@ -7357,24 +7402,24 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
     *chunk.items.offset(c2rust_fresh3 as isize) = object {
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed_11 {
-            integer: msg_ext_last_hl_id as Integer,
+            integer: msg_ext_last_hl_id.get() as Integer,
         },
     };
-    if (*msg_ext_chunks).size == (*msg_ext_chunks).capacity {
-        (*msg_ext_chunks).capacity = if (*msg_ext_chunks).capacity != 0 {
-            (*msg_ext_chunks).capacity << 1 as ::core::ffi::c_int
+    if (*msg_ext_chunks.get()).size == (*msg_ext_chunks.get()).capacity {
+        (*msg_ext_chunks.get()).capacity = if (*msg_ext_chunks.get()).capacity != 0 {
+            (*msg_ext_chunks.get()).capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
         };
-        (*msg_ext_chunks).items = xrealloc(
-            (*msg_ext_chunks).items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<Object>().wrapping_mul((*msg_ext_chunks).capacity),
+        (*msg_ext_chunks.get()).items = xrealloc(
+            (*msg_ext_chunks.get()).items as *mut ::core::ffi::c_void,
+            ::core::mem::size_of::<Object>().wrapping_mul((*msg_ext_chunks.get()).capacity),
         ) as *mut Object;
     } else {
     };
-    let c2rust_fresh4 = (*msg_ext_chunks).size;
-    (*msg_ext_chunks).size = (*msg_ext_chunks).size.wrapping_add(1);
-    *(*msg_ext_chunks).items.offset(c2rust_fresh4 as isize) = object {
+    let c2rust_fresh4 = (*msg_ext_chunks.get()).size;
+    (*msg_ext_chunks.get()).size = (*msg_ext_chunks.get()).size.wrapping_add(1);
+    *(*msg_ext_chunks.get()).items.offset(c2rust_fresh4 as isize) = object {
         type_0: kObjectTypeArray,
         data: C2Rust_Unnamed_11 { array: chunk },
     };
@@ -7387,25 +7432,25 @@ unsafe extern "C" fn msg_puts_display(
 ) {
     let mut s: *const ::core::ffi::c_char = str;
     let mut sb_str: *const ::core::ffi::c_char = str;
-    let mut sb_col: ::core::ffi::c_int = msg_col;
+    let mut sb_col: ::core::ffi::c_int = msg_col.get();
     let mut attr: ::core::ffi::c_int = if hl_id != 0 {
         syn_id2attr(hl_id)
     } else {
         0 as ::core::ffi::c_int
     };
-    did_wait_return = false_0 != 0;
+    did_wait_return.set(false_0 != 0);
     if ui_has(kUIMessages) {
-        if attr as sattr_T != msg_ext_last_attr {
+        if attr as sattr_T != msg_ext_last_attr.get() {
             msg_ext_emit_chunk();
-            msg_ext_last_attr = attr as sattr_T;
-            msg_ext_last_hl_id = hl_id;
+            msg_ext_last_attr.set(attr as sattr_T);
+            msg_ext_last_hl_id.set(hl_id);
         }
         let mut len: size_t = if maxlen < 0 as ::core::ffi::c_int {
             strlen(str)
         } else {
             strnlen(str, maxlen as size_t)
         };
-        ga_concat_len(&raw mut msg_ext_last_chunk, str, len);
+        ga_concat_len(msg_ext_last_chunk.ptr(), str, len);
         let mut lastline: *const ::core::ffi::c_char =
             xmemrchr(str as *const ::core::ffi::c_void, '\n' as uint8_t, len)
                 as *const ::core::ffi::c_char;
@@ -7424,35 +7469,41 @@ unsafe extern "C" fn msg_puts_display(
         } else {
             mb_string2cells_len(p, maxlen as size_t)
         }) as ::core::ffi::c_int;
-        msg_col = (if !lastline.is_null() {
-            0 as ::core::ffi::c_int
-        } else {
-            msg_col
-        }) + col;
+        msg_col.set(
+            (if !lastline.is_null() {
+                0 as ::core::ffi::c_int
+            } else {
+                msg_col.get()
+            }) + col,
+        );
         return;
     }
     let mut print_attr: ::core::ffi::c_int = hl_combine_attr(
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
         attr,
     );
     msg_grid_validate();
-    cmdline_was_last_drawn = redrawing_cmdline;
+    cmdline_was_last_drawn.set(redrawing_cmdline.get());
     let mut msg_row_pending: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     loop {
-        if msg_col >= Columns {
-            if p_more != 0 && recurse == 0 {
+        if msg_col.get() >= Columns.get() {
+            if p_more.get() != 0 && recurse == 0 {
                 store_sb_text(&raw mut sb_str, s, hl_id, &raw mut sb_col, true_0);
             }
-            if msg_no_more as ::core::ffi::c_int != 0 && lines_left == 0 as ::core::ffi::c_int {
+            if msg_no_more.get() as ::core::ffi::c_int != 0
+                && lines_left.get() == 0 as ::core::ffi::c_int
+            {
                 break;
             }
-            msg_col = 0 as ::core::ffi::c_int;
-            msg_row += 1;
-            msg_didout = false_0 != 0;
+            msg_col.set(0 as ::core::ffi::c_int);
+            (*msg_row.ptr()) += 1;
+            msg_didout.set(false_0 != 0);
         }
-        if msg_row >= Rows {
-            msg_row = Rows - 1 as ::core::ffi::c_int;
-            if msg_no_more as ::core::ffi::c_int != 0 && lines_left == 0 as ::core::ffi::c_int {
+        if msg_row.get() >= Rows.get() {
+            msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+            if msg_no_more.get() as ::core::ffi::c_int != 0
+                && lines_left.get() == 0 as ::core::ffi::c_int
+            {
                 break;
             }
             if recurse == 0 {
@@ -7462,24 +7513,24 @@ unsafe extern "C" fn msg_puts_display(
                 }
                 msg_scroll_up(true_0 != 0, false_0 != 0);
                 inc_msg_scrolled();
-                need_wait_return = true_0 != 0;
-                redraw_cmdline = true_0 != 0;
-                if cmdline_row > 0 as ::core::ffi::c_int && !exmode_active {
-                    cmdline_row -= 1;
+                need_wait_return.set(true_0 != 0);
+                redraw_cmdline.set(true_0 != 0);
+                if cmdline_row.get() > 0 as ::core::ffi::c_int && !exmode_active.get() {
+                    (*cmdline_row.ptr()) -= 1;
                 }
-                if lines_left > 0 as ::core::ffi::c_int {
-                    lines_left -= 1;
+                if lines_left.get() > 0 as ::core::ffi::c_int {
+                    (*lines_left.ptr()) -= 1;
                 }
-                if p_more != 0
-                    && lines_left == 0 as ::core::ffi::c_int
-                    && State != MODE_HITRETURN as ::core::ffi::c_int
-                    && !msg_no_more
-                    && !exmode_active
+                if p_more.get() != 0
+                    && lines_left.get() == 0 as ::core::ffi::c_int
+                    && State.get() != MODE_HITRETURN as ::core::ffi::c_int
+                    && !msg_no_more.get()
+                    && !exmode_active.get()
                 {
                     if do_more_prompt(NUL) {
-                        s = confirm_buttons;
+                        s = confirm_buttons.get();
                     }
-                    if quit_more {
+                    if quit_more.get() {
                         return;
                     }
                 }
@@ -7491,15 +7542,15 @@ unsafe extern "C" fn msg_puts_display(
         {
             break;
         }
-        if msg_row != msg_row_pending
+        if msg_row.get() != msg_row_pending
             && (*s as uint8_t as ::core::ffi::c_int >= 0x20 as ::core::ffi::c_int
                 || *s as ::core::ffi::c_int == TAB)
         {
             if msg_row_pending >= 0 as ::core::ffi::c_int {
                 msg_line_flush();
             }
-            grid_line_start(&raw mut msg_grid_adj, msg_row);
-            msg_row_pending = msg_row;
+            grid_line_start(msg_grid_adj.ptr(), msg_row.get());
+            msg_row_pending = msg_row.get();
         }
         if *s as uint8_t as ::core::ffi::c_int >= 0x20 as ::core::ffi::c_int {
             let mut cw: ::core::ffi::c_int = utf_ptr2cells(s);
@@ -7511,50 +7562,52 @@ unsafe extern "C" fn msg_puts_display(
             } else {
                 utfc_ptr2len(s)
             };
-            if cw > 1 as ::core::ffi::c_int && msg_col == Columns - 1 as ::core::ffi::c_int {
+            if cw > 1 as ::core::ffi::c_int
+                && msg_col.get() == Columns.get() - 1 as ::core::ffi::c_int
+            {
                 grid_line_puts(
-                    msg_col,
+                    msg_col.get(),
                     b">\0".as_ptr() as *const ::core::ffi::c_char,
                     1 as ::core::ffi::c_int,
-                    *hl_attr_active.offset(HLF_AT as ::core::ffi::c_int as isize),
+                    *(*hl_attr_active.ptr()).offset(HLF_AT as ::core::ffi::c_int as isize),
                 );
                 cw = 1 as ::core::ffi::c_int;
             } else {
-                grid_line_puts(msg_col, s, l, print_attr);
+                grid_line_puts(msg_col.get(), s, l, print_attr);
                 s = s.offset(l as isize);
             }
-            msg_didout = true_0 != 0;
-            msg_col += cw;
+            msg_didout.set(true_0 != 0);
+            (*msg_col.ptr()) += cw;
         } else {
             let c2rust_fresh5 = s;
             s = s.offset(1);
             let mut c: ::core::ffi::c_char = *c2rust_fresh5;
             if c as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
-                msg_didout = false_0 != 0;
-                msg_col = 0 as ::core::ffi::c_int;
-                msg_row += 1;
-                if p_more != 0 && recurse == 0 {
+                msg_didout.set(false_0 != 0);
+                msg_col.set(0 as ::core::ffi::c_int);
+                (*msg_row.ptr()) += 1;
+                if p_more.get() != 0 && recurse == 0 {
                     store_sb_text(&raw mut sb_str, s, hl_id, &raw mut sb_col, true_0);
                 }
             } else if c as ::core::ffi::c_int == '\r' as ::core::ffi::c_int {
-                msg_col = 0 as ::core::ffi::c_int;
+                msg_col.set(0 as ::core::ffi::c_int);
             } else if c as ::core::ffi::c_int == '\u{8}' as ::core::ffi::c_int {
-                if msg_col != 0 {
-                    msg_col -= 1;
+                if msg_col.get() != 0 {
+                    (*msg_col.ptr()) -= 1;
                 }
             } else if c as ::core::ffi::c_int == TAB {
                 loop {
                     grid_line_puts(
-                        msg_col,
+                        msg_col.get(),
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
                         1 as ::core::ffi::c_int,
                         print_attr,
                     );
-                    msg_col += 1 as ::core::ffi::c_int;
-                    if msg_col == Columns {
+                    (*msg_col.ptr()) += 1 as ::core::ffi::c_int;
+                    if msg_col.get() == Columns.get() {
                         break;
                     }
-                    if msg_col & 7 as ::core::ffi::c_int == 0 {
+                    if msg_col.get() & 7 as ::core::ffi::c_int == 0 {
                         break;
                     }
                 }
@@ -7566,34 +7619,38 @@ unsafe extern "C" fn msg_puts_display(
     if msg_row_pending >= 0 as ::core::ffi::c_int {
         msg_line_flush();
     }
-    msg_cursor_goto(msg_row, msg_col);
-    if p_more != 0 && recurse == 0 {
+    msg_cursor_goto(msg_row.get(), msg_col.get());
+    if p_more.get() != 0 && recurse == 0 {
         store_sb_text(&raw mut sb_str, s, hl_id, &raw mut sb_col, false_0);
     }
     msg_check();
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_line_flush() {
-    if cmdmsg_rl {
-        grid_line_mirror(msg_grid.cols);
+    if cmdmsg_rl.get() {
+        grid_line_mirror((*msg_grid.ptr()).cols);
     }
     grid_line_flush_if_valid_row();
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_cursor_goto(mut row: ::core::ffi::c_int, mut col: ::core::ffi::c_int) {
-    if cmdmsg_rl {
-        col = Columns - 1 as ::core::ffi::c_int - col;
+    if cmdmsg_rl.get() {
+        col = Columns.get() - 1 as ::core::ffi::c_int - col;
     }
-    let mut grid: *mut ScreenGrid = grid_adjust(&raw mut msg_grid_adj, &raw mut row, &raw mut col);
+    let mut grid: *mut ScreenGrid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
     ui_grid_cursor_goto((*grid).handle, row, col);
 }
 #[no_mangle]
 pub unsafe extern "C" fn message_filtered(mut msg_0: *const ::core::ffi::c_char) -> bool {
-    if cmdmod.cmod_filter_regmatch.regprog.is_null() {
+    if (*cmdmod.ptr()).cmod_filter_regmatch.regprog.is_null() {
         return false_0 != 0;
     }
-    let mut match_0: bool = vim_regexec(&raw mut cmdmod.cmod_filter_regmatch, msg_0, 0 as colnr_T);
-    return if cmdmod.cmod_filter_force as ::core::ffi::c_int != 0 {
+    let mut match_0: bool = vim_regexec(
+        &raw mut (*cmdmod.ptr()).cmod_filter_regmatch,
+        msg_0,
+        0 as colnr_T,
+    );
+    return if (*cmdmod.ptr()).cmod_filter_force as ::core::ffi::c_int != 0 {
         match_0 as ::core::ffi::c_int
     } else {
         !match_0 as ::core::ffi::c_int
@@ -7601,9 +7658,9 @@ pub unsafe extern "C" fn message_filtered(mut msg_0: *const ::core::ffi::c_char)
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_scrollsize() -> ::core::ffi::c_int {
-    return msg_scrolled
-        + p_ch as ::core::ffi::c_int
-        + (if p_ch > 0 as OptInt || msg_scrolled > 1 as ::core::ffi::c_int {
+    return msg_scrolled.get()
+        + p_ch.get() as ::core::ffi::c_int
+        + (if p_ch.get() > 0 as OptInt || msg_scrolled.get() > 1 as ::core::ffi::c_int {
             1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
@@ -7612,60 +7669,63 @@ pub unsafe extern "C" fn msg_scrollsize() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn msg_do_throttle() -> bool {
     return msg_use_grid() as ::core::ffi::c_int != 0
-        && rdb_flags & kOptRdbFlagNothrottle as ::core::ffi::c_int as ::core::ffi::c_uint == 0;
+        && rdb_flags.get() & kOptRdbFlagNothrottle as ::core::ffi::c_int as ::core::ffi::c_uint
+            == 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_scroll_up(mut may_throttle: bool, mut zerocmd: bool) {
     if may_throttle as ::core::ffi::c_int != 0 && msg_do_throttle() as ::core::ffi::c_int != 0 {
-        msg_grid.throttled = true_0 != 0;
+        (*msg_grid.ptr()).throttled = true_0 != 0;
     }
-    msg_did_scroll = true_0 != 0;
-    if msg_grid_pos > 0 as ::core::ffi::c_int {
-        msg_grid_set_pos(msg_grid_pos - 1 as ::core::ffi::c_int, !zerocmd);
-        if zerocmd as ::core::ffi::c_int != 0 && !msg_grid.chars.is_null() {
+    msg_did_scroll.set(true_0 != 0);
+    if msg_grid_pos.get() > 0 as ::core::ffi::c_int {
+        msg_grid_set_pos(msg_grid_pos.get() - 1 as ::core::ffi::c_int, !zerocmd);
+        if zerocmd as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).chars.is_null() {
             grid_clear_line(
-                &raw mut msg_grid,
-                *msg_grid
+                msg_grid.ptr(),
+                *(*msg_grid.ptr())
                     .line_offset
                     .offset(0 as ::core::ffi::c_int as isize),
-                msg_grid.cols,
+                (*msg_grid.ptr()).cols,
                 false_0 != 0,
             );
         }
     } else {
         grid_del_lines(
-            &raw mut msg_grid,
+            msg_grid.ptr(),
             0 as ::core::ffi::c_int,
             1 as ::core::ffi::c_int,
-            msg_grid.rows,
+            (*msg_grid.ptr()).rows,
             0 as ::core::ffi::c_int,
-            msg_grid.cols,
+            (*msg_grid.ptr()).cols,
         );
         memmove(
-            msg_grid.dirty_col as *mut ::core::ffi::c_void,
-            msg_grid.dirty_col.offset(1 as ::core::ffi::c_int as isize)
-                as *const ::core::ffi::c_void,
-            ((msg_grid.rows - 1 as ::core::ffi::c_int) as size_t)
+            (*msg_grid.ptr()).dirty_col as *mut ::core::ffi::c_void,
+            (*msg_grid.ptr())
+                .dirty_col
+                .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+            (((*msg_grid.ptr()).rows - 1 as ::core::ffi::c_int) as size_t)
                 .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
         );
-        *msg_grid
+        *(*msg_grid.ptr())
             .dirty_col
-            .offset((msg_grid.rows - 1 as ::core::ffi::c_int) as isize) = 0 as ::core::ffi::c_int;
+            .offset(((*msg_grid.ptr()).rows - 1 as ::core::ffi::c_int) as isize) =
+            0 as ::core::ffi::c_int;
     }
     grid_clear(
-        &raw mut msg_grid_adj,
-        Rows - 1 as ::core::ffi::c_int,
-        Rows,
+        msg_grid_adj.ptr(),
+        Rows.get() - 1 as ::core::ffi::c_int,
+        Rows.get(),
         0 as ::core::ffi::c_int,
-        Columns,
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+        Columns.get(),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
     );
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_scroll_flush() {
-    if msg_grid.throttled {
-        msg_grid.throttled = false_0 != 0;
-        let mut pos_delta: ::core::ffi::c_int = msg_grid_pos_at_flush - msg_grid_pos;
+    if (*msg_grid.ptr()).throttled {
+        (*msg_grid.ptr()).throttled = false_0 != 0;
+        let mut pos_delta: ::core::ffi::c_int = msg_grid_pos_at_flush.get() - msg_grid_pos.get();
         '_c2rust_label: {
             if pos_delta >= 0 as ::core::ffi::c_int {
             } else {
@@ -7677,16 +7737,16 @@ pub unsafe extern "C" fn msg_scroll_flush() {
                 );
             }
         };
-        let mut delta: ::core::ffi::c_int = if msg_scrolled - msg_scrolled_at_flush < msg_grid.rows
-        {
-            msg_scrolled - msg_scrolled_at_flush
-        } else {
-            msg_grid.rows
-        };
+        let mut delta: ::core::ffi::c_int =
+            if msg_scrolled.get() - msg_scrolled_at_flush.get() < (*msg_grid.ptr()).rows {
+                msg_scrolled.get() - msg_scrolled_at_flush.get()
+            } else {
+                (*msg_grid.ptr()).rows
+            };
         if pos_delta > 0 as ::core::ffi::c_int {
-            ui_ext_msg_set_pos(msg_grid_pos, true_0 != 0);
+            ui_ext_msg_set_pos(msg_grid_pos.get(), true_0 != 0);
         }
-        let mut to_scroll: ::core::ffi::c_int = delta - pos_delta - msg_grid_scroll_discount;
+        let mut to_scroll: ::core::ffi::c_int = delta - pos_delta - msg_grid_scroll_discount.get();
         '_c2rust_label_0: {
             if to_scroll >= 0 as ::core::ffi::c_int {
             } else {
@@ -7698,18 +7758,18 @@ pub unsafe extern "C" fn msg_scroll_flush() {
                 );
             }
         };
-        if to_scroll > 0 as ::core::ffi::c_int && msg_grid_pos == 0 as ::core::ffi::c_int {
+        if to_scroll > 0 as ::core::ffi::c_int && msg_grid_pos.get() == 0 as ::core::ffi::c_int {
             ui_call_grid_scroll(
-                msg_grid.handle as Integer,
+                (*msg_grid.ptr()).handle as Integer,
                 0 as Integer,
-                Rows as Integer,
+                Rows.get() as Integer,
                 0 as Integer,
-                Columns as Integer,
+                Columns.get() as Integer,
                 to_scroll as Integer,
                 0 as Integer,
             );
         }
-        let mut i: ::core::ffi::c_int = if Rows
+        let mut i: ::core::ffi::c_int = if Rows.get()
             - (if delta > 1 as ::core::ffi::c_int {
                 delta
             } else {
@@ -7717,16 +7777,17 @@ pub unsafe extern "C" fn msg_scroll_flush() {
             })
             > 0 as ::core::ffi::c_int
         {
-            Rows - (if delta > 1 as ::core::ffi::c_int {
-                delta
-            } else {
-                1 as ::core::ffi::c_int
-            })
+            Rows.get()
+                - (if delta > 1 as ::core::ffi::c_int {
+                    delta
+                } else {
+                    1 as ::core::ffi::c_int
+                })
         } else {
             0 as ::core::ffi::c_int
         };
-        while i < Rows {
-            let mut row: ::core::ffi::c_int = i - msg_grid_pos;
+        while i < Rows.get() {
+            let mut row: ::core::ffi::c_int = i - msg_grid_pos.get();
             '_c2rust_label_1: {
                 if row >= 0 as ::core::ffi::c_int {
                 } else {
@@ -7739,71 +7800,71 @@ pub unsafe extern "C" fn msg_scroll_flush() {
                 }
             };
             ui_line(
-                &raw mut msg_grid,
+                msg_grid.ptr(),
                 row,
                 false_0 != 0,
                 0 as ::core::ffi::c_int,
-                *msg_grid.dirty_col.offset(row as isize),
-                msg_grid.cols,
-                *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                *(*msg_grid.ptr()).dirty_col.offset(row as isize),
+                (*msg_grid.ptr()).cols,
+                *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
                 false_0 != 0,
             );
-            *msg_grid.dirty_col.offset(row as isize) = 0 as ::core::ffi::c_int;
+            *(*msg_grid.ptr()).dirty_col.offset(row as isize) = 0 as ::core::ffi::c_int;
             i += 1;
         }
     }
-    msg_scrolled_at_flush = msg_scrolled;
-    msg_grid_scroll_discount = 0 as ::core::ffi::c_int;
-    msg_grid_pos_at_flush = msg_grid_pos;
+    msg_scrolled_at_flush.set(msg_scrolled.get());
+    msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
+    msg_grid_pos_at_flush.set(msg_grid_pos.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_reset_scroll() {
     if ui_has(kUIMessages) {
         return;
     }
-    msg_grid.throttled = false_0 != 0;
-    msg_grid_set_pos(Rows - p_ch as ::core::ffi::c_int, false_0 != 0);
-    clear_cmdline = true_0 != 0;
-    if !msg_grid.chars.is_null() {
+    (*msg_grid.ptr()).throttled = false_0 != 0;
+    msg_grid_set_pos(Rows.get() - p_ch.get() as ::core::ffi::c_int, false_0 != 0);
+    clear_cmdline.set(true_0 != 0);
+    if !(*msg_grid.ptr()).chars.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i
-            < (if msg_scrollsize() < msg_grid.rows {
+            < (if msg_scrollsize() < (*msg_grid.ptr()).rows {
                 msg_scrollsize()
             } else {
-                msg_grid.rows
+                (*msg_grid.ptr()).rows
             })
         {
             grid_clear_line(
-                &raw mut msg_grid,
-                *msg_grid.line_offset.offset(i as isize),
-                msg_grid.cols,
+                msg_grid.ptr(),
+                *(*msg_grid.ptr()).line_offset.offset(i as isize),
+                (*msg_grid.ptr()).cols,
                 false_0 != 0,
             );
             i += 1;
         }
     }
-    msg_scrolled = 0 as ::core::ffi::c_int;
-    msg_scrolled_at_flush = 0 as ::core::ffi::c_int;
-    msg_grid_scroll_discount = 0 as ::core::ffi::c_int;
+    msg_scrolled.set(0 as ::core::ffi::c_int);
+    msg_scrolled_at_flush.set(0 as ::core::ffi::c_int);
+    msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ui_refresh() {
-    if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 && !msg_grid.chars.is_null() {
+    if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).chars.is_null() {
         ui_call_grid_resize(
-            msg_grid.handle as Integer,
-            msg_grid.cols as Integer,
-            msg_grid.rows as Integer,
+            (*msg_grid.ptr()).handle as Integer,
+            (*msg_grid.ptr()).cols as Integer,
+            (*msg_grid.ptr()).rows as Integer,
         );
-        ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
+        ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ui_flush() {
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
-        && !msg_grid.chars.is_null()
-        && msg_grid.pending_comp_index_update as ::core::ffi::c_int != 0
+        && !(*msg_grid.ptr()).chars.is_null()
+        && (*msg_grid.ptr()).pending_comp_index_update as ::core::ffi::c_int != 0
     {
-        ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled != 0);
+        ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
     }
 }
 unsafe extern "C" fn inc_msg_scrolled() {
@@ -7834,11 +7895,12 @@ unsafe extern "C" fn inc_msg_scrolled() {
         set_vim_var_string(VV_SCROLLSTART, p.data, p.size as ptrdiff_t);
         xfree(tofree as *mut ::core::ffi::c_void);
     }
-    msg_scrolled += 1;
+    (*msg_scrolled.ptr()) += 1;
     set_must_redraw(UPD_VALID as ::core::ffi::c_int);
 }
-static mut last_msgchunk: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
-static mut do_clear_sb_text: sb_clear_T = SB_CLEAR_NONE;
+static last_msgchunk: GlobalCell<*mut msgchunk_T> =
+    GlobalCell::new(::core::ptr::null_mut::<msgchunk_T>());
+static do_clear_sb_text: GlobalCell<sb_clear_T> = GlobalCell::new(SB_CLEAR_NONE);
 unsafe extern "C" fn store_sb_text(
     mut sb_str: *mut *const ::core::ffi::c_char,
     mut s: *const ::core::ffi::c_char,
@@ -7847,24 +7909,24 @@ unsafe extern "C" fn store_sb_text(
     mut finish: ::core::ffi::c_int,
 ) {
     let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
-    if do_clear_sb_text as ::core::ffi::c_uint
+    if do_clear_sb_text.get() as ::core::ffi::c_uint
         == SB_CLEAR_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
-        || do_clear_sb_text as ::core::ffi::c_uint
+        || do_clear_sb_text.get() as ::core::ffi::c_uint
             == SB_CLEAR_CMDLINE_DONE as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         clear_sb_text(
-            do_clear_sb_text as ::core::ffi::c_uint
+            do_clear_sb_text.get() as ::core::ffi::c_uint
                 == SB_CLEAR_ALL as ::core::ffi::c_int as ::core::ffi::c_uint,
         );
         msg_sb_eol();
-        if do_clear_sb_text as ::core::ffi::c_uint
+        if do_clear_sb_text.get() as ::core::ffi::c_uint
             == SB_CLEAR_CMDLINE_DONE as ::core::ffi::c_int as ::core::ffi::c_uint
             && s > *sb_str
             && **sb_str as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
         {
             *sb_str = (*sb_str).offset(1);
         }
-        do_clear_sb_text = SB_CLEAR_NONE;
+        do_clear_sb_text.set(SB_CLEAR_NONE);
     }
     if s > *sb_str {
         mp = xmalloc(
@@ -7882,17 +7944,17 @@ unsafe extern "C" fn store_sb_text(
         );
         *(&raw mut (*mp).sb_text as *mut ::core::ffi::c_char)
             .offset(s.offset_from(*sb_str) as isize) = NUL as ::core::ffi::c_char;
-        if last_msgchunk.is_null() {
-            last_msgchunk = mp;
+        if (*last_msgchunk.ptr()).is_null() {
+            last_msgchunk.set(mp);
             (*mp).sb_prev = ::core::ptr::null_mut::<msgchunk_T>();
         } else {
-            (*mp).sb_prev = last_msgchunk;
-            (*last_msgchunk).sb_next = mp;
-            last_msgchunk = mp;
+            (*mp).sb_prev = last_msgchunk.get();
+            (*last_msgchunk.get()).sb_next = mp;
+            last_msgchunk.set(mp);
         }
         (*mp).sb_next = ::core::ptr::null_mut::<msgchunk_T>();
-    } else if finish != 0 && !last_msgchunk.is_null() {
-        (*last_msgchunk).sb_eol = true_0 as ::core::ffi::c_char;
+    } else if finish != 0 && !(*last_msgchunk.ptr()).is_null() {
+        (*last_msgchunk.get()).sb_eol = true_0 as ::core::ffi::c_char;
     }
     *sb_str = s;
     *sb_col = 0 as ::core::ffi::c_int;
@@ -7900,30 +7962,31 @@ unsafe extern "C" fn store_sb_text(
 #[no_mangle]
 pub unsafe extern "C" fn may_clear_sb_text() {
     msg_ext_ui_flush();
-    do_clear_sb_text = SB_CLEAR_ALL;
-    do_clear_hist_temp = true_0 != 0;
+    do_clear_sb_text.set(SB_CLEAR_ALL);
+    do_clear_hist_temp.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn sb_text_start_cmdline() {
-    if do_clear_sb_text as ::core::ffi::c_uint
+    if do_clear_sb_text.get() as ::core::ffi::c_uint
         == SB_CLEAR_CMDLINE_BUSY as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         sb_text_restart_cmdline();
     } else {
         msg_sb_eol();
-        do_clear_sb_text = SB_CLEAR_CMDLINE_BUSY;
+        do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn sb_text_restart_cmdline() {
-    do_clear_sb_text = SB_CLEAR_CMDLINE_BUSY;
-    if last_msgchunk.is_null() || (*last_msgchunk).sb_eol as ::core::ffi::c_int != 0 {
+    do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
+    if (*last_msgchunk.ptr()).is_null() || (*last_msgchunk.get()).sb_eol as ::core::ffi::c_int != 0
+    {
         return;
     }
-    let mut tofree: *mut msgchunk_T = msg_sb_start(last_msgchunk);
-    last_msgchunk = (*tofree).sb_prev;
-    if !last_msgchunk.is_null() {
-        (*last_msgchunk).sb_next = ::core::ptr::null_mut::<msgchunk_T>();
+    let mut tofree: *mut msgchunk_T = msg_sb_start(last_msgchunk.get());
+    last_msgchunk.set((*tofree).sb_prev);
+    if !(*last_msgchunk.ptr()).is_null() {
+        (*last_msgchunk.get()).sb_next = ::core::ptr::null_mut::<msgchunk_T>();
     }
     while !tofree.is_null() {
         let mut tofree_next: *mut msgchunk_T = (*tofree).sb_next;
@@ -7933,21 +7996,21 @@ pub unsafe extern "C" fn sb_text_restart_cmdline() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn sb_text_end_cmdline() {
-    do_clear_sb_text = SB_CLEAR_CMDLINE_DONE;
+    do_clear_sb_text.set(SB_CLEAR_CMDLINE_DONE);
 }
 #[no_mangle]
 pub unsafe extern "C" fn clear_sb_text(mut all: bool) {
     let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
     let mut lastp: *mut *mut msgchunk_T = ::core::ptr::null_mut::<*mut msgchunk_T>();
     if all {
-        lastp = &raw mut last_msgchunk;
+        lastp = last_msgchunk.ptr();
     } else {
-        if last_msgchunk.is_null() {
+        if (*last_msgchunk.ptr()).is_null() {
             return;
         }
         lastp = &raw mut (*(msg_sb_start
             as unsafe extern "C" fn(*mut msgchunk_T) -> *mut msgchunk_T)(
-            last_msgchunk
+            last_msgchunk.get()
         ))
         .sb_prev;
     }
@@ -7999,7 +8062,7 @@ pub unsafe extern "C" fn show_sb_text() {
         ex_messages(&raw mut ea);
         return;
     }
-    let mut mp: *mut msgchunk_T = msg_sb_start(last_msgchunk);
+    let mut mp: *mut msgchunk_T = msg_sb_start(last_msgchunk.get());
     if mp.is_null() || (*mp).sb_prev.is_null() {
         vim_beep(kOptBoFlagMess as ::core::ffi::c_int as ::core::ffi::c_uint);
     } else {
@@ -8016,8 +8079,8 @@ unsafe extern "C" fn msg_sb_start(mut mps: *mut msgchunk_T) -> *mut msgchunk_T {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_sb_eol() {
-    if !last_msgchunk.is_null() {
-        (*last_msgchunk).sb_eol = true_0 as ::core::ffi::c_char;
+    if !(*last_msgchunk.ptr()).is_null() {
+        (*last_msgchunk.get()).sb_eol = true_0 as ::core::ffi::c_char;
     }
 }
 unsafe extern "C" fn disp_sb_line(
@@ -8026,8 +8089,8 @@ unsafe extern "C" fn disp_sb_line(
 ) -> *mut msgchunk_T {
     let mut mp: *mut msgchunk_T = smp;
     loop {
-        msg_row = row;
-        msg_col = (*mp).sb_msg_col;
+        msg_row.set(row);
+        msg_col.set((*mp).sb_msg_col);
         let mut p: *mut ::core::ffi::c_char = &raw mut (*mp).sb_text as *mut ::core::ffi::c_char;
         msg_puts_display(p, -1 as ::core::ffi::c_int, (*mp).sb_hl_id, true_0);
         if (*mp).sb_eol as ::core::ffi::c_int != 0 || (*mp).sb_next.is_null() {
@@ -8039,13 +8102,14 @@ unsafe extern "C" fn disp_sb_line(
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_use_printf() -> ::core::ffi::c_int {
-    return (!embedded_mode && ui_active() == 0 && !ui_has(kUIMessages)) as ::core::ffi::c_int;
+    return (!embedded_mode.get() && ui_active() == 0 && !ui_has(kUIMessages))
+        as ::core::ffi::c_int;
 }
 unsafe extern "C" fn msg_puts_printf(mut str: *const ::core::ffi::c_char, maxlen: ptrdiff_t) {
     let mut s: *const ::core::ffi::c_char = str;
     let mut buf: [::core::ffi::c_char; 7] = [0; 7];
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if on_print.type_0 as ::core::ffi::c_uint
+    if (*on_print.ptr()).type_0 as ::core::ffi::c_uint
         != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut argv: [typval_T; 1] = [typval_T {
@@ -8062,7 +8126,7 @@ unsafe extern "C" fn msg_puts_printf(mut str: *const ::core::ffi::c_char, maxlen
             vval: typval_vval_union { v_number: 0 },
         };
         callback_call(
-            &raw mut on_print,
+            on_print.ptr(),
             1 as ::core::ffi::c_int,
             &raw mut argv as *mut typval_T,
             &raw mut rettv,
@@ -8074,12 +8138,12 @@ unsafe extern "C" fn msg_puts_printf(mut str: *const ::core::ffi::c_char, maxlen
         && *s as ::core::ffi::c_int != NUL
     {
         let mut len: ::core::ffi::c_int = utf_ptr2len(s);
-        if !(silent_mode as ::core::ffi::c_int != 0 && p_verbose == 0 as OptInt) {
+        if !(silent_mode.get() as ::core::ffi::c_int != 0 && p_verbose.get() == 0 as OptInt) {
             p = (&raw mut buf as *mut ::core::ffi::c_char).offset(0 as ::core::ffi::c_int as isize);
             if *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                && !info_message
-                && !silent_mode
-                && !headless_mode
+                && !info_message.get()
+                && !silent_mode.get()
+                && !headless_mode.get()
             {
                 let c2rust_fresh6 = p;
                 p = p.offset(1);
@@ -8091,7 +8155,7 @@ unsafe extern "C" fn msg_puts_printf(mut str: *const ::core::ffi::c_char, maxlen
                 len as size_t,
             );
             *p.offset(len as isize) = NUL as ::core::ffi::c_char;
-            if info_message {
+            if info_message.get() {
                 printf(
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                     &raw mut buf as *mut ::core::ffi::c_char,
@@ -8108,37 +8172,38 @@ unsafe extern "C" fn msg_puts_printf(mut str: *const ::core::ffi::c_char, maxlen
         if *s as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
             || *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
         {
-            msg_col = 0 as ::core::ffi::c_int;
-            msg_didout = false_0 != 0;
+            msg_col.set(0 as ::core::ffi::c_int);
+            msg_didout.set(false_0 != 0);
         } else {
-            msg_col += cw;
-            msg_didout = true_0 != 0;
+            (*msg_col.ptr()) += cw;
+            msg_didout.set(true_0 != 0);
         }
         s = s.offset(len as isize);
     }
 }
 unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool {
-    static mut entered: bool = false_0 != 0;
+    static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut used_typed_char: ::core::ffi::c_int = typed_char;
-    let mut oldState: ::core::ffi::c_int = State;
+    let mut oldState: ::core::ffi::c_int = State.get();
     let mut c: ::core::ffi::c_int = 0;
     let mut retval: bool = false_0 != 0;
     let mut to_redraw: bool = false_0 != 0;
     let mut mp_last: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
     let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
     let mut no_need_more: bool =
-        headless_mode as ::core::ffi::c_int != 0 && !embedded_mode && ui_active() == 0;
+        headless_mode.get() as ::core::ffi::c_int != 0 && !embedded_mode.get() && ui_active() == 0;
     if no_need_more as ::core::ffi::c_int != 0
-        || entered as ::core::ffi::c_int != 0
-        || State == MODE_HITRETURN as ::core::ffi::c_int && typed_char == 0 as ::core::ffi::c_int
+        || entered.get() as ::core::ffi::c_int != 0
+        || State.get() == MODE_HITRETURN as ::core::ffi::c_int
+            && typed_char == 0 as ::core::ffi::c_int
     {
         return false_0 != 0;
     }
-    entered = true_0 != 0;
+    entered.set(true_0 != 0);
     if typed_char == 'G' as ::core::ffi::c_int {
-        mp_last = msg_sb_start(last_msgchunk);
+        mp_last = msg_sb_start(last_msgchunk.get());
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < Rows - 2 as ::core::ffi::c_int
+        while i < Rows.get() - 2 as ::core::ffi::c_int
             && !mp_last.is_null()
             && !(*mp_last).sb_prev.is_null()
         {
@@ -8146,7 +8211,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
             i += 1;
         }
     }
-    State = MODE_ASKMORE as ::core::ffi::c_int;
+    State.set(MODE_ASKMORE as ::core::ffi::c_int);
     setmouse();
     if typed_char == NUL {
         msg_moremsg(false_0 != 0);
@@ -8156,7 +8221,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
             c = used_typed_char;
             used_typed_char = NUL;
         } else {
-            c = get_keystroke(resize_events);
+            c = get_keystroke(resize_events.get());
         }
         let mut toscroll: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         's_276: {
@@ -8170,19 +8235,19 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                     break 's_276;
                 }
                 117 => {
-                    toscroll = -(Rows / 2 as ::core::ffi::c_int);
+                    toscroll = -(Rows.get() / 2 as ::core::ffi::c_int);
                     break 's_276;
                 }
                 100 => {
-                    toscroll = Rows / 2 as ::core::ffi::c_int;
+                    toscroll = Rows.get() / 2 as ::core::ffi::c_int;
                     break 's_276;
                 }
                 98 | Ctrl_B | K_PAGEUP => {
-                    toscroll = -(Rows - 1 as ::core::ffi::c_int);
+                    toscroll = -(Rows.get() - 1 as ::core::ffi::c_int);
                     break 's_276;
                 }
                 32 | 102 | Ctrl_F | K_PAGEDOWN | -11517 => {
-                    toscroll = Rows - 1 as ::core::ffi::c_int;
+                    toscroll = Rows.get() - 1 as ::core::ffi::c_int;
                     break 's_276;
                 }
                 103 => {
@@ -8191,20 +8256,20 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                 }
                 71 => {
                     toscroll = 999999 as ::core::ffi::c_int;
-                    lines_left = 999999 as ::core::ffi::c_int;
+                    lines_left.set(999999 as ::core::ffi::c_int);
                     break 's_276;
                 }
                 58 => {
-                    if confirm_msg_used == 0 {
+                    if confirm_msg_used.get() == 0 {
                         typeahead_noflush(':' as ::core::ffi::c_int);
-                        cmdline_row = Rows - 1 as ::core::ffi::c_int;
-                        skip_redraw = true_0 != 0;
-                        need_wait_return = false_0 != 0;
+                        cmdline_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+                        skip_redraw.set(true_0 != 0);
+                        need_wait_return.set(false_0 != 0);
                     }
                 }
                 113 | Ctrl_C | ESC => {}
                 K_EVENT => {
-                    multiqueue_process_events(resize_events);
+                    multiqueue_process_events(resize_events.get());
                     to_redraw = true_0 != 0;
                     break 's_276;
                 }
@@ -8213,13 +8278,13 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                     continue 's_528;
                 }
             }
-            if confirm_msg_used != 0 {
+            if confirm_msg_used.get() != 0 {
                 retval = true_0 != 0;
             } else {
-                got_int = true_0 != 0;
-                quit_more = true_0 != 0;
+                got_int.set(true_0 != 0);
+                quit_more.set(true_0 != 0);
             }
-            lines_left = Rows - 1 as ::core::ffi::c_int;
+            lines_left.set(Rows.get() - 1 as ::core::ffi::c_int);
         }
         '_c2rust_label: {
             if toscroll == 0 as ::core::ffi::c_int || !to_redraw {
@@ -8237,14 +8302,16 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
         }
         if toscroll < 0 as ::core::ffi::c_int || to_redraw as ::core::ffi::c_int != 0 {
             if mp_last.is_null() {
-                mp = msg_sb_start(last_msgchunk);
+                mp = msg_sb_start(last_msgchunk.get());
             } else if !(*mp_last).sb_prev.is_null() {
                 mp = msg_sb_start((*mp_last).sb_prev);
             } else {
                 mp = ::core::ptr::null_mut::<msgchunk_T>();
             }
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < Rows - 2 as ::core::ffi::c_int && !mp.is_null() && !(*mp).sb_prev.is_null()
+            while i_0 < Rows.get() - 2 as ::core::ffi::c_int
+                && !mp.is_null()
+                && !(*mp).sb_prev.is_null()
             {
                 mp = msg_sb_start((*mp).sb_prev);
                 i_0 += 1;
@@ -8257,7 +8324,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                     }
                     mp = msg_sb_start((*mp).sb_prev);
                     if mp_last.is_null() {
-                        mp_last = msg_sb_start(last_msgchunk);
+                        mp_last = msg_sb_start(last_msgchunk.get());
                     } else {
                         mp_last = msg_sb_start((*mp_last).sb_prev);
                     }
@@ -8265,35 +8332,35 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                 }
                 if toscroll == -1 as ::core::ffi::c_int && !to_redraw {
                     grid_ins_lines(
-                        &raw mut msg_grid,
+                        msg_grid.ptr(),
                         0 as ::core::ffi::c_int,
                         1 as ::core::ffi::c_int,
-                        Rows,
+                        Rows.get(),
                         0 as ::core::ffi::c_int,
-                        Columns,
+                        Columns.get(),
                     );
                     grid_clear(
-                        &raw mut msg_grid_adj,
+                        msg_grid_adj.ptr(),
                         0 as ::core::ffi::c_int,
                         1 as ::core::ffi::c_int,
                         0 as ::core::ffi::c_int,
-                        Columns,
-                        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                        Columns.get(),
+                        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
                     );
                     disp_sb_line(0 as ::core::ffi::c_int, mp);
                 } else {
                     grid_clear(
-                        &raw mut msg_grid_adj,
+                        msg_grid_adj.ptr(),
                         0 as ::core::ffi::c_int,
-                        Rows,
+                        Rows.get(),
                         0 as ::core::ffi::c_int,
-                        Columns,
-                        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                        Columns.get(),
+                        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
                     );
                     let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while !mp.is_null() && i_2 < Rows - 1 as ::core::ffi::c_int {
+                    while !mp.is_null() && i_2 < Rows.get() - 1 as ::core::ffi::c_int {
                         mp = disp_sb_line(i_2, mp);
-                        msg_scrolled += 1;
+                        (*msg_scrolled.ptr()) += 1;
                         i_2 += 1;
                     }
                     to_redraw = false_0 != 0;
@@ -8301,70 +8368,70 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
                 toscroll = 0 as ::core::ffi::c_int;
             }
         } else {
-            if cmdline_row >= Rows && !ui_has(kUIMessages) {
+            if cmdline_row.get() >= Rows.get() && !ui_has(kUIMessages) {
                 msg_scroll_up(true_0 != 0, false_0 != 0);
-                msg_scrolled += 1;
+                (*msg_scrolled.ptr()) += 1;
             }
             while toscroll > 0 as ::core::ffi::c_int && !mp_last.is_null() {
-                if msg_do_throttle() as ::core::ffi::c_int != 0 && !msg_grid.throttled {
-                    msg_scrolled_at_flush -= 1;
-                    msg_grid_scroll_discount += 1;
+                if msg_do_throttle() as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).throttled {
+                    (*msg_scrolled_at_flush.ptr()) -= 1;
+                    (*msg_grid_scroll_discount.ptr()) += 1;
                 }
                 msg_scroll_up(true_0 != 0, false_0 != 0);
                 inc_msg_scrolled();
                 grid_clear(
-                    &raw mut msg_grid_adj,
-                    Rows - 2 as ::core::ffi::c_int,
-                    Rows - 1 as ::core::ffi::c_int,
+                    msg_grid_adj.ptr(),
+                    Rows.get() - 2 as ::core::ffi::c_int,
+                    Rows.get() - 1 as ::core::ffi::c_int,
                     0 as ::core::ffi::c_int,
-                    Columns,
-                    *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                    Columns.get(),
+                    *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
                 );
-                mp_last = disp_sb_line(Rows - 2 as ::core::ffi::c_int, mp_last);
+                mp_last = disp_sb_line(Rows.get() - 2 as ::core::ffi::c_int, mp_last);
                 toscroll -= 1;
             }
         }
         if toscroll <= 0 as ::core::ffi::c_int {
             grid_clear(
-                &raw mut msg_grid_adj,
-                Rows - 1 as ::core::ffi::c_int,
-                Rows,
+                msg_grid_adj.ptr(),
+                Rows.get() - 1 as ::core::ffi::c_int,
+                Rows.get(),
                 0 as ::core::ffi::c_int,
-                Columns,
-                *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+                Columns.get(),
+                *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
             );
             msg_moremsg(false_0 != 0);
         } else {
-            lines_left = toscroll;
+            lines_left.set(toscroll);
             break;
         }
     }
     grid_clear(
-        &raw mut msg_grid_adj,
-        Rows - 1 as ::core::ffi::c_int,
-        Rows,
+        msg_grid_adj.ptr(),
+        Rows.get() - 1 as ::core::ffi::c_int,
+        Rows.get(),
         0 as ::core::ffi::c_int,
-        Columns,
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+        Columns.get(),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
     );
-    redraw_cmdline = true_0 != 0;
-    clear_cmdline = false_0 != 0;
-    mode_displayed = false_0 != 0;
-    State = oldState;
+    redraw_cmdline.set(true_0 != 0);
+    clear_cmdline.set(false_0 != 0);
+    mode_displayed.set(false_0 != 0);
+    State.set(oldState);
     setmouse();
-    if quit_more {
-        msg_row = Rows - 1 as ::core::ffi::c_int;
-        msg_col = 0 as ::core::ffi::c_int;
+    if quit_more.get() {
+        msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+        msg_col.set(0 as ::core::ffi::c_int);
     }
-    entered = false_0 != 0;
+    entered.set(false_0 != 0);
     return retval;
 }
 unsafe extern "C" fn msg_moremsg(mut full: bool) {
     let mut attr: ::core::ffi::c_int = hl_combine_attr(
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
-        *hl_attr_active.offset(HLF_M as ::core::ffi::c_int as isize),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
+        *(*hl_attr_active.ptr()).offset(HLF_M as ::core::ffi::c_int as isize),
     );
-    grid_line_start(&raw mut msg_grid_adj, Rows - 1 as ::core::ffi::c_int);
+    grid_line_start(msg_grid_adj.ptr(), Rows.get() - 1 as ::core::ffi::c_int);
     let mut len: ::core::ffi::c_int = grid_line_puts(
         0 as ::core::ffi::c_int,
         gettext(b"-- More --\0".as_ptr() as *const ::core::ffi::c_char),
@@ -8390,29 +8457,31 @@ pub unsafe extern "C" fn repeat_message() {
     if ui_has(kUIMessages) {
         return;
     }
-    if State == MODE_ASKMORE as ::core::ffi::c_int {
+    if State.get() == MODE_ASKMORE as ::core::ffi::c_int {
         msg_moremsg(true_0 != 0);
-        msg_row = Rows - 1 as ::core::ffi::c_int;
-    } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 && !confirm_msg.is_null() {
-        display_confirm_msg();
-        msg_row = Rows - 1 as ::core::ffi::c_int;
-    } else if State == MODE_EXTERNCMD as ::core::ffi::c_int {
-        ui_cursor_goto(msg_row, msg_col);
-    } else if State == MODE_HITRETURN as ::core::ffi::c_int
-        || State == MODE_SETWSIZE as ::core::ffi::c_int
+        msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+        && !(*confirm_msg.ptr()).is_null()
     {
-        if msg_row == Rows - 1 as ::core::ffi::c_int {
-            msg_didout = false_0 != 0;
-            msg_col = 0 as ::core::ffi::c_int;
+        display_confirm_msg();
+        msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
+    } else if State.get() == MODE_EXTERNCMD as ::core::ffi::c_int {
+        ui_cursor_goto(msg_row.get(), msg_col.get());
+    } else if State.get() == MODE_HITRETURN as ::core::ffi::c_int
+        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
+    {
+        if msg_row.get() == Rows.get() - 1 as ::core::ffi::c_int {
+            msg_didout.set(false_0 != 0);
+            msg_col.set(0 as ::core::ffi::c_int);
             msg_clr_eos();
         }
         hit_return_msg(false_0 != 0);
-        msg_row = Rows - 1 as ::core::ffi::c_int;
+        msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_clr_eos() {
-    if msg_silent == 0 as ::core::ffi::c_int {
+    if msg_silent.get() == 0 as ::core::ffi::c_int {
         msg_clr_eos_force();
     }
 }
@@ -8421,56 +8490,58 @@ pub unsafe extern "C" fn msg_clr_eos_force() {
     if ui_has(kUIMessages) {
         return;
     }
-    let mut msg_startcol: ::core::ffi::c_int = if cmdmsg_rl as ::core::ffi::c_int != 0 {
+    let mut msg_startcol: ::core::ffi::c_int = if cmdmsg_rl.get() as ::core::ffi::c_int != 0 {
         0 as ::core::ffi::c_int
     } else {
-        msg_col
+        msg_col.get()
     };
-    let mut msg_endcol: ::core::ffi::c_int = if cmdmsg_rl as ::core::ffi::c_int != 0 {
-        Columns - msg_col
+    let mut msg_endcol: ::core::ffi::c_int = if cmdmsg_rl.get() as ::core::ffi::c_int != 0 {
+        Columns.get() - msg_col.get()
     } else {
-        Columns
+        Columns.get()
     };
-    if !msg_grid.chars.is_null() && msg_row < msg_grid_pos {
+    if !(*msg_grid.ptr()).chars.is_null() && msg_row.get() < msg_grid_pos.get() {
         msg_grid_validate();
-        if msg_row < msg_grid_pos {
-            msg_row = msg_grid_pos;
+        if msg_row.get() < msg_grid_pos.get() {
+            msg_row.set(msg_grid_pos.get());
         }
     }
     grid_clear(
-        &raw mut msg_grid_adj,
-        msg_row,
-        msg_row + 1 as ::core::ffi::c_int,
+        msg_grid_adj.ptr(),
+        msg_row.get(),
+        msg_row.get() + 1 as ::core::ffi::c_int,
         msg_startcol,
         msg_endcol,
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
     );
     grid_clear(
-        &raw mut msg_grid_adj,
-        msg_row + 1 as ::core::ffi::c_int,
-        Rows,
+        msg_grid_adj.ptr(),
+        msg_row.get() + 1 as ::core::ffi::c_int,
+        Rows.get(),
         0 as ::core::ffi::c_int,
-        Columns,
-        *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
+        Columns.get(),
+        *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
     );
-    redraw_cmdline = true_0 != 0;
-    if msg_row < Rows - 1 as ::core::ffi::c_int || msg_col == 0 as ::core::ffi::c_int {
-        clear_cmdline = false_0 != 0;
-        mode_displayed = false_0 != 0;
-        cmdline_was_last_drawn = false_0 != 0;
+    redraw_cmdline.set(true_0 != 0);
+    if msg_row.get() < Rows.get() - 1 as ::core::ffi::c_int
+        || msg_col.get() == 0 as ::core::ffi::c_int
+    {
+        clear_cmdline.set(false_0 != 0);
+        mode_displayed.set(false_0 != 0);
+        cmdline_was_last_drawn.set(false_0 != 0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_clr_cmdline() {
-    msg_row = cmdline_row;
-    msg_col = 0 as ::core::ffi::c_int;
+    msg_row.set(cmdline_row.get());
+    msg_col.set(0 as ::core::ffi::c_int);
     msg_clr_eos_force();
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_end() -> bool {
-    if !exiting
-        && need_wait_return as ::core::ffi::c_int != 0
-        && State & MODE_CMDLINE as ::core::ffi::c_int == 0
+    if !exiting.get()
+        && need_wait_return.get() as ::core::ffi::c_int != 0
+        && State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0
     {
         wait_return(false_0);
         return false_0 != 0;
@@ -8479,32 +8550,32 @@ pub unsafe extern "C" fn msg_end() -> bool {
     return true_0 != 0;
 }
 unsafe extern "C" fn msg_ext_init_chunks() -> *mut Array {
-    let mut tofree: *mut Array = msg_ext_chunks;
-    msg_ext_chunks = xcalloc(1 as size_t, ::core::mem::size_of::<Array>()) as *mut Array;
-    msg_col = 0 as ::core::ffi::c_int;
+    let mut tofree: *mut Array = msg_ext_chunks.get();
+    msg_ext_chunks.set(xcalloc(1 as size_t, ::core::mem::size_of::<Array>()) as *mut Array);
+    msg_col.set(0 as ::core::ffi::c_int);
     return tofree;
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
-        msg_ext_kind = ::core::ptr::null::<::core::ffi::c_char>();
+        msg_ext_kind.set(::core::ptr::null::<::core::ffi::c_char>());
         return;
-    } else if msg_ext_skip_flush {
+    } else if msg_ext_skip_flush.get() {
         return;
     }
     msg_ext_emit_chunk();
-    if (*msg_ext_chunks).size > 0 as size_t {
+    if (*msg_ext_chunks.get()).size > 0 as size_t {
         let mut tofree: *mut Array = msg_ext_init_chunks();
         ui_call_msg_show(
-            cstr_as_string(msg_ext_kind),
+            cstr_as_string(msg_ext_kind.get()),
             *tofree,
-            msg_ext_overwrite as Boolean,
-            msg_ext_history as Boolean,
-            msg_ext_append as Boolean,
-            msg_ext_id,
-            cstr_as_string(msg_ext_trigger),
+            msg_ext_overwrite.get() as Boolean,
+            msg_ext_history.get() as Boolean,
+            msg_ext_append.get() as Boolean,
+            msg_ext_id.get(),
+            cstr_as_string(msg_ext_trigger.get()),
         );
-        if msg_ext_history {
+        if msg_ext_history.get() {
             api_free_array(*tofree);
         } else {
             let mut msg_0: HlMessage = HlMessage {
@@ -8544,26 +8615,27 @@ pub unsafe extern "C" fn msg_ext_ui_flush() {
             msg_hist_add_multihl(msg_0, true_0 != 0, ::core::ptr::null_mut::<MessageData>());
         }
         xfree(tofree as *mut ::core::ffi::c_void);
-        msg_ext_overwrite = false_0 != 0;
-        msg_ext_history = false_0 != 0;
-        msg_ext_append = false_0 != 0;
-        msg_ext_kind = ::core::ptr::null::<::core::ffi::c_char>();
-        msg_id_next += (msg_ext_id.data.integer == msg_id_next) as ::core::ffi::c_int as int64_t;
-        msg_ext_id = object {
+        msg_ext_overwrite.set(false_0 != 0);
+        msg_ext_history.set(false_0 != 0);
+        msg_ext_append.set(false_0 != 0);
+        msg_ext_kind.set(::core::ptr::null::<::core::ffi::c_char>());
+        (*msg_id_next.ptr()) += ((*msg_ext_id.ptr()).data.integer == msg_id_next.get())
+            as ::core::ffi::c_int as int64_t;
+        msg_ext_id.set(object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed_11 {
-                integer: msg_id_next,
+                integer: msg_id_next.get(),
             },
-        };
+        });
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_ext_flush_showmode() {
-    static mut clear: bool = false_0 != 0;
+    static clear: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if ui_has(kUIMessages) as ::core::ffi::c_int != 0
-        && (msg_ext_last_attr != -1 as sattr_T || clear as ::core::ffi::c_int != 0)
+        && (msg_ext_last_attr.get() != -1 as sattr_T || clear.get() as ::core::ffi::c_int != 0)
     {
-        clear = msg_ext_last_attr != -1 as sattr_T;
+        clear.set(msg_ext_last_attr.get() != -1 as sattr_T);
         msg_ext_emit_chunk();
         let mut tofree: *mut Array = msg_ext_init_chunks();
         ui_call_msg_showmode(*tofree);
@@ -8576,9 +8648,9 @@ pub unsafe extern "C" fn msg_check() {
     if ui_has(kUIMessages) {
         return;
     }
-    if msg_row == Rows - 1 as ::core::ffi::c_int && msg_col >= sc_col {
-        need_wait_return = true_0 != 0;
-        redraw_cmdline = true_0 != 0;
+    if msg_row.get() == Rows.get() - 1 as ::core::ffi::c_int && msg_col.get() >= sc_col.get() {
+        need_wait_return.set(true_0 != 0);
+        redraw_cmdline.set(true_0 != 0);
     }
 }
 unsafe extern "C" fn redir_write(str: *const ::core::ffi::c_char, maxlen: ptrdiff_t) {
@@ -8586,43 +8658,49 @@ unsafe extern "C" fn redir_write(str: *const ::core::ffi::c_char, maxlen: ptrdif
     if maxlen == 0 as ptrdiff_t {
         return;
     }
-    if redir_off {
+    if redir_off.get() {
         return;
     }
-    if *p_vfile as ::core::ffi::c_int != NUL && verbose_fd.is_null() {
+    if *p_vfile.get() as ::core::ffi::c_int != NUL && (*verbose_fd.ptr()).is_null() {
         verbose_open();
     }
     if redirecting() != 0 {
         if *s as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
             && *s as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
         {
-            while redir_col < msg_col {
-                if !capture_ga.is_null() {
+            while redir_col.get() < msg_col.get() {
+                if !(*capture_ga.ptr()).is_null() {
                     ga_concat_len(
-                        capture_ga,
+                        capture_ga.get(),
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
                         1 as size_t,
                     );
                 }
-                if redir_reg != 0 {
+                if redir_reg.get() != 0 {
                     write_reg_contents(
-                        redir_reg,
+                        redir_reg.get(),
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
                         1 as ssize_t,
                         true_0,
                     );
-                } else if redir_vname {
+                } else if redir_vname.get() {
                     var_redir_str(
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
                         -1 as ::core::ffi::c_int,
                     );
-                } else if !redir_fd.is_null() {
-                    fputs(b" \0".as_ptr() as *const ::core::ffi::c_char, redir_fd);
+                } else if !(*redir_fd.ptr()).is_null() {
+                    fputs(
+                        b" \0".as_ptr() as *const ::core::ffi::c_char,
+                        redir_fd.get(),
+                    );
                 }
-                if !verbose_fd.is_null() {
-                    fputs(b" \0".as_ptr() as *const ::core::ffi::c_char, verbose_fd);
+                if !(*verbose_fd.ptr()).is_null() {
+                    fputs(
+                        b" \0".as_ptr() as *const ::core::ffi::c_char,
+                        verbose_fd.get(),
+                    );
                 }
-                redir_col += 1;
+                (*redir_col.ptr()) += 1;
             }
         }
         let mut len: size_t = if maxlen == -1 as ptrdiff_t {
@@ -8630,112 +8708,116 @@ unsafe extern "C" fn redir_write(str: *const ::core::ffi::c_char, maxlen: ptrdif
         } else {
             maxlen as size_t
         };
-        if !capture_ga.is_null() {
-            ga_concat_len(capture_ga, str, len);
+        if !(*capture_ga.ptr()).is_null() {
+            ga_concat_len(capture_ga.get(), str, len);
         }
-        if redir_reg != 0 {
-            write_reg_contents(redir_reg, s, len as ssize_t, true_0);
+        if redir_reg.get() != 0 {
+            write_reg_contents(redir_reg.get(), s, len as ssize_t, true_0);
         }
-        if redir_vname {
+        if redir_vname.get() {
             var_redir_str(s, maxlen as ::core::ffi::c_int);
         }
         while *s as ::core::ffi::c_int != NUL
             && (maxlen < 0 as ptrdiff_t
                 || (s.offset_from(str) as ::core::ffi::c_int as ptrdiff_t) < maxlen)
         {
-            if redir_reg == 0 && !redir_vname && capture_ga.is_null() {
-                if !redir_fd.is_null() {
-                    putc(*s as ::core::ffi::c_int, redir_fd);
+            if redir_reg.get() == 0 && !redir_vname.get() && (*capture_ga.ptr()).is_null() {
+                if !(*redir_fd.ptr()).is_null() {
+                    putc(*s as ::core::ffi::c_int, redir_fd.get());
                 }
             }
-            if !verbose_fd.is_null() {
-                putc(*s as ::core::ffi::c_int, verbose_fd);
+            if !(*verbose_fd.ptr()).is_null() {
+                putc(*s as ::core::ffi::c_int, verbose_fd.get());
             }
             if *s as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
                 || *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
             {
-                redir_col = 0 as ::core::ffi::c_int;
+                redir_col.set(0 as ::core::ffi::c_int);
             } else if *s as ::core::ffi::c_int == '\t' as ::core::ffi::c_int {
-                redir_col += 8 as ::core::ffi::c_int - redir_col % 8 as ::core::ffi::c_int;
+                (*redir_col.ptr()) +=
+                    8 as ::core::ffi::c_int - redir_col.get() % 8 as ::core::ffi::c_int;
             } else {
-                redir_col += 1;
+                (*redir_col.ptr()) += 1;
             }
             s = s.offset(1);
         }
-        if msg_silent != 0 as ::core::ffi::c_int {
-            msg_col = redir_col;
+        if msg_silent.get() != 0 as ::core::ffi::c_int {
+            msg_col.set(redir_col.get());
         }
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn redirecting() -> ::core::ffi::c_int {
-    return (!redir_fd.is_null()
-        || *p_vfile as ::core::ffi::c_int != NUL
-        || redir_reg != 0
-        || redir_vname as ::core::ffi::c_int != 0
-        || !capture_ga.is_null()) as ::core::ffi::c_int;
+    return (!(*redir_fd.ptr()).is_null()
+        || *p_vfile.get() as ::core::ffi::c_int != NUL
+        || redir_reg.get() != 0
+        || redir_vname.get() as ::core::ffi::c_int != 0
+        || !(*capture_ga.ptr()).is_null()) as ::core::ffi::c_int;
 }
-static mut pre_verbose_kind: *const ::core::ffi::c_char =
-    ::core::ptr::null::<::core::ffi::c_char>();
-static mut verbose_kind: *const ::core::ffi::c_char =
-    b"verbose\0".as_ptr() as *const ::core::ffi::c_char;
+static pre_verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+static verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(b"verbose\0".as_ptr() as *const ::core::ffi::c_char);
 #[no_mangle]
 pub unsafe extern "C" fn verbose_enter() {
-    if *p_vfile as ::core::ffi::c_int != NUL {
-        msg_silent += 1;
+    if *p_vfile.get() as ::core::ffi::c_int != NUL {
+        (*msg_silent.ptr()) += 1;
     }
-    if !msg_ext_skip_verbose {
-        if msg_ext_kind != verbose_kind {
-            pre_verbose_kind = msg_ext_kind;
+    if !msg_ext_skip_verbose.get() {
+        if msg_ext_kind.get() != verbose_kind.get() {
+            pre_verbose_kind.set(msg_ext_kind.get());
         }
         msg_ext_set_kind(b"verbose\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    msg_ext_skip_verbose = false_0 != 0;
+    msg_ext_skip_verbose.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn verbose_leave() {
-    if *p_vfile as ::core::ffi::c_int != NUL {
-        msg_silent -= 1;
-        if msg_silent < 0 as ::core::ffi::c_int {
-            msg_silent = 0 as ::core::ffi::c_int;
+    if *p_vfile.get() as ::core::ffi::c_int != NUL {
+        (*msg_silent.ptr()) -= 1;
+        if msg_silent.get() < 0 as ::core::ffi::c_int {
+            msg_silent.set(0 as ::core::ffi::c_int);
         }
     }
-    if !pre_verbose_kind.is_null() {
-        msg_ext_set_kind(pre_verbose_kind);
-        pre_verbose_kind = ::core::ptr::null::<::core::ffi::c_char>();
+    if !(*pre_verbose_kind.ptr()).is_null() {
+        msg_ext_set_kind(pre_verbose_kind.get());
+        pre_verbose_kind.set(::core::ptr::null::<::core::ffi::c_char>());
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn verbose_enter_scroll() {
     verbose_enter();
-    if *p_vfile as ::core::ffi::c_int == NUL {
-        msg_scroll = true_0;
+    if *p_vfile.get() as ::core::ffi::c_int == NUL {
+        msg_scroll.set(true_0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn verbose_leave_scroll() {
     verbose_leave();
-    if *p_vfile as ::core::ffi::c_int == NUL {
-        cmdline_row = msg_row;
+    if *p_vfile.get() as ::core::ffi::c_int == NUL {
+        cmdline_row.set(msg_row.get());
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn verbose_stop() {
-    if !verbose_fd.is_null() {
-        fclose(verbose_fd);
-        verbose_fd = ::core::ptr::null_mut::<FILE>();
+    if !(*verbose_fd.ptr()).is_null() {
+        fclose(verbose_fd.get());
+        verbose_fd.set(::core::ptr::null_mut::<FILE>());
     }
-    verbose_did_open = false_0 != 0;
+    verbose_did_open.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn verbose_open() -> ::core::ffi::c_int {
-    if verbose_fd.is_null() && !verbose_did_open {
-        verbose_did_open = true_0 != 0;
-        verbose_fd = os_fopen(p_vfile, b"a\0".as_ptr() as *const ::core::ffi::c_char);
-        if verbose_fd.is_null() {
+    if (*verbose_fd.ptr()).is_null() && !verbose_did_open.get() {
+        verbose_did_open.set(true_0 != 0);
+        verbose_fd.set(os_fopen(
+            p_vfile.get(),
+            b"a\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
+        if (*verbose_fd.ptr()).is_null() {
             semsg(
                 gettext(&raw const e_notopen as *const ::core::ffi::c_char),
-                p_vfile,
+                p_vfile.get(),
             );
             return FAIL;
         }
@@ -8748,36 +8830,35 @@ pub unsafe extern "C" fn give_warning(
     mut hl: bool,
     mut hist: bool,
 ) {
-    if msg_silent != 0 as ::core::ffi::c_int {
+    if msg_silent.get() != 0 as ::core::ffi::c_int {
         return;
     }
-    let mut save_msg_hist_off: bool = msg_hist_off;
-    msg_hist_off = !hist;
-    no_wait_return += 1;
+    let mut save_msg_hist_off: bool = msg_hist_off.get();
+    msg_hist_off.set(!hist);
+    (*no_wait_return.ptr()) += 1;
     set_vim_var_string(VV_WARNINGMSG, message, -1 as ptrdiff_t);
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut keep_msg as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
     if hl {
-        keep_msg_hl_id = HLF_W as ::core::ffi::c_int;
+        keep_msg_hl_id.set(HLF_W as ::core::ffi::c_int);
     } else {
-        keep_msg_hl_id = 0 as ::core::ffi::c_int;
+        keep_msg_hl_id.set(0 as ::core::ffi::c_int);
     }
-    if msg_ext_kind.is_null() {
+    if (*msg_ext_kind.ptr()).is_null() {
         msg_ext_set_kind(b"wmsg\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    if msg(message, keep_msg_hl_id) as ::core::ffi::c_int != 0
-        && msg_scrolled == 0 as ::core::ffi::c_int
+    if msg(message, keep_msg_hl_id.get()) as ::core::ffi::c_int != 0
+        && msg_scrolled.get() == 0 as ::core::ffi::c_int
     {
-        set_keep_msg(message, keep_msg_hl_id);
+        set_keep_msg(message, keep_msg_hl_id.get());
     }
-    msg_didout = false_0 != 0;
-    msg_nowait = true_0 != 0;
-    msg_col = 0 as ::core::ffi::c_int;
-    no_wait_return -= 1;
-    msg_hist_off = save_msg_hist_off;
+    msg_didout.set(false_0 != 0);
+    msg_nowait.set(true_0 != 0);
+    msg_col.set(0 as ::core::ffi::c_int);
+    (*no_wait_return.ptr()) -= 1;
+    msg_hist_off.set(save_msg_hist_off);
 }
 #[no_mangle]
 pub unsafe extern "C" fn swmsg(
@@ -8788,25 +8869,25 @@ pub unsafe extern "C" fn swmsg(
     let mut args: ::core::ffi::VaListImpl;
     args = c2rust_args.clone();
     vim_vsnprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
         args.as_va_list(),
     );
-    give_warning(&raw mut IObuff as *mut ::core::ffi::c_char, hl, true_0 != 0);
+    give_warning(IObuff.ptr() as *mut ::core::ffi::c_char, hl, true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_advance(mut col: ::core::ffi::c_int) {
-    if msg_silent != 0 as ::core::ffi::c_int {
-        msg_col = col;
+    if msg_silent.get() != 0 as ::core::ffi::c_int {
+        msg_col.set(col);
         return;
     }
-    col = if col < Columns - 1 as ::core::ffi::c_int {
+    col = if col < Columns.get() - 1 as ::core::ffi::c_int {
         col
     } else {
-        Columns - 1 as ::core::ffi::c_int
+        Columns.get() - 1 as ::core::ffi::c_int
     };
-    while msg_col < col {
+    while msg_col.get() < col {
         msg_putchar(' ' as ::core::ffi::c_int);
     }
 }
@@ -8822,13 +8903,13 @@ pub unsafe extern "C" fn do_dialog(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0;
-    if silent_mode {
+    if silent_mode.get() {
         return dfltbutton;
     }
-    let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-    let mut oldState: ::core::ffi::c_int = State;
-    msg_silent = 0 as ::core::ffi::c_int;
-    no_wait_return += 1;
+    let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+    let mut oldState: ::core::ffi::c_int = State.get();
+    msg_silent.set(0 as ::core::ffi::c_int);
+    (*no_wait_return.ptr()) += 1;
     let mut hotkeys: *mut ::core::ffi::c_char =
         msg_show_console_dialog(message, buttons, dfltbutton);
     loop {
@@ -8837,7 +8918,7 @@ pub unsafe extern "C" fn do_dialog(
             break;
         } else {
             let mut c: ::core::ffi::c_int = prompt_for_input(
-                confirm_buttons,
+                confirm_buttons.get(),
                 HLF_M as ::core::ffi::c_int,
                 true_0 != 0,
                 ::core::ptr::null_mut::<bool>(),
@@ -8853,8 +8934,8 @@ pub unsafe extern "C" fn do_dialog(
                 }
                 _ => {
                     if c < 0 as ::core::ffi::c_int {
-                        msg_didany = false_0 != 0;
-                        msg_didout = msg_didany;
+                        msg_didany.set(false_0 != 0);
+                        msg_didout.set(msg_didany.get());
                     } else if c == ':' as ::core::ffi::c_int && ex_cmd != 0 {
                         retval = dfltbutton;
                         ins_char_typebuf(
@@ -8878,20 +8959,20 @@ pub unsafe extern "C" fn do_dialog(
                         if *hotkeys.offset(i as isize) != 0 {
                             break;
                         }
-                        msg_didany = false_0 != 0;
-                        msg_didout = msg_didany;
+                        msg_didany.set(false_0 != 0);
+                        msg_didout.set(msg_didany.get());
                     }
                 }
             }
         }
     }
     xfree(hotkeys as *mut ::core::ffi::c_void);
-    xfree(confirm_msg as *mut ::core::ffi::c_void);
-    confirm_msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    msg_silent = save_msg_silent;
-    State = oldState;
+    xfree(confirm_msg.get() as *mut ::core::ffi::c_void);
+    confirm_msg.set(::core::ptr::null_mut::<::core::ffi::c_char>());
+    msg_silent.set(save_msg_silent);
+    State.set(oldState);
     setmouse();
-    no_wait_return -= 1;
+    (*no_wait_return.ptr()) -= 1;
     msg_end_prompt();
     return retval;
 }
@@ -8947,9 +9028,9 @@ unsafe extern "C" fn console_dialog_alloc(
     if !*has_hotkey.offset(0 as ::core::ffi::c_int as isize) {
         button_len += 2 as ::core::ffi::c_int;
     }
-    confirm_msg = xmalloc(msg_len as size_t) as *mut ::core::ffi::c_char;
+    confirm_msg.set(xmalloc(msg_len as size_t) as *mut ::core::ffi::c_char);
     snprintf(
-        confirm_msg,
+        confirm_msg.get(),
         msg_len as size_t,
         if ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
             b"%s\0".as_ptr() as *const ::core::ffi::c_char
@@ -8958,8 +9039,8 @@ unsafe extern "C" fn console_dialog_alloc(
         },
         message,
     );
-    xfree(confirm_buttons as *mut ::core::ffi::c_void);
-    confirm_buttons = xmalloc(button_len as size_t) as *mut ::core::ffi::c_char;
+    xfree(confirm_buttons.get() as *mut ::core::ffi::c_void);
+    confirm_buttons.set(xmalloc(button_len as size_t) as *mut ::core::ffi::c_char);
     return xmalloc(lenhotkey as size_t) as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn msg_show_console_dialog(
@@ -9022,7 +9103,7 @@ unsafe extern "C" fn copy_confirm_hotkeys(
     if !*has_hotkey.offset(0 as ::core::ffi::c_int as isize) {
         first_hotkey = true_0 != 0;
     }
-    let mut msgp: *mut ::core::ffi::c_char = confirm_buttons;
+    let mut msgp: *mut ::core::ffi::c_char = confirm_buttons.get();
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut r: *const ::core::ffi::c_char = buttons;
     while *r != 0 {
@@ -9092,12 +9173,12 @@ unsafe extern "C" fn copy_confirm_hotkeys(
     *msgp = NUL as ::core::ffi::c_char;
 }
 unsafe extern "C" fn display_confirm_msg() {
-    confirm_msg_used += 1;
-    if !confirm_msg.is_null() {
+    (*confirm_msg_used.ptr()) += 1;
+    if !(*confirm_msg.ptr()).is_null() {
         msg_ext_set_kind(b"confirm\0".as_ptr() as *const ::core::ffi::c_char);
-        msg_puts_hl(confirm_msg, HLF_M as ::core::ffi::c_int, false_0 != 0);
+        msg_puts_hl(confirm_msg.get(), HLF_M as ::core::ffi::c_int, false_0 != 0);
     }
-    confirm_msg_used -= 1;
+    (*confirm_msg_used.ptr()) -= 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_dialog_yesno(
@@ -9185,7 +9266,7 @@ pub unsafe extern "C" fn msg_delay(mut ms: uint64_t, mut ignoreinput: bool) {
     if ui_has(kUIMessages) {
         return;
     }
-    if nvim_testing {
+    if nvim_testing.get() {
         ms = 100 as uint64_t;
     }
     logmsg(
@@ -9196,7 +9277,7 @@ pub unsafe extern "C" fn msg_delay(mut ms: uint64_t, mut ignoreinput: bool) {
         true_0 != 0,
         b"%lu ms%s\0".as_ptr() as *const ::core::ffi::c_char,
         ms,
-        if nvim_testing as ::core::ffi::c_int != 0 {
+        if nvim_testing.get() as ::core::ffi::c_int != 0 {
             b" (skipped by NVIM_TEST)\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
@@ -9207,17 +9288,17 @@ pub unsafe extern "C" fn msg_delay(mut ms: uint64_t, mut ignoreinput: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn msg_check_for_delay(mut check_msg_scroll: bool) {
-    if (emsg_on_display as ::core::ffi::c_int != 0
-        || check_msg_scroll as ::core::ffi::c_int != 0 && msg_scroll != 0)
-        && !did_wait_return
-        && emsg_silent == 0 as ::core::ffi::c_int
-        && !in_assert_fails
+    if (emsg_on_display.get() as ::core::ffi::c_int != 0
+        || check_msg_scroll as ::core::ffi::c_int != 0 && msg_scroll.get() != 0)
+        && !did_wait_return.get()
+        && emsg_silent.get() == 0 as ::core::ffi::c_int
+        && !in_assert_fails.get()
         && !ui_has(kUIMessages)
     {
         msg_delay(1006 as uint64_t, true_0 != 0);
-        emsg_on_display = false_0 != 0;
+        emsg_on_display.set(false_0 != 0);
         if check_msg_scroll {
-            msg_scroll = false_0;
+            msg_scroll.set(false_0);
         }
     }
 }

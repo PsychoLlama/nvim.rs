@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -69,11 +70,11 @@ extern "C" {
     fn bt_help(buf: *const buf_T) -> bool;
     fn set_buflisted(on: ::core::ffi::c_int);
     fn wipe_buffer(buf: *mut buf_T, aucmd: bool);
-    static mut p_hf: *mut ::core::ffi::c_char;
-    static mut p_hh: OptInt;
-    static mut p_hlg: *mut ::core::ffi::c_char;
-    static mut p_rtp: *mut ::core::ffi::c_char;
-    static mut p_sb: ::core::ffi::c_int;
+    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hh: GlobalCell<OptInt>;
+    static p_hlg: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_rtp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sb: GlobalCell<::core::ffi::c_int>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -117,17 +118,17 @@ extern "C" {
         __line: ::core::ffi::c_uint,
         __function: *const ::core::ffi::c_char,
     ) -> !;
-    static mut Columns: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut KeyTyped: bool;
-    static mut got_int: bool;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static KeyTyped: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn api_free_object(value: Object);
     fn api_clear_error(value: *mut Error);
@@ -3342,7 +3343,7 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut empty_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut alt_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let old_KeyTyped: bool = KeyTyped;
+    let old_KeyTyped: bool = KeyTyped.get();
     if !eap.is_null() {
         arg = (*eap).arg;
         while *arg != 0 {
@@ -3475,15 +3476,16 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
     let mut tag: *mut ::core::ffi::c_char = xstrdup(*matches.offset(i as isize));
     FreeWild(num_matches, matches);
     '_erret: {
-        if !bt_help((*curwin).w_buffer) || cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
-            if cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
+        if !bt_help((*curwin.get()).w_buffer) || (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int
+        {
+            if (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int {
                 wp = ::core::ptr::null_mut::<win_T>();
             } else {
                 wp = ::core::ptr::null_mut::<win_T>();
-                let mut wp2: *mut win_T = if curtab == curtab {
-                    firstwin
+                let mut wp2: *mut win_T = if curtab.get() == curtab.get() {
+                    firstwin.get()
                 } else {
-                    (*curtab).tp_firstwin
+                    (*curtab.get()).tp_firstwin
                 };
                 while !wp2.is_null() {
                     if bt_help((*wp2).w_buffer) as ::core::ffi::c_int != 0
@@ -3500,24 +3502,24 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
             if !wp.is_null() && (*(*wp).w_buffer).b_nwindows > 0 as ::core::ffi::c_int {
                 win_enter(wp, true_0 != 0);
             } else {
-                helpfd = os_fopen(p_hf, READBIN.as_ptr());
+                helpfd = os_fopen(p_hf.get(), READBIN.as_ptr());
                 if helpfd.is_null() {
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
                             b"Help file \"%s\" not found\0".as_ptr() as *const ::core::ffi::c_char
                         ),
-                        p_hf,
+                        p_hf.get(),
                     );
                     break '_erret;
                 } else {
                     fclose(helpfd);
                     n = WSP_HELP as ::core::ffi::c_int;
-                    if cmdmod.cmod_split == 0 as ::core::ffi::c_int
-                        && (*curwin).w_width != Columns
-                        && (*curwin).w_width < 80 as ::core::ffi::c_int
+                    if (*cmdmod.ptr()).cmod_split == 0 as ::core::ffi::c_int
+                        && (*curwin.get()).w_width != Columns.get()
+                        && (*curwin.get()).w_width < 80 as ::core::ffi::c_int
                     {
-                        n |= if p_sb != 0 {
+                        n |= if p_sb.get() != 0 {
                             WSP_BOT as ::core::ffi::c_int
                         } else {
                             WSP_TOP as ::core::ffi::c_int
@@ -3526,10 +3528,10 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
                     if win_split(0 as ::core::ffi::c_int, n) == FAIL {
                         break '_erret;
                     } else {
-                        if ((*curwin).w_height as OptInt) < p_hh {
-                            win_setheight(p_hh as ::core::ffi::c_int);
+                        if ((*curwin.get()).w_height as OptInt) < p_hh.get() {
+                            win_setheight(p_hh.get() as ::core::ffi::c_int);
                         }
-                        alt_fnum = (*curbuf).handle as ::core::ffi::c_int;
+                        alt_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
                         do_ecmd(
                             0 as ::core::ffi::c_int,
                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -3539,18 +3541,18 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
                             ECMD_HIDE as ::core::ffi::c_int + ECMD_SET_HELP as ::core::ffi::c_int,
                             ::core::ptr::null_mut::<win_T>(),
                         );
-                        if cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
+                        if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
                             == 0 as ::core::ffi::c_int
                         {
-                            (*curwin).w_alt_fnum = alt_fnum;
+                            (*curwin.get()).w_alt_fnum = alt_fnum;
                         }
-                        empty_fnum = (*curbuf).handle as ::core::ffi::c_int;
+                        empty_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
                     }
                 }
             }
         }
-        restart_edit = 0 as ::core::ffi::c_int;
-        KeyTyped = old_KeyTyped;
+        restart_edit.set(0 as ::core::ffi::c_int);
+        KeyTyped.set(old_KeyTyped);
         do_tag(
             tag,
             DT_HELP as ::core::ffi::c_int,
@@ -3558,17 +3560,18 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
             false_0,
             true_0 != 0,
         );
-        if empty_fnum != 0 as ::core::ffi::c_int && (*curbuf).handle != empty_fnum {
+        if empty_fnum != 0 as ::core::ffi::c_int && (*curbuf.get()).handle != empty_fnum {
             let mut buf: *mut buf_T = buflist_findnr(empty_fnum);
             if !buf.is_null() && (*buf).b_nwindows == 0 as ::core::ffi::c_int {
                 wipe_buffer(buf, true_0 != 0);
             }
         }
         if alt_fnum != 0 as ::core::ffi::c_int
-            && (*curwin).w_alt_fnum == empty_fnum
-            && cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+            && (*curwin.get()).w_alt_fnum == empty_fnum
+            && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
+                == 0 as ::core::ffi::c_int
         {
-            (*curwin).w_alt_fnum = alt_fnum;
+            (*curwin.get()).w_alt_fnum = alt_fnum;
         }
     }
     xfree(tag as *mut ::core::ffi::c_void);
@@ -3576,10 +3579,10 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_helpclose(mut eap: *mut exarg_T) {
-    let mut win: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut win: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !win.is_null() {
         if bt_help((*win).w_buffer) {
@@ -3769,7 +3772,7 @@ pub unsafe extern "C" fn find_help_tags(
         }
     };
     xstrlcpy(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         res.data.string.data,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
     );
@@ -3785,7 +3788,7 @@ pub unsafe extern "C" fn find_help_tags(
         flags |= TAG_KEEP_LANG as ::core::ffi::c_int;
     }
     if find_tags(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         num_matches,
         matches,
         flags,
@@ -3820,10 +3823,10 @@ pub unsafe extern "C" fn cleanup_help_tags(
 ) {
     let mut buf: [::core::ffi::c_char; 4] = [0; 4];
     let mut p: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
-    if *p_hlg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        && (*p_hlg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+    if *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+        && (*(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             != 'e' as ::core::ffi::c_int
-            || *p_hlg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            || *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != 'n' as ::core::ffi::c_int)
     {
         let c2rust_fresh3 = p;
@@ -3831,10 +3834,10 @@ pub unsafe extern "C" fn cleanup_help_tags(
         *c2rust_fresh3 = '@' as ::core::ffi::c_char;
         let c2rust_fresh4 = p;
         p = p.offset(1);
-        *c2rust_fresh4 = *p_hlg.offset(0 as ::core::ffi::c_int as isize);
+        *c2rust_fresh4 = *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize);
         let c2rust_fresh5 = p;
         p = p.offset(1);
-        *c2rust_fresh5 = *p_hlg.offset(1 as ::core::ffi::c_int as isize);
+        *c2rust_fresh5 = *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize);
     }
     *p = NUL as ::core::ffi::c_char;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3891,7 +3894,7 @@ pub unsafe extern "C" fn cleanup_help_tags(
 }
 #[no_mangle]
 pub unsafe extern "C" fn prepare_help_buffer() {
-    (*curbuf).b_help = true_0 != 0;
+    (*curbuf.get()).b_help = true_0 != 0;
     set_option_direct(
         kOptBuftype,
         OptVal {
@@ -3911,7 +3914,7 @@ pub unsafe extern "C" fn prepare_help_buffer() {
     let mut p: *mut ::core::ffi::c_char = b"!-~,^*,^|,^\",192-255\0".as_ptr()
         as *const ::core::ffi::c_char
         as *mut ::core::ffi::c_char;
-    if strcmp((*curbuf).b_p_isk, p) != 0 as ::core::ffi::c_int {
+    if strcmp((*curbuf.get()).b_p_isk, p) != 0 as ::core::ffi::c_int {
         set_option_direct(
             kOptIskeyword,
             OptVal {
@@ -3923,8 +3926,8 @@ pub unsafe extern "C" fn prepare_help_buffer() {
             OPT_LOCAL as ::core::ffi::c_int,
             0 as scid_T,
         );
-        check_buf_options(curbuf);
-        buf_init_chartab(curbuf, false_0 != 0);
+        check_buf_options(curbuf.get());
+        buf_init_chartab(curbuf.get(), false_0 != 0);
     }
     set_option_direct(
         kOptFoldmethod,
@@ -3942,19 +3945,19 @@ pub unsafe extern "C" fn prepare_help_buffer() {
         OPT_LOCAL as ::core::ffi::c_int,
         0 as scid_T,
     );
-    (*curbuf).b_p_ts = 8 as OptInt;
-    (*curwin).w_onebuf_opt.wo_list = false_0;
-    (*curbuf).b_p_ma = false_0;
-    (*curbuf).b_p_bin = false_0;
-    (*curwin).w_onebuf_opt.wo_nu = 0 as ::core::ffi::c_int;
-    (*curwin).w_onebuf_opt.wo_rnu = 0 as ::core::ffi::c_int;
-    (*curwin).w_onebuf_opt.wo_scb = false_0;
-    (*curwin).w_onebuf_opt.wo_crb = false_0;
-    (*curwin).w_onebuf_opt.wo_arab = false_0;
-    (*curwin).w_onebuf_opt.wo_rl = false_0;
-    (*curwin).w_onebuf_opt.wo_fen = false_0;
-    (*curwin).w_onebuf_opt.wo_diff = false_0;
-    (*curwin).w_onebuf_opt.wo_spell = false_0;
+    (*curbuf.get()).b_p_ts = 8 as OptInt;
+    (*curwin.get()).w_onebuf_opt.wo_list = false_0;
+    (*curbuf.get()).b_p_ma = false_0;
+    (*curbuf.get()).b_p_bin = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_nu = 0 as ::core::ffi::c_int;
+    (*curwin.get()).w_onebuf_opt.wo_rnu = 0 as ::core::ffi::c_int;
+    (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_arab = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_rl = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_fen = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_diff = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_spell = false_0;
     set_buflisted(false_0);
 }
 #[no_mangle]
@@ -4017,18 +4020,18 @@ unsafe extern "C" fn helptags_one(
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut dirlen: size_t = xstrlcpy(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         dir,
         ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
     );
     if dirlen >= MAXPATHL as size_t
         || xstrlcat(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             b"/**/*\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
         || xstrlcat(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             ext,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
@@ -4038,8 +4041,7 @@ unsafe extern "C" fn helptags_one(
         ));
         return;
     }
-    let mut buff_list: [*mut ::core::ffi::c_char; 1] =
-        [&raw mut NameBuff as *mut ::core::ffi::c_char];
+    let mut buff_list: [*mut ::core::ffi::c_char; 1] = [NameBuff.ptr() as *mut ::core::ffi::c_char];
     let res: ::core::ffi::c_int = gen_expand_wildcards(
         1 as ::core::ffi::c_int,
         &raw mut buff_list as *mut *mut ::core::ffi::c_char,
@@ -4048,10 +4050,10 @@ unsafe extern "C" fn helptags_one(
         EW_FILE as ::core::ffi::c_int | EW_SILENT as ::core::ffi::c_int,
     );
     if res == FAIL || filecount == 0 as ::core::ffi::c_int {
-        if !got_int {
+        if !got_int.get() {
             semsg(
                 gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
         if res != FAIL {
@@ -4060,13 +4062,13 @@ unsafe extern "C" fn helptags_one(
         return;
     }
     memcpy(
-        &raw mut NameBuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+        NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
         dir as *const ::core::ffi::c_void,
         dirlen.wrapping_add(1 as size_t),
     );
-    if !add_pathsep(&raw mut NameBuff as *mut ::core::ffi::c_char)
+    if !add_pathsep(NameBuff.ptr() as *mut ::core::ffi::c_char)
         || xstrlcat(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             tagfname,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
@@ -4077,7 +4079,7 @@ unsafe extern "C" fn helptags_one(
         return;
     }
     let fd_tags: *mut FILE = os_fopen(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         b"w\0".as_ptr() as *const ::core::ffi::c_char,
     );
     if fd_tags.is_null() {
@@ -4086,7 +4088,7 @@ unsafe extern "C" fn helptags_one(
                 gettext(
                     b"E152: Cannot open %s for writing\0".as_ptr() as *const ::core::ffi::c_char
                 ),
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
         FreeWild(filecount, files);
@@ -4119,7 +4121,7 @@ unsafe extern "C" fn helptags_one(
         ga.ga_len += 1;
     }
     let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while fi < filecount && !got_int {
+    while fi < filecount && !got_int.get() {
         let fd: *mut FILE = os_fopen(
             *files.offset(fi as isize),
             b"r\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4136,11 +4138,13 @@ unsafe extern "C" fn helptags_one(
                 .offset(dirlen as isize)
                 .offset(1 as ::core::ffi::c_int as isize);
             let mut in_example: bool = false_0 != 0;
-            while !vim_fgets(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int {
+            while !vim_fgets(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int.get()
+            {
                 if in_example {
                     if !vim_strchr(
                         b" \t\n\r\0".as_ptr() as *const ::core::ffi::c_char,
-                        IObuff[0 as ::core::ffi::c_int as usize] as uint8_t as ::core::ffi::c_int,
+                        (*IObuff.ptr())[0 as ::core::ffi::c_int as usize] as uint8_t
+                            as ::core::ffi::c_int,
                     )
                     .is_null()
                     {
@@ -4149,7 +4153,7 @@ unsafe extern "C" fn helptags_one(
                     in_example = false_0 != 0;
                 }
                 let mut p1: *mut ::core::ffi::c_char = vim_strchr(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     '*' as ::core::ffi::c_int,
                 );
                 while !p1.is_null() {
@@ -4169,7 +4173,7 @@ unsafe extern "C" fn helptags_one(
                             s = s.offset(1);
                         }
                         if s == p2
-                            && (p1 == &raw mut IObuff as *mut ::core::ffi::c_char
+                            && (p1 == IObuff.ptr() as *mut ::core::ffi::c_char
                                 || *p1.offset(-1 as ::core::ffi::c_int as isize)
                                     as ::core::ffi::c_int
                                     == ' ' as ::core::ffi::c_int
@@ -4211,26 +4215,28 @@ unsafe extern "C" fn helptags_one(
                     }
                     p1 = p2;
                 }
-                let mut off: size_t = strlen(&raw mut IObuff as *mut ::core::ffi::c_char);
+                let mut off: size_t = strlen(IObuff.ptr() as *mut ::core::ffi::c_char);
                 if off >= 2 as size_t
-                    && IObuff[off.wrapping_sub(1 as size_t) as usize] as ::core::ffi::c_int
+                    && (*IObuff.ptr())[off.wrapping_sub(1 as size_t) as usize] as ::core::ffi::c_int
                         == '\n' as ::core::ffi::c_int
                 {
                     off = off.wrapping_sub(2 as size_t);
                     while off > 0 as size_t
-                        && (IObuff[off as usize] as ::core::ffi::c_uint
+                        && ((*IObuff.ptr())[off as usize] as ::core::ffi::c_uint
                             >= 'a' as ::core::ffi::c_uint
-                            && IObuff[off as usize] as ::core::ffi::c_uint
+                            && (*IObuff.ptr())[off as usize] as ::core::ffi::c_uint
                                 <= 'z' as ::core::ffi::c_uint
-                            || ascii_isdigit(IObuff[off as usize] as ::core::ffi::c_int)
+                            || ascii_isdigit((*IObuff.ptr())[off as usize] as ::core::ffi::c_int)
                                 as ::core::ffi::c_int
                                 != 0)
                     {
                         off = off.wrapping_sub(1);
                     }
-                    if IObuff[off as usize] as ::core::ffi::c_int == '>' as ::core::ffi::c_int
+                    if (*IObuff.ptr())[off as usize] as ::core::ffi::c_int
+                        == '>' as ::core::ffi::c_int
                         && (off == 0 as size_t
-                            || IObuff[off.wrapping_sub(1 as size_t) as usize] as ::core::ffi::c_int
+                            || (*IObuff.ptr())[off.wrapping_sub(1 as size_t) as usize]
+                                as ::core::ffi::c_int
                                 == ' ' as ::core::ffi::c_int)
                     {
                         in_example = true_0 != 0;
@@ -4243,7 +4249,7 @@ unsafe extern "C" fn helptags_one(
         fi += 1;
     }
     FreeWild(filecount, files);
-    if !got_int && !ga.ga_data.is_null() {
+    if !got_int.get() && !ga.ga_data.is_null() {
         sort_strings(ga.ga_data as *mut *mut ::core::ffi::c_char, ga.ga_len);
         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         while i < ga.ga_len {
@@ -4255,7 +4261,7 @@ unsafe extern "C" fn helptags_one(
                 if *p2_0 as ::core::ffi::c_int == '\t' as ::core::ffi::c_int {
                     *p2_0 = NUL as ::core::ffi::c_char;
                     vim_snprintf(
-                        &raw mut NameBuff as *mut ::core::ffi::c_char,
+                        NameBuff.ptr() as *mut ::core::ffi::c_char,
                         MAXPATHL as size_t,
                         gettext(b"E154: Duplicate tag \"%s\" in file %s/%s\0".as_ptr()
                             as *const ::core::ffi::c_char),
@@ -4263,7 +4269,7 @@ unsafe extern "C" fn helptags_one(
                         dir,
                         p2_0.offset(1 as ::core::ffi::c_int as isize),
                     );
-                    emsg(&raw mut NameBuff as *mut ::core::ffi::c_char);
+                    emsg(NameBuff.ptr() as *mut ::core::ffi::c_char);
                     *p2_0 = '\t' as ::core::ffi::c_char;
                     break;
                 } else {
@@ -4336,13 +4342,13 @@ unsafe extern "C" fn do_helptags(
     let mut files: *mut *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     xstrlcpy(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         dirname,
         ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
     );
-    if !add_pathsep(&raw mut NameBuff as *mut ::core::ffi::c_char)
+    if !add_pathsep(NameBuff.ptr() as *mut ::core::ffi::c_char)
         || xstrlcat(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             b"**\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
@@ -4352,8 +4358,7 @@ unsafe extern "C" fn do_helptags(
         ));
         return;
     }
-    let mut buff_list: [*mut ::core::ffi::c_char; 1] =
-        [&raw mut NameBuff as *mut ::core::ffi::c_char];
+    let mut buff_list: [*mut ::core::ffi::c_char; 1] = [NameBuff.ptr() as *mut ::core::ffi::c_char];
     if gen_expand_wildcards(
         1 as ::core::ffi::c_int,
         &raw mut buff_list as *mut *mut ::core::ffi::c_char,
@@ -4365,7 +4370,7 @@ unsafe extern "C" fn do_helptags(
     {
         semsg(
             gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
         );
         return;
     }
@@ -4620,7 +4625,7 @@ pub unsafe extern "C" fn ex_helptags(mut eap: *mut exarg_T) {
         == 0 as ::core::ffi::c_int
     {
         do_in_path(
-            p_rtp,
+            p_rtp.get(),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
             b"doc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,

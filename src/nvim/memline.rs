@@ -95,7 +95,7 @@ extern "C" {
     fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
     fn check_cursor(wp: *mut win_T);
     fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    static mut msg_ext_skip_flush: bool;
+    static msg_ext_skip_flush: GlobalCell<bool>;
     fn verb_msg(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
     fn msg_multiline(
@@ -184,24 +184,24 @@ extern "C" {
         bufsize: size_t,
     ) -> ssize_t;
     fn flush_buffers(flush_typeahead: flush_buffers_T);
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut need_check_timestamps: bool;
-    static mut did_check_timestamps: bool;
-    static mut curwin: *mut win_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut allbuf_lock: ::core::ffi::c_int;
-    static mut inhibit_delete_count: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut swap_exists_action: ::core::ffi::c_int;
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut recoverymode: bool;
-    static mut got_int: bool;
-    static mut no_lines_msg: [::core::ffi::c_char; 0];
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static need_check_timestamps: GlobalCell<bool>;
+    static did_check_timestamps: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static allbuf_lock: GlobalCell<::core::ffi::c_int>;
+    static inhibit_delete_count: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static swap_exists_action: GlobalCell<::core::ffi::c_int>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static recoverymode: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static no_lines_msg: GlobalCell<[::core::ffi::c_char; 0]>;
     fn prompt_for_input(
         prompt: *mut ::core::ffi::c_char,
         hl_id: ::core::ffi::c_int,
@@ -255,10 +255,10 @@ extern "C" {
         maxlen: size_t,
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
-    static mut p_dir: *mut ::core::ffi::c_char;
-    static mut p_shm: *mut ::core::ffi::c_char;
-    static mut p_uc: OptInt;
-    static mut p_verbose: OptInt;
+    static p_dir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_uc: GlobalCell<OptInt>;
+    static p_verbose: GlobalCell<OptInt>;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_open(
         path: *const ::core::ffi::c_char,
@@ -3690,10 +3690,10 @@ pub unsafe extern "C" fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
     (*buf).b_ml.ml_line_offset = 0 as size_t;
     (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut::<chunksize_T>();
     (*buf).b_ml.ml_usedchunks = 0 as ::core::ffi::c_int;
-    if cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
+    if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
         (*buf).b_p_swf = false_0;
     }
-    if (*buf).terminal.is_null() && p_uc != 0 && (*buf).b_p_swf != 0 {
+    if (*buf).terminal.is_null() && p_uc.get() != 0 && (*buf).b_p_swf != 0 {
         (*buf).b_may_swap = true_0 != 0;
     } else {
         (*buf).b_may_swap = false_0 != 0;
@@ -3835,14 +3835,15 @@ pub unsafe extern "C" fn ml_setname(mut buf: *mut buf_T) {
     let mut success: bool = false_0 != 0;
     let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
     if (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-        if p_uc != 0 as OptInt
-            && cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        if p_uc.get() != 0 as OptInt
+            && (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int
+                == 0 as ::core::ffi::c_int
         {
             ml_open_file(buf);
         }
         return;
     }
-    let mut dirp: *mut ::core::ffi::c_char = p_dir;
+    let mut dirp: *mut ::core::ffi::c_char = p_dir.get();
     let mut found_existing_dir: bool = false_0 != 0;
     while *dirp as ::core::ffi::c_int != NUL {
         let mut fname: *mut ::core::ffi::c_char = findswapname(
@@ -3895,7 +3896,7 @@ pub unsafe extern "C" fn ml_setname(mut buf: *mut buf_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_open_files() {
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if (*buf).b_p_ro == 0 || (*buf).b_changed != 0 {
             ml_open_file(buf);
@@ -3909,7 +3910,7 @@ pub unsafe extern "C" fn ml_open_file(mut buf: *mut buf_T) {
     if mfp.is_null()
         || (*mfp).mf_fd >= 0 as ::core::ffi::c_int
         || (*buf).b_p_swf == 0
-        || cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0
         || !(*buf).terminal.is_null()
     {
         return;
@@ -3922,7 +3923,7 @@ pub unsafe extern "C" fn ml_open_file(mut buf: *mut buf_T) {
         (*buf).b_may_swap = false_0 != 0;
         return;
     }
-    let mut dirp: *mut ::core::ffi::c_char = p_dir;
+    let mut dirp: *mut ::core::ffi::c_char = p_dir.get();
     let mut found_existing_dir: bool = false_0 != 0;
     while *dirp as ::core::ffi::c_int != NUL {
         let mut fname_0: *mut ::core::ffi::c_char = findswapname(
@@ -3949,9 +3950,9 @@ pub unsafe extern "C" fn ml_open_file(mut buf: *mut buf_T) {
             mf_close_file(buf, false_0 != 0);
         }
     }
-    if *p_dir as ::core::ffi::c_int != NUL && (*mfp).mf_fname.is_null() {
-        need_wait_return = true_0 != 0;
-        no_wait_return += 1;
+    if *p_dir.get() as ::core::ffi::c_int != NUL && (*mfp).mf_fname.is_null() {
+        need_wait_return.set(true_0 != 0);
+        (*no_wait_return.ptr()) += 1;
         semsg(
             gettext(
                 b"E303: Unable to open swap file for \"%s\", recovery impossible\0".as_ptr()
@@ -3963,18 +3964,20 @@ pub unsafe extern "C" fn ml_open_file(mut buf: *mut buf_T) {
                 (*buf).b_fname
             },
         );
-        no_wait_return -= 1;
+        (*no_wait_return.ptr()) -= 1;
     }
     (*buf).b_may_swap = false_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_need_swap(mut newfile: bool) {
-    let mut old_msg_silent: ::core::ffi::c_int = msg_silent;
-    msg_silent = 0 as ::core::ffi::c_int;
-    if (*curbuf).b_may_swap as ::core::ffi::c_int != 0 && ((*curbuf).b_p_ro == 0 || !newfile) {
-        ml_open_file(curbuf);
+    let mut old_msg_silent: ::core::ffi::c_int = msg_silent.get();
+    msg_silent.set(0 as ::core::ffi::c_int);
+    if (*curbuf.get()).b_may_swap as ::core::ffi::c_int != 0
+        && ((*curbuf.get()).b_p_ro == 0 || !newfile)
+    {
+        ml_open_file(curbuf.get());
     }
-    msg_silent = old_msg_silent;
+    msg_silent.set(old_msg_silent);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_close(mut buf: *mut buf_T, mut del_file: ::core::ffi::c_int) {
@@ -3998,7 +4001,7 @@ pub unsafe extern "C" fn ml_close(mut buf: *mut buf_T, mut del_file: ::core::ffi
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_close_all(mut del_file: bool) {
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         ml_close(buf, del_file as ::core::ffi::c_int);
         buf = (*buf).b_next;
@@ -4008,7 +4011,7 @@ pub unsafe extern "C" fn ml_close_all(mut del_file: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_close_notmod() {
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if !bufIsChanged(buf) {
             ml_close(buf, true_0);
@@ -4185,7 +4188,7 @@ unsafe extern "C" fn set_b0_fname(mut b0p: *mut ZeroBlock, mut buf: *mut buf_T) 
             (*buf).b_orig_mode = 0 as ::core::ffi::c_int;
         }
     }
-    add_b0_fenc(b0p, curbuf);
+    add_b0_fenc(b0p, curbuf.get());
 }
 unsafe extern "C" fn set_b0_dir_flag(mut b0p: *mut ZeroBlock, mut buf: *mut buf_T) {
     if same_directory((*(*buf).b_ml.ml_mfp).mf_fname, (*buf).b_ffname) {
@@ -4376,10 +4379,10 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
     let mut directly: bool = false;
     let mut serious_error: bool = true_0 != 0;
     let mut orig_file_status: ::core::ffi::c_int = NOTDONE;
-    recoverymode = true_0 != 0;
+    recoverymode.set(true_0 != 0);
     let mut called_from_main: ::core::ffi::c_int =
-        (*curbuf).b_ml.ml_mfp.is_null() as ::core::ffi::c_int;
-    let mut fname: *mut ::core::ffi::c_char = (*curbuf).b_fname;
+        (*curbuf.get()).b_ml.ml_mfp.is_null() as ::core::ffi::c_int;
+    let mut fname: *mut ::core::ffi::c_char = (*curbuf.get()).b_fname;
     if fname.is_null() {
         fname = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
@@ -4477,7 +4480,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
             }
         }
         if !fname_used.is_null() {
-            if called_from_main != 0 && ml_open(curbuf) == FAIL {
+            if called_from_main != 0 && ml_open(curbuf.get()) == FAIL {
                 getout(1 as ::core::ffi::c_int);
             }
             buf = xmalloc(::core::mem::size_of::<buf_T>()) as *mut buf_T;
@@ -4630,12 +4633,12 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         if directly {
                             expand_env(
                                 &raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char,
-                                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                NameBuff.ptr() as *mut ::core::ffi::c_char,
                                 MAXPATHL,
                             );
                             if setfname(
-                                curbuf,
-                                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                curbuf.get(),
+                                NameBuff.ptr() as *mut ::core::ffi::c_char,
                                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                 true_0 != 0,
                             ) == FAIL
@@ -4644,11 +4647,11 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             }
                         }
                         msg_ext_set_kind(b"wmsg\0".as_ptr() as *const ::core::ffi::c_char);
-                        msg_ext_skip_flush = true_0 != 0;
+                        msg_ext_skip_flush.set(true_0 != 0);
                         home_replace(
                             ::core::ptr::null::<buf_T>(),
                             (*mfp).mf_fname,
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                             MAXPATHL as size_t,
                             true_0 != 0,
                         );
@@ -4657,19 +4660,19 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             gettext(
                                 b"Using swap file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
                             ),
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                         );
-                        if !buf_spname(curbuf).is_null() {
+                        if !buf_spname(curbuf.get()).is_null() {
                             xstrlcpy(
-                                &raw mut NameBuff as *mut ::core::ffi::c_char,
-                                buf_spname(curbuf),
+                                NameBuff.ptr() as *mut ::core::ffi::c_char,
+                                buf_spname(curbuf.get()),
                                 MAXPATHL as size_t,
                             );
                         } else {
                             home_replace(
                                 ::core::ptr::null::<buf_T>(),
-                                (*curbuf).b_ffname,
-                                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                (*curbuf.get()).b_ffname,
+                                NameBuff.ptr() as *mut ::core::ffi::c_char,
                                 MAXPATHL as size_t,
                                 true_0 != 0,
                             );
@@ -4680,10 +4683,10 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             gettext(
                                 b"Original file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
                             ),
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                         );
                         msg_putchar('\n' as ::core::ffi::c_int);
-                        msg_ext_skip_flush = false_0 != 0;
+                        msg_ext_skip_flush.set(false_0 != 0);
                         org_file_info = FileInfo {
                             stat: uv_stat_t {
                                 st_dev: 0,
@@ -4750,8 +4753,8 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         };
                         mtime = char_to_long(&raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char)
                             as ::core::ffi::c_int;
-                        if !(*curbuf).b_ffname.is_null()
-                            && os_fileinfo((*curbuf).b_ffname, &raw mut org_file_info)
+                        if !(*curbuf.get()).b_ffname.is_null()
+                            && os_fileinfo((*curbuf.get()).b_ffname, &raw mut org_file_info)
                                 as ::core::ffi::c_int
                                 != 0
                             && (os_fileinfo((*mfp).mf_fname, &raw mut swp_file_info)
@@ -4798,12 +4801,12 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         }
                         mf_put(mfp, hp, false_0 != 0, false_0 != 0);
                         hp = ::core::ptr::null_mut::<bhdr_T>();
-                        while (*curbuf).b_ml.ml_flags & ML_EMPTY == 0 {
+                        while (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0 {
                             ml_delete(1 as linenr_T);
                         }
-                        if !(*curbuf).b_ffname.is_null() {
+                        if !(*curbuf.get()).b_ffname.is_null() {
                             orig_file_status = readfile(
-                                (*curbuf).b_ffname,
+                                (*curbuf.get()).b_ffname,
                                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                 0 as linenr_T,
                                 0 as linenr_T,
@@ -4832,7 +4835,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             );
                             xfree(b0_fenc as *mut ::core::ffi::c_void);
                         }
-                        unchanged(curbuf, true_0 != 0, true_0 != 0);
+                        unchanged(curbuf.get(), true_0 != 0, true_0 != 0);
                         bnum = 1 as blocknr_T;
                         page_count = 1 as ::core::ffi::c_uint;
                         lnum = 0 as linenr_T;
@@ -4842,9 +4845,9 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         (*buf).b_ml.ml_stack_top = 0 as ::core::ffi::c_int;
                         (*buf).b_ml.ml_stack = ::core::ptr::null_mut::<infoptr_T>();
                         (*buf).b_ml.ml_stack_size = 0 as ::core::ffi::c_int;
-                        cannot_open = (*curbuf).b_ffname.is_null();
+                        cannot_open = (*curbuf.get()).b_ffname.is_null();
                         serious_error = false_0 != 0;
-                        's_977: while !got_int {
+                        's_977: while !got_int.get() {
                             if !hp.is_null() {
                                 mf_put(mfp, hp, false_0 != 0, false_0 != 0);
                             }
@@ -4961,7 +4964,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                                     if line_count <= 0 as linenr_T
                                                         || pe_old_lnum < 1 as linenr_T
                                                         || readfile(
-                                                            (*curbuf).b_ffname,
+                                                            (*curbuf.get()).b_ffname,
                                                             ::core::ptr::null_mut::<
                                                                 ::core::ffi::c_char,
                                                             >(
@@ -5201,13 +5204,14 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             line_breakcheck();
                         }
                         if orig_file_status != OK
-                            || (*curbuf).b_ml.ml_line_count != lnum * 2 as linenr_T + 1 as linenr_T
+                            || (*curbuf.get()).b_ml.ml_line_count
+                                != lnum * 2 as linenr_T + 1 as linenr_T
                         {
-                            if !((*curbuf).b_ml.ml_line_count == 2 as linenr_T
+                            if !((*curbuf.get()).b_ml.ml_line_count == 2 as linenr_T
                                 && *ml_get(1 as linenr_T) as ::core::ffi::c_int == NUL)
                             {
-                                changed_internal(curbuf);
-                                buf_inc_changedtick(curbuf);
+                                changed_internal(curbuf.get());
+                                buf_inc_changedtick(curbuf.get());
                             }
                         } else {
                             idx = 1 as ::core::ffi::c_int;
@@ -5220,28 +5224,28 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                     strcmp(p, ml_get(idx as linenr_T + lnum));
                                 xfree(p as *mut ::core::ffi::c_void);
                                 if i_2 != 0 as ::core::ffi::c_int {
-                                    changed_internal(curbuf);
-                                    buf_inc_changedtick(curbuf);
+                                    changed_internal(curbuf.get());
+                                    buf_inc_changedtick(curbuf.get());
                                     break;
                                 } else {
                                     idx += 1;
                                 }
                             }
                         }
-                        while (*curbuf).b_ml.ml_line_count > lnum
-                            && (*curbuf).b_ml.ml_flags & ML_EMPTY == 0
+                        while (*curbuf.get()).b_ml.ml_line_count > lnum
+                            && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0
                         {
-                            ml_delete((*curbuf).b_ml.ml_line_count);
+                            ml_delete((*curbuf.get()).b_ml.ml_line_count);
                         }
-                        (*curbuf).b_flags |= BF_RECOVERED;
-                        check_cursor(curwin);
-                        msg_ext_skip_flush = !got_int;
-                        recoverymode = false_0 != 0;
-                        if got_int {
+                        (*curbuf.get()).b_flags |= BF_RECOVERED;
+                        check_cursor(curwin.get());
+                        msg_ext_skip_flush.set(!got_int.get());
+                        recoverymode.set(false_0 != 0);
+                        if got_int.get() {
                             emsg(gettext(b"E311: Recovery Interrupted\0".as_ptr()
                                 as *const ::core::ffi::c_char));
                         } else if error != 0 {
-                            no_wait_return += 1;
+                            (*no_wait_return.ptr()) += 1;
                             msg_ext_set_kind(b"emsg\0".as_ptr() as *const ::core::ffi::c_char);
                             msg(
                                 b">>>>>>>>>>>>>\n\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5253,7 +5257,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                         .as_ptr() as *const ::core::ffi::c_char,
                                 ),
                             );
-                            no_wait_return -= 1;
+                            (*no_wait_return.ptr()) -= 1;
                             msg_putchar('\n' as ::core::ffi::c_int);
                             msg(
                                 gettext(b"See \":help E312\" for more information.\0".as_ptr()
@@ -5266,7 +5270,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             );
                         } else {
                             msg_ext_set_kind(b"wmsg\0".as_ptr() as *const ::core::ffi::c_char);
-                            if (*curbuf).b_changed != 0 {
+                            if (*curbuf.get()).b_changed != 0 {
                                 msg(
                                     gettext(
                                         b"Recovery completed. You should check if everything is OK.\0"
@@ -5308,7 +5312,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             if !ui_has(kUIMessages) {
                                 msg_puts(b"\n\n\0".as_ptr() as *const ::core::ffi::c_char);
                             }
-                            cmdline_row = msg_row;
+                            cmdline_row.set(msg_row.get());
                         }
                         redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
                     }
@@ -5316,9 +5320,9 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
             }
         }
     }
-    msg_ext_skip_flush = false_0 != 0;
+    msg_ext_skip_flush.set(false_0 != 0);
     xfree(fname_used as *mut ::core::ffi::c_void);
-    recoverymode = false_0 != 0;
+    recoverymode.set(false_0 != 0);
     if !mfp.is_null() {
         if !hp.is_null() {
             mf_put(mfp, hp, false_0 != 0, false_0 != 0);
@@ -5330,21 +5334,21 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
         xfree(buf as *mut ::core::ffi::c_void);
     }
     if serious_error as ::core::ffi::c_int != 0 && called_from_main != 0 {
-        ml_close(curbuf, true_0);
+        ml_close(curbuf.get(), true_0);
     } else {
         apply_autocmds(
             EVENT_BUFREADPOST,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            (*curbuf).b_fname,
+            (*curbuf.get()).b_fname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
         apply_autocmds(
             EVENT_BUFWINENTER,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            (*curbuf).b_fname,
+            (*curbuf.get()).b_fname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
     };
 }
@@ -5374,7 +5378,7 @@ pub unsafe extern "C" fn recover_names(
             fname
         };
     }
-    msg_ext_skip_flush = true_0 != 0;
+    msg_ext_skip_flush.set(true_0 != 0);
     if do_list {
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
         msg(
@@ -5387,8 +5391,9 @@ pub unsafe extern "C" fn recover_names(
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
     };
-    dir_name.data = xmalloc(strlen(p_dir).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-    let mut dirp: *mut ::core::ffi::c_char = p_dir;
+    dir_name.data =
+        xmalloc(strlen(p_dir.get()).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
+    let mut dirp: *mut ::core::ffi::c_char = p_dir.get();
     while *dirp != 0 {
         dir_name.size = copy_option_part(
             &raw mut dirp,
@@ -5496,9 +5501,9 @@ pub unsafe extern "C" fn recover_names(
                 xfree(swapname as *mut ::core::ffi::c_void);
             }
         }
-        if !(*curbuf).b_ml.ml_mfp.is_null()
+        if !(*curbuf.get()).b_ml.ml_mfp.is_null()
             && {
-                p = (*(*curbuf).b_ml.ml_mfp).mf_fname;
+                p = (*(*curbuf.get()).b_ml.ml_mfp).mf_fname;
                 !p.is_null()
             }
             && ret_list.is_null()
@@ -5614,7 +5619,7 @@ pub unsafe extern "C" fn recover_names(
             FreeWild(num_files, files);
         }
     }
-    msg_ext_skip_flush = false_0 != 0;
+    msg_ext_skip_flush.set(false_0 != 0);
     xfree(dir_name.data as *mut ::core::ffi::c_void);
     return file_count;
 }
@@ -6137,7 +6142,7 @@ pub unsafe extern "C" fn ml_sync_all(
     mut check_char: ::core::ffi::c_int,
     mut do_fsync: bool,
 ) {
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if !((*buf).b_ml.ml_mfp.is_null() || (*(*buf).b_ml.ml_mfp).mf_fname.is_null()) {
             ml_flush_line(buf, false_0 != 0);
@@ -6185,8 +6190,8 @@ pub unsafe extern "C" fn ml_sync_all(
                     || os_fileinfo_size(&raw mut file_info) != (*buf).b_orig_size
                 {
                     ml_preserve(buf, false_0 != 0, do_fsync);
-                    did_check_timestamps = false_0 != 0;
-                    need_check_timestamps = true_0 != 0;
+                    did_check_timestamps.set(false_0 != 0);
+                    need_check_timestamps.set(true_0 != 0);
                 }
             }
             if (*(*buf).b_ml.ml_mfp).mf_dirty as ::core::ffi::c_uint
@@ -6217,7 +6222,7 @@ pub unsafe extern "C" fn ml_sync_all(
 #[no_mangle]
 pub unsafe extern "C" fn ml_preserve(mut buf: *mut buf_T, mut message: bool, mut do_fsync: bool) {
     let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
-    let mut got_int_save: ::core::ffi::c_int = got_int as ::core::ffi::c_int;
+    let mut got_int_save: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
     if mfp.is_null() || (*mfp).mf_fname.is_null() {
         if message {
             emsg(gettext(
@@ -6227,7 +6232,7 @@ pub unsafe extern "C" fn ml_preserve(mut buf: *mut buf_T, mut message: bool, mut
         }
         return;
     }
-    got_int = false_0 != 0;
+    got_int.set(false_0 != 0);
     ml_flush_line(buf, false_0 != 0);
     ml_find_line(buf, 0 as linenr_T, ML_FLUSH as ::core::ffi::c_int);
     let mut status: ::core::ffi::c_int = mf_sync(
@@ -6241,7 +6246,7 @@ pub unsafe extern "C" fn ml_preserve(mut buf: *mut buf_T, mut message: bool, mut
     );
     (*buf).b_ml.ml_stack_top = 0 as ::core::ffi::c_int;
     '_theend: {
-        if mf_need_trans(mfp) as ::core::ffi::c_int != 0 && !got_int {
+        if mf_need_trans(mfp) as ::core::ffi::c_int != 0 && !got_int.get() {
             let mut lnum: linenr_T = 1 as linenr_T;
             while mf_need_trans(mfp) as ::core::ffi::c_int != 0 && lnum <= (*buf).b_ml.ml_line_count
             {
@@ -6269,7 +6274,7 @@ pub unsafe extern "C" fn ml_preserve(mut buf: *mut buf_T, mut message: bool, mut
             (*buf).b_ml.ml_stack_top = 0 as ::core::ffi::c_int;
         }
     }
-    got_int = got_int as ::core::ffi::c_int | got_int_save != 0;
+    got_int.set(got_int.get() as ::core::ffi::c_int | got_int_save != 0);
     if message {
         if status == OK {
             msg(
@@ -6285,7 +6290,7 @@ pub unsafe extern "C" fn ml_preserve(mut buf: *mut buf_T, mut message: bool, mut
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get(mut lnum: linenr_T) -> *mut ::core::ffi::c_char {
-    return ml_get_buf_impl(curbuf, lnum, false_0 != 0);
+    return ml_get_buf_impl(curbuf.get(), lnum, false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get_buf(
@@ -6303,15 +6308,15 @@ pub unsafe extern "C" fn ml_get_buf_mut(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get_pos(mut pos: *const pos_T) -> *mut ::core::ffi::c_char {
-    return ml_get_buf(curbuf, (*pos).lnum).offset((*pos).col as isize);
+    return ml_get_buf(curbuf.get(), (*pos).lnum).offset((*pos).col as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get_len(mut lnum: linenr_T) -> colnr_T {
-    return ml_get_buf_len(curbuf, lnum);
+    return ml_get_buf_len(curbuf.get(), lnum);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get_pos_len(mut pos: *mut pos_T) -> colnr_T {
-    return ml_get_buf_len(curbuf, (*pos).lnum) - (*pos).col;
+    return ml_get_buf_len(curbuf.get(), (*pos).lnum) - (*pos).col;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_get_buf_len(mut buf: *mut buf_T, mut lnum: linenr_T) -> colnr_T {
@@ -6378,7 +6383,7 @@ unsafe extern "C" fn ml_get_buf_impl(
                     if recursive.get() == 0 as ::core::ffi::c_int {
                         (*recursive.ptr()) += 1;
                         get_trans_bufname(buf);
-                        shorten_dir(&raw mut NameBuff as *mut ::core::ffi::c_char);
+                        shorten_dir(NameBuff.ptr() as *mut ::core::ffi::c_char);
                         siemsg(
                             gettext(
                                 (e_ml_get_cannot_find_line_nr_in_buffer_nr_str.ptr() as *const _)
@@ -6386,7 +6391,7 @@ unsafe extern "C" fn ml_get_buf_impl(
                             ),
                             lnum as int64_t,
                             (*buf).handle,
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                         );
                         (*recursive.ptr()) -= 1;
                     }
@@ -6429,7 +6434,7 @@ unsafe extern "C" fn ml_get_buf_impl(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_line_alloced() -> ::core::ffi::c_int {
-    return (*curbuf).b_ml.ml_flags & ML_LINE_DIRTY;
+    return (*curbuf.get()).b_ml.ml_flags & ML_LINE_DIRTY;
 }
 unsafe extern "C" fn ml_append_int(
     mut buf: *mut buf_T,
@@ -6995,7 +7000,7 @@ pub unsafe extern "C" fn ml_append_flags(
     mut len: colnr_T,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if (*curbuf).b_ml.ml_mfp.is_null()
+    if (*curbuf.get()).b_ml.ml_mfp.is_null()
         && open_buffer(
             false_0 != 0,
             ::core::ptr::null_mut::<exarg_T>(),
@@ -7004,7 +7009,7 @@ pub unsafe extern "C" fn ml_append_flags(
     {
         return FAIL;
     }
-    return ml_append_flush(curbuf, lnum, line, len, flags);
+    return ml_append_flush(curbuf.get(), lnum, line, len, flags);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_append_buf(
@@ -7031,7 +7036,7 @@ pub unsafe extern "C" fn ml_append_buf(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_add_deleted_len(mut ptr: *mut ::core::ffi::c_char, mut len: ssize_t) {
-    ml_add_deleted_len_buf(curbuf, ptr, len);
+    ml_add_deleted_len_buf(curbuf.get(), ptr, len);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_add_deleted_len_buf(
@@ -7039,7 +7044,7 @@ pub unsafe extern "C" fn ml_add_deleted_len_buf(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: ssize_t,
 ) {
-    if inhibit_delete_count != 0 {
+    if inhibit_delete_count.get() != 0 {
         return;
     }
     let mut maxlen: ssize_t = strlen(ptr) as ssize_t;
@@ -7069,7 +7074,7 @@ pub unsafe extern "C" fn ml_replace(
     mut line: *mut ::core::ffi::c_char,
     mut copy: bool,
 ) -> ::core::ffi::c_int {
-    return ml_replace_buf(curbuf, lnum, line, copy, false_0 != 0);
+    return ml_replace_buf(curbuf.get(), lnum, line, copy, false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_replace_len(
@@ -7078,7 +7083,7 @@ pub unsafe extern "C" fn ml_replace_len(
     mut len: size_t,
     mut copy: bool,
 ) -> ::core::ffi::c_int {
-    return ml_replace_buf_len(curbuf, lnum, line, len, copy, false_0 != 0);
+    return ml_replace_buf_len(curbuf.get(), lnum, line, len, copy, false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_replace_buf(
@@ -7179,7 +7184,7 @@ unsafe extern "C" fn ml_delete_int(
     if (*buf).b_ml.ml_line_count == 1 as linenr_T {
         if flags & ML_DEL_MESSAGE as ::core::ffi::c_int != 0 {
             set_keep_msg(
-                gettext(&raw mut no_lines_msg as *mut ::core::ffi::c_char),
+                gettext(no_lines_msg.ptr() as *mut ::core::ffi::c_char),
                 0 as ::core::ffi::c_int,
             );
         }
@@ -7356,17 +7361,17 @@ pub unsafe extern "C" fn ml_delete_flags(
     mut lnum: linenr_T,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    ml_flush_line(curbuf, false_0 != 0);
-    if lnum < 1 as linenr_T || lnum > (*curbuf).b_ml.ml_line_count {
+    ml_flush_line(curbuf.get(), false_0 != 0);
+    if lnum < 1 as linenr_T || lnum > (*curbuf.get()).b_ml.ml_line_count {
         return FAIL;
     }
-    return ml_delete_int(curbuf, lnum, flags);
+    return ml_delete_int(curbuf.get(), lnum, flags);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_setmarked(mut lnum: linenr_T) {
     if lnum < 1 as linenr_T
-        || lnum > (*curbuf).b_ml.ml_line_count
-        || (*curbuf).b_ml.ml_mfp.is_null()
+        || lnum > (*curbuf.get()).b_ml.ml_line_count
+        || (*curbuf.get()).b_ml.ml_mfp.is_null()
     {
         return;
     }
@@ -7374,37 +7379,37 @@ pub unsafe extern "C" fn ml_setmarked(mut lnum: linenr_T) {
         lowest_marked.set(lnum);
     }
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
+    hp = ml_find_line(curbuf.get(), lnum, ML_FIND as ::core::ffi::c_int);
     if hp.is_null() {
         return;
     }
     let mut dp: *mut DataBlock = (*hp).bh_data as *mut DataBlock;
     *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint)
-        .offset((lnum - (*curbuf).b_ml.ml_locked_low) as isize) |= DB_MARKED;
-    (*curbuf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+        .offset((lnum - (*curbuf.get()).b_ml.ml_locked_low) as isize) |= DB_MARKED;
+    (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_firstmarked() -> linenr_T {
-    if (*curbuf).b_ml.ml_mfp.is_null() {
+    if (*curbuf.get()).b_ml.ml_mfp.is_null() {
         return 0 as linenr_T;
     }
     let mut lnum: linenr_T = lowest_marked.get();
-    while lnum <= (*curbuf).b_ml.ml_line_count {
+    while lnum <= (*curbuf.get()).b_ml.ml_line_count {
         let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-        hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
+        hp = ml_find_line(curbuf.get(), lnum, ML_FIND as ::core::ffi::c_int);
         if hp.is_null() {
             return 0 as linenr_T;
         }
         let mut dp: *mut DataBlock = (*hp).bh_data as *mut DataBlock;
         let mut i: ::core::ffi::c_int =
-            lnum as ::core::ffi::c_int - (*curbuf).b_ml.ml_locked_low as ::core::ffi::c_int;
-        while lnum <= (*curbuf).b_ml.ml_locked_high {
+            lnum as ::core::ffi::c_int - (*curbuf.get()).b_ml.ml_locked_low as ::core::ffi::c_int;
+        while lnum <= (*curbuf.get()).b_ml.ml_locked_high {
             if *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint).offset(i as isize) & DB_MARKED
                 != 0
             {
                 *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint).offset(i as isize) &=
                     DB_INDEX_MASK;
-                (*curbuf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+                (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
                 lowest_marked.set(lnum + 1 as linenr_T);
                 return lnum;
             }
@@ -7416,26 +7421,26 @@ pub unsafe extern "C" fn ml_firstmarked() -> linenr_T {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ml_clearmarked() {
-    if (*curbuf).b_ml.ml_mfp.is_null() {
+    if (*curbuf.get()).b_ml.ml_mfp.is_null() {
         return;
     }
     let mut lnum: linenr_T = lowest_marked.get();
-    while lnum <= (*curbuf).b_ml.ml_line_count {
+    while lnum <= (*curbuf.get()).b_ml.ml_line_count {
         let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-        hp = ml_find_line(curbuf, lnum, ML_FIND as ::core::ffi::c_int);
+        hp = ml_find_line(curbuf.get(), lnum, ML_FIND as ::core::ffi::c_int);
         if hp.is_null() {
             return;
         }
         let mut dp: *mut DataBlock = (*hp).bh_data as *mut DataBlock;
         let mut i: ::core::ffi::c_int =
-            lnum as ::core::ffi::c_int - (*curbuf).b_ml.ml_locked_low as ::core::ffi::c_int;
-        while lnum <= (*curbuf).b_ml.ml_locked_high {
+            lnum as ::core::ffi::c_int - (*curbuf.get()).b_ml.ml_locked_low as ::core::ffi::c_int;
+        while lnum <= (*curbuf.get()).b_ml.ml_locked_high {
             if *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint).offset(i as isize) & DB_MARKED
                 != 0
             {
                 *(&raw mut (*dp).db_index as *mut ::core::ffi::c_uint).offset(i as isize) &=
                     DB_INDEX_MASK;
-                (*curbuf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+                (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
             }
             i += 1;
             lnum += 1;
@@ -8125,7 +8130,7 @@ unsafe extern "C" fn do_swapexists(
         ::core::ptr::null::<::core::ffi::c_char>(),
         -1 as ptrdiff_t,
     );
-    allbuf_lock += 1;
+    (*allbuf_lock.ptr()) += 1;
     apply_autocmds(
         EVENT_SWAPEXISTS,
         (*buf).b_fname,
@@ -8133,7 +8138,7 @@ unsafe extern "C" fn do_swapexists(
         false_0 != 0,
         ::core::ptr::null_mut::<buf_T>(),
     );
-    allbuf_lock -= 1;
+    (*allbuf_lock.ptr()) -= 1;
     set_vim_var_string(
         VV_SWAPNAME,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -8225,7 +8230,7 @@ unsafe extern "C" fn findswapname(
                 && *fname.offset(n.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
                     == 'p' as ::core::ffi::c_int
             {
-                if !recoverymode
+                if !recoverymode.get()
                     && !buf_fname.is_null()
                     && !(*buf).b_help
                     && (*buf).b_flags & BF_DUMMY == 0
@@ -8271,12 +8276,12 @@ unsafe extern "C" fn findswapname(
                                 {
                                     expand_env(
                                         &raw mut b0.b0_fname as *mut ::core::ffi::c_char,
-                                        &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                        NameBuff.ptr() as *mut ::core::ffi::c_char,
                                         MAXPATHL,
                                     );
                                     if fnamecmp_ino(
                                         (*buf).b_ffname,
-                                        &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                        NameBuff.ptr() as *mut ::core::ffi::c_char,
                                         char_to_long(
                                             &raw mut b0.b0_ino as *mut ::core::ffi::c_char,
                                         ),
@@ -8287,12 +8292,12 @@ unsafe extern "C" fn findswapname(
                             } else {
                                 expand_env(
                                     &raw mut b0.b0_fname as *mut ::core::ffi::c_char,
-                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                                     MAXPATHL,
                                 );
                                 if fnamecmp_ino(
                                     (*buf).b_ffname,
-                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                                     char_to_long(&raw mut b0.b0_ino as *mut ::core::ffi::c_char),
                                 ) {
                                     differ = true_0 != 0;
@@ -8302,15 +8307,15 @@ unsafe extern "C" fn findswapname(
                         close(fd);
                     }
                     if !differ
-                        && (*curbuf).b_flags & BF_RECOVERED == 0
-                        && vim_strchr(p_shm, SHM_ATTENTION as ::core::ffi::c_int).is_null()
+                        && (*curbuf.get()).b_flags & BF_RECOVERED == 0
+                        && vim_strchr(p_shm.get(), SHM_ATTENTION as ::core::ffi::c_int).is_null()
                     {
                         let mut choice: sea_choice_T = SEA_CHOICE_NONE;
                         if os_path_exists((*buf).b_fname) as ::core::ffi::c_int != 0
                             && swapfile_unchanged(fname) as ::core::ffi::c_int != 0
                         {
                             choice = SEA_CHOICE_DELETE;
-                            if p_verbose > 0 as OptInt {
+                            if p_verbose.get() > 0 as OptInt {
                                 verb_msg(gettext(
                                     b"Found a swap file that is not useful, deleting it\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -8319,7 +8324,7 @@ unsafe extern "C" fn findswapname(
                         }
                         if choice as ::core::ffi::c_uint
                             == SEA_CHOICE_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-                            && swap_exists_action != SEA_NONE
+                            && swap_exists_action.get() != SEA_NONE
                             && has_autocmd(EVENT_SWAPEXISTS, buf_fname, buf) as ::core::ffi::c_int
                                 != 0
                         {
@@ -8327,7 +8332,7 @@ unsafe extern "C" fn findswapname(
                         }
                         if choice as ::core::ffi::c_uint
                             == SEA_CHOICE_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-                            && swap_exists_action == SEA_READONLY
+                            && swap_exists_action.get() == SEA_READONLY
                         {
                             choice = SEA_CHOICE_READONLY;
                         }
@@ -8335,7 +8340,7 @@ unsafe extern "C" fn findswapname(
                         if choice as ::core::ffi::c_uint
                             == SEA_CHOICE_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            no_wait_return += 1;
+                            (*no_wait_return.ptr()) += 1;
                             let mut msg_0: StringBuilder = KV_INITIAL_VALUE;
                             msg_0.capacity =
                                 (1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t;
@@ -8347,9 +8352,9 @@ unsafe extern "C" fn findswapname(
                             let mut fhname: *mut ::core::ffi::c_char =
                                 home_replace_save(::core::ptr::null_mut::<buf_T>(), fname);
                             attention_message(buf, fname, fhname, &raw mut msg_0);
-                            got_int = false_0 != 0;
+                            got_int.set(false_0 != 0);
                             flush_buffers(FLUSH_TYPEAHEAD);
-                            if swap_exists_action != SEA_NONE {
+                            if swap_exists_action.get() != SEA_NONE {
                                 kv_do_printf(
                                     &raw mut msg_0,
                                     gettext(
@@ -8412,7 +8417,7 @@ unsafe extern "C" fn findswapname(
                                     &raw mut need_clear,
                                 );
                             }
-                            no_wait_return -= 1;
+                            (*no_wait_return.ptr()) -= 1;
                             xfree(msg_0.items as *mut ::core::ffi::c_void);
                             msg_0.capacity = 0 as size_t;
                             msg_0.size = msg_0.capacity;
@@ -8424,22 +8429,22 @@ unsafe extern "C" fn findswapname(
                                 (*buf).b_p_ro = true_0;
                             }
                             3 => {
-                                swap_exists_action = SEA_RECOVER;
+                                swap_exists_action.set(SEA_RECOVER);
                             }
                             4 => {
                                 os_remove(fname);
                             }
                             5 => {
-                                swap_exists_action = SEA_QUIT;
+                                swap_exists_action.set(SEA_QUIT);
                             }
                             6 => {
-                                swap_exists_action = SEA_QUIT;
-                                got_int = true_0 != 0;
+                                swap_exists_action.set(SEA_QUIT);
+                                got_int.set(true_0 != 0);
                             }
                             0 => {
                                 msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-                                if msg_silent == 0 as ::core::ffi::c_int {
-                                    need_wait_return = true_0 != 0;
+                                if msg_silent.get() == 0 as ::core::ffi::c_int {
+                                    need_wait_return.set(true_0 != 0);
                                 }
                             }
                             2 | _ => {}
@@ -8914,7 +8919,7 @@ pub unsafe extern "C" fn ml_find_line_or_offset(
     let mut can_cache: bool =
         lnum != 0 as linenr_T && ffdos == 0 && (*buf).b_ml.ml_line_lnum == lnum;
     if lnum == 0 as linenr_T || (*buf).b_ml.ml_line_lnum < lnum || !no_ff {
-        ml_flush_line(curbuf, false_0 != 0);
+        ml_flush_line(curbuf.get(), false_0 != 0);
     } else if can_cache as ::core::ffi::c_int != 0 && (*buf).b_ml.ml_line_offset > 0 as size_t {
         return (*buf).b_ml.ml_line_offset as ::core::ffi::c_int;
     }
@@ -9052,24 +9057,25 @@ pub unsafe extern "C" fn ml_find_line_or_offset(
 #[no_mangle]
 pub unsafe extern "C" fn goto_byte(mut cnt: ::core::ffi::c_int) {
     let mut boff: ::core::ffi::c_int = cnt;
-    ml_flush_line(curbuf, false_0 != 0);
+    ml_flush_line(curbuf.get(), false_0 != 0);
     setpcmark();
     if boff != 0 {
         boff -= 1;
     }
     let mut lnum: linenr_T =
-        ml_find_line_or_offset(curbuf, 0 as linenr_T, &raw mut boff, false_0 != 0) as linenr_T;
+        ml_find_line_or_offset(curbuf.get(), 0 as linenr_T, &raw mut boff, false_0 != 0)
+            as linenr_T;
     if lnum < 1 as linenr_T {
-        (*curwin).w_cursor.lnum = (*curbuf).b_ml.ml_line_count;
-        (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
-        coladvance(curwin, MAXCOL as ::core::ffi::c_int);
+        (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
+        (*curwin.get()).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
+        coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
     } else {
-        (*curwin).w_cursor.lnum = lnum;
-        (*curwin).w_cursor.col = boff;
-        (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-        (*curwin).w_set_curswant = true_0;
+        (*curwin.get()).w_cursor.lnum = lnum;
+        (*curwin.get()).w_cursor.col = boff;
+        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_set_curswant = true_0;
     }
-    check_cursor(curwin);
+    check_cursor(curwin.get());
     mb_adjust_cursor();
 }
 #[no_mangle]
@@ -9086,7 +9092,7 @@ pub unsafe extern "C" fn inc(mut lp: *mut pos_T) -> ::core::ffi::c_int {
             };
         }
     }
-    if (*lp).lnum != (*curbuf).b_ml.ml_line_count {
+    if (*lp).lnum != (*curbuf.get()).b_ml.ml_line_count {
         (*lp).col = 0 as ::core::ffi::c_int as colnr_T;
         (*lp).lnum += 1;
         (*lp).coladd = 0 as ::core::ffi::c_int as colnr_T;

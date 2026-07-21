@@ -129,386 +129,386 @@ extern "C" {
         ...
     ) -> bool;
     fn save_file_ff(buf: *mut buf_T);
-    static mut opt_ambw_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_bg_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_bs_values: [*const ::core::ffi::c_char; 5];
-    static mut opt_bkc_values: [*const ::core::ffi::c_char; 6];
-    static mut opt_bo_values: [*const ::core::ffi::c_char; 21];
-    static mut opt_briopt_values: [*const ::core::ffi::c_char; 6];
-    static mut opt_bh_values: [*const ::core::ffi::c_char; 6];
-    static mut opt_bt_values: [*const ::core::ffi::c_char; 9];
-    static mut opt_cmp_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_cb_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_cpt_values: [*const ::core::ffi::c_char; 16];
-    static mut opt_cot_values: [*const ::core::ffi::c_char; 12];
-    static mut opt_csl_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_culopt_values: [*const ::core::ffi::c_char; 5];
-    static mut opt_debug_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_dip_values: [*const ::core::ffi::c_char; 20];
-    static mut opt_dy_values: [*const ::core::ffi::c_char; 5];
-    static mut opt_ead_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_ff_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_fcl_values: [*const ::core::ffi::c_char; 2];
-    static mut opt_fdc_values: [*const ::core::ffi::c_char; 21];
-    static mut opt_fdm_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_fdo_values: [*const ::core::ffi::c_char; 12];
-    static mut opt_icm_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_jop_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_km_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_lop_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_mopt_values: [*const ::core::ffi::c_char; 5];
-    static mut opt_mousem_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_mousescroll_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_nf_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_pumborder_values: [*const ::core::ffi::c_char; 9];
-    static mut opt_rdb_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_rlc_values: [*const ::core::ffi::c_char; 2];
-    static mut opt_sbo_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_sel_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_slm_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_ssop_values: [*const ::core::ffi::c_char; 19];
-    static mut opt_sloc_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_scl_values: [*const ::core::ffi::c_char; 23];
-    static mut opt_spo_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_sps_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_spk_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_swb_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_tcl_values: [*const ::core::ffi::c_char; 3];
-    static mut opt_tc_values: [*const ::core::ffi::c_char; 6];
-    static mut opt_tpf_values: [*const ::core::ffi::c_char; 8];
-    static mut opt_ve_values: [*const ::core::ffi::c_char; 7];
-    static mut opt_wim_values: [*const ::core::ffi::c_char; 6];
-    static mut opt_wop_values: [*const ::core::ffi::c_char; 5];
-    static mut opt_wak_values: [*const ::core::ffi::c_char; 4];
-    static mut opt_winborder_values: [*const ::core::ffi::c_char; 9];
-    static mut empty_string_option: [::core::ffi::c_char; 0];
-    static mut p_ambw: *mut ::core::ffi::c_char;
-    static mut p_acd: ::core::ffi::c_int;
-    static mut p_ai: ::core::ffi::c_int;
-    static mut p_bin: ::core::ffi::c_int;
-    static mut p_bomb: ::core::ffi::c_int;
-    static mut p_bl: ::core::ffi::c_int;
-    static mut p_cin: ::core::ffi::c_int;
-    static mut p_channel: OptInt;
-    static mut p_cink: *mut ::core::ffi::c_char;
-    static mut p_cinsd: *mut ::core::ffi::c_char;
-    static mut p_cinw: *mut ::core::ffi::c_char;
-    static mut p_cfu: *mut ::core::ffi::c_char;
-    static mut p_ofu: *mut ::core::ffi::c_char;
-    static mut p_tsrfu: *mut ::core::ffi::c_char;
-    static mut p_ci: ::core::ffi::c_int;
-    static mut p_ar: ::core::ffi::c_int;
-    static mut p_aw: ::core::ffi::c_int;
-    static mut p_awa: ::core::ffi::c_int;
-    static mut p_bs: *mut ::core::ffi::c_char;
-    static mut p_bg: *mut ::core::ffi::c_char;
-    static mut p_bk: ::core::ffi::c_int;
-    static mut p_bkc: *mut ::core::ffi::c_char;
-    static mut bkc_flags: ::core::ffi::c_uint;
-    static mut p_bdir: *mut ::core::ffi::c_char;
-    static mut p_bex: *mut ::core::ffi::c_char;
-    static mut p_bo: *mut ::core::ffi::c_char;
-    static mut bo_flags: ::core::ffi::c_uint;
-    static mut p_bsk: *mut ::core::ffi::c_char;
-    static mut p_breakat: *mut ::core::ffi::c_char;
-    static mut p_bh: *mut ::core::ffi::c_char;
-    static mut p_bt: *mut ::core::ffi::c_char;
-    static mut p_busy: OptInt;
-    static mut p_cmp: *mut ::core::ffi::c_char;
-    static mut cmp_flags: ::core::ffi::c_uint;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_deco: ::core::ffi::c_int;
-    static mut p_ccv: *mut ::core::ffi::c_char;
-    static mut p_cino: *mut ::core::ffi::c_char;
-    static mut p_cedit: *mut ::core::ffi::c_char;
-    static mut p_cb: *mut ::core::ffi::c_char;
-    static mut cb_flags: ::core::ffi::c_uint;
-    static mut p_cwh: OptInt;
-    static mut p_ch: OptInt;
-    static mut p_cms: *mut ::core::ffi::c_char;
-    static mut p_cpt: *mut ::core::ffi::c_char;
-    static mut p_cto: OptInt;
-    static mut p_columns: OptInt;
-    static mut p_confirm: ::core::ffi::c_int;
-    static mut p_cia: *mut ::core::ffi::c_char;
-    static mut p_cot: *mut ::core::ffi::c_char;
-    static mut cot_flags: ::core::ffi::c_uint;
-    static mut p_ac: ::core::ffi::c_int;
-    static mut p_act: OptInt;
-    static mut p_acl: OptInt;
-    static mut p_pumborder: *mut ::core::ffi::c_char;
-    static mut p_pb: OptInt;
-    static mut p_ph: OptInt;
-    static mut p_pw: OptInt;
-    static mut p_pmw: OptInt;
-    static mut p_com: *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_debug: *mut ::core::ffi::c_char;
-    static mut p_def: *mut ::core::ffi::c_char;
-    static mut p_inc: *mut ::core::ffi::c_char;
-    static mut p_dia: *mut ::core::ffi::c_char;
-    static mut p_dip: *mut ::core::ffi::c_char;
-    static mut p_dex: *mut ::core::ffi::c_char;
-    static mut p_dict: *mut ::core::ffi::c_char;
-    static mut p_dg: ::core::ffi::c_int;
-    static mut p_dir: *mut ::core::ffi::c_char;
-    static mut p_dy: *mut ::core::ffi::c_char;
-    static mut dy_flags: ::core::ffi::c_uint;
-    static mut p_ead: *mut ::core::ffi::c_char;
-    static mut p_emoji: ::core::ffi::c_int;
-    static mut p_ea: ::core::ffi::c_int;
-    static mut p_ep: *mut ::core::ffi::c_char;
-    static mut p_eb: ::core::ffi::c_int;
-    static mut p_ef: *mut ::core::ffi::c_char;
-    static mut p_efm: *mut ::core::ffi::c_char;
-    static mut p_gefm: *mut ::core::ffi::c_char;
-    static mut p_gp: *mut ::core::ffi::c_char;
-    static mut p_eof: ::core::ffi::c_int;
-    static mut p_eol: ::core::ffi::c_int;
-    static mut p_ei: *mut ::core::ffi::c_char;
-    static mut p_et: ::core::ffi::c_int;
-    static mut p_exrc: ::core::ffi::c_int;
-    static mut p_fenc: *mut ::core::ffi::c_char;
-    static mut p_fencs: *mut ::core::ffi::c_char;
-    static mut p_ff: *mut ::core::ffi::c_char;
-    static mut p_ffs: *mut ::core::ffi::c_char;
-    static mut p_fic: ::core::ffi::c_int;
-    static mut p_ft: *mut ::core::ffi::c_char;
-    static mut p_fcs: *mut ::core::ffi::c_char;
-    static mut p_ffu: *mut ::core::ffi::c_char;
-    static mut p_fixeol: ::core::ffi::c_int;
-    static mut p_fcl: *mut ::core::ffi::c_char;
-    static mut p_fdls: OptInt;
-    static mut p_fdo: *mut ::core::ffi::c_char;
-    static mut fdo_flags: ::core::ffi::c_uint;
-    static mut p_fex: *mut ::core::ffi::c_char;
-    static mut p_flp: *mut ::core::ffi::c_char;
-    static mut p_fo: *mut ::core::ffi::c_char;
-    static mut p_fp: *mut ::core::ffi::c_char;
-    static mut p_fs: ::core::ffi::c_int;
-    static mut p_gd: ::core::ffi::c_int;
-    static mut p_guicursor: *mut ::core::ffi::c_char;
-    static mut p_guifont: *mut ::core::ffi::c_char;
-    static mut p_guifontwide: *mut ::core::ffi::c_char;
-    static mut p_hf: *mut ::core::ffi::c_char;
-    static mut p_hh: OptInt;
-    static mut p_hlg: *mut ::core::ffi::c_char;
-    static mut p_hid: ::core::ffi::c_int;
-    static mut p_hl: *mut ::core::ffi::c_char;
-    static mut p_hls: ::core::ffi::c_int;
-    static mut p_hi: OptInt;
-    static mut p_arshape: ::core::ffi::c_int;
-    static mut p_icon: ::core::ffi::c_int;
-    static mut p_iconstring: *mut ::core::ffi::c_char;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut p_iminsert: OptInt;
-    static mut p_imsearch: OptInt;
-    static mut p_inf: ::core::ffi::c_int;
-    static mut p_inex: *mut ::core::ffi::c_char;
-    static mut p_is: ::core::ffi::c_int;
-    static mut p_inde: *mut ::core::ffi::c_char;
-    static mut p_indk: *mut ::core::ffi::c_char;
-    static mut p_icm: *mut ::core::ffi::c_char;
-    static mut p_isf: *mut ::core::ffi::c_char;
-    static mut p_isi: *mut ::core::ffi::c_char;
-    static mut p_isk: *mut ::core::ffi::c_char;
-    static mut p_isp: *mut ::core::ffi::c_char;
-    static mut p_js: ::core::ffi::c_int;
-    static mut p_jop: *mut ::core::ffi::c_char;
-    static mut jop_flags: ::core::ffi::c_uint;
-    static mut p_keymap: *mut ::core::ffi::c_char;
-    static mut p_kp: *mut ::core::ffi::c_char;
-    static mut p_km: *mut ::core::ffi::c_char;
-    static mut p_langmap: *mut ::core::ffi::c_char;
-    static mut p_lnr: ::core::ffi::c_int;
-    static mut p_lrm: ::core::ffi::c_int;
-    static mut p_lm: *mut ::core::ffi::c_char;
-    static mut p_lines: OptInt;
-    static mut p_linespace: OptInt;
-    static mut p_lisp: ::core::ffi::c_int;
-    static mut p_lop: *mut ::core::ffi::c_char;
-    static mut p_lispwords: *mut ::core::ffi::c_char;
-    static mut p_ls: OptInt;
-    static mut p_stal: OptInt;
-    static mut p_lcs: *mut ::core::ffi::c_char;
-    static mut p_lz: ::core::ffi::c_int;
-    static mut p_lpl: ::core::ffi::c_int;
-    static mut p_magic: ::core::ffi::c_int;
-    static mut p_menc: *mut ::core::ffi::c_char;
-    static mut p_mef: *mut ::core::ffi::c_char;
-    static mut p_mp: *mut ::core::ffi::c_char;
-    static mut p_mps: *mut ::core::ffi::c_char;
-    static mut p_mat: OptInt;
-    static mut p_mco: OptInt;
-    static mut p_mfd: OptInt;
-    static mut p_mmd: OptInt;
-    static mut p_mmp: OptInt;
-    static mut p_mis: OptInt;
-    static mut p_mopt: *mut ::core::ffi::c_char;
-    static mut p_msc: OptInt;
-    static mut p_msm: *mut ::core::ffi::c_char;
-    static mut p_ml: ::core::ffi::c_int;
-    static mut p_mle: ::core::ffi::c_int;
-    static mut p_mls: OptInt;
-    static mut p_ma: ::core::ffi::c_int;
-    static mut p_mod: ::core::ffi::c_int;
-    static mut p_mouse: *mut ::core::ffi::c_char;
-    static mut p_mousem: *mut ::core::ffi::c_char;
-    static mut p_mousemev: ::core::ffi::c_int;
-    static mut p_mousef: ::core::ffi::c_int;
-    static mut p_mh: ::core::ffi::c_int;
-    static mut p_mousescroll: *mut ::core::ffi::c_char;
-    static mut p_mouset: OptInt;
-    static mut p_more: ::core::ffi::c_int;
-    static mut p_nf: *mut ::core::ffi::c_char;
-    static mut p_opfunc: *mut ::core::ffi::c_char;
-    static mut p_para: *mut ::core::ffi::c_char;
-    static mut p_paste: ::core::ffi::c_int;
-    static mut p_pex: *mut ::core::ffi::c_char;
-    static mut p_pm: *mut ::core::ffi::c_char;
-    static mut p_path: *mut ::core::ffi::c_char;
-    static mut p_cdpath: *mut ::core::ffi::c_char;
-    static mut p_pi: ::core::ffi::c_int;
-    static mut p_pyx: OptInt;
-    static mut p_qe: *mut ::core::ffi::c_char;
-    static mut p_ro: ::core::ffi::c_int;
-    static mut p_rdb: *mut ::core::ffi::c_char;
-    static mut rdb_flags: ::core::ffi::c_uint;
-    static mut p_rdt: OptInt;
-    static mut p_re: OptInt;
-    static mut p_report: OptInt;
-    static mut p_pvh: OptInt;
-    static mut p_chi: OptInt;
-    static mut p_ari: ::core::ffi::c_int;
-    static mut p_ri: ::core::ffi::c_int;
-    static mut p_ru: ::core::ffi::c_int;
-    static mut p_ruf: *mut ::core::ffi::c_char;
-    static mut p_pp: *mut ::core::ffi::c_char;
-    static mut p_qftf: *mut ::core::ffi::c_char;
-    static mut p_rtp: *mut ::core::ffi::c_char;
-    static mut p_scbk: OptInt;
-    static mut p_sj: OptInt;
-    static mut p_so: OptInt;
-    static mut p_sbo: *mut ::core::ffi::c_char;
-    static mut p_sections: *mut ::core::ffi::c_char;
-    static mut p_secure: ::core::ffi::c_int;
-    static mut p_sel: *mut ::core::ffi::c_char;
-    static mut p_slm: *mut ::core::ffi::c_char;
-    static mut p_ssop: *mut ::core::ffi::c_char;
-    static mut ssop_flags: ::core::ffi::c_uint;
-    static mut p_sh: *mut ::core::ffi::c_char;
-    static mut p_shcf: *mut ::core::ffi::c_char;
-    static mut p_sp: *mut ::core::ffi::c_char;
-    static mut p_shq: *mut ::core::ffi::c_char;
-    static mut p_sxq: *mut ::core::ffi::c_char;
-    static mut p_sxe: *mut ::core::ffi::c_char;
-    static mut p_srr: *mut ::core::ffi::c_char;
-    static mut p_stmp: ::core::ffi::c_int;
-    static mut p_stl: *mut ::core::ffi::c_char;
-    static mut p_wbr: *mut ::core::ffi::c_char;
-    static mut p_sr: ::core::ffi::c_int;
-    static mut p_sw: OptInt;
-    static mut p_shm: *mut ::core::ffi::c_char;
-    static mut p_sbr: *mut ::core::ffi::c_char;
-    static mut p_sc: ::core::ffi::c_int;
-    static mut p_sloc: *mut ::core::ffi::c_char;
-    static mut p_sft: ::core::ffi::c_int;
-    static mut p_sm: ::core::ffi::c_int;
-    static mut p_smd: ::core::ffi::c_int;
-    static mut p_ss: OptInt;
-    static mut p_siso: OptInt;
-    static mut p_scs: ::core::ffi::c_int;
-    static mut p_si: ::core::ffi::c_int;
-    static mut p_sta: ::core::ffi::c_int;
-    static mut p_sts: OptInt;
-    static mut p_sb: ::core::ffi::c_int;
-    static mut p_sua: *mut ::core::ffi::c_char;
-    static mut p_swf: ::core::ffi::c_int;
-    static mut p_smc: OptInt;
-    static mut p_tpm: OptInt;
-    static mut p_tal: *mut ::core::ffi::c_char;
-    static mut p_tpf: *mut ::core::ffi::c_char;
-    static mut tpf_flags: ::core::ffi::c_uint;
-    static mut p_tfu: *mut ::core::ffi::c_char;
-    static mut p_spc: *mut ::core::ffi::c_char;
-    static mut p_spf: *mut ::core::ffi::c_char;
-    static mut p_spl: *mut ::core::ffi::c_char;
-    static mut p_spo: *mut ::core::ffi::c_char;
-    static mut spo_flags: ::core::ffi::c_uint;
-    static mut p_sps: *mut ::core::ffi::c_char;
-    static mut p_spr: ::core::ffi::c_int;
-    static mut p_sol: ::core::ffi::c_int;
-    static mut p_su: *mut ::core::ffi::c_char;
-    static mut p_swb: *mut ::core::ffi::c_char;
-    static mut swb_flags: ::core::ffi::c_uint;
-    static mut p_spk: *mut ::core::ffi::c_char;
-    static mut p_syn: *mut ::core::ffi::c_char;
-    static mut p_tcl: *mut ::core::ffi::c_char;
-    static mut tcl_flags: ::core::ffi::c_uint;
-    static mut p_ts: OptInt;
-    static mut p_tbs: ::core::ffi::c_int;
-    static mut p_tc: *mut ::core::ffi::c_char;
-    static mut tc_flags: ::core::ffi::c_uint;
-    static mut p_tl: OptInt;
-    static mut p_tr: ::core::ffi::c_int;
-    static mut p_tags: *mut ::core::ffi::c_char;
-    static mut p_tgst: ::core::ffi::c_int;
-    static mut p_tbidi: ::core::ffi::c_int;
-    static mut p_tw: OptInt;
-    static mut p_to: ::core::ffi::c_int;
-    static mut p_timeout: ::core::ffi::c_int;
-    static mut p_tm: OptInt;
-    static mut p_title: ::core::ffi::c_int;
-    static mut p_titlelen: OptInt;
-    static mut p_titleold: *mut ::core::ffi::c_char;
-    static mut p_titlestring: *mut ::core::ffi::c_char;
-    static mut p_tsr: *mut ::core::ffi::c_char;
-    static mut p_tgc: ::core::ffi::c_int;
-    static mut p_ttimeout: ::core::ffi::c_int;
-    static mut p_ttm: OptInt;
-    static mut p_tf: ::core::ffi::c_int;
-    static mut p_udir: *mut ::core::ffi::c_char;
-    static mut p_udf: ::core::ffi::c_int;
-    static mut p_ul: OptInt;
-    static mut p_ur: OptInt;
-    static mut p_uc: OptInt;
-    static mut p_ut: OptInt;
-    static mut p_shada: *mut ::core::ffi::c_char;
-    static mut p_shadafile: *mut ::core::ffi::c_char;
-    static mut p_termsync: ::core::ffi::c_int;
-    static mut p_vsts: *mut ::core::ffi::c_char;
-    static mut p_vts: *mut ::core::ffi::c_char;
-    static mut p_vdir: *mut ::core::ffi::c_char;
-    static mut p_vop: *mut ::core::ffi::c_char;
-    static mut vop_flags: ::core::ffi::c_uint;
-    static mut p_vb: ::core::ffi::c_int;
-    static mut p_ve: *mut ::core::ffi::c_char;
-    static mut ve_flags: ::core::ffi::c_uint;
-    static mut p_verbose: OptInt;
-    static mut p_warn: ::core::ffi::c_int;
-    static mut p_wop: *mut ::core::ffi::c_char;
-    static mut wop_flags: ::core::ffi::c_uint;
-    static mut p_window: OptInt;
-    static mut p_wak: *mut ::core::ffi::c_char;
-    static mut p_wig: *mut ::core::ffi::c_char;
-    static mut p_ww: *mut ::core::ffi::c_char;
-    static mut p_wc: OptInt;
-    static mut p_wcm: OptInt;
-    static mut p_wic: ::core::ffi::c_int;
-    static mut p_wim: *mut ::core::ffi::c_char;
-    static mut p_wmnu: ::core::ffi::c_int;
-    static mut p_winborder: *mut ::core::ffi::c_char;
-    static mut p_wh: OptInt;
-    static mut p_wmh: OptInt;
-    static mut p_wmw: OptInt;
-    static mut p_wiw: OptInt;
-    static mut p_wm: OptInt;
-    static mut p_ws: ::core::ffi::c_int;
-    static mut p_write: ::core::ffi::c_int;
-    static mut p_wa: ::core::ffi::c_int;
-    static mut p_wb: ::core::ffi::c_int;
-    static mut p_wd: OptInt;
-    static mut p_cdh: ::core::ffi::c_int;
+    static opt_ambw_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_bg_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_bs_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
+    static opt_bkc_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
+    static opt_bo_values: GlobalCell<[*const ::core::ffi::c_char; 21]>;
+    static opt_briopt_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
+    static opt_bh_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
+    static opt_bt_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
+    static opt_cmp_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_cb_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_cpt_values: GlobalCell<[*const ::core::ffi::c_char; 16]>;
+    static opt_cot_values: GlobalCell<[*const ::core::ffi::c_char; 12]>;
+    static opt_csl_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_culopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
+    static opt_debug_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_dip_values: GlobalCell<[*const ::core::ffi::c_char; 20]>;
+    static opt_dy_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
+    static opt_ead_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_ff_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_fcl_values: GlobalCell<[*const ::core::ffi::c_char; 2]>;
+    static opt_fdc_values: GlobalCell<[*const ::core::ffi::c_char; 21]>;
+    static opt_fdm_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_fdo_values: GlobalCell<[*const ::core::ffi::c_char; 12]>;
+    static opt_icm_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_jop_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_km_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_lop_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_mopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
+    static opt_mousem_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_mousescroll_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_nf_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_pumborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
+    static opt_rdb_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_rlc_values: GlobalCell<[*const ::core::ffi::c_char; 2]>;
+    static opt_sbo_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_sel_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_slm_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_ssop_values: GlobalCell<[*const ::core::ffi::c_char; 19]>;
+    static opt_sloc_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_scl_values: GlobalCell<[*const ::core::ffi::c_char; 23]>;
+    static opt_spo_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_sps_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_spk_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_swb_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_tcl_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
+    static opt_tc_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
+    static opt_tpf_values: GlobalCell<[*const ::core::ffi::c_char; 8]>;
+    static opt_ve_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
+    static opt_wim_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
+    static opt_wop_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
+    static opt_wak_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
+    static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
+    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
+    static p_ambw: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_acd: GlobalCell<::core::ffi::c_int>;
+    static p_ai: GlobalCell<::core::ffi::c_int>;
+    static p_bin: GlobalCell<::core::ffi::c_int>;
+    static p_bomb: GlobalCell<::core::ffi::c_int>;
+    static p_bl: GlobalCell<::core::ffi::c_int>;
+    static p_cin: GlobalCell<::core::ffi::c_int>;
+    static p_channel: GlobalCell<OptInt>;
+    static p_cink: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cinsd: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cinw: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cfu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ofu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tsrfu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ci: GlobalCell<::core::ffi::c_int>;
+    static p_ar: GlobalCell<::core::ffi::c_int>;
+    static p_aw: GlobalCell<::core::ffi::c_int>;
+    static p_awa: GlobalCell<::core::ffi::c_int>;
+    static p_bs: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bk: GlobalCell<::core::ffi::c_int>;
+    static p_bkc: GlobalCell<*mut ::core::ffi::c_char>;
+    static bkc_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_bdir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bo: GlobalCell<*mut ::core::ffi::c_char>;
+    static bo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_bsk: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_breakat: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bh: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bt: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_busy: GlobalCell<OptInt>;
+    static p_cmp: GlobalCell<*mut ::core::ffi::c_char>;
+    static cmp_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_deco: GlobalCell<::core::ffi::c_int>;
+    static p_ccv: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cino: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cedit: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cb: GlobalCell<*mut ::core::ffi::c_char>;
+    static cb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_cwh: GlobalCell<OptInt>;
+    static p_ch: GlobalCell<OptInt>;
+    static p_cms: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpt: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cto: GlobalCell<OptInt>;
+    static p_columns: GlobalCell<OptInt>;
+    static p_confirm: GlobalCell<::core::ffi::c_int>;
+    static p_cia: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cot: GlobalCell<*mut ::core::ffi::c_char>;
+    static cot_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_ac: GlobalCell<::core::ffi::c_int>;
+    static p_act: GlobalCell<OptInt>;
+    static p_acl: GlobalCell<OptInt>;
+    static p_pumborder: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pb: GlobalCell<OptInt>;
+    static p_ph: GlobalCell<OptInt>;
+    static p_pw: GlobalCell<OptInt>;
+    static p_pmw: GlobalCell<OptInt>;
+    static p_com: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_debug: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_def: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_inc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dia: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dip: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dict: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dg: GlobalCell<::core::ffi::c_int>;
+    static p_dir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dy: GlobalCell<*mut ::core::ffi::c_char>;
+    static dy_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_ead: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_emoji: GlobalCell<::core::ffi::c_int>;
+    static p_ea: GlobalCell<::core::ffi::c_int>;
+    static p_ep: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_eb: GlobalCell<::core::ffi::c_int>;
+    static p_ef: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_efm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_gefm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_gp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_eof: GlobalCell<::core::ffi::c_int>;
+    static p_eol: GlobalCell<::core::ffi::c_int>;
+    static p_ei: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_et: GlobalCell<::core::ffi::c_int>;
+    static p_exrc: GlobalCell<::core::ffi::c_int>;
+    static p_fenc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fencs: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ff: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ffs: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fic: GlobalCell<::core::ffi::c_int>;
+    static p_ft: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fcs: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ffu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fixeol: GlobalCell<::core::ffi::c_int>;
+    static p_fcl: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fdls: GlobalCell<OptInt>;
+    static p_fdo: GlobalCell<*mut ::core::ffi::c_char>;
+    static fdo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_fex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_flp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fs: GlobalCell<::core::ffi::c_int>;
+    static p_gd: GlobalCell<::core::ffi::c_int>;
+    static p_guicursor: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_guifont: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_guifontwide: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hh: GlobalCell<OptInt>;
+    static p_hlg: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hid: GlobalCell<::core::ffi::c_int>;
+    static p_hl: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hls: GlobalCell<::core::ffi::c_int>;
+    static p_hi: GlobalCell<OptInt>;
+    static p_arshape: GlobalCell<::core::ffi::c_int>;
+    static p_icon: GlobalCell<::core::ffi::c_int>;
+    static p_iconstring: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static p_iminsert: GlobalCell<OptInt>;
+    static p_imsearch: GlobalCell<OptInt>;
+    static p_inf: GlobalCell<::core::ffi::c_int>;
+    static p_inex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_is: GlobalCell<::core::ffi::c_int>;
+    static p_inde: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_indk: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_icm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isi: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isk: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_js: GlobalCell<::core::ffi::c_int>;
+    static p_jop: GlobalCell<*mut ::core::ffi::c_char>;
+    static jop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_keymap: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_kp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_km: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_langmap: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lnr: GlobalCell<::core::ffi::c_int>;
+    static p_lrm: GlobalCell<::core::ffi::c_int>;
+    static p_lm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lines: GlobalCell<OptInt>;
+    static p_linespace: GlobalCell<OptInt>;
+    static p_lisp: GlobalCell<::core::ffi::c_int>;
+    static p_lop: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lispwords: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ls: GlobalCell<OptInt>;
+    static p_stal: GlobalCell<OptInt>;
+    static p_lcs: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lz: GlobalCell<::core::ffi::c_int>;
+    static p_lpl: GlobalCell<::core::ffi::c_int>;
+    static p_magic: GlobalCell<::core::ffi::c_int>;
+    static p_menc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mef: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mps: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mat: GlobalCell<OptInt>;
+    static p_mco: GlobalCell<OptInt>;
+    static p_mfd: GlobalCell<OptInt>;
+    static p_mmd: GlobalCell<OptInt>;
+    static p_mmp: GlobalCell<OptInt>;
+    static p_mis: GlobalCell<OptInt>;
+    static p_mopt: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_msc: GlobalCell<OptInt>;
+    static p_msm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ml: GlobalCell<::core::ffi::c_int>;
+    static p_mle: GlobalCell<::core::ffi::c_int>;
+    static p_mls: GlobalCell<OptInt>;
+    static p_ma: GlobalCell<::core::ffi::c_int>;
+    static p_mod: GlobalCell<::core::ffi::c_int>;
+    static p_mouse: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mousem: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mousemev: GlobalCell<::core::ffi::c_int>;
+    static p_mousef: GlobalCell<::core::ffi::c_int>;
+    static p_mh: GlobalCell<::core::ffi::c_int>;
+    static p_mousescroll: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mouset: GlobalCell<OptInt>;
+    static p_more: GlobalCell<::core::ffi::c_int>;
+    static p_nf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_opfunc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_para: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_paste: GlobalCell<::core::ffi::c_int>;
+    static p_pex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_path: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cdpath: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pi: GlobalCell<::core::ffi::c_int>;
+    static p_pyx: GlobalCell<OptInt>;
+    static p_qe: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ro: GlobalCell<::core::ffi::c_int>;
+    static p_rdb: GlobalCell<*mut ::core::ffi::c_char>;
+    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_rdt: GlobalCell<OptInt>;
+    static p_re: GlobalCell<OptInt>;
+    static p_report: GlobalCell<OptInt>;
+    static p_pvh: GlobalCell<OptInt>;
+    static p_chi: GlobalCell<OptInt>;
+    static p_ari: GlobalCell<::core::ffi::c_int>;
+    static p_ri: GlobalCell<::core::ffi::c_int>;
+    static p_ru: GlobalCell<::core::ffi::c_int>;
+    static p_ruf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_qftf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_rtp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_scbk: GlobalCell<OptInt>;
+    static p_sj: GlobalCell<OptInt>;
+    static p_so: GlobalCell<OptInt>;
+    static p_sbo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sections: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_secure: GlobalCell<::core::ffi::c_int>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_slm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ssop: GlobalCell<*mut ::core::ffi::c_char>;
+    static ssop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_sh: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shcf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shq: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sxq: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sxe: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_srr: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_stmp: GlobalCell<::core::ffi::c_int>;
+    static p_stl: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wbr: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sr: GlobalCell<::core::ffi::c_int>;
+    static p_sw: GlobalCell<OptInt>;
+    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sbr: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sc: GlobalCell<::core::ffi::c_int>;
+    static p_sloc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sft: GlobalCell<::core::ffi::c_int>;
+    static p_sm: GlobalCell<::core::ffi::c_int>;
+    static p_smd: GlobalCell<::core::ffi::c_int>;
+    static p_ss: GlobalCell<OptInt>;
+    static p_siso: GlobalCell<OptInt>;
+    static p_scs: GlobalCell<::core::ffi::c_int>;
+    static p_si: GlobalCell<::core::ffi::c_int>;
+    static p_sta: GlobalCell<::core::ffi::c_int>;
+    static p_sts: GlobalCell<OptInt>;
+    static p_sb: GlobalCell<::core::ffi::c_int>;
+    static p_sua: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_swf: GlobalCell<::core::ffi::c_int>;
+    static p_smc: GlobalCell<OptInt>;
+    static p_tpm: GlobalCell<OptInt>;
+    static p_tal: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tpf: GlobalCell<*mut ::core::ffi::c_char>;
+    static tpf_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_tfu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_spc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_spf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_spl: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_spo: GlobalCell<*mut ::core::ffi::c_char>;
+    static spo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_sps: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_spr: GlobalCell<::core::ffi::c_int>;
+    static p_sol: GlobalCell<::core::ffi::c_int>;
+    static p_su: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_swb: GlobalCell<*mut ::core::ffi::c_char>;
+    static swb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_spk: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_syn: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tcl: GlobalCell<*mut ::core::ffi::c_char>;
+    static tcl_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_ts: GlobalCell<OptInt>;
+    static p_tbs: GlobalCell<::core::ffi::c_int>;
+    static p_tc: GlobalCell<*mut ::core::ffi::c_char>;
+    static tc_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_tl: GlobalCell<OptInt>;
+    static p_tr: GlobalCell<::core::ffi::c_int>;
+    static p_tags: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tgst: GlobalCell<::core::ffi::c_int>;
+    static p_tbidi: GlobalCell<::core::ffi::c_int>;
+    static p_tw: GlobalCell<OptInt>;
+    static p_to: GlobalCell<::core::ffi::c_int>;
+    static p_timeout: GlobalCell<::core::ffi::c_int>;
+    static p_tm: GlobalCell<OptInt>;
+    static p_title: GlobalCell<::core::ffi::c_int>;
+    static p_titlelen: GlobalCell<OptInt>;
+    static p_titleold: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_titlestring: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tsr: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tgc: GlobalCell<::core::ffi::c_int>;
+    static p_ttimeout: GlobalCell<::core::ffi::c_int>;
+    static p_ttm: GlobalCell<OptInt>;
+    static p_tf: GlobalCell<::core::ffi::c_int>;
+    static p_udir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_udf: GlobalCell<::core::ffi::c_int>;
+    static p_ul: GlobalCell<OptInt>;
+    static p_ur: GlobalCell<OptInt>;
+    static p_uc: GlobalCell<OptInt>;
+    static p_ut: GlobalCell<OptInt>;
+    static p_shada: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shadafile: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_termsync: GlobalCell<::core::ffi::c_int>;
+    static p_vsts: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_vts: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_vdir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_vop: GlobalCell<*mut ::core::ffi::c_char>;
+    static vop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_vb: GlobalCell<::core::ffi::c_int>;
+    static p_ve: GlobalCell<*mut ::core::ffi::c_char>;
+    static ve_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_warn: GlobalCell<::core::ffi::c_int>;
+    static p_wop: GlobalCell<*mut ::core::ffi::c_char>;
+    static wop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_window: GlobalCell<OptInt>;
+    static p_wak: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wig: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ww: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wc: GlobalCell<OptInt>;
+    static p_wcm: GlobalCell<OptInt>;
+    static p_wic: GlobalCell<::core::ffi::c_int>;
+    static p_wim: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wmnu: GlobalCell<::core::ffi::c_int>;
+    static p_winborder: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wh: GlobalCell<OptInt>;
+    static p_wmh: GlobalCell<OptInt>;
+    static p_wmw: GlobalCell<OptInt>;
+    static p_wiw: GlobalCell<OptInt>;
+    static p_wm: GlobalCell<OptInt>;
+    static p_ws: GlobalCell<::core::ffi::c_int>;
+    static p_write: GlobalCell<::core::ffi::c_int>;
+    static p_wa: GlobalCell<::core::ffi::c_int>;
+    static p_wb: GlobalCell<::core::ffi::c_int>;
+    static p_wd: GlobalCell<OptInt>;
+    static p_cdh: GlobalCell<::core::ffi::c_int>;
     fn vim_strsave_escaped(
         string: *const ::core::ffi::c_char,
         esc_chars: *const ::core::ffi::c_char,
@@ -551,7 +551,7 @@ extern "C" {
     fn parse_shape_opt(what: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider;
     fn diff_buf_adjust(win: *mut win_T);
-    static mut updating_screen: bool;
+    static updating_screen: GlobalCell<bool>;
     static e_invarg: [::core::ffi::c_char; 0];
     static e_positive: [::core::ffi::c_char; 0];
     static e_sandbox: [::core::ffi::c_char; 0];
@@ -635,38 +635,38 @@ extern "C" {
         count: ::core::ffi::c_int,
         funcsort: bool,
     );
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut clear_cmdline: bool;
-    static mut info_message: bool;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_maketitle: bool;
-    static mut current_sctx: sctx_T;
-    static mut t_colors: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut lastwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut redraw_tabline: bool;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut starting: ::core::ffi::c_int;
-    static mut full_screen: bool;
-    static mut secure: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut silent_mode: bool;
-    static mut fenc_default: *mut ::core::ffi::c_char;
-    static mut State: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut readonlymode: bool;
-    static mut got_int: bool;
-    static mut escape_chars: *mut ::core::ffi::c_char;
-    static mut magic_overruled: optmagic_T;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static clear_cmdline: GlobalCell<bool>;
+    static info_message: GlobalCell<bool>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_maketitle: GlobalCell<bool>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static t_colors: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static lastwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static redraw_tabline: GlobalCell<bool>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static starting: GlobalCell<::core::ffi::c_int>;
+    static full_screen: GlobalCell<bool>;
+    static secure: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static silent_mode: GlobalCell<bool>;
+    static fenc_default: GlobalCell<*mut ::core::ffi::c_char>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static readonlymode: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static escape_chars: GlobalCell<*mut ::core::ffi::c_char>;
+    static magic_overruled: GlobalCell<optmagic_T>;
     fn ns_hl_def(
         ns_id: NS,
         hl_id: ::core::ffi::c_int,
@@ -5152,8 +5152,9 @@ pub const LISPWORD_VALUE: [::core::ffi::c_char; 746] = unsafe {
     )
 };
 #[no_mangle]
-pub static mut p_vfile: *mut ::core::ffi::c_char =
-    unsafe { &raw const empty_string_option as *mut ::core::ffi::c_char };
+pub static p_vfile: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(unsafe {
+    (empty_string_option.as_raw() as *const _) as *mut ::core::ffi::c_char
+});
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 pub const SB_MAX: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
@@ -5188,52 +5189,59 @@ unsafe extern "C" fn optval_type_get_name(type_0: OptValType) -> *const ::core::
     }
     unreachable!();
 }
-static mut e_unknown_option: [::core::ffi::c_char; 21] = unsafe {
+static e_unknown_option: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E518: Unknown option\0")
-};
-static mut e_not_allowed_in_modeline: [::core::ffi::c_char; 32] = unsafe {
+});
+static e_not_allowed_in_modeline: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E520: Not allowed in a modeline\0",
     )
-};
-static mut e_not_allowed_in_modeline_when_modelineexpr_is_off: [::core::ffi::c_char; 59] = unsafe {
-    ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
-        *b"E992: Not allowed in a modeline when 'modelineexpr' is off\0",
-    )
-};
-static mut e_number_required_after_equal: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
-        *b"E521: Number required after =\0",
-    )
-};
-static mut e_preview_window_already_exists: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-        *b"E590: A preview window already exists\0",
-    )
-};
-static mut e_cannot_have_negative_or_zero_number_of_quickfix: [::core::ffi::c_char; 72] = unsafe {
-    ::core::mem::transmute::<[u8; 72], [::core::ffi::c_char; 72]>(
-        *b"E1542: Cannot have a negative or zero number of quickfix/location lists\0",
-    )
-};
-static mut e_cannot_have_more_than_hundred_quickfix: [::core::ffi::c_char; 63] = unsafe {
-    ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
-        *b"E1543: Cannot have more than a hundred quickfix/location lists\0",
-    )
-};
-static mut p_term: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut p_ttytype: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-static mut p_et_nobin: ::core::ffi::c_int = 0;
-static mut p_ml_nobin: ::core::ffi::c_int = 0;
-static mut p_tw_nobin: OptInt = 0;
-static mut p_wm_nobin: OptInt = 0;
-static mut p_ai_nopaste: ::core::ffi::c_int = 0;
-static mut p_et_nopaste: ::core::ffi::c_int = 0;
-static mut p_sts_nopaste: OptInt = 0;
-static mut p_tw_nopaste: OptInt = 0;
-static mut p_wm_nopaste: OptInt = 0;
-static mut p_vsts_nopaste: *mut ::core::ffi::c_char =
-    ::core::ptr::null_mut::<::core::ffi::c_char>();
+});
+static e_not_allowed_in_modeline_when_modelineexpr_is_off: GlobalCell<[::core::ffi::c_char; 59]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+            *b"E992: Not allowed in a modeline when 'modelineexpr' is off\0",
+        )
+    });
+static e_number_required_after_equal: GlobalCell<[::core::ffi::c_char; 30]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+            *b"E521: Number required after =\0",
+        )
+    });
+static e_preview_window_already_exists: GlobalCell<[::core::ffi::c_char; 38]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+            *b"E590: A preview window already exists\0",
+        )
+    });
+static e_cannot_have_negative_or_zero_number_of_quickfix: GlobalCell<[::core::ffi::c_char; 72]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 72], [::core::ffi::c_char; 72]>(
+            *b"E1542: Cannot have a negative or zero number of quickfix/location lists\0",
+        )
+    });
+static e_cannot_have_more_than_hundred_quickfix: GlobalCell<[::core::ffi::c_char; 63]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
+            *b"E1543: Cannot have more than a hundred quickfix/location lists\0",
+        )
+    });
+static p_term: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static p_ttytype: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static p_et_nobin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_ml_nobin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
+static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
+static p_ai_nopaste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_et_nopaste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_sts_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+static p_tw_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+static p_wm_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+static p_vsts_nopaste: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
     .wrapping_div(::core::mem::size_of::<vimoption_T>())
     .wrapping_div(
@@ -5241,14 +5249,14 @@ pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
             .wrapping_rem(::core::mem::size_of::<vimoption_T>())
             == 0) as ::core::ffi::c_int as usize,
     );
-static mut p_bin_dep_opts: [::core::ffi::c_int; 5] = [
+static p_bin_dep_opts: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
     kOptTextwidth as ::core::ffi::c_int,
     kOptWrapmargin as ::core::ffi::c_int,
     kOptModeline as ::core::ffi::c_int,
     kOptExpandtab as ::core::ffi::c_int,
     kOptInvalid as ::core::ffi::c_int,
-];
-static mut p_paste_dep_opts: [::core::ffi::c_int; 11] = [
+]);
+static p_paste_dep_opts: GlobalCell<[::core::ffi::c_int; 11]> = GlobalCell::new([
     kOptAutoindent as ::core::ffi::c_int,
     kOptExpandtab as ::core::ffi::c_int,
     kOptRuler as ::core::ffi::c_int,
@@ -5260,13 +5268,15 @@ static mut p_paste_dep_opts: [::core::ffi::c_int; 11] = [
     kOptRevins as ::core::ffi::c_int,
     kOptVarsofttabstop as ::core::ffi::c_int,
     kOptInvalid as ::core::ffi::c_int,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn set_init_tablocal() {
-    p_ch = options[kOptCmdheight as ::core::ffi::c_int as usize]
-        .def_val
-        .data
-        .number;
+    p_ch.set(
+        (*options.ptr())[kOptCmdheight as ::core::ffi::c_int as usize]
+            .def_val
+            .data
+            .number,
+    );
 }
 unsafe extern "C" fn set_init_default_shell() {
     let mut shell: *mut ::core::ffi::c_char =
@@ -5289,12 +5299,12 @@ unsafe extern "C" fn set_init_default_shell() {
     }
 }
 unsafe extern "C" fn set_init_default_backupskip() {
-    static mut names: [*mut ::core::ffi::c_char; 4] = [
+    static names: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
         b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"TMPDIR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"TEMP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"TMP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    ]);
     let mut ga: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -5320,13 +5330,13 @@ unsafe extern "C" fn set_init_default_backupskip() {
         let mut mustfree: bool = true_0 != 0;
         let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut plen: size_t = 0;
-        if *names[i as usize] as ::core::ffi::c_int == NUL {
+        if *(*names.ptr())[i as usize] as ::core::ffi::c_int == NUL {
             p = b"/tmp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             plen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
                 as size_t;
             mustfree = false_0 != 0;
         } else {
-            p = vim_getenv(names[i as usize] as *const ::core::ffi::c_char);
+            p = vim_getenv((*names.ptr())[i as usize] as *const ::core::ffi::c_char);
             plen = 0 as size_t;
         }
         if !p.is_null() && *p as ::core::ffi::c_int != NUL {
@@ -5367,7 +5377,7 @@ unsafe extern "C" fn set_init_default_backupskip() {
                 ga.ga_data as *const ::core::ffi::c_char,
                 item,
                 itemlen,
-                options[opt_idx as usize].flags,
+                (*options.ptr())[opt_idx as usize].flags,
             )
             .is_null()
             {
@@ -5452,7 +5462,7 @@ unsafe extern "C" fn set_init_expand_env() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
         let mut opt: *mut vimoption_T =
-            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
         if (*opt).flags & kOptFlagNoDefExp as ::core::ffi::c_int as uint32_t == 0 {
             let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if (*opt).flags & kOptFlagGettext as ::core::ffi::c_int as uint32_t != 0
@@ -5496,7 +5506,7 @@ unsafe extern "C" fn set_init_fenc_default() {
             ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         ) as *mut ::core::ffi::c_char;
     }
-    fenc_default = p;
+    fenc_default.set(p);
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
@@ -5560,13 +5570,13 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
         rtp = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     set_options_default(0 as ::core::ffi::c_int);
-    (*curbuf).b_p_initialized = true_0 != 0;
-    (*curbuf).b_p_ac = -1 as ::core::ffi::c_int;
-    (*curbuf).b_p_ar = -1 as ::core::ffi::c_int;
-    (*curbuf).b_p_fs = -1 as ::core::ffi::c_int;
-    (*curbuf).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-    check_buf_options(curbuf);
-    check_win_options(curwin);
+    (*curbuf.get()).b_p_initialized = true_0 != 0;
+    (*curbuf.get()).b_p_ac = -1 as ::core::ffi::c_int;
+    (*curbuf.get()).b_p_ar = -1 as ::core::ffi::c_int;
+    (*curbuf.get()).b_p_fs = -1 as ::core::ffi::c_int;
+    (*curbuf.get()).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+    check_buf_options(curbuf.get());
+    check_win_options(curwin.get());
     check_options();
     last_status(false_0 != 0);
     didset_options();
@@ -5585,7 +5595,7 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
             0 as ::core::ffi::c_int,
         );
     }
-    save_file_ff(curbuf);
+    save_file_ff(curbuf.get());
     if os_env_exists(
         b"MLTERM\0".as_ptr() as *const ::core::ffi::c_char,
         false_0 != 0,
@@ -5602,7 +5612,7 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     didset_options2();
     lang_init();
     set_init_fenc_default();
-    bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc);
+    bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc.get());
     set_helplang_default(get_mess_lang());
 }
 #[no_mangle]
@@ -5610,7 +5620,7 @@ pub unsafe extern "C" fn get_option_default(
     opt_idx: OptIndex,
     mut opt_flags: ::core::ffi::c_int,
 ) -> OptVal {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut is_global_local_option: bool = option_is_global_local(opt_idx);
     if opt_idx as ::core::ffi::c_int == kOptModeline as ::core::ffi::c_int
         && getuid() == ROOT_UID as __uid_t
@@ -5646,44 +5656,46 @@ pub unsafe extern "C" fn get_option_default(
 unsafe extern "C" fn alloc_options_default() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        options[opt_idx as usize].def_val = optval_copy(options[opt_idx as usize].def_val);
+        (*options.ptr())[opt_idx as usize].def_val =
+            optval_copy((*options.ptr())[opt_idx as usize].def_val);
         opt_idx += 1;
     }
 }
 unsafe extern "C" fn change_option_default(opt_idx: OptIndex, mut value: OptVal) {
-    optval_free(options[opt_idx as usize].def_val);
-    options[opt_idx as usize].def_val = value;
+    optval_free((*options.ptr())[opt_idx as usize].def_val);
+    (*options.ptr())[opt_idx as usize].def_val = value;
 }
 unsafe extern "C" fn set_option_default(opt_idx: OptIndex, mut opt_flags: ::core::ffi::c_int) {
     let mut both: bool = opt_flags
         & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
         == 0 as ::core::ffi::c_int;
     let mut def_val: OptVal = get_option_default(opt_idx, opt_flags);
-    set_option_direct(opt_idx, def_val, opt_flags, current_sctx.sc_sid);
+    set_option_direct(opt_idx, def_val, opt_flags, (*current_sctx.ptr()).sc_sid);
     if opt_idx as ::core::ffi::c_int == kOptScroll as ::core::ffi::c_int {
-        win_comp_scroll(curwin);
+        win_comp_scroll(curwin.get());
     }
-    let mut flagsp: *mut uint32_t = insecure_flag(curwin, opt_idx, opt_flags);
+    let mut flagsp: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
     *flagsp = *flagsp & !(kOptFlagInsecure as ::core::ffi::c_int as uint32_t);
     if both {
-        flagsp = insecure_flag(curwin, opt_idx, OPT_LOCAL as ::core::ffi::c_int);
+        flagsp = insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as ::core::ffi::c_int);
         *flagsp = *flagsp & !(kOptFlagInsecure as ::core::ffi::c_int as uint32_t);
     }
 }
 unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        if options[opt_idx as usize].flags & kOptFlagNoDefault as ::core::ffi::c_int as uint32_t
+        if (*options.ptr())[opt_idx as usize].flags
+            & kOptFlagNoDefault as ::core::ffi::c_int as uint32_t
             == 0
         {
             set_option_default(opt_idx, opt_flags);
         }
         opt_idx += 1;
     }
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -5693,7 +5705,7 @@ unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
         }
         tp = (*tp).tp_next as *mut tabpage_T;
     }
-    parse_cino(curbuf);
+    parse_cino(curbuf.get());
 }
 unsafe extern "C" fn set_string_default(
     mut opt_idx: OptIndex,
@@ -5776,9 +5788,9 @@ pub unsafe extern "C" fn set_init_2(mut _headless: bool) {
         613 as ::core::ffi::c_int,
         true_0 != 0,
         b"startup runtimepath/packpath value: %s\0".as_ptr() as *const ::core::ffi::c_char,
-        p_rtp,
+        p_rtp.get(),
     );
-    if options[kOptScroll as ::core::ffi::c_int as usize].flags
+    if (*options.ptr())[kOptScroll as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         == 0
     {
@@ -5786,14 +5798,14 @@ pub unsafe extern "C" fn set_init_2(mut _headless: bool) {
     }
     comp_col();
     if !option_was_set(kOptWindow) {
-        p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
+        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
     }
     change_option_default(
         kOptWindow,
         OptVal {
             type_0: kOptValTypeNumber,
             data: OptValData {
-                number: (Rows - 1 as ::core::ffi::c_int) as OptInt,
+                number: (Rows.get() - 1 as ::core::ffi::c_int) as OptInt,
             },
         },
     );
@@ -5801,15 +5813,15 @@ pub unsafe extern "C" fn set_init_2(mut _headless: bool) {
 #[no_mangle]
 pub unsafe extern "C" fn set_init_3() {
     parse_shape_opt(SHAPE_CURSOR);
-    let mut do_srr: bool = options[kOptShellredir as ::core::ffi::c_int as usize].flags
+    let mut do_srr: bool = (*options.ptr())[kOptShellredir as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         == 0;
-    let mut do_sp: bool = options[kOptShellpipe as ::core::ffi::c_int as usize].flags
+    let mut do_sp: bool = (*options.ptr())[kOptShellpipe as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         == 0;
     let mut len: size_t = 0 as size_t;
     let mut p: *mut ::core::ffi::c_char =
-        invocation_path_tail(p_sh, &raw mut len) as *mut ::core::ffi::c_char;
+        invocation_path_tail(p_sh.get(), &raw mut len) as *mut ::core::ffi::c_char;
     p = xmemdupz(p as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
     let mut is_csh: bool = path_fnamecmp(p, b"csh\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int
@@ -5896,8 +5908,8 @@ pub unsafe extern "C" fn set_init_3() {
         }
     }
     xfree(p as *mut ::core::ffi::c_void);
-    if buf_is_empty(curbuf) {
-        if options[kOptFileformats as ::core::ffi::c_int as usize].flags
+    if buf_is_empty(curbuf.get()) {
+        if (*options.ptr())[kOptFileformats as ::core::ffi::c_int as usize].flags
             & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
             != 0
         {
@@ -5915,52 +5927,52 @@ pub unsafe extern "C" fn set_helplang_default(mut lang: *const ::core::ffi::c_ch
     if lang_len < 2 as size_t {
         return;
     }
-    if options[kOptHelplang as ::core::ffi::c_int as usize].flags
+    if (*options.ptr())[kOptHelplang as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         != 0
     {
         return;
     }
-    free_string_option(p_hlg);
-    p_hlg = xmemdupz(lang as *const ::core::ffi::c_void, lang_len) as *mut ::core::ffi::c_char;
+    free_string_option(p_hlg.get());
+    p_hlg.set(xmemdupz(lang as *const ::core::ffi::c_void, lang_len) as *mut ::core::ffi::c_char);
     if strncasecmp(
-        p_hlg,
+        p_hlg.get(),
         b"zh_\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         3 as ::core::ffi::c_int as size_t,
     ) == 0 as ::core::ffi::c_int
         && lang_len >= 5 as size_t
     {
-        *p_hlg.offset(0 as ::core::ffi::c_int as isize) =
-            (if (*p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+        *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) =
+            (if (*(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                 < 'A' as ::core::ffi::c_int
-                || *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                || *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     > 'Z' as ::core::ffi::c_int
             {
-                *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             } else {
-                *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
             }) as ::core::ffi::c_char;
-        *p_hlg.offset(1 as ::core::ffi::c_int as isize) =
-            (if (*p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+        *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize) =
+            (if (*(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                 < 'A' as ::core::ffi::c_int
-                || *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                || *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     > 'Z' as ::core::ffi::c_int
             {
-                *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             } else {
-                *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
             }) as ::core::ffi::c_char;
-    } else if lang_len != 0 && *p_hlg as ::core::ffi::c_int == 'C' as ::core::ffi::c_int {
-        *p_hlg.offset(0 as ::core::ffi::c_int as isize) = 'e' as ::core::ffi::c_char;
-        *p_hlg.offset(1 as ::core::ffi::c_int as isize) = 'n' as ::core::ffi::c_char;
+    } else if lang_len != 0 && *p_hlg.get() as ::core::ffi::c_int == 'C' as ::core::ffi::c_int {
+        *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) = 'e' as ::core::ffi::c_char;
+        *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize) = 'n' as ::core::ffi::c_char;
     }
-    *p_hlg.offset(2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+    *(*p_hlg.ptr()).offset(2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_title_defaults() {
-    if options[kOptTitle as ::core::ffi::c_int as usize].flags
+    if (*options.ptr())[kOptTitle as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         == 0
     {
@@ -5971,9 +5983,9 @@ pub unsafe extern "C" fn set_title_defaults() {
                 data: OptValData { boolean: kFalse },
             },
         );
-        p_title = 0 as ::core::ffi::c_int;
+        p_title.set(0 as ::core::ffi::c_int);
     }
-    if options[kOptIcon as ::core::ffi::c_int as usize].flags
+    if (*options.ptr())[kOptIcon as ::core::ffi::c_int as usize].flags
         & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
         == 0
     {
@@ -5984,7 +5996,7 @@ pub unsafe extern "C" fn set_title_defaults() {
                 data: OptValData { boolean: kFalse },
             },
         );
-        p_icon = 0 as ::core::ffi::c_int;
+        p_icon.set(0 as ::core::ffi::c_int);
     }
 }
 #[no_mangle]
@@ -6427,7 +6439,7 @@ unsafe extern "C" fn stropt_get_newval(
     let mut newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     arg = arg.offset(1);
-    if varp == &raw mut p_kp as *mut ::core::ffi::c_void
+    if varp == p_kp.ptr() as *mut ::core::ffi::c_void
         && (*arg as ::core::ffi::c_int == NUL
             || *arg as ::core::ffi::c_int == ' ' as ::core::ffi::c_int)
     {
@@ -6544,11 +6556,11 @@ unsafe extern "C" fn validate_opt_idx(
     }
     if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0 {
         if flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0 {
-            *errmsg = &raw const e_not_allowed_in_modeline as *const ::core::ffi::c_char;
+            *errmsg = (e_not_allowed_in_modeline.ptr() as *const _) as *const ::core::ffi::c_char;
             return FAIL;
         }
-        if flags & kOptFlagMLE as ::core::ffi::c_int as uint32_t != 0 && p_mle == 0 {
-            *errmsg = &raw const e_not_allowed_in_modeline_when_modelineexpr_is_off
+        if flags & kOptFlagMLE as ::core::ffi::c_int as uint32_t != 0 && p_mle.get() == 0 {
+            *errmsg = (e_not_allowed_in_modeline_when_modelineexpr_is_off.ptr() as *const _)
                 as *const ::core::ffi::c_char;
             return FAIL;
         }
@@ -6559,7 +6571,7 @@ unsafe extern "C" fn validate_opt_idx(
             return FAIL;
         }
     }
-    if sandbox != 0 as ::core::ffi::c_int
+    if sandbox.get() != 0 as ::core::ffi::c_int
         && flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
     {
         *errmsg = &raw const e_sandbox as *const ::core::ffi::c_char;
@@ -6671,7 +6683,7 @@ unsafe extern "C" fn get_option_newval(
             );
         }
     };
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut arg: *mut ::core::ffi::c_char = *argp;
     let oldval_is_global: bool = option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
         && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
@@ -6744,7 +6756,7 @@ unsafe extern "C" fn get_option_newval(
             let mut oldval_num: OptInt = oldval.data.number;
             let mut newval_num: OptInt = 0;
             arg = arg.offset(1);
-            if (varp as *mut OptInt == &raw mut p_wc || varp as *mut OptInt == &raw mut p_wcm)
+            if (varp as *mut OptInt == p_wc.ptr() || varp as *mut OptInt == p_wcm.ptr())
                 && (*arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int
                     || *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int
                     || *arg as ::core::ffi::c_int != NUL
@@ -6779,12 +6791,13 @@ unsafe extern "C" fn get_option_newval(
                     || *arg.offset(i as isize) as ::core::ffi::c_int != NUL
                         && !ascii_iswhite(*arg.offset(i as isize) as ::core::ffi::c_int)
                 {
-                    *errmsg =
-                        &raw const e_number_required_after_equal as *const ::core::ffi::c_char;
+                    *errmsg = (e_number_required_after_equal.ptr() as *const _)
+                        as *const ::core::ffi::c_char;
                     return newval;
                 }
             } else {
-                *errmsg = &raw const e_number_required_after_equal as *const ::core::ffi::c_char;
+                *errmsg =
+                    (e_number_required_after_equal.ptr() as *const _) as *const ::core::ffi::c_char;
                 return newval;
             }
             if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint {
@@ -6855,7 +6868,7 @@ unsafe extern "C" fn do_one_set_option(
     } else if is_tty_option(arg) {
         return;
     } else {
-        *errmsg = &raw const e_unknown_option as *const ::core::ffi::c_char;
+        *errmsg = (e_unknown_option.ptr() as *const _) as *const ::core::ffi::c_char;
         return;
     }
     let mut afterchar: uint8_t = *option_end as uint8_t;
@@ -6868,12 +6881,12 @@ unsafe extern "C" fn do_one_set_option(
         p = p.offset(1);
     }
     let mut nextchar: uint8_t = *p as uint8_t;
-    let mut flags: uint32_t = options[opt_idx as usize].flags;
+    let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
     let mut varp: *mut ::core::ffi::c_void = get_varp_scope(
-        (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+        (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
         opt_flags,
     );
-    if validate_opt_idx(curwin, opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
+    if validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
         return;
     }
     if !vim_strchr(
@@ -6928,20 +6941,21 @@ unsafe extern "C" fn do_one_set_option(
             *did_show = true_0 != 0;
         }
         showoneopt(
-            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
             opt_flags,
         );
-        if p_verbose > 0 as OptInt {
-            if varp == options[opt_idx as usize].var {
-                last_set_msg(options[opt_idx as usize].script_ctx);
+        if p_verbose.get() > 0 as OptInt {
+            if varp == (*options.ptr())[opt_idx as usize].var {
+                last_set_msg((*options.ptr())[opt_idx as usize].script_ctx);
             } else if option_has_scope(opt_idx, kOptScopeWin) {
                 last_set_msg(
-                    (*curwin).w_onebuf_opt.wo_script_ctx
+                    (*curwin.get()).w_onebuf_opt.wo_script_ctx
                         [option_scope_idx(opt_idx, kOptScopeWin) as usize],
                 );
             } else if option_has_scope(opt_idx, kOptScopeBuf) {
                 last_set_msg(
-                    (*curbuf).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize],
+                    (*curbuf.get()).b_p_script_ctx
+                        [option_scope_idx(opt_idx, kOptScopeBuf) as usize],
                 );
             }
         }
@@ -7074,14 +7088,14 @@ pub unsafe extern "C" fn do_set(
                 }
                 if !errmsg.is_null() {
                     let mut i_0: ::core::ffi::c_int = vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                         gettext(errmsg),
                     ) + 2 as ::core::ffi::c_int;
                     if i_0 as isize + arg.offset_from(startarg) < IOSIZE as isize {
                         xstrlcpy(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char)
+                            (IObuff.ptr() as *mut ::core::ffi::c_char)
                                 .offset(i_0 as isize)
                                 .offset(-(2 as ::core::ffi::c_int as isize)),
                             b": \0".as_ptr() as *const ::core::ffi::c_char,
@@ -7100,30 +7114,30 @@ pub unsafe extern "C" fn do_set(
                             }
                         };
                         memmove(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(i_0 as isize)
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(i_0 as isize)
                                 as *mut ::core::ffi::c_void,
                             startarg as *const ::core::ffi::c_void,
                             arg.offset_from(startarg) as size_t,
                         );
-                        IObuff[(i_0 as isize + arg.offset_from(startarg)) as usize] =
+                        (*IObuff.ptr())[(i_0 as isize + arg.offset_from(startarg)) as usize] =
                             NUL as ::core::ffi::c_char;
                     }
-                    trans_characters(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE);
-                    no_wait_return += 1;
-                    emsg(&raw mut IObuff as *mut ::core::ffi::c_char);
-                    no_wait_return -= 1;
+                    trans_characters(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE);
+                    (*no_wait_return.ptr()) += 1;
+                    emsg(IObuff.ptr() as *mut ::core::ffi::c_char);
+                    (*no_wait_return.ptr()) -= 1;
                     return FAIL;
                 }
             }
             arg = skipwhite(arg);
         }
     }
-    if silent_mode as ::core::ffi::c_int != 0 && did_show as ::core::ffi::c_int != 0 {
-        silent_mode = false_0 != 0;
-        info_message = true_0 != 0;
+    if silent_mode.get() as ::core::ffi::c_int != 0 && did_show as ::core::ffi::c_int != 0 {
+        silent_mode.set(false_0 != 0);
+        info_message.set(true_0 != 0);
         msg_putchar('\n' as ::core::ffi::c_int);
-        silent_mode = true_0 != 0;
-        info_message = false_0 != 0;
+        silent_mode.set(true_0 != 0);
+        info_message.set(false_0 != 0);
     }
     return OK;
 }
@@ -7201,7 +7215,7 @@ pub unsafe extern "C" fn string_to_key(mut arg: *mut ::core::ffi::c_char) -> ::c
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_title() {
-    if starting != NO_SCREEN {
+    if starting.get() != NO_SCREEN {
         maketitle();
     }
 }
@@ -7214,129 +7228,133 @@ pub unsafe extern "C" fn set_options_bin(
     if newval != 0 {
         if oldval == 0 {
             if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
-                (*curbuf).b_p_tw_nobin = (*curbuf).b_p_tw;
-                (*curbuf).b_p_wm_nobin = (*curbuf).b_p_wm;
-                (*curbuf).b_p_ml_nobin = (*curbuf).b_p_ml;
-                (*curbuf).b_p_et_nobin = (*curbuf).b_p_et;
+                (*curbuf.get()).b_p_tw_nobin = (*curbuf.get()).b_p_tw;
+                (*curbuf.get()).b_p_wm_nobin = (*curbuf.get()).b_p_wm;
+                (*curbuf.get()).b_p_ml_nobin = (*curbuf.get()).b_p_ml;
+                (*curbuf.get()).b_p_et_nobin = (*curbuf.get()).b_p_et;
             }
             if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
-                p_tw_nobin = p_tw;
-                p_wm_nobin = p_wm;
-                p_ml_nobin = p_ml;
-                p_et_nobin = p_et;
+                p_tw_nobin.set(p_tw.get());
+                p_wm_nobin.set(p_wm.get());
+                p_ml_nobin.set(p_ml.get());
+                p_et_nobin.set(p_et.get());
             }
         }
         if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
-            (*curbuf).b_p_tw = 0 as OptInt;
-            (*curbuf).b_p_wm = 0 as OptInt;
-            (*curbuf).b_p_ml = 0 as ::core::ffi::c_int;
-            (*curbuf).b_p_et = 0 as ::core::ffi::c_int;
+            (*curbuf.get()).b_p_tw = 0 as OptInt;
+            (*curbuf.get()).b_p_wm = 0 as OptInt;
+            (*curbuf.get()).b_p_ml = 0 as ::core::ffi::c_int;
+            (*curbuf.get()).b_p_et = 0 as ::core::ffi::c_int;
         }
         if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
-            p_tw = 0 as OptInt;
-            p_wm = 0 as OptInt;
-            p_ml = false_0;
-            p_et = false_0;
-            p_bin = true_0;
+            p_tw.set(0 as OptInt);
+            p_wm.set(0 as OptInt);
+            p_ml.set(false_0);
+            p_et.set(false_0);
+            p_bin.set(true_0);
         }
     } else if oldval != 0 {
         if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
-            (*curbuf).b_p_tw = (*curbuf).b_p_tw_nobin;
-            (*curbuf).b_p_wm = (*curbuf).b_p_wm_nobin;
-            (*curbuf).b_p_ml = (*curbuf).b_p_ml_nobin;
-            (*curbuf).b_p_et = (*curbuf).b_p_et_nobin;
+            (*curbuf.get()).b_p_tw = (*curbuf.get()).b_p_tw_nobin;
+            (*curbuf.get()).b_p_wm = (*curbuf.get()).b_p_wm_nobin;
+            (*curbuf.get()).b_p_ml = (*curbuf.get()).b_p_ml_nobin;
+            (*curbuf.get()).b_p_et = (*curbuf.get()).b_p_et_nobin;
         }
         if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
-            p_tw = p_tw_nobin;
-            p_wm = p_wm_nobin;
-            p_ml = p_ml_nobin;
-            p_et = p_et_nobin;
+            p_tw.set(p_tw_nobin.get());
+            p_wm.set(p_wm_nobin.get());
+            p_ml.set(p_ml_nobin.get());
+            p_et.set(p_et_nobin.get());
         }
     }
-    didset_options_sctx(
-        opt_flags,
-        &raw mut p_bin_dep_opts as *mut ::core::ffi::c_int,
-    );
+    didset_options_sctx(opt_flags, p_bin_dep_opts.ptr() as *mut ::core::ffi::c_int);
 }
 unsafe extern "C" fn option_expand(
     mut opt_idx: OptIndex,
     mut val: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    if options[opt_idx as usize].flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t == 0
+    if (*options.ptr())[opt_idx as usize].flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t
+        == 0
         || is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if val.is_null() {
-        val = *(options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char);
+        val = *((*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char);
     }
     if val.is_null() || strlen(val) > MAXPATHL as size_t {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut var: *mut *mut ::core::ffi::c_char =
-        options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char;
-    let mut esc: bool = var == &raw mut p_tags || var == &raw mut p_path;
+        (*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char;
+    let mut esc: bool = var == p_tags.ptr() || var == p_path.ptr();
     expand_env_esc(
         val,
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         MAXPATHL,
         esc,
         false_0 != 0,
-        (if options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char == &raw mut p_sps {
+        (if (*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char == p_sps.ptr() {
             b"file:\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             ::core::ptr::null::<::core::ffi::c_char>()
         }) as *mut ::core::ffi::c_char,
     );
-    if strcmp(&raw mut NameBuff as *mut ::core::ffi::c_char, val) == 0 as ::core::ffi::c_int {
+    if strcmp(NameBuff.ptr() as *mut ::core::ffi::c_char, val) == 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return &raw mut NameBuff as *mut ::core::ffi::c_char;
+    return NameBuff.ptr() as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn didset_options() {
     init_chartab();
     didset_string_options();
     spell_check_msm();
     spell_check_sps();
-    compile_cap_prog((*curwin).w_s);
+    compile_cap_prog((*curwin.get()).w_s);
     did_set_spell_option();
     did_set_cedit(::core::ptr::null_mut::<optset_T>());
     did_set_breakat(::core::ptr::null_mut::<optset_T>());
-    didset_window_options(curwin, true_0 != 0);
+    didset_window_options(curwin.get(), true_0 != 0);
 }
 unsafe extern "C" fn didset_options2() {
     highlight_changed();
     set_chars_option(
-        curwin,
-        (*curwin).w_onebuf_opt.wo_fcs,
+        curwin.get(),
+        (*curwin.get()).w_onebuf_opt.wo_fcs,
         kFillchars,
         true_0 != 0,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         0 as size_t,
     );
     set_chars_option(
-        curwin,
-        (*curwin).w_onebuf_opt.wo_lcs,
+        curwin.get(),
+        (*curwin.get()).w_onebuf_opt.wo_lcs,
         kListchars,
         true_0 != 0,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         0 as size_t,
     );
     check_opt_wim();
-    xfree((*curbuf).b_p_vsts_array as *mut ::core::ffi::c_void);
-    tabstop_set((*curbuf).b_p_vsts, &raw mut (*curbuf).b_p_vsts_array);
-    xfree((*curbuf).b_p_vts_array as *mut ::core::ffi::c_void);
-    tabstop_set((*curbuf).b_p_vts, &raw mut (*curbuf).b_p_vts_array);
+    xfree((*curbuf.get()).b_p_vsts_array as *mut ::core::ffi::c_void);
+    tabstop_set(
+        (*curbuf.get()).b_p_vsts,
+        &raw mut (*curbuf.get()).b_p_vsts_array,
+    );
+    xfree((*curbuf.get()).b_p_vts_array as *mut ::core::ffi::c_void);
+    tabstop_set(
+        (*curbuf.get()).b_p_vts,
+        &raw mut (*curbuf.get()).b_p_vts_array,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_options() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
         if option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0
-            && !options[opt_idx as usize].var.is_null()
+            && !(*options.ptr())[opt_idx as usize].var.is_null()
         {
             check_string_option(get_varp(
-                (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+                (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
             ) as *mut *mut ::core::ffi::c_char);
         }
         opt_idx += 1;
@@ -7402,12 +7420,12 @@ pub unsafe extern "C" fn insecure_flag(
             _ => {}
         }
     }
-    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize)).flags;
+    return &raw mut (*(options.ptr() as *mut vimoption_T).offset(opt_idx as isize)).flags;
 }
 #[no_mangle]
 pub unsafe extern "C" fn redraw_titles() {
-    need_maketitle = true_0 != 0;
-    redraw_tabline = true_0 != 0;
+    need_maketitle.set(true_0 != 0);
+    redraw_tabline.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn valid_name(
@@ -7440,8 +7458,7 @@ pub unsafe extern "C" fn parse_winhl_opt(
     mut winhl: *const ::core::ffi::c_char,
     mut wp: *mut win_T,
 ) -> bool {
-    let mut p: *const ::core::ffi::c_char =
-        &raw mut empty_string_option as *mut ::core::ffi::c_char;
+    let mut p: *const ::core::ffi::c_char = empty_string_option.ptr() as *mut ::core::ffi::c_char;
     if !winhl.is_null() {
         p = winhl;
     } else if !wp.is_null() {
@@ -7532,7 +7549,7 @@ pub unsafe extern "C" fn get_option_sctx(mut opt_idx: OptIndex) -> *mut sctx_T {
             );
         }
     };
-    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize)).script_ctx;
+    return &raw mut (*(options.ptr() as *mut vimoption_T).offset(opt_idx as isize)).script_ctx;
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_option_sctx(
@@ -7553,16 +7570,17 @@ pub unsafe extern "C" fn set_option_sctx(
         || opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
         || option_is_global_only(opt_idx) as ::core::ffi::c_int != 0
     {
-        options[opt_idx as usize].script_ctx = script_ctx;
+        (*options.ptr())[opt_idx as usize].script_ctx = script_ctx;
     }
     if both as ::core::ffi::c_int != 0 || opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         if option_has_scope(opt_idx, kOptScopeBuf) {
-            (*curbuf).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize] = script_ctx;
+            (*curbuf.get()).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize] =
+                script_ctx;
         } else if option_has_scope(opt_idx, kOptScopeWin) {
-            (*curwin).w_onebuf_opt.wo_script_ctx
+            (*curwin.get()).w_onebuf_opt.wo_script_ctx
                 [option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
             if both {
-                (*curwin).w_allbuf_opt.wo_script_ctx
+                (*curwin.get()).w_allbuf_opt.wo_script_ctx
                     [option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
             }
         }
@@ -7577,7 +7595,7 @@ unsafe extern "C" fn apply_optionset_autocmd(
     mut newval: OptVal,
     mut errmsg: *const ::core::ffi::c_char,
 ) {
-    if starting != 0
+    if starting.get() != 0
         || !errmsg.is_null()
         || *get_vim_var_str(VV_OPTION_TYPE) as ::core::ffi::c_int != NUL
     {
@@ -7646,7 +7664,7 @@ unsafe extern "C" fn apply_optionset_autocmd(
     }
     apply_autocmds(
         EVENT_OPTIONSET,
-        options[opt_idx as usize].fullname,
+        (*options.ptr())[opt_idx as usize].fullname,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
         ::core::ptr::null_mut::<buf_T>(),
@@ -7657,27 +7675,30 @@ unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::core::f
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if (*win).w_onebuf_opt.wo_arab != 0 {
-        if p_tbidi == 0 {
+        if p_tbidi.get() == 0 {
             if (*win).w_onebuf_opt.wo_rl == 0 {
                 (*win).w_onebuf_opt.wo_rl = true_0;
                 changed_window_setting(win);
             }
-            if p_arshape == 0 {
-                p_arshape = true_0;
+            if p_arshape.get() == 0 {
+                p_arshape.set(true_0);
                 redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
             }
         }
-        if strcmp(p_enc, b"utf-8\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as ::core::ffi::c_int
+        if strcmp(
+            p_enc.get(),
+            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char,
+        ) != 0 as ::core::ffi::c_int
         {
-            static mut w_arabic: *mut ::core::ffi::c_char =
+            static w_arabic: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
                 b"W17: Arabic requires UTF-8, do ':set encoding=utf-8'\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            );
             msg_source(HLF_W as ::core::ffi::c_int);
-            msg(gettext(w_arabic), HLF_W as ::core::ffi::c_int);
-            set_vim_var_string(VV_WARNINGMSG, gettext(w_arabic), -1 as ptrdiff_t);
+            msg(gettext(w_arabic.get()), HLF_W as ::core::ffi::c_int);
+            set_vim_var_string(VV_WARNINGMSG, gettext(w_arabic.get()), -1 as ptrdiff_t);
         }
-        p_deco = true_0;
+        p_deco.set(true_0);
         errmsg = set_option_value(
             kOptKeymap,
             OptVal {
@@ -7694,7 +7715,7 @@ unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::core::f
             OPT_LOCAL as ::core::ffi::c_int,
         );
     } else {
-        if p_tbidi == 0 {
+        if p_tbidi.get() == 0 {
             if (*win).w_onebuf_opt.wo_rl != 0 {
                 (*win).w_onebuf_opt.wo_rl = false_0;
                 changed_window_setting(win);
@@ -7738,13 +7759,13 @@ unsafe extern "C" fn did_set_buflisted(mut args: *mut optset_T) -> *const ::core
 }
 unsafe extern "C" fn did_set_cmdheight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
-    if p_ch > (Rows - min_rows(curtab) + 1 as ::core::ffi::c_int) as OptInt {
-        p_ch = (Rows - min_rows(curtab) + 1 as ::core::ffi::c_int) as OptInt;
+    if p_ch.get() > (Rows.get() - min_rows(curtab.get()) + 1 as ::core::ffi::c_int) as OptInt {
+        p_ch.set((Rows.get() - min_rows(curtab.get()) + 1 as ::core::ffi::c_int) as OptInt);
     }
-    if (p_ch != old_value
-        || (tabline_height() + global_stl_height() + (*topframe).fr_height) as OptInt
-            != Rows as OptInt - p_ch)
-        && full_screen as ::core::ffi::c_int != 0
+    if (p_ch.get() != old_value
+        || (tabline_height() + global_stl_height() + (*topframe.get()).fr_height) as OptInt
+            != Rows.get() as OptInt - p_ch.get())
+        && full_screen.get() as ::core::ffi::c_int != 0
     {
         command_height();
     }
@@ -7766,7 +7787,7 @@ unsafe extern "C" fn did_set_eof_eol_fixeol_bomb(
 }
 unsafe extern "C" fn did_set_equalalways(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    if p_ea != 0 && (*args).os_oldval.boolean as u64 == 0 {
+    if p_ea.get() != 0 && (*args).os_oldval.boolean as u64 == 0 {
         win_equal(win, false_0 != 0, 0 as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -7790,9 +7811,11 @@ unsafe extern "C" fn did_set_foldnestmax(mut args: *mut optset_T) -> *const ::co
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_helpheight(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    if !(firstwin == lastwin) {
-        if (*curbuf).b_help as ::core::ffi::c_int != 0 && ((*curwin).w_height as OptInt) < p_hh {
-            win_setheight(p_hh as ::core::ffi::c_int);
+    if !(firstwin.get() == lastwin.get()) {
+        if (*curbuf.get()).b_help as ::core::ffi::c_int != 0
+            && ((*curwin.get()).w_height as OptInt) < p_hh.get()
+        {
+            win_setheight(p_hh.get() as ::core::ffi::c_int);
         }
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -7802,7 +7825,7 @@ unsafe extern "C" fn did_set_hlsearch(mut _args: *mut optset_T) -> *const ::core
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_ignorecase(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    if p_hls != 0 {
+    if p_hls.get() != 0 {
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -7813,11 +7836,11 @@ unsafe extern "C" fn did_set_iminsert(mut _args: *mut optset_T) -> *const ::core
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_langnoremap(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    p_lrm = (p_lnr == 0) as ::core::ffi::c_int;
+    p_lrm.set((p_lnr.get() == 0) as ::core::ffi::c_int);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_langremap(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    p_lnr = (p_lrm == 0) as ::core::ffi::c_int;
+    p_lnr.set((p_lrm.get() == 0) as ::core::ffi::c_int);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
@@ -7825,19 +7848,19 @@ unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const ::cor
     let mut value: OptInt = (*args).os_newval.number;
     if value == 3 as OptInt && old_value != 3 as OptInt {
         frame_new_height(
-            topframe,
-            (*topframe).fr_height - STATUS_HEIGHT as ::core::ffi::c_int,
+            topframe.get(),
+            (*topframe.get()).fr_height - STATUS_HEIGHT as ::core::ffi::c_int,
             false_0 != 0,
             false_0 != 0,
             false_0 != 0,
         );
         win_comp_pos();
-        clear_cmdline = true_0 != 0;
+        clear_cmdline.set(true_0 != 0);
     }
     if old_value == 3 as OptInt && value != 3 as OptInt {
         frame_new_height(
-            topframe,
-            (*topframe).fr_height + STATUS_HEIGHT as ::core::ffi::c_int,
+            topframe.get(),
+            (*topframe.get()).fr_height + STATUS_HEIGHT as ::core::ffi::c_int,
             false_0 != 0,
             false_0 != 0,
             false_0 != 0,
@@ -7852,31 +7875,31 @@ unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const ::cor
 unsafe extern "C" fn did_set_lines_or_columns(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    if p_lines != Rows as OptInt || p_columns != Columns as OptInt {
-        if updating_screen {
+    if p_lines.get() != Rows.get() as OptInt || p_columns.get() != Columns.get() as OptInt {
+        if updating_screen.get() {
             let mut oldval: OptVal = OptVal {
                 type_0: kOptValTypeNumber,
                 data: (*args).os_oldval,
             };
             set_option_varp((*args).os_idx, (*args).os_varp, oldval, false_0 != 0);
-        } else if full_screen {
+        } else if full_screen.get() {
             screen_resize(
-                p_columns as ::core::ffi::c_int,
-                p_lines as ::core::ffi::c_int,
+                p_columns.get() as ::core::ffi::c_int,
+                p_lines.get() as ::core::ffi::c_int,
             );
         } else {
-            Rows = p_lines as ::core::ffi::c_int;
-            Columns = p_columns as ::core::ffi::c_int;
+            Rows.set(p_lines.get() as ::core::ffi::c_int);
+            Columns.set(p_columns.get() as ::core::ffi::c_int);
             check_screensize();
-            let mut new_row: ::core::ffi::c_int = (Rows as OptInt
-                - (if p_ch > 1 as OptInt {
-                    p_ch
+            let mut new_row: ::core::ffi::c_int = (Rows.get() as OptInt
+                - (if p_ch.get() > 1 as OptInt {
+                    p_ch.get()
                 } else {
                     1 as OptInt
                 })) as ::core::ffi::c_int;
-            if cmdline_row > new_row && Rows as OptInt > p_ch {
+            if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch.get() {
                 '_c2rust_label: {
-                    if p_ch >= 0 as OptInt && new_row <= 2147483647 as ::core::ffi::c_int {
+                    if p_ch.get() >= 0 as OptInt && new_row <= 2147483647 as ::core::ffi::c_int {
                     } else {
                         __assert_fail(
                             b"p_ch >= 0 && new_row <= INT_MAX\0".as_ptr()
@@ -7888,15 +7911,15 @@ unsafe extern "C" fn did_set_lines_or_columns(
                         );
                     }
                 };
-                cmdline_row = new_row;
+                cmdline_row.set(new_row);
             }
         }
-        if p_window >= Rows as OptInt || !option_was_set(kOptWindow) {
-            p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
+        if p_window.get() >= Rows.get() as OptInt || !option_was_set(kOptWindow) {
+            p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
         }
     }
-    if p_sj >= Rows as OptInt && full_screen as ::core::ffi::c_int != 0 {
-        p_sj = (Rows / 2 as ::core::ffi::c_int) as OptInt;
+    if p_sj.get() >= Rows.get() as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
+        p_sj.set((Rows.get() / 2 as ::core::ffi::c_int) as OptInt);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -7934,14 +7957,14 @@ unsafe extern "C" fn did_set_numberwidth(mut args: *mut optset_T) -> *const ::co
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    static mut old_p_paste: ::core::ffi::c_int = false_0;
-    static mut save_sm: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut save_sta: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut save_ru: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut save_ri: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if p_paste != 0 {
-        if old_p_paste == 0 {
-            let mut buf: *mut buf_T = firstbuf;
+    static old_p_paste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
+    static save_sm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static save_sta: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static save_ru: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static save_ri: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if p_paste.get() != 0 {
+        if old_p_paste.get() == 0 {
+            let mut buf: *mut buf_T = firstbuf.get();
             while !buf.is_null() {
                 (*buf).b_p_tw_nopaste = (*buf).b_p_tw;
                 (*buf).b_p_wm_nopaste = (*buf).b_p_wm;
@@ -7952,7 +7975,7 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
                     xfree((*buf).b_p_vsts_nopaste as *mut ::core::ffi::c_void);
                 }
                 (*buf).b_p_vsts_nopaste = if !(*buf).b_p_vsts.is_null()
-                    && (*buf).b_p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
+                    && (*buf).b_p_vsts != empty_string_option.ptr() as *mut ::core::ffi::c_char
                 {
                     xstrdup((*buf).b_p_vsts)
                 } else {
@@ -7960,27 +7983,29 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
                 };
                 buf = (*buf).b_next;
             }
-            save_sm = p_sm;
-            save_sta = p_sta;
-            save_ru = p_ru;
-            save_ri = p_ri;
-            p_ai_nopaste = p_ai;
-            p_et_nopaste = p_et;
-            p_sts_nopaste = p_sts;
-            p_tw_nopaste = p_tw;
-            p_wm_nopaste = p_wm;
-            if !p_vsts_nopaste.is_null() {
-                xfree(p_vsts_nopaste as *mut ::core::ffi::c_void);
+            save_sm.set(p_sm.get());
+            save_sta.set(p_sta.get());
+            save_ru.set(p_ru.get());
+            save_ri.set(p_ri.get());
+            p_ai_nopaste.set(p_ai.get());
+            p_et_nopaste.set(p_et.get());
+            p_sts_nopaste.set(p_sts.get());
+            p_tw_nopaste.set(p_tw.get());
+            p_wm_nopaste.set(p_wm.get());
+            if !(*p_vsts_nopaste.ptr()).is_null() {
+                xfree(p_vsts_nopaste.get() as *mut ::core::ffi::c_void);
             }
-            p_vsts_nopaste = if !p_vsts.is_null()
-                && p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
-            {
-                xstrdup(p_vsts)
-            } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
-            };
+            p_vsts_nopaste.set(
+                if !(*p_vsts.ptr()).is_null()
+                    && p_vsts.get() != empty_string_option.ptr() as *mut ::core::ffi::c_char
+                {
+                    xstrdup(p_vsts.get())
+                } else {
+                    ::core::ptr::null_mut::<::core::ffi::c_char>()
+                },
+            );
         }
-        let mut buf_0: *mut buf_T = firstbuf;
+        let mut buf_0: *mut buf_T = firstbuf.get();
         while !buf_0.is_null() {
             (*buf_0).b_p_tw = 0 as OptInt;
             (*buf_0).b_p_wm = 0 as OptInt;
@@ -7990,7 +8015,7 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
             if !(*buf_0).b_p_vsts.is_null() {
                 free_string_option((*buf_0).b_p_vsts);
             }
-            (*buf_0).b_p_vsts = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*buf_0).b_p_vsts = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             let mut ptr_: *mut *mut ::core::ffi::c_void =
                 &raw mut (*buf_0).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
@@ -7998,24 +8023,24 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
             *ptr_;
             buf_0 = (*buf_0).b_next;
         }
-        p_sm = 0 as ::core::ffi::c_int;
-        p_sta = 0 as ::core::ffi::c_int;
-        if p_ru != 0 {
+        p_sm.set(0 as ::core::ffi::c_int);
+        p_sta.set(0 as ::core::ffi::c_int);
+        if p_ru.get() != 0 {
             status_redraw_all();
         }
-        p_ru = 0 as ::core::ffi::c_int;
-        p_ri = 0 as ::core::ffi::c_int;
-        p_tw = 0 as OptInt;
-        p_wm = 0 as OptInt;
-        p_sts = 0 as OptInt;
-        p_ai = 0 as ::core::ffi::c_int;
-        p_et = 0 as ::core::ffi::c_int;
-        if !p_vsts.is_null() {
-            free_string_option(p_vsts);
+        p_ru.set(0 as ::core::ffi::c_int);
+        p_ri.set(0 as ::core::ffi::c_int);
+        p_tw.set(0 as OptInt);
+        p_wm.set(0 as OptInt);
+        p_sts.set(0 as OptInt);
+        p_ai.set(0 as ::core::ffi::c_int);
+        p_et.set(0 as ::core::ffi::c_int);
+        if !(*p_vsts.ptr()).is_null() {
+            free_string_option(p_vsts.get());
         }
-        p_vsts = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-    } else if old_p_paste != 0 {
-        let mut buf_1: *mut buf_T = firstbuf;
+        p_vsts.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
+    } else if old_p_paste.get() != 0 {
+        let mut buf_1: *mut buf_T = firstbuf.get();
         while !buf_1.is_null() {
             (*buf_1).b_p_tw = (*buf_1).b_p_tw_nopaste;
             (*buf_1).b_p_wm = (*buf_1).b_p_wm_nopaste;
@@ -8028,11 +8053,11 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
             (*buf_1).b_p_vsts = if !(*buf_1).b_p_vsts_nopaste.is_null() {
                 xstrdup((*buf_1).b_p_vsts_nopaste)
             } else {
-                &raw mut empty_string_option as *mut ::core::ffi::c_char
+                empty_string_option.ptr() as *mut ::core::ffi::c_char
             };
             xfree((*buf_1).b_p_vsts_array as *mut ::core::ffi::c_void);
             if !(*buf_1).b_p_vsts.is_null()
-                && (*buf_1).b_p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
+                && (*buf_1).b_p_vsts != empty_string_option.ptr() as *mut ::core::ffi::c_char
             {
                 tabstop_set((*buf_1).b_p_vsts, &raw mut (*buf_1).b_p_vsts_array);
             } else {
@@ -8040,31 +8065,31 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
             }
             buf_1 = (*buf_1).b_next;
         }
-        p_sm = save_sm;
-        p_sta = save_sta;
-        if p_ru != save_ru {
+        p_sm.set(save_sm.get());
+        p_sta.set(save_sta.get());
+        if p_ru.get() != save_ru.get() {
             status_redraw_all();
         }
-        p_ru = save_ru;
-        p_ri = save_ri;
-        p_ai = p_ai_nopaste;
-        p_et = p_et_nopaste;
-        p_sts = p_sts_nopaste;
-        p_tw = p_tw_nopaste;
-        p_wm = p_wm_nopaste;
-        if !p_vsts.is_null() {
-            free_string_option(p_vsts);
+        p_ru.set(save_ru.get());
+        p_ri.set(save_ri.get());
+        p_ai.set(p_ai_nopaste.get());
+        p_et.set(p_et_nopaste.get());
+        p_sts.set(p_sts_nopaste.get());
+        p_tw.set(p_tw_nopaste.get());
+        p_wm.set(p_wm_nopaste.get());
+        if !(*p_vsts.ptr()).is_null() {
+            free_string_option(p_vsts.get());
         }
-        p_vsts = if !p_vsts_nopaste.is_null() {
-            xstrdup(p_vsts_nopaste)
+        p_vsts.set(if !(*p_vsts_nopaste.ptr()).is_null() {
+            xstrdup(p_vsts_nopaste.get())
         } else {
-            &raw mut empty_string_option as *mut ::core::ffi::c_char
-        };
+            empty_string_option.ptr() as *mut ::core::ffi::c_char
+        });
     }
-    old_p_paste = p_paste;
+    old_p_paste.set(p_paste.get());
     didset_options_sctx(
         OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int,
-        &raw mut p_paste_dep_opts as *mut ::core::ffi::c_int,
+        p_paste_dep_opts.ptr() as *mut ::core::ffi::c_int,
     );
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -8073,15 +8098,16 @@ unsafe extern "C" fn did_set_previewwindow(mut args: *mut optset_T) -> *const ::
     if (*win).w_onebuf_opt.wo_pvw == 0 {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
         if (*wp).w_onebuf_opt.wo_pvw != 0 && wp != win {
             (*win).w_onebuf_opt.wo_pvw = false_0;
-            return &raw const e_preview_window_already_exists as *const ::core::ffi::c_char;
+            return (e_preview_window_already_exists.ptr() as *const _)
+                as *const ::core::ffi::c_char;
         }
         wp = (*wp).w_next;
     }
@@ -8099,7 +8125,7 @@ unsafe extern "C" fn did_set_readonly(mut args: *mut optset_T) -> *const ::core:
     if (*buf).b_p_ro == 0
         && (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
-        readonlymode = false_0 != 0;
+        readonlymode.set(false_0 != 0);
     }
     if (*buf).b_p_ro != 0 {
         (*buf).b_did_warn = false_0 != 0;
@@ -8159,7 +8185,7 @@ unsafe extern "C" fn did_set_spell(mut args: *mut optset_T) -> *const ::core::ff
 }
 unsafe extern "C" fn did_set_swapfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    if (*buf).b_p_swf != 0 && p_uc != 0 {
+    if (*buf).b_p_swf != 0 && p_uc.get() != 0 {
         ml_open_file(buf);
     } else {
         mf_close_file(buf, true_0 != 0);
@@ -8167,10 +8193,10 @@ unsafe extern "C" fn did_set_swapfile(mut args: *mut optset_T) -> *const ::core:
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_textwidth(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -8188,18 +8214,18 @@ unsafe extern "C" fn did_set_title_icon(mut _args: *mut optset_T) -> *const ::co
 }
 unsafe extern "C" fn did_set_titlelen(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
-    if starting != NO_SCREEN && old_value != p_titlelen {
-        need_maketitle = true_0 != 0;
+    if starting.get() != NO_SCREEN && old_value != p_titlelen.get() {
+        need_maketitle.set(true_0 != 0);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_undofile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    if (*buf).b_p_udf == 0 && p_udf == 0 {
+    if (*buf).b_p_udf == 0 && p_udf.get() == 0 {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut hash: [uint8_t; 32] = [0; 32];
-    let mut bp: *mut buf_T = firstbuf;
+    let mut bp: *mut buf_T = firstbuf.get();
     while !bp.is_null() {
         if (buf == bp
             || (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
@@ -8223,9 +8249,9 @@ pub unsafe extern "C" fn did_set_global_undolevels(
     mut value: OptInt,
     mut old_value: OptInt,
 ) -> *const ::core::ffi::c_char {
-    p_ul = old_value;
+    p_ul.set(old_value);
     u_sync(true_0 != 0);
-    p_ul = value;
+    p_ul.set(value);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
@@ -8242,7 +8268,7 @@ pub unsafe extern "C" fn did_set_buflocal_undolevels(
 unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut pp: *mut OptInt = (*args).os_varp as *mut OptInt;
-    if pp == &raw mut p_ul {
+    if pp == p_ul.ptr() {
         did_set_global_undolevels((*args).os_newval.number, (*args).os_oldval.number);
     } else if pp == &raw mut (*buf).b_p_ul {
         did_set_buflocal_undolevels(buf, (*args).os_newval.number, (*args).os_oldval.number);
@@ -8251,7 +8277,7 @@ unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const ::cor
 }
 unsafe extern "C" fn did_set_updatecount(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
-    if p_uc != 0 && old_value == 0 {
+    if p_uc.get() != 0 && old_value == 0 {
         ml_open_files();
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -8292,24 +8318,24 @@ unsafe extern "C" fn did_set_winblend(mut args: *mut optset_T) -> *const ::core:
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_window(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    if p_window < 1 as OptInt {
-        p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
-    } else if p_window >= Rows as OptInt {
-        p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
+    if p_window.get() < 1 as OptInt {
+        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
+    } else if p_window.get() >= Rows.get() as OptInt {
+        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_winheight(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    if !(firstwin == lastwin) {
-        if ((*curwin).w_height as OptInt) < p_wh {
-            win_setheight(p_wh as ::core::ffi::c_int);
+    if !(firstwin.get() == lastwin.get()) {
+        if ((*curwin.get()).w_height as OptInt) < p_wh.get() {
+            win_setheight(p_wh.get() as ::core::ffi::c_int);
         }
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_winwidth(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    if !(firstwin == lastwin) && ((*curwin).w_width as OptInt) < p_wiw {
-        win_setwidth(p_wiw as ::core::ffi::c_int);
+    if !(firstwin.get() == lastwin.get()) && ((*curwin.get()).w_width as OptInt) < p_wiw.get() {
+        win_setwidth(p_wiw.get() as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -8324,9 +8350,9 @@ unsafe extern "C" fn did_set_wrap(mut args: *mut optset_T) -> *const ::core::ffi
 }
 unsafe extern "C" fn did_set_xhistory(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut is_p_chi: bool = (*args).os_varp as *mut OptInt == &raw mut p_chi;
+    let mut is_p_chi: bool = (*args).os_varp as *mut OptInt == p_chi.ptr();
     let mut arg: *mut OptInt = if is_p_chi as ::core::ffi::c_int != 0 {
-        &raw mut p_chi
+        p_chi.ptr()
     } else {
         (*args).os_varp as *mut OptInt
     };
@@ -8338,17 +8364,17 @@ unsafe extern "C" fn did_set_xhistory(mut args: *mut optset_T) -> *const ::core:
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn do_syntax_autocmd(mut buf: *mut buf_T, mut value_changed: bool) {
-    static mut syn_recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    syn_recursive += 1;
+    static syn_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    (*syn_recursive.ptr()) += 1;
     (*buf).b_flags |= BF_SYN_SET;
     apply_autocmds(
         EVENT_SYNTAX,
         (*buf).b_p_syn,
         (*buf).b_fname,
-        value_changed as ::core::ffi::c_int != 0 || syn_recursive == 1 as ::core::ffi::c_int,
+        value_changed as ::core::ffi::c_int != 0 || syn_recursive.get() == 1 as ::core::ffi::c_int,
         buf,
     );
-    syn_recursive -= 1;
+    (*syn_recursive.ptr()) -= 1;
 }
 unsafe extern "C" fn do_spelllang_source(mut win: *mut win_T) {
     let mut fname: [::core::ffi::c_char; 200] = [0; 200];
@@ -8399,7 +8425,7 @@ unsafe extern "C" fn check_num_option_bounds(
     match opt_idx as ::core::ffi::c_int {
         169 => {
             if *newval < min_rows_for_all_tabpages() as OptInt
-                && full_screen as ::core::ffi::c_int != 0
+                && full_screen.get() as ::core::ffi::c_int != 0
             {
                 vim_snprintf(
                     errbuf,
@@ -8420,7 +8446,7 @@ unsafe extern "C" fn check_num_option_bounds(
         }
         47 => {
             if *newval < MIN_COLUMNS as ::core::ffi::c_int as OptInt
-                && full_screen as ::core::ffi::c_int != 0
+                && full_screen.get() as ::core::ffi::c_int != 0
             {
                 vim_snprintf(
                     errbuf,
@@ -8456,8 +8482,8 @@ unsafe extern "C" fn check_num_option_bounds(
             };
         }
         246 => {
-            if (*newval < -100 as OptInt || *newval >= Rows as OptInt)
-                && full_screen as ::core::ffi::c_int != 0
+            if (*newval < -100 as OptInt || *newval >= Rows.get() as OptInt)
+                && full_screen.get() as ::core::ffi::c_int != 0
             {
                 errmsg = &raw const e_scroll as *const ::core::ffi::c_char;
                 *newval = 1 as OptInt;
@@ -8465,14 +8491,14 @@ unsafe extern "C" fn check_num_option_bounds(
         }
         243 => {
             if (*newval <= 0 as OptInt
-                || *newval > (*curwin).w_view_height as OptInt
-                    && (*curwin).w_view_height > 0 as ::core::ffi::c_int)
-                && full_screen as ::core::ffi::c_int != 0
+                || *newval > (*curwin.get()).w_view_height as OptInt
+                    && (*curwin.get()).w_view_height > 0 as ::core::ffi::c_int)
+                && full_screen.get() as ::core::ffi::c_int != 0
             {
                 if *newval != 0 as OptInt {
                     errmsg = &raw const e_scroll as *const ::core::ffi::c_char;
                 }
-                *newval = win_default_scroll(curwin);
+                *newval = win_default_scroll(curwin.get());
             }
         }
         _ => {}
@@ -8498,28 +8524,28 @@ unsafe extern "C" fn validate_num_option(
         362 => {
             if value < 1 as OptInt {
                 return &raw const e_positive as *const ::core::ffi::c_char;
-            } else if p_wmh > value {
+            } else if p_wmh.get() > value {
                 return &raw const e_winheight as *const ::core::ffi::c_char;
             }
         }
         364 => {
             if value < 0 as OptInt {
                 return &raw const e_positive as *const ::core::ffi::c_char;
-            } else if value > p_wh {
+            } else if value > p_wh.get() {
                 return &raw const e_winheight as *const ::core::ffi::c_char;
             }
         }
         366 => {
             if value < 1 as OptInt {
                 return &raw const e_positive as *const ::core::ffi::c_char;
-            } else if p_wmw > value {
+            } else if p_wmw.get() > value {
                 return &raw const e_winwidth as *const ::core::ffi::c_char;
             }
         }
         365 => {
             if value < 0 as OptInt {
                 return &raw const e_positive as *const ::core::ffi::c_char;
-            } else if value > p_wiw {
+            } else if value > p_wiw.get() {
                 return &raw const e_winwidth as *const ::core::ffi::c_char;
             }
         }
@@ -8551,12 +8577,12 @@ unsafe extern "C" fn validate_num_option(
             }
         }
         247 => {
-            if value < 0 as OptInt && full_screen as ::core::ffi::c_int != 0 {
+            if value < 0 as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
                 return &raw const e_positive as *const ::core::ffi::c_char;
             }
         }
         276 => {
-            if value < 0 as OptInt && full_screen as ::core::ffi::c_int != 0 {
+            if value < 0 as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
                 return &raw const e_positive as *const ::core::ffi::c_char;
             }
         }
@@ -8604,10 +8630,10 @@ unsafe extern "C" fn validate_num_option(
         }
         37 | 167 => {
             if value < 1 as OptInt {
-                return &raw const e_cannot_have_negative_or_zero_number_of_quickfix
+                return (e_cannot_have_negative_or_zero_number_of_quickfix.ptr() as *const _)
                     as *const ::core::ffi::c_char;
             } else if value > 100 as OptInt {
-                return &raw const e_cannot_have_more_than_hundred_quickfix
+                return (e_cannot_have_more_than_hundred_quickfix.ptr() as *const _)
                     as *const ::core::ffi::c_char;
             }
         }
@@ -8638,7 +8664,7 @@ pub unsafe extern "C" fn check_redraw_for(
     if flags & kOptFlagRedrTabl as ::core::ffi::c_int as uint32_t != 0
         || all as ::core::ffi::c_int != 0
     {
-        redraw_tabline = true_0 != 0;
+        redraw_tabline.set(true_0 != 0);
     }
     if flags & kOptFlagRedrBuf as ::core::ffi::c_int as uint32_t != 0
         || flags & kOptFlagRedrWin as ::core::ffi::c_int as uint32_t != 0
@@ -8659,7 +8685,7 @@ pub unsafe extern "C" fn check_redraw_for(
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_redraw(mut flags: uint32_t) {
-    check_redraw_for(curbuf, curwin, flags);
+    check_redraw_for(curbuf.get(), curwin.get(), flags);
 }
 #[no_mangle]
 pub unsafe extern "C" fn is_tty_option(mut name: *const ::core::ffi::c_char) -> bool {
@@ -8669,7 +8695,7 @@ pub unsafe extern "C" fn is_tty_option(mut name: *const ::core::ffi::c_char) -> 
 pub unsafe extern "C" fn get_tty_option(mut name: *const ::core::ffi::c_char) -> OptVal {
     let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if strequal(name, b"t_Co\0".as_ptr() as *const ::core::ffi::c_char) {
-        if t_colors <= 1 as ::core::ffi::c_int {
+        if t_colors.get() <= 1 as ::core::ffi::c_int {
             value = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
         } else {
             value = xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
@@ -8677,18 +8703,18 @@ pub unsafe extern "C" fn get_tty_option(mut name: *const ::core::ffi::c_char) ->
                 value,
                 NUMBUFLEN as ::core::ffi::c_int as size_t,
                 b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                t_colors,
+                t_colors.get(),
             );
         }
     } else if strequal(name, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
-        value = if !p_term.is_null() {
-            xstrdup(p_term)
+        value = if !(*p_term.ptr()).is_null() {
+            xstrdup(p_term.get())
         } else {
             xstrdup(b"nvim\0".as_ptr() as *const ::core::ffi::c_char)
         };
     } else if strequal(name, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
-        value = if !p_ttytype.is_null() {
-            xstrdup(p_ttytype)
+        value = if !(*p_ttytype.ptr()).is_null() {
+            xstrdup(p_ttytype.get())
         } else {
             xstrdup(b"nvim\0".as_ptr() as *const ::core::ffi::c_char)
         };
@@ -8715,17 +8741,17 @@ pub unsafe extern "C" fn set_tty_option(
     mut value: *mut ::core::ffi::c_char,
 ) -> bool {
     if strequal(name, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
-        if !p_term.is_null() {
-            xfree(p_term as *mut ::core::ffi::c_void);
+        if !(*p_term.ptr()).is_null() {
+            xfree(p_term.get() as *mut ::core::ffi::c_void);
         }
-        p_term = value;
+        p_term.set(value);
         return true_0 != 0;
     }
     if strequal(name, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
-        if !p_ttytype.is_null() {
-            xfree(p_ttytype as *mut ::core::ffi::c_void);
+        if !(*p_ttytype.ptr()).is_null() {
+            xfree(p_ttytype.get() as *mut ::core::ffi::c_void);
         }
-        p_ttytype = value;
+        p_ttytype.set(value);
         return true_0 != 0;
     }
     return false_0 != 0;
@@ -8737,7 +8763,7 @@ pub unsafe extern "C" fn find_option_len(
 ) -> OptIndex {
     let mut index: ::core::ffi::c_int = find_option_hash(name, len);
     return (if index >= 0 as ::core::ffi::c_int {
-        option_hash_elems[index as usize].opt_idx as ::core::ffi::c_int
+        (*option_hash_elems.ptr())[index as usize].opt_idx as ::core::ffi::c_int
     } else {
         kOptInvalid as ::core::ffi::c_int
     }) as OptIndex;
@@ -8750,7 +8776,7 @@ pub unsafe extern "C" fn find_option(name: *const ::core::ffi::c_char) -> OptInd
 pub unsafe extern "C" fn optval_free(mut o: OptVal) {
     match o.type_0 as ::core::ffi::c_int {
         2 => {
-            if o.data.string.data != &raw mut empty_string_option as *mut ::core::ffi::c_char {
+            if o.data.string.data != empty_string_option.ptr() as *mut ::core::ffi::c_char {
                 api_free_string(o.data.string);
             }
         }
@@ -8799,14 +8825,14 @@ pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
     unreachable!();
 }
 unsafe extern "C" fn option_get_type(opt_idx: OptIndex) -> OptValType {
-    return options[opt_idx as usize].type_0;
+    return (*options.ptr())[opt_idx as usize].type_0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn optval_from_varp(
     mut opt_idx: OptIndex,
     mut varp: *mut ::core::ffi::c_void,
 ) -> OptVal {
-    if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf).b_changed {
+    if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf.get()).b_changed {
         return OptVal {
             type_0: kOptValTypeBoolean,
             data: OptValData {
@@ -9027,16 +9053,17 @@ pub unsafe extern "C" fn object_as_optval(mut o: Object, mut error: *mut bool) -
 #[no_mangle]
 pub unsafe extern "C" fn is_option_hidden(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && options[opt_idx as usize].immutable as ::core::ffi::c_int != 0
-        && options[opt_idx as usize].var
-            == &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize))
+        && (*options.ptr())[opt_idx as usize].immutable as ::core::ffi::c_int != 0
+        && (*options.ptr())[opt_idx as usize].var
+            == &raw mut (*(options.ptr() as *mut vimoption_T).offset(opt_idx as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void;
 }
 #[no_mangle]
 pub unsafe extern "C" fn option_has_type(mut opt_idx: OptIndex, mut type_0: OptValType) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && options[opt_idx as usize].type_0 as ::core::ffi::c_int == type_0 as ::core::ffi::c_int;
+        && (*options.ptr())[opt_idx as usize].type_0 as ::core::ffi::c_int
+            == type_0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn option_has_scope(mut opt_idx: OptIndex, mut scope: OptScope) -> bool {
@@ -9065,12 +9092,12 @@ pub unsafe extern "C" fn option_has_scope(mut opt_idx: OptIndex, mut scope: OptS
 #[inline]
 unsafe extern "C" fn option_is_global_local(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && !is_power_of_two(options[opt_idx as usize].scope_flags as uint64_t);
+        && !is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t);
 }
 #[inline]
 unsafe extern "C" fn option_is_global_only(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && is_power_of_two(options[opt_idx as usize].scope_flags as uint64_t)
+        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t)
             as ::core::ffi::c_int
             != 0
         && option_has_scope(opt_idx, kOptScopeGlobal) as ::core::ffi::c_int != 0;
@@ -9078,21 +9105,21 @@ unsafe extern "C" fn option_is_global_only(mut opt_idx: OptIndex) -> bool {
 #[inline]
 unsafe extern "C" fn option_is_window_local(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && is_power_of_two(options[opt_idx as usize].scope_flags as uint64_t)
+        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t)
             as ::core::ffi::c_int
             != 0
         && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn option_scope_idx(mut opt_idx: OptIndex, mut scope: OptScope) -> ssize_t {
-    return options[opt_idx as usize].scope_idx[scope as usize];
+    return (*options.ptr())[opt_idx as usize].scope_idx[scope as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_option_flags(mut opt_idx: OptIndex) -> uint32_t {
     return if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
         0 as uint32_t
     } else {
-        options[opt_idx as usize].flags
+        (*options.ptr())[opt_idx as usize].flags
     };
 }
 #[no_mangle]
@@ -9106,7 +9133,7 @@ pub unsafe extern "C" fn get_option_value(
             data: OptValData { boolean: kFalse },
         };
     }
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
     return optval_copy(optval_from_varp(opt_idx, varp));
 }
@@ -9123,7 +9150,7 @@ pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
             );
         }
     };
-    return (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    return (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
 }
 unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
     '_c2rust_label: {
@@ -9137,7 +9164,7 @@ unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
             );
         }
     };
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     if option_is_global_local(opt_idx) {
         if option_has_type(opt_idx, kOptValTypeString) {
             return OptVal {
@@ -9208,7 +9235,7 @@ unsafe extern "C" fn did_set_option(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut restore_chartab: bool = false_0 != 0;
     let mut value_changed: bool = false_0 != 0;
@@ -9224,13 +9251,13 @@ unsafe extern "C" fn did_set_option(
         os_restore_chartab: false_0 != 0,
         os_errbuf: errbuf,
         os_errbuflen: errbuflen,
-        os_win: curwin as *mut ::core::ffi::c_void,
-        os_buf: curbuf as *mut ::core::ffi::c_void,
+        os_win: curwin.get() as *mut ::core::ffi::c_void,
+        os_buf: curbuf.get() as *mut ::core::ffi::c_void,
     };
     if !direct {
         if (*opt).immutable as ::core::ffi::c_int != 0 && !optval_equal(old_value, new_value) {
             errmsg = &raw const e_unsupportedoption as *const ::core::ffi::c_char;
-        } else if (secure != 0 || sandbox != 0 as ::core::ffi::c_int)
+        } else if (secure.get() != 0 || sandbox.get() != 0 as ::core::ffi::c_int)
             && (*opt).flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
         {
             errmsg = &raw const e_secure as *const ::core::ffi::c_char;
@@ -9251,14 +9278,14 @@ unsafe extern "C" fn did_set_option(
     if !errmsg.is_null() {
         set_option_varp(opt_idx, varp, old_value, true_0 != 0);
         if restore_chartab {
-            buf_init_chartab(curbuf, true_0 != 0);
+            buf_init_chartab(curbuf.get(), true_0 != 0);
         }
         return errmsg;
     }
     new_value = optval_from_varp(opt_idx, varp);
     if set_sid != SID_NONE {
         let mut script_ctx: sctx_T = if set_sid == 0 as ::core::ffi::c_int {
-            current_sctx
+            current_sctx.get()
         } else {
             sctx_T {
                 sc_sid: set_sid,
@@ -9293,51 +9320,51 @@ unsafe extern "C" fn did_set_option(
     if direct {
         return errmsg;
     }
-    if varp == &raw mut (*curbuf).b_p_syn as *mut ::core::ffi::c_void {
-        do_syntax_autocmd(curbuf, value_changed);
-    } else if varp == &raw mut (*curbuf).b_p_ft as *mut ::core::ffi::c_void {
+    if varp == &raw mut (*curbuf.get()).b_p_syn as *mut ::core::ffi::c_void {
+        do_syntax_autocmd(curbuf.get(), value_changed);
+    } else if varp == &raw mut (*curbuf.get()).b_p_ft as *mut ::core::ffi::c_void {
         if opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0
             || value_changed as ::core::ffi::c_int != 0
         {
-            do_filetype_autocmd(curbuf, value_changed);
+            do_filetype_autocmd(curbuf.get(), value_changed);
         }
-    } else if varp == &raw mut (*(*curwin).w_s).b_p_spl as *mut ::core::ffi::c_void {
-        do_spelllang_source(curwin);
+    } else if varp == &raw mut (*(*curwin.get()).w_s).b_p_spl as *mut ::core::ffi::c_void {
+        do_spelllang_source(curwin.get());
     }
     comp_col();
-    if varp == &raw mut p_mouse as *mut ::core::ffi::c_void {
+    if varp == p_mouse.ptr() as *mut ::core::ffi::c_void {
         setmouse();
-    } else if (varp == &raw mut p_flp as *mut ::core::ffi::c_void
-        || varp == &raw mut (*curbuf).b_p_flp as *mut ::core::ffi::c_void)
-        && (*curwin).w_briopt_list != 0
+    } else if (varp == p_flp.ptr() as *mut ::core::ffi::c_void
+        || varp == &raw mut (*curbuf.get()).b_p_flp as *mut ::core::ffi::c_void)
+        && (*curwin.get()).w_briopt_list != 0
     {
         redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-    } else if varp == &raw mut p_wbr as *mut ::core::ffi::c_void
-        || varp == &raw mut (*curwin).w_onebuf_opt.wo_wbr as *mut ::core::ffi::c_void
+    } else if varp == p_wbr.ptr() as *mut ::core::ffi::c_void
+        || varp == &raw mut (*curwin.get()).w_onebuf_opt.wo_wbr as *mut ::core::ffi::c_void
     {
         set_winbar(true_0 != 0);
     }
-    if (*curwin).w_curswant != MAXCOL as ::core::ffi::c_int
+    if (*curwin.get()).w_curswant != MAXCOL as ::core::ffi::c_int
         && (*opt).flags
             & (kOptFlagCurswant as ::core::ffi::c_int | kOptFlagRedrAll as ::core::ffi::c_int)
                 as uint32_t
             != 0 as uint32_t
         && (*opt).flags & kOptFlagHLOnly as ::core::ffi::c_int as uint32_t == 0 as uint32_t
     {
-        (*curwin).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = true_0;
     }
     check_redraw((*opt).flags);
     if errmsg.is_null() {
         (*opt).flags |= kOptFlagWasSet as ::core::ffi::c_int as uint32_t;
-        let mut flagsp: *mut uint32_t = insecure_flag(curwin, opt_idx, opt_flags);
+        let mut flagsp: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
         let mut flagsp_local: *mut uint32_t = if scope_both as ::core::ffi::c_int != 0 {
-            insecure_flag(curwin, opt_idx, OPT_LOCAL as ::core::ffi::c_int)
+            insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as ::core::ffi::c_int)
         } else {
             ::core::ptr::null_mut::<uint32_t>()
         };
         if !value_checked
-            && (secure != 0
-                || sandbox != 0 as ::core::ffi::c_int
+            && (secure.get() != 0
+                || sandbox.get() != 0 as ::core::ffi::c_int
                 || opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0)
         {
             *flagsp |= kOptFlagInsecure as ::core::ffi::c_int as uint32_t;
@@ -9365,7 +9392,7 @@ unsafe extern "C" fn validate_option_value(
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
         && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
         && optval_equal(*newval, get_option_unset_value(opt_idx)) as ::core::ffi::c_int != 0
@@ -9433,7 +9460,7 @@ unsafe extern "C" fn set_option(
             return errmsg;
         }
     }
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let scope_local: bool = opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
     let scope_global: bool = opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0;
     let scope_both: bool = !scope_local && !scope_global;
@@ -9467,13 +9494,13 @@ unsafe extern "C" fn set_option(
     let mut saved_old_global_value: OptVal = optval_copy(old_global_value);
     let mut saved_old_local_value: OptVal = optval_copy(old_local_value);
     let mut saved_new_value: OptVal = optval_copy(value);
-    let mut p: *mut uint32_t = insecure_flag(curwin, opt_idx, opt_flags);
-    let secure_saved: ::core::ffi::c_int = secure;
+    let mut p: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
+    let secure_saved: ::core::ffi::c_int = secure.get();
     if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0
-        || sandbox != 0 as ::core::ffi::c_int
+        || sandbox.get() != 0 as ::core::ffi::c_int
         || !value_replaced && *p & kOptFlagInsecure as ::core::ffi::c_int as uint32_t != 0
     {
-        secure = 1 as ::core::ffi::c_int;
+        secure.set(1 as ::core::ffi::c_int);
     }
     set_option_varp(opt_idx, varp, value, false_0 != 0);
     errmsg = did_set_option(
@@ -9488,9 +9515,9 @@ unsafe extern "C" fn set_option(
         errbuf,
         errbuflen,
     );
-    secure = secure_saved;
+    secure.set(secure_saved);
     if errmsg.is_null() && !direct {
-        if starting == 0 {
+        if starting.get() == 0 {
             apply_optionset_autocmd(
                 opt_idx,
                 opt_flags,
@@ -9521,7 +9548,7 @@ pub unsafe extern "C" fn set_option_direct(
     mut opt_flags: ::core::ffi::c_int,
     mut set_sid: scid_T,
 ) {
-    static mut errbuf: [::core::ffi::c_char; 1025] = [0; 1025];
+    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
     if is_option_hidden(opt_idx) {
         return;
     }
@@ -9532,7 +9559,7 @@ pub unsafe extern "C" fn set_option_direct(
         set_sid,
         true_0 != 0,
         true_0 != 0,
-        &raw mut errbuf as *mut ::core::ffi::c_char,
+        errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
     );
     '_c2rust_label: {
@@ -9557,21 +9584,21 @@ pub unsafe extern "C" fn set_option_direct_for(
     mut scope: OptScope,
     from: *mut ::core::ffi::c_void,
 ) {
-    let mut save_curbuf: *mut buf_T = curbuf;
-    let mut save_curwin: *mut win_T = curwin;
+    let mut save_curbuf: *mut buf_T = curbuf.get();
+    let mut save_curwin: *mut win_T = curwin.get();
     match scope as ::core::ffi::c_uint {
         1 => {
-            curwin = from as *mut win_T;
-            curbuf = (*curwin).w_buffer;
+            curwin.set(from as *mut win_T);
+            curbuf.set((*curwin.get()).w_buffer);
         }
         2 => {
-            curbuf = from as *mut buf_T;
+            curbuf.set(from as *mut buf_T);
         }
         0 | _ => {}
     }
     set_option_direct(opt_idx, value, opt_flags, set_sid);
-    curwin = save_curwin;
-    curbuf = save_curbuf;
+    curwin.set(save_curwin);
+    curbuf.set(save_curbuf);
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_option_value(
@@ -9591,9 +9618,9 @@ pub unsafe extern "C" fn set_option_value(
             );
         }
     };
-    static mut errbuf: [::core::ffi::c_char; 1025] = [0; 1025];
-    let mut flags: uint32_t = options[opt_idx as usize].flags;
-    if sandbox > 0 as ::core::ffi::c_int
+    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
+    let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
+    if sandbox.get() > 0 as ::core::ffi::c_int
         && flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
     {
         return gettext(&raw const e_sandbox as *const ::core::ffi::c_char);
@@ -9605,7 +9632,7 @@ pub unsafe extern "C" fn set_option_value(
         0 as scid_T,
         false_0 != 0,
         true_0 != 0,
-        &raw mut errbuf as *mut ::core::ffi::c_char,
+        errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
     );
 }
@@ -9636,18 +9663,18 @@ pub unsafe extern "C" fn set_option_value_handle_tty(
     value: OptVal,
     mut opt_flags: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
-    static mut errbuf: [::core::ffi::c_char; 1025] = [0; 1025];
+    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
     if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
         if is_tty_option(name) {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         snprintf(
-            &raw mut errbuf as *mut ::core::ffi::c_char,
+            errbuf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
             gettext(&raw const e_unknown_option2 as *const ::core::ffi::c_char),
             name,
         );
-        return &raw mut errbuf as *mut ::core::ffi::c_char;
+        return errbuf.ptr() as *mut ::core::ffi::c_char;
     }
     return set_option_value(opt_idx, value, opt_flags);
 }
@@ -9673,7 +9700,7 @@ unsafe extern "C" fn switch_option_context(
         1 => {
             let win: *mut win_T = from as *mut win_T;
             let switchwin: *mut switchwin_T = ctx as *mut switchwin_T;
-            if win == curwin {
+            if win == curwin.get() {
                 return false_0 != 0;
             }
             if switch_win_noblock(switchwin, win, win_find_tabpage(win), true_0 != 0) == FAIL {
@@ -9693,7 +9720,7 @@ unsafe extern "C" fn switch_option_context(
         2 => {
             let buf: *mut buf_T = from as *mut buf_T;
             let aco: *mut aco_save_T = ctx as *mut aco_save_T;
-            if buf == curbuf {
+            if buf == curbuf.get() {
                 return false_0 != 0;
             }
             aucmd_prepbuf(aco, buf);
@@ -9846,12 +9873,12 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
         ));
     }
     let mut run: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while run <= 2 as ::core::ffi::c_int && !got_int {
+    while run <= 2 as ::core::ffi::c_int && !got_int.get() {
         let mut item_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut opt: *mut vimoption_T = ::core::ptr::null_mut::<vimoption_T>();
         let mut opt_idx: OptIndex = kOptAleph;
         while (opt_idx as ::core::ffi::c_int) < kOptCount {
-            opt = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+            opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
             if !message_filtered((*opt).fullname) {
                 let mut varp: *mut ::core::ffi::c_void = NULL;
                 if opt_flags & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
@@ -9868,13 +9895,13 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                 {
                     let mut len: ::core::ffi::c_int = 0;
                     if opt_flags & OPT_ONECOLUMN as ::core::ffi::c_int != 0 {
-                        len = Columns;
+                        len = Columns.get();
                     } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                         len = 1 as ::core::ffi::c_int;
                     } else {
                         option_value2string(opt, opt_flags);
                         len = strlen((*opt).fullname) as ::core::ffi::c_int
-                            + vim_strsize(&raw mut NameBuff as *mut ::core::ffi::c_char)
+                            + vim_strsize(NameBuff.ptr() as *mut ::core::ffi::c_char)
                             + 1 as ::core::ffi::c_int;
                     }
                     if len <= INC - GAP && run == 1 as ::core::ffi::c_int
@@ -9892,14 +9919,14 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
         let mut rows: ::core::ffi::c_int = 0;
         if run == 1 as ::core::ffi::c_int {
             '_c2rust_label: {
-                if Columns <= 2147483647 as ::core::ffi::c_int - 3 as ::core::ffi::c_int
-                    && Columns + 3 as ::core::ffi::c_int
+                if Columns.get() <= 2147483647 as ::core::ffi::c_int - 3 as ::core::ffi::c_int
+                    && Columns.get() + 3 as ::core::ffi::c_int
                         >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                             + 3 as ::core::ffi::c_int
-                    && (Columns + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
+                    && (Columns.get() + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
                         / 20 as ::core::ffi::c_int
                         >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                    && (Columns + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
+                    && (Columns.get() + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
                         / 20 as ::core::ffi::c_int
                         <= 2147483647 as ::core::ffi::c_int
                 {
@@ -9915,7 +9942,8 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                     );
                 }
             };
-            let mut cols: ::core::ffi::c_int = (Columns + GAP - 3 as ::core::ffi::c_int) / INC;
+            let mut cols: ::core::ffi::c_int =
+                (Columns.get() + GAP - 3 as ::core::ffi::c_int) / INC;
             if cols == 0 as ::core::ffi::c_int {
                 cols = 1 as ::core::ffi::c_int;
             }
@@ -9924,9 +9952,9 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
             rows = item_count;
         }
         let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while row < rows && !got_int {
+        while row < rows && !got_int.get() {
             msg_putchar('\n' as ::core::ffi::c_int);
-            if got_int {
+            if got_int.get() {
                 break;
             }
             let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -9950,7 +9978,7 @@ unsafe extern "C" fn optval_default(
     mut opt_idx: OptIndex,
     mut varp: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     if is_option_hidden(opt_idx) {
         return true_0;
     }
@@ -9962,27 +9990,29 @@ unsafe extern "C" fn optval_default(
 pub unsafe extern "C" fn ui_refresh_options() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        let mut flags: uint32_t = options[opt_idx as usize].flags;
+        let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
         if flags & kOptFlagUIOption as ::core::ffi::c_int as uint32_t != 0 {
-            let mut name: String_0 = cstr_as_string(options[opt_idx as usize].fullname);
-            let mut value: Object =
-                optval_as_object(optval_from_varp(opt_idx, options[opt_idx as usize].var));
+            let mut name: String_0 = cstr_as_string((*options.ptr())[opt_idx as usize].fullname);
+            let mut value: Object = optval_as_object(optval_from_varp(
+                opt_idx,
+                (*options.ptr())[opt_idx as usize].var,
+            ));
             ui_call_option_set(name, value);
         }
         opt_idx += 1;
     }
-    if !p_mouse.is_null() {
+    if !(*p_mouse.ptr()).is_null() {
         setmouse();
     }
 }
 unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: ::core::ffi::c_int) {
-    let mut save_silent: ::core::ffi::c_int = silent_mode as ::core::ffi::c_int;
-    silent_mode = false_0 != 0;
-    info_message = true_0 != 0;
+    let mut save_silent: ::core::ffi::c_int = silent_mode.get() as ::core::ffi::c_int;
+    silent_mode.set(false_0 != 0);
+    info_message.set(true_0 != 0);
     let mut opt_idx: OptIndex = get_opt_idx(opt);
     let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
     if option_has_type(opt_idx, kOptValTypeBoolean) as ::core::ffi::c_int != 0
-        && (if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf).b_changed {
+        && (if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf.get()).b_changed {
             !curbufIsChanged() as ::core::ffi::c_int
         } else {
             (*(varp as *mut ::core::ffi::c_int) == 0) as ::core::ffi::c_int
@@ -10000,16 +10030,16 @@ unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: ::core
     if !option_has_type(opt_idx, kOptValTypeBoolean) {
         msg_putchar('=' as ::core::ffi::c_int);
         option_value2string(opt, opt_flags);
-        if *(&raw mut NameBuff as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
+        if *(NameBuff.ptr() as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
             msg_outtrans(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
                 false_0 != 0,
             );
         }
     }
-    silent_mode = save_silent != 0;
-    info_message = false_0 != 0;
+    silent_mode.set(save_silent != 0);
+    info_message.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn makeset(
@@ -10022,7 +10052,7 @@ pub unsafe extern "C" fn makeset(
         let mut opt: *mut vimoption_T = ::core::ptr::null_mut::<vimoption_T>();
         let mut opt_idx: OptIndex = kOptAleph;
         while (opt_idx as ::core::ffi::c_int) < kOptCount {
-            opt = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+            opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
             's_14: {
                 if (*opt).flags & kOptFlagNoMkrc as ::core::ffi::c_int as uint32_t == 0
                     && (pri == 1 as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -10041,10 +10071,9 @@ pub unsafe extern "C" fn makeset(
                                     && optval_default(opt_idx, varp) != 0)
                                 {
                                     if !(opt_flags & OPT_SKIPRTP as ::core::ffi::c_int != 0
-                                        && ((*opt).var
-                                            == &raw mut p_rtp as *mut ::core::ffi::c_void
+                                        && ((*opt).var == p_rtp.ptr() as *mut ::core::ffi::c_void
                                             || (*opt).var
-                                                == &raw mut p_pp as *mut ::core::ffi::c_void))
+                                                == p_pp.ptr() as *mut ::core::ffi::c_void))
                                     {
                                         let mut round: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
                                         let mut varp_local: *mut ::core::ffi::c_void = NULL;
@@ -10136,49 +10165,49 @@ pub unsafe extern "C" fn makefoldset(mut fd: *mut FILE) -> ::core::ffi::c_int {
         fd,
         b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         kOptFoldmethod,
-        &raw mut (*curwin).w_onebuf_opt.wo_fdm as *mut ::core::ffi::c_void,
+        &raw mut (*curwin.get()).w_onebuf_opt.wo_fdm as *mut ::core::ffi::c_void,
     ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldexpr,
-            &raw mut (*curwin).w_onebuf_opt.wo_fde as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fde as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldmarker,
-            &raw mut (*curwin).w_onebuf_opt.wo_fmr as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fmr as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldignore,
-            &raw mut (*curwin).w_onebuf_opt.wo_fdi as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdi as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldlevel,
-            &raw mut (*curwin).w_onebuf_opt.wo_fdl as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdl as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldminlines,
-            &raw mut (*curwin).w_onebuf_opt.wo_fml as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fml as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldnestmax,
-            &raw mut (*curwin).w_onebuf_opt.wo_fdn as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdn as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
             b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldenable,
-            &raw mut (*curwin).w_onebuf_opt.wo_fen as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fen as *mut ::core::ffi::c_void,
         ) == FAIL
     {
         return FAIL;
@@ -10192,7 +10221,7 @@ unsafe extern "C" fn put_set(
     mut varp: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut value: OptVal = optval_from_varp(opt_idx, varp);
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut name: *mut ::core::ffi::c_char = (*opt).fullname;
     let mut flags: uint64_t = (*opt).flags as uint64_t;
     if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
@@ -10420,7 +10449,7 @@ pub unsafe extern "C" fn get_varp_scope(
     mut p: *mut vimoption_T,
     mut opt_flags: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_void {
-    return get_varp_scope_from(p, opt_flags, curbuf, curwin);
+    return get_varp_scope_from(p, opt_flags, curbuf.get(), curwin.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_option_varp_scope_from(
@@ -10430,7 +10459,7 @@ pub unsafe extern "C" fn get_option_varp_scope_from(
     mut win: *mut win_T,
 ) -> *mut ::core::ffi::c_void {
     return get_varp_scope_from(
-        (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+        (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
         opt_flags,
         buf,
         win,
@@ -10799,25 +10828,25 @@ pub unsafe extern "C" fn get_varp_from(
 }
 #[inline]
 unsafe extern "C" fn get_opt_idx(mut opt: *mut vimoption_T) -> OptIndex {
-    return opt.offset_from(&raw mut options as *mut vimoption_T) as OptIndex;
+    return opt.offset_from(options.ptr() as *mut vimoption_T) as OptIndex;
 }
 #[inline]
 unsafe extern "C" fn get_varp(mut p: *mut vimoption_T) -> *mut ::core::ffi::c_void {
-    return get_varp_from(p, curbuf, curwin);
+    return get_varp_from(p, curbuf.get(), curwin.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_equalprg() -> *mut ::core::ffi::c_char {
-    if *(*curbuf).b_p_ep as ::core::ffi::c_int == NUL {
-        return p_ep;
+    if *(*curbuf.get()).b_p_ep as ::core::ffi::c_int == NUL {
+        return p_ep.get();
     }
-    return (*curbuf).b_p_ep;
+    return (*curbuf.get()).b_p_ep;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_findfunc() -> *mut ::core::ffi::c_char {
-    if *(*curbuf).b_p_ffu as ::core::ffi::c_int == NUL {
-        return p_ffu;
+    if *(*curbuf.get()).b_p_ffu as ::core::ffi::c_int == NUL {
+        return p_ffu.get();
     }
-    return (*curbuf).b_p_ffu;
+    return (*curbuf.get()).b_p_ffu;
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_copy_options(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
@@ -10834,9 +10863,8 @@ pub unsafe extern "C" fn win_copy_options(mut wp_from: *mut win_T, mut wp_to: *m
 unsafe extern "C" fn copy_option_val(
     mut val: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    if val == &raw mut empty_string_option as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
-    {
-        return &raw mut empty_string_option as *mut ::core::ffi::c_char;
+    if val == empty_string_option.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_char {
+        return empty_string_option.ptr() as *mut ::core::ffi::c_char;
     }
     return xstrdup(val);
 }
@@ -10882,7 +10910,7 @@ pub unsafe extern "C" fn copy_winopt(mut from: *mut winopt_T, mut to: *mut winop
     (*to).wo_fdc_save = if (*from).wo_diff_saved != 0 {
         xstrdup((*from).wo_fdc_save)
     } else {
-        &raw mut empty_string_option as *mut ::core::ffi::c_char
+        empty_string_option.ptr() as *mut ::core::ffi::c_char
     };
     (*to).wo_fen = (*from).wo_fen;
     (*to).wo_fen_save = (*from).wo_fen_save;
@@ -10894,7 +10922,7 @@ pub unsafe extern "C" fn copy_winopt(mut from: *mut winopt_T, mut to: *mut winop
     (*to).wo_fdm_save = if (*from).wo_diff_saved != 0 {
         xstrdup((*from).wo_fdm_save)
     } else {
-        &raw mut empty_string_option as *mut ::core::ffi::c_char
+        empty_string_option.ptr() as *mut ::core::ffi::c_char
     };
     (*to).wo_fdn = (*from).wo_fdn;
     (*to).wo_fde = copy_option_val((*from).wo_fde);
@@ -11009,12 +11037,12 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
     let mut should_copy: bool = true_0 != 0;
     let mut save_p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_isk: bool = false_0 != 0;
-    if !p_cpo.is_null() {
-        if (vim_strchr(p_cpo, CPO_BUFOPTGLOB).is_null()
+    if !(*p_cpo.ptr()).is_null() {
+        if (vim_strchr(p_cpo.get(), CPO_BUFOPTGLOB).is_null()
             || flags & BCO_ENTER as ::core::ffi::c_int == 0)
             && ((*buf).b_p_initialized as ::core::ffi::c_int != 0
                 || flags & BCO_ENTER as ::core::ffi::c_int == 0
-                    && !vim_strchr(p_cpo, CPO_BUFOPT).is_null())
+                    && !vim_strchr(p_cpo.get(), CPO_BUFOPT).is_null())
         {
             should_copy = false_0 != 0;
         }
@@ -11034,8 +11062,8 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
             if !(*buf).b_p_initialized {
                 free_buf_options(buf, true_0 != 0);
                 (*buf).b_p_ro = false_0;
-                (*buf).b_p_fenc = xstrdup(p_fenc);
-                match *p_ffs as ::core::ffi::c_int {
+                (*buf).b_p_fenc = xstrdup(p_fenc.get());
+                match *p_ffs.get() as ::core::ffi::c_int {
                     109 => {
                         (*buf).b_p_ff = xstrdup(b"mac\0".as_ptr() as *const ::core::ffi::c_char);
                     }
@@ -11046,406 +11074,406 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
                         (*buf).b_p_ff = xstrdup(b"unix\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                     _ => {
-                        (*buf).b_p_ff = xstrdup(p_ff);
+                        (*buf).b_p_ff = xstrdup(p_ff.get());
                     }
                 }
-                (*buf).b_p_bh = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-                (*buf).b_p_bt = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+                (*buf).b_p_bh = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+                (*buf).b_p_bt = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             } else {
                 free_buf_options(buf, false_0 != 0);
             }
-            (*buf).b_p_ai = p_ai;
-            (*buf).b_p_script_ctx[kBufOptAutoindent as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptAutoindent as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_ai = p_ai.get();
+            (*buf).b_p_script_ctx[kBufOptAutoindent as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptAutoindent as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_ai_nopaste = p_ai_nopaste;
-            (*buf).b_p_sw = p_sw;
-            (*buf).b_p_script_ctx[kBufOptShiftwidth as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptShiftwidth as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_ai_nopaste = p_ai_nopaste.get();
+            (*buf).b_p_sw = p_sw.get();
+            (*buf).b_p_script_ctx[kBufOptShiftwidth as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptShiftwidth as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_scbk = p_scbk;
-            (*buf).b_p_script_ctx[kBufOptScrollback as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptScrollback as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_scbk = p_scbk.get();
+            (*buf).b_p_script_ctx[kBufOptScrollback as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptScrollback as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_tw = p_tw;
-            (*buf).b_p_script_ctx[kBufOptTextwidth as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptTextwidth as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_tw = p_tw.get();
+            (*buf).b_p_script_ctx[kBufOptTextwidth as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptTextwidth as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_tw_nopaste = p_tw_nopaste;
-            (*buf).b_p_tw_nobin = p_tw_nobin;
-            (*buf).b_p_wm = p_wm;
-            (*buf).b_p_script_ctx[kBufOptWrapmargin as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptWrapmargin as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_tw_nopaste = p_tw_nopaste.get();
+            (*buf).b_p_tw_nobin = p_tw_nobin.get();
+            (*buf).b_p_wm = p_wm.get();
+            (*buf).b_p_script_ctx[kBufOptWrapmargin as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptWrapmargin as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_wm_nopaste = p_wm_nopaste;
-            (*buf).b_p_wm_nobin = p_wm_nobin;
-            (*buf).b_p_bin = p_bin;
-            (*buf).b_p_script_ctx[kBufOptBinary as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_wm_nopaste = p_wm_nopaste.get();
+            (*buf).b_p_wm_nobin = p_wm_nobin.get();
+            (*buf).b_p_bin = p_bin.get();
+            (*buf).b_p_script_ctx[kBufOptBinary as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptBinary as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
-            (*buf).b_p_bomb = p_bomb;
-            (*buf).b_p_script_ctx[kBufOptBomb as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_bomb = p_bomb.get();
+            (*buf).b_p_script_ctx[kBufOptBomb as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptBomb as ::core::ffi::c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_et = p_et;
-            (*buf).b_p_script_ctx[kBufOptExpandtab as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptExpandtab as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_et = p_et.get();
+            (*buf).b_p_script_ctx[kBufOptExpandtab as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptExpandtab as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_fixeol = p_fixeol;
-            (*buf).b_p_script_ctx[kBufOptFixendofline as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptFixendofline as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_fixeol = p_fixeol.get();
+            (*buf).b_p_script_ctx[kBufOptFixendofline as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptFixendofline as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_et_nobin = p_et_nobin;
-            (*buf).b_p_et_nopaste = p_et_nopaste;
-            (*buf).b_p_ml = p_ml;
-            (*buf).b_p_script_ctx[kBufOptModeline as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptModeline as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_et_nobin = p_et_nobin.get();
+            (*buf).b_p_et_nopaste = p_et_nopaste.get();
+            (*buf).b_p_ml = p_ml.get();
+            (*buf).b_p_script_ctx[kBufOptModeline as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptModeline as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_ml_nobin = p_ml_nobin;
-            (*buf).b_p_inf = p_inf;
-            (*buf).b_p_script_ctx[kBufOptInfercase as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptInfercase as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_ml_nobin = p_ml_nobin.get();
+            (*buf).b_p_inf = p_inf.get();
+            (*buf).b_p_script_ctx[kBufOptInfercase as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptInfercase as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            if cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
+            if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
                 (*buf).b_p_swf = false_0;
             } else {
-                (*buf).b_p_swf = p_swf;
-                (*buf).b_p_script_ctx[kBufOptSwapfile as ::core::ffi::c_int as usize] = options
-                    [*(&raw const buf_opt_idx as *const OptIndex)
-                        .offset(kBufOptSwapfile as ::core::ffi::c_int as isize)
-                        as usize]
+                (*buf).b_p_swf = p_swf.get();
+                (*buf).b_p_script_ctx[kBufOptSwapfile as ::core::ffi::c_int as usize] = (*options
+                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSwapfile as ::core::ffi::c_int as isize)
+                    as usize]
                     .script_ctx;
             }
-            (*buf).b_p_cpt = xstrdup(p_cpt);
-            (*buf).b_p_script_ctx[kBufOptComplete as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptComplete as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_cpt = xstrdup(p_cpt.get());
+            (*buf).b_p_script_ctx[kBufOptComplete as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptComplete as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             set_buflocal_cpt_callbacks(buf);
-            (*buf).b_p_cfu = xstrdup(p_cfu);
-            (*buf).b_p_script_ctx[kBufOptCompletefunc as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCompletefunc as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_cfu = xstrdup(p_cfu.get());
+            (*buf).b_p_script_ctx[kBufOptCompletefunc as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCompletefunc as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             set_buflocal_cfu_callback(buf);
-            (*buf).b_p_ofu = xstrdup(p_ofu);
-            (*buf).b_p_script_ctx[kBufOptOmnifunc as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptOmnifunc as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_ofu = xstrdup(p_ofu.get());
+            (*buf).b_p_script_ctx[kBufOptOmnifunc as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptOmnifunc as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             set_buflocal_ofu_callback(buf);
-            (*buf).b_p_tfu = xstrdup(p_tfu);
-            (*buf).b_p_script_ctx[kBufOptTagfunc as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_tfu = xstrdup(p_tfu.get());
+            (*buf).b_p_script_ctx[kBufOptTagfunc as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptTagfunc as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             set_buflocal_tfu_callback(buf);
-            (*buf).b_p_sts = p_sts;
-            (*buf).b_p_script_ctx[kBufOptSofttabstop as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSofttabstop as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_sts = p_sts.get();
+            (*buf).b_p_script_ctx[kBufOptSofttabstop as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSofttabstop as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_sts_nopaste = p_sts_nopaste;
-            (*buf).b_p_vsts = xstrdup(p_vsts);
-            (*buf).b_p_script_ctx[kBufOptVarsofttabstop as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
+            (*buf).b_p_sts_nopaste = p_sts_nopaste.get();
+            (*buf).b_p_vsts = xstrdup(p_vsts.get());
+            (*buf).b_p_script_ctx[kBufOptVarsofttabstop as ::core::ffi::c_int as usize] =
+                (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptVarsofttabstop as ::core::ffi::c_int as isize)
                     as usize]
-                .script_ctx;
-            if !p_vsts.is_null()
-                && p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
+                    .script_ctx;
+            if !(*p_vsts.ptr()).is_null()
+                && p_vsts.get() != empty_string_option.ptr() as *mut ::core::ffi::c_char
             {
-                tabstop_set(p_vsts, &raw mut (*buf).b_p_vsts_array);
+                tabstop_set(p_vsts.get(), &raw mut (*buf).b_p_vsts_array);
             } else {
                 (*buf).b_p_vsts_array = ::core::ptr::null_mut::<colnr_T>();
             }
-            (*buf).b_p_vsts_nopaste = if !p_vsts_nopaste.is_null() {
-                xstrdup(p_vsts_nopaste)
+            (*buf).b_p_vsts_nopaste = if !(*p_vsts_nopaste.ptr()).is_null() {
+                xstrdup(p_vsts_nopaste.get())
             } else {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             };
-            (*buf).b_p_com = xstrdup(p_com);
-            (*buf).b_p_script_ctx[kBufOptComments as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptComments as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_com = xstrdup(p_com.get());
+            (*buf).b_p_script_ctx[kBufOptComments as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptComments as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_cms = xstrdup(p_cms);
-            (*buf).b_p_script_ctx[kBufOptCommentstring as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCommentstring as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_cms = xstrdup(p_cms.get());
+            (*buf).b_p_script_ctx[kBufOptCommentstring as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCommentstring as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_fo = xstrdup(p_fo);
-            (*buf).b_p_script_ctx[kBufOptFormatoptions as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptFormatoptions as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_fo = xstrdup(p_fo.get());
+            (*buf).b_p_script_ctx[kBufOptFormatoptions as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptFormatoptions as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_flp = xstrdup(p_flp);
-            (*buf).b_p_script_ctx[kBufOptFormatlistpat as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptFormatlistpat as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_flp = xstrdup(p_flp.get());
+            (*buf).b_p_script_ctx[kBufOptFormatlistpat as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptFormatlistpat as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_nf = xstrdup(p_nf);
-            (*buf).b_p_script_ctx[kBufOptNrformats as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptNrformats as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_nf = xstrdup(p_nf.get());
+            (*buf).b_p_script_ctx[kBufOptNrformats as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptNrformats as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_mps = xstrdup(p_mps);
-            (*buf).b_p_script_ctx[kBufOptMatchpairs as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptMatchpairs as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_mps = xstrdup(p_mps.get());
+            (*buf).b_p_script_ctx[kBufOptMatchpairs as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptMatchpairs as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_si = p_si;
-            (*buf).b_p_script_ctx[kBufOptSmartindent as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSmartindent as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_si = p_si.get();
+            (*buf).b_p_script_ctx[kBufOptSmartindent as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSmartindent as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             (*buf).b_p_channel = 0 as OptInt;
-            (*buf).b_p_ci = p_ci;
-            (*buf).b_p_script_ctx[kBufOptCopyindent as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCopyindent as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_ci = p_ci.get();
+            (*buf).b_p_script_ctx[kBufOptCopyindent as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCopyindent as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_cin = p_cin;
-            (*buf).b_p_script_ctx[kBufOptCindent as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_cin = p_cin.get();
+            (*buf).b_p_script_ctx[kBufOptCindent as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptCindent as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
-            (*buf).b_p_cink = xstrdup(p_cink);
-            (*buf).b_p_script_ctx[kBufOptCinkeys as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_cink = xstrdup(p_cink.get());
+            (*buf).b_p_script_ctx[kBufOptCinkeys as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptCinkeys as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
-            (*buf).b_p_cino = xstrdup(p_cino);
-            (*buf).b_p_script_ctx[kBufOptCinoptions as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCinoptions as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_cino = xstrdup(p_cino.get());
+            (*buf).b_p_script_ctx[kBufOptCinoptions as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCinoptions as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_cinsd = xstrdup(p_cinsd);
-            (*buf).b_p_script_ctx[kBufOptCinscopedecls as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCinscopedecls as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_cinsd = xstrdup(p_cinsd.get());
+            (*buf).b_p_script_ctx[kBufOptCinscopedecls as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCinscopedecls as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_lop = xstrdup(p_lop);
-            (*buf).b_p_script_ctx[kBufOptLispoptions as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptLispoptions as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_lop = xstrdup(p_lop.get());
+            (*buf).b_p_script_ctx[kBufOptLispoptions as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptLispoptions as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_ft = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_pi = p_pi;
-            (*buf).b_p_script_ctx[kBufOptPreserveindent as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
+            (*buf).b_p_ft = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_pi = p_pi.get();
+            (*buf).b_p_script_ctx[kBufOptPreserveindent as ::core::ffi::c_int as usize] =
+                (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptPreserveindent as ::core::ffi::c_int as isize)
                     as usize]
+                    .script_ctx;
+            (*buf).b_p_cinw = xstrdup(p_cinw.get());
+            (*buf).b_p_script_ctx[kBufOptCinwords as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptCinwords as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_cinw = xstrdup(p_cinw);
-            (*buf).b_p_script_ctx[kBufOptCinwords as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCinwords as ::core::ffi::c_int as isize)
-                    as usize]
-                .script_ctx;
-            (*buf).b_p_lisp = p_lisp;
-            (*buf).b_p_script_ctx[kBufOptLisp as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_lisp = p_lisp.get();
+            (*buf).b_p_script_ctx[kBufOptLisp as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptLisp as ::core::ffi::c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_syn = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_smc = p_smc;
-            (*buf).b_p_script_ctx[kBufOptSynmaxcol as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSynmaxcol as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_syn = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_smc = p_smc.get();
+            (*buf).b_p_script_ctx[kBufOptSynmaxcol as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSynmaxcol as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_s.b_syn_isk = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_s.b_p_spc = xstrdup(p_spc);
-            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSpellcapcheck as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_s.b_syn_isk = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_s.b_p_spc = xstrdup(p_spc.get());
+            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSpellcapcheck as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             compile_cap_prog(&raw mut (*buf).b_s);
-            (*buf).b_s.b_p_spf = xstrdup(p_spf);
-            (*buf).b_p_script_ctx[kBufOptSpellfile as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSpellfile as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_s.b_p_spf = xstrdup(p_spf.get());
+            (*buf).b_p_script_ctx[kBufOptSpellfile as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSpellfile as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_s.b_p_spl = xstrdup(p_spl);
-            (*buf).b_p_script_ctx[kBufOptSpelllang as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSpelllang as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_s.b_p_spl = xstrdup(p_spl.get());
+            (*buf).b_p_script_ctx[kBufOptSpelllang as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSpelllang as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_s.b_p_spo = xstrdup(p_spo);
-            (*buf).b_p_script_ctx[kBufOptSpelloptions as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSpelloptions as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_s.b_p_spo = xstrdup(p_spo.get());
+            (*buf).b_p_script_ctx[kBufOptSpelloptions as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSpelloptions as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_s.b_p_spo_flags = spo_flags;
-            (*buf).b_p_inde = xstrdup(p_inde);
-            (*buf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptIndentexpr as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_s.b_p_spo_flags = spo_flags.get();
+            (*buf).b_p_inde = xstrdup(p_inde.get());
+            (*buf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptIndentexpr as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_indk = xstrdup(p_indk);
-            (*buf).b_p_script_ctx[kBufOptIndentkeys as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptIndentkeys as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_indk = xstrdup(p_indk.get());
+            (*buf).b_p_script_ctx[kBufOptIndentkeys as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptIndentkeys as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_fp = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_fex = xstrdup(p_fex);
-            (*buf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptFormatexpr as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_fp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_fex = xstrdup(p_fex.get());
+            (*buf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptFormatexpr as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_sua = xstrdup(p_sua);
-            (*buf).b_p_script_ctx[kBufOptSuffixesadd as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSuffixesadd as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_sua = xstrdup(p_sua.get());
+            (*buf).b_p_script_ctx[kBufOptSuffixesadd as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptSuffixesadd as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_keymap = xstrdup(p_keymap);
-            (*buf).b_p_script_ctx[kBufOptKeymap as ::core::ffi::c_int as usize] = options
+            (*buf).b_p_keymap = xstrdup(p_keymap.get());
+            (*buf).b_p_script_ctx[kBufOptKeymap as ::core::ffi::c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptKeymap as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_kmap_state =
                 ((*buf).b_kmap_state as ::core::ffi::c_int | KEYMAP_INIT) as int16_t;
-            (*buf).b_p_iminsert = p_iminsert;
-            (*buf).b_p_script_ctx[kBufOptIminsert as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptIminsert as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_iminsert = p_iminsert.get();
+            (*buf).b_p_script_ctx[kBufOptIminsert as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptIminsert as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_imsearch = p_imsearch;
-            (*buf).b_p_script_ctx[kBufOptImsearch as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptImsearch as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_imsearch = p_imsearch.get();
+            (*buf).b_p_script_ctx[kBufOptImsearch as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptImsearch as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
             (*buf).b_p_ac = -1 as ::core::ffi::c_int;
             (*buf).b_p_ar = -1 as ::core::ffi::c_int;
             (*buf).b_p_fs = -1 as ::core::ffi::c_int;
             (*buf).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-            (*buf).b_p_bkc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*buf).b_p_bkc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             (*buf).b_bkc_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_gefm = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_gp = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_mp = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_efm = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_ep = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_ffu = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_kp = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_path = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_tags = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_tc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*buf).b_p_gefm = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_gp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_mp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_efm = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_ep = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_ffu = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_kp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_path = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_tags = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_tc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             (*buf).b_tc_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_def = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_inc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_inex = xstrdup(p_inex);
-            (*buf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptIncludeexpr as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_def = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_inc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_inex = xstrdup(p_inex.get());
+            (*buf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptIncludeexpr as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_cot = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*buf).b_p_cot = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             (*buf).b_cot_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_dict = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_dia = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_tsr = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_tsrfu = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_qe = xstrdup(p_qe);
-            (*buf).b_p_script_ctx[kBufOptQuoteescape as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptQuoteescape as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_dict = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_dia = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_tsr = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_tsrfu = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_qe = xstrdup(p_qe.get());
+            (*buf).b_p_script_ctx[kBufOptQuoteescape as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptQuoteescape as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_udf = p_udf;
-            (*buf).b_p_script_ctx[kBufOptUndofile as ::core::ffi::c_int as usize] = options
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptUndofile as ::core::ffi::c_int as isize)
-                    as usize]
+            (*buf).b_p_udf = p_udf.get();
+            (*buf).b_p_script_ctx[kBufOptUndofile as ::core::ffi::c_int as usize] = (*options
+                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                .offset(kBufOptUndofile as ::core::ffi::c_int as isize)
+                as usize]
                 .script_ctx;
-            (*buf).b_p_lw = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*buf).b_p_menc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*buf).b_p_lw = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_menc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
             if dont_do_help {
                 (*buf).b_p_isk = save_p_isk;
-                if !p_vts.is_null()
-                    && *p_vts as ::core::ffi::c_int != NUL
+                if !(*p_vts.ptr()).is_null()
+                    && *p_vts.get() as ::core::ffi::c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
-                    tabstop_set(p_vts, &raw mut (*buf).b_p_vts_array);
+                    tabstop_set(p_vts.get(), &raw mut (*buf).b_p_vts_array);
                 } else {
                     (*buf).b_p_vts_array = ::core::ptr::null_mut::<colnr_T>();
                 }
             } else {
-                (*buf).b_p_isk = xstrdup(p_isk);
-                (*buf).b_p_script_ctx[kBufOptIskeyword as ::core::ffi::c_int as usize] = options
-                    [*(&raw const buf_opt_idx as *const OptIndex)
-                        .offset(kBufOptIskeyword as ::core::ffi::c_int as isize)
-                        as usize]
+                (*buf).b_p_isk = xstrdup(p_isk.get());
+                (*buf).b_p_script_ctx[kBufOptIskeyword as ::core::ffi::c_int as usize] = (*options
+                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIskeyword as ::core::ffi::c_int as isize)
+                    as usize]
                     .script_ctx;
                 did_isk = true_0 != 0;
-                (*buf).b_p_ts = p_ts;
-                (*buf).b_p_script_ctx[kBufOptTabstop as ::core::ffi::c_int as usize] = options
-                    [*(&raw const buf_opt_idx as *const OptIndex)
-                        .offset(kBufOptTabstop as ::core::ffi::c_int as isize)
-                        as usize]
+                (*buf).b_p_ts = p_ts.get();
+                (*buf).b_p_script_ctx[kBufOptTabstop as ::core::ffi::c_int as usize] = (*options
+                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptTabstop as ::core::ffi::c_int as isize)
+                    as usize]
                     .script_ctx;
-                (*buf).b_p_vts = xstrdup(p_vts);
-                (*buf).b_p_script_ctx[kBufOptVartabstop as ::core::ffi::c_int as usize] = options
-                    [*(&raw const buf_opt_idx as *const OptIndex)
+                (*buf).b_p_vts = xstrdup(p_vts.get());
+                (*buf).b_p_script_ctx[kBufOptVartabstop as ::core::ffi::c_int as usize] =
+                    (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
                         .offset(kBufOptVartabstop as ::core::ffi::c_int as isize)
                         as usize]
-                    .script_ctx;
-                if !p_vts.is_null()
-                    && *p_vts as ::core::ffi::c_int != NUL
+                        .script_ctx;
+                if !(*p_vts.ptr()).is_null()
+                    && *p_vts.get() as ::core::ffi::c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
-                    tabstop_set(p_vts, &raw mut (*buf).b_p_vts_array);
+                    tabstop_set(p_vts.get(), &raw mut (*buf).b_p_vts_array);
                 } else {
                     (*buf).b_p_vts_array = ::core::ptr::null_mut::<colnr_T>();
                 }
@@ -11455,12 +11483,12 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
                 {
                     clear_string_option(&raw mut (*buf).b_p_bt);
                 }
-                (*buf).b_p_ma = p_ma;
-                (*buf).b_p_script_ctx[kBufOptModifiable as ::core::ffi::c_int as usize] = options
-                    [*(&raw const buf_opt_idx as *const OptIndex)
+                (*buf).b_p_ma = p_ma.get();
+                (*buf).b_p_script_ctx[kBufOptModifiable as ::core::ffi::c_int as usize] =
+                    (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
                         .offset(kBufOptModifiable as ::core::ffi::c_int as isize)
                         as usize]
-                    .script_ctx;
+                        .script_ctx;
             }
         }
         if should_copy {
@@ -11474,8 +11502,8 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
 }
 #[no_mangle]
 pub unsafe extern "C" fn reset_modifiable() {
-    (*curbuf).b_p_ma = false_0;
-    p_ma = false_0;
+    (*curbuf.get()).b_p_ma = false_0;
+    p_ma.set(false_0);
     change_option_default(
         kOptModifiable,
         OptVal {
@@ -11486,30 +11514,32 @@ pub unsafe extern "C" fn reset_modifiable() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_iminsert_global(mut buf: *mut buf_T) {
-    p_iminsert = (*buf).b_p_iminsert;
+    p_iminsert.set((*buf).b_p_iminsert);
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_imsearch_global(mut buf: *mut buf_T) {
-    p_imsearch = (*buf).b_p_imsearch;
+    p_imsearch.set((*buf).b_p_imsearch);
 }
-static mut expand_option_idx: OptIndex = kOptInvalid;
-static mut expand_option_start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut expand_option_name: [::core::ffi::c_char; 5] = [
+static expand_option_idx: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
+static expand_option_start_col: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static expand_option_name: GlobalCell<[::core::ffi::c_char; 5]> = GlobalCell::new([
     't' as ::core::ffi::c_char,
     '_' as ::core::ffi::c_char,
     NUL as ::core::ffi::c_char,
     NUL as ::core::ffi::c_char,
     NUL as ::core::ffi::c_char,
-];
-static mut expand_option_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut expand_option_append: bool = false_0 != 0;
+]);
+static expand_option_flags: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static expand_option_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn set_context_in_set_cmd(
     mut xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
     mut opt_flags: ::core::ffi::c_int,
 ) {
-    expand_option_flags = opt_flags;
+    expand_option_flags.set(opt_flags);
     (*xp).xp_context = EXPAND_SETTINGS as ::core::ffi::c_int;
     if *arg as ::core::ffi::c_int == NUL {
         (*xp).xp_pattern = arg;
@@ -11587,9 +11617,9 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        expand_option_name[2 as ::core::ffi::c_int as usize] =
+        (*expand_option_name.ptr())[2 as ::core::ffi::c_int as usize] =
             (-key & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
-        expand_option_name[3 as ::core::ffi::c_int as usize] =
+        (*expand_option_name.ptr())[3 as ::core::ffi::c_int as usize] =
             (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
                 as uint8_t as ::core::ffi::c_char;
     } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -11607,9 +11637,9 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        expand_option_name[2 as ::core::ffi::c_int as usize] =
+        (*expand_option_name.ptr())[2 as ::core::ffi::c_int as usize] =
             *p.offset(-2 as ::core::ffi::c_int as isize);
-        expand_option_name[3 as ::core::ffi::c_int as usize] =
+        (*expand_option_name.ptr())[3 as ::core::ffi::c_int as usize] =
             *p.offset(-1 as ::core::ffi::c_int as isize);
     } else {
         while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -11633,13 +11663,13 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
             (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
             return;
         }
-        flags = options[opt_idx as usize].flags;
+        flags = (*options.ptr())[opt_idx as usize].flags;
         if option_has_type(opt_idx, kOptValTypeBoolean) {
             (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
             return;
         }
     }
-    expand_option_append = false_0 != 0;
+    expand_option_append.set(false_0 != 0);
     let mut expand_option_subtract: bool = false_0 != 0;
     if (nextchar as ::core::ffi::c_int == '-' as ::core::ffi::c_int
         || nextchar as ::core::ffi::c_int == '+' as ::core::ffi::c_int
@@ -11653,7 +11683,7 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         if nextchar as ::core::ffi::c_int == '+' as ::core::ffi::c_int
             || nextchar as ::core::ffi::c_int == '^' as ::core::ffi::c_int
         {
-            expand_option_append = true_0 != 0;
+            expand_option_append.set(true_0 != 0);
         }
         p = p.offset(1);
         nextchar = '=' as ::core::ffi::c_char;
@@ -11666,31 +11696,34 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         return;
     }
     if is_term_option {
-        expand_option_idx = kOptInvalid;
+        expand_option_idx.set(kOptInvalid);
     } else {
-        expand_option_idx = opt_idx;
+        expand_option_idx.set(opt_idx);
     }
     (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
-    expand_option_start_col = p
-        .offset(1 as ::core::ffi::c_int as isize)
-        .offset_from((*xp).xp_line) as ::core::ffi::c_int;
-    if options[opt_idx as usize].var == &raw mut p_syn as *mut ::core::ffi::c_void {
+    expand_option_start_col.set(
+        p.offset(1 as ::core::ffi::c_int as isize)
+            .offset_from((*xp).xp_line) as ::core::ffi::c_int,
+    );
+    if (*options.ptr())[opt_idx as usize].var == p_syn.ptr() as *mut ::core::ffi::c_void {
         (*xp).xp_context = EXPAND_OWNSYNTAX as ::core::ffi::c_int;
         return;
     }
-    if options[opt_idx as usize].var == &raw mut p_ft as *mut ::core::ffi::c_void {
+    if (*options.ptr())[opt_idx as usize].var == p_ft.ptr() as *mut ::core::ffi::c_void {
         (*xp).xp_context = EXPAND_FILETYPE as ::core::ffi::c_int;
         return;
     }
-    if options[opt_idx as usize].var == &raw mut p_keymap as *mut ::core::ffi::c_void {
+    if (*options.ptr())[opt_idx as usize].var == p_keymap.ptr() as *mut ::core::ffi::c_void {
         (*xp).xp_context = EXPAND_KEYMAP as ::core::ffi::c_int;
         return;
     }
     if expand_option_subtract {
         (*xp).xp_context = EXPAND_SETTING_SUBTRACT as ::core::ffi::c_int;
         return;
-    } else if expand_option_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && options[expand_option_idx as usize].opt_expand_cb.is_some()
+    } else if expand_option_idx.get() as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
+        && (*options.ptr())[expand_option_idx.get() as usize]
+            .opt_expand_cb
+            .is_some()
     {
         (*xp).xp_context = EXPAND_STRING_SETTING as ::core::ffi::c_int;
     } else if *(*xp).xp_pattern as ::core::ffi::c_int == NUL {
@@ -11705,18 +11738,18 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         return;
     }
     if flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t != 0 {
-        p = options[opt_idx as usize].var as *mut ::core::ffi::c_char;
-        if p == &raw mut p_bdir as *mut ::core::ffi::c_char
-            || p == &raw mut p_dir as *mut ::core::ffi::c_char
-            || p == &raw mut p_path as *mut ::core::ffi::c_char
-            || p == &raw mut p_pp as *mut ::core::ffi::c_char
-            || p == &raw mut p_rtp as *mut ::core::ffi::c_char
-            || p == &raw mut p_cdpath as *mut ::core::ffi::c_char
-            || p == &raw mut p_vdir as *mut ::core::ffi::c_char
+        p = (*options.ptr())[opt_idx as usize].var as *mut ::core::ffi::c_char;
+        if p == p_bdir.ptr() as *mut ::core::ffi::c_char
+            || p == p_dir.ptr() as *mut ::core::ffi::c_char
+            || p == p_path.ptr() as *mut ::core::ffi::c_char
+            || p == p_pp.ptr() as *mut ::core::ffi::c_char
+            || p == p_rtp.ptr() as *mut ::core::ffi::c_char
+            || p == p_cdpath.ptr() as *mut ::core::ffi::c_char
+            || p == p_vdir.ptr() as *mut ::core::ffi::c_char
         {
             (*xp).xp_context = EXPAND_DIRECTORIES as ::core::ffi::c_int;
-            if p == &raw mut p_path as *mut ::core::ffi::c_char
-                || p == &raw mut p_cdpath as *mut ::core::ffi::c_char
+            if p == p_path.ptr() as *mut ::core::ffi::c_char
+                || p == p_cdpath.ptr() as *mut ::core::ffi::c_char
             {
                 (*xp).xp_backslash = XP_BS_THREE as ::core::ffi::c_int;
             } else {
@@ -11724,7 +11757,7 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
             }
         } else {
             (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
-            if p == &raw mut p_tags as *mut ::core::ffi::c_char {
+            if p == p_tags.ptr() as *mut ::core::ffi::c_char {
                 (*xp).xp_backslash = XP_BS_THREE as ::core::ffi::c_int;
             } else {
                 (*xp).xp_backslash = XP_BS_ONE as ::core::ffi::c_int;
@@ -11771,7 +11804,7 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
     if flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0 {
         (*xp).xp_pattern = argend;
     }
-    if options[opt_idx as usize].var == &raw mut p_sps as *mut ::core::ffi::c_void {
+    if (*options.ptr())[opt_idx as usize].var == p_sps.ptr() as *mut ::core::ffi::c_void {
         if strncmp(
             (*xp).xp_pattern,
             b"file:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -11780,7 +11813,10 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         {
             (*xp).xp_pattern = (*xp).xp_pattern.offset(5 as ::core::ffi::c_int as isize);
             return;
-        } else if options[expand_option_idx as usize].opt_expand_cb.is_some() {
+        } else if (*options.ptr())[expand_option_idx.get() as usize]
+            .opt_expand_cb
+            .is_some()
+        {
             (*xp).xp_context = EXPAND_STRING_SETTING as ::core::ffi::c_int;
         }
     }
@@ -11826,8 +11862,9 @@ pub unsafe extern "C" fn ExpandSettings(
 ) -> ::core::ffi::c_int {
     let mut num_normal: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut names: [*mut ::core::ffi::c_char; 1] =
-        [b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char];
+    static names: GlobalCell<[*mut ::core::ffi::c_char; 1]> = GlobalCell::new([b"all\0".as_ptr()
+        as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char]);
     let mut ic: ::core::ffi::c_int = (*regmatch).rm_ic as ::core::ffi::c_int;
     let mut fuzmatch: *mut fuzmatch_str_T = ::core::ptr::null_mut::<fuzmatch_str_T>();
     let fuzzy: bool = can_fuzzy as ::core::ffi::c_int != 0
@@ -11847,7 +11884,7 @@ pub unsafe extern "C" fn ExpandSettings(
                     ) as ::core::ffi::c_int
             {
                 if match_str(
-                    names[match_0 as usize] as *mut ::core::ffi::c_char,
+                    (*names.ptr())[match_0 as usize] as *mut ::core::ffi::c_char,
                     regmatch,
                     *matches,
                     count,
@@ -11868,7 +11905,7 @@ pub unsafe extern "C" fn ExpandSettings(
         let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut opt_idx: OptIndex = kOptAleph;
         while (opt_idx as ::core::ffi::c_int) < kOptCount {
-            str = options[opt_idx as usize].fullname;
+            str = (*options.ptr())[opt_idx as usize].fullname;
             if !is_option_hidden(opt_idx) {
                 if !((*xp).xp_context == EXPAND_BOOL_SETTINGS as ::core::ffi::c_int
                     && !option_has_type(opt_idx, kOptValTypeBoolean))
@@ -11889,9 +11926,12 @@ pub unsafe extern "C" fn ExpandSettings(
                             count += 1;
                         }
                     } else if !fuzzy
-                        && !options[opt_idx as usize].shortname.is_null()
-                        && vim_regexec(regmatch, options[opt_idx as usize].shortname, 0 as colnr_T)
-                            as ::core::ffi::c_int
+                        && !(*options.ptr())[opt_idx as usize].shortname.is_null()
+                        && vim_regexec(
+                            regmatch,
+                            (*options.ptr())[opt_idx as usize].shortname,
+                            0 as colnr_T,
+                        ) as ::core::ffi::c_int
                             != 0
                     {
                         if loop_0 == 0 as ::core::ffi::c_int {
@@ -11935,7 +11975,7 @@ pub unsafe extern "C" fn ExpandSettings(
 unsafe extern "C" fn escape_option_str_cmdline(
     mut var: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    let mut buf: *mut ::core::ffi::c_char = vim_strsave_escaped(var, escape_chars);
+    let mut buf: *mut ::core::ffi::c_char = vim_strsave_escaped(var, escape_chars.get());
     return buf;
 }
 #[no_mangle]
@@ -11947,15 +11987,17 @@ pub unsafe extern "C" fn ExpandOldSetting(
     *numMatches = 0 as ::core::ffi::c_int;
     *matches = xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>())
         as *mut *mut ::core::ffi::c_char;
-    if expand_option_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
-        expand_option_idx = find_option(&raw mut expand_option_name as *mut ::core::ffi::c_char);
+    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+        expand_option_idx.set(find_option(
+            expand_option_name.ptr() as *mut ::core::ffi::c_char
+        ));
     }
-    if expand_option_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+    if expand_option_idx.get() as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
         option_value2string(
-            (&raw mut options as *mut vimoption_T).offset(expand_option_idx as isize),
-            expand_option_flags,
+            (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
+            expand_option_flags.get(),
         );
-        var = &raw mut NameBuff as *mut ::core::ffi::c_char;
+        var = NameBuff.ptr() as *mut ::core::ffi::c_char;
     } else {
         var = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
@@ -11971,35 +12013,37 @@ pub unsafe extern "C" fn ExpandStringSetting(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if expand_option_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int
-        || options[expand_option_idx as usize].opt_expand_cb.is_none()
+    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int
+        || (*options.ptr())[expand_option_idx.get() as usize]
+            .opt_expand_cb
+            .is_none()
     {
         return FAIL;
     }
     let mut args: optexpand_T = optexpand_T {
         oe_varp: get_varp_scope(
-            (&raw mut options as *mut vimoption_T).offset(expand_option_idx as isize),
-            expand_option_flags,
+            (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
+            expand_option_flags.get(),
         ) as *mut ::core::ffi::c_char,
-        oe_idx: expand_option_idx,
+        oe_idx: expand_option_idx.get(),
         oe_opt_value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        oe_append: expand_option_append,
+        oe_append: expand_option_append.get(),
         oe_include_orig_val: false,
         oe_regmatch: regmatch,
         oe_xp: xp,
-        oe_set_arg: (*xp).xp_line.offset(expand_option_start_col as isize),
+        oe_set_arg: (*xp).xp_line.offset(expand_option_start_col.get() as isize),
     };
     args.oe_include_orig_val =
-        !expand_option_append && *args.oe_set_arg as ::core::ffi::c_int == NUL;
+        !expand_option_append.get() && *args.oe_set_arg as ::core::ffi::c_int == NUL;
     option_value2string(
-        (&raw mut options as *mut vimoption_T).offset(expand_option_idx as isize),
-        expand_option_flags,
+        (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
+        expand_option_flags.get(),
     );
-    let mut var: *mut ::core::ffi::c_char = &raw mut NameBuff as *mut ::core::ffi::c_char;
+    let mut var: *mut ::core::ffi::c_char = NameBuff.ptr() as *mut ::core::ffi::c_char;
     let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(var);
     args.oe_opt_value = buf;
     let mut num_ret: ::core::ffi::c_int =
-        options[expand_option_idx as usize]
+        (*options.ptr())[expand_option_idx.get() as usize]
             .opt_expand_cb
             .expect("non-null function pointer")(&raw mut args, numMatches, matches);
     xfree(buf as *mut ::core::ffi::c_void);
@@ -12012,14 +12056,17 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if expand_option_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
         return ExpandOldSetting(numMatches, matches);
     }
-    let mut option_val: *mut ::core::ffi::c_char =
-        *(get_option_varp_scope_from(expand_option_idx, expand_option_flags, curbuf, curwin)
-            as *mut *mut ::core::ffi::c_char);
-    let mut option_flags: uint32_t = options[expand_option_idx as usize].flags;
-    if option_has_type(expand_option_idx, kOptValTypeNumber) {
+    let mut option_val: *mut ::core::ffi::c_char = *(get_option_varp_scope_from(
+        expand_option_idx.get(),
+        expand_option_flags.get(),
+        curbuf.get(),
+        curwin.get(),
+    ) as *mut *mut ::core::ffi::c_char);
+    let mut option_flags: uint32_t = (*options.ptr())[expand_option_idx.get() as usize].flags;
+    if option_has_type(expand_option_idx.get(), kOptValTypeNumber) {
         return ExpandOldSetting(numMatches, matches);
     } else if option_flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
         if *option_val as ::core::ffi::c_int == NUL {
@@ -12130,19 +12177,19 @@ unsafe extern "C" fn option_value2string(
         let mut wc: OptInt = 0 as OptInt;
         if wc_use_keyname(varp, &raw mut wc) != 0 {
             xstrlcpy(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 get_special_key_name(wc as ::core::ffi::c_int, 0 as ::core::ffi::c_int),
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
             );
         } else if wc != 0 as OptInt {
             xstrlcpy(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 transchar(wc as ::core::ffi::c_int),
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
             );
         } else {
             snprintf(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
                 b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
                 *(varp as *mut OptInt),
@@ -12154,13 +12201,13 @@ unsafe extern "C" fn option_value2string(
             home_replace(
                 ::core::ptr::null::<buf_T>(),
                 varp as *const ::core::ffi::c_char,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 MAXPATHL as size_t,
                 false_0 != 0,
             );
         } else {
             xstrlcpy(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 varp as *const ::core::ffi::c_char,
                 MAXPATHL as size_t,
             );
@@ -12171,7 +12218,7 @@ unsafe extern "C" fn wc_use_keyname(
     mut varp: *const ::core::ffi::c_void,
     mut wcp: *mut OptInt,
 ) -> ::core::ffi::c_int {
-    if varp as *mut OptInt == &raw mut p_wc || varp as *mut OptInt == &raw mut p_wcm {
+    if varp as *mut OptInt == p_wc.ptr() || varp as *mut OptInt == p_wcm.ptr() {
         *wcp = *(varp as *mut OptInt);
         if *wcp < 0 as OptInt
             || find_special_key_in_table(*wcp as ::core::ffi::c_int) >= 0 as ::core::ffi::c_int
@@ -12183,9 +12230,9 @@ unsafe extern "C" fn wc_use_keyname(
 }
 #[no_mangle]
 pub unsafe extern "C" fn shortmess(mut x: ::core::ffi::c_int) -> bool {
-    return !p_shm.is_null()
-        && (!vim_strchr(p_shm, x).is_null()
-            || !vim_strchr(p_shm, 'a' as ::core::ffi::c_int).is_null() && {
+    return !(*p_shm.ptr()).is_null()
+        && (!vim_strchr(p_shm.get(), x).is_null()
+            || !vim_strchr(p_shm.get(), 'a' as ::core::ffi::c_int).is_null() && {
                 let mut c2rust_lvalue: [::core::ffi::c_char; 5] = [
                     SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
                     SHM_MOD as ::core::ffi::c_int as ::core::ffi::c_char,
@@ -12227,7 +12274,9 @@ pub unsafe extern "C" fn option_was_set(mut opt_idx: OptIndex) -> bool {
             );
         }
     };
-    return options[opt_idx as usize].flags & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0;
+    return (*options.ptr())[opt_idx as usize].flags
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
@@ -12242,9 +12291,9 @@ pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
             );
         }
     };
-    options[opt_idx as usize].flags = (options[opt_idx as usize].flags as ::core::ffi::c_uint
-        & !(kOptFlagWasSet as ::core::ffi::c_int as ::core::ffi::c_uint))
-        as uint32_t;
+    (*options.ptr())[opt_idx as usize].flags =
+        ((*options.ptr())[opt_idx as usize].flags as ::core::ffi::c_uint
+            & !(kOptFlagWasSet as ::core::ffi::c_int as ::core::ffi::c_uint)) as uint32_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn fill_culopt_flags(
@@ -12320,12 +12369,12 @@ pub unsafe extern "C" fn fill_culopt_flags(
 }
 #[no_mangle]
 pub unsafe extern "C" fn magic_isset() -> bool {
-    match magic_overruled as ::core::ffi::c_uint {
+    match magic_overruled.get() as ::core::ffi::c_uint {
         1 => return true_0 != 0,
         2 => return false_0 != 0,
         0 | _ => {}
     }
-    return p_magic != 0;
+    return p_magic.get() != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn option_set_callback_func(
@@ -12382,32 +12431,36 @@ unsafe extern "C" fn didset_options_sctx(
 ) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while *buf.offset(i as isize) != kOptInvalid as ::core::ffi::c_int {
-        set_option_sctx(*buf.offset(i as isize) as OptIndex, opt_flags, current_sctx);
+        set_option_sctx(
+            *buf.offset(i as isize) as OptIndex,
+            opt_flags,
+            current_sctx.get(),
+        );
         i += 1;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn can_bs(mut what: ::core::ffi::c_int) -> bool {
-    if what == BS_START && bt_prompt(curbuf) as ::core::ffi::c_int != 0 {
+    if what == BS_START && bt_prompt(curbuf.get()) as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
-    if *p_bs as ::core::ffi::c_int == '2' as ::core::ffi::c_int {
+    if *p_bs.get() as ::core::ffi::c_int == '2' as ::core::ffi::c_int {
         return what != BS_NOSTOP;
     }
-    return !vim_strchr(p_bs, what).is_null();
+    return !vim_strchr(p_bs.get(), what).is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_bkc_flags(mut buf: *mut buf_T) -> ::core::ffi::c_uint {
     return if (*buf).b_bkc_flags != 0 {
         (*buf).b_bkc_flags
     } else {
-        bkc_flags
+        bkc_flags.get()
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_flp_value(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
     if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp as ::core::ffi::c_int == NUL {
-        return p_flp;
+        return p_flp.get();
     }
     return (*buf).b_p_flp;
 }
@@ -12416,7 +12469,7 @@ pub unsafe extern "C" fn get_ve_flags(mut wp: *mut win_T) -> ::core::ffi::c_uint
     return (if (*wp).w_onebuf_opt.wo_ve_flags != 0 {
         (*wp).w_onebuf_opt.wo_ve_flags
     } else {
-        ve_flags
+        ve_flags.get()
     }) & !((kOptVeFlagNone as ::core::ffi::c_int | kOptVeFlagNoneU as ::core::ffi::c_int)
         as ::core::ffi::c_uint);
 }
@@ -12425,14 +12478,14 @@ pub unsafe extern "C" fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ff
     if (*win).w_onebuf_opt.wo_sbr.is_null()
         || *(*win).w_onebuf_opt.wo_sbr as ::core::ffi::c_int == NUL
     {
-        return p_sbr;
+        return p_sbr.get();
     }
     if strcmp(
         (*win).w_onebuf_opt.wo_sbr,
         b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
-        return &raw mut empty_string_option as *mut ::core::ffi::c_char;
+        return empty_string_option.ptr() as *mut ::core::ffi::c_char;
     }
     return (*win).w_onebuf_opt.wo_sbr;
 }
@@ -12476,7 +12529,7 @@ pub unsafe extern "C" fn get_fileformat_force(
 }
 #[no_mangle]
 pub unsafe extern "C" fn default_fileformat() -> ::core::ffi::c_int {
-    match *p_ffs as ::core::ffi::c_int {
+    match *p_ffs.get() as ::core::ffi::c_int {
         109 => return EOL_MAC,
         100 => return EOL_DOS,
         _ => {}
@@ -12514,9 +12567,9 @@ pub unsafe extern "C" fn set_fileformat(
             0 as scid_T,
         );
     }
-    redraw_buf_status_later(curbuf);
-    redraw_tabline = true_0 != 0;
-    need_maketitle = true_0 != 0;
+    redraw_buf_status_later(curbuf.get());
+    redraw_tabline.set(true_0 != 0);
+    need_maketitle.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn skip_to_option_part(
@@ -12577,7 +12630,7 @@ pub unsafe extern "C" fn copy_option_part(
 #[no_mangle]
 pub unsafe extern "C" fn csh_like_shell() -> ::core::ffi::c_int {
     return !strstr(
-        path_tail(p_sh),
+        path_tail(p_sh.get()),
         b"csh\0".as_ptr() as *const ::core::ffi::c_char,
     )
     .is_null() as ::core::ffi::c_int;
@@ -12585,7 +12638,7 @@ pub unsafe extern "C" fn csh_like_shell() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn fish_like_shell() -> bool {
     return !strstr(
-        path_tail(p_sh),
+        path_tail(p_sh.get()),
         b"fish\0".as_ptr() as *const ::core::ffi::c_char,
     )
     .is_null();
@@ -12596,7 +12649,7 @@ pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut 
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
         let mut opt: *mut vimoption_T =
-            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
         if bufopt != 0 && option_has_scope(opt_idx, kOptScopeBuf) as ::core::ffi::c_int != 0
             || bufopt == 0 && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0
         {
@@ -12613,11 +12666,13 @@ pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut 
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_scrolloff_value(mut wp: *mut win_T) -> int64_t {
-    if State & MODE_TERMINAL as ::core::ffi::c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
+    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+        && !(*(*wp).w_buffer).terminal.is_null()
+    {
         return 0 as int64_t;
     }
     return if (*wp).w_onebuf_opt.wo_so < 0 as OptInt {
-        p_so as int64_t
+        p_so.get() as int64_t
     } else {
         (*wp).w_onebuf_opt.wo_so as int64_t
     };
@@ -12625,7 +12680,7 @@ pub unsafe extern "C" fn get_scrolloff_value(mut wp: *mut win_T) -> int64_t {
 #[no_mangle]
 pub unsafe extern "C" fn get_sidescrolloff_value(mut wp: *mut win_T) -> int64_t {
     return if (*wp).w_onebuf_opt.wo_siso < 0 as OptInt {
-        p_siso as int64_t
+        p_siso.get() as int64_t
     } else {
         (*wp).w_onebuf_opt.wo_siso as int64_t
     };
@@ -12655,7 +12710,7 @@ pub unsafe extern "C" fn get_vimoption(
         };
     }
     return vimoption2dict(
-        (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+        (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
         opt_flags,
         buf,
         win,
@@ -12668,16 +12723,16 @@ pub unsafe extern "C" fn get_all_vimoptions(mut arena: *mut Arena) -> Dict {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
         let mut opt_dict: Dict = vimoption2dict(
-            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
             OPT_GLOBAL as ::core::ffi::c_int,
-            curbuf,
-            curwin,
+            curbuf.get(),
+            curwin.get(),
             arena,
         );
         let c2rust_fresh27 = retval.size;
         retval.size = retval.size.wrapping_add(1);
         *retval.items.offset(c2rust_fresh27 as isize) = key_value_pair {
-            key: cstr_as_string(options[opt_idx as usize].fullname),
+            key: cstr_as_string((*options.ptr())[opt_idx as usize].fullname),
             value: object {
                 type_0: kObjectTypeDict,
                 data: C2Rust_Unnamed { dict: opt_dict },
@@ -12867,32 +12922,34 @@ unsafe extern "C" fn vimoption2dict(
     };
     return dict;
 }
-static mut options: [vimoption_T; 374] = [vimoption_T {
-    fullname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    shortname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    flags: 0,
-    type_0: kOptValTypeBoolean,
-    scope_flags: 0,
-    var: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
-    scope_idx: [0; 3],
-    immutable: false,
-    values: ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
-    values_len: 0,
-    opt_did_set_cb: None,
-    opt_expand_cb: None,
-    def_val: OptVal {
+static options: GlobalCell<[vimoption_T; 374]> = GlobalCell::new(
+    [vimoption_T {
+        fullname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        shortname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        flags: 0,
         type_0: kOptValTypeBoolean,
-        data: OptValData { boolean: kFalse },
-    },
-    script_ctx: sctx_T {
-        sc_sid: 0,
-        sc_seq: 0,
-        sc_lnum: 0,
-        sc_chan: 0,
-    },
-}; 374];
-static mut option_hash_elems: [C2Rust_Unnamed_38; 719] = [
+        scope_flags: 0,
+        var: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
+        scope_idx: [0; 3],
+        immutable: false,
+        values: ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
+        values_len: 0,
+        opt_did_set_cb: None,
+        opt_expand_cb: None,
+        def_val: OptVal {
+            type_0: kOptValTypeBoolean,
+            data: OptValData { boolean: kFalse },
+        },
+        script_ctx: sctx_T {
+            sc_sid: 0,
+            sc_seq: 0,
+            sc_lnum: 0,
+            sc_chan: 0,
+        },
+    }; 374],
+);
+static option_hash_elems: GlobalCell<[C2Rust_Unnamed_38; 719]> = GlobalCell::new([
     C2Rust_Unnamed_38 {
         name: b"wa\0".as_ptr() as *const ::core::ffi::c_char,
         opt_idx: kOptWriteany,
@@ -15769,7 +15826,7 @@ static mut option_hash_elems: [C2Rust_Unnamed_38; 719] = [
         name: b"autocompletetimeout\0".as_ptr() as *const ::core::ffi::c_char,
         opt_idx: kOptAutocompletetimeout,
     },
-];
+]);
 unsafe extern "C" fn find_option_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -16724,7 +16781,7 @@ unsafe extern "C" fn find_option_hash(
     while i < high {
         if memcmp(
             str as *const ::core::ffi::c_void,
-            option_hash_elems[i as usize].name as *const ::core::ffi::c_void,
+            (*option_hash_elems.ptr())[i as usize].name as *const ::core::ffi::c_void,
             len,
         ) == 0
         {
@@ -16742,7 +16799,7 @@ pub const PROJECT_NAME: [::core::ffi::c_char; 5] =
     unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0") };
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
-    options = [
+    options.set([
         vimoption_T {
             fullname: b"aleph\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
@@ -16753,7 +16810,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(0 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -16791,7 +16848,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ari as *mut ::core::ffi::c_void,
+            var: p_ari.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAllowrevins as ::core::ffi::c_int as ssize_t,
@@ -16825,7 +16882,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ambw as *mut ::core::ffi::c_void,
+            var: p_ambw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAmbiwidth as ::core::ffi::c_int as ssize_t,
@@ -16833,7 +16890,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_ambw_values as *mut *const ::core::ffi::c_char,
+            values: opt_ambw_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_ambiwidth
@@ -16913,7 +16970,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_arshape as *mut ::core::ffi::c_void,
+            var: p_arshape.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptArabicshape as ::core::ffi::c_int as ssize_t,
@@ -16946,7 +17003,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_acd as *mut ::core::ffi::c_void,
+            var: p_acd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutochdir as ::core::ffi::c_int as ssize_t,
@@ -16983,7 +17040,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ac as *mut ::core::ffi::c_void,
+            var: p_ac.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutocomplete as ::core::ffi::c_int as ssize_t,
@@ -17016,7 +17073,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_acl as *mut ::core::ffi::c_void,
+            var: p_acl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutocompletedelay as ::core::ffi::c_int as ssize_t,
@@ -17051,7 +17108,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_act as *mut ::core::ffi::c_void,
+            var: p_act.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutocompletetimeout as ::core::ffi::c_int as ssize_t,
@@ -17086,7 +17143,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ai as *mut ::core::ffi::c_void,
+            var: p_ai.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17120,7 +17177,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ar as *mut ::core::ffi::c_void,
+            var: p_ar.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutoread as ::core::ffi::c_int as ssize_t,
@@ -17153,7 +17210,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_aw as *mut ::core::ffi::c_void,
+            var: p_aw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutowrite as ::core::ffi::c_int as ssize_t,
@@ -17186,7 +17243,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_awa as *mut ::core::ffi::c_void,
+            var: p_awa.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptAutowriteall as ::core::ffi::c_int as ssize_t,
@@ -17219,7 +17276,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bg as *mut ::core::ffi::c_void,
+            var: p_bg.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackground as ::core::ffi::c_int as ssize_t,
@@ -17227,7 +17284,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bg_values as *mut *const ::core::ffi::c_char,
+            values: opt_bg_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_background
@@ -17270,7 +17327,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bs as *mut ::core::ffi::c_void,
+            var: p_bs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackspace as ::core::ffi::c_int as ssize_t,
@@ -17278,7 +17335,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bs_values as *mut *const ::core::ffi::c_char,
+            values: opt_bs_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 4 as size_t,
             opt_did_set_cb: Some(
                 did_set_backspace
@@ -17320,7 +17377,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bk as *mut ::core::ffi::c_void,
+            var: p_bk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackup as ::core::ffi::c_int as ssize_t,
@@ -17355,15 +17412,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bkc as *mut ::core::ffi::c_void,
-            flags_var: &raw mut bkc_flags,
+            var: p_bkc.ptr() as *mut ::core::ffi::c_void,
+            flags_var: bkc_flags.ptr(),
             scope_idx: [
                 kGlobalOptBackupcopy as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptBackupcopy as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bkc_values as *mut *const ::core::ffi::c_char,
+            values: opt_bkc_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 5 as size_t,
             opt_did_set_cb: Some(
                 did_set_backupcopy
@@ -17409,7 +17466,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bdir as *mut ::core::ffi::c_void,
+            var: p_bdir.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackupdir as ::core::ffi::c_int as ssize_t,
@@ -17450,7 +17507,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bex as *mut ::core::ffi::c_void,
+            var: p_bex.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackupext as ::core::ffi::c_int as ssize_t,
@@ -17494,7 +17551,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bsk as *mut ::core::ffi::c_void,
+            var: p_bsk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBackupskip as ::core::ffi::c_int as ssize_t,
@@ -17535,15 +17592,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bo as *mut ::core::ffi::c_void,
-            flags_var: &raw mut bo_flags,
+            var: p_bo.ptr() as *mut ::core::ffi::c_void,
+            flags_var: bo_flags.ptr(),
             scope_idx: [
                 kGlobalOptBelloff as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bo_values as *mut *const ::core::ffi::c_char,
+            values: opt_bo_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 20 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -17586,7 +17643,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bin as *mut ::core::ffi::c_void,
+            var: p_bin.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17622,7 +17679,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bomb as *mut ::core::ffi::c_void,
+            var: p_bomb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17659,7 +17716,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_breakat as *mut ::core::ffi::c_void,
+            var: p_breakat.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptBreakat as ::core::ffi::c_int as ssize_t,
@@ -17746,7 +17803,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_briopt_values as *mut *const ::core::ffi::c_char,
+            values: opt_briopt_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 5 as size_t,
             opt_did_set_cb: Some(
                 did_set_breakindentopt
@@ -17788,7 +17845,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(26 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -17832,7 +17889,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bh as *mut ::core::ffi::c_void,
+            var: p_bh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17840,7 +17897,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptBufhidden as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bh_values as *mut *const ::core::ffi::c_char,
+            values: opt_bh_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 5 as size_t,
             opt_did_set_cb: Some(
                 did_set_bufhidden
@@ -17883,7 +17940,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bl as *mut ::core::ffi::c_void,
+            var: p_bl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17920,7 +17977,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_bt as *mut ::core::ffi::c_void,
+            var: p_bt.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -17928,7 +17985,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptBuftype as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_bt_values as *mut *const ::core::ffi::c_char,
+            values: opt_bt_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 8 as size_t,
             opt_did_set_cb: Some(
                 did_set_buftype
@@ -17970,7 +18027,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_busy as *mut ::core::ffi::c_void,
+            var: p_busy.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18006,15 +18063,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cmp as *mut ::core::ffi::c_void,
-            flags_var: &raw mut cmp_flags,
+            var: p_cmp.ptr() as *mut ::core::ffi::c_void,
+            flags_var: cmp_flags.ptr(),
             scope_idx: [
                 kGlobalOptCasemap as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_cmp_values as *mut *const ::core::ffi::c_char,
+            values: opt_cmp_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -18057,7 +18114,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cdh as *mut ::core::ffi::c_void,
+            var: p_cdh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCdhome as ::core::ffi::c_int as ssize_t,
@@ -18093,7 +18150,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cdpath as *mut ::core::ffi::c_void,
+            var: p_cdpath.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCdpath as ::core::ffi::c_int as ssize_t,
@@ -18132,7 +18189,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cedit as *mut ::core::ffi::c_void,
+            var: p_cedit.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCedit as ::core::ffi::c_int as ssize_t,
@@ -18174,7 +18231,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_channel as *mut ::core::ffi::c_void,
+            var: p_channel.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18210,7 +18267,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ccv as *mut ::core::ffi::c_void,
+            var: p_ccv.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCharconvert as ::core::ffi::c_int as ssize_t,
@@ -18253,7 +18310,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_chi as *mut ::core::ffi::c_void,
+            var: p_chi.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptChistory as ::core::ffi::c_int as ssize_t,
@@ -18291,7 +18348,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cin as *mut ::core::ffi::c_void,
+            var: p_cin.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18325,7 +18382,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cink as *mut ::core::ffi::c_void,
+            var: p_cink.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18366,7 +18423,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cino as *mut ::core::ffi::c_void,
+            var: p_cino.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18410,7 +18467,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cinsd as *mut ::core::ffi::c_void,
+            var: p_cinsd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18451,7 +18508,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cinw as *mut ::core::ffi::c_void,
+            var: p_cinw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18492,15 +18549,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cb as *mut ::core::ffi::c_void,
-            flags_var: &raw mut cb_flags,
+            var: p_cb.ptr() as *mut ::core::ffi::c_void,
+            flags_var: cb_flags.ptr(),
             scope_idx: [
                 kGlobalOptClipboard as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_cb_values as *mut *const ::core::ffi::c_char,
+            values: opt_cb_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -18543,7 +18600,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ch as *mut ::core::ffi::c_void,
+            var: p_ch.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCmdheight as ::core::ffi::c_int as ssize_t,
@@ -18581,7 +18638,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cwh as *mut ::core::ffi::c_void,
+            var: p_cwh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCmdwinheight as ::core::ffi::c_int as ssize_t,
@@ -18663,7 +18720,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_columns as *mut ::core::ffi::c_void,
+            var: p_columns.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptColumns as ::core::ffi::c_int as ssize_t,
@@ -18702,7 +18759,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_com as *mut ::core::ffi::c_void,
+            var: p_com.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18746,7 +18803,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cms as *mut ::core::ffi::c_void,
+            var: p_cms.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18789,7 +18846,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(50 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -18827,7 +18884,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cpt as *mut ::core::ffi::c_void,
+            var: p_cpt.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18835,7 +18892,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptComplete as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_cpt_values as *mut *const ::core::ffi::c_char,
+            values: opt_cpt_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 15 as size_t,
             opt_did_set_cb: Some(
                 did_set_complete
@@ -18878,7 +18935,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cfu as *mut ::core::ffi::c_void,
+            var: p_cfu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -18922,7 +18979,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cia as *mut ::core::ffi::c_void,
+            var: p_cia.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCompleteitemalign as ::core::ffi::c_int as ssize_t,
@@ -18967,15 +19024,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cot as *mut ::core::ffi::c_void,
-            flags_var: &raw mut cot_flags,
+            var: p_cot.ptr() as *mut ::core::ffi::c_void,
+            flags_var: cot_flags.ptr(),
             scope_idx: [
                 kGlobalOptCompleteopt as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptCompleteopt as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_cot_values as *mut *const ::core::ffi::c_char,
+            values: opt_cot_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 11 as size_t,
             opt_did_set_cb: Some(
                 did_set_completeopt
@@ -19017,7 +19074,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(55 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -19028,7 +19085,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptCompleteslash as ::core::ffi::c_int as ssize_t,
             ],
             immutable: true_0 != 0,
-            values: &raw mut opt_csl_values as *mut *const ::core::ffi::c_char,
+            values: opt_csl_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: None,
             opt_expand_cb: None,
@@ -19060,7 +19117,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cto as *mut ::core::ffi::c_void,
+            var: p_cto.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCompletetimeout as ::core::ffi::c_int as ssize_t,
@@ -19182,7 +19239,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_confirm as *mut ::core::ffi::c_void,
+            var: p_confirm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptConfirm as ::core::ffi::c_int as ssize_t,
@@ -19215,7 +19272,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ci as *mut ::core::ffi::c_void,
+            var: p_ci.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -19249,7 +19306,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_cpo as *mut ::core::ffi::c_void,
+            var: p_cpo.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptCpoptions as ::core::ffi::c_int as ssize_t,
@@ -19410,7 +19467,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_culopt_values as *mut *const ::core::ffi::c_char,
+            values: opt_culopt_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 4 as size_t,
             opt_did_set_cb: Some(
                 did_set_cursorlineopt
@@ -19452,7 +19509,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_debug as *mut ::core::ffi::c_void,
+            var: p_debug.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDebug as ::core::ffi::c_int as ssize_t,
@@ -19460,7 +19517,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_debug_values as *mut *const ::core::ffi::c_char,
+            values: opt_debug_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -19503,7 +19560,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_def as *mut ::core::ffi::c_void,
+            var: p_def.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDefine as ::core::ffi::c_int as ssize_t,
@@ -19543,7 +19600,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_deco as *mut ::core::ffi::c_void,
+            var: p_deco.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDelcombine as ::core::ffi::c_int as ssize_t,
@@ -19580,7 +19637,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dict as *mut ::core::ffi::c_void,
+            var: p_dict.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDictionary as ::core::ffi::c_int as ssize_t,
@@ -19658,7 +19715,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dia as *mut ::core::ffi::c_void,
+            var: p_dia.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDiffanchors as ::core::ffi::c_int as ssize_t,
@@ -19702,7 +19759,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dex as *mut ::core::ffi::c_void,
+            var: p_dex.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDiffexpr as ::core::ffi::c_int as ssize_t,
@@ -19748,7 +19805,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dip as *mut ::core::ffi::c_void,
+            var: p_dip.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDiffopt as ::core::ffi::c_int as ssize_t,
@@ -19756,7 +19813,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_dip_values as *mut *const ::core::ffi::c_char,
+            values: opt_dip_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 19 as size_t,
             opt_did_set_cb: Some(
                 did_set_diffopt
@@ -19799,7 +19856,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dg as *mut ::core::ffi::c_void,
+            var: p_dg.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDigraph as ::core::ffi::c_int as ssize_t,
@@ -19836,7 +19893,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dir as *mut ::core::ffi::c_void,
+            var: p_dir.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptDirectory as ::core::ffi::c_int as ssize_t,
@@ -19878,15 +19935,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_dy as *mut ::core::ffi::c_void,
-            flags_var: &raw mut dy_flags,
+            var: p_dy.ptr() as *mut ::core::ffi::c_void,
+            flags_var: dy_flags.ptr(),
             scope_idx: [
                 kGlobalOptDisplay as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_dy_values as *mut *const ::core::ffi::c_char,
+            values: opt_dy_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 4 as size_t,
             opt_did_set_cb: Some(
                 did_set_display
@@ -19928,7 +19985,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ead as *mut ::core::ffi::c_void,
+            var: p_ead.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEadirection as ::core::ffi::c_int as ssize_t,
@@ -19936,7 +19993,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_ead_values as *mut *const ::core::ffi::c_char,
+            values: opt_ead_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -19978,7 +20035,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(78 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -20015,7 +20072,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_emoji as *mut ::core::ffi::c_void,
+            var: p_emoji.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEmoji as ::core::ffi::c_int as ssize_t,
@@ -20051,7 +20108,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_enc as *mut ::core::ffi::c_void,
+            var: p_enc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEncoding as ::core::ffi::c_int as ssize_t,
@@ -20094,7 +20151,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_eof as *mut ::core::ffi::c_void,
+            var: p_eof.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20131,7 +20188,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_eol as *mut ::core::ffi::c_void,
+            var: p_eol.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20167,7 +20224,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ea as *mut ::core::ffi::c_void,
+            var: p_ea.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEqualalways as ::core::ffi::c_int as ssize_t,
@@ -20205,7 +20262,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ep as *mut ::core::ffi::c_void,
+            var: p_ep.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEqualprg as ::core::ffi::c_int as ssize_t,
@@ -20245,7 +20302,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_eb as *mut ::core::ffi::c_void,
+            var: p_eb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptErrorbells as ::core::ffi::c_int as ssize_t,
@@ -20279,7 +20336,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ef as *mut ::core::ffi::c_void,
+            var: p_ef.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptErrorfile as ::core::ffi::c_int as ssize_t,
@@ -20320,7 +20377,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_efm as *mut ::core::ffi::c_void,
+            var: p_efm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptErrorformat as ::core::ffi::c_int as ssize_t,
@@ -20360,7 +20417,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ei as *mut ::core::ffi::c_void,
+            var: p_ei.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptEventignore as ::core::ffi::c_int as ssize_t,
@@ -20461,7 +20518,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_et as *mut ::core::ffi::c_void,
+            var: p_et.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20495,7 +20552,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_exrc as *mut ::core::ffi::c_void,
+            var: p_exrc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptExrc as ::core::ffi::c_int as ssize_t,
@@ -20530,7 +20587,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fenc as *mut ::core::ffi::c_void,
+            var: p_fenc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20581,7 +20638,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fencs as *mut ::core::ffi::c_void,
+            var: p_fencs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFileencodings as ::core::ffi::c_int as ssize_t,
@@ -20630,7 +20687,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ff as *mut ::core::ffi::c_void,
+            var: p_ff.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20638,7 +20695,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptFileformat as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_ff_values as *mut *const ::core::ffi::c_char,
+            values: opt_ff_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_fileformat
@@ -20681,7 +20738,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ffs as *mut ::core::ffi::c_void,
+            var: p_ffs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFileformats as ::core::ffi::c_int as ssize_t,
@@ -20731,7 +20788,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fic as *mut ::core::ffi::c_void,
+            var: p_fic.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFileignorecase as ::core::ffi::c_int as ssize_t,
@@ -20765,7 +20822,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ft as *mut ::core::ffi::c_void,
+            var: p_ft.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20812,7 +20869,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fcs as *mut ::core::ffi::c_void,
+            var: p_fcs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFillchars as ::core::ffi::c_int as ssize_t,
@@ -20864,7 +20921,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ffu as *mut ::core::ffi::c_void,
+            var: p_ffu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFindfunc as ::core::ffi::c_int as ssize_t,
@@ -20908,7 +20965,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fixeol as *mut ::core::ffi::c_void,
+            var: p_fixeol.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -20946,7 +21003,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fcl as *mut ::core::ffi::c_void,
+            var: p_fcl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFoldclose as ::core::ffi::c_int as ssize_t,
@@ -20954,7 +21011,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_fcl_values as *mut *const ::core::ffi::c_char,
+            values: opt_fcl_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 1 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -21005,7 +21062,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_fdc_values as *mut *const ::core::ffi::c_char,
+            values: opt_fdc_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 20 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -21209,7 +21266,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fdls as *mut ::core::ffi::c_void,
+            var: p_fdls.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFoldlevelstart as ::core::ffi::c_int as ssize_t,
@@ -21298,7 +21355,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_fdm_values as *mut *const ::core::ffi::c_char,
+            values: opt_fdm_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_foldmethod
@@ -21420,15 +21477,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fdo as *mut ::core::ffi::c_void,
-            flags_var: &raw mut fdo_flags,
+            var: p_fdo.ptr() as *mut ::core::ffi::c_void,
+            flags_var: fdo_flags.ptr(),
             scope_idx: [
                 kGlobalOptFoldopen as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_fdo_values as *mut *const ::core::ffi::c_char,
+            values: opt_fdo_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 11 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -21516,7 +21573,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fex as *mut ::core::ffi::c_void,
+            var: p_fex.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -21559,7 +21616,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_flp as *mut ::core::ffi::c_void,
+            var: p_flp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -21600,7 +21657,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fo as *mut ::core::ffi::c_void,
+            var: p_fo.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -21651,7 +21708,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fp as *mut ::core::ffi::c_void,
+            var: p_fp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFormatprg as ::core::ffi::c_int as ssize_t,
@@ -21693,7 +21750,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_fs as *mut ::core::ffi::c_void,
+            var: p_fs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptFsync as ::core::ffi::c_int as ssize_t,
@@ -21726,7 +21783,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_gd as *mut ::core::ffi::c_void,
+            var: p_gd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGdefault as ::core::ffi::c_int as ssize_t,
@@ -21761,7 +21818,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_gefm as *mut ::core::ffi::c_void,
+            var: p_gefm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGrepformat as ::core::ffi::c_int as ssize_t,
@@ -21802,7 +21859,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_gp as *mut ::core::ffi::c_void,
+            var: p_gp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGrepprg as ::core::ffi::c_int as ssize_t,
@@ -21843,7 +21900,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_guicursor as *mut ::core::ffi::c_void,
+            var: p_guicursor.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGuicursor as ::core::ffi::c_int as ssize_t,
@@ -21889,7 +21946,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_guifont as *mut ::core::ffi::c_void,
+            var: p_guifont.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGuifont as ::core::ffi::c_int as ssize_t,
@@ -21930,7 +21987,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_guifontwide as *mut ::core::ffi::c_void,
+            var: p_guifontwide.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptGuifontwide as ::core::ffi::c_int as ssize_t,
@@ -21971,7 +22028,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(125 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22015,7 +22072,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(126 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22059,7 +22116,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(127 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22103,7 +22160,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hf as *mut ::core::ffi::c_void,
+            var: p_hf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHelpfile as ::core::ffi::c_int as ssize_t,
@@ -22145,7 +22202,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hh as *mut ::core::ffi::c_void,
+            var: p_hh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHelpheight as ::core::ffi::c_int as ssize_t,
@@ -22184,7 +22241,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hlg as *mut ::core::ffi::c_void,
+            var: p_hlg.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHelplang as ::core::ffi::c_int as ssize_t,
@@ -22227,7 +22284,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hid as *mut ::core::ffi::c_void,
+            var: p_hid.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHidden as ::core::ffi::c_int as ssize_t,
@@ -22261,7 +22318,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hl as *mut ::core::ffi::c_void,
+            var: p_hl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHighlight as ::core::ffi::c_int as ssize_t,
@@ -22303,7 +22360,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hi as *mut ::core::ffi::c_void,
+            var: p_hi.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHistory as ::core::ffi::c_int as ssize_t,
@@ -22338,7 +22395,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(134 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22374,7 +22431,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(135 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22411,7 +22468,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_hls as *mut ::core::ffi::c_void,
+            var: p_hls.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptHlsearch as ::core::ffi::c_int as ssize_t,
@@ -22446,7 +22503,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_icon as *mut ::core::ffi::c_void,
+            var: p_icon.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIcon as ::core::ffi::c_int as ssize_t,
@@ -22482,7 +22539,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_iconstring as *mut ::core::ffi::c_void,
+            var: p_iconstring.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIconstring as ::core::ffi::c_int as ssize_t,
@@ -22525,7 +22582,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ic as *mut ::core::ffi::c_void,
+            var: p_ic.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIgnorecase as ::core::ffi::c_int as ssize_t,
@@ -22561,7 +22618,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(140 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22597,7 +22654,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(141 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -22633,7 +22690,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_iminsert as *mut ::core::ffi::c_void,
+            var: p_iminsert.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22671,7 +22728,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_imsearch as *mut ::core::ffi::c_void,
+            var: p_imsearch.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22706,7 +22763,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_icm as *mut ::core::ffi::c_void,
+            var: p_icm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInccommand as ::core::ffi::c_int as ssize_t,
@@ -22714,7 +22771,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_icm_values as *mut *const ::core::ffi::c_char,
+            values: opt_icm_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_inccommand
@@ -22757,7 +22814,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_inc as *mut ::core::ffi::c_void,
+            var: p_inc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInclude as ::core::ffi::c_int as ssize_t,
@@ -22798,7 +22855,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_inex as *mut ::core::ffi::c_void,
+            var: p_inex.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22841,7 +22898,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_is as *mut ::core::ffi::c_void,
+            var: p_is.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIncsearch as ::core::ffi::c_int as ssize_t,
@@ -22875,7 +22932,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_inde as *mut ::core::ffi::c_void,
+            var: p_inde.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22919,7 +22976,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_indk as *mut ::core::ffi::c_void,
+            var: p_indk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22959,7 +23016,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_inf as *mut ::core::ffi::c_void,
+            var: p_inf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -22992,7 +23049,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(151 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -23029,7 +23086,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_isf as *mut ::core::ffi::c_void,
+            var: p_isf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIsfname as ::core::ffi::c_int as ssize_t,
@@ -23073,7 +23130,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_isi as *mut ::core::ffi::c_void,
+            var: p_isi.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIsident as ::core::ffi::c_int as ssize_t,
@@ -23117,7 +23174,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_isk as *mut ::core::ffi::c_void,
+            var: p_isk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -23162,7 +23219,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_isp as *mut ::core::ffi::c_void,
+            var: p_isp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptIsprint as ::core::ffi::c_int as ssize_t,
@@ -23205,7 +23262,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_js as *mut ::core::ffi::c_void,
+            var: p_js.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptJoinspaces as ::core::ffi::c_int as ssize_t,
@@ -23239,15 +23296,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_jop as *mut ::core::ffi::c_void,
-            flags_var: &raw mut jop_flags,
+            var: p_jop.ptr() as *mut ::core::ffi::c_void,
+            flags_var: jop_flags.ptr(),
             scope_idx: [
                 kGlobalOptJumpoptions as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_jop_values as *mut *const ::core::ffi::c_char,
+            values: opt_jop_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -23292,7 +23349,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_keymap as *mut ::core::ffi::c_void,
+            var: p_keymap.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -23336,7 +23393,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_km as *mut ::core::ffi::c_void,
+            var: p_km.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptKeymodel as ::core::ffi::c_int as ssize_t,
@@ -23344,7 +23401,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_km_values as *mut *const ::core::ffi::c_char,
+            values: opt_km_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_keymodel
@@ -23388,7 +23445,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_kp as *mut ::core::ffi::c_void,
+            var: p_kp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptKeywordprg as ::core::ffi::c_int as ssize_t,
@@ -23430,7 +23487,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_langmap as *mut ::core::ffi::c_void,
+            var: p_langmap.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLangmap as ::core::ffi::c_int as ssize_t,
@@ -23474,7 +23531,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lm as *mut ::core::ffi::c_void,
+            var: p_lm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLangmenu as ::core::ffi::c_int as ssize_t,
@@ -23514,7 +23571,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lnr as *mut ::core::ffi::c_void,
+            var: p_lnr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLangnoremap as ::core::ffi::c_int as ssize_t,
@@ -23550,7 +23607,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lrm as *mut ::core::ffi::c_void,
+            var: p_lrm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLangremap as ::core::ffi::c_int as ssize_t,
@@ -23587,7 +23644,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ls as *mut ::core::ffi::c_void,
+            var: p_ls.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLaststatus as ::core::ffi::c_int as ssize_t,
@@ -23625,7 +23682,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lz as *mut ::core::ffi::c_void,
+            var: p_lz.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLazyredraw as ::core::ffi::c_int as ssize_t,
@@ -23730,7 +23787,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lines as *mut ::core::ffi::c_void,
+            var: p_lines.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLines as ::core::ffi::c_int as ssize_t,
@@ -23769,7 +23826,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_linespace as *mut ::core::ffi::c_void,
+            var: p_linespace.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLinespace as ::core::ffi::c_int as ssize_t,
@@ -23803,7 +23860,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lisp as *mut ::core::ffi::c_void,
+            var: p_lisp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -23840,7 +23897,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lop as *mut ::core::ffi::c_void,
+            var: p_lop.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -23848,7 +23905,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptLispoptions as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_lop_values as *mut *const ::core::ffi::c_char,
+            values: opt_lop_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_lispoptions
@@ -23892,7 +23949,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lispwords as *mut ::core::ffi::c_void,
+            var: p_lispwords.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLispwords as ::core::ffi::c_int as ssize_t,
@@ -23968,7 +24025,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lcs as *mut ::core::ffi::c_void,
+            var: p_lcs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptListchars as ::core::ffi::c_int as ssize_t,
@@ -24018,7 +24075,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_lpl as *mut ::core::ffi::c_void,
+            var: p_lpl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptLoadplugins as ::core::ffi::c_int as ssize_t,
@@ -24050,7 +24107,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_magic as *mut ::core::ffi::c_void,
+            var: p_magic.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMagic as ::core::ffi::c_int as ssize_t,
@@ -24084,7 +24141,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mef as *mut ::core::ffi::c_void,
+            var: p_mef.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMakeef as ::core::ffi::c_int as ssize_t,
@@ -24125,7 +24182,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_menc as *mut ::core::ffi::c_void,
+            var: p_menc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMakeencoding as ::core::ffi::c_int as ssize_t,
@@ -24177,7 +24234,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mp as *mut ::core::ffi::c_void,
+            var: p_mp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMakeprg as ::core::ffi::c_int as ssize_t,
@@ -24218,7 +24275,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mps as *mut ::core::ffi::c_void,
+            var: p_mps.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -24261,7 +24318,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mat as *mut ::core::ffi::c_void,
+            var: p_mat.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMatchtime as ::core::ffi::c_int as ssize_t,
@@ -24296,7 +24353,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mco as *mut ::core::ffi::c_void,
+            var: p_mco.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMaxcombine as ::core::ffi::c_int as ssize_t,
@@ -24331,7 +24388,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mfd as *mut ::core::ffi::c_void,
+            var: p_mfd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMaxfuncdepth as ::core::ffi::c_int as ssize_t,
@@ -24366,7 +24423,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mmd as *mut ::core::ffi::c_void,
+            var: p_mmd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMaxmapdepth as ::core::ffi::c_int as ssize_t,
@@ -24401,7 +24458,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mmp as *mut ::core::ffi::c_void,
+            var: p_mmp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMaxmempattern as ::core::ffi::c_int as ssize_t,
@@ -24436,7 +24493,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_msc as *mut ::core::ffi::c_void,
+            var: p_msc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMaxsearchcount as ::core::ffi::c_int as ssize_t,
@@ -24471,7 +24528,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mis as *mut ::core::ffi::c_void,
+            var: p_mis.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMenuitems as ::core::ffi::c_int as ssize_t,
@@ -24508,7 +24565,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mopt as *mut ::core::ffi::c_void,
+            var: p_mopt.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMessagesopt as ::core::ffi::c_int as ssize_t,
@@ -24516,7 +24573,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_mopt_values as *mut *const ::core::ffi::c_char,
+            values: opt_mopt_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 4 as size_t,
             opt_did_set_cb: Some(
                 did_set_messagesopt
@@ -24559,7 +24616,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_msm as *mut ::core::ffi::c_void,
+            var: p_msm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMkspellmem as ::core::ffi::c_int as ssize_t,
@@ -24602,7 +24659,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ml as *mut ::core::ffi::c_void,
+            var: p_ml.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -24636,7 +24693,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mle as *mut ::core::ffi::c_void,
+            var: p_mle.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptModelineexpr as ::core::ffi::c_int as ssize_t,
@@ -24669,7 +24726,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mls as *mut ::core::ffi::c_void,
+            var: p_mls.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptModelines as ::core::ffi::c_int as ssize_t,
@@ -24705,7 +24762,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ma as *mut ::core::ffi::c_void,
+            var: p_ma.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -24742,7 +24799,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mod as *mut ::core::ffi::c_void,
+            var: p_mod.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -24777,7 +24834,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_more as *mut ::core::ffi::c_void,
+            var: p_more.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMore as ::core::ffi::c_int as ssize_t,
@@ -24810,7 +24867,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mouse as *mut ::core::ffi::c_void,
+            var: p_mouse.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMouse as ::core::ffi::c_int as ssize_t,
@@ -24861,7 +24918,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mousef as *mut ::core::ffi::c_void,
+            var: p_mousef.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousefocus as ::core::ffi::c_int as ssize_t,
@@ -24895,7 +24952,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mh as *mut ::core::ffi::c_void,
+            var: p_mh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousehide as ::core::ffi::c_int as ssize_t,
@@ -24928,7 +24985,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mousem as *mut ::core::ffi::c_void,
+            var: p_mousem.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousemodel as ::core::ffi::c_int as ssize_t,
@@ -24936,7 +24993,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_mousem_values as *mut *const ::core::ffi::c_char,
+            values: opt_mousem_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -24979,7 +25036,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mousemev as *mut ::core::ffi::c_void,
+            var: p_mousemev.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousemoveevent as ::core::ffi::c_int as ssize_t,
@@ -25012,7 +25069,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mousescroll as *mut ::core::ffi::c_void,
+            var: p_mousescroll.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousescroll as ::core::ffi::c_int as ssize_t,
@@ -25020,7 +25077,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_mousescroll_values as *mut *const ::core::ffi::c_char,
+            values: opt_mousescroll_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_mousescroll
@@ -25063,7 +25120,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(203 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -25106,7 +25163,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_mouset as *mut ::core::ffi::c_void,
+            var: p_mouset.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptMousetime as ::core::ffi::c_int as ssize_t,
@@ -25142,7 +25199,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_nf as *mut ::core::ffi::c_void,
+            var: p_nf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -25150,7 +25207,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptNrformats as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_nf_values as *mut *const ::core::ffi::c_char,
+            values: opt_nf_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -25269,7 +25326,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ofu as *mut ::core::ffi::c_void,
+            var: p_ofu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -25312,7 +25369,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(209 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -25349,7 +25406,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_opfunc as *mut ::core::ffi::c_void,
+            var: p_opfunc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptOperatorfunc as ::core::ffi::c_int as ssize_t,
@@ -25395,7 +25452,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pp as *mut ::core::ffi::c_void,
+            var: p_pp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPackpath as ::core::ffi::c_int as ssize_t,
@@ -25438,7 +25495,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_para as *mut ::core::ffi::c_void,
+            var: p_para.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptParagraphs as ::core::ffi::c_int as ssize_t,
@@ -25478,7 +25535,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_paste as *mut ::core::ffi::c_void,
+            var: p_paste.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPaste as ::core::ffi::c_int as ssize_t,
@@ -25514,7 +25571,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(214 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -25558,7 +25615,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pex as *mut ::core::ffi::c_void,
+            var: p_pex.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPatchexpr as ::core::ffi::c_int as ssize_t,
@@ -25602,7 +25659,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pm as *mut ::core::ffi::c_void,
+            var: p_pm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPatchmode as ::core::ffi::c_int as ssize_t,
@@ -25648,7 +25705,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_path as *mut ::core::ffi::c_void,
+            var: p_path.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPath as ::core::ffi::c_int as ssize_t,
@@ -25688,7 +25745,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pi as *mut ::core::ffi::c_void,
+            var: p_pi.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -25721,7 +25778,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pvh as *mut ::core::ffi::c_void,
+            var: p_pvh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPreviewheight as ::core::ffi::c_int as ssize_t,
@@ -25792,7 +25849,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(221 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -25829,7 +25886,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pb as *mut ::core::ffi::c_void,
+            var: p_pb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPumblend as ::core::ffi::c_int as ssize_t,
@@ -25867,7 +25924,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pumborder as *mut ::core::ffi::c_void,
+            var: p_pumborder.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPumborder as ::core::ffi::c_int as ssize_t,
@@ -25875,7 +25932,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_pumborder_values as *mut *const ::core::ffi::c_char,
+            values: opt_pumborder_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 8 as size_t,
             opt_did_set_cb: Some(
                 did_set_pumborder
@@ -25917,7 +25974,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ph as *mut ::core::ffi::c_void,
+            var: p_ph.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPumheight as ::core::ffi::c_int as ssize_t,
@@ -25952,7 +26009,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pmw as *mut ::core::ffi::c_void,
+            var: p_pmw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPummaxwidth as ::core::ffi::c_int as ssize_t,
@@ -25987,7 +26044,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pw as *mut ::core::ffi::c_void,
+            var: p_pw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPumwidth as ::core::ffi::c_int as ssize_t,
@@ -26023,7 +26080,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_pyx as *mut ::core::ffi::c_void,
+            var: p_pyx.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptPyxversion as ::core::ffi::c_int as ssize_t,
@@ -26059,7 +26116,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_qftf as *mut ::core::ffi::c_void,
+            var: p_qftf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptQuickfixtextfunc as ::core::ffi::c_int as ssize_t,
@@ -26102,7 +26159,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_qe as *mut ::core::ffi::c_void,
+            var: p_qe.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -26143,7 +26200,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ro as *mut ::core::ffi::c_void,
+            var: p_ro.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -26180,15 +26237,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_rdb as *mut ::core::ffi::c_void,
-            flags_var: &raw mut rdb_flags,
+            var: p_rdb.ptr() as *mut ::core::ffi::c_void,
+            flags_var: rdb_flags.ptr(),
             scope_idx: [
                 kGlobalOptRedrawdebug as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_rdb_values as *mut *const ::core::ffi::c_char,
+            values: opt_rdb_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -26230,7 +26287,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_rdt as *mut ::core::ffi::c_void,
+            var: p_rdt.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRedrawtime as ::core::ffi::c_int as ssize_t,
@@ -26265,7 +26322,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_re as *mut ::core::ffi::c_void,
+            var: p_re.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRegexpengine as ::core::ffi::c_int as ssize_t,
@@ -26336,7 +26393,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(235 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -26371,7 +26428,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_report as *mut ::core::ffi::c_void,
+            var: p_report.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptReport as ::core::ffi::c_int as ssize_t,
@@ -26406,7 +26463,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ri as *mut ::core::ffi::c_void,
+            var: p_ri.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRevins as ::core::ffi::c_int as ssize_t,
@@ -26482,7 +26539,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_rlc_values as *mut *const ::core::ffi::c_char,
+            values: opt_rlc_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 1 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -26525,7 +26582,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ru as *mut ::core::ffi::c_void,
+            var: p_ru.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRuler as ::core::ffi::c_int as ssize_t,
@@ -26559,7 +26616,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ruf as *mut ::core::ffi::c_void,
+            var: p_ruf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRulerformat as ::core::ffi::c_int as ssize_t,
@@ -26606,7 +26663,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_rtp as *mut ::core::ffi::c_void,
+            var: p_rtp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptRuntimepath as ::core::ffi::c_int as ssize_t,
@@ -26686,7 +26743,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_scbk as *mut ::core::ffi::c_void,
+            var: p_scbk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -26760,7 +26817,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sj as *mut ::core::ffi::c_void,
+            var: p_sj.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptScrolljump as ::core::ffi::c_int as ssize_t,
@@ -26796,7 +26853,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_so as *mut ::core::ffi::c_void,
+            var: p_so.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptScrolloff as ::core::ffi::c_int as ssize_t,
@@ -26832,7 +26889,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sbo as *mut ::core::ffi::c_void,
+            var: p_sbo.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptScrollopt as ::core::ffi::c_int as ssize_t,
@@ -26840,7 +26897,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_sbo_values as *mut *const ::core::ffi::c_char,
+            values: opt_sbo_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -26882,7 +26939,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sections as *mut ::core::ffi::c_void,
+            var: p_sections.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSections as ::core::ffi::c_int as ssize_t,
@@ -26922,7 +26979,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_secure as *mut ::core::ffi::c_void,
+            var: p_secure.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSecure as ::core::ffi::c_int as ssize_t,
@@ -26955,7 +27012,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sel as *mut ::core::ffi::c_void,
+            var: p_sel.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSelection as ::core::ffi::c_int as ssize_t,
@@ -26963,7 +27020,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_sel_values as *mut *const ::core::ffi::c_char,
+            values: opt_sel_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_selection
@@ -27006,7 +27063,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_slm as *mut ::core::ffi::c_void,
+            var: p_slm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSelectmode as ::core::ffi::c_int as ssize_t,
@@ -27014,7 +27071,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_slm_values as *mut *const ::core::ffi::c_char,
+            values: opt_slm_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -27057,15 +27114,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ssop as *mut ::core::ffi::c_void,
-            flags_var: &raw mut ssop_flags,
+            var: p_ssop.ptr() as *mut ::core::ffi::c_void,
+            flags_var: ssop_flags.ptr(),
             scope_idx: [
                 kGlobalOptSessionoptions as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_ssop_values as *mut *const ::core::ffi::c_char,
+            values: opt_ssop_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 18 as size_t,
             opt_did_set_cb: Some(
                 did_set_sessionoptions
@@ -27110,7 +27167,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_shada as *mut ::core::ffi::c_void,
+            var: p_shada.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShada as ::core::ffi::c_int as ssize_t,
@@ -27156,7 +27213,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_shadafile as *mut ::core::ffi::c_void,
+            var: p_shadafile.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShadafile as ::core::ffi::c_int as ssize_t,
@@ -27197,7 +27254,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sh as *mut ::core::ffi::c_void,
+            var: p_sh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShell as ::core::ffi::c_int as ssize_t,
@@ -27238,7 +27295,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_shcf as *mut ::core::ffi::c_void,
+            var: p_shcf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellcmdflag as ::core::ffi::c_int as ssize_t,
@@ -27279,7 +27336,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sp as *mut ::core::ffi::c_void,
+            var: p_sp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellpipe as ::core::ffi::c_int as ssize_t,
@@ -27323,7 +27380,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_shq as *mut ::core::ffi::c_void,
+            var: p_shq.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellquote as ::core::ffi::c_int as ssize_t,
@@ -27364,7 +27421,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_srr as *mut ::core::ffi::c_void,
+            var: p_srr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellredir as ::core::ffi::c_int as ssize_t,
@@ -27407,7 +27464,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(261 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -27443,7 +27500,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_stmp as *mut ::core::ffi::c_void,
+            var: p_stmp.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShelltemp as ::core::ffi::c_int as ssize_t,
@@ -27477,7 +27534,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sxe as *mut ::core::ffi::c_void,
+            var: p_sxe.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellxescape as ::core::ffi::c_int as ssize_t,
@@ -27518,7 +27575,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sxq as *mut ::core::ffi::c_void,
+            var: p_sxq.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShellxquote as ::core::ffi::c_int as ssize_t,
@@ -27558,7 +27615,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sr as *mut ::core::ffi::c_void,
+            var: p_sr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShiftround as ::core::ffi::c_int as ssize_t,
@@ -27591,7 +27648,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sw as *mut ::core::ffi::c_void,
+            var: p_sw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -27630,7 +27687,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_shm as *mut ::core::ffi::c_void,
+            var: p_shm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShortmess as ::core::ffi::c_int as ssize_t,
@@ -27682,7 +27739,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sbr as *mut ::core::ffi::c_void,
+            var: p_sbr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowbreak as ::core::ffi::c_int as ssize_t,
@@ -27725,7 +27782,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sc as *mut ::core::ffi::c_void,
+            var: p_sc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowcmd as ::core::ffi::c_int as ssize_t,
@@ -27758,7 +27815,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sloc as *mut ::core::ffi::c_void,
+            var: p_sloc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowcmdloc as ::core::ffi::c_int as ssize_t,
@@ -27766,7 +27823,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_sloc_values as *mut *const ::core::ffi::c_char,
+            values: opt_sloc_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_showcmdloc
@@ -27808,7 +27865,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sft as *mut ::core::ffi::c_void,
+            var: p_sft.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowfulltag as ::core::ffi::c_int as ssize_t,
@@ -27841,7 +27898,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sm as *mut ::core::ffi::c_void,
+            var: p_sm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowmatch as ::core::ffi::c_int as ssize_t,
@@ -27874,7 +27931,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_smd as *mut ::core::ffi::c_void,
+            var: p_smd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowmode as ::core::ffi::c_int as ssize_t,
@@ -27908,7 +27965,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_stal as *mut ::core::ffi::c_void,
+            var: p_stal.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptShowtabline as ::core::ffi::c_int as ssize_t,
@@ -27946,7 +28003,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ss as *mut ::core::ffi::c_void,
+            var: p_ss.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSidescroll as ::core::ffi::c_int as ssize_t,
@@ -27982,7 +28039,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_siso as *mut ::core::ffi::c_void,
+            var: p_siso.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSidescrolloff as ::core::ffi::c_int as ssize_t,
@@ -28026,7 +28083,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_scl_values as *mut *const ::core::ffi::c_char,
+            values: opt_scl_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 22 as size_t,
             opt_did_set_cb: Some(
                 did_set_signcolumn
@@ -28068,7 +28125,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_scs as *mut ::core::ffi::c_void,
+            var: p_scs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSmartcase as ::core::ffi::c_int as ssize_t,
@@ -28101,7 +28158,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_si as *mut ::core::ffi::c_void,
+            var: p_si.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28134,7 +28191,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sta as *mut ::core::ffi::c_void,
+            var: p_sta.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSmarttab as ::core::ffi::c_int as ssize_t,
@@ -28204,7 +28261,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sts as *mut ::core::ffi::c_void,
+            var: p_sts.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28276,7 +28333,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spc as *mut ::core::ffi::c_void,
+            var: p_spc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28322,7 +28379,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spf as *mut ::core::ffi::c_void,
+            var: p_spf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28369,7 +28426,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spl as *mut ::core::ffi::c_void,
+            var: p_spl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28416,7 +28473,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spo as *mut ::core::ffi::c_void,
+            var: p_spo.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28424,7 +28481,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptSpelloptions as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_spo_values as *mut *const ::core::ffi::c_char,
+            values: opt_spo_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_spelloptions
@@ -28469,7 +28526,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sps as *mut ::core::ffi::c_void,
+            var: p_sps.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSpellsuggest as ::core::ffi::c_int as ssize_t,
@@ -28477,7 +28534,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_sps_values as *mut *const ::core::ffi::c_char,
+            values: opt_sps_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_spellsuggest
@@ -28519,7 +28576,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sb as *mut ::core::ffi::c_void,
+            var: p_sb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSplitbelow as ::core::ffi::c_int as ssize_t,
@@ -28552,7 +28609,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spk as *mut ::core::ffi::c_void,
+            var: p_spk.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSplitkeep as ::core::ffi::c_int as ssize_t,
@@ -28560,7 +28617,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_spk_values as *mut *const ::core::ffi::c_char,
+            values: opt_spk_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -28602,7 +28659,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_spr as *mut ::core::ffi::c_void,
+            var: p_spr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSplitright as ::core::ffi::c_int as ssize_t,
@@ -28635,7 +28692,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sol as *mut ::core::ffi::c_void,
+            var: p_sol.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptStartofline as ::core::ffi::c_int as ssize_t,
@@ -28714,7 +28771,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_stl as *mut ::core::ffi::c_void,
+            var: p_stl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptStatusline as ::core::ffi::c_int as ssize_t,
@@ -28759,7 +28816,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_su as *mut ::core::ffi::c_void,
+            var: p_su.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptSuffixes as ::core::ffi::c_int as ssize_t,
@@ -28800,7 +28857,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_sua as *mut ::core::ffi::c_void,
+            var: p_sua.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28841,7 +28898,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_swf as *mut ::core::ffi::c_void,
+            var: p_swf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28878,15 +28935,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_swb as *mut ::core::ffi::c_void,
-            flags_var: &raw mut swb_flags,
+            var: p_swb.ptr() as *mut ::core::ffi::c_void,
+            flags_var: swb_flags.ptr(),
             scope_idx: [
                 kGlobalOptSwitchbuf as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_swb_values as *mut *const ::core::ffi::c_char,
+            values: opt_swb_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -28929,7 +28986,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_smc as *mut ::core::ffi::c_void,
+            var: p_smc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -28965,7 +29022,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_syn as *mut ::core::ffi::c_void,
+            var: p_syn.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -29009,15 +29066,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tcl as *mut ::core::ffi::c_void,
-            flags_var: &raw mut tcl_flags,
+            var: p_tcl.ptr() as *mut ::core::ffi::c_void,
+            flags_var: tcl_flags.ptr(),
             scope_idx: [
                 kGlobalOptTabclose as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_tcl_values as *mut *const ::core::ffi::c_char,
+            values: opt_tcl_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 2 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -29060,7 +29117,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tal as *mut ::core::ffi::c_void,
+            var: p_tal.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTabline as ::core::ffi::c_int as ssize_t,
@@ -29103,7 +29160,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tpm as *mut ::core::ffi::c_void,
+            var: p_tpm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTabpagemax as ::core::ffi::c_int as ssize_t,
@@ -29139,7 +29196,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ts as *mut ::core::ffi::c_void,
+            var: p_ts.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -29177,7 +29234,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tbs as *mut ::core::ffi::c_void,
+            var: p_tbs.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTagbsearch as ::core::ffi::c_int as ssize_t,
@@ -29211,15 +29268,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tc as *mut ::core::ffi::c_void,
-            flags_var: &raw mut tc_flags,
+            var: p_tc.ptr() as *mut ::core::ffi::c_void,
+            flags_var: tc_flags.ptr(),
             scope_idx: [
                 kGlobalOptTagcase as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptTagcase as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_tc_values as *mut *const ::core::ffi::c_char,
+            values: opt_tc_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 5 as size_t,
             opt_did_set_cb: Some(
                 did_set_tagcase
@@ -29262,7 +29319,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tfu as *mut ::core::ffi::c_void,
+            var: p_tfu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -29305,7 +29362,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tl as *mut ::core::ffi::c_void,
+            var: p_tl.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTaglength as ::core::ffi::c_int as ssize_t,
@@ -29340,7 +29397,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tr as *mut ::core::ffi::c_void,
+            var: p_tr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTagrelative as ::core::ffi::c_int as ssize_t,
@@ -29376,7 +29433,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tags as *mut ::core::ffi::c_void,
+            var: p_tags.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTags as ::core::ffi::c_int as ssize_t,
@@ -29416,7 +29473,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tgst as *mut ::core::ffi::c_void,
+            var: p_tgst.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTagstack as ::core::ffi::c_int as ssize_t,
@@ -29449,7 +29506,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tbidi as *mut ::core::ffi::c_void,
+            var: p_tbidi.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTermbidi as ::core::ffi::c_int as ssize_t,
@@ -29482,7 +29539,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(313 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -29526,7 +29583,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tgc as *mut ::core::ffi::c_void,
+            var: p_tgc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTermguicolors as ::core::ffi::c_int as ssize_t,
@@ -29560,15 +29617,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tpf as *mut ::core::ffi::c_void,
-            flags_var: &raw mut tpf_flags,
+            var: p_tpf.ptr() as *mut ::core::ffi::c_void,
+            flags_var: tpf_flags.ptr(),
             scope_idx: [
                 kGlobalOptTermpastefilter as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_tpf_values as *mut *const ::core::ffi::c_char,
+            values: opt_tpf_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 7 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -29610,7 +29667,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_termsync as *mut ::core::ffi::c_void,
+            var: p_termsync.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTermsync as ::core::ffi::c_int as ssize_t,
@@ -29642,7 +29699,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut (*(&raw mut options as *mut vimoption_T)
+            var: &raw mut (*(options.ptr() as *mut vimoption_T)
                 .offset(317 as ::core::ffi::c_int as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void,
@@ -29679,7 +29736,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tw as *mut ::core::ffi::c_void,
+            var: p_tw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -29721,7 +29778,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tsr as *mut ::core::ffi::c_void,
+            var: p_tsr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptThesaurus as ::core::ffi::c_int as ssize_t,
@@ -29763,7 +29820,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tsrfu as *mut ::core::ffi::c_void,
+            var: p_tsrfu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptThesaurusfunc as ::core::ffi::c_int as ssize_t,
@@ -29806,7 +29863,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_to as *mut ::core::ffi::c_void,
+            var: p_to.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTildeop as ::core::ffi::c_int as ssize_t,
@@ -29839,7 +29896,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_timeout as *mut ::core::ffi::c_void,
+            var: p_timeout.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTimeout as ::core::ffi::c_int as ssize_t,
@@ -29872,7 +29929,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tm as *mut ::core::ffi::c_void,
+            var: p_tm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTimeoutlen as ::core::ffi::c_int as ssize_t,
@@ -29906,7 +29963,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_title as *mut ::core::ffi::c_void,
+            var: p_title.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTitle as ::core::ffi::c_int as ssize_t,
@@ -29941,7 +29998,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_titlelen as *mut ::core::ffi::c_void,
+            var: p_titlelen.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTitlelen as ::core::ffi::c_int as ssize_t,
@@ -29979,7 +30036,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_titleold as *mut ::core::ffi::c_void,
+            var: p_titleold.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTitleold as ::core::ffi::c_int as ssize_t,
@@ -30019,7 +30076,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_titlestring as *mut ::core::ffi::c_void,
+            var: p_titlestring.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTitlestring as ::core::ffi::c_int as ssize_t,
@@ -30062,7 +30119,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ttimeout as *mut ::core::ffi::c_void,
+            var: p_ttimeout.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTtimeout as ::core::ffi::c_int as ssize_t,
@@ -30096,7 +30153,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ttm as *mut ::core::ffi::c_void,
+            var: p_ttm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTtimeoutlen as ::core::ffi::c_int as ssize_t,
@@ -30132,7 +30189,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_tf as *mut ::core::ffi::c_void,
+            var: p_tf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptTtyfast as ::core::ffi::c_int as ssize_t,
@@ -30169,7 +30226,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_udir as *mut ::core::ffi::c_void,
+            var: p_udir.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptUndodir as ::core::ffi::c_int as ssize_t,
@@ -30209,7 +30266,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_udf as *mut ::core::ffi::c_void,
+            var: p_udf.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -30246,7 +30303,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ul as *mut ::core::ffi::c_void,
+            var: p_ul.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptUndolevels as ::core::ffi::c_int as ssize_t,
@@ -30284,7 +30341,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ur as *mut ::core::ffi::c_void,
+            var: p_ur.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptUndoreload as ::core::ffi::c_int as ssize_t,
@@ -30319,7 +30376,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_uc as *mut ::core::ffi::c_void,
+            var: p_uc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptUpdatecount as ::core::ffi::c_int as ssize_t,
@@ -30357,7 +30414,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ut as *mut ::core::ffi::c_void,
+            var: p_ut.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptUpdatetime as ::core::ffi::c_int as ssize_t,
@@ -30393,7 +30450,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vsts as *mut ::core::ffi::c_void,
+            var: p_vsts.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -30437,7 +30494,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vts as *mut ::core::ffi::c_void,
+            var: p_vts.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -30481,7 +30538,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_verbose as *mut ::core::ffi::c_void,
+            var: p_verbose.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptVerbose as ::core::ffi::c_int as ssize_t,
@@ -30517,7 +30574,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vfile as *mut ::core::ffi::c_void,
+            var: p_vfile.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptVerbosefile as ::core::ffi::c_int as ssize_t,
@@ -30562,7 +30619,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vdir as *mut ::core::ffi::c_void,
+            var: p_vdir.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptViewdir as ::core::ffi::c_int as ssize_t,
@@ -30603,8 +30660,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vop as *mut ::core::ffi::c_void,
-            flags_var: &raw mut vop_flags,
+            var: p_vop.ptr() as *mut ::core::ffi::c_void,
+            flags_var: vop_flags.ptr(),
             scope_idx: [
                 kGlobalOptViewoptions as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -30656,15 +30713,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ve as *mut ::core::ffi::c_void,
-            flags_var: &raw mut ve_flags,
+            var: p_ve.ptr() as *mut ::core::ffi::c_void,
+            flags_var: ve_flags.ptr(),
             scope_idx: [
                 kGlobalOptVirtualedit as ::core::ffi::c_int as ssize_t,
                 kWinOptVirtualedit as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_ve_values as *mut *const ::core::ffi::c_char,
+            values: opt_ve_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 6 as size_t,
             opt_did_set_cb: Some(
                 did_set_virtualedit
@@ -30706,7 +30763,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_vb as *mut ::core::ffi::c_void,
+            var: p_vb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptVisualbell as ::core::ffi::c_int as ssize_t,
@@ -30738,7 +30795,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_warn as *mut ::core::ffi::c_void,
+            var: p_warn.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWarn as ::core::ffi::c_int as ssize_t,
@@ -30772,7 +30829,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ww as *mut ::core::ffi::c_void,
+            var: p_ww.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWhichwrap as ::core::ffi::c_int as ssize_t,
@@ -30822,7 +30879,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wc as *mut ::core::ffi::c_void,
+            var: p_wc.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildchar as ::core::ffi::c_int as ssize_t,
@@ -30860,7 +30917,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wcm as *mut ::core::ffi::c_void,
+            var: p_wcm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildcharm as ::core::ffi::c_int as ssize_t,
@@ -30899,7 +30956,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wig as *mut ::core::ffi::c_void,
+            var: p_wig.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildignore as ::core::ffi::c_int as ssize_t,
@@ -30939,7 +30996,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wic as *mut ::core::ffi::c_void,
+            var: p_wic.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildignorecase as ::core::ffi::c_int as ssize_t,
@@ -30972,7 +31029,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wmnu as *mut ::core::ffi::c_void,
+            var: p_wmnu.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildmenu as ::core::ffi::c_int as ssize_t,
@@ -31006,7 +31063,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wim as *mut ::core::ffi::c_void,
+            var: p_wim.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWildmode as ::core::ffi::c_int as ssize_t,
@@ -31014,7 +31071,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_wim_values as *mut *const ::core::ffi::c_char,
+            values: opt_wim_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 5 as size_t,
             opt_did_set_cb: Some(
                 did_set_wildmode
@@ -31057,15 +31114,15 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wop as *mut ::core::ffi::c_void,
-            flags_var: &raw mut wop_flags,
+            var: p_wop.ptr() as *mut ::core::ffi::c_void,
+            flags_var: wop_flags.ptr(),
             scope_idx: [
                 kGlobalOptWildoptions as ::core::ffi::c_int as ssize_t,
                 kWinOptInvalid as ::core::ffi::c_int as ssize_t,
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_wop_values as *mut *const ::core::ffi::c_char,
+            values: opt_wop_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 4 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -31107,7 +31164,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wak as *mut ::core::ffi::c_void,
+            var: p_wak.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinaltkeys as ::core::ffi::c_int as ssize_t,
@@ -31115,7 +31172,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_wak_values as *mut *const ::core::ffi::c_char,
+            values: opt_wak_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 3 as size_t,
             opt_did_set_cb: Some(
                 did_set_str_generic
@@ -31159,7 +31216,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeWin as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wbr as *mut ::core::ffi::c_void,
+            var: p_wbr.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinbar as ::core::ffi::c_int as ssize_t,
@@ -31241,7 +31298,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_winborder as *mut ::core::ffi::c_void,
+            var: p_winborder.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinborder as ::core::ffi::c_int as ssize_t,
@@ -31249,7 +31306,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 kBufOptInvalid as ::core::ffi::c_int as ssize_t,
             ],
             immutable: false_0 != 0,
-            values: &raw mut opt_winborder_values as *mut *const ::core::ffi::c_char,
+            values: opt_winborder_values.ptr() as *mut *const ::core::ffi::c_char,
             values_len: 8 as size_t,
             opt_did_set_cb: Some(
                 did_set_winborder
@@ -31291,7 +31348,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_window as *mut ::core::ffi::c_void,
+            var: p_window.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWindow as ::core::ffi::c_int as ssize_t,
@@ -31430,7 +31487,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wh as *mut ::core::ffi::c_void,
+            var: p_wh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinheight as ::core::ffi::c_int as ssize_t,
@@ -31522,7 +31579,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wmh as *mut ::core::ffi::c_void,
+            var: p_wmh.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinminheight as ::core::ffi::c_int as ssize_t,
@@ -31560,7 +31617,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wmw as *mut ::core::ffi::c_void,
+            var: p_wmw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinminwidth as ::core::ffi::c_int as ssize_t,
@@ -31598,7 +31655,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wiw as *mut ::core::ffi::c_void,
+            var: p_wiw.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWinwidth as ::core::ffi::c_int as ssize_t,
@@ -31672,7 +31729,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeBuf as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wm as *mut ::core::ffi::c_void,
+            var: p_wm.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptInvalid as ::core::ffi::c_int as ssize_t,
@@ -31707,7 +31764,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_ws as *mut ::core::ffi::c_void,
+            var: p_ws.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWrapscan as ::core::ffi::c_int as ssize_t,
@@ -31739,7 +31796,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_write as *mut ::core::ffi::c_void,
+            var: p_write.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWrite as ::core::ffi::c_int as ssize_t,
@@ -31772,7 +31829,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wa as *mut ::core::ffi::c_void,
+            var: p_wa.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWriteany as ::core::ffi::c_int as ssize_t,
@@ -31805,7 +31862,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wb as *mut ::core::ffi::c_void,
+            var: p_wb.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWritebackup as ::core::ffi::c_int as ssize_t,
@@ -31838,7 +31895,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             scope_flags: (0 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int) << kOptScopeGlobal as ::core::ffi::c_int)
                 as OptScopeFlags,
-            var: &raw mut p_wd as *mut ::core::ffi::c_void,
+            var: p_wd.ptr() as *mut ::core::ffi::c_void,
             flags_var: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
             scope_idx: [
                 kGlobalOptWritedelay as ::core::ffi::c_int as ssize_t,
@@ -31863,7 +31920,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
                 sc_chan: 0,
             },
         },
-    ];
+    ]);
 }
 #[used]
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

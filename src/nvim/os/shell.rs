@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -82,11 +83,11 @@ extern "C" {
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn read_buffer_into(buf: *mut buf_T, start: linenr_T, end: linenr_T, sb: *mut StringBuilder);
-    static mut p_sh: *mut ::core::ffi::c_char;
-    static mut p_shcf: *mut ::core::ffi::c_char;
-    static mut p_sxq: *mut ::core::ffi::c_char;
-    static mut p_sxe: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_sh: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shcf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sxq: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sxe: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn vim_strsave_escaped_ext(
         string: *const ::core::ffi::c_char,
         esc_chars: *const ::core::ffi::c_char,
@@ -154,21 +155,21 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn check_secure() -> bool;
     fn vim_tempname() -> *mut ::core::ffi::c_char;
-    static mut Rows: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut msg_no_more: bool;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut no_check_timestamps: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut secure: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut main_loop: Loop;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static msg_no_more: GlobalCell<bool>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static no_check_timestamps: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static secure: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static main_loop: SharedCell<Loop>;
     fn utfc_ptr2len_len(
         p: *const ::core::ffi::c_char,
         size: ::core::ffi::c_int,
@@ -2803,16 +2804,18 @@ pub unsafe extern "C" fn os_expand_wildcards(
     let mut tempname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut shell_style: ::core::ffi::c_int = STYLE_ECHO;
     let mut check_spaces: ::core::ffi::c_int = 0;
-    static mut did_find_nul: bool = false_0 != 0;
+    static did_find_nul: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut ampersand: bool = false_0 != 0;
-    static mut sh_vimglob_func: *mut ::core::ffi::c_char =
+    static sh_vimglob_func: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
         b"vimglob() { while [ $# -ge 1 ]; do echo \"$1\"; shift; done }; vimglob >\0".as_ptr()
-            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    static mut sh_globstar_opt: *mut ::core::ffi::c_char =
+            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+    );
+    static sh_globstar_opt: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
         b"[[ ${BASH_VERSINFO[0]} -ge 4 ]] && shopt -s globstar; \0".as_ptr()
-            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+    );
     let mut is_fish_shell: bool = strncmp(
-        invocation_path_tail(p_sh, ::core::ptr::null_mut::<size_t>()),
+        invocation_path_tail(p_sh.get(), ::core::ptr::null_mut::<size_t>()),
         b"fish\0".as_ptr() as *const ::core::ffi::c_char,
         4 as size_t,
     ) == 0 as ::core::ffi::c_int;
@@ -2822,10 +2825,10 @@ pub unsafe extern "C" fn os_expand_wildcards(
         save_patterns(num_pat, pat, num_file, file);
         return OK;
     }
-    if sandbox != 0 as ::core::ffi::c_int && check_secure() as ::core::ffi::c_int != 0 {
+    if sandbox.get() != 0 as ::core::ffi::c_int && check_secure() as ::core::ffi::c_int != 0 {
         return FAIL;
     }
-    if secure != 0 {
+    if secure.get() != 0 {
         i = 0 as ::core::ffi::c_int;
         while i < num_pat {
             if !vim_strchr(*pat.offset(i as isize), '`' as ::core::ffi::c_int).is_null()
@@ -2855,17 +2858,19 @@ pub unsafe extern "C" fn os_expand_wildcards(
     {
         shell_style = STYLE_BT;
     } else {
-        len = strlen(p_sh);
+        len = strlen(p_sh.get());
         if len >= 3 as size_t {
             if strcmp(
-                p_sh.offset(len as isize)
+                (*p_sh.ptr())
+                    .offset(len as isize)
                     .offset(-(3 as ::core::ffi::c_int as isize)),
                 b"csh\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
             {
                 shell_style = STYLE_GLOB;
             } else if strcmp(
-                p_sh.offset(len as isize)
+                (*p_sh.ptr())
+                    .offset(len as isize)
                     .offset(-(3 as ::core::ffi::c_int as isize)),
                 b"zsh\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
@@ -2876,14 +2881,14 @@ pub unsafe extern "C" fn os_expand_wildcards(
     }
     if shell_style == STYLE_ECHO {
         if !strstr(
-            path_tail(p_sh),
+            path_tail(p_sh.get()),
             b"bash\0".as_ptr() as *const ::core::ffi::c_char,
         )
         .is_null()
         {
             shell_style = STYLE_GLOBSTAR;
         } else if !strstr(
-            path_tail(p_sh),
+            path_tail(p_sh.get()),
             b"sh\0".as_ptr() as *const ::core::ffi::c_char,
         )
         .is_null()
@@ -2893,9 +2898,11 @@ pub unsafe extern "C" fn os_expand_wildcards(
     }
     len = strlen(tempname).wrapping_add(29 as size_t);
     if shell_style == STYLE_VIMGLOB {
-        len = len.wrapping_add(strlen(sh_vimglob_func));
+        len = len.wrapping_add(strlen(sh_vimglob_func.get()));
     } else if shell_style == STYLE_GLOBSTAR {
-        len = len.wrapping_add(strlen(sh_vimglob_func).wrapping_add(strlen(sh_globstar_opt)));
+        len = len.wrapping_add(
+            strlen(sh_vimglob_func.get()).wrapping_add(strlen(sh_globstar_opt.get())),
+        );
     }
     i = 0 as ::core::ffi::c_int;
     while i < num_pat {
@@ -2986,10 +2993,10 @@ pub unsafe extern "C" fn os_expand_wildcards(
                 b"print -N >\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else if shell_style == STYLE_VIMGLOB {
-            strcat(command, sh_vimglob_func);
+            strcat(command, sh_vimglob_func.get());
         } else if shell_style == STYLE_GLOBSTAR {
-            strcat(command, sh_globstar_opt);
-            strcat(command, sh_vimglob_func);
+            strcat(command, sh_globstar_opt.get());
+            strcat(command, sh_vimglob_func.get());
         } else {
             strcat(command, b"echo >\0".as_ptr() as *const ::core::ffi::c_char);
         }
@@ -3079,7 +3086,7 @@ pub unsafe extern "C" fn os_expand_wildcards(
         xfree(tempname as *mut ::core::ffi::c_void);
         if flags & EW_SILENT as ::core::ffi::c_int == 0 {
             msg_putchar('\n' as ::core::ffi::c_int);
-            cmdline_row = Rows - 1 as ::core::ffi::c_int;
+            cmdline_row.set(Rows.get() - 1 as ::core::ffi::c_int);
             msg(
                 gettext(&raw const e_wildexpand as *const ::core::ffi::c_char),
                 0 as ::core::ffi::c_int,
@@ -3163,12 +3170,12 @@ pub unsafe extern "C" fn os_expand_wildcards(
                 }
             } else {
                 check_spaces = false_0;
-                if shell_style == STYLE_PRINT && !did_find_nul {
+                if shell_style == STYLE_PRINT && !did_find_nul.get() {
                     *buffer.offset(len as isize) = NUL as ::core::ffi::c_char;
                     if len != 0
                         && (strlen(buffer) as ::core::ffi::c_int) < len as ::core::ffi::c_int
                     {
-                        did_find_nul = true_0 != 0;
+                        did_find_nul.set(true_0 != 0);
                     } else {
                         check_spaces = true_0;
                     }
@@ -3320,17 +3327,23 @@ pub unsafe extern "C" fn shell_build_argv(
     mut cmd: *const ::core::ffi::c_char,
     mut extra_args: *const ::core::ffi::c_char,
 ) -> *mut *mut ::core::ffi::c_char {
-    let mut argc: size_t = tokenize(p_sh, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-        .wrapping_add(if !cmd.is_null() {
-            tokenize(p_shcf, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-        } else {
-            0 as size_t
-        });
+    let mut argc: size_t = tokenize(
+        p_sh.get(),
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    )
+    .wrapping_add(if !cmd.is_null() {
+        tokenize(
+            p_shcf.get(),
+            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+        )
+    } else {
+        0 as size_t
+    });
     let mut rv: *mut *mut ::core::ffi::c_char = xmalloc(
         argc.wrapping_add(4 as size_t)
             .wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
     ) as *mut *mut ::core::ffi::c_char;
-    let mut i: size_t = tokenize(p_sh, rv);
+    let mut i: size_t = tokenize(p_sh.get(), rv);
     if !extra_args.is_null() {
         let c2rust_fresh8 = i;
         i = i.wrapping_add(1);
@@ -3338,7 +3351,7 @@ pub unsafe extern "C" fn shell_build_argv(
         *c2rust_lvalue_ptr = xstrdup(extra_args);
     }
     if !cmd.is_null() {
-        i = i.wrapping_add(tokenize(p_shcf, rv.offset(i as isize)));
+        i = i.wrapping_add(tokenize(p_shcf.get(), rv.offset(i as isize)));
         let c2rust_fresh9 = i;
         i = i.wrapping_add(1);
         let c2rust_lvalue_ptr_0 = &raw mut *rv.offset(c2rust_fresh9 as isize);
@@ -3414,14 +3427,14 @@ pub unsafe extern "C" fn os_call_shell(
     let mut output: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut output_ptr: *mut *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    let mut current_state: ::core::ffi::c_int = State;
+    let mut current_state: ::core::ffi::c_int = State.get();
     let mut forward_output: bool = true_0 != 0;
     signal_reject_deadly();
     if opts & (kShellOptHideMess as ::core::ffi::c_int | kShellOptExpand as ::core::ffi::c_int) != 0
     {
         forward_output = false_0 != 0;
     } else {
-        State = MODE_EXTERNCMD as ::core::ffi::c_int;
+        State.set(MODE_EXTERNCMD as ::core::ffi::c_int);
         if opts & kShellOptWrite as ::core::ffi::c_int != 0 {
             read_input(&raw mut input);
         }
@@ -3439,7 +3452,7 @@ pub unsafe extern "C" fn os_call_shell(
         input.size,
         output_ptr,
         &raw mut nread,
-        emsg_silent != 0,
+        emsg_silent.get() != 0,
         forward_output,
     );
     xfree(input.items as *mut ::core::ffi::c_void);
@@ -3450,7 +3463,7 @@ pub unsafe extern "C" fn os_call_shell(
         write_output(output, nread, true_0 != 0);
         xfree(output as *mut ::core::ffi::c_void);
     }
-    if emsg_silent == 0
+    if emsg_silent.get() == 0
         && exitcode != 0 as ::core::ffi::c_int
         && opts & kShellOptSilent as ::core::ffi::c_int == 0
     {
@@ -3463,7 +3476,7 @@ pub unsafe extern "C" fn os_call_shell(
         ));
         msg_outnum(exitcode);
     }
-    State = current_state;
+    State.set(current_state);
     signal_accept_deadly();
     return exitcode;
 }
@@ -3475,20 +3488,20 @@ pub unsafe extern "C" fn call_shell(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0;
     let mut wait_time: proftime_T = 0;
-    if p_verbose > 3 as OptInt {
+    if p_verbose.get() > 3 as OptInt {
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
             gettext(b"Executing command: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
-            if cmd.is_null() { p_sh } else { cmd },
+            if cmd.is_null() { p_sh.get() } else { cmd },
         );
         msg_putchar('\n' as ::core::ffi::c_int);
         verbose_leave();
     }
-    if do_profiling == PROF_YES {
+    if do_profiling.get() == PROF_YES {
         prof_child_enter(&raw mut wait_time);
     }
-    if *p_sh as ::core::ffi::c_int == NUL {
+    if *p_sh.get() as ::core::ffi::c_int == NUL {
         emsg(gettext(
             &raw const e_shellempty as *const ::core::ffi::c_char,
         ));
@@ -3498,7 +3511,7 @@ pub unsafe extern "C" fn call_shell(
         retval = os_call_shell(cmd, opts, extra_shell_arg);
     }
     set_vim_var_nr(VV_SHELL_ERROR, retval as varnumber_T);
-    if do_profiling == PROF_YES {
+    if do_profiling.get() == PROF_YES {
         prof_child_exit(&raw mut wait_time);
     }
     return retval;
@@ -3523,13 +3536,13 @@ pub unsafe extern "C" fn get_cmd_output(
     }
     let mut command: *mut ::core::ffi::c_char =
         make_filter_cmd(cmd, infile, tempname, false_0 != 0);
-    no_check_timestamps += 1;
+    (*no_check_timestamps.ptr()) += 1;
     call_shell(
         command,
         kShellOptDoOut as ::core::ffi::c_int | kShellOptExpand as ::core::ffi::c_int | flags,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     );
-    no_check_timestamps -= 1;
+    (*no_check_timestamps.ptr()) -= 1;
     xfree(command as *mut ::core::ffi::c_void);
     let mut fd: *mut FILE = os_fopen(tempname, READBIN.as_ptr());
     let mut len_l: ::core::ffi::c_long = 0;
@@ -3638,15 +3651,15 @@ unsafe extern "C" fn do_os_system(
         MAXPATHL as size_t,
     );
     let mut uvproc: LibuvProc =
-        libuv_proc_init(&raw mut main_loop, &raw mut buf as *mut ::core::ffi::c_void);
+        libuv_proc_init(main_loop.ptr(), &raw mut buf as *mut ::core::ffi::c_void);
     let mut proc: *mut Proc = &raw mut uvproc.proc;
-    let mut events: *mut MultiQueue = multiqueue_new_child(main_loop.events);
+    let mut events: *mut MultiQueue = multiqueue_new_child((*main_loop.ptr()).events);
     (*proc).events = events;
     (*proc).argv = argv;
     let mut status: ::core::ffi::c_int = proc_spawn(proc, has_input, true_0 != 0, true_0 != 0);
     '_end: {
         if status != 0 {
-            loop_poll_events(&raw mut main_loop, 0 as int64_t);
+            loop_poll_events(main_loop.ptr(), 0 as int64_t);
             if !silent {
                 msg_puts(gettext(
                     b"\nshell failed to start: \0".as_ptr() as *const ::core::ffi::c_char
@@ -3702,25 +3715,25 @@ unsafe extern "C" fn do_os_system(
             if forward_output {
                 msg_sb_eol();
                 msg_start();
-                msg_no_more = true_0 != 0;
-                lines_left = -1 as ::core::ffi::c_int;
+                msg_no_more.set(true_0 != 0);
+                lines_left.set(-1 as ::core::ffi::c_int);
             }
             exitcode = proc_wait(
                 proc,
                 -1 as ::core::ffi::c_int,
                 ::core::ptr::null_mut::<MultiQueue>(),
             );
-            if !got_int && out_data_decide_throttle(0 as size_t) as ::core::ffi::c_int != 0 {
+            if !got_int.get() && out_data_decide_throttle(0 as size_t) as ::core::ffi::c_int != 0 {
                 out_data_ring(
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     SIZE_MAX as size_t,
                 );
             }
             if forward_output {
-                no_wait_return += 1;
+                (*no_wait_return.ptr()) += 1;
                 msg_end();
-                no_wait_return -= 1;
-                msg_no_more = false_0 != 0;
+                (*no_wait_return.ptr()) -= 1;
+                msg_no_more.set(false_0 != 0);
             }
             ui_busy_stop();
             if !output.is_null() {
@@ -3830,72 +3843,72 @@ unsafe extern "C" fn system_data_cb(
     return count;
 }
 unsafe extern "C" fn out_data_decide_throttle(mut size: size_t) -> bool {
-    static mut started: uint64_t = 0 as uint64_t;
-    static mut received: size_t = 0 as size_t;
-    static mut visit: size_t = 0 as size_t;
-    static mut pulse_msg: [::core::ffi::c_char; 4] = [
+    static started: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
+    static received: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+    static visit: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+    static pulse_msg: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new([
         ' ' as ::core::ffi::c_char,
         ' ' as ::core::ffi::c_char,
         ' ' as ::core::ffi::c_char,
         NUL as ::core::ffi::c_char,
-    ];
+    ]);
     if size == 0 {
-        let mut previous_decision: bool = visit > 0 as size_t;
-        visit = 0 as size_t;
-        received = visit;
-        started = received as uint64_t;
+        let mut previous_decision: bool = visit.get() > 0 as size_t;
+        visit.set(0 as size_t);
+        received.set(visit.get());
+        started.set(received.get() as uint64_t);
         return previous_decision;
     }
-    received = received.wrapping_add(size);
-    if received < OUT_DATA_THRESHOLD as size_t
-        || started == 0 && received < size.wrapping_add(1000 as size_t)
+    received.set((*received.ptr()).wrapping_add(size));
+    if received.get() < OUT_DATA_THRESHOLD as size_t
+        || started.get() == 0 && received.get() < size.wrapping_add(1000 as size_t)
     {
         return false_0 != 0;
-    } else if visit == 0 {
-        started = os_hrtime();
+    } else if visit.get() == 0 {
+        started.set(os_hrtime());
     } else {
-        let mut since: uint64_t = os_hrtime().wrapping_sub(started);
+        let mut since: uint64_t = os_hrtime().wrapping_sub(started.get());
         if since
-            < (visit as uint64_t)
+            < (visit.get() as uint64_t)
                 .wrapping_mul(NS_1_SECOND.wrapping_div(10 as ::core::ffi::c_uint) as uint64_t)
         {
             return true_0 != 0;
         }
         if since > (3 as ::core::ffi::c_uint).wrapping_mul(NS_1_SECOND) as uint64_t {
-            visit = 0 as size_t;
-            received = visit;
+            visit.set(0 as size_t);
+            received.set(visit.get());
             return false_0 != 0;
         }
     }
-    visit = visit.wrapping_add(1);
-    let mut tick: size_t = visit.wrapping_rem(4 as size_t);
-    pulse_msg[0 as ::core::ffi::c_int as usize] = (if tick > 0 as size_t {
+    visit.set((*visit.ptr()).wrapping_add(1));
+    let mut tick: size_t = (*visit.ptr()).wrapping_rem(4 as size_t);
+    (*pulse_msg.ptr())[0 as ::core::ffi::c_int as usize] = (if tick > 0 as size_t {
         '.' as ::core::ffi::c_int
     } else {
         ' ' as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
-    pulse_msg[1 as ::core::ffi::c_int as usize] = (if tick > 1 as size_t {
+    (*pulse_msg.ptr())[1 as ::core::ffi::c_int as usize] = (if tick > 1 as size_t {
         '.' as ::core::ffi::c_int
     } else {
         ' ' as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
-    pulse_msg[2 as ::core::ffi::c_int as usize] = (if tick > 2 as size_t {
+    (*pulse_msg.ptr())[2 as ::core::ffi::c_int as usize] = (if tick > 2 as size_t {
         '.' as ::core::ffi::c_int
     } else {
         ' ' as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
-    if visit == 1 as size_t {
+    if visit.get() == 1 as size_t {
         msg_puts(b"...\n\0".as_ptr() as *const ::core::ffi::c_char);
     }
     msg_putchar('\r' as ::core::ffi::c_int);
-    msg_puts(&raw mut pulse_msg as *mut ::core::ffi::c_char);
+    msg_puts(pulse_msg.ptr() as *mut ::core::ffi::c_char);
     msg_putchar('\r' as ::core::ffi::c_int);
     ui_flush();
     return true_0 != 0;
 }
 unsafe extern "C" fn out_data_ring(mut output: *const ::core::ffi::c_char, mut size: size_t) {
-    static mut last_skipped: [::core::ffi::c_char; 5120] = [0; 5120];
-    static mut last_skipped_len: size_t = 0 as size_t;
+    static last_skipped: GlobalCell<[::core::ffi::c_char; 5120]> = GlobalCell::new([0; 5120]);
+    static last_skipped_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
     '_c2rust_label: {
         if !output.is_null() || (size == 0 as size_t || size == 18446744073709551615 as size_t) {
         } else {
@@ -3910,13 +3923,13 @@ unsafe extern "C" fn out_data_ring(mut output: *const ::core::ffi::c_char, mut s
         }
     };
     if output.is_null() && size == 0 as size_t {
-        last_skipped_len = 0 as size_t;
+        last_skipped_len.set(0 as size_t);
         return;
     }
     if output.is_null() && size == SIZE_MAX as size_t {
         out_data_append_to_screen(
-            &raw mut last_skipped as *mut ::core::ffi::c_char,
-            &raw mut last_skipped_len,
+            last_skipped.ptr() as *mut ::core::ffi::c_char,
+            last_skipped_len.ptr(),
             STDOUT_FILENO,
             true_0 != 0,
         );
@@ -3925,41 +3938,41 @@ unsafe extern "C" fn out_data_ring(mut output: *const ::core::ffi::c_char, mut s
     if size >= MAX_CHUNK_SIZE as size_t {
         let mut start: size_t = size.wrapping_sub(MAX_CHUNK_SIZE as size_t);
         memcpy(
-            &raw mut last_skipped as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            last_skipped.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             output.offset(start as isize) as *const ::core::ffi::c_void,
             MAX_CHUNK_SIZE as size_t,
         );
-        last_skipped_len = MAX_CHUNK_SIZE as size_t;
+        last_skipped_len.set(MAX_CHUNK_SIZE as size_t);
     } else if size > 0 as size_t {
-        let mut keep_len: size_t = if last_skipped_len
+        let mut keep_len: size_t = if last_skipped_len.get()
             < ((1024 as ::core::ffi::c_uint)
                 .wrapping_mul(10 as ::core::ffi::c_uint)
                 .wrapping_div(2 as ::core::ffi::c_uint) as size_t)
                 .wrapping_sub(size)
         {
-            last_skipped_len
+            last_skipped_len.get()
         } else {
             ((1024 as ::core::ffi::c_uint)
                 .wrapping_mul(10 as ::core::ffi::c_uint)
                 .wrapping_div(2 as ::core::ffi::c_uint) as size_t)
                 .wrapping_sub(size)
         };
-        let mut keep_start: size_t = last_skipped_len.wrapping_sub(keep_len);
+        let mut keep_start: size_t = (*last_skipped_len.ptr()).wrapping_sub(keep_len);
         if keep_start != 0 {
             memmove(
-                &raw mut last_skipped as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-                (&raw mut last_skipped as *mut ::core::ffi::c_char).offset(keep_start as isize)
+                last_skipped.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+                (last_skipped.ptr() as *mut ::core::ffi::c_char).offset(keep_start as isize)
                     as *const ::core::ffi::c_void,
                 keep_len,
             );
         }
         memcpy(
-            (&raw mut last_skipped as *mut ::core::ffi::c_char).offset(keep_len as isize)
+            (last_skipped.ptr() as *mut ::core::ffi::c_char).offset(keep_len as isize)
                 as *mut ::core::ffi::c_void,
             output as *const ::core::ffi::c_void,
             size,
         );
-        last_skipped_len = keep_len.wrapping_add(size);
+        last_skipped_len.set(keep_len.wrapping_add(size));
     }
 }
 pub const MAX_CHUNK_SIZE: ::core::ffi::c_uint =
@@ -4029,7 +4042,7 @@ unsafe extern "C" fn out_data_append_to_screen(
         xmemdupz(output as *const ::core::ffi::c_void, *count) as *mut ::core::ffi::c_char;
     if ui_has(kUIMessages) {
         multiqueue_put_event(
-            main_loop.fast_events,
+            (*main_loop.ptr()).fast_events,
             Event {
                 handler: Some(
                     out_data_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -4118,9 +4131,9 @@ unsafe extern "C" fn word_length(mut str: *const ::core::ffi::c_char) -> size_t 
 }
 unsafe extern "C" fn read_input(mut buf: *mut StringBuilder) {
     read_buffer_into(
-        curbuf,
-        (*curbuf).b_op_start.lnum,
-        (*curbuf).b_op_end.lnum,
+        curbuf.get(),
+        (*curbuf.get()).b_op_start.lnum,
+        (*curbuf.get()).b_op_end.lnum,
         buf,
     );
 }
@@ -4137,11 +4150,11 @@ unsafe extern "C" fn write_output(
     while off < remaining {
         if *output.offset(off as isize) as ::core::ffi::c_int == CAR
             && *output.offset(off.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int == NL
-            && (*curbuf).b_p_bin == 0
+            && (*curbuf.get()).b_p_bin == 0
         {
             *output.offset(off as isize) = NUL as ::core::ffi::c_char;
-            let c2rust_fresh11 = (*curwin).w_cursor.lnum;
-            (*curwin).w_cursor.lnum = (*curwin).w_cursor.lnum + 1;
+            let c2rust_fresh11 = (*curwin.get()).w_cursor.lnum;
+            (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum + 1;
             ml_append(
                 c2rust_fresh11,
                 output,
@@ -4153,12 +4166,12 @@ unsafe extern "C" fn write_output(
             remaining = remaining.wrapping_sub(skip);
             off = 0 as size_t;
         } else if *output.offset(off as isize) as ::core::ffi::c_int == CAR
-            && (*curbuf).b_p_bin == 0
+            && (*curbuf.get()).b_p_bin == 0
             || *output.offset(off as isize) as ::core::ffi::c_int == NL
         {
             *output.offset(off as isize) = NUL as ::core::ffi::c_char;
-            let c2rust_fresh12 = (*curwin).w_cursor.lnum;
-            (*curwin).w_cursor.lnum = (*curwin).w_cursor.lnum + 1;
+            let c2rust_fresh12 = (*curwin.get()).w_cursor.lnum;
+            (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum + 1;
             ml_append(
                 c2rust_fresh12,
                 output,
@@ -4178,13 +4191,13 @@ unsafe extern "C" fn write_output(
     }
     if eof {
         if remaining != 0 {
-            let c2rust_fresh13 = (*curwin).w_cursor.lnum;
-            (*curwin).w_cursor.lnum = (*curwin).w_cursor.lnum + 1;
+            let c2rust_fresh13 = (*curwin.get()).w_cursor.lnum;
+            (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum + 1;
             ml_append(c2rust_fresh13, output, 0 as colnr_T, false_0 != 0);
-            (*curbuf).b_no_eol_lnum = (*curwin).w_cursor.lnum;
+            (*curbuf.get()).b_no_eol_lnum = (*curwin.get()).w_cursor.lnum;
             output = output.offset(remaining as isize);
         } else {
-            (*curbuf).b_no_eol_lnum = 0 as ::core::ffi::c_int as linenr_T;
+            (*curbuf.get()).b_no_eol_lnum = 0 as ::core::ffi::c_int as linenr_T;
         }
     }
     ui_flush();
@@ -4209,27 +4222,29 @@ unsafe extern "C" fn shell_write_cb(
 unsafe extern "C" fn shell_xescape_xquote(
     mut cmd: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    if *p_sxq as ::core::ffi::c_int == NUL {
+    if *p_sxq.get() as ::core::ffi::c_int == NUL {
         return xstrdup(cmd);
     }
     let mut ecmd: *const ::core::ffi::c_char = cmd;
-    if *p_sxe as ::core::ffi::c_int != NUL
-        && strcmp(p_sxq, b"(\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
+    if *p_sxe.get() as ::core::ffi::c_int != NUL
+        && strcmp(p_sxq.get(), b"(\0".as_ptr() as *const ::core::ffi::c_char)
+            == 0 as ::core::ffi::c_int
     {
-        ecmd = vim_strsave_escaped_ext(cmd, p_sxe, '^' as ::core::ffi::c_char, false_0 != 0);
+        ecmd = vim_strsave_escaped_ext(cmd, p_sxe.get(), '^' as ::core::ffi::c_char, false_0 != 0);
     }
     let mut ncmd_size: size_t = strlen(ecmd)
-        .wrapping_add(strlen(p_sxq).wrapping_mul(2 as size_t))
+        .wrapping_add(strlen(p_sxq.get()).wrapping_mul(2 as size_t))
         .wrapping_add(1 as size_t);
     let mut ncmd: *mut ::core::ffi::c_char = xmalloc(ncmd_size) as *mut ::core::ffi::c_char;
-    if strcmp(p_sxq, b"(\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int {
+    if strcmp(p_sxq.get(), b"(\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
+    {
         vim_snprintf(
             ncmd,
             ncmd_size,
             b"(%s)\0".as_ptr() as *const ::core::ffi::c_char,
             ecmd,
         );
-    } else if strcmp(p_sxq, b"\"(\0".as_ptr() as *const ::core::ffi::c_char)
+    } else if strcmp(p_sxq.get(), b"\"(\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int
     {
         vim_snprintf(
@@ -4243,9 +4258,9 @@ unsafe extern "C" fn shell_xescape_xquote(
             ncmd,
             ncmd_size,
             b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-            p_sxq,
+            p_sxq.get(),
             ecmd,
-            p_sxq,
+            p_sxq.get(),
         );
     }
     if ecmd != cmd {

@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type multiqueue;
     fn snprintf(
@@ -45,9 +45,9 @@ extern "C" {
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut main_loop: Loop;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static main_loop: SharedCell<Loop>;
     fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
     fn os_unsetenv(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -900,7 +900,7 @@ pub unsafe extern "C" fn server_init(mut listen_addr: *const ::core::ffi::c_char
         || user_arg as ::core::ffi::c_int == kNone as ::core::ffi::c_int)
     {
         snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             if user_arg as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
                 b"Failed to --listen: %s: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
@@ -976,7 +976,7 @@ pub unsafe extern "C" fn server_address_new(
         if !name.is_null() {
             name
         } else {
-            &raw mut NameBuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
+            NameBuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
         },
         os_get_pid(),
         c2rust_fresh1,
@@ -1040,7 +1040,7 @@ pub unsafe extern "C" fn server_start(mut addr: *const ::core::ffi::c_char) -> :
     let mut watcher: *mut SocketWatcher =
         xmalloc(::core::mem::size_of::<SocketWatcher>()) as *mut SocketWatcher;
     let mut result: ::core::ffi::c_int = socket_watcher_init(
-        &raw mut main_loop,
+        main_loop.ptr(),
         watcher,
         if isname as ::core::ffi::c_int != 0 {
             addr_gen as *const ::core::ffi::c_char

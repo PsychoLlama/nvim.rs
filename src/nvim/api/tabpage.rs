@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -28,14 +29,14 @@ extern "C" {
     fn api_clear_error(value: *mut Error);
     fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn nvim_get_current_win() -> Window;
-    static mut autocmd_no_enter: ::core::ffi::c_int;
-    static mut autocmd_no_leave: ::core::ffi::c_int;
+    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
+    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
     static e_cmdwin: [::core::ffi::c_char; 0];
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut cmdwin_type: ::core::ffi::c_int;
-    static mut cmdwin_buf: *mut buf_T;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
     fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error);
     fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool;
     fn win_new_tabpage(
@@ -1772,8 +1773,8 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
         return rv;
     }
     let mut n: size_t = 0 as size_t;
-    let mut wp: *mut win_T = if tab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if tab == curtab.get() {
+        firstwin.get()
     } else {
         (*tab).tp_firstwin
     };
@@ -1782,8 +1783,8 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
         wp = (*wp).w_next;
     }
     rv = arena_array(arena, n);
-    let mut wp_0: *mut win_T = if tab == curtab {
-        firstwin
+    let mut wp_0: *mut win_T = if tab == curtab.get() {
+        firstwin.get()
     } else {
         (*tab).tp_firstwin
     };
@@ -1866,11 +1867,11 @@ pub unsafe extern "C" fn nvim_tabpage_get_win(mut tabpage: Tabpage, mut err: *mu
     if tab.is_null() || !valid_tabpage(tab) {
         return 0 as Window;
     }
-    if tab == curtab {
+    if tab == curtab.get() {
         return nvim_get_current_win();
     }
-    let mut wp: *mut win_T = if tab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if tab == curtab.get() {
+        firstwin.get()
     } else {
         (*tab).tp_firstwin
     };
@@ -1905,7 +1906,7 @@ pub unsafe extern "C" fn nvim_tabpage_set_win(
         );
         return;
     }
-    if tp == curtab {
+    if tp == curtab.get() {
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -1955,7 +1956,8 @@ pub unsafe extern "C" fn nvim_open_tabpage(
     if b.is_null() {
         return 0 as Tabpage;
     }
-    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0 || b == cmdwin_buf
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0
+        || b == cmdwin_buf.get()
     {
         api_set_error(
             err,
@@ -2011,15 +2013,15 @@ pub unsafe extern "C" fn nvim_open_tabpage(
         return 0 as Tabpage;
     }
     if tabpage_win_valid(tp, wp) as ::core::ffi::c_int != 0 && (*wp).w_buffer != b {
-        let au_no_enter_leave: bool = curwin != wp;
+        let au_no_enter_leave: bool = curwin.get() != wp;
         if au_no_enter_leave {
-            autocmd_no_enter += 1;
-            autocmd_no_leave += 1;
+            (*autocmd_no_enter.ptr()) += 1;
+            (*autocmd_no_leave.ptr()) += 1;
         }
         win_set_buf(wp, b, err);
         if au_no_enter_leave {
-            autocmd_no_enter -= 1;
-            autocmd_no_leave -= 1;
+            (*autocmd_no_enter.ptr()) -= 1;
+            (*autocmd_no_leave.ptr()) -= 1;
         }
         if !valid_tabpage(tp) {
             api_clear_error(err);

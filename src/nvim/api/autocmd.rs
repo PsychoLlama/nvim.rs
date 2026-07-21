@@ -117,8 +117,8 @@ extern "C" {
     fn do_modelines(flags: ::core::ffi::c_int);
     fn callback_free(callback: *mut Callback);
     fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char;
-    static mut current_sctx: sctx_T;
-    static mut curbuf: *mut buf_T;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
     fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
     fn nlua_ref_is_function(ref_0: LuaRef) -> bool;
     fn arena_printf(arena: *mut Arena, fmt: *const ::core::ffi::c_char, ...) -> String_0;
@@ -3862,7 +3862,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                                 handler_cmd,
                                                 &raw mut handler_fn,
                                             );
-                                            current_sctx = save_current_sctx;
+                                            current_sctx.set(save_current_sctx);
                                             if retval == 0 as ::core::ffi::c_int {
                                                 api_set_error(
                                                     err,
@@ -4065,7 +4065,7 @@ pub unsafe extern "C" fn nvim_create_augroup(
             event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
         }
     }
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
     return augroup as Integer;
 }
 #[no_mangle]
@@ -4112,7 +4112,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
 ) {
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut modeline: bool = true_0 != 0;
-    let mut b: *mut buf_T = curbuf;
+    let mut b: *mut buf_T = curbuf.get();
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let mut event_array: Array = unpack_string_or_array(
         event,

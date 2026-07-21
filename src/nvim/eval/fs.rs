@@ -197,14 +197,14 @@ extern "C" {
         base_in: *const ::core::ffi::c_char,
         p_in: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut globaldir: *mut ::core::ffi::c_char;
-    static mut p_fs: ::core::ffi::c_int;
-    static mut p_path: *mut ::core::ffi::c_char;
-    static mut p_wic: ::core::ffi::c_int;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static globaldir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fs: GlobalCell<::core::ffi::c_int>;
+    static p_path: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wic: GlobalCell<::core::ffi::c_int>;
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_can_exe(
@@ -2721,9 +2721,9 @@ pub unsafe extern "C" fn f_chdir(
             );
             return;
         }
-    } else if !(*curwin).w_localdir.is_null() {
+    } else if !(*curwin.get()).w_localdir.is_null() {
         scope = kCdScopeWindow;
-    } else if !(*curtab).tp_localdir.is_null() {
+    } else if !(*curtab.get()).tp_localdir.is_null() {
         scope = kCdScopeTabpage;
     }
     if !changedir_func(
@@ -2911,11 +2911,12 @@ unsafe extern "C" fn findfilendir(
     mut find_what: ::core::ffi::c_int,
 ) {
     let mut fresult: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut path: *mut ::core::ffi::c_char = if *(*curbuf).b_p_path as ::core::ffi::c_int == NUL {
-        p_path
-    } else {
-        (*curbuf).b_p_path
-    };
+    let mut path: *mut ::core::ffi::c_char =
+        if *(*curbuf.get()).b_p_path as ::core::ffi::c_int == NUL {
+            p_path.get()
+        } else {
+            (*curbuf.get()).b_p_path
+        };
     let mut count: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut first: bool = true_0 != 0;
     let mut error: bool = false_0 != 0;
@@ -2978,11 +2979,11 @@ unsafe extern "C" fn findfilendir(
                 first as ::core::ffi::c_int,
                 path,
                 find_what,
-                (*curbuf).b_ffname,
+                (*curbuf.get()).b_ffname,
                 (if find_what == FINDFILE_DIR as ::core::ffi::c_int {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
-                    (*curbuf).b_p_sua as *const ::core::ffi::c_char
+                    (*curbuf.get()).b_p_sua as *const ::core::ffi::c_char
                 }) as *mut ::core::ffi::c_char,
                 &raw mut file_to_find,
                 &raw mut search_ctx,
@@ -3081,8 +3082,8 @@ pub unsafe extern "C" fn f_getcwd(
         [0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int];
     let mut cwd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut from: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut tp: *mut tabpage_T = curtab;
-    let mut win: *mut win_T = curwin;
+    let mut tp: *mut tabpage_T = curtab.get();
+    let mut win: *mut win_T = curwin.get();
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut i: ::core::ffi::c_int = kCdScopeWindow as ::core::ffi::c_int;
@@ -3192,8 +3193,8 @@ pub unsafe extern "C" fn f_getcwd(
                     break 's_250;
                 }
             }
-            if !globaldir.is_null() {
-                from = globaldir;
+            if !(*globaldir.ptr()).is_null() {
+                from = globaldir.get();
                 break 's_250;
             }
         }
@@ -3472,7 +3473,7 @@ pub unsafe extern "C" fn f_glob(
     if !error {
         ExpandInit(&raw mut xpc);
         xpc.xp_context = EXPAND_FILES as ::core::ffi::c_int;
-        if p_wic != 0 {
+        if p_wic.get() != 0 {
             options += WILD_ICASE as ::core::ffi::c_int;
         }
         if (*rettv).v_type as ::core::ffi::c_uint
@@ -3628,8 +3629,8 @@ pub unsafe extern "C" fn f_haslocaldir(
     let mut scope: CdScope = kCdScopeInvalid;
     let mut scope_number: [::core::ffi::c_int; 2] =
         [0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int];
-    let mut tp: *mut tabpage_T = curtab;
-    let mut win: *mut win_T = curwin;
+    let mut tp: *mut tabpage_T = curtab.get();
+    let mut win: *mut win_T = curwin.get();
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
     let mut i: ::core::ffi::c_int = kCdScopeWindow as ::core::ffi::c_int;
@@ -4762,7 +4763,7 @@ pub unsafe extern "C" fn f_writefile(
         != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
         && !((*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            && script_is_lua(current_sctx.sc_sid) as ::core::ffi::c_int != 0)
+            && script_is_lua((*current_sctx.ptr()).sc_sid) as ::core::ffi::c_int != 0)
     {
         semsg(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
@@ -4776,7 +4777,7 @@ pub unsafe extern "C" fn f_writefile(
     let mut binary: bool = false_0 != 0;
     let mut append: bool = false_0 != 0;
     let mut defer: bool = false_0 != 0;
-    let mut do_fsync: bool = p_fs != 0;
+    let mut do_fsync: bool = p_fs.get() != 0;
     let mut mkdir_p: bool = false_0 != 0;
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint

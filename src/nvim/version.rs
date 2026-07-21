@@ -33,9 +33,9 @@ extern "C" {
     fn api_free_object(value: Object);
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn buf_is_empty(buf: *mut buf_T) -> bool;
-    static mut p_ls: OptInt;
-    static mut p_shm: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_ls: GlobalCell<OptInt>;
+    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -43,7 +43,7 @@ extern "C" {
     fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn screenclear();
     fn plain_vgetc() -> ::core::ffi::c_int;
-    static mut default_gridview: GridView;
+    static default_gridview: GlobalCell<GridView>;
     fn grid_line_start(view: *mut GridView, row: ::core::ffi::c_int);
     fn grid_line_puts(
         col: ::core::ffi::c_int,
@@ -52,16 +52,16 @@ extern "C" {
         attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn grid_line_flush();
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut curbuf: *mut buf_T;
-    static mut starting: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static starting: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn nlua_exec(
@@ -3226,14 +3226,14 @@ unsafe extern "C" fn version_msg_wrap(mut s: *mut ::core::ffi::c_char, mut wrap:
         } else {
             0 as ::core::ffi::c_int
         });
-    if !got_int
-        && len < Columns
-        && msg_col + len >= Columns
+    if !got_int.get()
+        && len < Columns.get()
+        && msg_col.get() + len >= Columns.get()
         && *s as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
     {
         msg_putchar('\n' as ::core::ffi::c_int);
     }
-    if !got_int {
+    if !got_int.get() {
         if wrap {
             msg_puts(b"[\0".as_ptr() as *const ::core::ffi::c_char);
         }
@@ -3274,18 +3274,19 @@ pub unsafe extern "C" fn list_in_columns(
         i += 1;
     }
     width += 1 as ::core::ffi::c_int;
-    if Columns < width {
+    if Columns.get() < width {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < item_count {
             version_msg_wrap(*items.offset(i_0 as isize), i_0 == current);
-            if msg_col > 0 as ::core::ffi::c_int && i_0 < item_count - 1 as ::core::ffi::c_int {
+            if msg_col.get() > 0 as ::core::ffi::c_int && i_0 < item_count - 1 as ::core::ffi::c_int
+            {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
             i_0 += 1;
         }
         return;
     }
-    let mut ncol: ::core::ffi::c_int = (Columns + 1 as ::core::ffi::c_int) / width;
+    let mut ncol: ::core::ffi::c_int = (Columns.get() + 1 as ::core::ffi::c_int) / width;
     let mut nrow: ::core::ffi::c_int = item_count / ncol
         + (if item_count % ncol != 0 {
             1 as ::core::ffi::c_int
@@ -3294,7 +3295,7 @@ pub unsafe extern "C" fn list_in_columns(
         });
     let mut cur_row: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while !got_int && i_1 < nrow * ncol {
+    while !got_int.get() && i_1 < nrow * ncol {
         let mut idx: ::core::ffi::c_int = i_1 / ncol + i_1 % ncol * nrow;
         if idx < item_count {
             let mut last_col: bool =
@@ -3307,16 +3308,16 @@ pub unsafe extern "C" fn list_in_columns(
                 msg_putchar(']' as ::core::ffi::c_int);
             }
             if last_col {
-                if msg_col > 0 as ::core::ffi::c_int && cur_row < nrow {
+                if msg_col.get() > 0 as ::core::ffi::c_int && cur_row < nrow {
                     msg_putchar('\n' as ::core::ffi::c_int);
                 }
                 cur_row += 1;
             } else {
-                while msg_col % width != 0 {
+                while msg_col.get() % width != 0 {
                     msg_putchar(' ' as ::core::ffi::c_int);
                 }
             }
-        } else if msg_col > 0 as ::core::ffi::c_int {
+        } else if msg_col.get() > 0 as ::core::ffi::c_int {
             if cur_row < nrow {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
@@ -3382,7 +3383,7 @@ pub unsafe extern "C" fn list_version() {
     msg_puts(version_buildtype.get());
     msg_putchar('\n' as ::core::ffi::c_int);
     list_lua_version();
-    if p_verbose > 0 as OptInt {
+    if p_verbose.get() > 0 as OptInt {
         msg_putchar('\n' as ::core::ffi::c_int);
         msg_puts(b"Vim versions: \0".as_ptr() as *const ::core::ffi::c_char);
         let mut i: size_t = 0 as size_t;
@@ -3428,9 +3429,9 @@ pub unsafe extern "C" fn list_version() {
         }
     }
     version_msg(
-        (if p_verbose > 0 as OptInt {
+        (if p_verbose.get() > 0 as OptInt {
             b"\nRun :checkhealth for more info\0".as_ptr() as *const ::core::ffi::c_char
-        } else if starting != 0 {
+        } else if starting.get() != 0 {
             b"\nRun \"nvim -V1 -v\" for more info\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\nRun \":verbose version\" for more info\0".as_ptr() as *const ::core::ffi::c_char
@@ -3439,12 +3440,13 @@ pub unsafe extern "C" fn list_version() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_show_intro() -> bool {
-    return buf_is_empty(curbuf) as ::core::ffi::c_int != 0
-        && (*curbuf).b_fname.is_null()
-        && (*curbuf).handle == 1 as ::core::ffi::c_int
-        && (*curwin).handle == LOWEST_WIN_ID as ::core::ffi::c_int
-        && one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
-        && vim_strchr(p_shm, SHM_INTRO as ::core::ffi::c_int).is_null();
+    return buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0
+        && (*curbuf.get()).b_fname.is_null()
+        && (*curbuf.get()).handle == 1 as ::core::ffi::c_int
+        && (*curwin.get()).handle == LOWEST_WIN_ID as ::core::ffi::c_int
+        && one_window(curwin.get(), ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
+            != 0
+        && vim_strchr(p_shm.get(), SHM_INTRO as ::core::ffi::c_int).is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn intro_message(mut colon: bool) {
@@ -3504,15 +3506,15 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
         }
     };
     let mut blanklines: ::core::ffi::c_int =
-        Rows - (lines_size as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-    if p_ls > 1 as OptInt {
-        blanklines -= Rows - (*topframe).fr_height;
+        Rows.get() - (lines_size as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+    if p_ls.get() > 1 as OptInt {
+        blanklines -= Rows.get() - (*topframe.get()).fr_height;
     }
     if blanklines < 0 as ::core::ffi::c_int {
         blanklines = 0 as ::core::ffi::c_int;
     }
     let mut row: ::core::ffi::c_int = blanklines / 2 as ::core::ffi::c_int;
-    if row >= 2 as ::core::ffi::c_int && Columns >= 50 as ::core::ffi::c_int
+    if row >= 2 as ::core::ffi::c_int && Columns.get() >= 50 as ::core::ffi::c_int
         || colon as ::core::ffi::c_int != 0
     {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3564,7 +3566,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
                     mesg = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 }
             }
-            if *mesg as ::core::ffi::c_int != NUL && row < Rows - 1 as ::core::ffi::c_int {
+            if *mesg as ::core::ffi::c_int != NUL && row < Rows.get() - 1 as ::core::ffi::c_int {
                 do_intro_line(row, mesg, colon, i < 3 as ::core::ffi::c_int);
             }
             row += 1;
@@ -3587,15 +3589,15 @@ unsafe extern "C" fn do_intro_line(
 ) {
     let mut l: ::core::ffi::c_int = 0;
     let mut col: ::core::ffi::c_int = vim_strsize(mesg);
-    col = (Columns - col) / 2 as ::core::ffi::c_int;
+    col = (Columns.get() - col) / 2 as ::core::ffi::c_int;
     if col < 0 as ::core::ffi::c_int {
         col = 0 as ::core::ffi::c_int;
     }
     grid_line_start(
         if !colon && ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 {
-            &raw mut (*firstwin).w_grid
+            &raw mut (*firstwin.get()).w_grid
         } else {
-            &raw mut default_gridview
+            default_gridview.ptr()
         },
         row,
     );
@@ -3691,7 +3693,7 @@ unsafe extern "C" fn do_intro_line(
                 col,
                 p_1,
                 l,
-                *hl_attr_active.offset(HLF_8 as ::core::ffi::c_int as isize),
+                *(*hl_attr_active.ptr()).offset(HLF_8 as ::core::ffi::c_int as isize),
             );
         } else {
             let mut colon_pos: *mut ::core::ffi::c_char = memchr(
@@ -3709,7 +3711,7 @@ unsafe extern "C" fn do_intro_line(
                     col,
                     colon_pos,
                     1 as ::core::ffi::c_int,
-                    *hl_attr_active.offset(HLF_8 as ::core::ffi::c_int as isize),
+                    *(*hl_attr_active.ptr()).offset(HLF_8 as ::core::ffi::c_int as isize),
                 );
                 let mut cmd_len: ::core::ffi::c_int = l - prefix_len - 1 as ::core::ffi::c_int;
                 col += grid_line_puts(

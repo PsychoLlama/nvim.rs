@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -62,10 +62,10 @@ extern "C" {
         buf: *mut ::core::ffi::c_void,
         bufsize: size_t,
     ) -> ssize_t;
-    static mut firstbuf: *mut buf_T;
-    static mut got_int: bool;
-    static mut did_swapwrite_msg: bool;
-    static mut main_loop: Loop;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static got_int: GlobalCell<bool>;
+    static did_swapwrite_msg: GlobalCell<bool>;
+    static main_loop: SharedCell<Loop>;
     fn ml_open_file(buf: *mut buf_T);
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
@@ -2611,12 +2611,12 @@ pub unsafe extern "C" fn mf_sync(
     mut mfp: *mut memfile_T,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut got_int_save: ::core::ffi::c_int = got_int as ::core::ffi::c_int;
+    let mut got_int_save: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
     if (*mfp).mf_fd < 0 as ::core::ffi::c_int {
         (*mfp).mf_dirty = MF_DIRTY_NO;
         return FAIL;
     }
-    got_int = false_0 != 0;
+    got_int.set(false_0 != 0);
     let mut status: ::core::ffi::c_int = OK;
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
     let mut __i: uint32_t = 0;
@@ -2639,10 +2639,10 @@ pub unsafe extern "C" fn mf_sync(
                     if os_char_avail() {
                         break;
                     }
-                } else if main_loop.recursive == 0 {
+                } else if (*main_loop.ptr()).recursive == 0 {
                     os_breakcheck();
                 }
-                if got_int {
+                if got_int.get() {
                     break;
                 }
             }
@@ -2657,7 +2657,7 @@ pub unsafe extern "C" fn mf_sync(
             status = FAIL;
         }
     }
-    got_int = got_int as ::core::ffi::c_int | got_int_save != 0;
+    got_int.set(got_int.get() as ::core::ffi::c_int | got_int_save != 0);
     return status;
 }
 #[no_mangle]
@@ -2677,7 +2677,7 @@ pub unsafe extern "C" fn mf_set_dirty(mut mfp: *mut memfile_T) {
 #[no_mangle]
 pub unsafe extern "C" fn mf_release_all() -> bool {
     let mut retval: bool = false_0 != 0;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
         if !mfp.is_null() {
@@ -2831,17 +2831,17 @@ unsafe extern "C" fn mf_write(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) -> :
                 (*mfp).mf_reopen = (*mfp).mf_fd < 0 as ::core::ffi::c_int;
             }
             if attempt == 2 as ::core::ffi::c_int || (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-                if !did_swapwrite_msg {
+                if !did_swapwrite_msg.get() {
                     emsg(gettext(
                         b"E297: Write error in swap file\0".as_ptr() as *const ::core::ffi::c_char
                     ));
                 }
-                did_swapwrite_msg = true_0 != 0;
+                did_swapwrite_msg.set(true_0 != 0);
                 return FAIL;
             }
             attempt += 1;
         }
-        did_swapwrite_msg = false_0 != 0;
+        did_swapwrite_msg.set(false_0 != 0);
         if !hp2.is_null() {
             (*hp2).bh_flags &= !BH_DIRTY;
         }

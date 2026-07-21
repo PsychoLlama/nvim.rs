@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     pub type terminal;
@@ -128,16 +129,16 @@ extern "C" {
         new_byte: bcount_t,
         undo: ExtmarkOp,
     );
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut RedrawingDisabled: ::core::ffi::c_int;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
     fn modify_keymap(
         channel_id: uint64_t,
         buffer: Buffer,
@@ -207,7 +208,7 @@ extern "C" {
         start_col: colnr_T,
         end_col: colnr_T,
     ) -> bcount_t;
-    static mut p_acd: ::core::ffi::c_int;
+    static p_acd: GlobalCell<::core::ffi::c_int>;
     fn u_save_buf(buf: *mut buf_T, top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
 }
 pub type ptrdiff_t = isize;
@@ -2473,12 +2474,12 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 kMarkAdjustApi,
                 kExtmarkNOOP,
             );
-            if VIsual_active as ::core::ffi::c_int != 0
-                && b == curbuf
-                && VIsual.lnum >= start as linenr_T
+            if VIsual_active.get() as ::core::ffi::c_int != 0
+                && b == curbuf.get()
+                && (*VIsual.ptr()).lnum >= start as linenr_T
             {
-                if VIsual.lnum >= end as linenr_T {
-                    VIsual.lnum += extra as linenr_T;
+                if (*VIsual.ptr()).lnum >= end as linenr_T {
+                    (*VIsual.ptr()).lnum += extra as linenr_T;
                 }
                 check_visual_pos();
             }
@@ -2502,10 +2503,10 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 extra as linenr_T,
                 true,
             );
-            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
-                let mut win: *mut win_T = if tp == curtab {
-                    firstwin
+                let mut win: *mut win_T = if tp == curtab.get() {
+                    firstwin.get()
                 } else {
                     (*tp).tp_firstwin
                 };
@@ -2872,13 +2873,13 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 kMarkAdjustApi,
                 kExtmarkNOOP,
             );
-            if VIsual_active as ::core::ffi::c_int != 0
-                && b == curbuf
-                && VIsual_mode != 22 as ::core::ffi::c_int
+            if VIsual_active.get() as ::core::ffi::c_int != 0
+                && b == curbuf.get()
+                && VIsual_mode.get() != 22 as ::core::ffi::c_int
             {
                 fix_pos_col(
                     b,
-                    &raw mut VIsual,
+                    VIsual.ptr(),
                     start_row as linenr_T,
                     start_col as colnr_T,
                     end_row as linenr_T,
@@ -2909,10 +2910,10 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 extra as linenr_T,
                 true,
             );
-            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
-                let mut win: *mut win_T = if tp == curtab {
-                    firstwin
+                let mut win: *mut win_T = if tp == curtab.get() {
+                    firstwin.get()
                 } else {
                     (*tp).tp_firstwin
                 };
@@ -3255,11 +3256,11 @@ pub unsafe extern "C" fn nvim_buf_set_name(
         did_emsg: 0,
     };
     try_enter(&raw mut tstate);
-    let is_curbuf: bool = b == curbuf;
-    let save_acd: ::core::ffi::c_int = p_acd;
+    let is_curbuf: bool = b == curbuf.get();
+    let save_acd: ::core::ffi::c_int = p_acd.get();
     if !is_curbuf {
-        RedrawingDisabled += 1;
-        p_acd = 0 as ::core::ffi::c_int;
+        (*RedrawingDisabled.ptr()) += 1;
+        p_acd.set(0 as ::core::ffi::c_int);
     }
     let mut aco: aco_save_T = aco_save_T {
         use_aucmd_win_idx: 0,
@@ -3280,8 +3281,8 @@ pub unsafe extern "C" fn nvim_buf_set_name(
     ren_ret = rename_buffer(name.data);
     aucmd_restbuf(&raw mut aco);
     if !is_curbuf {
-        RedrawingDisabled -= 1;
-        p_acd = save_acd;
+        (*RedrawingDisabled.ptr()) -= 1;
+        p_acd.set(save_acd);
     }
     try_leave(&raw mut tstate, err);
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -3370,7 +3371,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
     }
     let mut fm: *mut fmark_T = mark_get(
         b,
-        curwin,
+        curwin.get(),
         ::core::ptr::null_mut::<fmark_T>(),
         kMarkAllNoResolve,
         *name.data as ::core::ffi::c_int,
@@ -3452,7 +3453,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
     let mut mark: ::core::ffi::c_char = *name.data;
     fm = mark_get(
         b,
-        curwin,
+        curwin.get(),
         ::core::ptr::null_mut::<fmark_T>(),
         kMarkAllNoResolve,
         mark as ::core::ffi::c_int,
@@ -3736,7 +3737,7 @@ unsafe extern "C" fn fix_cursor_cols(
     mut new_cols_at_end_row: colnr_T,
 ) {
     let mut mode_col_adj: colnr_T =
-        if win == curwin && State & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if win == curwin.get() && State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
             0 as colnr_T
         } else {
             1 as colnr_T

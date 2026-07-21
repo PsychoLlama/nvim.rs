@@ -111,10 +111,10 @@ extern "C" {
     fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
     fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
     fn redraw_all_later(type_0: ::core::ffi::c_int);
-    static mut p_ambw: *mut ::core::ffi::c_char;
-    static mut cmp_flags: ::core::ffi::c_uint;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_emoji: ::core::ffi::c_int;
+    static p_ambw: GlobalCell<*mut ::core::ffi::c_char>;
+    static cmp_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_emoji: GlobalCell<::core::ffi::c_int>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_listreq: [::core::ffi::c_char; 0];
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
@@ -134,10 +134,10 @@ extern "C" {
         buf: *mut ::core::ffi::c_char,
     ) -> *const ::core::ffi::c_char;
     fn beep_flush();
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut fenc_default: *mut ::core::ffi::c_char;
-    static mut IObuff: [::core::ffi::c_char; 1025];
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static fenc_default: GlobalCell<*mut ::core::ffi::c_char>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
     fn schar_from_buf(buf: *const ::core::ffi::c_char, len: size_t) -> schar_T;
     fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
     fn vim_strchr(
@@ -3597,28 +3597,28 @@ pub unsafe extern "C" fn enc_canon_props(
 #[no_mangle]
 pub unsafe extern "C" fn bomb_size() -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if (*curbuf).b_p_bomb != 0 && (*curbuf).b_p_bin == 0 {
-        if *(*curbuf).b_p_fenc as ::core::ffi::c_int == NUL
+    if (*curbuf.get()).b_p_bomb != 0 && (*curbuf.get()).b_p_bin == 0 {
+        if *(*curbuf.get()).b_p_fenc as ::core::ffi::c_int == NUL
             || strcmp(
-                (*curbuf).b_p_fenc,
+                (*curbuf.get()).b_p_fenc,
                 b"utf-8\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
         {
             n = 3 as ::core::ffi::c_int;
         } else if strncmp(
-            (*curbuf).b_p_fenc,
+            (*curbuf.get()).b_p_fenc,
             b"ucs-2\0".as_ptr() as *const ::core::ffi::c_char,
             5 as size_t,
         ) == 0 as ::core::ffi::c_int
             || strncmp(
-                (*curbuf).b_p_fenc,
+                (*curbuf.get()).b_p_fenc,
                 b"utf-16\0".as_ptr() as *const ::core::ffi::c_char,
                 6 as size_t,
             ) == 0 as ::core::ffi::c_int
         {
             n = 2 as ::core::ffi::c_int;
         } else if strncmp(
-            (*curbuf).b_p_fenc,
+            (*curbuf.get()).b_p_fenc,
             b"ucs-4\0".as_ptr() as *const ::core::ffi::c_char,
             5 as size_t,
         ) == 0 as ::core::ffi::c_int
@@ -3653,7 +3653,7 @@ pub unsafe extern "C" fn remove_bom(mut s: *mut ::core::ffi::c_char) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn mb_get_class(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return mb_get_class_tab(p, &raw mut (*curbuf).b_chartab as *mut uint64_t);
+    return mb_get_class_tab(p, &raw mut (*curbuf.get()).b_chartab as *mut uint64_t);
 }
 #[no_mangle]
 pub unsafe extern "C" fn mb_get_class_tab(
@@ -3718,12 +3718,12 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
     if (*prop).charwidth() as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
         return 2 as ::core::ffi::c_int;
     }
-    if *p_ambw as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
+    if *p_ambw.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
         && (*prop).ambiguous_width() as ::core::ffi::c_int != 0
     {
         return 2 as ::core::ffi::c_int;
     }
-    if p_emoji != 0
+    if p_emoji.get() != 0
         && c >= 0x1f000 as ::core::ffi::c_int
         && (*prop).ambiguous_width() == 0
         && prop_is_emojilike(prop) as ::core::ffi::c_int != 0
@@ -3746,7 +3746,7 @@ pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> 
         }
         let mut cells: ::core::ffi::c_int = utf_char2cells(c as ::core::ffi::c_int);
         if cells == 1 as ::core::ffi::c_int
-            && p_emoji != 0
+            && p_emoji.get() != 0
             && prop_is_emojilike(utf8proc_get_property(c as utf8proc_int32_t)) as ::core::ffi::c_int
                 != 0
         {
@@ -3845,7 +3845,7 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
         }
         let mut cells: ::core::ffi::c_int = utf_char2cells(c);
         if cells == 1 as ::core::ffi::c_int
-            && p_emoji != 0
+            && p_emoji.get() != 0
             && size > len
             && prop_is_emojilike(utf8proc_get_property(c as utf8proc_int32_t)) as ::core::ffi::c_int
                 != 0
@@ -4492,7 +4492,7 @@ pub unsafe extern "C" fn utf_printable(mut c: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_class(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return utf_class_tab(c, &raw mut (*curbuf).b_chartab as *mut uint64_t);
+    return utf_class_tab(c, &raw mut (*curbuf.get()).b_chartab as *mut uint64_t);
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_class_tab(
@@ -4946,7 +4946,7 @@ pub unsafe extern "C" fn utf_fold(mut a: ::core::ffi::c_int) -> ::core::ffi::c_i
 #[no_mangle]
 pub unsafe extern "C" fn mb_toupper(mut a: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if a < 128 as ::core::ffi::c_int
-        && cmp_flags & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && cmp_flags.get() & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         return if a < 'a' as ::core::ffi::c_int || a > 'z' as ::core::ffi::c_int {
             a
@@ -4954,7 +4954,7 @@ pub unsafe extern "C" fn mb_toupper(mut a: ::core::ffi::c_int) -> ::core::ffi::c
             a - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
         };
     }
-    if cmp_flags & kOptCmpFlagInternal as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
+    if cmp_flags.get() & kOptCmpFlagInternal as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
         return towupper(a as wint_t) as ::core::ffi::c_int;
     }
     if a < 128 as ::core::ffi::c_int {
@@ -4969,7 +4969,7 @@ pub unsafe extern "C" fn mb_islower(mut a: ::core::ffi::c_int) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn mb_tolower(mut a: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if a < 128 as ::core::ffi::c_int
-        && cmp_flags & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && cmp_flags.get() & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         return if a < 'A' as ::core::ffi::c_int || a > 'Z' as ::core::ffi::c_int {
             a
@@ -4977,7 +4977,7 @@ pub unsafe extern "C" fn mb_tolower(mut a: ::core::ffi::c_int) -> ::core::ffi::c
             a + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
         };
     }
-    if cmp_flags & kOptCmpFlagInternal as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
+    if cmp_flags.get() & kOptCmpFlagInternal as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
         return towlower(a as wint_t) as ::core::ffi::c_int;
     }
     if a < 128 as ::core::ffi::c_int {
@@ -5161,7 +5161,7 @@ pub unsafe extern "C" fn show_utf8() {
         if clen == 0 as ::core::ffi::c_int {
             if i > 0 as ::core::ffi::c_int {
                 strcpy(
-                    (&raw mut IObuff as *mut ::core::ffi::c_char).offset(rlen as isize),
+                    (IObuff.ptr() as *mut ::core::ffi::c_char).offset(rlen as isize),
                     b"+ \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 rlen = rlen.wrapping_add(2 as size_t);
@@ -5180,7 +5180,7 @@ pub unsafe extern "C" fn show_utf8() {
             }
         };
         snprintf(
-            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(rlen as isize),
+            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(rlen as isize),
             (IOSIZE as size_t).wrapping_sub(rlen),
             b"%02x \0".as_ptr() as *const ::core::ffi::c_char,
             if *line.offset(i as isize) as ::core::ffi::c_int == NL {
@@ -5191,7 +5191,7 @@ pub unsafe extern "C" fn show_utf8() {
         );
         clen -= 1;
         rlen = rlen.wrapping_add(strlen(
-            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(rlen as isize),
+            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(rlen as isize),
         ));
         if rlen > (IOSIZE - 20 as ::core::ffi::c_int) as size_t {
             break;
@@ -5199,7 +5199,7 @@ pub unsafe extern "C" fn show_utf8() {
         i += 1;
     }
     msg(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         0 as ::core::ffi::c_int,
     );
 }
@@ -5590,7 +5590,7 @@ pub unsafe extern "C" fn utf_cp_bounds(
 }
 #[no_mangle]
 pub unsafe extern "C" fn utf_find_illegal() {
-    let mut pos: pos_T = (*curwin).w_cursor;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut vimconv: vimconv_T = vimconv_T {
         vc_type: 0,
         vc_factor: 0,
@@ -5599,10 +5599,10 @@ pub unsafe extern "C" fn utf_find_illegal() {
     };
     let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     vimconv.vc_type = CONV_NONE as ::core::ffi::c_int;
-    if enc_canon_props((*curbuf).b_p_fenc) & ENC_8BIT as ::core::ffi::c_int != 0 {
-        convert_setup(&raw mut vimconv, p_enc, (*curbuf).b_p_fenc);
+    if enc_canon_props((*curbuf.get()).b_p_fenc) & ENC_8BIT as ::core::ffi::c_int != 0 {
+        convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc);
     }
-    (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     '_theend: {
         loop {
             let mut p: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
@@ -5620,7 +5620,8 @@ pub unsafe extern "C" fn utf_find_illegal() {
                     && (len == 1 as ::core::ffi::c_int || utf_char2len(utf_ptr2char(p)) != len)
                 {
                     if vimconv.vc_type == CONV_NONE as ::core::ffi::c_int {
-                        (*curwin).w_cursor.col += p.offset_from(get_cursor_pos_ptr()) as colnr_T;
+                        (*curwin.get()).w_cursor.col +=
+                            p.offset_from(get_cursor_pos_ptr()) as colnr_T;
                     } else {
                         let mut l: ::core::ffi::c_int = 0;
                         len = p.offset_from(tofree) as ::core::ffi::c_int;
@@ -5631,7 +5632,7 @@ pub unsafe extern "C" fn utf_find_illegal() {
                             c2rust_fresh1 > 0 as ::core::ffi::c_int
                         } {
                             l = utf_ptr2len(p);
-                            (*curwin).w_cursor.col += l;
+                            (*curwin.get()).w_cursor.col += l;
                             p = p.offset(l as isize);
                         }
                     }
@@ -5640,13 +5641,13 @@ pub unsafe extern "C" fn utf_find_illegal() {
                     p = p.offset(len as isize);
                 }
             }
-            if (*curwin).w_cursor.lnum == (*curbuf).b_ml.ml_line_count {
+            if (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count {
                 break;
             }
-            (*curwin).w_cursor.lnum += 1;
-            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.lnum += 1;
+            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
         }
-        (*curwin).w_cursor = pos;
+        (*curwin.get()).w_cursor = pos;
         beep_flush();
     }
     xfree(tofree as *mut ::core::ffi::c_void);
@@ -5695,7 +5696,7 @@ pub unsafe extern "C" fn utf_valid_string(
 }
 #[no_mangle]
 pub unsafe extern "C" fn mb_adjust_cursor() {
-    mark_mb_adjustpos(curbuf, &raw mut (*curwin).w_cursor);
+    mark_mb_adjustpos(curbuf.get(), &raw mut (*curwin.get()).w_cursor);
 }
 #[no_mangle]
 pub unsafe extern "C" fn mb_check_adjust_col(mut win_: *mut ::core::ffi::c_void) {
@@ -5834,7 +5835,7 @@ pub unsafe extern "C" fn enc_canonize(
     mut enc: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     if strcmp(enc, b"default\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int {
-        return xstrdup(fenc_default);
+        return xstrdup(fenc_default.get());
     }
     let mut r: *mut ::core::ffi::c_char =
         xmalloc(strlen(enc).wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;

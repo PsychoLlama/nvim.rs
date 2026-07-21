@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -44,12 +45,12 @@ extern "C" {
         firstp: *mut linenr_T,
         lastp: *mut linenr_T,
     ) -> bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut restart_edit: ::core::ffi::c_int;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
     fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
     fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -73,7 +74,7 @@ extern "C" {
     fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
     fn get_ve_flags(wp: *mut win_T) -> ::core::ffi::c_uint;
     fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t;
-    static mut p_sel: *mut ::core::ffi::c_char;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
     fn linetabsize(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
     fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
     fn init_charsize_arg(
@@ -1757,8 +1758,8 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub unsafe extern "C" fn getviscol() -> ::core::ffi::c_int {
     let mut x: colnr_T = 0;
     getvvcol(
-        curwin,
-        &raw mut (*curwin).w_cursor,
+        curwin.get(),
+        &raw mut (*curwin.get()).w_cursor,
         &raw mut x,
         ::core::ptr::null_mut::<colnr_T>(),
         ::core::ptr::null_mut::<colnr_T>(),
@@ -1773,11 +1774,11 @@ pub unsafe extern "C" fn getviscol2(mut col: colnr_T, mut coladd: colnr_T) -> ::
         col: 0,
         coladd: 0,
     };
-    pos.lnum = (*curwin).w_cursor.lnum;
+    pos.lnum = (*curwin.get()).w_cursor.lnum;
     pos.col = col;
     pos.coladd = coladd;
     getvvcol(
-        curwin,
+        curwin.get(),
         &raw mut pos,
         &raw mut x,
         ::core::ptr::null_mut::<colnr_T>(),
@@ -1788,16 +1789,16 @@ pub unsafe extern "C" fn getviscol2(mut col: colnr_T, mut coladd: colnr_T) -> ::
 #[no_mangle]
 pub unsafe extern "C" fn coladvance_force(mut wcol: colnr_T) -> ::core::ffi::c_int {
     let mut rc: ::core::ffi::c_int = coladvance2(
-        curwin,
-        &raw mut (*curwin).w_cursor,
+        curwin.get(),
+        &raw mut (*curwin.get()).w_cursor,
         true_0 != 0,
         false_0 != 0,
         wcol,
     );
     if wcol == MAXCOL as ::core::ffi::c_int {
-        (*curwin).w_valid &= !VALID_VIRTCOL;
+        (*curwin.get()).w_valid &= !VALID_VIRTCOL;
     } else {
-        set_valid_virtcol(curwin, wcol);
+        set_valid_virtcol(curwin.get(), wcol);
     }
     return rc;
 }
@@ -1810,7 +1811,7 @@ pub unsafe extern "C" fn coladvance(mut wp: *mut win_T, mut wcol: colnr_T) -> ::
         as ::core::ffi::c_int
         != TAB
     {
-        set_valid_virtcol(curwin, wcol);
+        set_valid_virtcol(curwin.get(), wcol);
     }
     return rc;
 }
@@ -1822,7 +1823,7 @@ unsafe extern "C" fn coladvance2(
     mut wcol_arg: colnr_T,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if wp == curwin || !addspaces {
+        if wp == curwin.get() || !addspaces {
         } else {
             __assert_fail(
                 b"wp == curwin || !addspaces\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1837,11 +1838,11 @@ unsafe extern "C" fn coladvance2(
     let mut idx: ::core::ffi::c_int = 0;
     let mut col: colnr_T = 0 as colnr_T;
     let mut head: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut one_more: ::core::ffi::c_int = (State & MODE_INSERT as ::core::ffi::c_int != 0
-        || State & MODE_TERMINAL as ::core::ffi::c_int != 0
-        || restart_edit != NUL
-        || VIsual_active as ::core::ffi::c_int != 0
-            && *p_sel as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
+    let mut one_more: ::core::ffi::c_int = (State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        || State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+        || restart_edit.get() != NUL
+        || VIsual_active.get() as ::core::ffi::c_int != 0
+            && *p_sel.get() as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
         || get_ve_flags(wp) & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             && wcol < MAXCOL as ::core::ffi::c_int)
         as ::core::ffi::c_int;
@@ -1851,7 +1852,7 @@ unsafe extern "C" fn coladvance2(
         idx = linelen - 1 as ::core::ffi::c_int + one_more;
         col = wcol;
         if (addspaces as ::core::ffi::c_int != 0 || finetune as ::core::ffi::c_int != 0)
-            && !VIsual_active
+            && !VIsual_active.get()
         {
             (*wp).w_curswant = (linetabsize(wp, (*pos).lnum) + one_more) as colnr_T;
             if (*wp).w_curswant > 0 as ::core::ffi::c_int {
@@ -1872,7 +1873,7 @@ unsafe extern "C" fn coladvance2(
                 csize -= 1;
             }
             if wcol as ::core::ffi::c_int / width > csize / width
-                && (State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                && (State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                     || wcol > csize + 1 as ::core::ffi::c_int)
             {
                 wcol = ((csize / width + 1 as ::core::ffi::c_int) * width - 1 as ::core::ffi::c_int)
@@ -2089,11 +2090,11 @@ pub unsafe extern "C" fn getvpos(
 }
 #[no_mangle]
 pub unsafe extern "C" fn inc_cursor() -> ::core::ffi::c_int {
-    return inc(&raw mut (*curwin).w_cursor);
+    return inc(&raw mut (*curwin.get()).w_cursor);
 }
 #[no_mangle]
 pub unsafe extern "C" fn dec_cursor() -> ::core::ffi::c_int {
-    return dec(&raw mut (*curwin).w_cursor);
+    return dec(&raw mut (*curwin.get()).w_cursor);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_rel_lnum(mut wp: *mut win_T, mut lnum: linenr_T) -> linenr_T {
@@ -2160,11 +2161,11 @@ pub unsafe extern "C" fn check_cursor_col(mut win: *mut win_T) {
     if len == 0 as ::core::ffi::c_int {
         (*win).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     } else if (*win).w_cursor.col >= len {
-        if State & MODE_INSERT as ::core::ffi::c_int != 0
-            || restart_edit != 0
-            || State & MODE_TERMINAL as ::core::ffi::c_int != 0
-            || VIsual_active as ::core::ffi::c_int != 0
-                && *p_sel as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
+        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+            || restart_edit.get() != 0
+            || State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+            || VIsual_active.get() as ::core::ffi::c_int != 0
+                && *p_sel.get() as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
             || cur_ve_flags & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             || virtual_active(win) as ::core::ffi::c_int != 0
         {
@@ -2221,70 +2222,74 @@ pub unsafe extern "C" fn check_cursor(mut wp: *mut win_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_visual_pos() {
-    if VIsual.lnum > (*curbuf).b_ml.ml_line_count {
-        VIsual.lnum = (*curbuf).b_ml.ml_line_count;
-        VIsual.col = 0 as ::core::ffi::c_int as colnr_T;
-        VIsual.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    if (*VIsual.ptr()).lnum > (*curbuf.get()).b_ml.ml_line_count {
+        (*VIsual.ptr()).lnum = (*curbuf.get()).b_ml.ml_line_count;
+        (*VIsual.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
+        (*VIsual.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
     } else {
-        let mut len: ::core::ffi::c_int = ml_get_len(VIsual.lnum);
-        if VIsual.col > len {
-            VIsual.col = len as colnr_T;
-            VIsual.coladd = 0 as ::core::ffi::c_int as colnr_T;
+        let mut len: ::core::ffi::c_int = ml_get_len((*VIsual.ptr()).lnum);
+        if (*VIsual.ptr()).col > len {
+            (*VIsual.ptr()).col = len as colnr_T;
+            (*VIsual.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
         }
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn adjust_cursor_col() {
-    if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
-        && (!VIsual_active || *p_sel as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
+    if (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
+        && (!VIsual_active.get() || *p_sel.get() as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
         && gchar_cursor() == NUL
     {
-        (*curwin).w_cursor.col -= 1;
+        (*curwin.get()).w_cursor.col -= 1;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_leftcol(mut leftcol: colnr_T) -> bool {
-    if (*curwin).w_leftcol == leftcol {
+    if (*curwin.get()).w_leftcol == leftcol {
         return false_0 != 0;
     }
-    (*curwin).w_leftcol = leftcol;
-    changed_cline_bef_curs(curwin);
-    let mut lastcol: int64_t = ((*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width
-        - win_col_off(curwin)
+    (*curwin.get()).w_leftcol = leftcol;
+    changed_cline_bef_curs(curwin.get());
+    let mut lastcol: int64_t = ((*curwin.get()).w_leftcol as ::core::ffi::c_int
+        + (*curwin.get()).w_view_width
+        - win_col_off(curwin.get())
         - 1 as ::core::ffi::c_int) as int64_t;
-    validate_virtcol(curwin);
+    validate_virtcol(curwin.get());
     let mut retval: bool = false_0 != 0;
-    let mut siso: int64_t = get_sidescrolloff_value(curwin);
-    if (*curwin).w_virtcol > (lastcol - siso) as colnr_T {
+    let mut siso: int64_t = get_sidescrolloff_value(curwin.get());
+    if (*curwin.get()).w_virtcol > (lastcol - siso) as colnr_T {
         retval = true_0 != 0;
-        coladvance(curwin, (lastcol - siso) as colnr_T);
-    } else if ((*curwin).w_virtcol as int64_t) < (*curwin).w_leftcol as int64_t + siso {
+        coladvance(curwin.get(), (lastcol - siso) as colnr_T);
+    } else if ((*curwin.get()).w_virtcol as int64_t) < (*curwin.get()).w_leftcol as int64_t + siso {
         retval = true_0 != 0;
-        coladvance(curwin, ((*curwin).w_leftcol as int64_t + siso) as colnr_T);
+        coladvance(
+            curwin.get(),
+            ((*curwin.get()).w_leftcol as int64_t + siso) as colnr_T,
+        );
     }
     let mut s: colnr_T = 0;
     let mut e: colnr_T = 0;
     getvvcol(
-        curwin,
-        &raw mut (*curwin).w_cursor,
+        curwin.get(),
+        &raw mut (*curwin.get()).w_cursor,
         &raw mut s,
         ::core::ptr::null_mut::<colnr_T>(),
         &raw mut e,
     );
     if e > lastcol as colnr_T {
         retval = true_0 != 0;
-        coladvance(curwin, s - 1 as colnr_T);
-    } else if s < (*curwin).w_leftcol {
+        coladvance(curwin.get(), s - 1 as colnr_T);
+    } else if s < (*curwin.get()).w_leftcol {
         retval = true_0 != 0;
-        if coladvance(curwin, e + 1 as colnr_T) == FAIL {
-            (*curwin).w_leftcol = s;
-            changed_cline_bef_curs(curwin);
+        if coladvance(curwin.get(), e + 1 as colnr_T) == FAIL {
+            (*curwin.get()).w_leftcol = s;
+            changed_cline_bef_curs(curwin.get());
         }
     }
     if retval {
-        (*curwin).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = true_0;
     }
-    redraw_later(curwin, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
     return retval;
 }
 #[no_mangle]
@@ -2293,34 +2298,37 @@ pub unsafe extern "C" fn gchar_cursor() -> ::core::ffi::c_int {
 }
 #[no_mangle]
 pub unsafe extern "C" fn char_before_cursor() -> ::core::ffi::c_int {
-    if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int {
+    if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
     }
     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-    let mut p: *mut ::core::ffi::c_char = line.offset((*curwin).w_cursor.col as isize);
+    let mut p: *mut ::core::ffi::c_char = line.offset((*curwin.get()).w_cursor.col as isize);
     let mut prev_len: ::core::ffi::c_int =
         utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize))) + 1 as ::core::ffi::c_int;
     return utf_ptr2char(p.offset(-(prev_len as isize)));
 }
 #[no_mangle]
 pub unsafe extern "C" fn pchar_cursor(mut c: ::core::ffi::c_char) {
-    *ml_get_buf_mut(curbuf, (*curwin).w_cursor.lnum).offset((*curwin).w_cursor.col as isize) = c;
+    *ml_get_buf_mut(curbuf.get(), (*curwin.get()).w_cursor.lnum)
+        .offset((*curwin.get()).w_cursor.col as isize) = c;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char {
-    return ml_get_buf(curbuf, (*curwin).w_cursor.lnum);
+    return ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char {
-    return ml_get_buf(curbuf, (*curwin).w_cursor.lnum).offset((*curwin).w_cursor.col as isize);
+    return ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum)
+        .offset((*curwin.get()).w_cursor.col as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_len() -> colnr_T {
-    return ml_get_buf_len(curbuf, (*curwin).w_cursor.lnum);
+    return ml_get_buf_len(curbuf.get(), (*curwin.get()).w_cursor.lnum);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_pos_len() -> colnr_T {
-    return ml_get_buf_len(curbuf, (*curwin).w_cursor.lnum) - (*curwin).w_cursor.col;
+    return ml_get_buf_len(curbuf.get(), (*curwin.get()).w_cursor.lnum)
+        - (*curwin.get()).w_cursor.col;
 }
 #[inline(always)]
 unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {

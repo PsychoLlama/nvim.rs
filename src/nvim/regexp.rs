@@ -120,17 +120,17 @@ extern "C" {
     fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut rc_did_emsg: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut reg_do_extmatch: ::core::ffi::c_int;
-    static mut re_extmatch_in: *mut reg_extmatch_T;
-    static mut re_extmatch_out: *mut reg_extmatch_T;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static rc_did_emsg: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static reg_do_extmatch: GlobalCell<::core::ffi::c_int>;
+    static re_extmatch_in: GlobalCell<*mut reg_extmatch_T>;
+    static re_extmatch_out: GlobalCell<*mut reg_extmatch_T>;
     fn mark_get(
         buf: *mut buf_T,
         win: *mut win_T,
@@ -176,11 +176,11 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_mmp: OptInt;
-    static mut p_re: OptInt;
-    static mut p_sel: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mmp: GlobalCell<OptInt>;
+    static p_re: GlobalCell<OptInt>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn fast_breakcheck();
     fn init_charsize_arg(
         csarg: *mut CharsizeArg,
@@ -2875,7 +2875,7 @@ unsafe extern "C" fn get_coll_element(mut pp: *mut *mut ::core::ffi::c_char) -> 
 }
 static reg_cpo_lit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn get_cpo_flags() {
-    reg_cpo_lit.set(!vim_strchr(p_cpo, CPO_LITERAL).is_null() as ::core::ffi::c_int);
+    reg_cpo_lit.set(!vim_strchr(p_cpo.get(), CPO_LITERAL).is_null() as ::core::ffi::c_int);
 }
 unsafe extern "C" fn skip_anyof(mut p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut l: ::core::ffi::c_int = 0;
@@ -3380,7 +3380,7 @@ unsafe extern "C" fn read_limits(
                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
             },
         );
-        rc_did_emsg = true_0 != 0;
+        rc_did_emsg.set(true_0 != 0);
         return FAIL;
     }
     if reverse == 0 && *minval > *maxval || reverse != 0 && *minval < *maxval {
@@ -3570,7 +3570,7 @@ unsafe extern "C" fn reg_match_visual() -> bool {
     let mut lnum: linenr_T = 0;
     let mut col: colnr_T = 0;
     let mut wp: *mut win_T = if (*rex.ptr()).reg_win.is_null() {
-        curwin
+        curwin.get()
     } else {
         (*rex.ptr()).reg_win
     };
@@ -3580,35 +3580,38 @@ unsafe extern "C" fn reg_match_visual() -> bool {
     let mut start2: colnr_T = 0;
     let mut end2: colnr_T = 0;
     let mut curswant: colnr_T = 0;
-    if (*rex.ptr()).reg_buf != curbuf
-        || VIsual.lnum == 0 as linenr_T
+    if (*rex.ptr()).reg_buf != curbuf.get()
+        || (*VIsual.ptr()).lnum == 0 as linenr_T
         || !(*rex.ptr()).reg_match.is_null()
     {
         return false_0 != 0;
     }
-    if VIsual_active {
-        if lt(VIsual, (*wp).w_cursor) {
-            top = VIsual;
+    if VIsual_active.get() {
+        if lt(VIsual.get(), (*wp).w_cursor) {
+            top = VIsual.get();
             bot = (*wp).w_cursor;
         } else {
             top = (*wp).w_cursor;
-            bot = VIsual;
+            bot = VIsual.get();
         }
-        mode = VIsual_mode;
+        mode = VIsual_mode.get();
         curswant = (*wp).w_curswant;
     } else {
-        if lt((*curbuf).b_visual.vi_start, (*curbuf).b_visual.vi_end) {
-            top = (*curbuf).b_visual.vi_start;
-            bot = (*curbuf).b_visual.vi_end;
+        if lt(
+            (*curbuf.get()).b_visual.vi_start,
+            (*curbuf.get()).b_visual.vi_end,
+        ) {
+            top = (*curbuf.get()).b_visual.vi_start;
+            bot = (*curbuf.get()).b_visual.vi_end;
         } else {
-            top = (*curbuf).b_visual.vi_end;
-            bot = (*curbuf).b_visual.vi_start;
+            top = (*curbuf.get()).b_visual.vi_end;
+            bot = (*curbuf.get()).b_visual.vi_start;
         }
-        if bot.lnum > (*curbuf).b_ml.ml_line_count {
-            bot.lnum = (*curbuf).b_ml.ml_line_count;
+        if bot.lnum > (*curbuf.get()).b_ml.ml_line_count {
+            bot.lnum = (*curbuf.get()).b_ml.ml_line_count;
         }
-        mode = (*curbuf).b_visual.vi_mode;
-        curswant = (*curbuf).b_visual.vi_curswant;
+        mode = (*curbuf.get()).b_visual.vi_mode;
+        curswant = (*curbuf.get()).b_visual.vi_curswant;
     }
     lnum = (*rex.ptr()).lnum + (*rex.ptr()).reg_firstlnum;
     if lnum < top.lnum || lnum > bot.lnum {
@@ -3620,7 +3623,7 @@ unsafe extern "C" fn reg_match_visual() -> bool {
             || lnum == bot.lnum
                 && col
                     >= bot.col as ::core::ffi::c_int
-                        + (*p_sel as ::core::ffi::c_int != 'e' as ::core::ffi::c_int)
+                        + (*p_sel.get() as ::core::ffi::c_int != 'e' as ::core::ffi::c_int)
                             as ::core::ffi::c_int
         {
             return false_0 != 0;
@@ -3663,7 +3666,7 @@ unsafe extern "C" fn reg_match_visual() -> bool {
         if cols < start
             || cols
                 > end as ::core::ffi::c_int
-                    - (*p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int)
+                    - (*p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int)
                         as ::core::ffi::c_int
         {
             return false_0 != 0;
@@ -3836,7 +3839,7 @@ unsafe extern "C" fn match_with_backref(
         }
         clnum += 1;
         ccol = 0 as ::core::ffi::c_int as colnr_T;
-        if got_int {
+        if got_int.get() {
             return RA_FAIL;
         }
     }
@@ -3848,7 +3851,7 @@ unsafe extern "C" fn re_mult_next(mut what: *mut ::core::ffi::c_char) -> bool {
             gettext(b"E888: (NFA regexp) cannot repeat %s\0".as_ptr() as *const ::core::ffi::c_char),
             what,
         );
-        rc_did_emsg = true_0 != 0;
+        rc_did_emsg.set(true_0 != 0);
         return false_0 != 0;
     }
     return true_0 != 0;
@@ -4435,7 +4438,7 @@ pub unsafe extern "C" fn vim_regsub(
     (*rex.ptr()).reg_match = rmp;
     (*rex.ptr()).reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
     (*rex.ptr()).reg_maxline = 0 as ::core::ffi::c_int as linenr_T;
-    (*rex.ptr()).reg_buf = curbuf;
+    (*rex.ptr()).reg_buf = curbuf.get();
     (*rex.ptr()).reg_line_lbr = true_0 != 0;
     let mut result: ::core::ffi::c_int = vim_regsub_both(source, expr, dest, destlen, flags);
     rex_in_use.set(rex_in_use_save);
@@ -4488,9 +4491,9 @@ pub unsafe extern "C" fn vim_regsub_multi(
     rex_in_use.set(true_0 != 0);
     (*rex.ptr()).reg_match = ::core::ptr::null_mut::<regmatch_T>();
     (*rex.ptr()).reg_mmatch = rmp;
-    (*rex.ptr()).reg_buf = curbuf;
+    (*rex.ptr()).reg_buf = curbuf.get();
     (*rex.ptr()).reg_firstlnum = lnum;
-    (*rex.ptr()).reg_maxline = (*curbuf).b_ml.ml_line_count - lnum;
+    (*rex.ptr()).reg_maxline = (*curbuf.get()).b_ml.ml_line_count - lnum;
     (*rex.ptr()).reg_line_lbr = false_0 != 0;
     let mut result: ::core::ffi::c_int = vim_regsub_both(
         source,
@@ -6532,7 +6535,7 @@ unsafe extern "C" fn seen_endbrace(mut refnum: ::core::ffi::c_int) -> ::core::ff
             emsg(gettext(
                 b"E65: Illegal back reference\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return false_0;
         }
     }
@@ -6619,7 +6622,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                     },
                                 );
-                                rc_did_emsg = true_0 != 0;
+                                rc_did_emsg.set(true_0 != 0);
                                 return NULL_0 as *mut uint8_t;
                             }
                             ret = reg(REG_PAREN, &raw mut flags);
@@ -6644,13 +6647,13 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                     },
                                 );
-                                rc_did_emsg = true_0 != 0;
+                                rc_did_emsg.set(true_0 != 0);
                                 return NULL_0 as *mut uint8_t;
                             }
                             iemsg(gettext(
                                 &raw const e_internal_error_in_regexp as *const ::core::ffi::c_char,
                             ));
-                            rc_did_emsg = true_0 != 0;
+                            rc_did_emsg.set(true_0 != 0);
                             return NULL_0 as *mut uint8_t;
                         }
                         -195 | -193 | -213 | -192 | -133 | -214 => {
@@ -6674,7 +6677,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                 },
                                 c,
                             );
-                            rc_did_emsg = true_0 != 0;
+                            rc_did_emsg.set(true_0 != 0);
                             return NULL_0 as *mut uint8_t;
                         }
                         -130 => {
@@ -6698,7 +6701,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                 }
                             } else {
                                 emsg(gettext(&raw const e_nopresub as *const ::core::ffi::c_char));
-                                rc_did_emsg = true_0 != 0;
+                                rc_did_emsg.set(true_0 != 0);
                                 return NULL_0 as *mut uint8_t;
                             }
                             break 's_2192;
@@ -6716,12 +6719,12 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                             c = no_Magic(getchr());
                             match c {
                                 40 => {
-                                    if reg_do_extmatch & REX_SET == 0 as ::core::ffi::c_int {
+                                    if reg_do_extmatch.get() & REX_SET == 0 as ::core::ffi::c_int {
                                         emsg(gettext(
                                             (e_z_not_allowed.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     if one_exactly.get() != 0 {
@@ -6739,7 +6742,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                             },
                                         );
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     ret = reg(REG_ZPAREN, &raw mut flags);
@@ -6750,12 +6753,12 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                     re_has_z.set(REX_SET);
                                 }
                                 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
-                                    if reg_do_extmatch & REX_USE == 0 as ::core::ffi::c_int {
+                                    if reg_do_extmatch.get() & REX_USE == 0 as ::core::ffi::c_int {
                                         emsg(gettext(
                                             (e_z1_not_allowed.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     ret = regnode(ZREF + c - '0' as ::core::ffi::c_int);
@@ -6782,7 +6785,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                 _ => {
                                     emsg(gettext(b"E68: Invalid character after \\z\0".as_ptr()
                                         as *const ::core::ffi::c_char));
-                                    rc_did_emsg = true_0 != 0;
+                                    rc_did_emsg.set(true_0 != 0);
                                     return NULL_0 as *mut uint8_t;
                                 }
                             }
@@ -6809,7 +6812,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
                                         ret = reg(REG_NPAREN, &raw mut flags);
@@ -6875,7 +6878,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
                                         let mut lastbranch: *mut uint8_t =
@@ -6906,7 +6909,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                             as *const ::core::ffi::c_char
                                                     },
                                                 );
-                                                rc_did_emsg = true_0 != 0;
+                                                rc_did_emsg.set(true_0 != 0);
                                                 return NULL_0 as *mut uint8_t;
                                             }
                                             br = regnode(BRANCH);
@@ -6941,7 +6944,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
                                         lastbranch = regnode(BRANCH);
@@ -7003,7 +7006,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
                                         if use_multibytecode(i as ::core::ffi::c_int) {
@@ -7077,12 +7080,13 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                         ),
                                                         no_Magic(c),
                                                     );
-                                                    rc_did_emsg = true_0 != 0;
+                                                    rc_did_emsg.set(true_0 != 0);
                                                     return ::core::ptr::null_mut::<uint8_t>();
                                                 }
                                                 if c == 'l' as ::core::ffi::c_int {
                                                     if cur {
-                                                        n = (*curwin).w_cursor.lnum as uint32_t;
+                                                        n = (*curwin.get()).w_cursor.lnum
+                                                            as uint32_t;
                                                     }
                                                     ret = regnode(RE_LNUM);
                                                     if save_prev_at_start != 0 {
@@ -7090,7 +7094,8 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     }
                                                 } else if c == 'c' as ::core::ffi::c_int {
                                                     if cur {
-                                                        n = (*curwin).w_cursor.col as uint32_t;
+                                                        n = (*curwin.get()).w_cursor.col
+                                                            as uint32_t;
                                                         n = n.wrapping_add(1);
                                                     }
                                                     ret = regnode(RE_COL);
@@ -7098,8 +7103,8 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     if cur {
                                                         let mut vcol: colnr_T = 0 as colnr_T;
                                                         getvvcol(
-                                                            curwin,
-                                                            &raw mut (*curwin).w_cursor,
+                                                            curwin.get(),
+                                                            &raw mut (*curwin.get()).w_cursor,
                                                             ::core::ptr::null_mut::<colnr_T>(),
                                                             ::core::ptr::null_mut::<colnr_T>(),
                                                             &raw mut vcol,
@@ -7134,7 +7139,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                             },
                                         );
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                 }
@@ -7205,7 +7210,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                             (e_reverse_range.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     if utf_char2len(startc) > 1 as ::core::ffi::c_int
@@ -7216,7 +7221,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                 (e_large_class.ptr() as *const _)
                                                     as *const ::core::ffi::c_char,
                                             ));
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
                                         loop {
@@ -7285,7 +7290,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                             (e_unicode_val_too_large.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     if startc == 0 as ::core::ffi::c_int {
@@ -7522,7 +7527,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                         prevchr_len.set(1 as ::core::ffi::c_int);
                         if *regparse.get() as ::core::ffi::c_int != ']' as ::core::ffi::c_int {
                             emsg(gettext(&raw const e_toomsbra as *const ::core::ffi::c_char));
-                            rc_did_emsg = true_0 != 0;
+                            rc_did_emsg.set(true_0 != 0);
                             return NULL_0 as *mut uint8_t;
                         }
                         skipchr();
@@ -7543,7 +7548,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                 },
                             );
-                            rc_did_emsg = true_0 != 0;
+                            rc_did_emsg.set(true_0 != 0);
                             return NULL_0 as *mut uint8_t;
                         }
                         break 's_2080;
@@ -7556,7 +7561,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                         (e_invalid_use_of_underscore.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     ));
-                    rc_did_emsg = true_0 != 0;
+                    rc_did_emsg.set(true_0 != 0);
                     return NULL_0 as *mut uint8_t;
                 }
                 if c == '.' as ::core::ffi::c_int - 256 as ::core::ffi::c_int
@@ -7696,7 +7701,7 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
                     },
                 );
-                rc_did_emsg = true_0 != 0;
+                rc_did_emsg.set(true_0 != 0);
                 return NULL_0 as *mut uint8_t;
             }
             if lop == BEHIND || lop == NOBEHIND {
@@ -7740,7 +7745,7 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
                             b"\\\0".as_ptr() as *const ::core::ffi::c_char
                         },
                     );
-                    rc_did_emsg = true_0 != 0;
+                    rc_did_emsg.set(true_0 != 0);
                     return NULL_0 as *mut uint8_t;
                 }
                 reginsert(BRACE_COMPLEX + num_complex_braces.get(), ret);
@@ -7767,7 +7772,7 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         }
         semsg(
@@ -7781,7 +7786,7 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
             },
             no_Magic(peekchr()),
         );
-        rc_did_emsg = true_0 != 0;
+        rc_did_emsg.set(true_0 != 0);
         return NULL_0 as *mut uint8_t;
     }
     return ret;
@@ -7898,7 +7903,7 @@ unsafe extern "C" fn reg(
             emsg(gettext(
                 b"E50: Too many \\z(\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         }
         parno = regnzpar.get();
@@ -7916,7 +7921,7 @@ unsafe extern "C" fn reg(
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         }
         parno = regnpar.get();
@@ -7972,7 +7977,7 @@ unsafe extern "C" fn reg(
             emsg(gettext(
                 b"E52: Unmatched \\z(\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         } else if paren == REG_NPAREN {
             semsg(
@@ -7985,7 +7990,7 @@ unsafe extern "C" fn reg(
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         } else {
             semsg(
@@ -7998,7 +8003,7 @@ unsafe extern "C" fn reg(
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         }
     } else if paren == REG_NOPAREN && peekchr() != NUL {
@@ -8013,11 +8018,11 @@ unsafe extern "C" fn reg(
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         } else {
             emsg(gettext(&raw const e_trailing as *const ::core::ffi::c_char));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut uint8_t;
         }
     }
@@ -8036,7 +8041,7 @@ unsafe extern "C" fn bt_regcomp(
     let mut flags: ::core::ffi::c_int = 0;
     if expr.is_null() {
         iemsg(gettext(&raw const e_null as *const ::core::ffi::c_char));
-        rc_did_emsg = true_0 != 0;
+        rc_did_emsg.set(true_0 != 0);
         return NULL_0 as *mut regprog_T;
     }
     init_class_tab();
@@ -8058,7 +8063,7 @@ unsafe extern "C" fn bt_regcomp(
             emsg(gettext(
                 b"E339: Pattern too long\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return NULL_0 as *mut regprog_T;
         }
         return ::core::ptr::null_mut::<regprog_T>();
@@ -8239,7 +8244,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                                         count += 1;
                                         reg_nextline();
                                         scan = (*rex.ptr()).input;
-                                        if got_int {
+                                        if got_int.get() {
                                             break;
                                         }
                                     }
@@ -8441,7 +8446,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                                             reg_nextline();
                                         }
                                         scan = (*rex.ptr()).input;
-                                        if got_int {
+                                        if got_int.get() {
                                             break;
                                         }
                                     }
@@ -8475,7 +8480,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                                     }
                                     reg_nextline();
                                     scan = (*rex.ptr()).input;
-                                    if got_int {
+                                    if got_int.get() {
                                         break;
                                     }
                                 } else {
@@ -8516,7 +8521,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                                 }
                                 reg_nextline();
                                 scan = (*rex.ptr()).input;
-                                if got_int {
+                                if got_int.get() {
                                     break;
                                 }
                             } else {
@@ -8552,7 +8557,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                             }
                             reg_nextline();
                             scan = (*rex.ptr()).input;
-                            if got_int {
+                            if got_int.get() {
                                 break;
                             }
                         } else {
@@ -8581,7 +8586,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                         }
                         reg_nextline();
                         scan = (*rex.ptr()).input;
-                        if got_int {
+                        if got_int.get() {
                             break;
                         }
                     } else if vim_isprintc(utf_ptr2char(scan as *mut ::core::ffi::c_char))
@@ -8617,7 +8622,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                     }
                     reg_nextline();
                     scan = (*rex.ptr()).input;
-                    if got_int {
+                    if got_int.get() {
                         break;
                     }
                 } else if (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
@@ -8668,7 +8673,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                 }
                 reg_nextline();
                 scan = (*rex.ptr()).input;
-                if got_int {
+                if got_int.get() {
                     break;
                 }
             } else {
@@ -8704,7 +8709,7 @@ unsafe extern "C" fn regstack_push(
 ) -> *mut regitem_T {
     let mut rp: *mut regitem_T = ::core::ptr::null_mut::<regitem_T>();
     if ((*regstack.ptr()).ga_len as ::core::ffi::c_uint >> 10 as ::core::ffi::c_int) as int64_t
-        >= p_mmp
+        >= p_mmp.get()
     {
         emsg(gettext(
             (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
@@ -8782,7 +8787,7 @@ unsafe extern "C" fn regmatch(
     loop {
         reg_breakcheck();
         loop {
-            if got_int as ::core::ffi::c_int != 0 || scan.is_null() {
+            if got_int.get() as ::core::ffi::c_int != 0 || scan.is_null() {
                 status = RA_FAIL;
                 break;
             } else {
@@ -8876,7 +8881,7 @@ unsafe extern "C" fn regmatch(
                                 };
                                 let mut fm: *mut fmark_T = mark_get(
                                     (*rex.ptr()).reg_buf,
-                                    curwin,
+                                    curwin.get(),
                                     ::core::ptr::null_mut::<fmark_T>(),
                                     kMarkBufLocal,
                                     mark,
@@ -8996,7 +9001,7 @@ unsafe extern "C" fn regmatch(
                             }
                             RE_VCOL => {
                                 let mut wp: *mut win_T = if (*rex.ptr()).reg_win.is_null() {
-                                    curwin
+                                    curwin.get()
                                 } else {
                                     (*rex.ptr()).reg_win
                                 };
@@ -9808,16 +9813,16 @@ unsafe extern "C" fn regmatch(
                             131 | 132 | 133 | 134 | 135 | 136 | 137 | 138 | 139 => {
                                 cleanup_zsubexpr();
                                 no = op - ZREF;
-                                if !re_extmatch_in.is_null()
-                                    && !(*re_extmatch_in).matches[no as usize].is_null()
+                                if !(*re_extmatch_in.ptr()).is_null()
+                                    && !(*re_extmatch_in.get()).matches[no as usize].is_null()
                                 {
                                     let mut len_3: ::core::ffi::c_int = strlen(
-                                        (*re_extmatch_in).matches[no as usize]
+                                        (*re_extmatch_in.get()).matches[no as usize]
                                             as *mut ::core::ffi::c_char,
                                     )
                                         as ::core::ffi::c_int;
                                     if cstrncmp(
-                                        (*re_extmatch_in).matches[no as usize]
+                                        (*re_extmatch_in.get()).matches[no as usize]
                                             as *mut ::core::ffi::c_char,
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
                                         &raw mut len_3,
@@ -10006,7 +10011,7 @@ unsafe extern "C" fn regmatch(
                                     scan.offset(3 as ::core::ffi::c_int as isize),
                                     rst.maxval,
                                 ) as int64_t;
-                                if got_int {
+                                if got_int.get() {
                                     status = RA_FAIL;
                                 } else if if rst.minval <= rst.maxval {
                                     (rst.count >= rst.minval) as ::core::ffi::c_int
@@ -10017,7 +10022,7 @@ unsafe extern "C" fn regmatch(
                                     if ((*regstack.ptr()).ga_len as ::core::ffi::c_uint
                                         >> 10 as ::core::ffi::c_int)
                                         as int64_t
-                                        >= p_mmp
+                                        >= p_mmp.get()
                                     {
                                         emsg(gettext(
                                             (e_pattern_uses_more_memory_than_maxmempattern.ptr()
@@ -10069,7 +10074,7 @@ unsafe extern "C" fn regmatch(
                                 if ((*regstack.ptr()).ga_len as ::core::ffi::c_uint
                                     >> 10 as ::core::ffi::c_int)
                                     as int64_t
-                                    >= p_mmp
+                                    >= p_mmp.get()
                                 {
                                     emsg(gettext(
                                         (e_pattern_uses_more_memory_than_maxmempattern.ptr()
@@ -10486,7 +10491,7 @@ unsafe extern "C" fn regmatch(
                                     }
                                     (*rst_0).count += 1;
                                 }
-                                if got_int {
+                                if got_int.get() {
                                     break;
                                 }
                             } else {
@@ -10611,12 +10616,12 @@ unsafe extern "C" fn regtry(
                 .offset(0 as ::core::ffi::c_int as isize) = (*rex.ptr()).input;
         }
     }
-    unref_extmatch(re_extmatch_out);
-    re_extmatch_out = ::core::ptr::null_mut::<reg_extmatch_T>();
+    unref_extmatch(re_extmatch_out.get());
+    re_extmatch_out.set(::core::ptr::null_mut::<reg_extmatch_T>());
     if (*prog).reghasz as ::core::ffi::c_int == REX_SET {
         let mut i: ::core::ffi::c_int = 0;
         cleanup_zsubexpr();
-        re_extmatch_out = make_extmatch();
+        re_extmatch_out.set(make_extmatch());
         i = 0 as ::core::ffi::c_int;
         while i < NSUBEXP as ::core::ffi::c_int {
             if (*rex.ptr()).reg_match.is_null() {
@@ -10626,18 +10631,19 @@ unsafe extern "C" fn regtry(
                     && (*reg_endzpos.ptr())[i as usize].col
                         >= (*reg_startzpos.ptr())[i as usize].col
                 {
-                    (*re_extmatch_out).matches[i as usize] = xstrnsave(
+                    (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
                         reg_getline((*reg_startzpos.ptr())[i as usize].lnum)
                             .offset((*reg_startzpos.ptr())[i as usize].col as isize),
                         ((*reg_endzpos.ptr())[i as usize].col
                             - (*reg_startzpos.ptr())[i as usize].col)
                             as size_t,
-                    ) as *mut uint8_t;
+                    )
+                        as *mut uint8_t;
                 }
             } else if !(*reg_startzp.ptr())[i as usize].is_null()
                 && !(*reg_endzp.ptr())[i as usize].is_null()
             {
-                (*re_extmatch_out).matches[i as usize] = xstrnsave(
+                (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
                     (*reg_startzp.ptr())[i as usize] as *mut ::core::ffi::c_char,
                     (*reg_endzp.ptr())[i as usize].offset_from((*reg_startzp.ptr())[i as usize])
                         as size_t,
@@ -10761,7 +10767,7 @@ unsafe extern "C" fn bt_regexec_both(
                     }
                 } else {
                     let mut tm_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while !got_int {
+                    while !got_int.get() {
                         if (*prog).regstart != NUL {
                             s = cstrchr(
                                 ((*rex.ptr()).line as *mut ::core::ffi::c_char)
@@ -10867,7 +10873,7 @@ unsafe extern "C" fn bt_regexec_nl(
     (*rex.ptr()).reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
     (*rex.ptr()).reg_maxline = 0 as ::core::ffi::c_int as linenr_T;
     (*rex.ptr()).reg_line_lbr = line_lbr;
-    (*rex.ptr()).reg_buf = curbuf;
+    (*rex.ptr()).reg_buf = curbuf.get();
     (*rex.ptr()).reg_win = ::core::ptr::null_mut::<win_T>();
     (*rex.ptr()).reg_ic = (*rmp).rm_ic;
     (*rex.ptr()).reg_icombine = false_0 != 0;
@@ -19528,7 +19534,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 emsg(gettext(
                                     (e_nul_found.ptr() as *const _) as *const ::core::ffi::c_char,
                                 ));
-                                rc_did_emsg = true_0 != 0;
+                                rc_did_emsg.set(true_0 != 0);
                                 return FAIL;
                             }
                             -162 => {
@@ -19575,7 +19581,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         (e_nul_found.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ));
-                                    rc_did_emsg = true_0 != 0;
+                                    rc_did_emsg.set(true_0 != 0);
                                     return FAIL;
                                 }
                                 if c == '^' as ::core::ffi::c_int {
@@ -19734,12 +19740,14 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         }
                                     }
                                     49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
-                                        if reg_do_extmatch & REX_USE == 0 as ::core::ffi::c_int {
+                                        if reg_do_extmatch.get() & REX_USE
+                                            == 0 as ::core::ffi::c_int
+                                        {
                                             emsg(gettext(
                                                 (e_z1_not_allowed.ptr() as *const _)
                                                     as *const ::core::ffi::c_char,
                                             ));
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
                                         if post_ptr.get() >= post_end.get() {
@@ -19752,12 +19760,12 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         re_has_z.set(REX_USE);
                                     }
                                     40 => {
-                                        if reg_do_extmatch != REX_SET {
+                                        if reg_do_extmatch.get() != REX_SET {
                                             emsg(gettext(
                                                 (e_z_not_allowed.ptr() as *const _)
                                                     as *const ::core::ffi::c_char,
                                             ));
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
                                         if nfa_reg(REG_ZPAREN) == FAIL {
@@ -19830,7 +19838,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
                                         if post_ptr.get() >= post_end.get() {
@@ -19933,7 +19941,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                             as *const ::core::ffi::c_char
                                                     },
                                                 );
-                                                rc_did_emsg = true_0 != 0;
+                                                rc_did_emsg.set(true_0 != 0);
                                                 return FAIL;
                                             }
                                             if nfa_regatom() == FAIL {
@@ -19957,7 +19965,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                                                 },
                                             );
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
                                         if post_ptr.get() >= post_end.get() {
@@ -20040,7 +20048,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             }
                                             if c == 'l' as ::core::ffi::c_int {
                                                 if cur {
-                                                    n_0 = (*curwin).w_cursor.lnum as int64_t;
+                                                    n_0 = (*curwin.get()).w_cursor.lnum as int64_t;
                                                 }
                                                 if post_ptr.get() >= post_end.get() {
                                                     realloc_post_list();
@@ -20060,7 +20068,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 }
                                             } else if c == 'c' as ::core::ffi::c_int {
                                                 if cur {
-                                                    n_0 = (*curwin).w_cursor.col as int64_t;
+                                                    n_0 = (*curwin.get()).w_cursor.col as int64_t;
                                                     n_0 += 1;
                                                 }
                                                 if post_ptr.get() >= post_end.get() {
@@ -20080,8 +20088,8 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 if cur {
                                                     let mut vcol: colnr_T = 0 as colnr_T;
                                                     getvvcol(
-                                                        curwin,
-                                                        &raw mut (*curwin).w_cursor,
+                                                        curwin.get(),
+                                                        &raw mut (*curwin.get()).w_cursor,
                                                         ::core::ptr::null_mut::<colnr_T>(),
                                                         ::core::ptr::null_mut::<colnr_T>(),
                                                         &raw mut vcol,
@@ -20173,7 +20181,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     ),
                                     c as int64_t,
                                 );
-                                rc_did_emsg = true_0 != 0;
+                                rc_did_emsg.set(true_0 != 0);
                                 return FAIL;
                             }
                             siemsg(
@@ -20559,7 +20567,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 (e_unicode_val_too_large.ptr() as *const _)
                                                     as *const ::core::ffi::c_char,
                                             ));
-                                            rc_did_emsg = true_0 != 0;
+                                            rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
                                         got_coll_char = true_0;
@@ -20591,7 +20599,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             (e_reverse_range.ptr() as *const _)
                                                 as *const ::core::ffi::c_char,
                                         ));
-                                        rc_did_emsg = true_0 != 0;
+                                        rc_did_emsg.set(true_0 != 0);
                                         return FAIL;
                                     }
                                     if endc > startc + 2 as ::core::ffi::c_int {
@@ -20812,7 +20820,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                         emsg(gettext(
                             (e_missingbracket.ptr() as *const _) as *const ::core::ffi::c_char,
                         ));
-                        rc_did_emsg = true_0 != 0;
+                        rc_did_emsg.set(true_0 != 0);
                         return FAIL;
                     }
                 }
@@ -21009,7 +21017,7 @@ unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                     b"E870: (NFA regexp) Error reading repetition limits\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 ));
-                rc_did_emsg = true_0 != 0;
+                rc_did_emsg.set(true_0 != 0);
                 return FAIL;
             }
             if minval == 0 as ::core::ffi::c_int && maxval == MAX_LIMIT {
@@ -21112,7 +21120,7 @@ unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
             b"E871: (NFA regexp) Can't have a multi follow a multi\0".as_ptr()
                 as *const ::core::ffi::c_char,
         ));
-        rc_did_emsg = true_0 != 0;
+        rc_did_emsg.set(true_0 != 0);
         return FAIL;
     }
     return OK;
@@ -21240,7 +21248,7 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
             emsg(gettext(
                 b"E872: (NFA regexp) Too many '('\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         }
         let c2rust_fresh17 = regnpar.get();
@@ -21251,7 +21259,7 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
             emsg(gettext(
                 b"E879: (NFA regexp) Too many \\z(\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         }
         let c2rust_fresh18 = regnzpar.get();
@@ -21285,7 +21293,7 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         } else {
             semsg(
@@ -21298,7 +21306,7 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         }
     } else if paren == REG_NOPAREN && peekchr() != NUL {
@@ -21313,14 +21321,14 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         } else {
             emsg(gettext(
                 b"E873: (NFA regexp) proper termination error\0".as_ptr()
                     as *const ::core::ffi::c_char,
             ));
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         }
     }
@@ -22093,7 +22101,7 @@ unsafe extern "C" fn post2nfa(
                             .as_ptr() as *const ::core::ffi::c_char,
                     ),
                 );
-                rc_did_emsg = true_0 != 0;
+                rc_did_emsg.set(true_0 != 0);
                 return NULL_0 as *mut nfa_state_T;
             }
             if istate.get() >= nstate.get() {
@@ -22102,7 +22110,7 @@ unsafe extern "C" fn post2nfa(
                     b"E876: (NFA regexp) Not enough space to store the whole NFA \0".as_ptr()
                         as *const ::core::ffi::c_char,
                 ));
-                rc_did_emsg = true_0 != 0;
+                rc_did_emsg.set(true_0 != 0);
                 return NULL_0 as *mut nfa_state_T;
             }
             let c2rust_fresh14 = istate.get();
@@ -22578,7 +22586,7 @@ unsafe extern "C" fn addstate(
                     + 50 as ::core::ffi::c_int;
                 let newsize: size_t =
                     (newlen as size_t).wrapping_mul(::core::mem::size_of::<nfa_thread_T>());
-                if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp {
+                if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp.get() {
                     emsg(gettext(
                         (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
                             as *const ::core::ffi::c_char,
@@ -22828,7 +22836,7 @@ unsafe extern "C" fn addstate_here(
                 + 50 as ::core::ffi::c_int;
             let newsize: size_t =
                 (newlen as size_t).wrapping_mul(::core::mem::size_of::<nfa_thread_T>());
-            if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp {
+            if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp.get() {
                 emsg(gettext(
                     (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
                         as *const ::core::ffi::c_char,
@@ -23086,14 +23094,16 @@ unsafe extern "C" fn match_zref(
 ) -> ::core::ffi::c_int {
     let mut len: ::core::ffi::c_int = 0;
     cleanup_zsubexpr();
-    if re_extmatch_in.is_null() || (*re_extmatch_in).matches[subidx as usize].is_null() {
+    if (*re_extmatch_in.ptr()).is_null()
+        || (*re_extmatch_in.get()).matches[subidx as usize].is_null()
+    {
         *bytelen = 0 as ::core::ffi::c_int;
         return true_0;
     }
-    len = strlen((*re_extmatch_in).matches[subidx as usize] as *mut ::core::ffi::c_char)
+    len = strlen((*re_extmatch_in.get()).matches[subidx as usize] as *mut ::core::ffi::c_char)
         as ::core::ffi::c_int;
     if cstrncmp(
-        (*re_extmatch_in).matches[subidx as usize] as *mut ::core::ffi::c_char,
+        (*re_extmatch_in.get()).matches[subidx as usize] as *mut ::core::ffi::c_char,
         (*rex.ptr()).input as *mut ::core::ffi::c_char,
         &raw mut len,
     ) == 0 as ::core::ffi::c_int
@@ -23457,7 +23467,7 @@ unsafe extern "C" fn nfa_regmatch(
         ((*start).c == NFA_MOPEN as ::core::ffi::c_int) as ::core::ffi::c_int;
     let mut r: *mut regsubs_T = ::core::ptr::null_mut::<regsubs_T>();
     reg_breakcheck();
-    if got_int {
+    if got_int.get() {
         return false_0;
     }
     if nfa_did_time_out() != 0 {
@@ -23539,7 +23549,7 @@ unsafe extern "C" fn nfa_regmatch(
                     '_nextchar: {
                         while listidx < (*thislist).n {
                             reg_breakcheck();
-                            if got_int {
+                            if got_int.get() {
                                 break;
                             }
                             if !(*nfa_time_limit.ptr()).is_null() && {
@@ -24647,7 +24657,7 @@ unsafe extern "C" fn nfa_regmatch(
                                     {
                                         result = false_0;
                                         let mut wp: *mut win_T = if (*rex.ptr()).reg_win.is_null() {
-                                            curwin
+                                            curwin.get()
                                         } else {
                                             (*rex.ptr()).reg_win
                                         };
@@ -24718,7 +24728,7 @@ unsafe extern "C" fn nfa_regmatch(
                                     };
                                     let mut fm: *mut fmark_T = mark_get(
                                         (*rex.ptr()).reg_buf,
-                                        curwin,
+                                        curwin.get(),
                                         ::core::ptr::null_mut::<fmark_T>(),
                                         kMarkBufLocal,
                                         (*(*t).state).val,
@@ -25084,7 +25094,7 @@ unsafe extern "C" fn nfa_regmatch(
                         reg_nextline();
                     }
                     reg_breakcheck();
-                    if got_int {
+                    if got_int.get() {
                         break '_theend;
                     }
                     if !(!(*nfa_time_limit.ptr()).is_null() && {
@@ -25259,11 +25269,11 @@ unsafe extern "C" fn nfa_regtry(
                 .offset(0 as ::core::ffi::c_int as isize) = (*rex.ptr()).input;
         }
     }
-    unref_extmatch(re_extmatch_out);
-    re_extmatch_out = ::core::ptr::null_mut::<reg_extmatch_T>();
+    unref_extmatch(re_extmatch_out.get());
+    re_extmatch_out.set(::core::ptr::null_mut::<reg_extmatch_T>());
     if (*prog).reghasz == REX_SET {
         cleanup_zsubexpr();
-        re_extmatch_out = make_extmatch();
+        re_extmatch_out.set(make_extmatch());
         i = 1 as ::core::ffi::c_int;
         while i < subs.synt.in_use {
             if (*rex.ptr()).reg_match.is_null() {
@@ -25274,20 +25284,22 @@ unsafe extern "C" fn nfa_regtry(
                     && (*mpos).start_lnum == (*mpos).end_lnum
                     && (*mpos).end_col >= (*mpos).start_col
                 {
-                    (*re_extmatch_out).matches[i as usize] = xstrnsave(
+                    (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
                         reg_getline((*mpos).start_lnum).offset((*mpos).start_col as isize),
                         ((*mpos).end_col - (*mpos).start_col) as size_t,
-                    ) as *mut uint8_t;
+                    )
+                        as *mut uint8_t;
                 }
             } else {
                 let mut lpos: *mut linepos = (&raw mut subs.synt.list.line as *mut linepos)
                     .offset(i as isize)
                     as *mut linepos;
                 if !(*lpos).start.is_null() && !(*lpos).end.is_null() {
-                    (*re_extmatch_out).matches[i as usize] = xstrnsave(
+                    (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
                         (*lpos).start as *mut ::core::ffi::c_char,
                         (*lpos).end.offset_from((*lpos).start) as size_t,
-                    ) as *mut uint8_t;
+                    )
+                        as *mut uint8_t;
                 }
             }
             i += 1;
@@ -25472,7 +25484,7 @@ unsafe extern "C" fn nfa_regexec_nl(
     (*rex.ptr()).reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
     (*rex.ptr()).reg_maxline = 0 as ::core::ffi::c_int as linenr_T;
     (*rex.ptr()).reg_line_lbr = line_lbr;
-    (*rex.ptr()).reg_buf = curbuf;
+    (*rex.ptr()).reg_buf = curbuf.get();
     (*rex.ptr()).reg_win = ::core::ptr::null_mut::<win_T>();
     (*rex.ptr()).reg_ic = (*rmp).rm_ic;
     (*rex.ptr()).reg_icombine = false_0 != 0;
@@ -25559,7 +25571,7 @@ pub unsafe extern "C" fn vim_regcomp(
 ) -> *mut regprog_T {
     let mut prog: *mut regprog_T = ::core::ptr::null_mut::<regprog_T>();
     let mut expr: *const ::core::ffi::c_char = expr_arg;
-    regexp_engine.set(p_re as ::core::ffi::c_int);
+    regexp_engine.set(p_re.get() as ::core::ffi::c_int);
     if strncmp(
         expr,
         b"\\%#=\0".as_ptr() as *const ::core::ffi::c_char,
@@ -25588,8 +25600,8 @@ pub unsafe extern "C" fn vim_regcomp(
             regexp_engine.set(AUTOMATIC_ENGINE as ::core::ffi::c_int);
         }
     }
-    (*rex.ptr()).reg_buf = curbuf;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    (*rex.ptr()).reg_buf = curbuf.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     if regexp_engine.get() != BACKTRACKING_ENGINE as ::core::ffi::c_int {
         prog = (*nfa_regengine.ptr())
             .regcomp
@@ -25609,7 +25621,7 @@ pub unsafe extern "C" fn vim_regcomp(
     }
     if prog.is_null() {
         if regexp_engine.get() == AUTOMATIC_ENGINE as ::core::ffi::c_int
-            && called_emsg == called_emsg_before
+            && called_emsg.get() == called_emsg_before
         {
             regexp_engine.set(BACKTRACKING_ENGINE as ::core::ffi::c_int);
             report_re_switch(expr);
@@ -25635,7 +25647,7 @@ pub unsafe extern "C" fn vim_regfree(mut prog: *mut regprog_T) {
     }
 }
 unsafe extern "C" fn report_re_switch(mut pat: *const ::core::ffi::c_char) {
-    if p_verbose > 0 as OptInt {
+    if p_verbose.get() > 0 as OptInt {
         verbose_enter();
         msg_puts(gettext(
             b"Switching to backtracking RE engine for pattern: \0".as_ptr()
@@ -25703,11 +25715,11 @@ unsafe extern "C" fn vim_regexec_string(
     if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as ::core::ffi::c_int as ::core::ffi::c_uint
         && result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int
     {
-        let mut save_p_re: ::core::ffi::c_int = p_re as ::core::ffi::c_int;
+        let mut save_p_re: ::core::ffi::c_int = p_re.get() as ::core::ffi::c_int;
         let mut re_flags: ::core::ffi::c_int = (*(*rmp).regprog).re_flags as ::core::ffi::c_int;
         let mut pat: *mut ::core::ffi::c_char =
             xstrdup((*((*rmp).regprog as *mut nfa_regprog_T)).pattern);
-        p_re = BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt;
+        p_re.set(BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt);
         vim_regfree((*rmp).regprog);
         report_re_switch(pat);
         (*rmp).regprog = vim_regcomp(pat, re_flags);
@@ -25721,7 +25733,7 @@ unsafe extern "C" fn vim_regexec_string(
             (*(*rmp).regprog).re_in_use = false_0 != 0;
         }
         xfree(pat as *mut ::core::ffi::c_void);
-        p_re = save_p_re as OptInt;
+        p_re.set(save_p_re as OptInt);
     }
     rex_in_use.set(rex_in_use_save);
     if rex_in_use.get() {
@@ -25821,16 +25833,16 @@ pub unsafe extern "C" fn vim_regexec_multi(
     if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as ::core::ffi::c_int as ::core::ffi::c_uint
         && result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int
     {
-        let mut save_p_re: ::core::ffi::c_int = p_re as ::core::ffi::c_int;
+        let mut save_p_re: ::core::ffi::c_int = p_re.get() as ::core::ffi::c_int;
         let mut re_flags: ::core::ffi::c_int = (*(*rmp).regprog).re_flags as ::core::ffi::c_int;
         let mut pat: *mut ::core::ffi::c_char =
             xstrdup((*((*rmp).regprog as *mut nfa_regprog_T)).pattern);
-        p_re = BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt;
+        p_re.set(BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt);
         let mut prev_prog: *mut regprog_T = (*rmp).regprog;
         report_re_switch(pat);
-        reg_do_extmatch = REX_ALL;
+        reg_do_extmatch.set(REX_ALL);
         (*rmp).regprog = vim_regcomp(pat, re_flags);
-        reg_do_extmatch = 0 as ::core::ffi::c_int;
+        reg_do_extmatch.set(0 as ::core::ffi::c_int);
         if (*rmp).regprog.is_null() {
             (*rmp).regprog = prev_prog;
         } else {
@@ -25844,7 +25856,7 @@ pub unsafe extern "C" fn vim_regexec_multi(
             (*(*rmp).regprog).re_in_use = false_0 != 0;
         }
         xfree(pat as *mut ::core::ffi::c_void);
-        p_re = save_p_re as OptInt;
+        p_re.set(save_p_re as OptInt);
     }
     rex_in_use.set(rex_in_use_save);
     if rex_in_use.get() {

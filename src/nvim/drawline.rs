@@ -37,10 +37,10 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn bt_quickfix(buf: *const buf_T) -> bool;
-    static mut breakat_flags: [::core::ffi::c_char; 256];
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut dy_flags: ::core::ffi::c_uint;
-    static mut p_sel: *mut ::core::ffi::c_char;
+    static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static dy_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -61,7 +61,7 @@ extern "C" {
     fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T;
     fn cursor_is_block_during_visual(exclusive: bool) -> bool;
-    static mut decor_state: DecorState;
+    static decor_state: GlobalCell<DecorState>;
     fn clear_virttext(text: *mut VirtText);
     fn next_virt_text_chunk(
         vt: VirtText,
@@ -125,8 +125,8 @@ extern "C" {
         change_end: *mut ::core::ffi::c_int,
     ) -> bool;
     fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut diffline_T) -> bool;
-    static mut win_extmark_arr: C2Rust_Unnamed_30;
-    static mut screen_search_hl: match_T;
+    static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
+    static screen_search_hl: GlobalCell<match_T>;
     fn win_draw_end(
         wp: *mut win_T,
         c1: schar_T,
@@ -176,9 +176,9 @@ extern "C" {
         flags: ::core::ffi::c_int,
     );
     fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    static mut linebuf_char: *mut schar_T;
-    static mut linebuf_attr: *mut sattr_T;
-    static mut linebuf_vcol: *mut colnr_T;
+    static linebuf_char: GlobalCell<*mut schar_T>;
+    static linebuf_attr: GlobalCell<*mut sattr_T>;
+    static linebuf_vcol: GlobalCell<*mut colnr_T>;
     fn win_bg_attr(wp: *mut win_T) -> ::core::ffi::c_int;
     fn hl_get_underline() -> ::core::ffi::c_int;
     fn hl_combine_attr(
@@ -191,11 +191,11 @@ extern "C" {
         through: *mut bool,
     ) -> ::core::ffi::c_int;
     fn syn_attr2entry(attr: ::core::ffi::c_int) -> HlAttrs;
-    static mut highlight_attr: [::core::ffi::c_int; 76];
-    static mut cterm_normal_bg_color: ::core::ffi::c_int;
-    static mut normal_bg: RgbValue;
-    static mut ns_hl_fast: NS;
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]>;
+    static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int>;
+    static normal_bg: GlobalCell<RgbValue>;
+    static ns_hl_fast: GlobalCell<NS>;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
     fn get_breakindent_win(wp: *mut win_T, line: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -332,19 +332,19 @@ extern "C" {
         term_attrs: *mut ::core::ffi::c_int,
     );
     fn ui_rgb_attached() -> bool;
-    static mut dollar_vcol: colnr_T;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut highlight_match: bool;
-    static mut search_match_lines: linenr_T;
-    static mut search_match_endcol: colnr_T;
-    static mut curwin: *mut win_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut cmdwin_type: ::core::ffi::c_int;
-    static mut cmdwin_win: *mut win_T;
-    static mut spell_redraw_lnum: linenr_T;
+    static dollar_vcol: GlobalCell<colnr_T>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static highlight_match: GlobalCell<bool>;
+    static search_match_lines: GlobalCell<linenr_T>;
+    static search_match_endcol: GlobalCell<colnr_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_win: GlobalCell<*mut win_T>;
+    static spell_redraw_lnum: GlobalCell<linenr_T>;
 }
 pub type ptrdiff_t = isize;
 pub type size_t = usize;
@@ -2566,7 +2566,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
-    return breakat_flags[c as uint8_t as usize] != 0;
+    return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
 }
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
@@ -2752,7 +2752,7 @@ unsafe extern "C" fn draw_virt_text(
     mut end_col: *mut ::core::ffi::c_int,
     mut win_row: ::core::ffi::c_int,
 ) {
-    let state: *mut DecorState = &raw mut decor_state;
+    let state: *mut DecorState = decor_state.ptr();
     let max_col: ::core::ffi::c_int = (*wp).w_view_width;
     let mut right_pos: ::core::ffi::c_int = max_col;
     let do_eol: bool = (*state).eol_col > -1 as ::core::ffi::c_int;
@@ -2875,22 +2875,26 @@ unsafe extern "C" fn draw_virt_text(
                         win_row: win_row,
                         win_col: (*item).draw_col,
                     };
-                    if win_extmark_arr.size == win_extmark_arr.capacity {
-                        win_extmark_arr.capacity = if win_extmark_arr.capacity != 0 {
-                            win_extmark_arr.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        win_extmark_arr.items = xrealloc(
-                            win_extmark_arr.items as *mut ::core::ffi::c_void,
+                    if (*win_extmark_arr.ptr()).size == (*win_extmark_arr.ptr()).capacity {
+                        (*win_extmark_arr.ptr()).capacity =
+                            if (*win_extmark_arr.ptr()).capacity != 0 {
+                                (*win_extmark_arr.ptr()).capacity << 1 as ::core::ffi::c_int
+                            } else {
+                                8 as size_t
+                            };
+                        (*win_extmark_arr.ptr()).items = xrealloc(
+                            (*win_extmark_arr.ptr()).items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<WinExtmark>()
-                                .wrapping_mul(win_extmark_arr.capacity),
-                        ) as *mut WinExtmark;
+                                .wrapping_mul((*win_extmark_arr.ptr()).capacity),
+                        )
+                            as *mut WinExtmark;
                     } else {
                     };
-                    let c2rust_fresh4 = win_extmark_arr.size;
-                    win_extmark_arr.size = win_extmark_arr.size.wrapping_add(1);
-                    *win_extmark_arr.items.offset(c2rust_fresh4 as isize) = m;
+                    let c2rust_fresh4 = (*win_extmark_arr.ptr()).size;
+                    (*win_extmark_arr.ptr()).size = (*win_extmark_arr.ptr()).size.wrapping_add(1);
+                    *(*win_extmark_arr.ptr())
+                        .items
+                        .offset(c2rust_fresh4 as isize) = m;
                 }
                 if !vt.is_null() {
                     let mut vcol: ::core::ffi::c_int = (*item).draw_col - col_off;
@@ -2985,7 +2989,7 @@ unsafe extern "C" fn draw_virt_text_item(
             == kHlModeCombine as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             attr = hl_combine_attr(
-                *linebuf_attr.offset(col as isize) as ::core::ffi::c_int,
+                *(*linebuf_attr.ptr()).offset(col as isize) as ::core::ffi::c_int,
                 virt_attr,
             );
         } else if hl_mode as ::core::ffi::c_uint
@@ -2993,7 +2997,7 @@ unsafe extern "C" fn draw_virt_text_item(
         {
             through = *draw_str as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
             attr = hl_blend_attrs(
-                *linebuf_attr.offset(col as isize) as ::core::ffi::c_int,
+                *(*linebuf_attr.ptr()).offset(col as isize) as ::core::ffi::c_int,
                 virt_attr,
                 &raw mut through,
             );
@@ -3005,7 +3009,7 @@ unsafe extern "C" fn draw_virt_text_item(
             ' ' as ::core::ffi::c_int as schar_T,
         ];
         let mut maxcells: ::core::ffi::c_int = max_col - col;
-        if !through && *linebuf_char.offset(col as isize) == 0 as schar_T {
+        if !through && *(*linebuf_char.ptr()).offset(col as isize) == 0 as schar_T {
             '_c2rust_label_0: {
                 if col > 0 as ::core::ffi::c_int {
                 } else {
@@ -3018,9 +3022,9 @@ unsafe extern "C" fn draw_virt_text_item(
                     );
                 }
             };
-            *linebuf_char.offset((col - 1 as ::core::ffi::c_int) as isize) =
+            *(*linebuf_char.ptr()).offset((col - 1 as ::core::ffi::c_int) as isize) =
                 ' ' as ::core::ffi::c_int as schar_T;
-            *linebuf_char.offset(col as isize) = ' ' as ::core::ffi::c_int as schar_T;
+            *(*linebuf_char.ptr()).offset(col as isize) = ' ' as ::core::ffi::c_int as schar_T;
         }
         let mut cells_0: ::core::ffi::c_int = line_putchar(
             buf,
@@ -3028,14 +3032,14 @@ unsafe extern "C" fn draw_virt_text_item(
             if through as ::core::ffi::c_int != 0 {
                 &raw mut dummy as *mut schar_T
             } else {
-                linebuf_char.offset(col as isize)
+                (*linebuf_char.ptr()).offset(col as isize)
             },
             maxcells,
             vcol,
         );
         let mut c: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while c < cells_0 {
-            *linebuf_attr.offset(col as isize) = attr as sattr_T;
+            *(*linebuf_attr.ptr()).offset(col as isize) = attr as sattr_T;
             col += 1;
             c += 1;
         }
@@ -3062,7 +3066,7 @@ unsafe extern "C" fn draw_col_buf(
         let mut cells: ::core::ffi::c_int = line_putchar(
             (*wp).w_buffer,
             &raw mut ptr,
-            linebuf_char.offset((*wlv).off as isize),
+            (*linebuf_char.ptr()).offset((*wlv).off as isize),
             (*wp).w_view_width - (*wlv).off,
             (*wlv).off,
         );
@@ -3075,18 +3079,19 @@ unsafe extern "C" fn draw_col_buf(
         }
         let mut c: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while c < cells {
-            *linebuf_attr.offset((*wlv).off as isize) = myattr as sattr_T;
-            *linebuf_vcol.offset((*wlv).off as isize) = (if inc_vcol as ::core::ffi::c_int != 0 {
-                let c2rust_fresh6 = (*wlv).vcol;
-                (*wlv).vcol = (*wlv).vcol + 1;
-                c2rust_fresh6
-            } else if !fold_vcol.is_null() {
-                let c2rust_fresh7 = fold_vcol;
-                fold_vcol = fold_vcol.offset(1);
-                *c2rust_fresh7 as ::core::ffi::c_int
-            } else {
-                -1 as ::core::ffi::c_int
-            }) as colnr_T;
+            *(*linebuf_attr.ptr()).offset((*wlv).off as isize) = myattr as sattr_T;
+            *(*linebuf_vcol.ptr()).offset((*wlv).off as isize) =
+                (if inc_vcol as ::core::ffi::c_int != 0 {
+                    let c2rust_fresh6 = (*wlv).vcol;
+                    (*wlv).vcol = (*wlv).vcol + 1;
+                    c2rust_fresh6
+                } else if !fold_vcol.is_null() {
+                    let c2rust_fresh7 = fold_vcol;
+                    fold_vcol = fold_vcol.offset(1);
+                    *c2rust_fresh7 as ::core::ffi::c_int
+                } else {
+                    -1 as ::core::ffi::c_int
+                }) as colnr_T;
             (*wlv).off += 1;
             c += 1;
         }
@@ -3100,8 +3105,8 @@ unsafe extern "C" fn draw_col_fill(
 ) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < width {
-        *linebuf_char.offset((*wlv).off as isize) = fillchar;
-        *linebuf_attr.offset((*wlv).off as isize) = attr as sattr_T;
+        *(*linebuf_char.ptr()).offset((*wlv).off as isize) = fillchar;
+        *(*linebuf_attr.ptr()).offset((*wlv).off as isize) = attr as sattr_T;
         (*wlv).off += 1;
         i += 1;
     }
@@ -3224,11 +3229,11 @@ pub unsafe extern "C" fn fill_foldcolumn(
             *out_vcol.offset(i as isize) = vcol as colnr_T;
             *out_buffer.offset(i as isize) = symbol;
         } else {
-            *linebuf_vcol.offset(*wlv_off as isize) = vcol as colnr_T;
-            *linebuf_attr.offset(*wlv_off as isize) = attr as sattr_T;
+            *(*linebuf_vcol.ptr()).offset(*wlv_off as isize) = vcol as colnr_T;
+            *(*linebuf_attr.ptr()).offset(*wlv_off as isize) = attr as sattr_T;
             let c2rust_fresh0 = *wlv_off;
             *wlv_off = *wlv_off + 1;
-            *linebuf_char.offset(c2rust_fresh0 as isize) = symbol;
+            *(*linebuf_char.ptr()).offset(c2rust_fresh0 as isize) = symbol;
         }
         i += 1;
     }
@@ -3280,8 +3285,9 @@ unsafe extern "C" fn draw_sign(
                 );
             }
         };
-        *linebuf_char.offset(sign_pos as isize) = sattr.text[0 as ::core::ffi::c_int as usize];
-        *linebuf_char.offset((sign_pos + 1 as ::core::ffi::c_int) as isize) =
+        *(*linebuf_char.ptr()).offset(sign_pos as isize) =
+            sattr.text[0 as ::core::ffi::c_int as usize];
+        *(*linebuf_char.ptr()).offset((sign_pos + 1 as ::core::ffi::c_int) as isize) =
             sattr.text[1 as ::core::ffi::c_int as usize];
     } else {
         '_c2rust_label_0: {
@@ -3373,7 +3379,7 @@ unsafe extern "C" fn get_line_number_attr(
     return hl_combine_attr(win_hl_attr(wp, HLF_N as ::core::ffi::c_int), numhl_attr);
 }
 unsafe extern "C" fn draw_lnum_col(mut wp: *mut win_T, mut wlv: *mut winlinevars_T) {
-    let mut has_cpo_n: bool = !vim_strchr(p_cpo, CPO_NUMCOL).is_null();
+    let mut has_cpo_n: bool = !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null();
     if ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
         && ((*wlv).row == (*wlv).startrow + (*wlv).filler_lines || !has_cpo_n)
         && !(has_cpo_n as ::core::ffi::c_int != 0
@@ -3631,16 +3637,17 @@ unsafe extern "C" fn handle_breakindent(mut wp: *mut win_T, mut wlv: *mut winlin
         let mut vcol_before: colnr_T = (*wlv).vcol;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num {
-            *linebuf_char.offset((*wlv).off as isize) = ' ' as ::core::ffi::c_int as schar_T;
+            *(*linebuf_char.ptr()).offset((*wlv).off as isize) =
+                ' ' as ::core::ffi::c_int as schar_T;
             advance_color_col(wlv, (*wlv).vcol as ::core::ffi::c_int);
             let mut myattr: ::core::ffi::c_int = attr;
             if !(*wlv).color_cols.is_null() && (*wlv).vcol == *(*wlv).color_cols {
                 myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC as ::core::ffi::c_int), myattr);
             }
-            *linebuf_attr.offset((*wlv).off as isize) = myattr as sattr_T;
+            *(*linebuf_attr.ptr()).offset((*wlv).off as isize) = myattr as sattr_T;
             let c2rust_fresh5 = (*wlv).vcol;
             (*wlv).vcol = (*wlv).vcol + 1;
-            *linebuf_vcol.offset((*wlv).off as isize) = c2rust_fresh5;
+            *(*linebuf_vcol.ptr()).offset((*wlv).off as isize) = c2rust_fresh5;
             (*wlv).off += 1;
             i += 1;
         }
@@ -3716,7 +3723,7 @@ unsafe extern "C" fn apply_cursorline_highlight(mut wp: *mut win_T, mut wlv: *mu
         && ae.cterm_fg_color as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
         (*wlv).line_attr_lowprio = (*wlv).cul_attr;
-    } else if State & MODE_INSERT as ::core::ffi::c_int == 0
+    } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0
         && bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
         && qf_current_entry(wp) == (*wlv).lnum
     {
@@ -3742,11 +3749,11 @@ unsafe extern "C" fn has_more_inline_virt(mut wlv: *mut winlinevars_T, mut v: pt
     if (*wlv).virt_inline_i < (*wlv).virt_inline.size {
         return true_0 != 0;
     }
-    let count: ::core::ffi::c_int = decor_state.ranges_i.size as ::core::ffi::c_int;
-    let cur_end: ::core::ffi::c_int = decor_state.current_end;
-    let fut_beg: ::core::ffi::c_int = decor_state.future_begin;
-    let indices: *mut ::core::ffi::c_int = decor_state.ranges_i.items;
-    let slots: *mut DecorRangeSlot = decor_state.slots.items;
+    let count: ::core::ffi::c_int = (*decor_state.ptr()).ranges_i.size as ::core::ffi::c_int;
+    let cur_end: ::core::ffi::c_int = (*decor_state.ptr()).current_end;
+    let fut_beg: ::core::ffi::c_int = (*decor_state.ptr()).future_begin;
+    let indices: *mut ::core::ffi::c_int = (*decor_state.ptr()).ranges_i.items;
+    let slots: *mut DecorRangeSlot = (*decor_state.ptr()).slots.items;
     let beg_pos: [::core::ffi::c_int; 2] = [0 as ::core::ffi::c_int, fut_beg];
     let end_pos: [::core::ffi::c_int; 2] = [cur_end, count];
     let mut pos_i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3755,7 +3762,7 @@ unsafe extern "C" fn has_more_inline_virt(mut wlv: *mut winlinevars_T, mut v: pt
         while i < end_pos[pos_i as usize] {
             let mut item: *mut DecorRange =
                 &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
-            if !((*item).start_row != decor_state.row
+            if !((*item).start_row != (*decor_state.ptr()).row
                 || (*item).kind as ::core::ffi::c_int != kDecorKindVirtText as ::core::ffi::c_int
                 || (*(*item).data.vt).pos as ::core::ffi::c_uint
                     != kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3783,7 +3790,7 @@ unsafe extern "C" fn handle_inline_virtual_text(
         if (*wlv).virt_inline_i >= (*wlv).virt_inline.size {
             (*wlv).virt_inline = VIRTTEXT_EMPTY;
             (*wlv).virt_inline_i = 0 as size_t;
-            let mut state: *mut DecorState = &raw mut decor_state;
+            let mut state: *mut DecorState = decor_state.ptr();
             let end: ::core::ffi::c_int = (*state).current_end;
             let indices: *mut ::core::ffi::c_int = (*state).ranges_i.items;
             let slots: *mut DecorRangeSlot = (*state).slots.items;
@@ -3883,9 +3890,9 @@ unsafe extern "C" fn win_line_start(mut wp: *mut win_T, mut wlv: *mut winlinevar
     (*wlv).need_lbr = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*wp).w_view_width {
-        *linebuf_char.offset(i as isize) = ' ' as ::core::ffi::c_int as schar_T;
-        *linebuf_attr.offset(i as isize) = 0 as ::core::ffi::c_int as sattr_T;
-        *linebuf_vcol.offset(i as isize) = -1 as ::core::ffi::c_int as colnr_T;
+        *(*linebuf_char.ptr()).offset(i as isize) = ' ' as ::core::ffi::c_int as schar_T;
+        *(*linebuf_attr.ptr()).offset(i as isize) = 0 as ::core::ffi::c_int as sattr_T;
+        *(*linebuf_vcol.ptr()).offset(i as isize) = -1 as ::core::ffi::c_int as colnr_T;
         i += 1;
     }
 }
@@ -3933,7 +3940,7 @@ pub unsafe extern "C" fn win_line(
     let mut grid: *mut GridView = &raw mut (*wp).w_grid;
     let view_width: ::core::ffi::c_int = (*wp).w_view_width;
     let view_height: ::core::ffi::c_int = (*wp).w_view_height;
-    let in_curline: bool = wp == curwin && lnum == (*curwin).w_cursor.lnum;
+    let in_curline: bool = wp == curwin.get() && lnum == (*curwin.get()).w_cursor.lnum;
     let has_fold: bool =
         foldinfo.fi_level != 0 as ::core::ffi::c_int && foldinfo.fi_lines > 0 as linenr_T;
     let has_foldtext: bool = has_fold as ::core::ffi::c_int != 0
@@ -4073,13 +4080,13 @@ pub unsafe extern "C" fn win_line(
             && !(*(*wp).w_s).b_syn_slow
             && !has_foldtext
         {
-            let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-            did_emsg = false_0;
+            let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+            did_emsg.set(false_0);
             syntax_start(wp, lnum);
-            if did_emsg != 0 {
+            if did_emsg.get() != 0 {
                 (*(*wp).w_s).b_syn_error = true_0 != 0;
             } else {
-                did_emsg = save_did_emsg;
+                did_emsg.set(save_did_emsg);
                 if !(*(*wp).w_s).b_syn_slow {
                     has_syntax = true_0 != 0;
                     extra_check = true_0 != 0;
@@ -4096,18 +4103,20 @@ pub unsafe extern "C" fn win_line(
             &raw mut wlv,
             wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co,
         );
-        if VIsual_active as ::core::ffi::c_int != 0 && (*wp).w_buffer == (*curwin).w_buffer {
+        if VIsual_active.get() as ::core::ffi::c_int != 0
+            && (*wp).w_buffer == (*curwin.get()).w_buffer
+        {
             let mut top: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
             let mut bot: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-            if ltoreq((*curwin).w_cursor, VIsual) {
-                top = &raw mut (*curwin).w_cursor;
-                bot = &raw mut VIsual;
+            if ltoreq((*curwin.get()).w_cursor, VIsual.get()) {
+                top = &raw mut (*curwin.get()).w_cursor;
+                bot = VIsual.ptr();
             } else {
-                top = &raw mut VIsual;
-                bot = &raw mut (*curwin).w_cursor;
+                top = VIsual.ptr();
+                bot = &raw mut (*curwin.get()).w_cursor;
             }
             lnum_in_visual_area = lnum >= (*top).lnum && lnum <= (*bot).lnum;
-            if VIsual_mode == Ctrl_V {
+            if VIsual_mode.get() == Ctrl_V {
                 if lnum_in_visual_area {
                     wlv.fromcol = (*wp).w_old_cursor_fcol as ::core::ffi::c_int;
                     wlv.tocol = (*wp).w_old_cursor_lcol as ::core::ffi::c_int;
@@ -4116,7 +4125,7 @@ pub unsafe extern "C" fn win_line(
                 if lnum > (*top).lnum && lnum <= (*bot).lnum {
                     wlv.fromcol = 0 as ::core::ffi::c_int;
                 } else if lnum == (*top).lnum {
-                    if VIsual_mode == 'V' as ::core::ffi::c_int {
+                    if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
                         wlv.fromcol = 0 as ::core::ffi::c_int;
                     } else {
                         getvvcol(
@@ -4131,8 +4140,8 @@ pub unsafe extern "C" fn win_line(
                         }
                     }
                 }
-                if VIsual_mode != 'V' as ::core::ffi::c_int && lnum == (*bot).lnum {
-                    if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                if VIsual_mode.get() != 'V' as ::core::ffi::c_int && lnum == (*bot).lnum {
+                    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
                         && (*bot).col == 0 as ::core::ffi::c_int
                         && (*bot).coladd == 0 as ::core::ffi::c_int
                     {
@@ -4142,7 +4151,7 @@ pub unsafe extern "C" fn win_line(
                         wlv.tocol = MAXCOL as ::core::ffi::c_int;
                     } else {
                         let mut pos: pos_T = *bot;
-                        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+                        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                             getvvcol(
                                 wp,
                                 &raw mut pos,
@@ -4163,10 +4172,10 @@ pub unsafe extern "C" fn win_line(
                     }
                 }
             }
-            if !highlight_match
+            if !highlight_match.get()
                 && in_curline as ::core::ffi::c_int != 0
                 && cursor_is_block_during_visual(
-                    *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int,
+                    *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int,
                 ) as ::core::ffi::c_int
                     != 0
             {
@@ -4176,16 +4185,16 @@ pub unsafe extern "C" fn win_line(
                 area_highlighting = true_0 != 0;
                 vi_attr = win_hl_attr(wp, HLF_V as ::core::ffi::c_int);
             }
-        } else if highlight_match as ::core::ffi::c_int != 0
-            && wp == curwin
+        } else if highlight_match.get() as ::core::ffi::c_int != 0
+            && wp == curwin.get()
             && !has_foldtext
-            && lnum >= (*curwin).w_cursor.lnum
-            && lnum <= (*curwin).w_cursor.lnum + search_match_lines
+            && lnum >= (*curwin.get()).w_cursor.lnum
+            && lnum <= (*curwin.get()).w_cursor.lnum + search_match_lines.get()
         {
-            if lnum == (*curwin).w_cursor.lnum {
+            if lnum == (*curwin.get()).w_cursor.lnum {
                 getvcol(
-                    curwin,
-                    &raw mut (*curwin).w_cursor,
+                    curwin.get(),
+                    &raw mut (*curwin.get()).w_cursor,
                     &raw mut wlv.fromcol as *mut colnr_T,
                     ::core::ptr::null_mut::<colnr_T>(),
                     ::core::ptr::null_mut::<colnr_T>(),
@@ -4193,21 +4202,21 @@ pub unsafe extern "C" fn win_line(
             } else {
                 wlv.fromcol = 0 as ::core::ffi::c_int;
             }
-            if lnum == (*curwin).w_cursor.lnum + search_match_lines {
+            if lnum == (*curwin.get()).w_cursor.lnum + search_match_lines.get() {
                 let mut pos_0: pos_T = pos_T {
                     lnum: lnum,
-                    col: search_match_endcol,
+                    col: search_match_endcol.get(),
                     coladd: 0,
                 };
                 getvcol(
-                    curwin,
+                    curwin.get(),
                     &raw mut pos_0,
                     &raw mut wlv.tocol as *mut colnr_T,
                     ::core::ptr::null_mut::<colnr_T>(),
                     ::core::ptr::null_mut::<colnr_T>(),
                 );
             }
-            if wlv.fromcol == wlv.tocol && search_match_endcol != 0 {
+            if wlv.fromcol == wlv.tocol && search_match_endcol.get() != 0 {
                 wlv.tocol = wlv.fromcol + 1 as ::core::ffi::c_int;
             }
             area_highlighting = true_0 != 0;
@@ -4283,7 +4292,7 @@ pub unsafe extern "C" fn win_line(
         && (*wp).w_p_culopt_flags as ::core::ffi::c_int
             != kOptCuloptFlagNumber as ::core::ffi::c_int
         && lnum == (*wp).w_cursorline
-        && !(wp == curwin && VIsual_active as ::core::ffi::c_int != 0)
+        && !(wp == curwin.get() && VIsual_active.get() as ::core::ffi::c_int != 0)
     {
         cul_screenline = is_wrapped as ::core::ffi::c_int != 0
             && (*wp).w_p_culopt_flags as ::core::ffi::c_int
@@ -4326,7 +4335,7 @@ pub unsafe extern "C" fn win_line(
         statuscol.sattrs = &raw mut wlv.sattrs as *mut SignTextAttrs;
         statuscol.lnum = lnum;
         statuscol.foldinfo = foldinfo;
-        statuscol.width = win_col_off(wp) - (wp == cmdwin_win) as ::core::ffi::c_int;
+        statuscol.width = win_col_off(wp) - (wp == cmdwin_win.get()) as ::core::ffi::c_int;
         statuscol.sign_cul_id = if use_cursor_line_highlight(wp, lnum) as ::core::ffi::c_int != 0 {
             wlv.sign_cul_attr
         } else {
@@ -4566,7 +4575,8 @@ pub unsafe extern "C" fn win_line(
             && ((*wp).w_onebuf_opt.wo_cuc != 0
                 || !wlv.color_cols.is_null()
                 || virtual_active(wp) as ::core::ffi::c_int != 0
-                || VIsual_active as ::core::ffi::c_int != 0 && (*wp).w_buffer == (*curwin).w_buffer
+                || VIsual_active.get() as ::core::ffi::c_int != 0
+                    && (*wp).w_buffer == (*curwin.get()).w_buffer
                 || has_fold as ::core::ffi::c_int != 0)
         {
             wlv.vcol = start_vcol as colnr_T;
@@ -4625,7 +4635,7 @@ pub unsafe extern "C" fn win_line(
                 if spell_hlf as ::core::ffi::c_uint
                     != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    spell_attr = highlight_attr[spell_hlf as usize];
+                    spell_attr = (*highlight_attr.ptr())[spell_hlf as usize];
                 }
             }
             (*wp).w_cursor = pos_1;
@@ -4649,11 +4659,11 @@ pub unsafe extern "C" fn win_line(
     decor_redraw_line(
         wp,
         lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-        &raw mut decor_state,
+        decor_state.ptr(),
     );
     if !has_decor
         && decor_has_more_decorations(
-            &raw mut decor_state,
+            decor_state.ptr(),
             lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
         ) as ::core::ffi::c_int
             != 0
@@ -4683,14 +4693,14 @@ pub unsafe extern "C" fn win_line(
                 lnum,
                 v as colnr_T,
                 &raw mut line_1,
-                &raw mut screen_search_hl,
+                screen_search_hl.ptr(),
                 &raw mut search_attr,
                 &raw mut search_attr_from_match,
             ) as ::core::ffi::c_int
             != 0;
         ptr_0 = line_1.offset(v as isize);
     }
-    if State & MODE_INSERT as ::core::ffi::c_int != 0
+    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
         && ins_compl_win_active(wp) as ::core::ffi::c_int != 0
         && (in_curline as ::core::ffi::c_int != 0
             || ins_compl_lnum_in_range(lnum) as ::core::ffi::c_int != 0)
@@ -4735,7 +4745,7 @@ pub unsafe extern "C" fn win_line(
             ptr_0 = line_1.offset(col_0 as isize);
             if !has_decor
                 && decor_has_more_decorations(
-                    &raw mut decor_state,
+                    decor_state.ptr(),
                     lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                 ) as ::core::ffi::c_int
                     != 0
@@ -4764,10 +4774,10 @@ pub unsafe extern "C" fn win_line(
                         );
                     }
                 };
-                if wp == cmdwin_win {
+                if wp == cmdwin_win.get() {
                     draw_col_fill(
                         &raw mut wlv,
-                        cmdwin_type as schar_T,
+                        cmdwin_type.get() as schar_T,
                         1 as ::core::ffi::c_int,
                         win_hl_attr(wp, HLF_AT as ::core::ffi::c_int),
                     );
@@ -4885,7 +4895,7 @@ pub unsafe extern "C" fn win_line(
                                 - 1 as ::core::ffi::c_int,
                             wlv.off,
                             true_0 != 0,
-                            &raw mut decor_state,
+                            decor_state.ptr(),
                             decor_provider_end_col - 1 as ::core::ffi::c_int,
                         );
                     }
@@ -4903,7 +4913,7 @@ pub unsafe extern "C" fn win_line(
             {
                 apply_cursorline_highlight(wp, &raw mut wlv);
             }
-            if dollar_vcol >= 0 as ::core::ffi::c_int
+            if dollar_vcol.get() >= 0 as ::core::ffi::c_int
                 && in_curline as ::core::ffi::c_int != 0
                 && wlv.vcol >= (*wp).w_virtcol
             {
@@ -4966,7 +4976,7 @@ pub unsafe extern "C" fn win_line(
                                 && wlv.vcol == (*wp).w_virtcol;
                         if decor_need_recheck {
                             if !may_have_inline_virt {
-                                decor_recheck_draw_col(wlv.off, selected, &raw mut decor_state);
+                                decor_recheck_draw_col(wlv.off, selected, decor_state.ptr());
                             }
                             decor_need_recheck = false_0 != 0;
                         }
@@ -4979,7 +4989,7 @@ pub unsafe extern "C" fn win_line(
                                 wlv.off
                             },
                             selected,
-                            &raw mut decor_state,
+                            decor_state.ptr(),
                             decor_provider_end_col - 1 as ::core::ffi::c_int,
                         );
                         if may_have_inline_virt {
@@ -5039,7 +5049,7 @@ pub unsafe extern "C" fn win_line(
                             lnum,
                             v_1 as colnr_T,
                             &raw mut line_1,
-                            &raw mut screen_search_hl,
+                            screen_search_hl.ptr(),
                             &raw mut has_match_conc,
                             &raw mut match_conc,
                             lcs_eol_todo,
@@ -5050,7 +5060,7 @@ pub unsafe extern "C" fn win_line(
                         if *ptr_0 as ::core::ffi::c_int == NUL {
                             has_match_conc = 0 as ::core::ffi::c_int;
                         }
-                        if State & MODE_INSERT as ::core::ffi::c_int != 0
+                        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
                             && ins_compl_win_active(wp) as ::core::ffi::c_int != 0
                             && (in_curline as ::core::ffi::c_int != 0
                                 || ins_compl_lnum_in_range(lnum) as ::core::ffi::c_int != 0)
@@ -5117,7 +5127,7 @@ pub unsafe extern "C" fn win_line(
                     }
                     if area_attr != 0 as ::core::ffi::c_int {
                         char_attr_pri = hl_combine_attr(wlv.line_attr, area_attr);
-                        if !highlight_match {
+                        if !highlight_match.get() {
                             char_attr_pri = hl_combine_attr(search_attr, char_attr_pri);
                         }
                     } else if search_attr != 0 as ::core::ffi::c_int {
@@ -5430,8 +5440,8 @@ pub unsafe extern "C" fn win_line(
                             ptr_0.offset_from(line_1) as ::core::ffi::c_int;
                         let prev_v: ptrdiff_t = prev_ptr_0.offset_from(line_1);
                         if has_syntax as ::core::ffi::c_int != 0 && v_3 > 0 as ::core::ffi::c_int {
-                            let mut save_did_emsg_0: ::core::ffi::c_int = did_emsg;
-                            did_emsg = false_0;
+                            let mut save_did_emsg_0: ::core::ffi::c_int = did_emsg.get();
+                            did_emsg.set(false_0);
                             decor_attr = get_syntax_attr(
                                 v_3 as colnr_T - 1 as colnr_T,
                                 if (*spv).spv_has_spell as ::core::ffi::c_int != 0 {
@@ -5441,11 +5451,11 @@ pub unsafe extern "C" fn win_line(
                                 },
                                 false_0 != 0,
                             );
-                            if did_emsg != 0 {
+                            if did_emsg.get() != 0 {
                                 (*(*wp).w_s).b_syn_error = true_0 != 0;
                                 has_syntax = false_0 != 0;
                             } else {
-                                did_emsg = save_did_emsg_0;
+                                did_emsg.set(save_did_emsg_0);
                             }
                             if (*(*wp).w_s).b_syn_slow {
                                 has_syntax = false_0 != 0;
@@ -5461,12 +5471,12 @@ pub unsafe extern "C" fn win_line(
                         }
                         if has_decor as ::core::ffi::c_int != 0 && v_3 > 0 as ::core::ffi::c_int {
                             decor_attr = hl_combine_attr(decor_attr, extmark_attr);
-                            decor_conceal = decor_state.conceal;
-                            can_spell = if decor_state.spell as ::core::ffi::c_int
+                            decor_conceal = (*decor_state.ptr()).conceal;
+                            can_spell = if (*decor_state.ptr()).spell as ::core::ffi::c_int
                                 == kTrue as ::core::ffi::c_int
                             {
                                 true_0
-                            } else if decor_state.spell as ::core::ffi::c_int
+                            } else if (*decor_state.ptr()).spell as ::core::ffi::c_int
                                 == kFalse as ::core::ffi::c_int
                             {
                                 false_0
@@ -5528,14 +5538,14 @@ pub unsafe extern "C" fn win_line(
                                 word_end = v1 + len_0;
                                 if spell_hlf_0 as ::core::ffi::c_uint
                                     != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    && State & MODE_INSERT as ::core::ffi::c_int != 0
+                                    && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
                                     && (*wp).w_cursor.lnum == lnum
                                     && (*wp).w_cursor.col
                                         >= prev_ptr_0.offset_from(line_1) as colnr_T
                                     && (*wp).w_cursor.col < word_end
                                 {
                                     spell_hlf_0 = HLF_COUNT;
-                                    spell_redraw_lnum = lnum;
+                                    spell_redraw_lnum.set(lnum);
                                 }
                                 if spell_hlf_0 as ::core::ffi::c_uint
                                     == HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5554,7 +5564,7 @@ pub unsafe extern "C" fn win_line(
                                 if spell_hlf_0 as ::core::ffi::c_uint
                                     != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
-                                    spell_attr = highlight_attr[spell_hlf_0 as usize];
+                                    spell_attr = (*highlight_attr.ptr())[spell_hlf_0 as usize];
                                 }
                                 if (*spv).spv_cap_col > 0 as ::core::ffi::c_int {
                                     if p != prev_ptr_0 as *mut ::core::ffi::c_char
@@ -5900,7 +5910,7 @@ pub unsafe extern "C" fn win_line(
                                 || (wlv.fromcol >= 0 as ::core::ffi::c_int
                                     || fromcol_prev >= 0 as ::core::ffi::c_int)
                                     && wlv.tocol > wlv.vcol
-                                    && VIsual_mode != Ctrl_V
+                                    && VIsual_mode.get() != Ctrl_V
                                     && wlv.col < view_width
                                     && !(noinvcur as ::core::ffi::c_int != 0
                                         && lnum == (*wp).w_cursor.lnum
@@ -5940,7 +5950,7 @@ pub unsafe extern "C" fn win_line(
                             if wlv.n_extra == 0 as ::core::ffi::c_int {
                                 wlv.n_extra = byte2cells(mb_c) - 1 as ::core::ffi::c_int;
                             }
-                            if dy_flags
+                            if dy_flags.get()
                                 & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
                                 != 0
                                 && (*wp).w_onebuf_opt.wo_rl != 0
@@ -5980,8 +5990,9 @@ pub unsafe extern "C" fn win_line(
                             wlv.extra_attr = win_hl_attr(wp, HLF_8 as ::core::ffi::c_int);
                             saved_attr2 = wlv.char_attr;
                             mb_schar = mb_c as schar_T;
-                        } else if VIsual_active as ::core::ffi::c_int != 0
-                            && (VIsual_mode == Ctrl_V || VIsual_mode == 'v' as ::core::ffi::c_int)
+                        } else if VIsual_active.get() as ::core::ffi::c_int != 0
+                            && (VIsual_mode.get() == Ctrl_V
+                                || VIsual_mode.get() == 'v' as ::core::ffi::c_int)
                             && virtual_active(wp) as ::core::ffi::c_int != 0
                             && wlv.tocol != MAXCOL as ::core::ffi::c_int
                             && wlv.vcol < wlv.tocol
@@ -5993,7 +6004,7 @@ pub unsafe extern "C" fn win_line(
                         }
                     }
                     if (*wp).w_onebuf_opt.wo_cole > 0 as OptInt
-                        && (wp != curwin
+                        && (wp != curwin.get()
                             || lnum != (*wp).w_cursor.lnum
                             || conceal_cursor_line(wp) as ::core::ffi::c_int != 0)
                         && (syntax_flags & HL_CONCEAL as ::core::ffi::c_int
@@ -6015,7 +6026,7 @@ pub unsafe extern "C" fn win_line(
                             && (syntax_conceal as ::core::ffi::c_int != 0
                                 && syn_get_sub_char() != NUL
                                 || has_match_conc != 0 && match_conc != 0
-                                || decor_conceal != 0 && decor_state.conceal_char != 0
+                                || decor_conceal != 0 && (*decor_state.ptr()).conceal_char != 0
                                 || (*wp).w_onebuf_opt.wo_cole == 1 as OptInt)
                             && (*wp).w_onebuf_opt.wo_cole != 3 as OptInt
                         {
@@ -6024,10 +6035,10 @@ pub unsafe extern "C" fn win_line(
                             }
                             if has_match_conc != 0 && match_conc != 0 {
                                 mb_schar = schar_from_char(match_conc);
-                            } else if decor_conceal != 0 && decor_state.conceal_char != 0 {
-                                mb_schar = decor_state.conceal_char;
-                                if decor_state.conceal_attr != 0 {
-                                    wlv.char_attr = decor_state.conceal_attr;
+                            } else if decor_conceal != 0 && (*decor_state.ptr()).conceal_char != 0 {
+                                mb_schar = (*decor_state.ptr()).conceal_char;
+                                if (*decor_state.ptr()).conceal_attr != 0 {
+                                    wlv.char_attr = (*decor_state.ptr()).conceal_attr;
                                 }
                             } else if syntax_conceal as ::core::ffi::c_int != 0
                                 && syn_get_sub_char() != NUL
@@ -6151,15 +6162,15 @@ pub unsafe extern "C" fn win_line(
                 if mb_schar == NUL as schar_T && eol_hl_off == 0 as ::core::ffi::c_int {
                     let prevcol_hl_flag: bool = get_prevcol_hl_flag(
                         wp,
-                        &raw mut screen_search_hl,
+                        screen_search_hl.ptr(),
                         ptr_0.offset_from(line_1) as colnr_T - 1 as colnr_T,
                     );
                     if lcs_eol_todo as ::core::ffi::c_int != 0
                         && (area_attr != 0 as ::core::ffi::c_int
                             && wlv.vcol == wlv.fromcol
-                            && (VIsual_mode != Ctrl_V
-                                || lnum == VIsual.lnum
-                                || lnum == (*curwin).w_cursor.lnum)
+                            && (VIsual_mode.get() != Ctrl_V
+                                || lnum == (*VIsual.ptr()).lnum
+                                || lnum == (*curwin.get()).w_cursor.lnum)
                             || prevcol_hl_flag as ::core::ffi::c_int != 0)
                     {
                         let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6170,13 +6181,13 @@ pub unsafe extern "C" fn win_line(
                             wlv.off += n;
                             wlv.col += n;
                         } else {
-                            *linebuf_char.offset(wlv.off as isize) =
+                            *(*linebuf_char.ptr()).offset(wlv.off as isize) =
                                 ' ' as ::core::ffi::c_int as schar_T;
                         }
                         if area_attr == 0 as ::core::ffi::c_int && !has_fold {
                             get_search_match_hl(
                                 wp,
-                                &raw mut screen_search_hl,
+                                screen_search_hl.ptr(),
                                 ptr_0.offset_from(line_1) as colnr_T,
                                 &raw mut wlv.char_attr,
                             );
@@ -6186,8 +6197,8 @@ pub unsafe extern "C" fn win_line(
                         } else {
                             wlv.char_attr
                         };
-                        *linebuf_attr.offset(wlv.off as isize) = eol_attr as sattr_T;
-                        *linebuf_vcol.offset(wlv.off as isize) = wlv.vcol;
+                        *(*linebuf_attr.ptr()).offset(wlv.off as isize) = eol_attr as sattr_T;
+                        *(*linebuf_vcol.ptr()).offset(wlv.off as isize) = wlv.vcol;
                         wlv.col += 1;
                         wlv.off += 1;
                         wlv.vcol += 1;
@@ -6216,14 +6227,14 @@ pub unsafe extern "C" fn win_line(
                     if has_decor {
                         decor_redraw_eol(
                             wp,
-                            &raw mut decor_state,
+                            decor_state.ptr(),
                             &raw mut wlv.line_attr,
                             wlv.col + eol_skip,
                         );
                     }
                     let mut i_0: ::core::ffi::c_int = wlv.col;
                     while i_0 < view_width {
-                        *linebuf_vcol.offset((wlv.off + (i_0 - wlv.col)) as isize) =
+                        *(*linebuf_vcol.ptr()).offset((wlv.off + (i_0 - wlv.col)) as isize) =
                             (wlv.vcol as ::core::ffi::c_int + (i_0 - wlv.col)) as colnr_T;
                         i_0 += 1;
                     }
@@ -6270,7 +6281,7 @@ pub unsafe extern "C" fn win_line(
                             rightmost_vcol = INT_MAX;
                         }
                         while wlv.col < view_width {
-                            *linebuf_char.offset(wlv.off as isize) =
+                            *(*linebuf_char.ptr()).offset(wlv.off as isize) =
                                 ' ' as ::core::ffi::c_int as schar_T;
                             advance_color_col(
                                 &raw mut wlv,
@@ -6295,7 +6306,7 @@ pub unsafe extern "C" fn win_line(
                                 col_attr = hl_combine_attr(col_attr, term_attrs[wlv.vcol as usize]);
                             }
                             col_attr = hl_combine_attr(col_attr, wlv.line_attr);
-                            *linebuf_attr.offset(wlv.off as isize) = col_attr as sattr_T;
+                            *(*linebuf_attr.ptr()).offset(wlv.off as isize) = col_attr as sattr_T;
                             wlv.off += 1;
                             wlv.col += 1;
                             wlv.vcol += 1;
@@ -6326,10 +6337,10 @@ pub unsafe extern "C" fn win_line(
                     );
                     wlv.row += 1;
                     if in_curline {
-                        (*curwin).w_cline_row = startrow;
-                        (*curwin).w_cline_height = wlv.row - startrow;
-                        (*curwin).w_cline_folded = has_fold;
-                        (*curwin).w_valid |= VALID_CHEIGHT | VALID_CROW;
+                        (*curwin.get()).w_cline_row = startrow;
+                        (*curwin.get()).w_cline_height = wlv.row - startrow;
+                        (*curwin.get()).w_cline_folded = has_fold;
+                        (*curwin.get()).w_valid |= VALID_CHEIGHT | VALID_CROW;
                     }
                     break 's_5143;
                 } else {
@@ -6349,7 +6360,7 @@ pub unsafe extern "C" fn win_line(
                                 ptr_0.offset_from(line_1) as ::core::ffi::c_int,
                                 -1 as ::core::ffi::c_int,
                                 false_0 != 0,
-                                &raw mut decor_state,
+                                decor_state.ptr(),
                                 decor_provider_end_col - 1 as ::core::ffi::c_int,
                             );
                         }
@@ -6404,8 +6415,9 @@ pub unsafe extern "C" fn win_line(
                             let mut line_ae: HlAttrs = syn_attr2entry(wlv.line_attr_lowprio);
                             let mut char_ae: HlAttrs = syn_attr2entry(wlv.char_attr);
                             let mut win_normal_bg: ::core::ffi::c_int =
-                                normal_bg as ::core::ffi::c_int;
-                            let mut win_normal_cterm_bg: ::core::ffi::c_int = cterm_normal_bg_color;
+                                normal_bg.get() as ::core::ffi::c_int;
+                            let mut win_normal_cterm_bg: ::core::ffi::c_int =
+                                cterm_normal_bg_color.get();
                             if bg_attr != 0 as ::core::ffi::c_int {
                                 let mut norm_ae: HlAttrs = syn_attr2entry(bg_attr);
                                 win_normal_bg = norm_ae.rgb_bg_color as ::core::ffi::c_int;
@@ -6436,22 +6448,25 @@ pub unsafe extern "C" fn win_line(
                     }
                     if wlv.filler_todo <= 0 as ::core::ffi::c_int {
                         if wlv.skip_cells <= 0 as ::core::ffi::c_int {
-                            *linebuf_char.offset(wlv.off as isize) = mb_schar;
+                            *(*linebuf_char.ptr()).offset(wlv.off as isize) = mb_schar;
                             if multi_attr != 0 {
-                                *linebuf_attr.offset(wlv.off as isize) = multi_attr as sattr_T;
+                                *(*linebuf_attr.ptr()).offset(wlv.off as isize) =
+                                    multi_attr as sattr_T;
                                 multi_attr = 0 as ::core::ffi::c_int;
                             } else {
-                                *linebuf_attr.offset(wlv.off as isize) = wlv.char_attr as sattr_T;
+                                *(*linebuf_attr.ptr()).offset(wlv.off as isize) =
+                                    wlv.char_attr as sattr_T;
                             }
-                            *linebuf_vcol.offset(wlv.off as isize) = wlv.vcol;
+                            *(*linebuf_vcol.ptr()).offset(wlv.off as isize) = wlv.vcol;
                             if schar_cells(mb_schar) > 1 as ::core::ffi::c_int {
                                 wlv.off += 1;
                                 wlv.col += 1;
-                                *linebuf_char.offset(wlv.off as isize) = 0 as schar_T;
-                                *linebuf_attr.offset(wlv.off as isize) = *linebuf_attr
-                                    .offset((wlv.off - 1 as ::core::ffi::c_int) as isize);
+                                *(*linebuf_char.ptr()).offset(wlv.off as isize) = 0 as schar_T;
+                                *(*linebuf_attr.ptr()).offset(wlv.off as isize) = *(*linebuf_attr
+                                    .ptr())
+                                .offset((wlv.off - 1 as ::core::ffi::c_int) as isize);
                                 wlv.vcol += 1;
-                                *linebuf_vcol.offset(wlv.off as isize) = wlv.vcol;
+                                *(*linebuf_vcol.ptr()).offset(wlv.off as isize) = wlv.vcol;
                                 if wlv.tocol == wlv.vcol {
                                     wlv.tocol += 1;
                                 }
@@ -6529,7 +6544,7 @@ pub unsafe extern "C" fn win_line(
                                 ptr_0.offset_from(line_1) as ::core::ffi::c_int,
                                 -3 as ::core::ffi::c_int,
                                 false_0 != 0,
-                                &raw mut decor_state,
+                                decor_state.ptr(),
                                 decor_provider_end_col - 1 as ::core::ffi::c_int,
                             );
                             decor_need_recheck = true_0 != 0;
@@ -6537,14 +6552,14 @@ pub unsafe extern "C" fn win_line(
                             decor_recheck_draw_col(
                                 -1 as ::core::ffi::c_int,
                                 true_0 != 0,
-                                &raw mut decor_state,
+                                decor_state.ptr(),
                             );
                             decor_redraw_col(
                                 wp,
                                 MAXCOL as ::core::ffi::c_int,
                                 -1 as ::core::ffi::c_int,
                                 true_0 != 0,
-                                &raw mut decor_state,
+                                decor_state.ptr(),
                                 decor_provider_end_col - 1 as ::core::ffi::c_int,
                             );
                         }
@@ -6580,7 +6595,7 @@ pub unsafe extern "C" fn win_line(
         let mut draw_col: ::core::ffi::c_int = wlv.col - wlv.boguscols;
         let mut i_1: ::core::ffi::c_int = draw_col;
         while i_1 < view_width {
-            *linebuf_vcol.offset((wlv.off + (i_1 - draw_col)) as isize) =
+            *(*linebuf_vcol.ptr()).offset((wlv.off + (i_1 - draw_col)) as isize) =
                 (wlv.vcol as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
             i_1 += 1;
         }
@@ -6591,8 +6606,9 @@ pub unsafe extern "C" fn win_line(
             let mut attr: ::core::ffi::c_int =
                 hl_combine_attr(wlv.line_attr_lowprio, wlv.line_attr);
             while draw_col < view_width {
-                *linebuf_char.offset(wlv.off as isize) = schar_from_char(' ' as ::core::ffi::c_int);
-                *linebuf_attr.offset(wlv.off as isize) = attr as sattr_T;
+                *(*linebuf_char.ptr()).offset(wlv.off as isize) =
+                    schar_from_char(' ' as ::core::ffi::c_int);
+                *(*linebuf_attr.ptr()).offset(wlv.off as isize) = attr as sattr_T;
                 wlv.off += 1;
                 draw_col += 1;
             }
@@ -6671,7 +6687,7 @@ pub unsafe extern "C" fn win_line(
                 wlv.need_showbreak = true_0 != 0;
             }
             if statuscol.draw as ::core::ffi::c_int != 0
-                && !vim_strchr(p_cpo, CPO_NUMCOL).is_null()
+                && !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null()
                 && wlv.row > startrow + wlv.filler_lines
             {
                 statuscol.draw = false_0 != 0;
@@ -6739,9 +6755,8 @@ unsafe extern "C" fn wlv_put_linebuf(
         let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
             while off < (*wp).w_view_width
-                && ascii_isdigit(
-                    schar_get_ascii(*linebuf_char.offset(off as isize)) as ::core::ffi::c_int
-                ) as ::core::ffi::c_int
+                && ascii_isdigit(schar_get_ascii(*(*linebuf_char.ptr()).offset(off as isize))
+                    as ::core::ffi::c_int) as ::core::ffi::c_int
                     != 0
             {
                 off += 1;
@@ -6750,14 +6765,15 @@ unsafe extern "C" fn wlv_put_linebuf(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 3 as ::core::ffi::c_int && off < (*wp).w_view_width {
             if (off + 1 as ::core::ffi::c_int) < (*wp).w_view_width
-                && *linebuf_char.offset((off + 1 as ::core::ffi::c_int) as isize) == NUL as schar_T
+                && *(*linebuf_char.ptr()).offset((off + 1 as ::core::ffi::c_int) as isize)
+                    == NUL as schar_T
             {
-                *linebuf_char.offset((off + 1 as ::core::ffi::c_int) as isize) =
+                *(*linebuf_char.ptr()).offset((off + 1 as ::core::ffi::c_int) as isize) =
                     ' ' as ::core::ffi::c_int as schar_T;
             }
-            *linebuf_char.offset(off as isize) = '<' as ::core::ffi::c_int as schar_T;
-            *linebuf_attr.offset(off as isize) =
-                *hl_attr_active.offset(HLF_AT as ::core::ffi::c_int as isize) as sattr_T;
+            *(*linebuf_char.ptr()).offset(off as isize) = '<' as ::core::ffi::c_int as schar_T;
+            *(*linebuf_attr.ptr()).offset(off as isize) =
+                *(*hl_attr_active.ptr()).offset(HLF_AT as ::core::ffi::c_int as isize) as sattr_T;
             off += 1;
             i += 1;
         }
@@ -6853,10 +6869,10 @@ unsafe extern "C" fn win_hl_attr(
     mut wp: *mut win_T,
     mut hlf: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast < 0 as ::core::ffi::c_int {
+    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
         (*wp).w_ns_hl_attr
     } else {
-        hl_attr_active
+        hl_attr_active.get()
     }
     .offset(hlf as isize);
 }

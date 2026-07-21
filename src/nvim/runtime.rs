@@ -127,13 +127,13 @@ extern "C" {
         buf: *mut buf_T,
     ) -> bool;
     fn has_autocmd(event: event_T, sfname: *mut ::core::ffi::c_char, buf: *mut buf_T) -> bool;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut p_lpl: ::core::ffi::c_int;
-    static mut p_pp: *mut ::core::ffi::c_char;
-    static mut p_rtp: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static p_lpl: GlobalCell<::core::ffi::c_int>;
+    static p_pp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_rtp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -185,7 +185,7 @@ extern "C" {
     fn api_clear_error(value: *mut Error);
     fn eval_to_number(expr: *mut ::core::ffi::c_char, use_simple_function: bool) -> varnumber_T;
     fn get_copyID() -> ::core::ffi::c_int;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
@@ -302,21 +302,21 @@ extern "C" {
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn openscript(name: *mut ::core::ffi::c_char, directly: bool);
-    static mut msg_col: ::core::ffi::c_int;
-    static mut ex_nesting_level: ::core::ffi::c_int;
-    static mut debug_break_level: ::core::ffi::c_int;
-    static mut debug_tick: ::core::ffi::c_int;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut did_source_packages: bool;
-    static mut curbuf: *mut buf_T;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut got_int: bool;
-    static mut global_busy: ::core::ffi::c_int;
-    static mut listcmd_busy: bool;
-    static mut time_fd: *mut FILE;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
+    static debug_break_level: GlobalCell<::core::ffi::c_int>;
+    static debug_tick: GlobalCell<::core::ffi::c_int>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static did_source_packages: GlobalCell<bool>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static got_int: GlobalCell<bool>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
+    static listcmd_busy: GlobalCell<bool>;
+    static time_fd: GlobalCell<*mut FILE>;
     fn add_win_cmd_modifiers(
         buf: *mut ::core::ffi::c_char,
         cmod: *const cmdmod_T,
@@ -4468,7 +4468,7 @@ pub unsafe extern "C" fn do_in_path(
     let mut buf: *mut ::core::ffi::c_char =
         xmallocz(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if p_verbose > 10 as OptInt && !name.is_null() {
+    if p_verbose.get() > 10 as OptInt && !name.is_null() {
         verbose_enter();
         if *prefix as ::core::ffi::c_int != NUL {
             smsg(
@@ -4547,7 +4547,7 @@ pub unsafe extern "C" fn do_in_path(
                     (MAXPATHL as isize - tail.offset_from(buf)) as size_t,
                     b"\t \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                if p_verbose > 10 as OptInt {
+                if p_verbose.get() > 10 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -4582,19 +4582,19 @@ pub unsafe extern "C" fn do_in_path(
     xfree(buf as *mut ::core::ffi::c_void);
     xfree(rtp_copy as *mut ::core::ffi::c_void);
     if !did_one && !name.is_null() {
-        let mut basepath: *mut ::core::ffi::c_char = (if path == p_rtp as *const ::core::ffi::c_char
-        {
-            b"runtimepath\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b"packpath\0".as_ptr() as *const ::core::ffi::c_char
-        }) as *mut ::core::ffi::c_char;
+        let mut basepath: *mut ::core::ffi::c_char =
+            (if path == p_rtp.get() as *const ::core::ffi::c_char {
+                b"runtimepath\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b"packpath\0".as_ptr() as *const ::core::ffi::c_char
+            }) as *mut ::core::ffi::c_char;
         if flags & DIP_ERR as ::core::ffi::c_int != 0 {
             semsg(
                 gettext(&raw const e_dirnotf as *const ::core::ffi::c_char),
                 basepath,
                 name,
             );
-        } else if p_verbose > 1 as OptInt {
+        } else if p_verbose.get() > 1 as OptInt {
             verbose_enter();
             smsg(
                 0 as ::core::ffi::c_int,
@@ -4676,7 +4676,7 @@ unsafe extern "C" fn do_in_cached_path(
 ) -> ::core::ffi::c_int {
     let mut did_one: bool = false_0 != 0;
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
-    if p_verbose > 10 as OptInt && !name.is_null() {
+    if p_verbose.get() > 10 as OptInt && !name.is_null() {
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
@@ -4746,7 +4746,7 @@ unsafe extern "C" fn do_in_cached_path(
                             as size_t,
                         b"\t \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     );
-                    if p_verbose > 10 as OptInt {
+                    if p_verbose.get() > 10 as OptInt {
                         verbose_enter();
                         smsg(
                             0 as ::core::ffi::c_int,
@@ -4791,7 +4791,7 @@ unsafe extern "C" fn do_in_cached_path(
                 b"runtime path\0".as_ptr() as *const ::core::ffi::c_char,
                 name,
             );
-        } else if p_verbose > 1 as OptInt {
+        } else if p_verbose.get() > 1 as OptInt {
             verbose_enter();
             smsg(
                 0 as ::core::ffi::c_int,
@@ -5029,7 +5029,7 @@ pub unsafe extern "C" fn do_in_path_and_pp(
             b"pack/*/start/*/\0".as_ptr() as *const ::core::ffi::c_char
         };
         done |= do_in_path(
-            p_pp,
+            p_pp.get(),
             prefix,
             name,
             flags & !(DIP_AFTER as ::core::ffi::c_int),
@@ -5043,7 +5043,7 @@ pub unsafe extern "C" fn do_in_path_and_pp(
                 b"start/*/\0".as_ptr() as *const ::core::ffi::c_char
             };
             done |= do_in_path(
-                p_pp,
+                p_pp.get(),
                 prefix,
                 name,
                 flags & !(DIP_AFTER as ::core::ffi::c_int),
@@ -5056,7 +5056,7 @@ pub unsafe extern "C" fn do_in_path_and_pp(
         && flags & DIP_OPT as ::core::ffi::c_int != 0
     {
         done |= do_in_path(
-            p_pp,
+            p_pp.get(),
             b"pack/*/opt/*/\0".as_ptr() as *const ::core::ffi::c_char,
             name,
             flags,
@@ -5065,7 +5065,7 @@ pub unsafe extern "C" fn do_in_path_and_pp(
         );
         if done == FAIL || flags & DIP_ALL as ::core::ffi::c_int != 0 {
             done |= do_in_path(
-                p_pp,
+                p_pp.get(),
                 b"opt/*/\0".as_ptr() as *const ::core::ffi::c_char,
                 name,
                 flags,
@@ -5250,7 +5250,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
         items: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     };
     static buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
-    let mut entry: *mut ::core::ffi::c_char = p_pp;
+    let mut entry: *mut ::core::ffi::c_char = p_pp.get();
     while *entry as ::core::ffi::c_int != NUL {
         let mut cur_entry: *mut ::core::ffi::c_char = entry;
         let mut buflen: size_t = copy_option_part(
@@ -5281,7 +5281,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
         map_put_String_int(&raw mut pack_used, the_entry, 0 as ::core::ffi::c_int);
     }
     let mut rtp_entry: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    rtp_entry = p_rtp;
+    rtp_entry = p_rtp.get();
     while *rtp_entry as ::core::ffi::c_int != NUL {
         let mut cur_entry_0: *mut ::core::ffi::c_char = rtp_entry;
         let mut buflen_0: size_t = copy_option_part(
@@ -5294,7 +5294,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
             rtp_entry = cur_entry_0;
             break;
         } else {
-            let mut pos_in_rtp: size_t = cur_entry_0.offset_from(p_rtp) as size_t;
+            let mut pos_in_rtp: size_t = cur_entry_0.offset_from(p_rtp.get()) as size_t;
             expand_rtp_entry(
                 &raw mut search_path,
                 &raw mut rtp_used,
@@ -5320,7 +5320,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
             }
         }
     }
-    let mut sentinel_pos_in_rtp: size_t = rtp_entry.offset_from(p_rtp) as size_t;
+    let mut sentinel_pos_in_rtp: size_t = rtp_entry.offset_from(p_rtp.get()) as size_t;
     sentinel_pos_in_rtp = sentinel_pos_in_rtp.wrapping_sub(
         (if sentinel_pos_in_rtp > 0 as size_t {
             1 as ::core::ffi::c_int
@@ -5364,7 +5364,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
             MAXPATHL as size_t,
             b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        let mut pos_in_rtp_0: size_t = cur_entry_1.offset_from(p_rtp) as size_t;
+        let mut pos_in_rtp_0: size_t = cur_entry_1.offset_from(p_rtp.get()) as size_t;
         expand_rtp_entry(
             &raw mut search_path,
             &raw mut rtp_used,
@@ -5467,7 +5467,7 @@ pub unsafe extern "C" fn do_in_runtimepath(
     if flags & (DIP_START as ::core::ffi::c_int | DIP_OPT as ::core::ffi::c_int) != 0
         && (success == FAIL || flags & DIP_ALL as ::core::ffi::c_int != 0)
     {
-        success |= do_in_path_and_pp(p_rtp, name, flags, callback, cookie);
+        success |= do_in_path_and_pp(p_rtp.get(), name, flags, callback, cookie);
     }
     return success;
 }
@@ -5595,7 +5595,7 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut insp: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut after_insp: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut entry: *const ::core::ffi::c_char = p_rtp;
+    let mut entry: *const ::core::ffi::c_char = p_rtp.get();
     '_theend: {
         while *entry as ::core::ffi::c_int != NUL {
             let mut cur_entry: *const ::core::ffi::c_char = entry;
@@ -5645,7 +5645,7 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             }
         }
         if insp.is_null() {
-            insp = p_rtp.offset(strlen(p_rtp) as isize);
+            insp = (*p_rtp.ptr()).offset(strlen(p_rtp.get()) as isize);
         }
         afterdir = concat_fnames(
             fname,
@@ -5661,7 +5661,7 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
         {
             afterlen = strlen(afterdir).wrapping_add(1 as size_t);
         }
-        oldlen = strlen(p_rtp);
+        oldlen = strlen(p_rtp.get());
         addlen = strlen(fname).wrapping_add(1 as size_t);
         new_rtp_capacity = oldlen
             .wrapping_add(addlen)
@@ -5669,11 +5669,11 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             .wrapping_add(1 as size_t);
         new_rtp = try_malloc(new_rtp_capacity) as *mut ::core::ffi::c_char;
         if !new_rtp.is_null() {
-            keep = insp.offset_from(p_rtp) as size_t;
+            keep = insp.offset_from(p_rtp.get()) as size_t;
             first_pos = keep;
             memmove(
                 new_rtp as *mut ::core::ffi::c_void,
-                p_rtp as *const ::core::ffi::c_void,
+                p_rtp.get() as *const ::core::ffi::c_void,
                 keep,
             );
             new_rtp_len = keep;
@@ -5696,10 +5696,10 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             }
             after_pos = 0 as size_t;
             if afterlen > 0 as size_t && !after_insp.is_null() {
-                let mut keep_after: size_t = after_insp.offset_from(p_rtp) as size_t;
+                let mut keep_after: size_t = after_insp.offset_from(p_rtp.get()) as size_t;
                 memmove(
                     new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
-                    p_rtp.offset(keep as isize) as *const ::core::ffi::c_void,
+                    (*p_rtp.ptr()).offset(keep as isize) as *const ::core::ffi::c_void,
                     keep_after.wrapping_sub(keep),
                 );
                 new_rtp_len = new_rtp_len.wrapping_add(keep_after.wrapping_sub(keep));
@@ -5715,10 +5715,10 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
                 keep = keep_after;
                 after_pos = keep_after;
             }
-            if *p_rtp.offset(keep as isize) as ::core::ffi::c_int != NUL {
+            if *(*p_rtp.ptr()).offset(keep as isize) as ::core::ffi::c_int != NUL {
                 memmove(
                     new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
-                    p_rtp.offset(keep as isize) as *const ::core::ffi::c_void,
+                    (*p_rtp.ptr()).offset(keep as isize) as *const ::core::ffi::c_void,
                     oldlen.wrapping_sub(keep).wrapping_add(1 as size_t),
                 );
             } else {
@@ -5951,7 +5951,7 @@ unsafe extern "C" fn add_pack_plugins(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_fnames {
             let mut found: bool = false_0 != 0;
-            let mut p: *const ::core::ffi::c_char = p_rtp;
+            let mut p: *const ::core::ffi::c_char = p_rtp.get();
             while *p as ::core::ffi::c_int != NUL {
                 copy_option_part(
                     &raw mut p as *mut *mut ::core::ffi::c_char,
@@ -6016,7 +6016,7 @@ unsafe extern "C" fn add_opt_pack_plugins(
 #[no_mangle]
 pub unsafe extern "C" fn add_pack_start_dirs() {
     do_in_path(
-        p_pp,
+        p_pp.get(),
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
@@ -6094,9 +6094,9 @@ unsafe extern "C" fn add_pack_start_dir(
 }
 #[no_mangle]
 pub unsafe extern "C" fn load_start_packages() {
-    did_source_packages = true_0 != 0;
+    did_source_packages.set(true_0 != 0);
     do_in_path(
-        p_pp,
+        p_pp.get(),
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         b"pack/*/start/*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
@@ -6112,7 +6112,7 @@ pub unsafe extern "C" fn load_start_packages() {
         APP_LOAD.ptr() as *mut ::core::ffi::c_void,
     );
     do_in_path(
-        p_pp,
+        p_pp.get(),
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         b"start/*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
@@ -6131,19 +6131,19 @@ pub unsafe extern "C" fn load_start_packages() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_packloadall(mut eap: *mut exarg_T) {
-    if !did_source_packages || (*eap).forceit != 0 {
+    if !did_source_packages.get() || (*eap).forceit != 0 {
         add_pack_start_dirs();
         load_start_packages();
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn load_plugins() {
-    if p_lpl != 0 {
-        let mut rtp_copy: *mut ::core::ffi::c_char = p_rtp;
+    if p_lpl.get() != 0 {
+        let mut rtp_copy: *mut ::core::ffi::c_char = p_rtp.get();
         let plugin_pattern: *mut ::core::ffi::c_char =
             b"plugin/**/*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        if !did_source_packages {
-            rtp_copy = xstrdup(p_rtp);
+        if !did_source_packages.get() {
+            rtp_copy = xstrdup(p_rtp.get());
             add_pack_start_dirs();
         }
         source_in_path_vim_lua(
@@ -6151,17 +6151,17 @@ pub unsafe extern "C" fn load_plugins() {
             plugin_pattern,
             DIP_ALL as ::core::ffi::c_int | DIP_NOAFTER as ::core::ffi::c_int,
         );
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"loading rtp plugins\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
             );
         }
-        if !did_source_packages {
+        if !did_source_packages.get() {
             xfree(rtp_copy as *mut ::core::ffi::c_void);
             load_start_packages();
         }
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"loading packages\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -6171,7 +6171,7 @@ pub unsafe extern "C" fn load_plugins() {
             plugin_pattern,
             DIP_ALL as ::core::ffi::c_int | DIP_AFTER as ::core::ffi::c_int,
         );
-        if !time_fd.is_null() {
+        if !(*time_fd.ptr()).is_null() {
             time_msg(
                 b"loading after plugins\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<proftime_T>(),
@@ -6194,7 +6194,7 @@ pub unsafe extern "C" fn ex_packadd(mut eap: *mut exarg_T) {
     } else {
         APP_BOTH.ptr()
     }) as *mut ::core::ffi::c_void;
-    if !did_source_packages {
+    if !did_source_packages.get() {
         vim_snprintf(
             pat,
             len,
@@ -6203,7 +6203,7 @@ pub unsafe extern "C" fn ex_packadd(mut eap: *mut exarg_T) {
             (*eap).arg,
         );
         res = do_in_path(
-            p_pp,
+            p_pp.get(),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
             pat,
             DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
@@ -6227,7 +6227,7 @@ pub unsafe extern "C" fn ex_packadd(mut eap: *mut exarg_T) {
         (*eap).arg,
     );
     do_in_path(
-        p_pp,
+        p_pp.get(),
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         pat,
         DIP_ALL as ::core::ffi::c_int
@@ -6286,7 +6286,7 @@ unsafe extern "C" fn ExpandRTDir_int(
         );
         loop {
             if flags & DIP_NORTP as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                globpath(p_rtp, buf, gap, glob_flags, expand_dirs);
+                globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs);
             }
             if flags & DIP_START as ::core::ffi::c_int != 0 {
                 snprintf(
@@ -6310,7 +6310,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                         b"*.{vim,lua}\0".as_ptr() as *const ::core::ffi::c_char
                     },
                 );
-                globpath(p_pp, buf, gap, glob_flags, expand_dirs);
+                globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
                 snprintf(
                     buf,
                     buf_len,
@@ -6332,7 +6332,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                         b"*.{vim,lua}\0".as_ptr() as *const ::core::ffi::c_char
                     },
                 );
-                globpath(p_pp, buf, gap, glob_flags, expand_dirs);
+                globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
             }
             if flags & DIP_OPT as ::core::ffi::c_int != 0 {
                 snprintf(
@@ -6356,7 +6356,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                         b"*.{vim,lua}\0".as_ptr() as *const ::core::ffi::c_char
                     },
                 );
-                globpath(p_pp, buf, gap, glob_flags, expand_dirs);
+                globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
                 snprintf(
                     buf,
                     buf_len,
@@ -6378,7 +6378,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                         b"*.{vim,lua}\0".as_ptr() as *const ::core::ffi::c_char
                     },
                 );
-                globpath(p_pp, buf, gap, glob_flags, expand_dirs);
+                globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
             }
             if !(**dirnames.offset(i as isize) as ::core::ffi::c_int == NUL && !expand_dirs) {
                 break;
@@ -6597,14 +6597,26 @@ pub unsafe extern "C" fn ExpandPackAddDir(
         b"pack/*/opt/%s*\0".as_ptr() as *const ::core::ffi::c_char,
         pat,
     );
-    globpath(p_pp, s, &raw mut ga, 0 as ::core::ffi::c_int, true_0 != 0);
+    globpath(
+        p_pp.get(),
+        s,
+        &raw mut ga,
+        0 as ::core::ffi::c_int,
+        true_0 != 0,
+    );
     snprintf(
         s,
         buflen,
         b"opt/%s*\0".as_ptr() as *const ::core::ffi::c_char,
         pat,
     );
-    globpath(p_pp, s, &raw mut ga, 0 as ::core::ffi::c_int, true_0 != 0);
+    globpath(
+        p_pp.get(),
+        s,
+        &raw mut ga,
+        0 as ::core::ffi::c_int,
+        true_0 != 0,
+    );
     xfree(s as *mut ::core::ffi::c_void);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < ga.ga_len {
@@ -6825,13 +6837,13 @@ unsafe extern "C" fn add_dir(
             }
         };
         xmemcpyz(
-            &raw mut IObuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            IObuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             appname as *const ::core::ffi::c_void,
             appname_len,
         );
         xmemcpyz(
             dest as *mut ::core::ffi::c_void,
-            &raw mut IObuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
+            IObuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
             appname_len,
         );
         dest = dest.offset(appname_len as isize);
@@ -7136,8 +7148,8 @@ unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *m
     } else if !eap.is_null() && (*eap).forceit != 0 {
         openscript(
             fname,
-            global_busy != 0
-                || listcmd_busy as ::core::ffi::c_int != 0
+            global_busy.get() != 0
+                || listcmd_busy.get() as ::core::ffi::c_int != 0
                 || !(*eap).nextcmd.is_null()
                 || (*(*eap).cstack).cs_idx >= 0 as ::core::ffi::c_int,
         );
@@ -7165,7 +7177,7 @@ pub unsafe extern "C" fn ex_options(mut _eap: *mut exarg_T) {
     buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     add_win_cmd_modifiers(
         &raw mut buf as *mut ::core::ffi::c_char,
-        &raw mut cmdmod,
+        cmdmod.ptr(),
         &raw mut multi_mods,
     );
     os_setenv(
@@ -7275,29 +7287,29 @@ unsafe extern "C" fn do_source_buffer_init(
     mut eap: *const exarg_T,
     mut ex_lua: bool,
 ) -> *mut ::core::ffi::c_char {
-    if curbuf.is_null() {
+    if (*curbuf.ptr()).is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if !(*curbuf).b_ffname.is_null() {
-        fname = xstrdup((*curbuf).b_ffname);
+    if !(*curbuf.get()).b_ffname.is_null() {
+        fname = xstrdup((*curbuf.get()).b_ffname);
     } else {
         if ex_lua {
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b":{range}lua buffer=%d\0".as_ptr() as *const ::core::ffi::c_char,
-                (*curbuf).handle,
+                (*curbuf.get()).handle,
             );
         } else {
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b":source buffer=%d\0".as_ptr() as *const ::core::ffi::c_char,
-                (*curbuf).handle,
+                (*curbuf.get()).handle,
             );
         }
-        fname = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+        fname = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     }
     ga_init(
         &raw mut (*sp).buflines,
@@ -7437,7 +7449,7 @@ unsafe extern "C" fn do_source_ext(
     };
     let mut firstline: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
     let mut retval: ::core::ffi::c_int = FAIL;
-    let mut save_debug_break_level: ::core::ffi::c_int = debug_break_level;
+    let mut save_debug_break_level: ::core::ffi::c_int = debug_break_level.get();
     let mut si: *mut scriptitem_T = ::core::ptr::null_mut::<scriptitem_T>();
     let mut wait_start: proftime_T = 0;
     let mut trigger_source_post: bool = false_0 != 0;
@@ -7502,8 +7514,13 @@ unsafe extern "C" fn do_source_ext(
                 if has_autocmd(EVENT_SOURCECMD, fname_exp, ::core::ptr::null_mut::<buf_T>())
                     as ::core::ffi::c_int
                     != 0
-                    && apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp, false_0 != 0, curbuf)
-                        as ::core::ffi::c_int
+                    && apply_autocmds(
+                        EVENT_SOURCECMD,
+                        fname_exp,
+                        fname_exp,
+                        false_0 != 0,
+                        curbuf.get(),
+                    ) as ::core::ffi::c_int
                         != 0
                 {
                     retval = if aborting() as ::core::ffi::c_int != 0 {
@@ -7517,12 +7534,18 @@ unsafe extern "C" fn do_source_ext(
                             fname_exp,
                             fname_exp,
                             false_0 != 0,
-                            curbuf,
+                            curbuf.get(),
                         );
                     }
                     break '_theend;
                 } else {
-                    apply_autocmds(EVENT_SOURCEPRE, fname_exp, fname_exp, false_0 != 0, curbuf);
+                    apply_autocmds(
+                        EVENT_SOURCEPRE,
+                        fname_exp,
+                        fname_exp,
+                        false_0 != 0,
+                        curbuf.get(),
+                    );
                 }
             }
             if !cookie.source_from_buf_or_str {
@@ -7552,7 +7575,7 @@ unsafe extern "C" fn do_source_ext(
                 }
             }
             if cookie.fp.is_null() && !cookie.source_from_buf_or_str {
-                if p_verbose > 1 as OptInt {
+                if p_verbose.get() > 1 as OptInt {
                     verbose_enter();
                     if (*((*exestack.ptr()).ga_data as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
@@ -7581,7 +7604,7 @@ unsafe extern "C" fn do_source_ext(
                     verbose_leave();
                 }
             } else {
-                if p_verbose > 1 as OptInt {
+                if p_verbose.get() > 1 as OptInt {
                     verbose_enter();
                     if (*((*exestack.ptr()).ga_data as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
@@ -7616,15 +7639,15 @@ unsafe extern "C" fn do_source_ext(
                 }
                 cookie.breakpoint = dbg_find_breakpoint(true_0 != 0, fname_exp, 0 as linenr_T);
                 cookie.fname = fname_exp;
-                cookie.dbg_tick = debug_tick;
-                cookie.level = ex_nesting_level;
+                cookie.dbg_tick = debug_tick.get();
+                cookie.level = ex_nesting_level.get();
                 rel_time = 0;
                 start_time = 0;
-                l_time_fd = time_fd;
+                l_time_fd = time_fd.get();
                 if !l_time_fd.is_null() {
                     time_push(&raw mut rel_time, &raw mut start_time);
                 }
-                l_do_profiling = do_profiling;
+                l_do_profiling = do_profiling.get();
                 if l_do_profiling == PROF_YES {
                     prof_child_enter(&raw mut wait_start);
                 }
@@ -7633,9 +7656,9 @@ unsafe extern "C" fn do_source_ext(
                     next: ::core::ptr::null_mut::<funccal_entry_T>(),
                 };
                 save_funccal(&raw mut funccalp_entry);
-                save_current_sctx = current_sctx;
+                save_current_sctx = current_sctx.get();
                 (*last_current_SID_seq.ptr()) += 1;
-                current_sctx.sc_seq = last_current_SID_seq.get();
+                (*current_sctx.ptr()).sc_seq = last_current_SID_seq.get();
                 if sid > 0 as ::core::ffi::c_int {
                     si = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
                         .offset((sid - 1 as ::core::ffi::c_int) as isize);
@@ -7664,9 +7687,9 @@ unsafe extern "C" fn do_source_ext(
                         );
                     }
                 };
-                if str.is_null() || !script_is_lua(current_sctx.sc_sid) {
-                    current_sctx.sc_sid = sid as scid_T;
-                    current_sctx.sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
+                if str.is_null() || !script_is_lua((*current_sctx.ptr()).sc_sid) {
+                    (*current_sctx.ptr()).sc_sid = sid as scid_T;
+                    (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
                 }
                 estack_push(
                     ETYPE_SCRIPT,
@@ -7699,12 +7722,12 @@ unsafe extern "C" fn do_source_ext(
                     && !eap.is_null()
                     && !ex_lua
                     && !strequal(
-                        (*curbuf).b_p_ft,
+                        (*curbuf.get()).b_p_ft,
                         b"lua\0".as_ptr() as *const ::core::ffi::c_char,
                     )
-                    && !(!(*curbuf).b_fname.is_null()
+                    && !(!(*curbuf.get()).b_fname.is_null()
                         && path_with_extension(
-                            (*curbuf).b_fname,
+                            (*curbuf.get()).b_fname,
                             b"lua\0".as_ptr() as *const ::core::ffi::c_char,
                         ) as ::core::ffi::c_int
                             != 0)
@@ -7721,7 +7744,7 @@ unsafe extern "C" fn do_source_ext(
                     *args.items.offset(c2rust_fresh0 as isize) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
-                            integer: (*curbuf).handle as Integer,
+                            integer: (*curbuf.get()).handle as Integer,
                         },
                     };
                     let c2rust_fresh1 = args.size;
@@ -7771,13 +7794,13 @@ unsafe extern "C" fn do_source_ext(
                     && (ex_lua as ::core::ffi::c_int != 0
                         || ts_lua as ::core::ffi::c_int != 0
                         || strequal(
-                            (*curbuf).b_p_ft,
+                            (*curbuf.get()).b_p_ft,
                             b"lua\0".as_ptr() as *const ::core::ffi::c_char,
                         ) as ::core::ffi::c_int
                             != 0
-                        || !(*curbuf).b_fname.is_null()
+                        || !(*curbuf.get()).b_fname.is_null()
                             && path_with_extension(
-                                (*curbuf).b_fname,
+                                (*curbuf.get()).b_fname,
                                 b"lua\0".as_ptr() as *const ::core::ffi::c_char,
                             ) as ::core::ffi::c_int
                                 != 0)
@@ -7805,7 +7828,7 @@ unsafe extern "C" fn do_source_ext(
                             &raw mut cookie.conv,
                             b"utf-8\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char,
-                            p_enc,
+                            p_enc.get(),
                         );
                         let mut p_1: *mut ::core::ffi::c_char = string_convert(
                             &raw mut cookie.conv,
@@ -7843,8 +7866,8 @@ unsafe extern "C" fn do_source_ext(
                 retval = OK;
                 if l_do_profiling == PROF_YES && !si.is_null() {
                     si = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                        (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                            as isize,
+                        ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int
+                            - 1 as ::core::ffi::c_int) as isize,
                     );
                     if (*si).sn_prof_on {
                         (*si).sn_pr_start = profile_end((*si).sn_pr_start);
@@ -7854,11 +7877,11 @@ unsafe extern "C" fn do_source_ext(
                             profile_self((*si).sn_pr_self, (*si).sn_pr_start, (*si).sn_pr_children);
                     }
                 }
-                if got_int {
+                if got_int.get() {
                     emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
                 }
                 estack_pop();
-                if p_verbose > 1 as OptInt {
+                if p_verbose.get() > 1 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -7883,26 +7906,26 @@ unsafe extern "C" fn do_source_ext(
                 }
                 if !l_time_fd.is_null() {
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"sourcing %s\0".as_ptr() as *const ::core::ffi::c_char,
                         fname,
                     );
                     time_msg(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         &raw mut start_time,
                     );
                     time_pop(rel_time);
                 }
-                if !got_int {
+                if !got_int.get() {
                     trigger_source_post = true_0 != 0;
                 }
-                if save_debug_break_level > ex_nesting_level
-                    && debug_break_level == ex_nesting_level
+                if save_debug_break_level > ex_nesting_level.get()
+                    && debug_break_level.get() == ex_nesting_level.get()
                 {
-                    debug_break_level += 1;
+                    (*debug_break_level.ptr()) += 1;
                 }
-                current_sctx = save_current_sctx;
+                current_sctx.set(save_current_sctx);
                 restore_funccal();
                 if l_do_profiling == PROF_YES {
                     prof_child_exit(&raw mut wait_start);
@@ -7921,7 +7944,13 @@ unsafe extern "C" fn do_source_ext(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 );
                 if str.is_null() && trigger_source_post as ::core::ffi::c_int != 0 {
-                    apply_autocmds(EVENT_SOURCEPOST, fname_exp, fname_exp, false_0 != 0, curbuf);
+                    apply_autocmds(
+                        EVENT_SOURCEPOST,
+                        fname_exp,
+                        fname_exp,
+                        false_0 != 0,
+                        curbuf.get(),
+                    );
                 }
             }
         }
@@ -8001,10 +8030,10 @@ pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
             } else {
                 expand_env(
                     (*eap).arg,
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                     MAXPATHL,
                 );
-                (*eap).arg = &raw mut NameBuff as *mut ::core::ffi::c_char;
+                (*eap).arg = NameBuff.ptr() as *mut ::core::ffi::c_char;
             }
             do_exedit(eap, ::core::ptr::null_mut::<win_T>());
         }
@@ -8012,7 +8041,7 @@ pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
     }
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while i <= (*script_items.ptr()).ga_len && !got_int {
+    while i <= (*script_items.ptr()).ga_len && !got_int.get() {
         if !(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
             .offset((i - 1 as ::core::ffi::c_int) as isize))
         .sn_name
@@ -8023,23 +8052,23 @@ pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
                 (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
                     .offset((i - 1 as ::core::ffi::c_int) as isize))
                 .sn_name,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 MAXPATHL as size_t,
                 true_0 != 0,
             );
             vim_snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%3d: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 i,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
-            if !message_filtered(&raw mut IObuff as *mut ::core::ffi::c_char) {
-                if msg_col > 0 as ::core::ffi::c_int {
+            if !message_filtered(IObuff.ptr() as *mut ::core::ffi::c_char) {
+                if msg_col.get() > 0 as ::core::ffi::c_int {
                     msg_putchar('\n' as ::core::ffi::c_int);
                 }
                 msg_outtrans(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
                 );
@@ -8079,12 +8108,12 @@ pub unsafe extern "C" fn get_scriptname(
         SID_LUA => return gettext(b"Lua\0".as_ptr() as *const ::core::ffi::c_char),
         SID_API_CLIENT => {
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 gettext(b"API client (channel id %lu)\0".as_ptr() as *const ::core::ffi::c_char),
                 script_ctx.sc_chan,
             );
-            return &raw mut IObuff as *mut ::core::ffi::c_char;
+            return IObuff.ptr() as *mut ::core::ffi::c_char;
         }
         SID_STR => {
             return gettext(b"anonymous :source\0".as_ptr() as *const ::core::ffi::c_char);
@@ -8097,13 +8126,13 @@ pub unsafe extern "C" fn get_scriptname(
                 .sn_name;
             if sname.is_null() {
                 snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     gettext(b"anonymous :source (script id %d)\0".as_ptr()
                         as *const ::core::ffi::c_char),
                     script_ctx.sc_sid,
                 );
-                return &raw mut IObuff as *mut ::core::ffi::c_char;
+                return IObuff.ptr() as *mut ::core::ffi::c_char;
             }
             if !should_free.is_null() {
                 *should_free = true_0 != 0;
@@ -8147,7 +8176,9 @@ unsafe extern "C" fn get_script_local_funcs(mut sid: scid_T) -> *mut list_T {
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hitodo_ = hitodo_.wrapping_sub(1);
             let fp: *const ufunc_T =
                 (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
@@ -8180,7 +8211,7 @@ pub unsafe extern "C" fn f_getscriptinfo(
         startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
         endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
         rm_matchcol: 0,
-        rm_ic: p_ic != 0,
+        rm_ic: p_ic.get() != 0,
     };
     let mut filterpat: bool = false_0 != 0;
     let mut sid: varnumber_T = -1 as varnumber_T;
@@ -8303,7 +8334,7 @@ pub unsafe extern "C" fn getsourceline(
 ) -> *mut ::core::ffi::c_char {
     let mut sp: *mut source_cookie_T = cookie as *mut source_cookie_T;
     let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*sp).dbg_tick < debug_tick && !(*sp).source_from_buf_or_str {
+    if (*sp).dbg_tick < debug_tick.get() && !(*sp).source_from_buf_or_str {
         (*sp).breakpoint = dbg_find_breakpoint(
             true_0 != 0,
             (*sp).fname,
@@ -8311,9 +8342,9 @@ pub unsafe extern "C" fn getsourceline(
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
-        (*sp).dbg_tick = debug_tick;
+        (*sp).dbg_tick = debug_tick.get();
     }
-    if do_profiling == PROF_YES {
+    if do_profiling.get() == PROF_YES {
         script_line_end();
     }
     (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -8330,12 +8361,12 @@ pub unsafe extern "C" fn getsourceline(
         (*sp).nextline = ::core::ptr::null_mut::<::core::ffi::c_char>();
         (*sp).sourcing_lnum += 1;
     }
-    if !line.is_null() && do_profiling == PROF_YES {
+    if !line.is_null() && do_profiling.get() == PROF_YES {
         script_line_start();
     }
     if !line.is_null()
         && do_concat as ::core::ffi::c_int != 0
-        && vim_strchr(p_cpo, CPO_CONCAT).is_null()
+        && vim_strchr(p_cpo.get(), CPO_CONCAT).is_null()
     {
         let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         (*sp).sourcing_lnum -= 1;
@@ -8408,7 +8439,7 @@ pub unsafe extern "C" fn getsourceline(
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum,
         );
-        (*sp).dbg_tick = debug_tick;
+        (*sp).dbg_tick = debug_tick.get();
     }
     return line;
 }
@@ -8533,7 +8564,7 @@ pub unsafe extern "C" fn ex_scriptencoding(mut eap: *mut exarg_T) {
     };
     let mut sp: *mut source_cookie_T =
         getline_cookie((*eap).ea_getline, (*eap).cookie) as *mut source_cookie_T;
-    convert_setup(&raw mut (*sp).conv, name, p_enc);
+    convert_setup(&raw mut (*sp).conv, name, p_enc.get());
     if name != (*eap).arg {
         xfree(name as *mut ::core::ffi::c_void);
     }

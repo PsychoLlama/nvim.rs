@@ -37,7 +37,7 @@ extern "C" {
     fn expr_map_locked() -> bool;
     fn text_locked() -> bool;
     fn get_text_locked_msg() -> *const ::core::ffi::c_char;
-    static mut textlock: ::core::ffi::c_int;
+    static textlock: GlobalCell<::core::ffi::c_int>;
     fn nvim_get_autocmds(
         opts: *mut KeyDict_get_autocmds,
         arena: *mut Arena,
@@ -7467,7 +7467,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_lines(
                         arg_5 = (*args.items.offset(4 as ::core::ffi::c_int as isize))
                             .data
                             .array;
-                        if textlock != 0 as ::core::ffi::c_int
+                        if textlock.get() != 0 as ::core::ffi::c_int
                             || expr_map_locked() as ::core::ffi::c_int != 0
                         {
                             api_set_error(
@@ -7615,7 +7615,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_text(
                                 arg_6 = (*args.items.offset(5 as ::core::ffi::c_int as isize))
                                     .data
                                     .array;
-                                if textlock != 0 as ::core::ffi::c_int
+                                if textlock.get() != 0 as ::core::ffi::c_int
                                     || expr_map_locked() as ::core::ffi::c_int != 0
                                 {
                                     api_set_error(
@@ -16402,7 +16402,9 @@ pub unsafe extern "C" fn handle_nvim_open_tabpage(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,
@@ -18805,7 +18807,8 @@ pub unsafe extern "C" fn handle_nvim_set_current_line(
         arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
             .data
             .string;
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 error,
                 kErrorTypeException,
@@ -18854,7 +18857,9 @@ pub unsafe extern "C" fn handle_nvim_del_current_line(
                 as *const ::core::ffi::c_char,
             args.size,
         );
-    } else if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+    } else if textlock.get() != 0 as ::core::ffi::c_int
+        || expr_map_locked() as ::core::ffi::c_int != 0
+    {
         api_set_error(
             error,
             kErrorTypeException,
@@ -19836,7 +19841,9 @@ pub unsafe extern "C" fn handle_nvim_open_term(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,
@@ -20155,7 +20162,7 @@ pub unsafe extern "C" fn handle_nvim_paste(
                 arg_3 = (*args.items.offset(2 as ::core::ffi::c_int as isize))
                     .data
                     .integer;
-                if textlock != 0 as ::core::ffi::c_int
+                if textlock.get() != 0 as ::core::ffi::c_int
                     || expr_map_locked() as ::core::ffi::c_int != 0
                 {
                     api_set_error(
@@ -20302,7 +20309,7 @@ pub unsafe extern "C" fn handle_nvim_put(
                     );
                     break '_cleanup;
                 }
-                if textlock != 0 as ::core::ffi::c_int
+                if textlock.get() != 0 as ::core::ffi::c_int
                     || expr_map_locked() as ::core::ffi::c_int != 0
                 {
                     api_set_error(
@@ -23289,7 +23296,9 @@ pub unsafe extern "C" fn handle_nvim_open_win(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,
@@ -23795,7 +23804,9 @@ pub unsafe extern "C" fn handle_nvim_win_set_buf(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,
@@ -24906,7 +24917,9 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,
@@ -25010,7 +25023,9 @@ pub unsafe extern "C" fn handle_nvim_win_close(
                 );
                 break '_cleanup;
             }
-            if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+            if textlock.get() != 0 as ::core::ffi::c_int
+                || expr_map_locked() as ::core::ffi::c_int != 0
+            {
                 api_set_error(
                     error,
                     kErrorTypeException,

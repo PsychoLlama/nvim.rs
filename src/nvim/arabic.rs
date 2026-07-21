@@ -1,7 +1,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
-    static mut p_arshape: ::core::ffi::c_int;
-    static mut p_tbidi: ::core::ffi::c_int;
+    static p_arshape: GlobalCell<::core::ffi::c_int>;
+    static p_tbidi: GlobalCell<::core::ffi::c_int>;
 }
 pub type size_t = usize;
 pub const a_ALEF: C2Rust_Unnamed = 1575;
@@ -536,7 +536,7 @@ unsafe extern "C" fn can_join(
 }
 #[no_mangle]
 pub unsafe extern "C" fn arabic_maycombine(mut two: ::core::ffi::c_int) -> bool {
-    if p_arshape != 0 && p_tbidi == 0 {
+    if p_arshape.get() != 0 && p_tbidi.get() == 0 {
         return two == a_ALEF_MADDA as ::core::ffi::c_int
             || two == a_ALEF_HAMZA_ABOVE as ::core::ffi::c_int
             || two == a_ALEF_HAMZA_BELOW as ::core::ffi::c_int

@@ -151,7 +151,7 @@ extern "C" {
     fn expr_map_locked() -> bool;
     fn text_locked() -> bool;
     fn get_text_locked_msg() -> *const ::core::ffi::c_char;
-    static mut textlock: ::core::ffi::c_int;
+    static textlock: GlobalCell<::core::ffi::c_int>;
     fn nlua_push_String(lstate: *mut lua_State, s: String_0, flags: ::core::ffi::c_int);
     fn nlua_push_Integer(lstate: *mut lua_State, n: Integer, flags: ::core::ffi::c_int);
     fn nlua_push_Float(lstate: *mut lua_State, f: Float, flags: ::core::ffi::c_int);
@@ -2325,7 +2325,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> 
                 b"nvim_buf_set_lines\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -2438,7 +2439,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> :
                 b"nvim_buf_set_text\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -8815,7 +8817,8 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(mut lstate: *mut lua_State) -> :
                 b"nvim_open_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -10473,7 +10476,8 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
                 b"nvim_set_current_line\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -10542,7 +10546,8 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
                 b"nvim_del_current_line\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -11578,7 +11583,8 @@ unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::co
                 b"nvim_open_term\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -11944,7 +11950,8 @@ unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::
                 b"nvim_paste\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -12047,7 +12054,8 @@ unsafe extern "C" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ff
                 b"nvim_put\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -14813,7 +14821,8 @@ unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::cor
                 b"nvim_open_win\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -15353,7 +15362,8 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(mut lstate: *mut lua_State) -> ::
                 b"nvim_win_set_buf\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -16326,7 +16336,8 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(mut lstate: *mut lua_State) -> ::cor
                 b"nvim_win_hide\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -16395,7 +16406,8 @@ unsafe extern "C" fn nlua_api_nvim_win_close(mut lstate: *mut lua_State) -> ::co
                 b"nvim_win_close\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
+        {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,

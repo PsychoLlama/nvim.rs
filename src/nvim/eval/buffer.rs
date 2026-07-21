@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -115,18 +116,18 @@ extern "C" {
         new_col: colnr_T,
         undo: ExtmarkOp,
     );
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual_active: bool;
-    static mut u_sync_once: ::core::ffi::c_int;
-    static mut swap_exists_action: ::core::ffi::c_int;
-    static mut cmdwin_buf: *mut buf_T;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static u_sync_once: GlobalCell<::core::ffi::c_int>;
+    static swap_exists_action: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
     fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
@@ -1958,7 +1959,7 @@ pub unsafe extern "C" fn find_buffer(mut avar: *mut typval_T) -> *mut buf_T {
     {
         buf = buflist_findname_exp((*avar).vval.v_string);
         if buf.is_null() {
-            let mut bp: *mut buf_T = firstbuf;
+            let mut bp: *mut buf_T = firstbuf.get();
             while !bp.is_null() {
                 if !(*bp).b_fname.is_null()
                     && (path_with_url((*bp).b_fname) != 0
@@ -1977,10 +1978,10 @@ pub unsafe extern "C" fn find_buffer(mut avar: *mut typval_T) -> *mut buf_T {
 }
 unsafe extern "C" fn find_win_for_curbuf() {
     let mut i: size_t = 0 as size_t;
-    while i < (*curbuf).b_wininfo.size {
-        let mut wip: *mut WinInfo = *(*curbuf).b_wininfo.items.offset(i as isize);
-        if !(*wip).wi_win.is_null() && (*(*wip).wi_win).w_buffer == curbuf {
-            curwin = (*wip).wi_win;
+    while i < (*curbuf.get()).b_wininfo.size {
+        let mut wip: *mut WinInfo = *(*curbuf.get()).b_wininfo.items.offset(i as isize);
+        if !(*wip).wi_win.is_null() && (*(*wip).wi_win).w_buffer == curbuf.get() {
+            curwin.set((*wip).wi_win);
             break;
         } else {
             i = i.wrapping_add(1);
@@ -1993,13 +1994,13 @@ unsafe extern "C" fn change_other_buffer_prepare(mut cob: *mut cob_T, mut buf: *
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<cob_T>(),
     );
-    (*cob).cob_save_VIsual_active = VIsual_active as ::core::ffi::c_int;
-    VIsual_active = false_0 != 0;
-    (*cob).cob_curwin_save = curwin;
-    curbuf = buf;
+    (*cob).cob_save_VIsual_active = VIsual_active.get() as ::core::ffi::c_int;
+    VIsual_active.set(false_0 != 0);
+    (*cob).cob_curwin_save = curwin.get();
+    curbuf.set(buf);
     find_win_for_curbuf();
-    if (*curwin).w_buffer != buf {
-        curbuf = (*curwin).w_buffer;
+    if (*curwin.get()).w_buffer != buf {
+        curbuf.set((*curwin.get()).w_buffer);
         aucmd_prepbuf(&raw mut (*cob).cob_aco, buf);
         (*cob).cob_using_aco = true_0;
     }
@@ -2008,10 +2009,10 @@ unsafe extern "C" fn change_other_buffer_restore(mut cob: *mut cob_T) {
     if (*cob).cob_using_aco != 0 {
         aucmd_restbuf(&raw mut (*cob).cob_aco);
     } else {
-        curwin = (*cob).cob_curwin_save;
-        curbuf = (*curwin).w_buffer;
+        curwin.set((*cob).cob_curwin_save);
+        curbuf.set((*curwin.get()).w_buffer);
     }
-    VIsual_active = (*cob).cob_save_VIsual_active != 0;
+    VIsual_active.set((*cob).cob_save_VIsual_active != 0);
 }
 unsafe extern "C" fn set_buffer_lines(
     mut buf: *mut buf_T,
@@ -2027,7 +2028,7 @@ unsafe extern "C" fn set_buffer_lines(
             0 as linenr_T
         });
     let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let is_curbuf: bool = buf == curbuf;
+    let is_curbuf: bool = buf == curbuf.get();
     if buf.is_null() || !is_curbuf && (*buf).b_ml.ml_mfp.is_null() || lnum < 1 as linenr_T {
         (*rettv).vval.v_number = 1 as varnumber_T;
         return;
@@ -2059,7 +2060,7 @@ unsafe extern "C" fn set_buffer_lines(
     if append {
         append_lnum = lnum - 1 as linenr_T;
     } else {
-        append_lnum = (*curbuf).b_ml.ml_line_count;
+        append_lnum = (*curbuf.get()).b_ml.ml_line_count;
     }
     let mut l: *mut list_T = ::core::ptr::null_mut::<list_T>();
     let mut li: *mut listitem_T = ::core::ptr::null_mut::<listitem_T>();
@@ -2089,14 +2090,14 @@ unsafe extern "C" fn set_buffer_lines(
                 li = (*li).li_next;
             }
             (*rettv).vval.v_number = 1 as varnumber_T;
-            if line.is_null() || lnum > (*curbuf).b_ml.ml_line_count + 1 as linenr_T {
+            if line.is_null() || lnum > (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T {
                 break;
             }
-            if u_sync_once == 2 as ::core::ffi::c_int {
-                u_sync_once = 1 as ::core::ffi::c_int;
+            if u_sync_once.get() == 2 as ::core::ffi::c_int {
+                u_sync_once.set(1 as ::core::ffi::c_int);
                 u_sync(true_0 != 0);
             }
-            if !append && lnum <= (*curbuf).b_ml.ml_line_count {
+            if !append && lnum <= (*curbuf.get()).b_ml.ml_line_count {
                 let mut old_len: ::core::ffi::c_int = strlen(ml_get(lnum)) as ::core::ffi::c_int;
                 if u_savesub(lnum) == OK && ml_replace(lnum, line, true_0 != 0) == OK {
                     inserted_bytes(
@@ -2105,8 +2106,9 @@ unsafe extern "C" fn set_buffer_lines(
                         old_len,
                         strlen(line) as ::core::ffi::c_int,
                     );
-                    if is_curbuf as ::core::ffi::c_int != 0 && lnum == (*curwin).w_cursor.lnum {
-                        check_cursor_col(curwin);
+                    if is_curbuf as ::core::ffi::c_int != 0 && lnum == (*curwin.get()).w_cursor.lnum
+                    {
+                        check_cursor_col(curwin.get());
                     }
                     (*rettv).vval.v_number = 0 as varnumber_T;
                 }
@@ -2124,16 +2126,16 @@ unsafe extern "C" fn set_buffer_lines(
         xfree(line as *mut ::core::ffi::c_void);
         if added > 0 as ::core::ffi::c_int {
             appended_lines_mark(append_lnum, added);
-            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
-                let mut wp: *mut win_T = if tp == curtab {
-                    firstwin
+                let mut wp: *mut win_T = if tp == curtab.get() {
+                    firstwin.get()
                 } else {
                     (*tp).tp_firstwin
                 };
                 while !wp.is_null() {
                     if (*wp).w_buffer == buf
-                        && ((*wp).w_buffer != curbuf || wp == curwin)
+                        && ((*wp).w_buffer != curbuf.get() || wp == curwin.get())
                         && (*wp).w_cursor.lnum > append_lnum
                     {
                         (*wp).w_cursor.lnum += added as linenr_T;
@@ -2142,8 +2144,8 @@ unsafe extern "C" fn set_buffer_lines(
                 }
                 tp = (*tp).tp_next as *mut tabpage_T;
             }
-            check_cursor_col(curwin);
-            update_topline(curwin);
+            check_cursor_col(curwin.get());
+            update_topline(curwin.get());
         }
     }
     if !is_curbuf {
@@ -2156,11 +2158,11 @@ pub unsafe extern "C" fn f_append(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     let lnum: linenr_T = tv_get_lnum(argvars.offset(0 as ::core::ffi::c_int as isize));
-    if did_emsg == did_emsg_before {
+    if did_emsg.get() == did_emsg_before {
         set_buffer_lines(
-            curbuf,
+            curbuf.get(),
             lnum,
             true_0 != 0,
             argvars.offset(1 as ::core::ffi::c_int as isize),
@@ -2173,13 +2175,13 @@ unsafe extern "C" fn buf_set_append_line(
     mut rettv: *mut typval_T,
     mut append: bool,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     let buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         (*rettv).vval.v_number = 1 as varnumber_T;
     } else {
         let lnum: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
-        if did_emsg == did_emsg_before {
+        if did_emsg.get() == did_emsg_before {
             set_buffer_lines(
                 buf,
                 lnum,
@@ -2204,7 +2206,7 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 1 as varnumber_T;
     let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2247,7 +2249,7 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
             (*lines).vval.v_string = new_str_0;
         }
     }
-    if did_emsg == did_emsg_before {
+    if did_emsg.get() == did_emsg_before {
         if did_concat as ::core::ffi::c_int != 0
             && tv_list_len((*lines).vval.v_list) > 1 as ::core::ffi::c_int
         {
@@ -2338,8 +2340,8 @@ pub unsafe extern "C" fn f_bufload(
 ) {
     let mut buf: *mut buf_T = get_buf_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     if !buf.is_null() {
-        if swap_exists_action != SEA_READONLY {
-            swap_exists_action = SEA_NONE;
+        if swap_exists_action.get() != SEA_READONLY {
+            swap_exists_action.set(SEA_NONE);
         }
         buf_ensure_loaded(buf);
     }
@@ -2367,7 +2369,7 @@ pub unsafe extern "C" fn f_bufname(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        buf = curbuf;
+        buf = curbuf.get();
     } else {
         buf = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     }
@@ -2387,14 +2389,14 @@ pub unsafe extern "C" fn f_bufnr(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        buf = curbuf;
+        buf = curbuf.get();
     } else {
         if !tv_check_str_or_nr(argvars.offset(0 as ::core::ffi::c_int as isize)) {
             return;
         }
-        emsg_off += 1;
+        (*emsg_off.ptr()) += 1;
         buf = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
-        emsg_off -= 1;
+        (*emsg_off.ptr()) -= 1;
     }
     let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if buf.is_null()
@@ -2434,15 +2436,15 @@ unsafe extern "C" fn buf_win_common(
     let mut winnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut winid: ::core::ffi::c_int = 0;
     let mut found_buf: bool = false_0 != 0;
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
-        winnr += win_has_winnr(wp, curtab) as ::core::ffi::c_int;
+        winnr += win_has_winnr(wp, curtab.get()) as ::core::ffi::c_int;
         if (*wp).w_buffer == buf as *mut buf_T
-            && (!get_nr || win_has_winnr(wp, curtab) as ::core::ffi::c_int != 0)
+            && (!get_nr || win_has_winnr(wp, curtab.get()) as ::core::ffi::c_int != 0)
         {
             found_buf = true_0 != 0;
             winid = (*wp).handle as ::core::ffi::c_int;
@@ -2483,7 +2485,7 @@ pub unsafe extern "C" fn f_deletebufline(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     (*rettv).vval.v_number = 1 as varnumber_T;
     let buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
@@ -2491,7 +2493,7 @@ pub unsafe extern "C" fn f_deletebufline(
     }
     let mut last: linenr_T = 0;
     let first: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
-    if did_emsg > did_emsg_before {
+    if did_emsg.get() > did_emsg_before {
         return;
     }
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -2508,7 +2510,7 @@ pub unsafe extern "C" fn f_deletebufline(
     {
         return;
     }
-    let is_curbuf: bool = buf == curbuf;
+    let is_curbuf: bool = buf == curbuf.get();
     let mut cob: cob_T = cob_T {
         cob_curwin_save: ::core::ptr::null_mut::<win_T>(),
         cob_aco: aco_save_T {
@@ -2532,13 +2534,13 @@ pub unsafe extern "C" fn f_deletebufline(
     if !is_curbuf {
         change_other_buffer_prepare(&raw mut cob, buf);
     }
-    if last > (*curbuf).b_ml.ml_line_count {
-        last = (*curbuf).b_ml.ml_line_count;
+    if last > (*curbuf.get()).b_ml.ml_line_count {
+        last = (*curbuf.get()).b_ml.ml_line_count;
     }
     let count: ::core::ffi::c_int =
         last as ::core::ffi::c_int - first as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    if u_sync_once == 2 as ::core::ffi::c_int {
-        u_sync_once = 1 as ::core::ffi::c_int;
+    if u_sync_once.get() == 2 as ::core::ffi::c_int {
+        u_sync_once.set(1 as ::core::ffi::c_int);
         u_sync(true_0 != 0);
     }
     if u_save(first - 1 as linenr_T, last + 1 as linenr_T) != FAIL {
@@ -2547,10 +2549,10 @@ pub unsafe extern "C" fn f_deletebufline(
             ml_delete_flags(first, ML_DEL_MESSAGE as ::core::ffi::c_int);
             lnum += 1;
         }
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab {
-                firstwin
+            let mut wp: *mut win_T = if tp == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp).tp_firstwin
             };
@@ -2569,7 +2571,7 @@ pub unsafe extern "C" fn f_deletebufline(
             }
             tp = (*tp).tp_next as *mut tabpage_T;
         }
-        check_cursor_col(curwin);
+        check_cursor_col(curwin.get());
         deleted_lines_mark(first, count);
         (*rettv).vval.v_number = 0 as varnumber_T;
     }
@@ -2599,8 +2601,8 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
         dict,
         b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (if buf == curbuf {
-            (*curwin).w_cursor.lnum
+        (if buf == curbuf.get() {
+            (*curwin.get()).w_cursor.lnum
         } else {
             buflist_findlnum(buf)
         }) as varnumber_T,
@@ -2646,7 +2648,7 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
         dict,
         b"command\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        (buf == cmdwin_buf) as ::core::ffi::c_int as varnumber_T,
+        (buf == cmdwin_buf.get()) as ::core::ffi::c_int as varnumber_T,
     );
     tv_dict_add_dict(
         dict,
@@ -2655,10 +2657,10 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
         (*buf).b_vars,
     );
     let windows: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -2749,7 +2751,7 @@ pub unsafe extern "C" fn f_getbufinfo(
             return;
         }
     }
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if !(!argbuf.is_null() && argbuf != buf) {
             if !(filtered as ::core::ffi::c_int != 0
@@ -2816,10 +2818,10 @@ unsafe extern "C" fn getbufline(
     mut rettv: *mut typval_T,
     mut retlist: bool,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     let lnum: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
-    if did_emsg > did_emsg_before {
+    if did_emsg.get() > did_emsg_before {
         return;
     }
     let end: linenr_T = if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
@@ -2866,7 +2868,7 @@ pub unsafe extern "C" fn f_getline(
         end = tv_get_lnum(argvars.offset(1 as ::core::ffi::c_int as isize));
         retlist = true_0 != 0;
     }
-    get_buffer_lines(curbuf, lnum, end, retlist, rettv);
+    get_buffer_lines(curbuf.get(), lnum, end, retlist, rettv);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_setbufline(
@@ -2882,11 +2884,11 @@ pub unsafe extern "C" fn f_setline(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     let mut lnum: linenr_T = tv_get_lnum(argvars.offset(0 as ::core::ffi::c_int as isize));
-    if did_emsg == did_emsg_before {
+    if did_emsg.get() == did_emsg_before {
         set_buffer_lines(
-            curbuf,
+            curbuf.get(),
             lnum,
             false_0 != 0,
             argvars.offset(1 as ::core::ffi::c_int as isize),
@@ -2897,20 +2899,20 @@ pub unsafe extern "C" fn f_setline(
 #[no_mangle]
 pub unsafe extern "C" fn switch_buffer(mut save_curbuf: *mut bufref_T, mut buf: *mut buf_T) {
     block_autocmds();
-    set_bufref(save_curbuf, curbuf);
-    (*curbuf).b_nwindows -= 1;
-    curbuf = buf;
-    (*curwin).w_buffer = buf;
-    (*curbuf).b_nwindows += 1;
+    set_bufref(save_curbuf, curbuf.get());
+    (*curbuf.get()).b_nwindows -= 1;
+    curbuf.set(buf);
+    (*curwin.get()).w_buffer = buf;
+    (*curbuf.get()).b_nwindows += 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_buffer(mut save_curbuf: *mut bufref_T) {
     unblock_autocmds();
     if bufref_valid(save_curbuf) {
-        (*curbuf).b_nwindows -= 1;
-        (*curwin).w_buffer = (*save_curbuf).br_buf;
-        curbuf = (*save_curbuf).br_buf;
-        (*curbuf).b_nwindows += 1;
+        (*curbuf.get()).b_nwindows -= 1;
+        (*curwin.get()).w_buffer = (*save_curbuf).br_buf;
+        curbuf.set((*save_curbuf).br_buf);
+        (*curbuf.get()).b_nwindows += 1;
     }
 }
 #[no_mangle]
@@ -2987,7 +2989,7 @@ pub unsafe extern "C" fn f_prompt_setprompt(
     let mut new_prompt_len: ::core::ffi::c_int = strlen(new_prompt) as ::core::ffi::c_int;
     if bt_prompt(buf) as ::core::ffi::c_int != 0 && !(*buf).b_ml.ml_mfp.is_null() {
         if (*buf).b_prompt_start.mark.lnum < 1 as linenr_T
-            || (*buf).b_prompt_start.mark.lnum > (*curbuf).b_ml.ml_line_count
+            || (*buf).b_prompt_start.mark.lnum > (*curbuf.get()).b_ml.ml_line_count
         {
             (*buf).b_prompt_start.mark.lnum = if 1 as linenr_T
                 > (if (*buf).b_prompt_start.mark.lnum < (*buf).b_ml.ml_line_count {
@@ -3001,14 +3003,14 @@ pub unsafe extern "C" fn f_prompt_setprompt(
             } else {
                 (*buf).b_ml.ml_line_count
             };
-            (*curbuf).b_prompt_append_new_line = true_0 != 0;
+            (*curbuf.get()).b_prompt_append_new_line = true_0 != 0;
         }
         let mut prompt_lno: linenr_T = (*buf).b_prompt_start.mark.lnum;
         let mut old_prompt: *mut ::core::ffi::c_char = buf_prompt_text(buf);
         let mut old_line: *mut ::core::ffi::c_char = ml_get_buf(buf, prompt_lno);
         let mut old_line_len: colnr_T = ml_get_buf_len(buf, prompt_lno);
         let mut old_prompt_len: ::core::ffi::c_int = strlen(old_prompt) as ::core::ffi::c_int;
-        let mut cursor_col: colnr_T = (*curwin).w_cursor.col;
+        let mut cursor_col: colnr_T = (*curwin.get()).w_cursor.col;
         if (*buf).b_prompt_start.mark.col < old_prompt_len
             || (*buf).b_prompt_start.mark.col > old_line_len
             || !strnequal(
@@ -3054,9 +3056,9 @@ pub unsafe extern "C" fn f_prompt_setprompt(
             cursor_col +=
                 (new_prompt_len as colnr_T - (*buf).b_prompt_start.mark.col) as ::core::ffi::c_int;
         }
-        if (*curwin).w_buffer == buf && (*curwin).w_cursor.lnum == prompt_lno {
-            (*curwin).w_cursor.col = cursor_col;
-            check_cursor_col(curwin);
+        if (*curwin.get()).w_buffer == buf && (*curwin.get()).w_cursor.lnum == prompt_lno {
+            (*curwin.get()).w_cursor.col = cursor_col;
+            check_cursor_col(curwin.get());
         }
         changed_lines(
             buf,

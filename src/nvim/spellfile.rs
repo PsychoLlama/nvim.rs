@@ -138,9 +138,9 @@ extern "C" {
     fn __errno_location() -> *mut ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn buflist_findname_exp(fname: *mut ::core::ffi::c_char) -> *mut buf_T;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_msm: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_msm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -183,14 +183,14 @@ extern "C" {
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_didout: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut got_int: bool;
-    static mut hash_removed: ::core::ffi::c_char;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_didout: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static got_int: GlobalCell<bool>;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
@@ -3769,7 +3769,7 @@ pub unsafe extern "C" fn spell_load_file(
                         gettext(&raw const e_notopen as *const ::core::ffi::c_char),
                         fname,
                     );
-                } else if p_verbose > 2 as OptInt {
+                } else if p_verbose.get() > 2 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -3779,7 +3779,7 @@ pub unsafe extern "C" fn spell_load_file(
                     verbose_leave();
                 }
             } else {
-                if p_verbose > 2 as OptInt {
+                if p_verbose.get() > 2 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -4027,7 +4027,7 @@ unsafe extern "C" fn tree_count_words(
     curi[0 as ::core::ffi::c_int as usize] = 1 as ::core::ffi::c_int;
     wordcount[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
     let mut depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while depth >= 0 as ::core::ffi::c_int && !got_int {
+    while depth >= 0 as ::core::ffi::c_int && !got_int.get() {
         if curi[depth as usize]
             > *byts.offset(arridx[depth as usize] as isize) as ::core::ffi::c_int
         {
@@ -4074,9 +4074,9 @@ pub unsafe extern "C" fn suggest_load_files() {
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while lpi < (*(*curwin).w_s).b_langp.ga_len {
+    while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
-            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
+            ((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
         if (*slang).sl_sugtime != 0 as time_t && !(*slang).sl_sugloaded {
             (*slang).sl_sugloaded = true_0 != 0;
@@ -5150,7 +5150,7 @@ unsafe extern "C" fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut a
         slang = (*slang).sl_next;
     }
     if added_word as ::core::ffi::c_int != 0 && !didit {
-        parse_spelllang(curwin);
+        parse_spelllang(curwin.get());
     }
 }
 pub const PFX_FLAGS: ::core::ffi::c_int = -256 as ::core::ffi::c_int;
@@ -5165,7 +5165,7 @@ static compress_added: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(500000 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
-    let mut p: *mut ::core::ffi::c_char = p_msm;
+    let mut p: *mut ::core::ffi::c_char = p_msm.get();
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
@@ -5245,12 +5245,12 @@ unsafe extern "C" fn spell_read_aff(
         return ::core::ptr::null_mut::<afffile_T>();
     }
     vim_snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         gettext(b"Reading affix file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
-    spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+    spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     let mut do_rep: bool = (*spin).si_rep.ga_len <= 0 as ::core::ffi::c_int;
     let mut do_repsal: bool = (*spin).si_repsal.ga_len <= 0 as ::core::ffi::c_int;
     let mut do_sal: bool = (*spin).si_sal.ga_len <= 0 as ::core::ffi::c_int;
@@ -5260,7 +5260,7 @@ unsafe extern "C" fn spell_read_aff(
     hash_init(&raw mut (*aff).af_pref);
     hash_init(&raw mut (*aff).af_suff);
     hash_init(&raw mut (*aff).af_comp);
-    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
+    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int.get() {
         line_breakcheck();
         lnum += 1;
         if *(&raw mut rline as *mut ::core::ffi::c_char) as ::core::ffi::c_int
@@ -5348,7 +5348,7 @@ unsafe extern "C" fn spell_read_aff(
             (*aff).af_enc =
                 enc_canonize(items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char);
             if (*spin).si_ascii == 0
-                && convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc) == FAIL
+                && convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) == FAIL
             {
                 smsg(
                     0 as ::core::ffi::c_int,
@@ -5356,7 +5356,7 @@ unsafe extern "C" fn spell_read_aff(
                         as *const ::core::ffi::c_char),
                     fname,
                     (*aff).af_enc,
-                    p_enc,
+                    p_enc.get(),
                 );
             }
             (*spin).si_conv.vc_fail = true_0 != 0;
@@ -5998,7 +5998,9 @@ unsafe extern "C" fn spell_read_aff(
                     AH_KEY_LEN as size_t,
                 );
                 hi = hash_find(tp, &raw mut key as *mut ::core::ffi::c_char);
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     cur_aff = (*hi).hi_key as *mut affheader_T;
                     if (*cur_aff).ah_combine
                         != (*items[2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
@@ -6634,7 +6636,7 @@ unsafe extern "C" fn spell_read_aff(
                             items[i_0 as usize] as *const ::core::ffi::c_char,
                         ))
                         .hi_key
-                            == &raw mut hash_removed
+                            == &raw const hash_removed as *mut ::core::ffi::c_char
                     {
                         p = xstrdup(items[i_0 as usize] as *const ::core::ffi::c_char);
                         hash_add(&raw mut (*spin).si_commonwords, p);
@@ -6962,7 +6964,9 @@ unsafe extern "C" fn process_compflags(
                     &raw mut (*aff).af_comp,
                     &raw mut key as *mut ::core::ffi::c_char,
                 );
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     id = (*((*hi).hi_key as *mut compitem_T)).ci_newID;
                 } else {
                     ci = getroom(spin, ::core::mem::size_of::<compitem_T>(), true_0 != 0)
@@ -7120,7 +7124,7 @@ unsafe extern "C" fn add_fromto(
     let mut ftp: *mut fromto_T =
         ga_append_via_ptr(gap, ::core::mem::size_of::<fromto_T>()) as *mut fromto_T;
     spell_casefold(
-        curwin,
+        curwin.get(),
         from,
         strlen(from) as ::core::ffi::c_int,
         &raw mut word as *mut ::core::ffi::c_char,
@@ -7128,7 +7132,7 @@ unsafe extern "C" fn add_fromto(
     );
     (*ftp).ft_from = getroom_save(spin, &raw mut word as *mut ::core::ffi::c_char);
     spell_casefold(
-        curwin,
+        curwin.get(),
         to,
         strlen(to) as ::core::ffi::c_int,
         &raw mut word as *mut ::core::ffi::c_char,
@@ -7147,7 +7151,9 @@ unsafe extern "C" fn spell_free_aff(mut aff: *mut afffile_T) {
         let mut todo: ::core::ffi::c_int = (*ht).ht_used as ::core::ffi::c_int;
         let mut hi: *mut hashitem_T = (*ht).ht_array;
         while todo > 0 as ::core::ffi::c_int {
-            if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+            if !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 todo -= 1;
                 let mut ah: *mut affheader_T = (*hi).hi_key as *mut affheader_T;
                 let mut ae: *mut affentry_T = (*ah).ah_first;
@@ -7204,12 +7210,12 @@ unsafe extern "C" fn spell_read_dic(
     }
     hash_init(&raw mut ht);
     vim_snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         gettext(b"Reading dictionary file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
-    spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+    spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     (*spin).si_msg_count = 999999 as ::core::ffi::c_int;
     if vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd) as ::core::ffi::c_int
         != 0
@@ -7222,7 +7228,7 @@ unsafe extern "C" fn spell_read_dic(
             fname,
         );
     }
-    while !vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
+    while !vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int.get() {
         line_breakcheck();
         lnum += 1;
         if line[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == '#' as ::core::ffi::c_int
@@ -7309,8 +7315,8 @@ unsafe extern "C" fn spell_read_dic(
                         0 as ::core::ffi::c_int,
                     );
                     msg_clr_eos();
-                    msg_didout = false_0 != 0;
-                    msg_col = 0 as ::core::ffi::c_int;
+                    msg_didout.set(false_0 != 0);
+                    msg_col.set(0 as ::core::ffi::c_int);
                     ui_flush();
                 }
             }
@@ -7322,8 +7328,10 @@ unsafe extern "C" fn spell_read_dic(
             } else {
                 let mut hash: hash_T = hash_hash(dw);
                 let mut hi: *mut hashitem_T = hash_lookup(&raw mut ht, dw, strlen(dw), hash);
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
-                    if p_verbose > 0 as OptInt {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
+                    if p_verbose.get() > 0 as OptInt {
                         smsg(
                             0 as ::core::ffi::c_int,
                             gettext(b"Duplicate word in %s line %d: %s\0".as_ptr()
@@ -7512,7 +7520,9 @@ unsafe extern "C" fn get_pfxlist(
                 &raw mut (*affile).af_pref,
                 &raw mut key as *mut ::core::ffi::c_char,
             );
-            if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+            if !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 let mut id: ::core::ffi::c_int = (*((*hi).hi_key as *mut affheader_T)).ah_newID;
                 if id != 0 as ::core::ffi::c_int {
                     let c2rust_fresh32 = cnt;
@@ -7550,7 +7560,9 @@ unsafe extern "C" fn get_compflags(
                 &raw mut (*affile).af_comp,
                 &raw mut key as *mut ::core::ffi::c_char,
             );
-            if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+            if !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 let c2rust_fresh31 = cnt;
                 cnt = cnt + 1;
                 *store_afflist.offset(c2rust_fresh31 as isize) =
@@ -7586,7 +7598,9 @@ unsafe extern "C" fn store_aff_word(
     let mut todo: ::core::ffi::c_int = (*ht).ht_used as ::core::ffi::c_int;
     let mut hi: *mut hashitem_T = (*ht).ht_array;
     while todo > 0 as ::core::ffi::c_int && retval == OK {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             todo -= 1;
             let mut ah: *mut affheader_T = (*hi).hi_key as *mut affheader_T;
             if (condit & CONDIT_COMB == 0 as ::core::ffi::c_int || (*ah).ah_combine != 0)
@@ -7887,13 +7901,13 @@ unsafe extern "C" fn spell_read_wordfile(
         return FAIL;
     }
     vim_snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         gettext(b"Reading word file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
-    spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
-    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
+    spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
+    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int.get() {
         line_breakcheck();
         lnum += 1;
         if *(&raw mut rline as *mut ::core::ffi::c_char) as ::core::ffi::c_int
@@ -7971,7 +7985,7 @@ unsafe extern "C" fn spell_read_wordfile(
                     line = line.offset(9 as ::core::ffi::c_int as isize);
                     let mut enc: *mut ::core::ffi::c_char = enc_canonize(line);
                     if (*spin).si_ascii == 0
-                        && convert_setup(&raw mut (*spin).si_conv, enc, p_enc) == FAIL
+                        && convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) == FAIL
                     {
                         smsg(
                             0 as ::core::ffi::c_int,
@@ -7979,7 +7993,7 @@ unsafe extern "C" fn spell_read_wordfile(
                                 as *const ::core::ffi::c_char),
                             fname,
                             line,
-                            p_enc,
+                            p_enc.get(),
                         );
                     }
                     xfree(enc as *mut ::core::ffi::c_void);
@@ -8106,13 +8120,13 @@ unsafe extern "C" fn spell_read_wordfile(
     fclose(fd);
     if (*spin).si_ascii != 0 && non_ascii > 0 as ::core::ffi::c_int {
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             gettext(b"Ignored %d words with non-ASCII characters\0".as_ptr()
                 as *const ::core::ffi::c_char),
             non_ascii,
         );
-        spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+        spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     }
     return retval;
 }
@@ -8215,7 +8229,7 @@ unsafe extern "C" fn store_word(
         return FAIL;
     }
     spell_casefold(
-        curwin,
+        curwin.get(),
         word,
         len,
         &raw mut foldword as *mut ::core::ffi::c_char,
@@ -8398,8 +8412,8 @@ unsafe extern "C" fn tree_add_word(
             msg_start();
             msg_puts(gettext(msg_compressing.get()));
             msg_clr_eos();
-            msg_didout = false_0 != 0;
-            msg_col = 0 as ::core::ffi::c_int;
+            msg_didout.set(false_0 != 0);
+            msg_col.set(0 as ::core::ffi::c_int);
             ui_flush();
         }
         wordtree_compress(
@@ -8482,7 +8496,7 @@ unsafe extern "C" fn wordtree_compress(
     }
     hash_init(&raw mut ht);
     let n: ::core::ffi::c_int = node_compress(spin, (*root).wn_sibling, &raw mut ht, &raw mut tot);
-    if (*spin).si_verbose != 0 || p_verbose > 2 as OptInt {
+    if (*spin).si_verbose != 0 || p_verbose.get() > 2 as OptInt {
         if tot > 1000000 as ::core::ffi::c_int {
             perc = ((tot - n) / (tot / 100 as ::core::ffi::c_int)) as ::core::ffi::c_long;
         } else if tot == 0 as ::core::ffi::c_int {
@@ -8491,7 +8505,7 @@ unsafe extern "C" fn wordtree_compress(
             perc = ((tot - n) * 100 as ::core::ffi::c_int / tot) as ::core::ffi::c_long;
         }
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             gettext(
                 b"Compressed %s: %d of %d nodes; %d (%ld%%) remaining\0".as_ptr()
@@ -8503,7 +8517,7 @@ unsafe extern "C" fn wordtree_compress(
             tot - n,
             perc,
         );
-        spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+        spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     }
     hash_clear(&raw mut ht);
 }
@@ -8519,7 +8533,7 @@ unsafe extern "C" fn node_compress(
     let mut n: ::core::ffi::c_uint = 0;
     let mut compressed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut np: *mut wordnode_T = node;
-    while !np.is_null() && !got_int {
+    while !np.is_null() && !got_int.get() {
         len += 1;
         child = (*np).wn_child;
         if !child.is_null() {
@@ -8533,7 +8547,9 @@ unsafe extern "C" fn node_compress(
                 strlen(&raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char),
                 hash,
             );
-            if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+            if !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+            {
                 tp = (*hi).hi_key as *mut wordnode_T;
                 while !tp.is_null() {
                     if node_equal(child, tp) {
@@ -8918,7 +8934,9 @@ unsafe extern "C" fn write_vim_spell(
                 todo = (*spin).si_commonwords.ht_used;
                 hi = (*spin).si_commonwords.ht_array;
                 while todo > 0 as size_t {
-                    if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                    if !((*hi).hi_key.is_null()
+                        || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                    {
                         let mut l_4: size_t = strlen((*hi).hi_key).wrapping_add(1 as size_t);
                         len = len.wrapping_add(l_4);
                         if round_0 == 2 as ::core::ffi::c_uint {
@@ -9357,7 +9375,7 @@ unsafe extern "C" fn sug_filltree(
     curi[0 as ::core::ffi::c_int as usize] = 1 as ::core::ffi::c_int;
     wordcount[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
     let mut depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while depth >= 0 as ::core::ffi::c_int && !got_int {
+    while depth >= 0 as ::core::ffi::c_int && !got_int.get() {
         if curi[depth as usize]
             > *byts.offset(arridx[depth as usize] as isize) as ::core::ffi::c_int
         {
@@ -9551,12 +9569,12 @@ unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::cor
         return;
     }
     vim_snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         gettext(b"Writing suggestion file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
-    spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+    spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     '_theend: {
         if fwrite(
             VIMSUGMAGIC.as_ptr() as *const ::core::ffi::c_void,
@@ -9643,13 +9661,13 @@ unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::cor
                 emsg(gettext(&raw const e_write as *const ::core::ffi::c_char));
             }
             vim_snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
                     as *const ::core::ffi::c_char),
                 (*spin).si_memtot,
             );
-            spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+            spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
         }
     }
     fclose(fd);
@@ -10026,7 +10044,7 @@ unsafe extern "C" fn mkspell(
                     0 as ::core::ffi::c_int,
                 );
             }
-            if !error && !got_int {
+            if !error && !got_int.get() {
                 spell_message(&raw mut spin, gettext(msg_compressing.get()));
                 wordtree_compress(
                     &raw mut spin,
@@ -10044,27 +10062,27 @@ unsafe extern "C" fn mkspell(
                     b"prefixes\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
-            if !error && !got_int {
+            if !error && !got_int.get() {
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     gettext(b"Writing spell file %s...\0".as_ptr() as *const ::core::ffi::c_char),
                     wfname,
                 );
-                spell_message(&raw mut spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+                spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
                 error = write_vim_spell(&raw mut spin, wfname) == FAIL;
                 spell_message(
                     &raw mut spin,
                     gettext(b"Done!\0".as_ptr() as *const ::core::ffi::c_char),
                 );
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
                         as *const ::core::ffi::c_char),
                     spin.si_memtot,
                 );
-                spell_message(&raw mut spin, &raw mut IObuff as *mut ::core::ffi::c_char);
+                spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
                 if !error {
                     spell_reload_one(wfname, added_word);
                 }
@@ -10084,7 +10102,7 @@ unsafe extern "C" fn mkspell(
                 i_1 += 1;
             }
             free_blocks(spin.si_blocks);
-            if spin.si_sugtime != 0 as time_t && !error && !got_int {
+            if spin.si_sugtime != 0 as time_t && !error && !got_int.get() {
                 spell_make_sugfile(&raw mut spin, wfname);
             }
         }
@@ -10096,7 +10114,7 @@ unsafe extern "C" fn spell_message(
     mut spin: *const spellinfo_T,
     mut str: *mut ::core::ffi::c_char,
 ) {
-    if (*spin).si_verbose != 0 || p_verbose > 2 as OptInt {
+    if (*spin).si_verbose != 0 || p_verbose.get() > 2 as OptInt {
         if (*spin).si_verbose == 0 {
             verbose_enter();
         }
@@ -10156,11 +10174,11 @@ pub unsafe extern "C" fn spell_add_word(
         fname = int_wordlist.get();
     } else {
         let mut i: ::core::ffi::c_int = 0;
-        if *(*(*curwin).w_s).b_p_spf as ::core::ffi::c_int == NUL {
+        if *(*(*curwin.get()).w_s).b_p_spf as ::core::ffi::c_int == NUL {
             init_spellfile();
             new_spf = true_0 != 0;
         }
-        if *(*(*curwin).w_s).b_p_spf as ::core::ffi::c_int == NUL {
+        if *(*(*curwin.get()).w_s).b_p_spf as ::core::ffi::c_int == NUL {
             semsg(
                 gettext(&raw const e_notset as *const ::core::ffi::c_char),
                 b"spellfile\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10168,7 +10186,7 @@ pub unsafe extern "C" fn spell_add_word(
             return;
         }
         fnamebuf = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        spf = (*(*curwin).w_s).b_p_spf;
+        spf = (*(*curwin.get()).w_s).b_p_spf;
         i = 1 as ::core::ffi::c_int;
         while *spf as ::core::ffi::c_int != NUL {
             copy_option_part(
@@ -10243,7 +10261,7 @@ pub unsafe extern "C" fn spell_add_word(
                         home_replace(
                             ::core::ptr::null::<buf_T>(),
                             fname,
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                             MAXPATHL as size_t,
                             true_0 != 0,
                         );
@@ -10253,7 +10271,7 @@ pub unsafe extern "C" fn spell_add_word(
                                 as *const ::core::ffi::c_char),
                             len,
                             word,
-                            &raw mut NameBuff as *mut ::core::ffi::c_char,
+                            NameBuff.ptr() as *mut ::core::ffi::c_char,
                         );
                     }
                 }
@@ -10324,7 +10342,7 @@ pub unsafe extern "C" fn spell_add_word(
             home_replace(
                 ::core::ptr::null::<buf_T>(),
                 fname,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 MAXPATHL as size_t,
                 true_0 != 0,
             );
@@ -10333,7 +10351,7 @@ pub unsafe extern "C" fn spell_add_word(
                 gettext(b"Word '%.*s' added to %s\0".as_ptr() as *const ::core::ffi::c_char),
                 len,
                 word,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
     }
@@ -10355,13 +10373,13 @@ pub unsafe extern "C" fn spell_add_word(
 unsafe extern "C" fn init_spellfile() {
     let mut lend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut aspath: bool = false_0 != 0;
-    let mut lstart: *mut ::core::ffi::c_char = (*curbuf).b_s.b_p_spl;
-    if *(*(*curwin).w_s).b_p_spl as ::core::ffi::c_int == NUL
-        || (*(*curwin).w_s).b_langp.ga_len <= 0 as ::core::ffi::c_int
+    let mut lstart: *mut ::core::ffi::c_char = (*curbuf.get()).b_s.b_p_spl;
+    if *(*(*curwin.get()).w_s).b_p_spl as ::core::ffi::c_int == NUL
+        || (*(*curwin.get()).w_s).b_langp.ga_len <= 0 as ::core::ffi::c_int
     {
         return;
     }
-    lend = (*(*curwin).w_s).b_p_spl;
+    lend = (*(*curwin.get()).w_s).b_p_spl;
     while *lend as ::core::ffi::c_int != NUL
         && vim_strchr(
             b",._\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10400,14 +10418,14 @@ unsafe extern "C" fn init_spellfile() {
             return;
         }
     } else {
-        if lend.offset_from((*curbuf).b_s.b_p_spl) as size_t >= buf_len {
+        if lend.offset_from((*curbuf.get()).b_s.b_p_spl) as size_t >= buf_len {
             xfree(buf as *mut ::core::ffi::c_void);
             return;
         }
         xmemcpyz(
             buf as *mut ::core::ffi::c_void,
-            (*curbuf).b_s.b_p_spl as *const ::core::ffi::c_void,
-            lend.offset_from((*curbuf).b_s.b_p_spl) as size_t,
+            (*curbuf.get()).b_s.b_p_spl as *const ::core::ffi::c_void,
+            lend.offset_from((*curbuf.get()).b_s.b_p_spl) as size_t,
         );
     }
     vim_snprintf(
@@ -10417,7 +10435,7 @@ unsafe extern "C" fn init_spellfile() {
         lend.offset_from(lstart) as ::core::ffi::c_int,
         lstart,
     );
-    let mut fname: *mut ::core::ffi::c_char = (*(*((*(*curwin).w_s).b_langp.ga_data
+    let mut fname: *mut ::core::ffi::c_char = (*(*((*(*curwin.get()).w_s).b_langp.ga_data
         as *mut langp_T)
         .offset(0 as ::core::ffi::c_int as isize))
     .lp_slang)
@@ -10623,7 +10641,9 @@ unsafe extern "C" fn set_map_str(mut lp: *mut slang_T, mut map: *const ::core::f
                     NUL as ::core::ffi::c_char;
                 hash = hash_hash(b);
                 hi = hash_lookup(&raw mut (*lp).sl_map_hash, b, strlen(b), hash);
-                if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+                if (*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+                {
                     hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash);
                 } else {
                     emsg(gettext(

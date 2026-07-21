@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use ::c2rust_bitfields;
 extern "C" {
     pub type _IO_wide_data;
@@ -165,9 +165,9 @@ extern "C" {
     fn signal_watcher_stop(watcher: *mut SignalWatcher);
     fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb);
     fn stream_set_blocking(fd: ::core::ffi::c_int, blocking: bool) -> ::core::ffi::c_int;
-    static mut t_colors: ::core::ffi::c_int;
-    static mut stdin_isatty: bool;
-    static mut main_loop: Loop;
+    static t_colors: GlobalCell<::core::ffi::c_int>;
+    static stdin_isatty: GlobalCell<bool>;
+    static main_loop: SharedCell<Loop>;
     fn schar_cache_clear_if_full() -> bool;
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn schar_get_ascii(sc: schar_T) -> ::core::ffi::c_char;
@@ -177,7 +177,7 @@ extern "C" {
     fn utf_ambiguous_width(p: *const ::core::ffi::c_char) -> bool;
     fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
     fn os_isatty(fd: ::core::ffi::c_int) -> bool;
-    static mut nvim_testing: bool;
+    static nvim_testing: GlobalCell<bool>;
     fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
@@ -209,9 +209,9 @@ extern "C" {
         right: ::core::ffi::c_int,
         count: ::core::ffi::c_int,
     );
-    static mut ui_client_channel_id: uint64_t;
-    static mut ui_client_error_exit: ::core::ffi::c_int;
-    static mut ui_client_exit_status: ::core::ffi::c_int;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
+    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
+    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
     fn ui_client_attach(
         width: ::core::ffi::c_int,
         height: ::core::ffi::c_int,
@@ -1552,7 +1552,7 @@ pub unsafe extern "C" fn tui_start(
     (*tui).is_starting = true_0 != 0;
     (*tui).screenshot = ::core::ptr::null_mut::<FILE>();
     (*tui).stopped = false_0 != 0;
-    (*tui).loop_0 = &raw mut main_loop;
+    (*tui).loop_0 = main_loop.ptr();
     (*tui).url = -1 as ::core::ffi::c_int;
     (*tui).invalid_regions.capacity = 0 as size_t;
     (*tui).invalid_regions.size = (*tui).invalid_regions.capacity;
@@ -1624,7 +1624,7 @@ pub unsafe extern "C" fn tui_start(
         0 as uint64_t,
     );
     *tui_p = tui;
-    loop_poll_events(&raw mut main_loop, 1 as int64_t);
+    loop_poll_events(main_loop.ptr(), 1 as int64_t);
     *width = (*tui).width;
     *height = (*tui).height;
     *term = (*tui).term;
@@ -1693,7 +1693,7 @@ pub unsafe extern "C" fn tui_handle_term_mode(
     's_137: {
         match state as ::core::ffi::c_uint {
             0 | 4 => {
-                if !nvim_testing {
+                if !nvim_testing.get() {
                     logmsg(
                         LOGLVL_WRN,
                         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1716,7 +1716,7 @@ pub unsafe extern "C" fn tui_handle_term_mode(
                 break 's_137;
             }
         }
-        if !nvim_testing {
+        if !nvim_testing.get() {
             logmsg(
                 LOGLVL_WRN,
                 ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1989,7 +1989,7 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
                 as ::core::ffi::c_int
                 != 0;
     (*tui).bce = (*tui).ti.bce;
-    t_colors = (*tui).ti.max_colors;
+    t_colors.set((*tui).ti.max_colors);
     terminfo_out(tui, kTerm_enter_ca_mode);
     terminfo_out(tui, kTerm_keypad_xmit);
     terminfo_out(tui, kTerm_clear_screen);
@@ -2124,14 +2124,14 @@ unsafe extern "C" fn terminfo_disable(mut tui: *mut TUIData) {
     flush_buf(tui);
 }
 unsafe extern "C" fn terminfo_stop(mut tui: *mut TUIData) {
-    if ui_client_exit_status == 0 as ::core::ffi::c_int
-        && ui_client_error_exit > 0 as ::core::ffi::c_int
+    if ui_client_exit_status.get() == 0 as ::core::ffi::c_int
+        && ui_client_error_exit.get() > 0 as ::core::ffi::c_int
     {
-        ui_client_exit_status = ui_client_error_exit;
+        ui_client_exit_status.set(ui_client_error_exit.get());
     }
-    if ui_client_exit_status
-        == (if ui_client_error_exit > 0 as ::core::ffi::c_int {
-            ui_client_error_exit
+    if ui_client_exit_status.get()
+        == (if ui_client_error_exit.get() > 0 as ::core::ffi::c_int {
+            ui_client_error_exit.get()
         } else {
             0 as ::core::ffi::c_int
         })
@@ -2162,11 +2162,7 @@ unsafe extern "C" fn tui_terminal_start(mut tui: *mut TUIData) {
     (*tui).print_attr_id = -1 as ::core::ffi::c_int;
     terminfo_start(tui);
     if (*tui).input.loop_0.is_null() {
-        tinput_init(
-            &raw mut (*tui).input,
-            &raw mut main_loop,
-            &raw mut (*tui).ti,
-        );
+        tinput_init(&raw mut (*tui).input, main_loop.ptr(), &raw mut (*tui).ti);
     }
     tui_guess_size(tui);
     tinput_start(&raw mut (*tui).input);
@@ -3288,7 +3284,7 @@ pub unsafe extern "C" fn tui_mode_change(
 ) {
     if (*tui).out_isatty as ::core::ffi::c_int != 0
         && (*tui).is_starting as ::core::ffi::c_int != 0
-        && !stdin_isatty
+        && !stdin_isatty.get()
     {
         let mut ret: ::core::ffi::c_int =
             uv_tty_set_mode(&raw mut (*tui).output_handle.tty, UV_TTY_MODE_NORMAL);
@@ -3798,7 +3794,7 @@ unsafe extern "C" fn show_verbose_terminfo(mut tui: *mut TUIData) {
         data: C2Rust_Unnamed_13 { dict: opts },
     };
     rpc_send_event(
-        ui_client_channel_id,
+        ui_client_channel_id.get(),
         b"nvim_echo\0".as_ptr() as *const ::core::ffi::c_char,
         args,
     );
@@ -3942,7 +3938,7 @@ pub unsafe extern "C" fn tui_option_set(
             0 as ::core::ffi::c_int,
             (*tui).grid.width,
         );
-        if ui_client_channel_id != 0 {
+        if ui_client_channel_id.get() != 0 {
             let mut args: Array = Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -3971,7 +3967,7 @@ pub unsafe extern "C" fn tui_option_set(
                 },
             };
             rpc_send_event(
-                ui_client_channel_id,
+                ui_client_channel_id.get(),
                 b"nvim_ui_set_option\0".as_ptr() as *const ::core::ffi::c_char,
                 args,
             );

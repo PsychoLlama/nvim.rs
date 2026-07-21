@@ -175,20 +175,20 @@ extern "C" {
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn beep_flush();
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut textlock: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut no_u_sync: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut KeyTyped: bool;
-    static mut got_int: bool;
-    static mut global_busy: ::core::ffi::c_int;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static no_u_sync: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static KeyTyped: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
     fn os_localtime_r(clock: *const time_t, result: *mut tm) -> *mut tm;
     fn os_time() -> Timestamp;
     fn free_fmark(fm: fmark_T);
@@ -222,12 +222,12 @@ extern "C" {
         maxlen: size_t,
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut fdo_flags: ::core::ffi::c_uint;
-    static mut p_fs: ::core::ffi::c_int;
-    static mut p_udir: *mut ::core::ffi::c_char;
-    static mut p_ul: OptInt;
-    static mut p_verbose: OptInt;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static fdo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_fs: GlobalCell<::core::ffi::c_int>;
+    static p_udir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ul: GlobalCell<OptInt>;
+    static p_verbose: GlobalCell<OptInt>;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_open(
         path: *const ::core::ffi::c_char,
@@ -2843,7 +2843,7 @@ static undo_undoes: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static lastmark: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn u_save_cursor() -> ::core::ffi::c_int {
-    let mut cur: linenr_T = (*curwin).w_cursor.lnum;
+    let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut top: linenr_T = if cur > 0 as linenr_T {
         cur - 1 as linenr_T
     } else {
@@ -2854,7 +2854,7 @@ pub unsafe extern "C" fn u_save_cursor() -> ::core::ffi::c_int {
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_save(mut top: linenr_T, mut bot: linenr_T) -> ::core::ffi::c_int {
-    return u_save_buf(curbuf, top, bot);
+    return u_save_buf(curbuf.get(), top, bot);
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_save_buf(
@@ -2873,7 +2873,7 @@ pub unsafe extern "C" fn u_save_buf(
 #[no_mangle]
 pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
-        curbuf,
+        curbuf.get(),
         lnum - 1 as linenr_T,
         lnum + 1 as linenr_T,
         lnum + 1 as linenr_T,
@@ -2883,7 +2883,7 @@ pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
-        curbuf,
+        curbuf.get(),
         lnum - 1 as linenr_T,
         lnum,
         lnum + 1 as linenr_T,
@@ -2893,10 +2893,10 @@ pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
-        curbuf,
+        curbuf.get(),
         lnum - 1 as linenr_T,
         lnum + nlines,
-        if nlines == (*curbuf).b_ml.ml_line_count {
+        if nlines == (*curbuf.get()).b_ml.ml_line_count {
             2 as linenr_T
         } else {
             lnum
@@ -2912,11 +2912,11 @@ pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
         ));
         return false_0 != 0;
     }
-    if sandbox != 0 as ::core::ffi::c_int {
+    if sandbox.get() != 0 as ::core::ffi::c_int {
         emsg(gettext(&raw const e_sandbox as *const ::core::ffi::c_char));
         return false_0 != 0;
     }
-    if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
+    if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
         emsg(gettext(&raw const e_textlock as *const ::core::ffi::c_char));
         return false_0 != 0;
     }
@@ -2924,7 +2924,7 @@ pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
 }
 unsafe extern "C" fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
     if (*buf).b_p_ul == NO_LOCAL_UNDOLEVEL as OptInt {
-        return p_ul;
+        return p_ul.get();
     }
     return (*buf).b_p_ul;
 }
@@ -2952,7 +2952,7 @@ pub unsafe extern "C" fn u_savecommon(
         if !undo_allowed(buf) {
             return FAIL;
         }
-        if buf == curbuf {
+        if buf == curbuf.get() {
             change_warning(buf, 0 as ::core::ffi::c_int);
         }
         if bot > (*buf).b_ml.ml_line_count + 1 as linenr_T {
@@ -3028,9 +3028,9 @@ pub unsafe extern "C" fn u_savecommon(
         (*uhp).uh_walk = 0 as ::core::ffi::c_int;
         (*uhp).uh_entry = ::core::ptr::null_mut::<u_entry_T>();
         (*uhp).uh_getbot_entry = ::core::ptr::null_mut::<u_entry_T>();
-        (*uhp).uh_cursor = (*curwin).w_cursor;
-        if virtual_active(curwin) as ::core::ffi::c_int != 0
-            && (*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
+        (*uhp).uh_cursor = (*curwin.get()).w_cursor;
+        if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
+            && (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
         {
             (*uhp).uh_cursor_vcol = getviscol() as colnr_T;
         } else {
@@ -3136,7 +3136,7 @@ pub unsafe extern "C" fn u_savecommon(
         lnum = top + 1 as linenr_T;
         while (i_0 as linenr_T) < size {
             fast_breakcheck();
-            if got_int {
+            if got_int.get() {
                 u_freeentry(uep, i_0);
                 return FAIL;
             }
@@ -3209,7 +3209,7 @@ pub unsafe extern "C" fn u_get_undo_file_name(
     let mut munged_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut undo_file_name: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut dirp: *mut ::core::ffi::c_char = p_udir;
+    let mut dirp: *mut ::core::ffi::c_char = p_udir.get();
     while *dirp as ::core::ffi::c_int != NUL {
         let mut dir_len: size_t = copy_option_part(
             &raw mut dirp,
@@ -3841,7 +3841,7 @@ pub unsafe extern "C" fn u_write_undo(
     if name.is_null() {
         file_name = u_get_undo_file_name((*buf).b_ffname, false_0 != 0);
         if file_name.is_null() {
-            if p_verbose > 0 as OptInt {
+            if p_verbose.get() > 0 as OptInt {
                 verbose_enter();
                 smsg(
                     0 as ::core::ffi::c_int,
@@ -3872,7 +3872,7 @@ pub unsafe extern "C" fn u_write_undo(
                 let mut fd: ::core::ffi::c_int =
                     os_open(file_name, O_RDONLY, 0 as ::core::ffi::c_int);
                 if fd < 0 as ::core::ffi::c_int {
-                    if !name.is_null() || p_verbose > 0 as OptInt {
+                    if !name.is_null() || p_verbose.get() > 0 as OptInt {
                         if name.is_null() {
                             verbose_enter();
                         }
@@ -3904,7 +3904,7 @@ pub unsafe extern "C" fn u_write_undo(
                             UF_START_MAGIC_LEN as size_t,
                         ) != 0 as ::core::ffi::c_int
                     {
-                        if !name.is_null() || p_verbose > 0 as OptInt {
+                        if !name.is_null() || p_verbose.get() > 0 as OptInt {
                             if name.is_null() {
                                 verbose_enter();
                             }
@@ -3927,7 +3927,7 @@ pub unsafe extern "C" fn u_write_undo(
             os_remove(file_name);
         }
         if (*buf).b_u_numhead == 0 as ::core::ffi::c_int && (*buf).b_u_line_ptr.is_null() {
-            if p_verbose > 0 as OptInt {
+            if p_verbose.get() > 0 as OptInt {
                 verb_msg(gettext(
                     b"Skipping undo file write, nothing to undo\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3942,7 +3942,7 @@ pub unsafe extern "C" fn u_write_undo(
                 );
             } else {
                 os_setperm(file_name, perm);
-                if p_verbose > 0 as OptInt {
+                if p_verbose.get() > 0 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -4087,7 +4087,7 @@ pub unsafe extern "C" fn u_write_undo(
                             if (if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
                                 (*buf).b_p_fs
                             } else {
-                                p_fs
+                                p_fs.get()
                             }) != 0
                                 && fflush(fp) == 0 as ::core::ffi::c_int
                                 && os_fsync(fd_0) != 0 as ::core::ffi::c_int
@@ -4153,7 +4153,7 @@ pub unsafe extern "C" fn u_read_undo(
     let mut line_ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if name.is_null() {
-        file_name = u_get_undo_file_name((*curbuf).b_ffname, true_0 != 0);
+        file_name = u_get_undo_file_name((*curbuf.get()).b_ffname, true_0 != 0);
         if file_name.is_null() {
             return;
         }
@@ -4226,7 +4226,7 @@ pub unsafe extern "C" fn u_read_undo(
             && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
             && file_info_undo.stat.st_uid != getuid() as uint64_t
         {
-            if p_verbose > 0 as OptInt {
+            if p_verbose.get() > 0 as OptInt {
                 verbose_enter();
                 smsg(
                     0 as ::core::ffi::c_int,
@@ -4241,7 +4241,7 @@ pub unsafe extern "C" fn u_read_undo(
     } else {
         file_name = name;
     }
-    if p_verbose > 0 as OptInt {
+    if p_verbose.get() > 0 as OptInt {
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
@@ -4254,7 +4254,7 @@ pub unsafe extern "C" fn u_read_undo(
     '_theend: {
         '_error: {
             if fp.is_null() {
-                if !name.is_null() || p_verbose > 0 as OptInt {
+                if !name.is_null() || p_verbose.get() > 0 as OptInt {
                     semsg(
                         gettext(b"E822: Cannot open undo file for reading: %s\0".as_ptr()
                             as *const ::core::ffi::c_char),
@@ -4263,7 +4263,7 @@ pub unsafe extern "C" fn u_read_undo(
                 }
             } else {
                 bi = bufinfo_T {
-                    bi_buf: curbuf,
+                    bi_buf: curbuf.get(),
                     bi_fp: fp,
                 };
                 magic_buf = [0; 9];
@@ -4312,9 +4312,9 @@ pub unsafe extern "C" fn u_read_undo(
                                 &raw mut read_hash as *mut uint8_t as *const ::core::ffi::c_void,
                                 UNDO_HASH_SIZE as ::core::ffi::c_int as size_t,
                             ) != 0 as ::core::ffi::c_int
-                                || line_count != (*curbuf).b_ml.ml_line_count
+                                || line_count != (*curbuf.get()).b_ml.ml_line_count
                             {
-                                if p_verbose > 0 as OptInt || !name.is_null() {
+                                if p_verbose.get() > 0 as OptInt || !name.is_null() {
                                     if name.is_null() {
                                         verbose_enter();
                                     }
@@ -4606,8 +4606,8 @@ pub unsafe extern "C" fn u_read_undo(
                                                 }
                                                 i += 1;
                                             }
-                                            u_blockfree(curbuf);
-                                            (*curbuf).b_u_oldhead = if (old_idx
+                                            u_blockfree(curbuf.get());
+                                            (*curbuf.get()).b_u_oldhead = if (old_idx
                                                 as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
@@ -4615,7 +4615,7 @@ pub unsafe extern "C" fn u_read_undo(
                                             } else {
                                                 *uhp_table.offset(old_idx as isize)
                                             };
-                                            (*curbuf).b_u_newhead = if (new_idx
+                                            (*curbuf.get()).b_u_newhead = if (new_idx
                                                 as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
@@ -4623,7 +4623,7 @@ pub unsafe extern "C" fn u_read_undo(
                                             } else {
                                                 *uhp_table.offset(new_idx as isize)
                                             };
-                                            (*curbuf).b_u_curhead = if (cur_idx
+                                            (*curbuf.get()).b_u_curhead = if (cur_idx
                                                 as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
@@ -4631,16 +4631,16 @@ pub unsafe extern "C" fn u_read_undo(
                                             } else {
                                                 *uhp_table.offset(cur_idx as isize)
                                             };
-                                            (*curbuf).b_u_line_ptr = line_ptr;
-                                            (*curbuf).b_u_line_lnum = line_lnum;
-                                            (*curbuf).b_u_line_colnr = line_colnr;
-                                            (*curbuf).b_u_numhead = num_head;
-                                            (*curbuf).b_u_seq_last = seq_last;
-                                            (*curbuf).b_u_seq_cur = seq_cur;
-                                            (*curbuf).b_u_time_cur = seq_time;
-                                            (*curbuf).b_u_save_nr_last = last_save_nr;
-                                            (*curbuf).b_u_save_nr_cur = last_save_nr;
-                                            (*curbuf).b_u_synced = true_0 != 0;
+                                            (*curbuf.get()).b_u_line_ptr = line_ptr;
+                                            (*curbuf.get()).b_u_line_lnum = line_lnum;
+                                            (*curbuf.get()).b_u_line_colnr = line_colnr;
+                                            (*curbuf.get()).b_u_numhead = num_head;
+                                            (*curbuf.get()).b_u_seq_last = seq_last;
+                                            (*curbuf.get()).b_u_seq_cur = seq_cur;
+                                            (*curbuf.get()).b_u_time_cur = seq_time;
+                                            (*curbuf.get()).b_u_save_nr_last = last_save_nr;
+                                            (*curbuf.get()).b_u_save_nr_cur = last_save_nr;
+                                            (*curbuf.get()).b_u_synced = true_0 != 0;
                                             xfree(uhp_table as *mut ::core::ffi::c_void);
                                             if !name.is_null() {
                                                 smsg(
@@ -4788,11 +4788,11 @@ unsafe extern "C" fn undo_read_string(
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_undo(mut count: ::core::ffi::c_int) {
-    if (*curbuf).b_u_synced as ::core::ffi::c_int == false_0 {
+    if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
         u_sync(true_0 != 0);
         count = 1 as ::core::ffi::c_int;
     }
-    if vim_strchr(p_cpo, CPO_UNDO).is_null() {
+    if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
         undo_undoes.set(true_0 != 0);
     } else {
         undo_undoes.set(!undo_undoes.get());
@@ -4801,7 +4801,7 @@ pub unsafe extern "C" fn u_undo(mut count: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_redo(mut count: ::core::ffi::c_int) {
-    if vim_strchr(p_cpo, CPO_UNDO).is_null() {
+    if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
         undo_undoes.set(false_0 != 0);
     }
     u_doit(count, false_0 != 0, true_0 != 0);
@@ -4811,40 +4811,40 @@ pub unsafe extern "C" fn u_undo_and_forget(
     mut count: ::core::ffi::c_int,
     mut do_buf_event: bool,
 ) -> bool {
-    if (*curbuf).b_u_synced as ::core::ffi::c_int == false_0 {
+    if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
         u_sync(true_0 != 0);
         count = 1 as ::core::ffi::c_int;
     }
     undo_undoes.set(true_0 != 0);
     u_doit(count, true_0 != 0, do_buf_event);
-    if (*curbuf).b_u_curhead.is_null() {
+    if (*curbuf.get()).b_u_curhead.is_null() {
         return false_0 != 0;
     }
-    let mut to_forget: *mut u_header_T = (*curbuf).b_u_curhead;
-    (*curbuf).b_u_newhead = (*to_forget).uh_next.ptr;
-    (*curbuf).b_u_curhead = (*to_forget).uh_alt_next.ptr;
-    if !(*curbuf).b_u_curhead.is_null() {
+    let mut to_forget: *mut u_header_T = (*curbuf.get()).b_u_curhead;
+    (*curbuf.get()).b_u_newhead = (*to_forget).uh_next.ptr;
+    (*curbuf.get()).b_u_curhead = (*to_forget).uh_alt_next.ptr;
+    if !(*curbuf.get()).b_u_curhead.is_null() {
         (*to_forget).uh_alt_next.ptr = ::core::ptr::null_mut::<u_header_T>();
-        (*(*curbuf).b_u_curhead).uh_alt_prev.ptr = (*to_forget).uh_alt_prev.ptr;
-        (*curbuf).b_u_seq_cur = if !(*(*curbuf).b_u_curhead).uh_next.ptr.is_null() {
-            (*(*(*curbuf).b_u_curhead).uh_next.ptr).uh_seq
+        (*(*curbuf.get()).b_u_curhead).uh_alt_prev.ptr = (*to_forget).uh_alt_prev.ptr;
+        (*curbuf.get()).b_u_seq_cur = if !(*(*curbuf.get()).b_u_curhead).uh_next.ptr.is_null() {
+            (*(*(*curbuf.get()).b_u_curhead).uh_next.ptr).uh_seq
         } else {
             0 as ::core::ffi::c_int
         };
-    } else if !(*curbuf).b_u_newhead.is_null() {
-        (*curbuf).b_u_seq_cur = (*(*curbuf).b_u_newhead).uh_seq;
+    } else if !(*curbuf.get()).b_u_newhead.is_null() {
+        (*curbuf.get()).b_u_seq_cur = (*(*curbuf.get()).b_u_newhead).uh_seq;
     }
     if !(*to_forget).uh_alt_prev.ptr.is_null() {
-        (*(*to_forget).uh_alt_prev.ptr).uh_alt_next.ptr = (*curbuf).b_u_curhead;
+        (*(*to_forget).uh_alt_prev.ptr).uh_alt_next.ptr = (*curbuf.get()).b_u_curhead;
     }
-    if !(*curbuf).b_u_newhead.is_null() {
-        (*(*curbuf).b_u_newhead).uh_prev.ptr = (*curbuf).b_u_curhead;
+    if !(*curbuf.get()).b_u_newhead.is_null() {
+        (*(*curbuf.get()).b_u_newhead).uh_prev.ptr = (*curbuf.get()).b_u_curhead;
     }
-    if (*curbuf).b_u_seq_last == (*to_forget).uh_seq {
-        (*curbuf).b_u_seq_last -= 1;
+    if (*curbuf.get()).b_u_seq_last == (*to_forget).uh_seq {
+        (*curbuf.get()).b_u_seq_last -= 1;
     }
     u_freebranch(
-        curbuf,
+        curbuf.get(),
         to_forget,
         ::core::ptr::null_mut::<*mut u_header_T>(),
     );
@@ -4855,12 +4855,12 @@ unsafe extern "C" fn u_doit(
     mut quiet: bool,
     mut do_buf_event: bool,
 ) {
-    if !undo_allowed(curbuf) {
+    if !undo_allowed(curbuf.get()) {
         return;
     }
     u_newcount.set(0 as ::core::ffi::c_int);
     u_oldcount.set(0 as ::core::ffi::c_int);
-    if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+    if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         u_oldcount.set(-1 as ::core::ffi::c_int);
     }
     msg_ext_set_kind(b"undo\0".as_ptr() as *const ::core::ffi::c_char);
@@ -4871,15 +4871,17 @@ unsafe extern "C" fn u_doit(
         if c2rust_fresh4 == 0 {
             break;
         }
-        change_warning(curbuf, 0 as ::core::ffi::c_int);
+        change_warning(curbuf.get(), 0 as ::core::ffi::c_int);
         if undo_undoes.get() {
-            if (*curbuf).b_u_curhead.is_null() {
-                (*curbuf).b_u_curhead = (*curbuf).b_u_newhead;
-            } else if get_undolevel(curbuf) > 0 as OptInt {
-                (*curbuf).b_u_curhead = (*(*curbuf).b_u_curhead).uh_next.ptr;
+            if (*curbuf.get()).b_u_curhead.is_null() {
+                (*curbuf.get()).b_u_curhead = (*curbuf.get()).b_u_newhead;
+            } else if get_undolevel(curbuf.get()) > 0 as OptInt {
+                (*curbuf.get()).b_u_curhead = (*(*curbuf.get()).b_u_curhead).uh_next.ptr;
             }
-            if (*curbuf).b_u_numhead == 0 as ::core::ffi::c_int || (*curbuf).b_u_curhead.is_null() {
-                (*curbuf).b_u_curhead = (*curbuf).b_u_oldhead;
+            if (*curbuf.get()).b_u_numhead == 0 as ::core::ffi::c_int
+                || (*curbuf.get()).b_u_curhead.is_null()
+            {
+                (*curbuf.get()).b_u_curhead = (*curbuf.get()).b_u_oldhead;
                 beep_flush();
                 if count == startcount - 1 as ::core::ffi::c_int {
                     msg(
@@ -4894,7 +4896,9 @@ unsafe extern "C" fn u_doit(
             } else {
                 u_undoredo(true_0 != 0, do_buf_event);
             }
-        } else if (*curbuf).b_u_curhead.is_null() || get_undolevel(curbuf) <= 0 as OptInt {
+        } else if (*curbuf.get()).b_u_curhead.is_null()
+            || get_undolevel(curbuf.get()) <= 0 as OptInt
+        {
             beep_flush();
             if count == startcount - 1 as ::core::ffi::c_int {
                 msg(
@@ -4906,10 +4910,10 @@ unsafe extern "C" fn u_doit(
             break;
         } else {
             u_undoredo(false_0 != 0, do_buf_event);
-            if (*(*curbuf).b_u_curhead).uh_prev.ptr.is_null() {
-                (*curbuf).b_u_newhead = (*curbuf).b_u_curhead;
+            if (*(*curbuf.get()).b_u_curhead).uh_prev.ptr.is_null() {
+                (*curbuf.get()).b_u_newhead = (*curbuf.get()).b_u_curhead;
             }
-            (*curbuf).b_u_curhead = (*(*curbuf).b_u_curhead).uh_prev.ptr;
+            (*curbuf.get()).b_u_curhead = (*(*curbuf.get()).b_u_curhead).uh_prev.ptr;
         }
     }
     u_undo_end(undo_undoes.get(), false_0 != 0, quiet);
@@ -4925,12 +4929,12 @@ pub unsafe extern "C" fn undo_time(
         text_locked_msg();
         return;
     }
-    if (*curbuf).b_u_synced as ::core::ffi::c_int == false_0 {
+    if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
         u_sync(true_0 != 0);
     }
     u_newcount.set(0 as ::core::ffi::c_int);
     u_oldcount.set(0 as ::core::ffi::c_int);
-    if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+    if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         u_oldcount.set(-1 as ::core::ffi::c_int);
     }
     let mut target: ::core::ffi::c_int = 0;
@@ -4945,32 +4949,32 @@ pub unsafe extern "C" fn undo_time(
         closest = -1 as ::core::ffi::c_int;
     } else {
         if dosec {
-            target = (*curbuf).b_u_time_cur as ::core::ffi::c_int + step;
+            target = (*curbuf.get()).b_u_time_cur as ::core::ffi::c_int + step;
         } else if dofile {
             if step < 0 as ::core::ffi::c_int {
-                uhp = (*curbuf).b_u_curhead;
+                uhp = (*curbuf.get()).b_u_curhead;
                 if !uhp.is_null() {
                     uhp = (*uhp).uh_next.ptr;
                 } else {
-                    uhp = (*curbuf).b_u_newhead;
+                    uhp = (*curbuf.get()).b_u_newhead;
                 }
                 if !uhp.is_null() && (*uhp).uh_save_nr != 0 as ::core::ffi::c_int {
-                    target = (*curbuf).b_u_save_nr_cur + step;
+                    target = (*curbuf.get()).b_u_save_nr_cur + step;
                 } else {
-                    target = (*curbuf).b_u_save_nr_cur + step + 1 as ::core::ffi::c_int;
+                    target = (*curbuf.get()).b_u_save_nr_cur + step + 1 as ::core::ffi::c_int;
                 }
                 if target <= 0 as ::core::ffi::c_int {
                     dofile = false_0 != 0;
                 }
             } else {
-                target = (*curbuf).b_u_save_nr_cur + step;
-                if target > (*curbuf).b_u_save_nr_last {
-                    target = (*curbuf).b_u_seq_last + 1 as ::core::ffi::c_int;
+                target = (*curbuf.get()).b_u_save_nr_cur + step;
+                if target > (*curbuf.get()).b_u_save_nr_last {
+                    target = (*curbuf.get()).b_u_seq_last + 1 as ::core::ffi::c_int;
                     dofile = false_0 != 0;
                 }
             }
         } else {
-            target = (*curbuf).b_u_seq_cur + step;
+            target = (*curbuf.get()).b_u_seq_cur + step;
         }
         if step < 0 as ::core::ffi::c_int {
             target = if target > 0 as ::core::ffi::c_int {
@@ -4983,9 +4987,9 @@ pub unsafe extern "C" fn undo_time(
             if dosec {
                 closest = os_time().wrapping_add(1 as Timestamp) as ::core::ffi::c_int;
             } else if dofile {
-                closest = (*curbuf).b_u_save_nr_last + 2 as ::core::ffi::c_int;
+                closest = (*curbuf.get()).b_u_save_nr_last + 2 as ::core::ffi::c_int;
             } else {
-                closest = (*curbuf).b_u_seq_last + 2 as ::core::ffi::c_int;
+                closest = (*curbuf.get()).b_u_seq_last + 2 as ::core::ffi::c_int;
             }
             if target >= closest {
                 target = closest - 1 as ::core::ffi::c_int;
@@ -4993,7 +4997,7 @@ pub unsafe extern "C" fn undo_time(
         }
     }
     let mut closest_start: ::core::ffi::c_int = closest;
-    let mut closest_seq: ::core::ffi::c_int = (*curbuf).b_u_seq_cur;
+    let mut closest_seq: ::core::ffi::c_int = (*curbuf.get()).b_u_seq_cur;
     let mut mark: ::core::ffi::c_int = 0;
     let mut nomark: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if target == 0 as ::core::ffi::c_int {
@@ -5005,10 +5009,10 @@ pub unsafe extern "C" fn undo_time(
             mark = lastmark.get();
             (*lastmark.ptr()) += 1;
             nomark = lastmark.get();
-            if (*curbuf).b_u_curhead.is_null() {
-                uhp = (*curbuf).b_u_newhead;
+            if (*curbuf.get()).b_u_curhead.is_null() {
+                uhp = (*curbuf.get()).b_u_newhead;
             } else {
-                uhp = (*curbuf).b_u_curhead;
+                uhp = (*curbuf.get()).b_u_curhead;
             }
             while !uhp.is_null() {
                 (*uhp).uh_walk = mark;
@@ -5023,9 +5027,9 @@ pub unsafe extern "C" fn undo_time(
                     && !(dofile as ::core::ffi::c_int != 0 && val == 0 as ::core::ffi::c_int)
                 {
                     if (if step < 0 as ::core::ffi::c_int {
-                        ((*uhp).uh_seq <= (*curbuf).b_u_seq_cur) as ::core::ffi::c_int
+                        ((*uhp).uh_seq <= (*curbuf.get()).b_u_seq_cur) as ::core::ffi::c_int
                     } else {
-                        ((*uhp).uh_seq > (*curbuf).b_u_seq_cur) as ::core::ffi::c_int
+                        ((*uhp).uh_seq > (*curbuf.get()).b_u_seq_cur) as ::core::ffi::c_int
                     }) != 0
                         && (if dosec as ::core::ffi::c_int != 0 && val == closest {
                             if step < 0 as ::core::ffi::c_int {
@@ -5072,7 +5076,7 @@ pub unsafe extern "C" fn undo_time(
                     && (*(*uhp).uh_next.ptr).uh_walk != nomark
                     && (*(*uhp).uh_next.ptr).uh_walk != mark
                 {
-                    if uhp == (*curbuf).b_u_curhead {
+                    if uhp == (*curbuf.get()).b_u_curhead {
                         (*uhp).uh_walk = nomark;
                     }
                     uhp = (*uhp).uh_next.ptr;
@@ -5125,11 +5129,11 @@ pub unsafe extern "C" fn undo_time(
         }
     }
     if !uhp.is_null() || target == 0 as ::core::ffi::c_int {
-        while !got_int {
-            change_warning(curbuf, 0 as ::core::ffi::c_int);
-            uhp = (*curbuf).b_u_curhead;
+        while !got_int.get() {
+            change_warning(curbuf.get(), 0 as ::core::ffi::c_int);
+            uhp = (*curbuf.get()).b_u_curhead;
             if uhp.is_null() {
-                uhp = (*curbuf).b_u_newhead;
+                uhp = (*curbuf.get()).b_u_newhead;
             } else {
                 uhp = (*uhp).uh_next.ptr;
             }
@@ -5139,16 +5143,16 @@ pub unsafe extern "C" fn undo_time(
             {
                 break;
             }
-            (*curbuf).b_u_curhead = uhp;
+            (*curbuf.get()).b_u_curhead = uhp;
             u_undoredo(true_0 != 0, true_0 != 0);
             if target > 0 as ::core::ffi::c_int {
                 (*uhp).uh_walk = nomark;
             }
         }
         if target > 0 as ::core::ffi::c_int {
-            while !got_int {
-                change_warning(curbuf, 0 as ::core::ffi::c_int);
-                uhp = (*curbuf).b_u_curhead;
+            while !got_int.get() {
+                change_warning(curbuf.get(), 0 as ::core::ffi::c_int);
+                uhp = (*curbuf.get()).b_u_curhead;
                 if uhp.is_null() {
                     break;
                 }
@@ -5173,27 +5177,27 @@ pub unsafe extern "C" fn undo_time(
                     (*last).uh_alt_prev.ptr = ::core::ptr::null_mut::<u_header_T>();
                     (*last).uh_alt_next.ptr = uhp;
                     (*uhp).uh_alt_prev.ptr = last;
-                    if (*curbuf).b_u_oldhead == uhp {
-                        (*curbuf).b_u_oldhead = last;
+                    if (*curbuf.get()).b_u_oldhead == uhp {
+                        (*curbuf.get()).b_u_oldhead = last;
                     }
                     uhp = last;
                     if !(*uhp).uh_next.ptr.is_null() {
                         (*(*uhp).uh_next.ptr).uh_prev.ptr = uhp;
                     }
                 }
-                (*curbuf).b_u_curhead = uhp;
+                (*curbuf.get()).b_u_curhead = uhp;
                 if (*uhp).uh_walk != mark {
                     break;
                 }
                 if (*uhp).uh_seq == target && above as ::core::ffi::c_int != 0 {
-                    (*curbuf).b_u_seq_cur = target - 1 as ::core::ffi::c_int;
+                    (*curbuf.get()).b_u_seq_cur = target - 1 as ::core::ffi::c_int;
                     break;
                 } else {
                     u_undoredo(false_0 != 0, true_0 != 0);
                     if (*uhp).uh_prev.ptr.is_null() {
-                        (*curbuf).b_u_newhead = uhp;
+                        (*curbuf.get()).b_u_newhead = uhp;
                     }
-                    (*curbuf).b_u_curhead = (*uhp).uh_prev.ptr;
+                    (*curbuf.get()).b_u_curhead = (*uhp).uh_prev.ptr;
                     did_undo = false_0 != 0;
                     if (*uhp).uh_seq == target {
                         break;
@@ -5214,7 +5218,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
     let mut newarray: *mut *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut newlnum: linenr_T = MAXLNUM as ::core::ffi::c_int as linenr_T;
-    let mut new_curpos: pos_T = (*curwin).w_cursor;
+    let mut new_curpos: pos_T = (*curwin.get()).w_cursor;
     let mut nuep: *mut u_entry_T = ::core::ptr::null_mut::<u_entry_T>();
     let mut newlist: *mut u_entry_T = ::core::ptr::null_mut::<u_entry_T>();
     let mut namedm: [fmark_T; 26] = [fmark_T {
@@ -5231,46 +5235,46 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     }; 26];
-    let mut curhead: *mut u_header_T = (*curbuf).b_u_curhead;
+    let mut curhead: *mut u_header_T = (*curbuf.get()).b_u_curhead;
     block_autocmds();
     let mut old_flags: ::core::ffi::c_int = (*curhead).uh_flags;
-    let mut new_flags: ::core::ffi::c_int = (if (*curbuf).b_changed != 0 {
+    let mut new_flags: ::core::ffi::c_int = (if (*curbuf.get()).b_changed != 0 {
         UH_CHANGED as ::core::ffi::c_int
     } else {
         0 as ::core::ffi::c_int
-    }) | (if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+    }) | (if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         UH_EMPTYBUF as ::core::ffi::c_int
     } else {
         0 as ::core::ffi::c_int
     }) | old_flags & UH_RELOAD as ::core::ffi::c_int;
     setpcmark();
-    zero_fmark_additional_data(&raw mut (*curbuf).b_namedm as *mut fmark_T);
+    zero_fmark_additional_data(&raw mut (*curbuf.get()).b_namedm as *mut fmark_T);
     memmove(
         &raw mut namedm as *mut fmark_T as *mut ::core::ffi::c_void,
-        &raw mut (*curbuf).b_namedm as *mut fmark_T as *const ::core::ffi::c_void,
+        &raw mut (*curbuf.get()).b_namedm as *mut fmark_T as *const ::core::ffi::c_void,
         ::core::mem::size_of::<fmark_T>().wrapping_mul(NMARKS as size_t),
     );
-    let mut visualinfo: visualinfo_T = (*curbuf).b_visual;
-    (*curbuf).b_op_start.lnum = (*curbuf).b_ml.ml_line_count;
-    (*curbuf).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
-    (*curbuf).b_op_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*curbuf).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
+    let mut visualinfo: visualinfo_T = (*curbuf.get()).b_visual;
+    (*curbuf.get()).b_op_start.lnum = (*curbuf.get()).b_ml.ml_line_count;
+    (*curbuf.get()).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
+    (*curbuf.get()).b_op_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
+    (*curbuf.get()).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
     let mut uep: *mut u_entry_T = (*curhead).uh_entry;
     while !uep.is_null() {
         let mut top: linenr_T = (*uep).ue_top;
         let mut bot: linenr_T = (*uep).ue_bot;
         if bot == 0 as linenr_T {
-            bot = (*curbuf).b_ml.ml_line_count + 1 as linenr_T;
+            bot = (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T;
         }
-        if top > (*curbuf).b_ml.ml_line_count
+        if top > (*curbuf.get()).b_ml.ml_line_count
             || top >= bot
-            || bot > (*curbuf).b_ml.ml_line_count + 1 as linenr_T
+            || bot > (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T
         {
             unblock_autocmds();
             iemsg(gettext(
                 b"E438: u_undo: line numbers wrong\0".as_ptr() as *const ::core::ffi::c_char
             ));
-            changed(curbuf);
+            changed(curbuf.get());
             return;
         }
         let mut oldsize: linenr_T = bot - top - 1 as linenr_T;
@@ -5318,7 +5322,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
                     break;
                 }
                 *newarray.offset(i_0 as isize) = u_save_line(lnum_0);
-                if (*curbuf).b_ml.ml_line_count == 1 as linenr_T {
+                if (*curbuf.get()).b_ml.ml_line_count == 1 as linenr_T {
                     empty_buffer = true_0 != 0;
                 }
                 ml_delete(lnum_0);
@@ -5327,7 +5331,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         } else {
             newarray = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
         }
-        check_cursor_lnum(curwin);
+        check_cursor_lnum(curwin.get());
         if newsize != 0 {
             let mut i_1: ::core::ffi::c_int = 0;
             let mut lnum_1: linenr_T = 0;
@@ -5362,37 +5366,37 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
                 newsize - oldsize,
                 kExtmarkNOOP,
             );
-            if (*curbuf).b_op_start.lnum > top + oldsize {
-                (*curbuf).b_op_start.lnum += newsize - oldsize;
+            if (*curbuf.get()).b_op_start.lnum > top + oldsize {
+                (*curbuf.get()).b_op_start.lnum += newsize - oldsize;
             }
-            if (*curbuf).b_op_end.lnum > top + oldsize {
-                (*curbuf).b_op_end.lnum += newsize - oldsize;
+            if (*curbuf.get()).b_op_end.lnum > top + oldsize {
+                (*curbuf.get()).b_op_end.lnum += newsize - oldsize;
             }
         }
         if oldsize > 0 as linenr_T || newsize > 0 as linenr_T {
             changed_lines(
-                curbuf,
+                curbuf.get(),
                 top + 1 as linenr_T,
                 0 as colnr_T,
                 bot,
                 newsize - oldsize,
                 do_buf_event,
             );
-            if spell_check_window(curwin) as ::core::ffi::c_int != 0
-                && bot <= (*curbuf).b_ml.ml_line_count
+            if spell_check_window(curwin.get()) as ::core::ffi::c_int != 0
+                && bot <= (*curbuf.get()).b_ml.ml_line_count
             {
-                redrawWinline(curwin, bot);
+                redrawWinline(curwin.get(), bot);
             }
         }
-        (*curbuf).b_op_start.lnum = if (*curbuf).b_op_start.lnum < top + 1 as linenr_T {
-            (*curbuf).b_op_start.lnum
+        (*curbuf.get()).b_op_start.lnum = if (*curbuf.get()).b_op_start.lnum < top + 1 as linenr_T {
+            (*curbuf.get()).b_op_start.lnum
         } else {
             top + 1 as linenr_T
         };
-        if newsize == 0 as linenr_T && top + 1 as linenr_T > (*curbuf).b_op_end.lnum {
-            (*curbuf).b_op_end.lnum = top + 1 as linenr_T;
-        } else if top + newsize > (*curbuf).b_op_end.lnum {
-            (*curbuf).b_op_end.lnum = top + newsize;
+        if newsize == 0 as linenr_T && top + 1 as linenr_T > (*curbuf.get()).b_op_end.lnum {
+            (*curbuf.get()).b_op_end.lnum = top + 1 as linenr_T;
+        } else if top + newsize > (*curbuf.get()).b_op_end.lnum {
+            (*curbuf.get()).b_op_end.lnum = top + newsize;
         }
         (*u_newcount.ptr()) += newsize as ::core::ffi::c_int;
         (*u_oldcount.ptr()) += oldsize as ::core::ffi::c_int;
@@ -5404,16 +5408,18 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         newlist = uep;
         uep = nuep;
     }
-    (*curbuf).b_op_start.lnum = if (*curbuf).b_op_start.lnum < (*curbuf).b_ml.ml_line_count {
-        (*curbuf).b_op_start.lnum
-    } else {
-        (*curbuf).b_ml.ml_line_count
-    };
-    (*curbuf).b_op_end.lnum = if (*curbuf).b_op_end.lnum < (*curbuf).b_ml.ml_line_count {
-        (*curbuf).b_op_end.lnum
-    } else {
-        (*curbuf).b_ml.ml_line_count
-    };
+    (*curbuf.get()).b_op_start.lnum =
+        if (*curbuf.get()).b_op_start.lnum < (*curbuf.get()).b_ml.ml_line_count {
+            (*curbuf.get()).b_op_start.lnum
+        } else {
+            (*curbuf.get()).b_ml.ml_line_count
+        };
+    (*curbuf.get()).b_op_end.lnum =
+        if (*curbuf.get()).b_op_end.lnum < (*curbuf.get()).b_ml.ml_line_count {
+            (*curbuf.get()).b_op_end.lnum
+        } else {
+            (*curbuf.get()).b_ml.ml_line_count
+        };
     if undo {
         let mut i_2: ::core::ffi::c_int =
             (*curhead).uh_extmark.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
@@ -5429,30 +5435,30 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         }
     }
     if (*curhead).uh_flags & UH_RELOAD as ::core::ffi::c_int != 0 {
-        buf_updates_unload(curbuf, true_0 != 0);
+        buf_updates_unload(curbuf.get(), true_0 != 0);
     }
-    (*curwin).w_cursor = new_curpos;
-    check_cursor_lnum(curwin);
+    (*curwin.get()).w_cursor = new_curpos;
+    check_cursor_lnum(curwin.get());
     (*curhead).uh_entry = newlist;
     (*curhead).uh_flags = new_flags;
     if old_flags & UH_EMPTYBUF as ::core::ffi::c_int != 0
-        && buf_is_empty(curbuf) as ::core::ffi::c_int != 0
+        && buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0
     {
-        (*curbuf).b_ml.ml_flags |= ML_EMPTY;
+        (*curbuf.get()).b_ml.ml_flags |= ML_EMPTY;
     }
     if old_flags & UH_CHANGED as ::core::ffi::c_int != 0 {
-        changed(curbuf);
+        changed(curbuf.get());
     } else {
-        unchanged(curbuf, false_0 != 0, true_0 != 0);
+        unchanged(curbuf.get(), false_0 != 0, true_0 != 0);
     }
     if do_buf_event {
-        buf_updates_changedtick(curbuf);
+        buf_updates_changedtick(curbuf.get());
     }
     let mut i_4: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_4 < NMARKS {
         if (*curhead).uh_namedm[i_4 as usize].mark.lnum != 0 as linenr_T {
-            free_fmark((*curbuf).b_namedm[i_4 as usize]);
-            (*curbuf).b_namedm[i_4 as usize] = (*curhead).uh_namedm[i_4 as usize];
+            free_fmark((*curbuf.get()).b_namedm[i_4 as usize]);
+            (*curbuf.get()).b_namedm[i_4 as usize] = (*curhead).uh_namedm[i_4 as usize];
         }
         if namedm[i_4 as usize].mark.lnum != 0 as linenr_T {
             (*curhead).uh_namedm[i_4 as usize] = namedm[i_4 as usize];
@@ -5462,35 +5468,35 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         i_4 += 1;
     }
     if (*curhead).uh_visual.vi_start.lnum != 0 as linenr_T {
-        (*curbuf).b_visual = (*curhead).uh_visual;
+        (*curbuf.get()).b_visual = (*curhead).uh_visual;
         (*curhead).uh_visual = visualinfo;
     }
-    if (*curhead).uh_cursor.lnum + 1 as linenr_T == (*curwin).w_cursor.lnum
-        && (*curwin).w_cursor.lnum > 1 as linenr_T
+    if (*curhead).uh_cursor.lnum + 1 as linenr_T == (*curwin.get()).w_cursor.lnum
+        && (*curwin.get()).w_cursor.lnum > 1 as linenr_T
     {
-        (*curwin).w_cursor.lnum -= 1;
+        (*curwin.get()).w_cursor.lnum -= 1;
     }
-    if (*curwin).w_cursor.lnum <= (*curbuf).b_ml.ml_line_count {
-        if (*curhead).uh_cursor.lnum == (*curwin).w_cursor.lnum {
-            (*curwin).w_cursor.col = (*curhead).uh_cursor.col;
-            if virtual_active(curwin) as ::core::ffi::c_int != 0
+    if (*curwin.get()).w_cursor.lnum <= (*curbuf.get()).b_ml.ml_line_count {
+        if (*curhead).uh_cursor.lnum == (*curwin.get()).w_cursor.lnum {
+            (*curwin.get()).w_cursor.col = (*curhead).uh_cursor.col;
+            if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
                 && (*curhead).uh_cursor_vcol >= 0 as ::core::ffi::c_int
             {
-                coladvance(curwin, (*curhead).uh_cursor_vcol);
+                coladvance(curwin.get(), (*curhead).uh_cursor_vcol);
             } else {
-                (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+                (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
             }
         } else {
             beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
         }
     } else {
-        (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     }
-    check_cursor(curwin);
-    (*curbuf).b_u_seq_cur = (*curhead).uh_seq;
+    check_cursor(curwin.get());
+    (*curbuf.get()).b_u_seq_cur = (*curhead).uh_seq;
     if undo {
-        (*curbuf).b_u_seq_cur = if !(*curhead).uh_next.ptr.is_null() {
+        (*curbuf.get()).b_u_seq_cur = if !(*curhead).uh_next.ptr.is_null() {
             (*(*curhead).uh_next.ptr).uh_seq
         } else {
             0 as ::core::ffi::c_int
@@ -5498,24 +5504,24 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
     }
     if (*curhead).uh_save_nr != 0 as ::core::ffi::c_int {
         if undo {
-            (*curbuf).b_u_save_nr_cur = (*curhead).uh_save_nr - 1 as ::core::ffi::c_int;
+            (*curbuf.get()).b_u_save_nr_cur = (*curhead).uh_save_nr - 1 as ::core::ffi::c_int;
         } else {
-            (*curbuf).b_u_save_nr_cur = (*curhead).uh_save_nr;
+            (*curbuf.get()).b_u_save_nr_cur = (*curhead).uh_save_nr;
         }
     }
-    (*curbuf).b_u_time_cur = (*curhead).uh_time;
+    (*curbuf.get()).b_u_time_cur = (*curhead).uh_time;
     unblock_autocmds();
 }
 unsafe extern "C" fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quiet: bool) {
-    if fdo_flags & kOptFdoFlagUndo as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && KeyTyped as ::core::ffi::c_int != 0
+    if fdo_flags.get() & kOptFdoFlagUndo as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && KeyTyped.get() as ::core::ffi::c_int != 0
     {
         foldOpenCursor();
     }
-    if quiet as ::core::ffi::c_int != 0 || global_busy != 0 || !messaging() {
+    if quiet as ::core::ffi::c_int != 0 || global_busy.get() != 0 || !messaging() {
         return;
     }
-    if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+    if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         (*u_newcount.ptr()) -= 1;
     }
     (*u_oldcount.ptr()) -= u_newcount.get();
@@ -5539,17 +5545,19 @@ unsafe extern "C" fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quie
         }
     }
     let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
-    if !(*curbuf).b_u_curhead.is_null() {
-        if absolute as ::core::ffi::c_int != 0 && !(*(*curbuf).b_u_curhead).uh_next.ptr.is_null() {
-            uhp = (*(*curbuf).b_u_curhead).uh_next.ptr;
+    if !(*curbuf.get()).b_u_curhead.is_null() {
+        if absolute as ::core::ffi::c_int != 0
+            && !(*(*curbuf.get()).b_u_curhead).uh_next.ptr.is_null()
+        {
+            uhp = (*(*curbuf.get()).b_u_curhead).uh_next.ptr;
             did_undo = false_0 != 0;
         } else if did_undo {
-            uhp = (*curbuf).b_u_curhead;
+            uhp = (*curbuf.get()).b_u_curhead;
         } else {
-            uhp = (*(*curbuf).b_u_curhead).uh_next.ptr;
+            uhp = (*(*curbuf.get()).b_u_curhead).uh_next.ptr;
         }
     } else {
-        uhp = (*curbuf).b_u_newhead;
+        uhp = (*curbuf.get()).b_u_newhead;
     }
     let mut msgbuf: [::core::ffi::c_char; 80] = [0; 80];
     if uhp.is_null() {
@@ -5561,19 +5569,19 @@ unsafe extern "C" fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quie
             (*uhp).uh_time,
         );
     }
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
-        if (*wp).w_buffer == curbuf && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt {
+        if (*wp).w_buffer == curbuf.get() && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt {
             redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
         }
         wp = (*wp).w_next;
     }
-    if VIsual_active {
-        check_pos(curbuf, &raw mut VIsual);
+    if VIsual_active.get() {
+        check_pos(curbuf.get(), VIsual.ptr());
     }
     smsg_keep(
         0 as ::core::ffi::c_int,
@@ -5657,16 +5665,16 @@ pub unsafe extern "C" fn undo_fmt_time(
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_sync(mut force: bool) {
-    if (*curbuf).b_u_synced as ::core::ffi::c_int != 0
-        || !force && no_u_sync > 0 as ::core::ffi::c_int
+    if (*curbuf.get()).b_u_synced as ::core::ffi::c_int != 0
+        || !force && no_u_sync.get() > 0 as ::core::ffi::c_int
     {
         return;
     }
-    if get_undolevel(curbuf) < 0 as OptInt {
-        (*curbuf).b_u_synced = true_0 != 0;
+    if get_undolevel(curbuf.get()) < 0 as OptInt {
+        (*curbuf.get()).b_u_synced = true_0 != 0;
     } else {
-        u_getbot(curbuf);
-        (*curbuf).b_u_curhead = ::core::ptr::null_mut::<u_header_T>();
+        u_getbot(curbuf.get());
+        (*curbuf.get()).b_u_curhead = ::core::ptr::null_mut::<u_header_T>();
     };
 }
 #[no_mangle]
@@ -5688,33 +5696,32 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
         ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
         20 as ::core::ffi::c_int,
     );
-    let mut uhp: *mut u_header_T = (*curbuf).b_u_oldhead;
+    let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_oldhead;
     while !uhp.is_null() {
         if (*uhp).uh_prev.ptr.is_null() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
             vim_snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%6d %7d  \0".as_ptr() as *const ::core::ffi::c_char,
                 (*uhp).uh_seq,
                 changes,
             );
             undo_fmt_time(
-                (&raw mut IObuff as *mut ::core::ffi::c_char)
-                    .offset(strlen(&raw mut IObuff as *mut ::core::ffi::c_char) as isize),
-                (IOSIZE as size_t)
-                    .wrapping_sub(strlen(&raw mut IObuff as *mut ::core::ffi::c_char)),
+                (IObuff.ptr() as *mut ::core::ffi::c_char)
+                    .offset(strlen(IObuff.ptr() as *mut ::core::ffi::c_char) as isize),
+                (IOSIZE as size_t).wrapping_sub(strlen(IObuff.ptr() as *mut ::core::ffi::c_char)),
                 (*uhp).uh_time,
             );
             if (*uhp).uh_save_nr > 0 as ::core::ffi::c_int {
-                while strlen(&raw mut IObuff as *mut ::core::ffi::c_char) < 33 as size_t {
+                while strlen(IObuff.ptr() as *mut ::core::ffi::c_char) < 33 as size_t {
                     xstrlcat(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
                         IOSIZE as size_t,
                     );
                 }
                 vim_snprintf_add(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     b"  %3d\0".as_ptr() as *const ::core::ffi::c_char,
                     (*uhp).uh_save_nr,
@@ -5722,7 +5729,7 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
             }
             ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
             *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
-                xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+                xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
             ga.ga_len += 1;
         }
         (*uhp).uh_walk = mark;
@@ -5770,9 +5777,9 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
             false_0 != 0,
         );
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < ga.ga_len && !got_int {
+        while i < ga.ga_len && !got_int.get() {
             msg_putchar('\n' as ::core::ffi::c_int);
-            if got_int {
+            if got_int.get() {
                 break;
             }
             msg_puts(*(ga.ga_data as *mut *const ::core::ffi::c_char).offset(i as isize));
@@ -5784,22 +5791,22 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
-    if (*curbuf).b_u_newhead.is_null() {
+    if (*curbuf.get()).b_u_newhead.is_null() {
         return;
     }
-    if !(*curbuf).b_u_curhead.is_null() {
+    if !(*curbuf.get()).b_u_curhead.is_null() {
         emsg(gettext(
             b"E790: undojoin is not allowed after undo\0".as_ptr() as *const ::core::ffi::c_char,
         ));
         return;
     }
-    if !(*curbuf).b_u_synced {
+    if !(*curbuf.get()).b_u_synced {
         return;
     }
-    if get_undolevel(curbuf) < 0 as OptInt {
+    if get_undolevel(curbuf.get()) < 0 as OptInt {
         return;
     }
-    (*curbuf).b_u_synced = false_0 != 0;
+    (*curbuf.get()).b_u_synced = false_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_unchanged(mut buf: *mut buf_T) {
@@ -5808,8 +5815,8 @@ pub unsafe extern "C" fn u_unchanged(mut buf: *mut buf_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_find_first_changed() {
-    let mut uhp: *mut u_header_T = (*curbuf).b_u_newhead;
-    if !(*curbuf).b_u_curhead.is_null() || uhp.is_null() {
+    let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_newhead;
+    if !(*curbuf.get()).b_u_curhead.is_null() || uhp.is_null() {
         return;
     }
     let mut uep: *mut u_entry_T = (*uhp).uh_entry;
@@ -5818,9 +5825,9 @@ pub unsafe extern "C" fn u_find_first_changed() {
     }
     let mut lnum: linenr_T = 0;
     lnum = 1 as ::core::ffi::c_int as linenr_T;
-    while lnum < (*curbuf).b_ml.ml_line_count && lnum <= (*uep).ue_size {
+    while lnum < (*curbuf.get()).b_ml.ml_line_count && lnum <= (*uep).ue_size {
         if strcmp(
-            ml_get_buf(curbuf, lnum),
+            ml_get_buf(curbuf.get(), lnum),
             *(*uep).ue_array.offset((lnum - 1 as linenr_T) as isize),
         ) != 0 as ::core::ffi::c_int
         {
@@ -5830,7 +5837,7 @@ pub unsafe extern "C" fn u_find_first_changed() {
         }
         lnum += 1;
     }
-    if (*curbuf).b_ml.ml_line_count != (*uep).ue_size {
+    if (*curbuf.get()).b_ml.ml_line_count != (*uep).ue_size {
         clearpos(&raw mut (*uhp).uh_cursor);
         (*uhp).uh_cursor.lnum = lnum;
     }
@@ -6022,8 +6029,8 @@ unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr_T) {
     }
     u_clearline(buf);
     (*buf).b_u_line_lnum = lnum;
-    if (*curwin).w_buffer == buf && (*curwin).w_cursor.lnum == lnum {
-        (*buf).b_u_line_colnr = (*curwin).w_cursor.col;
+    if (*curwin.get()).w_buffer == buf && (*curwin.get()).w_cursor.lnum == lnum {
+        (*buf).b_u_line_colnr = (*curwin.get()).w_cursor.col;
     } else {
         (*buf).b_u_line_colnr = 0 as ::core::ffi::c_int as colnr_T;
     }
@@ -6043,43 +6050,49 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_undoline() {
-    if (*curbuf).b_u_line_ptr.is_null() || (*curbuf).b_u_line_lnum > (*curbuf).b_ml.ml_line_count {
+    if (*curbuf.get()).b_u_line_ptr.is_null()
+        || (*curbuf.get()).b_u_line_lnum > (*curbuf.get()).b_ml.ml_line_count
+    {
         beep_flush();
         return;
     }
     if u_savecommon(
-        curbuf,
-        (*curbuf).b_u_line_lnum - 1 as linenr_T,
-        (*curbuf).b_u_line_lnum + 1 as linenr_T,
+        curbuf.get(),
+        (*curbuf.get()).b_u_line_lnum - 1 as linenr_T,
+        (*curbuf.get()).b_u_line_lnum + 1 as linenr_T,
         0 as linenr_T,
         false_0 != 0,
     ) == FAIL
     {
         return;
     }
-    let mut oldp: *mut ::core::ffi::c_char = u_save_line((*curbuf).b_u_line_lnum);
-    ml_replace((*curbuf).b_u_line_lnum, (*curbuf).b_u_line_ptr, true_0 != 0);
+    let mut oldp: *mut ::core::ffi::c_char = u_save_line((*curbuf.get()).b_u_line_lnum);
+    ml_replace(
+        (*curbuf.get()).b_u_line_lnum,
+        (*curbuf.get()).b_u_line_ptr,
+        true_0 != 0,
+    );
     extmark_splice_cols(
-        curbuf,
-        (*curbuf).b_u_line_lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+        curbuf.get(),
+        (*curbuf.get()).b_u_line_lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
         0 as colnr_T,
         strlen(oldp) as colnr_T,
-        strlen((*curbuf).b_u_line_ptr) as colnr_T,
+        strlen((*curbuf.get()).b_u_line_ptr) as colnr_T,
         kExtmarkUndo,
     );
-    changed_bytes((*curbuf).b_u_line_lnum, 0 as colnr_T);
-    xfree((*curbuf).b_u_line_ptr as *mut ::core::ffi::c_void);
-    (*curbuf).b_u_line_ptr = oldp;
-    let mut t: colnr_T = (*curbuf).b_u_line_colnr;
-    if (*curwin).w_cursor.lnum == (*curbuf).b_u_line_lnum {
-        (*curbuf).b_u_line_colnr = (*curwin).w_cursor.col;
+    changed_bytes((*curbuf.get()).b_u_line_lnum, 0 as colnr_T);
+    xfree((*curbuf.get()).b_u_line_ptr as *mut ::core::ffi::c_void);
+    (*curbuf.get()).b_u_line_ptr = oldp;
+    let mut t: colnr_T = (*curbuf.get()).b_u_line_colnr;
+    if (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_u_line_lnum {
+        (*curbuf.get()).b_u_line_colnr = (*curwin.get()).w_cursor.col;
     }
-    (*curwin).w_cursor.col = t;
-    (*curwin).w_cursor.lnum = (*curbuf).b_u_line_lnum;
-    check_cursor_col(curwin);
+    (*curwin.get()).w_cursor.col = t;
+    (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_u_line_lnum;
+    check_cursor_col(curwin.get());
 }
 unsafe extern "C" fn u_save_line(mut lnum: linenr_T) -> *mut ::core::ffi::c_char {
-    return u_save_line_buf(curbuf, lnum);
+    return u_save_line_buf(curbuf.get(), lnum);
 }
 unsafe extern "C" fn u_save_line_buf(
     mut buf: *mut buf_T,
@@ -6100,7 +6113,7 @@ pub unsafe extern "C" fn bufIsChanged(mut buf: *mut buf_T) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn anyBufIsChanged() -> bool {
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if bufIsChanged(buf) {
             return true_0 != 0;
@@ -6111,7 +6124,7 @@ pub unsafe extern "C" fn anyBufIsChanged() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn curbufIsChanged() -> bool {
-    return bufIsChanged(curbuf);
+    return bufIsChanged(curbuf.get());
 }
 unsafe extern "C" fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) -> *mut list_T {
     let list: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
@@ -6197,7 +6210,7 @@ pub unsafe extern "C" fn f_undotree(
     let buf: *mut buf_T = if (*tv).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        curbuf
+        curbuf.get()
     } else {
         get_buf_arg(tv)
     };

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     fn memmove(
@@ -32,19 +33,19 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn fix_input_buffer(buf: *mut uint8_t, len: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut mod_mask: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scrolled: ::core::ffi::c_int;
-    static mut keep_msg: *mut ::core::ffi::c_char;
-    static mut keep_msg_hl_id: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut no_mapping: ::core::ffi::c_int;
-    static mut allow_keys: ::core::ffi::c_int;
-    static mut mapped_ctrl_c: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
+    static mod_mask: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
+    static keep_msg: GlobalCell<*mut ::core::ffi::c_char>;
+    static keep_msg_hl_id: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static no_mapping: GlobalCell<::core::ffi::c_int>;
+    static allow_keys: GlobalCell<::core::ffi::c_int>;
+    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
     static utf8len_tab: [uint8_t; 256];
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn set_keep_msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int);
@@ -581,15 +582,15 @@ pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    let save_State: ::core::ffi::c_int = State;
-    no_wait_return += 1;
+    let save_State: ::core::ffi::c_int = State.get();
+    (*no_wait_return.ptr()) += 1;
     snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         gettext(b"%s (y/n)?\0".as_ptr() as *const ::core::ffi::c_char),
         str,
     );
-    let mut prompt: *mut ::core::ffi::c_char = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+    let mut prompt: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     let mut r: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
     while r != 'y' as ::core::ffi::c_int && r != 'n' as ::core::ffi::c_int {
         r = prompt_for_input(
@@ -605,9 +606,9 @@ pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::f
             }
         }
     }
-    need_wait_return = msg_scrolled != 0;
-    no_wait_return -= 1;
-    State = save_State;
+    need_wait_return.set(msg_scrolled.get() != 0);
+    (*no_wait_return.ptr()) -= 1;
+    State.set(save_State);
     setmouse();
     xfree(prompt as *mut ::core::ffi::c_void);
     return r;
@@ -618,9 +619,9 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
     let mut buflen: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut n: ::core::ffi::c_int = 0;
-    let mut save_mapped_ctrl_c: ::core::ffi::c_int = mapped_ctrl_c;
-    mod_mask = 0 as ::core::ffi::c_int;
-    mapped_ctrl_c = 0 as ::core::ffi::c_int;
+    let mut save_mapped_ctrl_c: ::core::ffi::c_int = mapped_ctrl_c.get();
+    mod_mask.set(0 as ::core::ffi::c_int);
+    mapped_ctrl_c.set(0 as ::core::ffi::c_int);
     loop {
         ui_flush();
         let mut maxlen: ::core::ffi::c_int =
@@ -676,7 +677,7 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
                 break;
             }
             if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_MODIFIER {
-                mod_mask = *buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
+                mod_mask.set(*buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int);
             }
             len -= 3 as ::core::ffi::c_int;
             if len > 0 as ::core::ffi::c_int {
@@ -702,8 +703,8 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
         }
     }
     xfree(buf as *mut ::core::ffi::c_void);
-    mapped_ctrl_c = save_mapped_ctrl_c;
-    return merge_modifiers(n, &raw mut mod_mask);
+    mapped_ctrl_c.set(save_mapped_ctrl_c);
+    return merge_modifiers(n, mod_mask.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn prompt_for_input(
@@ -717,8 +718,8 @@ pub unsafe extern "C" fn prompt_for_input(
     } else {
         0 as ::core::ffi::c_int
     };
-    let mut kmsg: *mut ::core::ffi::c_char = if !keep_msg.is_null() {
-        xstrdup(keep_msg)
+    let mut kmsg: *mut ::core::ffi::c_char = if !(*keep_msg.ptr()).is_null() {
+        xstrdup(keep_msg.get())
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
@@ -733,10 +734,10 @@ pub unsafe extern "C" fn prompt_for_input(
                 as *const ::core::ffi::c_char);
         }
     }
-    cmdline_row = msg_row;
+    cmdline_row.set(msg_row.get());
     ui_flush();
-    no_mapping += 1;
-    allow_keys += 1;
+    (*no_mapping.ptr()) += 1;
+    (*allow_keys.ptr()) += 1;
     let mut resp: *mut ::core::ffi::c_char = getcmdline_prompt(
         -1 as ::core::ffi::c_int,
         prompt,
@@ -752,8 +753,8 @@ pub unsafe extern "C" fn prompt_for_input(
         one_key,
         mouse_used,
     );
-    allow_keys -= 1;
-    no_mapping -= 1;
+    (*allow_keys.ptr()) -= 1;
+    (*no_mapping.ptr()) -= 1;
     if !resp.is_null() {
         ret = if one_key as ::core::ffi::c_int != 0 {
             *resp as ::core::ffi::c_int
@@ -763,7 +764,7 @@ pub unsafe extern "C" fn prompt_for_input(
         xfree(resp as *mut ::core::ffi::c_void);
     }
     if !kmsg.is_null() {
-        set_keep_msg(kmsg, keep_msg_hl_id);
+        set_keep_msg(kmsg, keep_msg_hl_id.get());
         xfree(kmsg as *mut ::core::ffi::c_void);
     }
     return ret;

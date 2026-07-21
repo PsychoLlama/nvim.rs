@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type multiqueue;
     pub type TUIData;
@@ -53,7 +53,7 @@ extern "C" {
     fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
     fn uv_timer_get_due_in(handle: *const uv_timer_t) -> uint64_t;
     fn loop_schedule_fast(loop_0: *mut Loop, event: Event);
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
     fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
     fn rstream_stop(stream: *mut RStream);
@@ -62,8 +62,8 @@ extern "C" {
     fn rstream_may_close(stream: *mut RStream);
     fn os_exit(r: ::core::ffi::c_int) -> !;
     fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
-    static mut p_ttimeout: ::core::ffi::c_int;
-    static mut p_ttm: OptInt;
+    static p_ttimeout: GlobalCell<::core::ffi::c_int>;
+    static p_ttm: GlobalCell<OptInt>;
     fn kv_do_printf(
         str: *mut StringBuilder,
         fmt: *const ::core::ffi::c_char,
@@ -129,7 +129,7 @@ extern "C" {
         key: *mut TermKeyKey,
         format: TermKeyFormat,
     ) -> size_t;
-    static mut ui_client_channel_id: uint64_t;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState);
     fn tui_enable_extended_underline(tui: *mut TUIData);
     fn tui_query_bg_color(tui: *mut TUIData);
@@ -1542,8 +1542,8 @@ pub unsafe extern "C" fn tinput_init(
     (*input).loop_0 = loop_0;
     (*input).paste = 0 as int8_t;
     (*input).in_fd = STDIN_FILENO;
-    (*input).ttimeout = p_ttimeout != 0;
-    (*input).ttimeoutlen = p_ttm;
+    (*input).ttimeout = p_ttimeout.get() != 0;
+    (*input).ttimeoutlen = p_ttm.get();
     rstream_init_fd(loop_0, &raw mut (*input).read_stream, (*input).in_fd);
     let mut i: size_t = 0 as size_t;
     while i < ::core::mem::size_of::<[kitty_key_map_entry; 77]>()
@@ -1660,7 +1660,7 @@ unsafe extern "C" fn tinput_flush(mut input: *mut TermInput) {
             },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_paste\0".as_ptr() as *const ::core::ffi::c_char,
             args,
         );
@@ -1682,7 +1682,7 @@ unsafe extern "C" fn tinput_flush(mut input: *mut TermInput) {
             data: C2Rust_Unnamed { string: keys },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_input\0".as_ptr() as *const ::core::ffi::c_char,
             args_0,
         );
@@ -2282,7 +2282,7 @@ unsafe extern "C" fn handle_focus_event(
             },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_ui_set_focus\0".as_ptr() as *const ::core::ffi::c_char,
             args,
         );
@@ -2446,7 +2446,7 @@ unsafe extern "C" fn handle_term_response(mut input: *mut TermInput, mut key: *c
             },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
             args,
         );
@@ -2604,7 +2604,7 @@ unsafe extern "C" fn handle_primary_device_attr(
             },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
             args,
         );
@@ -2754,7 +2754,7 @@ unsafe extern "C" fn handle_unknown_csi(mut input: *mut TermInput, mut key: *con
                     },
                 };
                 rpc_send_event(
-                    ui_client_channel_id,
+                    ui_client_channel_id.get(),
                     b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
                     args_0,
                 );
@@ -2921,7 +2921,7 @@ unsafe extern "C" fn tinput_read_cb(
     tinput_flush(input);
     if eof {
         loop_schedule_fast(
-            &raw mut main_loop,
+            main_loop.ptr(),
             Event {
                 handler: ::core::mem::transmute::<
                     Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> !>,

@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -84,29 +84,29 @@ extern "C" {
         key_alloc: *mut *mut ::core::ffi::c_int,
         new_item: *mut bool,
     ) -> *mut String_0;
-    static mut last_cursormoved_win: *mut win_T;
-    static mut last_cursormoved: pos_T;
-    static mut autocmd_busy: bool;
-    static mut autocmd_no_enter: ::core::ffi::c_int;
-    static mut autocmd_no_leave: ::core::ffi::c_int;
-    static mut au_pending_free_buf: *mut buf_T;
-    static mut au_pending_free_win: *mut win_T;
-    static mut autocmd_fname: *mut ::core::ffi::c_char;
-    static mut autocmd_fname_full: bool;
-    static mut autocmd_bufnr: ::core::ffi::c_int;
-    static mut autocmd_match: *mut ::core::ffi::c_char;
-    static mut did_cursorhold: bool;
-    static mut aucmd_win_vec: C2Rust_Unnamed_30;
-    static mut deferred_events: *mut MultiQueue;
+    static last_cursormoved_win: GlobalCell<*mut win_T>;
+    static last_cursormoved: GlobalCell<pos_T>;
+    static autocmd_busy: GlobalCell<bool>;
+    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
+    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
+    static au_pending_free_buf: GlobalCell<*mut buf_T>;
+    static au_pending_free_win: GlobalCell<*mut win_T>;
+    static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char>;
+    static autocmd_fname_full: GlobalCell<bool>;
+    static autocmd_bufnr: GlobalCell<::core::ffi::c_int>;
+    static autocmd_match: GlobalCell<*mut ::core::ffi::c_char>;
+    static did_cursorhold: GlobalCell<bool>;
+    static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_30>;
+    static deferred_events: GlobalCell<*mut MultiQueue>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
     fn bufref_valid(bufref: *mut bufref_T) -> bool;
     fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
     fn bt_prompt(buf: *mut buf_T) -> bool;
     fn do_modelines(flags: ::core::ffi::c_int);
-    static mut p_acd: ::core::ffi::c_int;
-    static mut p_ei: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_acd: GlobalCell<::core::ffi::c_int>;
+    static p_ei: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strnicmp_asc(
         s1: *const ::core::ffi::c_char,
@@ -212,33 +212,33 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn saveRedobuff(save_redo: *mut save_redo_T);
     fn restoreRedobuff(save_redo: *mut save_redo_T);
-    static mut msg_col: ::core::ffi::c_int;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut need_maketitle: bool;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut firstwin: *mut win_T;
-    static mut lastwin: *mut win_T;
-    static mut prevwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut starting: ::core::ffi::c_int;
-    static mut secure: ::core::ffi::c_int;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut reg_recording: ::core::ffi::c_int;
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut typebuf: typebuf_T;
-    static mut KeyTyped: bool;
-    static mut got_int: bool;
-    static mut last_mode: [::core::ffi::c_char; 4];
-    static mut globaldir: *mut ::core::ffi::c_char;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static need_maketitle: GlobalCell<bool>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static lastwin: GlobalCell<*mut win_T>;
+    static prevwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static starting: GlobalCell<::core::ffi::c_int>;
+    static secure: GlobalCell<::core::ffi::c_int>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static reg_recording: GlobalCell<::core::ffi::c_int>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static typebuf: GlobalCell<typebuf_T>;
+    static KeyTyped: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static last_mode: GlobalCell<[::core::ffi::c_char; 4]>;
+    static globaldir: GlobalCell<*mut ::core::ffi::c_char>;
     fn grid_free(grid: *mut ScreenGrid);
     fn ins_compl_active() -> bool;
-    static mut window_handles: Map_int_ptr_t;
+    static window_handles: GlobalCell<Map_int_ptr_t>;
     fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
     fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
@@ -255,7 +255,7 @@ extern "C" {
         err: *mut Error,
     ) -> Object;
     fn nlua_set_sctx(current: *mut sctx_T);
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn set_option_direct(
         opt_idx: OptIndex,
         value: OptVal,
@@ -4403,7 +4403,7 @@ static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_
 });
 #[no_mangle]
 pub unsafe extern "C" fn autocmd_init() {
-    deferred_events = multiqueue_new_child(main_loop.events);
+    deferred_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
 unsafe extern "C" fn augroup_map_del(
     mut id: ::core::ffi::c_int,
@@ -4497,11 +4497,11 @@ unsafe extern "C" fn au_show_for_event(
                     if (*(*ac).pat).group != last_group {
                         last_group = (*(*ac).pat).group;
                         last_group_name = augroup_name((*(*ac).pat).group);
-                        if got_int {
+                        if got_int.get() {
                             return;
                         }
                         msg_putchar('\n' as ::core::ffi::c_int);
-                        if got_int {
+                        if got_int.get() {
                             return;
                         }
                         if (*(*ac).pat).group != AUGROUP_DEFAULT as ::core::ffi::c_int {
@@ -4529,20 +4529,20 @@ unsafe extern "C" fn au_show_for_event(
                     if last_ap != (*ac).pat {
                         last_ap = (*ac).pat;
                         msg_putchar('\n' as ::core::ffi::c_int);
-                        if got_int {
+                        if got_int.get() {
                             return;
                         }
                         msg_advance(4 as ::core::ffi::c_int);
                         msg_outtrans((*(*ac).pat).pat, 0 as ::core::ffi::c_int, false_0 != 0);
                     }
-                    if got_int {
+                    if got_int.get() {
                         return;
                     }
-                    if msg_col >= 14 as ::core::ffi::c_int {
+                    if msg_col.get() >= 14 as ::core::ffi::c_int {
                         msg_putchar('\n' as ::core::ffi::c_int);
                     }
                     msg_advance(14 as ::core::ffi::c_int);
-                    if got_int {
+                    if got_int.get() {
                         return;
                     }
                     let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(ac);
@@ -4583,10 +4583,10 @@ unsafe extern "C" fn au_show_for_event(
                     xfree(*ptr__0);
                     *ptr__0 = NULL_0;
                     *ptr__0;
-                    if p_verbose > 0 as OptInt {
+                    if p_verbose.get() > 0 as OptInt {
                         last_set_msg((*ac).script_ctx);
                     }
-                    if got_int {
+                    if got_int.get() {
                         return;
                     }
                 }
@@ -4647,7 +4647,7 @@ pub unsafe extern "C" fn aucmd_del_for_event_and_group(
     au_cleanup();
 }
 unsafe extern "C" fn au_cleanup() {
-    if autocmd_busy as ::core::ffi::c_int != 0 || !au_need_clean.get() {
+    if autocmd_busy.get() as ::core::ffi::c_int != 0 || !au_need_clean.get() {
         return;
     }
     let mut event: event_T = EVENT_BUFADD;
@@ -4700,7 +4700,7 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
             if !((*ac).pat.is_null() || (*(*ac).pat).buflocal_nr != (*buf).handle) {
                 aucmd_del(ac);
-                if p_verbose >= 6 as OptInt {
+                if p_verbose.get() >= 6 as OptInt {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -4920,9 +4920,10 @@ pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_g
 #[no_mangle]
 pub unsafe extern "C" fn is_aucmd_win(mut win: *mut win_T) -> bool {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < aucmd_win_vec.size as ::core::ffi::c_int {
-        if (*aucmd_win_vec.items.offset(i as isize)).auc_win_used as ::core::ffi::c_int != 0
-            && (*aucmd_win_vec.items.offset(i as isize)).auc_win == win
+    while i < (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
+        if (*(*aucmd_win_vec.ptr()).items.offset(i as isize)).auc_win_used as ::core::ffi::c_int
+            != 0
+            && (*(*aucmd_win_vec.ptr()).items.offset(i as isize)).auc_win == win
         {
             return true_0 != 0;
         }
@@ -4993,8 +4994,8 @@ pub unsafe extern "C" fn event_ignored(
                 || *ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ',' as ::core::ffi::c_int)
         {
-            ignored =
-                ei == p_ei || (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int;
+            ignored = ei == p_ei.get()
+                || (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int;
             ei = ei.offset(
                 (3 as ::core::ffi::c_int
                     + (*ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5014,7 +5015,7 @@ pub unsafe extern "C" fn event_ignored(
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    let mut win: bool = ei != p_ei;
+    let mut win: bool = ei != p_ei.get();
     while *ei != 0 {
         if strncasecmp(
             ei,
@@ -5052,12 +5053,13 @@ pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::f
 pub unsafe extern "C" fn au_event_disable(
     mut what: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    let mut p_ei_len: size_t = strlen(p_ei);
+    let mut p_ei_len: size_t = strlen(p_ei.get());
     let mut save_ei: *mut ::core::ffi::c_char =
-        xmemdupz(p_ei as *const ::core::ffi::c_void, p_ei_len) as *mut ::core::ffi::c_char;
-    let mut new_ei: *mut ::core::ffi::c_char = xstrnsave(p_ei, p_ei_len.wrapping_add(strlen(what)));
+        xmemdupz(p_ei.get() as *const ::core::ffi::c_void, p_ei_len) as *mut ::core::ffi::c_char;
+    let mut new_ei: *mut ::core::ffi::c_char =
+        xstrnsave(p_ei.get(), p_ei_len.wrapping_add(strlen(what)));
     if *what as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-        && *p_ei as ::core::ffi::c_int == NUL
+        && *p_ei.get() as ::core::ffi::c_int == NUL
     {
         strcpy(new_ei, what.offset(1 as ::core::ffi::c_int as isize));
     } else {
@@ -5510,7 +5512,7 @@ pub unsafe extern "C" fn autocmd_register(
             == EVENT_MODECHANGED as ::core::ffi::c_int as ::core::ffi::c_uint
             && !has_event(EVENT_MODECHANGED)
         {
-            get_mode(&raw mut last_mode as *mut ::core::ffi::c_char);
+            get_mode(last_mode.ptr() as *mut ::core::ffi::c_char);
         }
         if event as ::core::ffi::c_uint
             == EVENT_CURSORMOVED as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5519,8 +5521,8 @@ pub unsafe extern "C" fn autocmd_register(
                 == EVENT_CURSORMOVEDI as ::core::ffi::c_int as ::core::ffi::c_uint
                 && !has_event(EVENT_CURSORMOVEDI)
         {
-            last_cursormoved_win = curwin;
-            last_cursormoved = (*curwin).w_cursor;
+            last_cursormoved_win.set(curwin.get());
+            last_cursormoved.set((*curwin.get()).w_cursor);
         }
         if (event as ::core::ffi::c_uint
             == EVENT_WINSCROLLED as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5529,15 +5531,15 @@ pub unsafe extern "C" fn autocmd_register(
             && !(has_event(EVENT_WINSCROLLED) as ::core::ffi::c_int != 0
                 || has_event(EVENT_WINRESIZED) as ::core::ffi::c_int != 0)
         {
-            let mut save_curtab: *mut tabpage_T = curtab;
-            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            let mut save_curtab: *mut tabpage_T = curtab.get();
+            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
-                unuse_tabpage(curtab);
+                unuse_tabpage(curtab.get());
                 use_tabpage(tp as *mut tabpage_T);
                 snapshot_windows_scroll_size();
                 tp = (*tp).tp_next as *mut tabpage_T;
             }
-            unuse_tabpage(curtab);
+            unuse_tabpage(curtab.get());
             use_tabpage(save_curtab);
         }
         (*ap).group = if group == AUGROUP_ALL as ::core::ffi::c_int {
@@ -5581,7 +5583,7 @@ pub unsafe extern "C" fn autocmd_register(
         (*ac).handler_cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
         callback_copy(&raw mut (*ac).handler_fn, handler_fn);
     }
-    (*ac).script_ctx = current_sctx;
+    (*ac).script_ctx = current_sctx.get();
     (*ac).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
@@ -5657,7 +5659,7 @@ pub unsafe extern "C" fn do_doautocmd(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0 != 0,
             group,
-            curbuf,
+            curbuf.get(),
             ::core::ptr::null_mut::<exarg_T>(),
             ::core::ptr::null_mut::<Object>(),
         ) {
@@ -5707,14 +5709,14 @@ pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
         br_buf_free_count: 0,
     };
     let mut did_aucmd: bool = false;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
-        if !((*buf).b_ml.ml_mfp.is_null() || buf == curbuf) {
+        if !((*buf).b_ml.ml_mfp.is_null() || buf == curbuf.get()) {
             aucmd_prepbuf(&raw mut aco, buf);
             set_bufref(&raw mut bufref, buf);
             retval = do_doautocmd(arg, false_0 != 0, &raw mut did_aucmd);
             if call_do_modelines != 0 && did_aucmd as ::core::ffi::c_int != 0 {
-                do_modelines(if is_aucmd_win(curwin) as ::core::ffi::c_int != 0 {
+                do_modelines(if is_aucmd_win(curwin.get()) as ::core::ffi::c_int != 0 {
                     OPT_NOWIN as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
@@ -5752,15 +5754,15 @@ pub unsafe extern "C" fn check_nomodeline(mut argp: *mut *mut ::core::ffi::c_cha
 pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut buf_T) {
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut need_append: bool = true_0 != 0;
-    let same_buffer: bool = buf == curbuf;
+    let same_buffer: bool = buf == curbuf.get();
     if same_buffer {
-        win = curwin;
+        win = curwin.get();
     } else {
         win = ::core::ptr::null_mut::<win_T>();
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
@@ -5772,57 +5774,58 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         }
     }
     let mut auc_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut auc_idx: ::core::ffi::c_int = aucmd_win_vec.size as ::core::ffi::c_int;
+    let mut auc_idx: ::core::ffi::c_int = (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int;
     if win.is_null() {
         auc_idx = 0 as ::core::ffi::c_int;
-        while auc_idx < aucmd_win_vec.size as ::core::ffi::c_int {
-            if !(*aucmd_win_vec.items.offset(auc_idx as isize)).auc_win_used {
+        while auc_idx < (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
+            if !(*(*aucmd_win_vec.ptr()).items.offset(auc_idx as isize)).auc_win_used {
                 break;
             }
             auc_idx += 1;
         }
-        if auc_idx == aucmd_win_vec.size as ::core::ffi::c_int {
-            if aucmd_win_vec.size == aucmd_win_vec.capacity {
-                aucmd_win_vec.capacity = if aucmd_win_vec.capacity != 0 {
-                    aucmd_win_vec.capacity << 1 as ::core::ffi::c_int
+        if auc_idx == (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
+            if (*aucmd_win_vec.ptr()).size == (*aucmd_win_vec.ptr()).capacity {
+                (*aucmd_win_vec.ptr()).capacity = if (*aucmd_win_vec.ptr()).capacity != 0 {
+                    (*aucmd_win_vec.ptr()).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
                 };
-                aucmd_win_vec.items = xrealloc(
-                    aucmd_win_vec.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<aucmdwin_T>().wrapping_mul(aucmd_win_vec.capacity),
+                (*aucmd_win_vec.ptr()).items = xrealloc(
+                    (*aucmd_win_vec.ptr()).items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<aucmdwin_T>()
+                        .wrapping_mul((*aucmd_win_vec.ptr()).capacity),
                 ) as *mut aucmdwin_T;
             } else {
             };
-            let c2rust_fresh12 = aucmd_win_vec.size;
-            aucmd_win_vec.size = aucmd_win_vec.size.wrapping_add(1);
-            *aucmd_win_vec.items.offset(c2rust_fresh12 as isize) = aucmdwin_T {
+            let c2rust_fresh12 = (*aucmd_win_vec.ptr()).size;
+            (*aucmd_win_vec.ptr()).size = (*aucmd_win_vec.ptr()).size.wrapping_add(1);
+            *(*aucmd_win_vec.ptr()).items.offset(c2rust_fresh12 as isize) = aucmdwin_T {
                 auc_win: ::core::ptr::null_mut::<win_T>(),
                 auc_win_used: false,
             };
         }
-        if (*aucmd_win_vec.items.offset(auc_idx as isize))
+        if (*(*aucmd_win_vec.ptr()).items.offset(auc_idx as isize))
             .auc_win
             .is_null()
         {
             win_alloc_aucmd_win(auc_idx);
             need_append = false_0 != 0;
         }
-        auc_win = (*aucmd_win_vec.items.offset(auc_idx as isize)).auc_win;
-        (*aucmd_win_vec.items.offset(auc_idx as isize)).auc_win_used = true_0 != 0;
+        auc_win = (*(*aucmd_win_vec.ptr()).items.offset(auc_idx as isize)).auc_win;
+        (*(*aucmd_win_vec.ptr()).items.offset(auc_idx as isize)).auc_win_used = true_0 != 0;
     }
-    (*aco).save_curwin_handle = (*curwin).handle;
-    (*aco).save_prevwin_handle = (if prevwin.is_null() {
+    (*aco).save_curwin_handle = (*curwin.get()).handle;
+    (*aco).save_prevwin_handle = (if (*prevwin.ptr()).is_null() {
         0 as ::core::ffi::c_int
     } else {
-        (*prevwin).handle as ::core::ffi::c_int
+        (*prevwin.get()).handle as ::core::ffi::c_int
     }) as handle_T;
-    if bt_prompt(curbuf) {
-        (*aco).save_prompt_insert = (*curbuf).b_prompt_insert;
+    if bt_prompt(curbuf.get()) {
+        (*aco).save_prompt_insert = (*curbuf.get()).b_prompt_insert;
     }
     if !win.is_null() {
         (*aco).use_aucmd_win_idx = -1 as ::core::ffi::c_int;
-        curwin = win;
+        curwin.set(win);
     } else {
         (*aco).use_aucmd_win_idx = auc_idx;
         (*auc_win).w_buffer = buf;
@@ -5834,60 +5837,60 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
-        (*aco).tp_localdir = (*curtab).tp_localdir;
-        (*curtab).tp_localdir = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*aco).globaldir = globaldir;
-        globaldir = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        (*aco).tp_localdir = (*curtab.get()).tp_localdir;
+        (*curtab.get()).tp_localdir = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        (*aco).globaldir = globaldir.get();
+        globaldir.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         block_autocmds();
         if need_append {
-            win_append(lastwin, auc_win, ::core::ptr::null_mut::<tabpage_T>());
+            win_append(lastwin.get(), auc_win, ::core::ptr::null_mut::<tabpage_T>());
             map_put_int_ptr_t(
-                &raw mut window_handles,
+                window_handles.ptr(),
                 (*auc_win).handle as ::core::ffi::c_int,
                 auc_win as ptr_t,
             );
             win_config_float(auc_win, (*auc_win).w_config);
         }
-        let save_acd: ::core::ffi::c_int = p_acd;
-        p_acd = false_0;
-        RedrawingDisabled += 1;
+        let save_acd: ::core::ffi::c_int = p_acd.get();
+        p_acd.set(false_0);
+        (*RedrawingDisabled.ptr()) += 1;
         win_enter(auc_win, false_0 != 0);
-        RedrawingDisabled -= 1;
-        p_acd = save_acd;
+        (*RedrawingDisabled.ptr()) -= 1;
+        p_acd.set(save_acd);
         unblock_autocmds();
-        curwin = auc_win;
+        curwin.set(auc_win);
     }
-    curbuf = buf;
-    (*aco).new_curwin_handle = (*curwin).handle;
-    set_bufref(&raw mut (*aco).new_curbuf, curbuf);
-    (*aco).save_VIsual_active = VIsual_active;
+    curbuf.set(buf);
+    (*aco).new_curwin_handle = (*curwin.get()).handle;
+    set_bufref(&raw mut (*aco).new_curbuf, curbuf.get());
+    (*aco).save_VIsual_active = VIsual_active.get();
     if !same_buffer {
-        VIsual_active = false_0 != 0;
+        VIsual_active.set(false_0 != 0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
     if (*aco).use_aucmd_win_idx >= 0 as ::core::ffi::c_int {
-        let mut awp: *mut win_T = (*aucmd_win_vec
+        let mut awp: *mut win_T = (*(*aucmd_win_vec.ptr())
             .items
             .offset((*aco).use_aucmd_win_idx as isize))
         .auc_win;
         block_autocmds();
         '_win_found: {
-            if curwin != awp {
-                let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            if curwin.get() != awp {
+                let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
                 loop {
                     if tp.is_null() {
                         break '_win_found;
                     }
-                    let mut wp: *mut win_T = if tp == curtab {
-                        firstwin
+                    let mut wp: *mut win_T = if tp == curtab.get() {
+                        firstwin.get()
                     } else {
                         (*tp).tp_firstwin
                     };
                     while !wp.is_null() {
                         if wp == awp {
-                            if tp != curtab {
+                            if tp != curtab.get() {
                                 goto_tabpage_tp(tp as *mut tabpage_T, true_0 != 0, true_0 != 0);
                             }
                             win_goto(awp);
@@ -5900,80 +5903,80 @@ pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
                 }
             }
         }
-        (*curbuf).b_nwindows -= 1;
-        win_remove(curwin, ::core::ptr::null_mut::<tabpage_T>());
+        (*curbuf.get()).b_nwindows -= 1;
+        win_remove(curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
         map_del_int_ptr_t(
-            &raw mut window_handles,
-            (*curwin).handle as ::core::ffi::c_int,
+            window_handles.ptr(),
+            (*curwin.get()).handle as ::core::ffi::c_int,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
         );
-        if !(*curwin).w_grid_alloc.chars.is_null() {
-            ui_comp_remove_grid(&raw mut (*curwin).w_grid_alloc);
-            ui_call_win_hide((*curwin).w_grid_alloc.handle as Integer);
-            grid_free(&raw mut (*curwin).w_grid_alloc);
+        if !(*curwin.get()).w_grid_alloc.chars.is_null() {
+            ui_comp_remove_grid(&raw mut (*curwin.get()).w_grid_alloc);
+            ui_call_win_hide((*curwin.get()).w_grid_alloc.handle as Integer);
+            grid_free(&raw mut (*curwin.get()).w_grid_alloc);
         }
-        (*aucmd_win_vec
+        (*(*aucmd_win_vec.ptr())
             .items
             .offset((*aco).use_aucmd_win_idx as isize))
         .auc_win_used = false_0 != 0;
-        if valid_tabpage_win(curtab) == 0 {
-            close_tabpage(curtab);
+        if valid_tabpage_win(curtab.get()) == 0 {
+            close_tabpage(curtab.get());
         }
         unblock_autocmds();
         let save_curwin: *mut win_T = win_find_by_handle((*aco).save_curwin_handle);
         if !save_curwin.is_null() {
-            curwin = save_curwin;
+            curwin.set(save_curwin);
         } else {
-            curwin = firstwin;
+            curwin.set(firstwin.get());
         }
-        curbuf = (*curwin).w_buffer;
-        entering_window(curwin);
-        if bt_prompt(curbuf) {
-            (*curbuf).b_prompt_insert = (*aco).save_prompt_insert;
+        curbuf.set((*curwin.get()).w_buffer);
+        entering_window(curwin.get());
+        if bt_prompt(curbuf.get()) {
+            (*curbuf.get()).b_prompt_insert = (*aco).save_prompt_insert;
         }
-        prevwin = win_find_by_handle((*aco).save_prevwin_handle);
+        prevwin.set(win_find_by_handle((*aco).save_prevwin_handle));
         vars_clear(&raw mut (*(*awp).w_vars).dv_hashtab);
         hash_init(&raw mut (*(*awp).w_vars).dv_hashtab);
         if !(*awp).w_localdir.is_null() {
             win_fix_current_dir();
         }
-        xfree((*curtab).tp_localdir as *mut ::core::ffi::c_void);
-        (*curtab).tp_localdir = (*aco).tp_localdir;
-        xfree(globaldir as *mut ::core::ffi::c_void);
-        globaldir = (*aco).globaldir;
-        VIsual_active = (*aco).save_VIsual_active;
-        check_cursor(curwin);
-        if (*curwin).w_topline > (*curbuf).b_ml.ml_line_count {
-            (*curwin).w_topline = (*curbuf).b_ml.ml_line_count;
-            (*curwin).w_topfill = 0 as ::core::ffi::c_int;
+        xfree((*curtab.get()).tp_localdir as *mut ::core::ffi::c_void);
+        (*curtab.get()).tp_localdir = (*aco).tp_localdir;
+        xfree(globaldir.get() as *mut ::core::ffi::c_void);
+        globaldir.set((*aco).globaldir);
+        VIsual_active.set((*aco).save_VIsual_active);
+        check_cursor(curwin.get());
+        if (*curwin.get()).w_topline > (*curbuf.get()).b_ml.ml_line_count {
+            (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count;
+            (*curwin.get()).w_topfill = 0 as ::core::ffi::c_int;
         }
     } else {
         let save_curwin_0: *mut win_T = win_find_by_handle((*aco).save_curwin_handle);
         if !save_curwin_0.is_null() {
-            if (*curwin).handle == (*aco).new_curwin_handle
-                && curbuf != (*aco).new_curbuf.br_buf
+            if (*curwin.get()).handle == (*aco).new_curwin_handle
+                && curbuf.get() != (*aco).new_curbuf.br_buf
                 && bufref_valid(&raw mut (*aco).new_curbuf) as ::core::ffi::c_int != 0
                 && !(*(*aco).new_curbuf.br_buf).b_ml.ml_mfp.is_null()
             {
-                if (*curwin).w_s == &raw mut (*curbuf).b_s {
-                    (*curwin).w_s = &raw mut (*(*aco).new_curbuf.br_buf).b_s;
+                if (*curwin.get()).w_s == &raw mut (*curbuf.get()).b_s {
+                    (*curwin.get()).w_s = &raw mut (*(*aco).new_curbuf.br_buf).b_s;
                 }
-                (*curbuf).b_nwindows -= 1;
-                curbuf = (*aco).new_curbuf.br_buf;
-                (*curwin).w_buffer = curbuf;
-                (*curbuf).b_nwindows += 1;
+                (*curbuf.get()).b_nwindows -= 1;
+                curbuf.set((*aco).new_curbuf.br_buf);
+                (*curwin.get()).w_buffer = curbuf.get();
+                (*curbuf.get()).b_nwindows += 1;
             }
-            curwin = save_curwin_0;
-            curbuf = (*curwin).w_buffer;
-            prevwin = win_find_by_handle((*aco).save_prevwin_handle);
-            VIsual_active = (*aco).save_VIsual_active;
-            check_cursor(curwin);
+            curwin.set(save_curwin_0);
+            curbuf.set((*curwin.get()).w_buffer);
+            prevwin.set(win_find_by_handle((*aco).save_prevwin_handle));
+            VIsual_active.set((*aco).save_VIsual_active);
+            check_cursor(curwin.get());
         }
     }
-    VIsual_active = (*aco).save_VIsual_active;
-    check_cursor(curwin);
-    if VIsual_active {
-        check_pos(curbuf, &raw mut VIsual);
+    VIsual_active.set((*aco).save_VIsual_active);
+    check_cursor(curwin.get());
+    if VIsual_active.get() {
+        check_pos(curbuf.get(), VIsual.ptr());
     }
 }
 #[no_mangle]
@@ -6009,7 +6012,7 @@ pub unsafe extern "C" fn aucmd_defer(
         (*evdata).data = ::core::ptr::null_mut::<Object>();
     }
     multiqueue_put_event(
-        deferred_events,
+        deferred_events.get(),
         Event {
             handler: Some(
                 deferred_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -6192,10 +6195,10 @@ unsafe extern "C" fn has_cursorhold() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn trigger_cursorhold() -> bool {
-    if !did_cursorhold
+    if !did_cursorhold.get()
         && has_cursorhold() as ::core::ffi::c_int != 0
-        && reg_recording == 0 as ::core::ffi::c_int
-        && typebuf.tb_len == 0 as ::core::ffi::c_int
+        && reg_recording.get() == 0 as ::core::ffi::c_int
+        && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
         && !ins_compl_active()
     {
         let mut state: ::core::ffi::c_int = get_real_state();
@@ -6292,12 +6295,12 @@ pub unsafe extern "C" fn apply_autocmds_group(
             bh_create_newblock: false,
         },
     };
-    let save_KeyTyped: bool = KeyTyped;
+    let save_KeyTyped: bool = KeyTyped.get();
     if !(event as ::core::ffi::c_uint == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
         || (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size == 0 as size_t
         || is_autocmd_blocked() as ::core::ffi::c_int != 0)
     {
-        if !(autocmd_busy as ::core::ffi::c_int != 0
+        if !(autocmd_busy.get() as ::core::ffi::c_int != 0
             && !(force as ::core::ffi::c_int != 0
                 || autocmd_nested.get() as ::core::ffi::c_int != 0))
         {
@@ -6309,21 +6312,21 @@ pub unsafe extern "C" fn apply_autocmds_group(
                             == EVENT_FILECHANGEDSHELLPOST as ::core::ffi::c_int
                                 as ::core::ffi::c_uint))
                 {
-                    if !event_ignored(event, p_ei) {
+                    if !event_ignored(event, p_ei.get()) {
                         win_ignore = false_0 != 0;
-                        if buf == curbuf
+                        if buf == curbuf.get()
                             && (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int
                         {
-                            win_ignore = event_ignored(event, (*curwin).w_onebuf_opt.wo_eiw);
+                            win_ignore = event_ignored(event, (*curwin.get()).w_onebuf_opt.wo_eiw);
                         } else if !buf.is_null()
                             && (*event_names.ptr())[event as usize].event <= 0 as ::core::ffi::c_int
                             && (*buf).b_nwindows > 0 as ::core::ffi::c_int
                         {
                             win_ignore = true_0 != 0;
-                            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+                            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
                             while !tp.is_null() {
-                                let mut wp: *mut win_T = if tp == curtab {
-                                    firstwin
+                                let mut wp: *mut win_T = if tp == curtab.get() {
+                                    firstwin.get()
                                 } else {
                                     (*tp).tp_firstwin
                                 };
@@ -6346,13 +6349,13 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     (e_autocommand_nesting_too_deep.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ));
-                            } else if !(autocmd_no_enter != 0
+                            } else if !(autocmd_no_enter.get() != 0
                                 && (event as ::core::ffi::c_uint
                                     == EVENT_WINENTER as ::core::ffi::c_int as ::core::ffi::c_uint
                                     || event as ::core::ffi::c_uint
                                         == EVENT_BUFENTER as ::core::ffi::c_int
                                             as ::core::ffi::c_uint)
-                                || autocmd_no_leave != 0
+                                || autocmd_no_leave.get() != 0
                                     && (event as ::core::ffi::c_uint
                                         == EVENT_WINLEAVE as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
@@ -6360,14 +6363,14 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             == EVENT_BUFLEAVE as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint))
                             {
-                                save_autocmd_fname = autocmd_fname;
-                                save_autocmd_fname_full = autocmd_fname_full;
-                                save_autocmd_bufnr = autocmd_bufnr;
-                                save_autocmd_match = autocmd_match;
-                                save_autocmd_busy = autocmd_busy as ::core::ffi::c_int;
+                                save_autocmd_fname = autocmd_fname.get();
+                                save_autocmd_fname_full = autocmd_fname_full.get();
+                                save_autocmd_bufnr = autocmd_bufnr.get();
+                                save_autocmd_match = autocmd_match.get();
+                                save_autocmd_busy = autocmd_busy.get() as ::core::ffi::c_int;
                                 save_autocmd_nested = autocmd_nested.get() as ::core::ffi::c_int;
-                                save_changed = (*curbuf).b_changed != 0;
-                                old_curbuf = curbuf;
+                                save_changed = (*curbuf.get()).b_changed != 0;
+                                old_curbuf = curbuf.get();
                                 if fname_io.is_null() {
                                     if event as ::core::ffi::c_uint
                                         == EVENT_COLORSCHEME as ::core::ffi::c_int
@@ -6385,32 +6388,33 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             == EVENT_MARKSET as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                     {
-                                        autocmd_fname =
-                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
+                                        autocmd_fname
+                                            .set(::core::ptr::null_mut::<::core::ffi::c_char>());
                                     } else if !fname.is_null()
                                         && ends_excmd(*fname as ::core::ffi::c_int) == 0
                                     {
-                                        autocmd_fname = fname;
+                                        autocmd_fname.set(fname);
                                     } else if !buf.is_null() {
-                                        autocmd_fname = (*buf).b_ffname;
+                                        autocmd_fname.set((*buf).b_ffname);
                                     } else {
-                                        autocmd_fname =
-                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
+                                        autocmd_fname
+                                            .set(::core::ptr::null_mut::<::core::ffi::c_char>());
                                     }
                                 } else {
-                                    autocmd_fname = fname_io;
+                                    autocmd_fname.set(fname_io);
                                 }
                                 afile_orig = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                if !autocmd_fname.is_null() {
-                                    afile_orig = xstrdup(autocmd_fname);
-                                    autocmd_fname = xstrnsave(autocmd_fname, MAXPATHL as size_t);
+                                if !(*autocmd_fname.ptr()).is_null() {
+                                    afile_orig = xstrdup(autocmd_fname.get());
+                                    autocmd_fname
+                                        .set(xstrnsave(autocmd_fname.get(), MAXPATHL as size_t));
                                 }
-                                autocmd_fname_full = false_0 != 0;
-                                autocmd_bufnr = if buf.is_null() {
+                                autocmd_fname_full.set(false_0 != 0);
+                                autocmd_bufnr.set(if buf.is_null() {
                                     0 as ::core::ffi::c_int
                                 } else {
                                     (*buf).handle as ::core::ffi::c_int
-                                };
+                                });
                                 if fname.is_null() || *fname as ::core::ffi::c_int == NUL {
                                     if buf.is_null() {
                                         fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6528,7 +6532,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                                 as ::core::ffi::c_uint
                                     {
                                         fname = xstrdup(fname);
-                                        autocmd_fname_full = true_0 != 0;
+                                        autocmd_fname_full.set(true_0 != 0);
                                     } else {
                                         fname = FullName_save(fname, false_0 != 0);
                                     }
@@ -6537,15 +6541,15 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     xfree(sfname as *mut ::core::ffi::c_void);
                                     retval = false_0 != 0;
                                 } else {
-                                    autocmd_match = fname;
-                                    RedrawingDisabled += 1;
+                                    autocmd_match.set(fname);
+                                    (*RedrawingDisabled.ptr()) += 1;
                                     estack_push(
                                         ETYPE_AUCMD,
                                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                         0 as linenr_T,
                                     );
-                                    save_current_sctx = current_sctx;
-                                    if do_profiling == PROF_YES {
+                                    save_current_sctx = current_sctx.get();
+                                    if do_profiling.get() == PROF_YES {
                                         prof_child_enter(&raw mut wait_time);
                                     }
                                     funccal_entry = funccal_entry_T {
@@ -6553,15 +6557,16 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         next: ::core::ptr::null_mut::<funccal_entry_T>(),
                                     };
                                     save_funccal(&raw mut funccal_entry);
-                                    if !autocmd_busy {
+                                    if !autocmd_busy.get() {
                                         save_search_patterns();
                                         if !ins_compl_active() {
                                             saveRedobuff(&raw mut save_redo);
                                             did_save_redobuff = true_0 != 0;
                                         }
-                                        (*curbuf).b_did_filetype = (*curbuf).b_keep_filetype;
+                                        (*curbuf.get()).b_did_filetype =
+                                            (*curbuf.get()).b_keep_filetype;
                                     }
-                                    autocmd_busy = true_0 != 0;
+                                    autocmd_busy.set(true_0 != 0);
                                     filechangeshell_busy.set(
                                         event as ::core::ffi::c_uint
                                             == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int
@@ -6572,7 +6577,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         == EVENT_FILETYPE as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
                                     {
-                                        (*curbuf).b_did_filetype = true_0 != 0;
+                                        (*curbuf.get()).b_did_filetype = true_0 != 0;
                                     }
                                     tail = path_tail(fname);
                                     patcmd = AutoPatCmd_S {
@@ -6593,7 +6598,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             sc_lnum: 0,
                                             sc_chan: 0,
                                         },
-                                        arg_bufnr: autocmd_bufnr,
+                                        arg_bufnr: autocmd_bufnr.get(),
                                         data: ::core::ptr::null_mut::<Object>(),
                                         next: ::core::ptr::null_mut::<AutoPatCmd>(),
                                     };
@@ -6623,7 +6628,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         } else {
                                             check_lnums_nested(true_0 != 0);
                                         }
-                                        let save_did_emsg: ::core::ffi::c_int = did_emsg;
+                                        let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
                                         let save_ex_pressedreturn: bool = get_pressedreturn();
                                         do_cmdline(
                                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -6641,7 +6646,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                                 | DOCMD_VERBOSE as ::core::ffi::c_int
                                                 | DOCMD_REPEAT as ::core::ffi::c_int,
                                         );
-                                        did_emsg += save_did_emsg;
+                                        (*did_emsg.ptr()) += save_did_emsg;
                                         set_pressedreturn(save_ex_pressedreturn);
                                         if nesting.get() == 1 as ::core::ffi::c_int {
                                             reset_lnums();
@@ -6657,8 +6662,8 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             active_apc_list.set(patcmd.next);
                                         }
                                     }
-                                    RedrawingDisabled -= 1;
-                                    autocmd_busy = save_autocmd_busy != 0;
+                                    (*RedrawingDisabled.ptr()) -= 1;
+                                    autocmd_busy.set(save_autocmd_busy != 0);
                                     filechangeshell_busy.set(false_0 != 0);
                                     autocmd_nested.set(save_autocmd_nested != 0);
                                     xfree(
@@ -6671,38 +6676,42 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     );
                                     estack_pop();
                                     xfree(afile_orig as *mut ::core::ffi::c_void);
-                                    xfree(autocmd_fname as *mut ::core::ffi::c_void);
-                                    autocmd_fname = save_autocmd_fname;
-                                    autocmd_fname_full = save_autocmd_fname_full;
-                                    autocmd_bufnr = save_autocmd_bufnr;
-                                    autocmd_match = save_autocmd_match;
-                                    current_sctx = save_current_sctx;
+                                    xfree(autocmd_fname.get() as *mut ::core::ffi::c_void);
+                                    autocmd_fname.set(save_autocmd_fname);
+                                    autocmd_fname_full.set(save_autocmd_fname_full);
+                                    autocmd_bufnr.set(save_autocmd_bufnr);
+                                    autocmd_match.set(save_autocmd_match);
+                                    current_sctx.set(save_current_sctx);
                                     restore_funccal();
-                                    if do_profiling == PROF_YES {
+                                    if do_profiling.get() == PROF_YES {
                                         prof_child_exit(&raw mut wait_time);
                                     }
-                                    KeyTyped = save_KeyTyped;
+                                    KeyTyped.set(save_KeyTyped);
                                     xfree(fname as *mut ::core::ffi::c_void);
                                     xfree(sfname as *mut ::core::ffi::c_void);
                                     (*nesting.ptr()) -= 1;
-                                    if !autocmd_busy {
+                                    if !autocmd_busy.get() {
                                         restore_search_patterns();
                                         if did_save_redobuff {
                                             restoreRedobuff(&raw mut save_redo);
                                         }
-                                        (*curbuf).b_did_filetype = false_0 != 0;
-                                        while !au_pending_free_buf.is_null() {
-                                            let mut b: *mut buf_T = (*au_pending_free_buf).b_next;
-                                            xfree(au_pending_free_buf as *mut ::core::ffi::c_void);
-                                            au_pending_free_buf = b;
+                                        (*curbuf.get()).b_did_filetype = false_0 != 0;
+                                        while !(*au_pending_free_buf.ptr()).is_null() {
+                                            let mut b: *mut buf_T =
+                                                (*au_pending_free_buf.get()).b_next;
+                                            xfree(au_pending_free_buf.get()
+                                                as *mut ::core::ffi::c_void);
+                                            au_pending_free_buf.set(b);
                                         }
-                                        while !au_pending_free_win.is_null() {
-                                            let mut w: *mut win_T = (*au_pending_free_win).w_next;
-                                            xfree(au_pending_free_win as *mut ::core::ffi::c_void);
-                                            au_pending_free_win = w;
+                                        while !(*au_pending_free_win.ptr()).is_null() {
+                                            let mut w: *mut win_T =
+                                                (*au_pending_free_win.get()).w_next;
+                                            xfree(au_pending_free_win.get()
+                                                as *mut ::core::ffi::c_void);
+                                            au_pending_free_win.set(w);
                                         }
                                     }
-                                    if curbuf == old_curbuf
+                                    if curbuf.get() == old_curbuf
                                         && (event as ::core::ffi::c_uint
                                             == EVENT_BUFREADPOST as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
@@ -6719,11 +6728,13 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                                 == EVENT_VIMLEAVEPRE as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint)
                                     {
-                                        if (*curbuf).b_changed != save_changed as ::core::ffi::c_int
+                                        if (*curbuf.get()).b_changed
+                                            != save_changed as ::core::ffi::c_int
                                         {
-                                            need_maketitle = true_0 != 0;
+                                            need_maketitle.set(true_0 != 0);
                                         }
-                                        (*curbuf).b_changed = save_changed as ::core::ffi::c_int;
+                                        (*curbuf.get()).b_changed =
+                                            save_changed as ::core::ffi::c_int;
                                     }
                                     au_cleanup();
                                 }
@@ -6743,7 +6754,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
         && event as ::core::ffi::c_uint
             == EVENT_FILETYPE as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        (*curbuf).b_au_did_filetype = true_0 != 0;
+        (*curbuf.get()).b_au_did_filetype = true_0 != 0;
     }
     return retval;
 }
@@ -6832,7 +6843,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
         }
     };
     let mut i: size_t = (*apc).auidx;
-    while i < (*apc).ausize && !got_int {
+    while i < (*apc).ausize && !got_int.get() {
         let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
         let ap: *mut AutoPat = (*ac).pat;
         's_11: {
@@ -6868,7 +6879,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
                         let namep: *mut ::core::ffi::c_char =
                             xmalloc(sourcing_name_len) as *mut ::core::ffi::c_char;
                         snprintf(namep, sourcing_name_len, s, name, (*ap).pat);
-                        if p_verbose >= 8 as OptInt {
+                        if p_verbose.get() >= 8 as OptInt {
                             verbose_enter();
                             smsg(
                                 0 as ::core::ffi::c_int,
@@ -6963,7 +6974,7 @@ unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPat
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
-                    string: cstr_as_string(autocmd_match),
+                    string: cstr_as_string(autocmd_match.get()),
                 },
             },
         };
@@ -6974,7 +6985,7 @@ unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPat
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
-                    integer: autocmd_bufnr as Integer,
+                    integer: autocmd_bufnr.get() as Integer,
                 },
             },
         };
@@ -7094,7 +7105,7 @@ pub unsafe extern "C" fn getnextac(
         }
     };
     let mut oneshot: bool = (*ac).once;
-    if p_verbose >= 9 as OptInt {
+    if p_verbose.get() >= 9 as OptInt {
         verbose_enter_scroll();
         let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(ac);
         smsg(
@@ -7111,8 +7122,8 @@ pub unsafe extern "C" fn getnextac(
         verbose_leave_scroll();
     }
     autocmd_nested.set((*ac).nested);
-    current_sctx = (*ac).script_ctx;
-    (*apc).script_ctx = current_sctx;
+    current_sctx.set((*ac).script_ctx);
+    (*apc).script_ctx = current_sctx.get();
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !(*ac).handler_cmd.is_null() {
         retval = xstrdup((*ac).handler_cmd);
@@ -7330,7 +7341,7 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
                             as *mut ::core::ffi::c_char,
                     ) == 0 as ::core::ffi::c_int
                 {
-                    buflocal_buf = curbuf;
+                    buflocal_buf = curbuf.get();
                 }
                 let mut i: size_t = 0 as size_t;
                 while i < (*acs).size {
@@ -7389,7 +7400,7 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
         }
     };
     if patlen == 8 as ::core::ffi::c_int {
-        return (*curbuf).handle as ::core::ffi::c_int;
+        return (*curbuf.get()).handle as ::core::ffi::c_int;
     }
     if patlen > 9 as ::core::ffi::c_int
         && *pat.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -7403,7 +7414,7 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
                 13 as ::core::ffi::c_int as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            return autocmd_bufnr;
+            return autocmd_bufnr.get();
         }
         if skipdigits(pat.offset(8 as ::core::ffi::c_int as isize))
             == pat
@@ -7436,7 +7447,7 @@ pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
         }
     };
     if buflocal_nr == 0 as ::core::ffi::c_int {
-        buflocal_nr = (*curbuf).handle as ::core::ffi::c_int;
+        buflocal_nr = (*curbuf.get()).handle as ::core::ffi::c_int;
     }
     snprintf(
         dest,
@@ -7627,7 +7638,7 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
     {
         pending_vimresume.set(kNone);
         multiqueue_put_event(
-            main_loop.events,
+            (*main_loop.ptr()).events,
             Event {
                 handler: Some(
                     vimresume_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -7651,7 +7662,7 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
 #[no_mangle]
 pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: bool) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-    if starting == NO_SCREEN {
+    if starting.get() == NO_SCREEN {
         return;
     }
     if recursive.get() {
@@ -7702,7 +7713,7 @@ pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: 
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     restore_v_event(dict, &raw mut save_v_event);
     recursive.set(false_0 != 0);
@@ -7724,7 +7735,7 @@ pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     if gained as ::core::ffi::c_int != 0
         && (*last_time.ptr()).wrapping_add(2000 as ::core::ffi::c_int as Timestamp) < os_now()
@@ -7740,8 +7751,8 @@ pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: boo
     if ft_recursive.get() > 0 as ::core::ffi::c_int && !force {
         return false_0 != 0;
     }
-    let mut secure_save: ::core::ffi::c_int = secure;
-    secure = 0 as ::core::ffi::c_int;
+    let mut secure_save: ::core::ffi::c_int = secure.get();
+    secure.set(0 as ::core::ffi::c_int);
     (*ft_recursive.ptr()) += 1;
     (*buf).b_did_filetype = true_0 != 0;
     let mut ret: bool = apply_autocmds(
@@ -7752,7 +7763,7 @@ pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: boo
         buf,
     );
     (*ft_recursive.ptr()) -= 1;
-    secure = secure_save;
+    secure.set(secure_save);
     return ret;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

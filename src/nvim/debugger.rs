@@ -84,33 +84,33 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn save_typeahead(tp: *mut tasave_T);
     fn restore_typeahead(tp: *mut tasave_T);
-    static mut Rows: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut ex_nesting_level: ::core::ffi::c_int;
-    static mut debug_break_level: ::core::ffi::c_int;
-    static mut debug_did_msg: bool;
-    static mut debug_tick: ::core::ffi::c_int;
-    static mut debug_backtrace_level: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut State: ::core::ffi::c_int;
-    static mut debug_mode: bool;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut cmd_silent: bool;
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut ex_normal_busy: ::core::ffi::c_int;
-    static mut ignore_script: bool;
-    static mut got_int: bool;
-    static mut redir_off: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
+    static debug_break_level: GlobalCell<::core::ffi::c_int>;
+    static debug_did_msg: GlobalCell<bool>;
+    static debug_tick: GlobalCell<::core::ffi::c_int>;
+    static debug_backtrace_level: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static debug_mode: GlobalCell<bool>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static cmd_silent: GlobalCell<bool>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
+    static ignore_script: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static redir_off: GlobalCell<bool>;
     fn expand_env_save(src: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn home_replace(
         buf: *const buf_T,
@@ -2906,13 +2906,13 @@ static debug_newval: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
-    let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll;
-    let mut save_State: ::core::ffi::c_int = State;
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    let save_cmd_silent: bool = cmd_silent;
-    let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-    let mut save_emsg_silent: ::core::ffi::c_int = emsg_silent;
-    let mut save_redir_off: bool = redir_off;
+    let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
+    let mut save_State: ::core::ffi::c_int = State.get();
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    let save_cmd_silent: bool = cmd_silent.get();
+    let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+    let mut save_emsg_silent: ::core::ffi::c_int = emsg_silent.get();
+    let mut save_redir_off: bool = redir_off.get();
     let mut typeaheadbuf: tasave_T = tasave_T {
         save_typebuf: typebuf_T {
             tb_buf: ::core::ptr::null_mut::<uint8_t>(),
@@ -2961,16 +2961,16 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static last_cmd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    RedrawingDisabled += 1;
-    no_wait_return += 1;
-    did_emsg = false_0;
-    cmd_silent = false_0 != 0;
-    msg_silent = false_0;
-    emsg_silent = false_0;
-    redir_off = true_0 != 0;
-    State = MODE_NORMAL as ::core::ffi::c_int;
-    debug_mode = true_0 != 0;
-    if !debug_did_msg {
+    (*RedrawingDisabled.ptr()) += 1;
+    (*no_wait_return.ptr()) += 1;
+    did_emsg.set(false_0);
+    cmd_silent.set(false_0 != 0);
+    msg_silent.set(false_0);
+    emsg_silent.set(false_0);
+    redir_off.set(true_0 != 0);
+    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    debug_mode.set(true_0 != 0);
+    if !debug_did_msg.get() {
         msg(
             gettext(
                 b"Entering Debug mode.  Type \"cont\" to continue.\0".as_ptr()
@@ -3029,18 +3029,18 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
         );
     }
     loop {
-        msg_scroll = true_0;
-        need_wait_return = false_0 != 0;
-        let mut save_ex_normal_busy: ::core::ffi::c_int = ex_normal_busy;
-        ex_normal_busy = 0 as ::core::ffi::c_int;
+        msg_scroll.set(true_0);
+        need_wait_return.set(false_0 != 0);
+        let mut save_ex_normal_busy: ::core::ffi::c_int = ex_normal_busy.get();
+        ex_normal_busy.set(0 as ::core::ffi::c_int);
         if !debug_greedy.get() {
             save_typeahead(&raw mut typeaheadbuf);
             typeahead_saved = true_0 != 0;
-            save_ignore_script = ignore_script as ::core::ffi::c_int;
-            ignore_script = true_0 != 0;
+            save_ignore_script = ignore_script.get() as ::core::ffi::c_int;
+            ignore_script.set(true_0 != 0);
         }
-        let mut n: ::core::ffi::c_int = debug_break_level;
-        debug_break_level = -1 as ::core::ffi::c_int;
+        let mut n: ::core::ffi::c_int = debug_break_level.get();
+        debug_break_level.set(-1 as ::core::ffi::c_int);
         xfree(cmdline as *mut ::core::ffi::c_void);
         cmdline = getcmdline_prompt(
             '>' as ::core::ffi::c_int,
@@ -3057,13 +3057,13 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             false_0 != 0,
             ::core::ptr::null_mut::<bool>(),
         );
-        debug_break_level = n;
+        debug_break_level.set(n);
         if typeahead_saved {
             restore_typeahead(&raw mut typeaheadbuf);
-            ignore_script = save_ignore_script != 0;
+            ignore_script.set(save_ignore_script != 0);
         }
-        ex_normal_busy = save_ex_normal_busy;
-        cmdline_row = msg_row;
+        ex_normal_busy.set(save_ex_normal_busy);
+        cmdline_row.set(msg_row.get());
         msg_starthere();
         if !cmdline.is_null() {
             p = skipwhite(cmdline);
@@ -3160,24 +3160,24 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             if last_cmd.get() != 0 as ::core::ffi::c_int {
                 match last_cmd.get() {
                     CMD_CONT => {
-                        debug_break_level = -1 as ::core::ffi::c_int;
+                        debug_break_level.set(-1 as ::core::ffi::c_int);
                     }
                     CMD_NEXT => {
-                        debug_break_level = ex_nesting_level;
+                        debug_break_level.set(ex_nesting_level.get());
                     }
                     CMD_STEP => {
-                        debug_break_level = 9999 as ::core::ffi::c_int;
+                        debug_break_level.set(9999 as ::core::ffi::c_int);
                     }
                     CMD_FINISH => {
-                        debug_break_level = ex_nesting_level - 1 as ::core::ffi::c_int;
+                        debug_break_level.set(ex_nesting_level.get() - 1 as ::core::ffi::c_int);
                     }
                     CMD_QUIT => {
-                        got_int = true_0 != 0;
-                        debug_break_level = -1 as ::core::ffi::c_int;
+                        got_int.set(true_0 != 0);
+                        debug_break_level.set(-1 as ::core::ffi::c_int);
                     }
                     CMD_INTERRUPT => {
-                        got_int = true_0 != 0;
-                        debug_break_level = 9999 as ::core::ffi::c_int;
+                        got_int.set(true_0 != 0);
+                        debug_break_level.set(9999 as ::core::ffi::c_int);
                         last_cmd.set(CMD_STEP);
                     }
                     CMD_BACKTRACE => {
@@ -3194,22 +3194,22 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
                         continue;
                     }
                     CMD_UP => {
-                        debug_backtrace_level += 1;
+                        (*debug_backtrace_level.ptr()) += 1;
                         do_checkbacktracelevel();
                         continue;
                     }
                     CMD_DOWN => {
-                        debug_backtrace_level -= 1;
+                        (*debug_backtrace_level.ptr()) -= 1;
                         do_checkbacktracelevel();
                         continue;
                     }
                     _ => {}
                 }
-                debug_backtrace_level = 0 as ::core::ffi::c_int;
+                debug_backtrace_level.set(0 as ::core::ffi::c_int);
                 break;
             } else {
-                n = debug_break_level;
-                debug_break_level = -1 as ::core::ffi::c_int;
+                n = debug_break_level.get();
+                debug_break_level.set(-1 as ::core::ffi::c_int);
                 do_cmdline(
                     cmdline,
                     Some(
@@ -3225,26 +3225,26 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
                     NULL,
                     DOCMD_VERBOSE as ::core::ffi::c_int | DOCMD_EXCRESET as ::core::ffi::c_int,
                 );
-                debug_break_level = n;
+                debug_break_level.set(n);
             }
         }
-        lines_left = Rows - 1 as ::core::ffi::c_int;
+        lines_left.set(Rows.get() - 1 as ::core::ffi::c_int);
     }
     xfree(cmdline as *mut ::core::ffi::c_void);
-    RedrawingDisabled -= 1;
-    no_wait_return -= 1;
+    (*RedrawingDisabled.ptr()) -= 1;
+    (*no_wait_return.ptr()) -= 1;
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-    need_wait_return = false_0 != 0;
-    msg_scroll = save_msg_scroll;
-    lines_left = Rows - 1 as ::core::ffi::c_int;
-    State = save_State;
-    debug_mode = false_0 != 0;
-    did_emsg = save_did_emsg;
-    cmd_silent = save_cmd_silent;
-    msg_silent = save_msg_silent;
-    emsg_silent = save_emsg_silent;
-    redir_off = save_redir_off;
-    debug_did_msg = true_0 != 0;
+    need_wait_return.set(false_0 != 0);
+    msg_scroll.set(save_msg_scroll);
+    lines_left.set(Rows.get() - 1 as ::core::ffi::c_int);
+    State.set(save_State);
+    debug_mode.set(false_0 != 0);
+    did_emsg.set(save_did_emsg);
+    cmd_silent.set(save_cmd_silent);
+    msg_silent.set(save_msg_silent);
+    emsg_silent.set(save_emsg_silent);
+    redir_off.set(save_redir_off);
+    debug_did_msg.set(true_0 != 0);
 }
 pub const CMD_CONT: ::core::ffi::c_int = 1;
 pub const CMD_NEXT: ::core::ffi::c_int = 2;
@@ -3278,15 +3278,15 @@ unsafe extern "C" fn get_maxbacktrace_level(
 unsafe extern "C" fn do_setdebugtracelevel(mut arg: *mut ::core::ffi::c_char) {
     let mut level: ::core::ffi::c_int = atoi(arg);
     if *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int || level < 0 as ::core::ffi::c_int {
-        debug_backtrace_level += level;
+        (*debug_backtrace_level.ptr()) += level;
     } else {
-        debug_backtrace_level = level;
+        debug_backtrace_level.set(level);
     }
     do_checkbacktracelevel();
 }
 unsafe extern "C" fn do_checkbacktracelevel() {
-    if debug_backtrace_level < 0 as ::core::ffi::c_int {
-        debug_backtrace_level = 0 as ::core::ffi::c_int;
+    if debug_backtrace_level.get() < 0 as ::core::ffi::c_int {
+        debug_backtrace_level.set(0 as ::core::ffi::c_int);
         msg(
             gettext(b"frame is zero\0".as_ptr() as *const ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
@@ -3294,8 +3294,8 @@ unsafe extern "C" fn do_checkbacktracelevel() {
     } else {
         let mut sname: *mut ::core::ffi::c_char = estack_sfile(ESTACK_NONE);
         let mut max: ::core::ffi::c_int = get_maxbacktrace_level(sname);
-        if debug_backtrace_level > max {
-            debug_backtrace_level = max;
+        if debug_backtrace_level.get() > max {
+            debug_backtrace_level.set(max);
             smsg(
                 0 as ::core::ffi::c_int,
                 gettext(b"frame at highest level: %d\0".as_ptr() as *const ::core::ffi::c_char),
@@ -3311,13 +3311,13 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
     if !sname.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut cur: *mut ::core::ffi::c_char = sname;
-        while !got_int {
+        while !got_int.get() {
             let mut next: *mut ::core::ffi::c_char =
                 strstr(cur, b"..\0".as_ptr() as *const ::core::ffi::c_char);
             if !next.is_null() {
                 *next = NUL as ::core::ffi::c_char;
             }
-            if i == max - debug_backtrace_level {
+            if i == max - debug_backtrace_level.get() {
                 smsg(
                     0 as ::core::ffi::c_int,
                     b"->%d %s\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3364,10 +3364,10 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_debug(mut eap: *mut exarg_T) {
-    let mut debug_break_level_save: ::core::ffi::c_int = debug_break_level;
-    debug_break_level = 9999 as ::core::ffi::c_int;
+    let mut debug_break_level_save: ::core::ffi::c_int = debug_break_level.get();
+    debug_break_level.set(9999 as ::core::ffi::c_int);
     do_cmdline_cmd((*eap).arg);
-    debug_break_level = debug_break_level_save;
+    debug_break_level.set(debug_break_level_save);
 }
 static debug_breakpoint_name: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
@@ -3415,7 +3415,7 @@ pub unsafe extern "C" fn dbg_check_breakpoint(mut eap: *mut exarg_T) {
             debug_skipped_name.set(debug_breakpoint_name.get());
             debug_breakpoint_name.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         }
-    } else if ex_nesting_level <= debug_break_level {
+    } else if ex_nesting_level.get() <= debug_break_level.get() {
         if (*eap).skip == 0 {
             do_debug((*eap).cmd);
         } else {
@@ -3429,13 +3429,13 @@ pub unsafe extern "C" fn dbg_check_skipped(mut eap: *mut exarg_T) -> bool {
     if !debug_skipped.get() {
         return false_0 != 0;
     }
-    let mut prev_got_int: bool = got_int;
-    got_int = false_0 != 0;
+    let mut prev_got_int: bool = got_int.get();
+    got_int.set(false_0 != 0);
     debug_breakpoint_name.set(debug_skipped_name.get());
     (*eap).skip = false_0;
     dbg_check_breakpoint(eap);
     (*eap).skip = true_0;
-    got_int = got_int as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0;
+    got_int.set(got_int.get() as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0);
     return true_0 != 0;
 }
 static dbg_breakp: GlobalCell<garray_T> = GlobalCell::new(garray_T {
@@ -3458,9 +3458,9 @@ pub const DBG_FUNC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DBG_FILE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DBG_EXPR: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 unsafe extern "C" fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
-    emsg_off += 1;
+    (*emsg_off.ptr()) += 1;
     let tv: *mut typval_T = eval_expr((*bp).dbg_name, ::core::ptr::null_mut::<exarg_T>());
-    emsg_off -= 1;
+    (*emsg_off.ptr()) -= 1;
     return tv;
 }
 unsafe extern "C" fn dbg_parsearg(
@@ -3492,7 +3492,7 @@ unsafe extern "C" fn dbg_parsearg(
             4 as size_t,
         ) == 0 as ::core::ffi::c_int
     {
-        if (*curbuf).b_ffname.is_null() {
+        if (*curbuf.get()).b_ffname.is_null() {
             emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
             return FAIL;
         }
@@ -3515,7 +3515,7 @@ unsafe extern "C" fn dbg_parsearg(
     }
     p = skipwhite(p.offset(4 as ::core::ffi::c_int as isize));
     if here {
-        (*bp).dbg_lnum = (*curwin).w_cursor.lnum;
+        (*bp).dbg_lnum = (*curwin.get()).w_cursor.lnum;
     } else if gap != prof_ga.ptr()
         && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
@@ -3549,7 +3549,7 @@ unsafe extern "C" fn dbg_parsearg(
             },
         );
     } else if here {
-        (*bp).dbg_name = xstrdup((*curbuf).b_ffname);
+        (*bp).dbg_name = xstrdup((*curbuf.get()).b_ffname);
     } else if (*bp).dbg_type == DBG_EXPR {
         (*bp).dbg_name = xstrdup(p);
         (*bp).dbg_val = eval_expr_no_emsg(bp);
@@ -3607,7 +3607,7 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
                 (*last_breakp.ptr()) += 1;
                 (*((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize)).dbg_nr =
                     last_breakp.get();
-                debug_tick += 1;
+                (*debug_tick.ptr()) += 1;
             }
             (*gap).ga_len += 1;
         }
@@ -3617,7 +3617,7 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
         (*gap).ga_len = (*gap).ga_len + 1;
         (*((*gap).ga_data as *mut debuggy).offset(c2rust_fresh0 as isize)).dbg_nr =
             last_breakp.get();
-        debug_tick += 1;
+        (*debug_tick.ptr()) += 1;
         if gap == dbg_breakp.ptr() {
             has_expr_breakpoint.set(true_0 != 0);
         }
@@ -3718,7 +3718,7 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
             );
         }
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_breakdel as ::core::ffi::c_int {
-            debug_tick += 1;
+            (*debug_tick.ptr()) += 1;
         }
         if !del_all {
             break;
@@ -3747,7 +3747,7 @@ pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
             home_replace(
                 ::core::ptr::null::<buf_T>(),
                 (*bp).dbg_name,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 MAXPATHL as size_t,
                 true_0 != 0,
             );
@@ -3765,7 +3765,7 @@ pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
                 if (*bp).dbg_type == DBG_FUNC {
                     (*bp).dbg_name
                 } else {
-                    &raw mut NameBuff as *mut ::core::ffi::c_char
+                    NameBuff.ptr() as *mut ::core::ffi::c_char
                 },
                 (*bp).dbg_lnum as int64_t,
             );
@@ -3837,15 +3837,16 @@ unsafe extern "C" fn debuggy_find(
             && (gap == prof_ga.ptr()
                 || (*bp).dbg_lnum > after && (lnum == 0 as linenr_T || (*bp).dbg_lnum < lnum))
         {
-            let mut prev_got_int: bool = got_int;
-            got_int = false_0 != 0;
+            let mut prev_got_int: bool = got_int.get();
+            got_int.set(false_0 != 0);
             if vim_regexec_prog(&raw mut (*bp).dbg_prog, false_0 != 0, name, 0 as colnr_T) {
                 lnum = (*bp).dbg_lnum;
                 if !fp.is_null() {
                     *fp = (*bp).dbg_forceit != 0;
                 }
             }
-            got_int = got_int as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0;
+            got_int
+                .set(got_int.get() as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0);
         } else if (*bp).dbg_type == DBG_EXPR {
             let mut line: bool = false_0 != 0;
             let tv: *mut typval_T = eval_expr_no_emsg(bp);

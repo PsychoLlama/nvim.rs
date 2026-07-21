@@ -65,7 +65,7 @@ extern "C" {
         val_n: int64_t,
         quote_val: bool,
     );
-    static mut ui_ext_names: [*const ::core::ffi::c_char; 0];
+    static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
     fn remote_ui_stop(ui: *mut RemoteUI);
     fn remote_ui_grid_clear(ui: *mut RemoteUI, grid: Integer);
     fn remote_ui_grid_resize(ui: *mut RemoteUI, grid: Integer, width: Integer, height: Integer);
@@ -166,41 +166,41 @@ extern "C" {
     fn screen_resize(width: ::core::ffi::c_int, height: ::core::ffi::c_int);
     fn os_hrtime() -> uint64_t;
     fn os_sleep(ms: uint64_t);
-    static mut updating_screen: bool;
+    static updating_screen: GlobalCell<bool>;
     fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
     fn cmdline_ui_flush();
     fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    static mut default_grid: ScreenGrid;
+    static default_grid: GlobalCell<ScreenGrid>;
     fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
-    static mut called_vim_beep: bool;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut starting: ::core::ffi::c_int;
-    static mut exiting: bool;
-    static mut full_screen: bool;
-    static mut textlock: ::core::ffi::c_int;
-    static mut VIsual_active: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut in_assert_fails: bool;
-    static mut expr_map_lock: ::core::ffi::c_int;
-    static mut bo_flags: ::core::ffi::c_uint;
-    static mut p_debug: *mut ::core::ffi::c_char;
-    static mut p_guicursor: *mut ::core::ffi::c_char;
-    static mut p_lz: ::core::ffi::c_int;
-    static mut p_mouse: *mut ::core::ffi::c_char;
-    static mut rdb_flags: ::core::ffi::c_uint;
-    static mut p_tgc: ::core::ffi::c_int;
-    static mut p_vb: ::core::ffi::c_int;
-    static mut p_wd: OptInt;
+    static called_vim_beep: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static starting: GlobalCell<::core::ffi::c_int>;
+    static exiting: GlobalCell<bool>;
+    static full_screen: GlobalCell<bool>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static VIsual_active: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static in_assert_fails: GlobalCell<bool>;
+    static expr_map_lock: GlobalCell<::core::ffi::c_int>;
+    static bo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_debug: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_guicursor: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_lz: GlobalCell<::core::ffi::c_int>;
+    static p_mouse: GlobalCell<*mut ::core::ffi::c_char>;
+    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_tgc: GlobalCell<::core::ffi::c_int>;
+    static p_vb: GlobalCell<::core::ffi::c_int>;
+    static p_wd: GlobalCell<OptInt>;
     fn highlight_use_hlstate() -> bool;
     fn ui_send_all_hls(ui: *mut RemoteUI);
-    static mut cterm_normal_fg_color: ::core::ffi::c_int;
-    static mut cterm_normal_bg_color: ::core::ffi::c_int;
-    static mut normal_fg: RgbValue;
-    static mut normal_bg: RgbValue;
-    static mut normal_sp: RgbValue;
+    static cterm_normal_fg_color: GlobalCell<::core::ffi::c_int>;
+    static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int>;
+    static normal_fg: GlobalCell<RgbValue>;
+    static normal_bg: GlobalCell<RgbValue>;
+    static normal_sp: GlobalCell<RgbValue>;
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_call_ref_ctx(
         fast: bool,
@@ -211,7 +211,7 @@ extern "C" {
         arena: *mut Arena,
         err: *mut Error,
     ) -> Object;
-    static mut msg_grid_adj: GridView;
+    static msg_grid_adj: GlobalCell<GridView>;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
     fn msg_source(hl_id: ::core::ffi::c_int);
     fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, ...);
@@ -229,11 +229,11 @@ extern "C" {
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
-    static mut noargs: Array;
-    static mut ui_event_ns_id: uint32_t;
-    static mut resize_events: *mut MultiQueue;
-    static mut ui_refresh_cmdheight: bool;
-    static mut ui_client_channel_id: uint64_t;
+    static noargs: GlobalCell<Array>;
+    static ui_event_ns_id: GlobalCell<uint32_t>;
+    static resize_events: GlobalCell<*mut MultiQueue>;
+    static ui_refresh_cmdheight: GlobalCell<bool>;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn ui_comp_init();
     fn ui_comp_attach(ui: *mut RemoteUI);
     fn ui_comp_detach(ui: *mut RemoteUI);
@@ -2727,13 +2727,13 @@ unsafe extern "C" fn ui_log(mut funname: *const ::core::ffi::c_char) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_init() {
-    default_grid.handle = 1 as ::core::ffi::c_int as handle_T;
-    msg_grid_adj.target = &raw mut default_grid;
+    (*default_grid.ptr()).handle = 1 as ::core::ffi::c_int as handle_T;
+    (*msg_grid_adj.ptr()).target = default_grid.ptr();
     ui_comp_init();
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_rgb_attached() -> bool {
-    if p_tgc != 0 {
+    if p_tgc.get() != 0 {
         return true_0 != 0;
     }
     let mut i: size_t = 0 as size_t;
@@ -2777,7 +2777,7 @@ pub unsafe extern "C" fn ui_active() -> size_t {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_refresh() {
-    if ui_client_channel_id != 0 {
+    if ui_client_channel_id.get() != 0 {
         abort();
     }
     let mut width: ::core::ffi::c_int = INT_MAX;
@@ -2830,8 +2830,7 @@ pub unsafe extern "C" fn ui_refresh() {
         if (i_0 as ::core::ffi::c_uint) < kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint {
             ui_call_option_set(
                 cstr_as_string(
-                    *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-                        .offset(i_0 as isize),
+                    *(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(i_0 as isize),
                 ),
                 object {
                     type_0: kObjectTypeBoolean,
@@ -2846,7 +2845,7 @@ pub unsafe extern "C" fn ui_refresh() {
     if had_message as ::core::ffi::c_int
         != (*ui_ext.ptr())[kUIMessages as ::core::ffi::c_int as usize] as ::core::ffi::c_int
     {
-        if ui_refresh_cmdheight {
+        if ui_refresh_cmdheight.get() {
             set_option_value(
                 kOptCmdheight,
                 OptVal {
@@ -2857,7 +2856,7 @@ pub unsafe extern "C" fn ui_refresh() {
                 },
                 0 as ::core::ffi::c_int,
             );
-            let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
                 (*tp).tp_ch_used = had_message as OptInt;
                 tp = (*tp).tp_next as *mut tabpage_T;
@@ -2869,15 +2868,15 @@ pub unsafe extern "C" fn ui_refresh() {
     if ui_active() == 0 {
         return;
     }
-    if updating_screen {
+    if updating_screen.get() {
         ui_schedule_refresh();
         return;
     }
     ui_default_colors_set();
-    let mut save_p_lz: ::core::ffi::c_int = p_lz;
-    p_lz = false_0;
+    let mut save_p_lz: ::core::ffi::c_int = p_lz.get();
+    p_lz.set(false_0);
     screen_resize(width, height);
-    p_lz = save_p_lz;
+    p_lz.set(save_p_lz);
     ui_mode_info_set();
     pending_mode_update.set(true_0 != 0);
     ui_cursor_shape();
@@ -2931,7 +2930,7 @@ unsafe extern "C" fn ui_refresh_event(mut _argv: *mut *mut ::core::ffi::c_void) 
 #[no_mangle]
 pub unsafe extern "C" fn ui_schedule_refresh() {
     multiqueue_put_event(
-        resize_events,
+        resize_events.get(),
         Event {
             handler: Some(
                 ui_refresh_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -2954,7 +2953,7 @@ pub unsafe extern "C" fn ui_schedule_refresh() {
 #[no_mangle]
 pub unsafe extern "C" fn ui_default_colors_set() {
     pending_default_colors.set(true_0 != 0);
-    if starting == 0 as ::core::ffi::c_int {
+    if starting.get() == 0 as ::core::ffi::c_int {
         ui_may_set_default_colors();
     }
 }
@@ -2962,11 +2961,11 @@ unsafe extern "C" fn ui_may_set_default_colors() {
     if pending_default_colors.get() {
         pending_default_colors.set(false_0 != 0);
         ui_call_default_colors_set(
-            normal_fg as Integer,
-            normal_bg as Integer,
-            normal_sp as Integer,
-            cterm_normal_fg_color as Integer,
-            cterm_normal_bg_color as Integer,
+            normal_fg.get() as Integer,
+            normal_bg.get() as Integer,
+            normal_sp.get() as Integer,
+            cterm_normal_fg_color.get() as Integer,
+            cterm_normal_bg_color.get() as Integer,
         );
     }
 }
@@ -2987,12 +2986,14 @@ pub unsafe extern "C" fn ui_busy_stop() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_beep(mut val: ::core::ffi::c_uint) {
-    called_vim_beep = true_0 != 0;
-    if emsg_silent != 0 as ::core::ffi::c_int || in_assert_fails as ::core::ffi::c_int != 0 {
+    called_vim_beep.set(true_0 != 0);
+    if emsg_silent.get() != 0 as ::core::ffi::c_int
+        || in_assert_fails.get() as ::core::ffi::c_int != 0
+    {
         return;
     }
-    if !(bo_flags & val != 0
-        || bo_flags & kOptBoFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
+    if !(bo_flags.get() & val != 0
+        || bo_flags.get() & kOptBoFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
     {
         static beeps: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
         static start_time: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
@@ -3004,14 +3005,14 @@ pub unsafe extern "C" fn vim_beep(mut val: ::core::ffi::c_uint) {
         }
         (*beeps.ptr()) += 1;
         if beeps.get() <= 3 as ::core::ffi::c_int {
-            if p_vb != 0 {
+            if p_vb.get() != 0 {
                 ui_call_visual_bell();
             } else {
                 ui_call_bell();
             }
         }
     }
-    if !vim_strchr(p_debug, 'e' as ::core::ffi::c_int).is_null() {
+    if !vim_strchr(p_debug.get(), 'e' as ::core::ffi::c_int).is_null() {
         msg_source(HLF_W as ::core::ffi::c_int);
         msg(
             gettext(b"Beep!\0".as_ptr() as *const ::core::ffi::c_char),
@@ -3038,7 +3039,7 @@ pub unsafe extern "C" fn ui_attach_impl(mut ui: *mut RemoteUI, mut chanid: uint6
     }
     if !(*ui).ui_ext[kUIMultigrid as ::core::ffi::c_int as usize]
         && !(*ui).ui_ext[kUIFloatDebug as ::core::ffi::c_int as usize]
-        && ui_client_channel_id == 0
+        && ui_client_channel_id.get() == 0
     {
         ui_comp_attach(ui);
     }
@@ -3096,7 +3097,7 @@ pub unsafe extern "C" fn ui_detach_impl(mut ui: *mut RemoteUI, mut chanid: uint6
         shift_index = shift_index.wrapping_add(1);
     }
     ui_count.set((*ui_count.ptr()).wrapping_sub(1));
-    if ui_count.get() != 0 && !exiting {
+    if ui_count.get() != 0 && !exiting.get() {
         ui_schedule_refresh();
     }
     if !(*ui).ui_ext[kUIMultigrid as ::core::ffi::c_int as usize]
@@ -3116,7 +3117,7 @@ pub unsafe extern "C" fn ui_set_ext_option(
         ui_refresh();
         return;
     }
-    if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(ext as isize))
+    if *(*(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(ext as isize))
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         != '_' as ::core::ffi::c_int
         || active as ::core::ffi::c_int != 0
@@ -3124,7 +3125,7 @@ pub unsafe extern "C" fn ui_set_ext_option(
         remote_ui_option_set(
             ui,
             cstr_as_string(
-                *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(ext as isize),
+                *(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(ext as isize),
             ),
             object {
                 type_0: kObjectTypeBoolean,
@@ -3181,7 +3182,9 @@ pub unsafe extern "C" fn ui_line(
         ((*grid).chars as *const schar_T).offset(off as isize),
         ((*grid).attrs as *const sattr_T).offset(off as isize),
     );
-    if p_wd != 0 && rdb_flags & kOptRdbFlagLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if p_wd.get() != 0
+        && rdb_flags.get() & kOptRdbFlagLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+    {
         ui_call_grid_cursor_goto(
             (*grid).handle as Integer,
             row as Integer,
@@ -3192,7 +3195,7 @@ pub unsafe extern "C" fn ui_line(
             }) as Integer,
         );
         ui_call_flush();
-        let mut wd: uint64_t = llabs(p_wd as ::core::ffi::c_longlong) as uint64_t;
+        let mut wd: uint64_t = llabs(p_wd.get() as ::core::ffi::c_longlong) as uint64_t;
         os_sleep(wd);
         pending_cursor_update.set(true_0 != 0);
     }
@@ -3242,7 +3245,7 @@ pub unsafe extern "C" fn ui_current_col() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn ui_flush() {
     '_c2rust_label: {
-        if ui_client_channel_id == 0 {
+        if ui_client_channel_id.get() == 0 {
         } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3256,9 +3259,9 @@ pub unsafe extern "C" fn ui_flush() {
         return;
     }
     static was_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-    if State & MODE_CMDLINE as ::core::ffi::c_int == 0
-        && (*curwin).w_floating as ::core::ffi::c_int != 0
-        && (*curwin).w_config.hide as ::core::ffi::c_int != 0
+    if State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0
+        && (*curwin.get()).w_floating as ::core::ffi::c_int != 0
+        && (*curwin.get()).w_config.hide as ::core::ffi::c_int != 0
     {
         if !was_busy.get() {
             ui_call_busy_start();
@@ -3269,7 +3272,7 @@ pub unsafe extern "C" fn ui_flush() {
         was_busy.set(false_0 != 0);
     }
     win_ui_flush(false_0 != 0);
-    if textlock == 0 as ::core::ffi::c_int && expr_map_lock == 0 as ::core::ffi::c_int {
+    if textlock.get() == 0 as ::core::ffi::c_int && expr_map_lock.get() == 0 as ::core::ffi::c_int {
         cmdline_ui_flush();
         msg_ext_ui_flush();
     }
@@ -3286,7 +3289,7 @@ pub unsafe extern "C" fn ui_flush() {
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
         let mut style: Array = mode_style_array(&raw mut arena);
-        let mut enabled: bool = *p_guicursor as ::core::ffi::c_int != NUL;
+        let mut enabled: bool = *p_guicursor.get() as ::core::ffi::c_int != NUL;
         ui_call_mode_info_set(enabled as Boolean, style);
         arena_mem_free(arena_finish(&raw mut arena));
         pending_mode_info_update.set(false_0 != 0);
@@ -3295,7 +3298,7 @@ pub unsafe extern "C" fn ui_flush() {
     let mut cursor_obscured: bool = ui_cursor_is_behind_floatwin();
     if (cursor_obscured as ::core::ffi::c_int != cursor_was_obscured.get() as ::core::ffi::c_int
         || pending_mode_update.get() as ::core::ffi::c_int != 0)
-        && starting == 0
+        && starting.get() == 0
     {
         let mut idx: ::core::ffi::c_int = if cursor_obscured as ::core::ffi::c_int != 0 {
             SHAPE_IDX_R as ::core::ffi::c_int
@@ -3317,29 +3320,31 @@ pub unsafe extern "C" fn ui_flush() {
         pending_has_mouse.set(has_mouse.get() as ::core::ffi::c_int);
     }
     ui_call_flush();
-    if p_wd != 0 && rdb_flags & kOptRdbFlagFlush as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        os_sleep(llabs(p_wd as ::core::ffi::c_longlong) as uint64_t);
+    if p_wd.get() != 0
+        && rdb_flags.get() & kOptRdbFlagFlush as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+    {
+        os_sleep(llabs(p_wd.get() as ::core::ffi::c_longlong) as uint64_t);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_check_mouse() {
     has_mouse.set(false_0 != 0);
-    if *p_mouse as ::core::ffi::c_int == NUL {
+    if *p_mouse.get() as ::core::ffi::c_int == NUL {
         return;
     }
     let mut checkfor: ::core::ffi::c_int = MOUSE_NORMAL;
-    if VIsual_active {
+    if VIsual_active.get() {
         checkfor = MOUSE_VISUAL;
-    } else if State == MODE_HITRETURN as ::core::ffi::c_int
-        || State == MODE_ASKMORE as ::core::ffi::c_int
-        || State == MODE_SETWSIZE as ::core::ffi::c_int
+    } else if State.get() == MODE_HITRETURN as ::core::ffi::c_int
+        || State.get() == MODE_ASKMORE as ::core::ffi::c_int
+        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
     {
         checkfor = MOUSE_RETURN;
-    } else if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
         checkfor = MOUSE_INSERT;
-    } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
         checkfor = MOUSE_COMMAND;
-    } else if State == MODE_EXTERNCMD as ::core::ffi::c_int {
+    } else if State.get() == MODE_EXTERNCMD as ::core::ffi::c_int {
         checkfor = ' ' as ::core::ffi::c_int;
     }
     if ui_mouse_has(checkfor) {
@@ -3348,7 +3353,7 @@ pub unsafe extern "C" fn ui_check_mouse() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_mouse_has(mut mode: ::core::ffi::c_int) -> bool {
-    let mut p: *mut ::core::ffi::c_char = p_mouse;
+    let mut p: *mut ::core::ffi::c_char = p_mouse.get();
     while *p != 0 {
         match *p as ::core::ffi::c_int {
             97 => {
@@ -3357,7 +3362,7 @@ pub unsafe extern "C" fn ui_mouse_has(mut mode: ::core::ffi::c_int) -> bool {
                 }
             }
             MOUSE_HELP => {
-                if mode != MOUSE_RETURN && (*curbuf).b_help as ::core::ffi::c_int != 0 {
+                if mode != MOUSE_RETURN && (*curbuf.get()).b_help as ::core::ffi::c_int != 0 {
                     return true_0 != 0;
                 }
             }
@@ -3373,7 +3378,7 @@ pub unsafe extern "C" fn ui_mouse_has(mut mode: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_cursor_shape_no_check_conceal() {
-    if !full_screen {
+    if !full_screen.get() {
         return;
     }
     let mut new_mode_idx: ::core::ffi::c_int = cursor_get_mode_idx();
@@ -3388,20 +3393,20 @@ pub unsafe extern "C" fn ui_cursor_shape() {
     conceal_check_cursor_line();
 }
 unsafe extern "C" fn ui_cursor_is_behind_floatwin() -> bool {
-    if State & MODE_CMDLINE as ::core::ffi::c_int != 0 || !ui_comp_should_draw() {
+    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 || !ui_comp_should_draw() {
         return false_0 != 0;
     }
     let mut crow: ::core::ffi::c_int =
-        (*curwin).w_winrow + (*curwin).w_winrow_off + (*curwin).w_wrow;
-    let mut ccol: ::core::ffi::c_int = (*curwin).w_wincol
-        + (*curwin).w_wincol_off
-        + (if (*curwin).w_onebuf_opt.wo_rl != 0 {
-            (*curwin).w_view_width - (*curwin).w_wcol - 1 as ::core::ffi::c_int
+        (*curwin.get()).w_winrow + (*curwin.get()).w_winrow_off + (*curwin.get()).w_wrow;
+    let mut ccol: ::core::ffi::c_int = (*curwin.get()).w_wincol
+        + (*curwin.get()).w_wincol_off
+        + (if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
+            (*curwin.get()).w_view_width - (*curwin.get()).w_wcol - 1 as ::core::ffi::c_int
         } else {
-            (*curwin).w_wcol
+            (*curwin.get()).w_wcol
         });
     let mut top_grid: *mut ScreenGrid = ui_comp_get_grid_at_coord(crow, ccol);
-    return top_grid != &raw mut (*curwin).w_grid_alloc && top_grid != &raw mut default_grid;
+    return top_grid != &raw mut (*curwin.get()).w_grid_alloc && top_grid != default_grid.ptr();
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_has(mut ext: UIExtension) -> bool {
@@ -3522,7 +3527,7 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
         let mut j: UIExtension = kUICmdline;
         while (j as ::core::ffi::c_uint) < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(j as isize))
+            if *(*(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(j as isize))
                 .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != '_' as ::core::ffi::c_int
                 || (*ui).ui_ext[j as usize] as ::core::ffi::c_int != 0
@@ -3531,8 +3536,8 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
                 info.size = info.size.wrapping_add(1);
                 *info.items.offset(c2rust_fresh11 as isize) = key_value_pair {
                     key: cstr_as_string(
-                        *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-                            .offset(j as isize) as *mut ::core::ffi::c_char,
+                        *(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(j as isize)
+                            as *mut ::core::ffi::c_char,
                     ),
                     value: object {
                         type_0: kObjectTypeBoolean,
@@ -3672,22 +3677,22 @@ pub unsafe extern "C" fn ui_call_event(mut name: *mut ::core::ffi::c_char, mut a
         );
         i += 1;
     }
-    let mut save_expr_map_lock: ::core::ffi::c_int = expr_map_lock;
-    let mut save_textlock: ::core::ffi::c_int = textlock;
-    expr_map_lock = 0 as ::core::ffi::c_int;
-    textlock = 0 as ::core::ffi::c_int;
+    let mut save_expr_map_lock: ::core::ffi::c_int = expr_map_lock.get();
+    let mut save_textlock: ::core::ffi::c_int = textlock.get();
+    expr_map_lock.set(0 as ::core::ffi::c_int);
+    textlock.set(0 as ::core::ffi::c_int);
     let mut handled: bool = false_0 != 0;
     let mut event_cb: *mut UIEventCallback = ::core::ptr::null_mut::<UIEventCallback>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
     while __i < (*ui_event_cbs.ptr()).set.h.n_keys {
-        ui_event_ns_id = *(*ui_event_cbs.ptr()).set.keys.offset(__i as isize);
+        ui_event_ns_id.set(*(*ui_event_cbs.ptr()).set.keys.offset(__i as isize));
         event_cb = *(*ui_event_cbs.ptr()).values.offset(__i as isize) as *mut UIEventCallback;
         let mut err: Error = Error {
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
-        let mut ns_id: uint32_t = ui_event_ns_id;
+        let mut ns_id: uint32_t = ui_event_ns_id.get();
         let mut res: Object = nlua_call_ref_ctx(
             fast,
             (*event_cb).cb,
@@ -3697,7 +3702,7 @@ pub unsafe extern "C" fn ui_call_event(mut name: *mut ::core::ffi::c_char, mut a
             ::core::ptr::null_mut::<Arena>(),
             &raw mut err,
         );
-        ui_event_ns_id = 0 as uint32_t;
+        ui_event_ns_id.set(0 as uint32_t);
         if res.type_0 as ::core::ffi::c_uint
             == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             && res.data.boolean as ::core::ffi::c_int == 1 as ::core::ffi::c_int
@@ -3711,8 +3716,8 @@ pub unsafe extern "C" fn ui_call_event(mut name: *mut ::core::ffi::c_char, mut a
         api_clear_error(&raw mut err);
         __i = __i.wrapping_add(1);
     }
-    expr_map_lock = save_expr_map_lock;
-    textlock = save_textlock;
+    expr_map_lock.set(save_expr_map_lock);
+    textlock.set(save_textlock);
     if !handled {
         let mut any_call: bool = false_0 != 0;
         let mut i_0: size_t = 0 as size_t;
@@ -4225,7 +4230,7 @@ pub unsafe extern "C" fn ui_call_clear() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }
@@ -4238,7 +4243,7 @@ pub unsafe extern "C" fn ui_call_eol_clear() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"eol_clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }
@@ -5208,7 +5213,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_hide() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"popupmenu_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }
@@ -5530,7 +5535,7 @@ pub unsafe extern "C" fn ui_call_cmdline_block_hide() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"cmdline_block_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }
@@ -5595,7 +5600,7 @@ pub unsafe extern "C" fn ui_call_wildmenu_hide() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"wildmenu_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }
@@ -5677,7 +5682,7 @@ pub unsafe extern "C" fn ui_call_msg_clear() {
     entered.set(true_0 != 0);
     ui_call_event(
         b"msg_clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
     entered.set(false_0 != 0);
 }

@@ -51,8 +51,8 @@ extern "C" {
     fn api_free_array(value: Array);
     fn is_aucmd_win(win: *mut win_T) -> bool;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut msg_loclist: *mut ::core::ffi::c_char;
-    static mut msg_qflist: *mut ::core::ffi::c_char;
+    static msg_loclist: GlobalCell<*mut ::core::ffi::c_char>;
+    static msg_qflist: GlobalCell<*mut ::core::ffi::c_char>;
     fn calc_percentage(part: int64_t, whole: int64_t) -> ::core::ffi::c_int;
     fn col_print(
         buf: *mut ::core::ffi::c_char,
@@ -72,14 +72,14 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn bt_quickfix(buf: *const buf_T) -> bool;
     fn buf_spname(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
-    static mut p_ch: OptInt;
-    static mut p_ru: ::core::ffi::c_int;
-    static mut p_ruf: *mut ::core::ffi::c_char;
-    static mut p_stl: *mut ::core::ffi::c_char;
-    static mut p_wbr: *mut ::core::ffi::c_char;
-    static mut p_sc: ::core::ffi::c_int;
-    static mut p_sloc: *mut ::core::ffi::c_char;
-    static mut p_tal: *mut ::core::ffi::c_char;
+    static p_ch: GlobalCell<OptInt>;
+    static p_ru: GlobalCell<::core::ffi::c_int>;
+    static p_ruf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_stl: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wbr: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sc: GlobalCell<::core::ffi::c_int>;
+    static p_sloc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tal: GlobalCell<*mut ::core::ffi::c_char>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -133,8 +133,8 @@ extern "C" {
     );
     fn redrawing() -> bool;
     fn compute_foldcolumn(wp: *mut win_T, col: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    static mut updating_screen: bool;
-    static mut redraw_not_allowed: bool;
+    static updating_screen: GlobalCell<bool>;
+    static redraw_not_allowed: GlobalCell<bool>;
     fn eval_to_string_safe(
         arg: *mut ::core::ffi::c_char,
         use_sandbox: bool,
@@ -149,30 +149,30 @@ extern "C" {
     fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
     fn set_var(name: *const ::core::ffi::c_char, name_len: size_t, tv: *mut typval_T, copy: bool);
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut edit_submode: *mut ::core::ffi::c_char;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut t_colors: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut redraw_tabline: bool;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut ru_col: ::core::ffi::c_int;
-    static mut VIsual_active: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut KeyTyped: bool;
-    static mut wild_menu_showing: ::core::ffi::c_int;
-    static mut default_grid: ScreenGrid;
-    static mut default_gridview: GridView;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static edit_submode: GlobalCell<*mut ::core::ffi::c_char>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static t_colors: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static redraw_tabline: GlobalCell<bool>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static ru_col: GlobalCell<::core::ffi::c_int>;
+    static VIsual_active: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static KeyTyped: GlobalCell<bool>;
+    static wild_menu_showing: GlobalCell<::core::ffi::c_int>;
+    static default_grid: GlobalCell<ScreenGrid>;
+    static default_gridview: GlobalCell<GridView>;
     fn grid_adjust(
         grid: *mut GridView,
         row_off: *mut ::core::ffi::c_int,
@@ -201,10 +201,10 @@ extern "C" {
         attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn grid_line_flush();
-    static mut highlight_user: [::core::ffi::c_int; 9];
-    static mut highlight_stlnc: [::core::ffi::c_int; 9];
-    static mut ns_hl_fast: NS;
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static highlight_user: GlobalCell<[::core::ffi::c_int; 9]>;
+    static highlight_stlnc: GlobalCell<[::core::ffi::c_int; 9]>;
+    static ns_hl_fast: GlobalCell<NS>;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn hl_combine_attr(
         char_attr: ::core::ffi::c_int,
         prim_attr: ::core::ffi::c_int,
@@ -222,9 +222,9 @@ extern "C" {
         offp: *mut ::core::ffi::c_int,
         no_ff: bool,
     ) -> ::core::ffi::c_int;
-    static mut msg_grid_adj: GridView;
+    static msg_grid_adj: GlobalCell<GridView>;
     fn msg_clr_eos();
-    static mut showcmd_buf: [::core::ffi::c_char; 41];
+    static showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]>;
     fn get_option_default(opt_idx: OptIndex, opt_flags: ::core::ffi::c_int) -> OptVal;
     fn was_set_insecurely(
         wp: *mut win_T,
@@ -255,8 +255,8 @@ extern "C" {
         cursor: *mut colnr_T,
         end: *mut colnr_T,
     );
-    static mut tab_page_click_defs: *mut StlClickDefinition;
-    static mut tab_page_click_defs_size: size_t;
+    static tab_page_click_defs: GlobalCell<*mut StlClickDefinition>;
+    static tab_page_click_defs_size: GlobalCell<size_t>;
     fn describe_sign_text(buf: *mut ::core::ffi::c_char, sign_text: *mut schar_T) -> size_t;
     fn ui_has(ext: UIExtension) -> bool;
     fn ui_call_tabline_update(
@@ -2697,10 +2697,10 @@ unsafe extern "C" fn win_hl_attr(
     mut wp: *mut win_T,
     mut hlf: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast < 0 as ::core::ffi::c_int {
+    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
         (*wp).w_ns_hl_attr
     } else {
-        hl_attr_active
+        hl_attr_active.get()
     }
     .offset(hlf as isize);
 }
@@ -2710,21 +2710,21 @@ pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
     static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if busy.get() as ::core::ffi::c_int != 0
-        || wild_menu_showing != 0 as ::core::ffi::c_int && !ui_has(kUIWildmenu)
+        || wild_menu_showing.get() != 0 as ::core::ffi::c_int && !ui_has(kUIWildmenu)
     {
         return;
     }
     busy.set(true_0 != 0);
     (*wp).w_redr_status = false_0 != 0;
     if (*wp).w_status_height == 0 as ::core::ffi::c_int
-        && !(is_stl_global as ::core::ffi::c_int != 0 && wp == curwin)
+        && !(is_stl_global as ::core::ffi::c_int != 0 && wp == curwin.get())
     {
-        redraw_cmdline = true_0 != 0;
+        redraw_cmdline.set(true_0 != 0);
     } else if !redrawing() {
         (*wp).w_redr_status = true_0 != 0;
     } else if *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
         || !(*wp).w_floating
-        || is_stl_global as ::core::ffi::c_int != 0 && wp == curwin
+        || is_stl_global as ::core::ffi::c_int != 0 && wp == curwin.get()
     {
         redraw_custom_statusline(wp);
     }
@@ -2740,7 +2740,7 @@ pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
             fillchar = (*wp).w_p_fcs_chars.vert;
         }
         let mut attr: ::core::ffi::c_int = win_hl_attr(wp, group as ::core::ffi::c_int);
-        grid_line_start(&raw mut default_gridview, (*wp).w_winrow + (*wp).w_height);
+        grid_line_start(default_gridview.ptr(), (*wp).w_winrow + (*wp).w_height);
         grid_line_put_schar((*wp).w_wincol + (*wp).w_width, fillchar, attr);
         grid_line_flush();
     }
@@ -2750,7 +2750,7 @@ pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
 pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
     if !buf_spname(buf).is_null() {
         xstrlcpy(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             buf_spname(buf),
             MAXPATHL as size_t,
         );
@@ -2758,12 +2758,12 @@ pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
         home_replace(
             buf,
             (*buf).b_fname,
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             MAXPATHL as size_t,
             true_0 != 0,
         );
     }
-    trans_characters(&raw mut NameBuff as *mut ::core::ffi::c_char, MAXPATHL);
+    trans_characters(NameBuff.ptr() as *mut ::core::ffi::c_char, MAXPATHL);
 }
 #[no_mangle]
 pub unsafe extern "C" fn stl_connected(mut wp: *mut win_T) -> bool {
@@ -2925,7 +2925,7 @@ unsafe extern "C" fn win_redr_custom(
         if !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 && !is_stl_global {
             &raw mut (*wp).w_grid_alloc
         } else {
-            &raw mut default_grid
+            default_grid.ptr()
         };
     if entered.get() {
         return;
@@ -2933,19 +2933,19 @@ unsafe extern "C" fn win_redr_custom(
     entered.set(true_0 != 0);
     '_theend: {
         if wp.is_null() {
-            stl = p_tal;
+            stl = p_tal.get();
             row = 0 as ::core::ffi::c_int;
             fillchar = ' ' as ::core::ffi::c_int as schar_T;
             group = HLF_TPF;
-            attr = *hl_attr_active.offset(group as ::core::ffi::c_int as isize);
-            maxwidth = Columns;
+            attr = *(*hl_attr_active.ptr()).offset(group as ::core::ffi::c_int as isize);
+            maxwidth = Columns.get();
             opt_idx = kOptTabline;
         } else if draw_winbar {
             opt_idx = kOptWinbar;
             stl = if *(*wp).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL {
                 (*wp).w_onebuf_opt.wo_wbr
             } else {
-                p_wbr
+                p_wbr.get()
             };
             opt_scope = if *(*wp).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL {
                 OPT_LOCAL as ::core::ffi::c_int
@@ -2959,7 +2959,7 @@ unsafe extern "C" fn win_redr_custom(
                 break '_theend;
             } else {
                 fillchar = (*wp).w_p_fcs_chars.wbr;
-                group = (if wp == curwin {
+                group = (if wp == curwin.get() {
                     HLF_WBR as ::core::ffi::c_int
                 } else {
                     HLF_WBRNC as ::core::ffi::c_int
@@ -2982,14 +2982,14 @@ unsafe extern "C" fn win_redr_custom(
                 maxwidth = (*wp).w_view_width;
             } else {
                 row = if is_stl_global as ::core::ffi::c_int != 0 {
-                    Rows - p_ch as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                    Rows.get() - p_ch.get() as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 } else {
                     (*wp).w_winrow + (*wp).w_height
                 };
                 maxwidth = if in_status_line as ::core::ffi::c_int != 0 && !is_stl_global {
                     (*wp).w_width
                 } else {
-                    Columns
+                    Columns.get()
                 };
             }
             fillchar = fillchar_status(&raw mut group, wp);
@@ -3000,7 +3000,7 @@ unsafe extern "C" fn win_redr_custom(
                 &raw mut (*wp).w_status_click_defs_size,
             );
             if draw_ruler {
-                stl = p_ruf;
+                stl = p_ruf.get();
                 opt_idx = kOptRulerformat;
                 if *stl as ::core::ffi::c_int == '%' as ::core::ffi::c_int {
                     stl = stl.offset(1);
@@ -3015,20 +3015,20 @@ unsafe extern "C" fn win_redr_custom(
                     let c2rust_fresh0 = stl;
                     stl = stl.offset(1);
                     if *c2rust_fresh0 as ::core::ffi::c_int != '(' as ::core::ffi::c_int {
-                        stl = p_ruf;
+                        stl = p_ruf.get();
                     }
                 }
-                col = if ru_col - (Columns - maxwidth)
+                col = if ru_col.get() - (Columns.get() - maxwidth)
                     > (maxwidth + 1 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int
                 {
-                    ru_col - (Columns - maxwidth)
+                    ru_col.get() - (Columns.get() - maxwidth)
                 } else {
                     (maxwidth + 1 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int
                 };
                 maxwidth -= col;
                 if !in_status_line {
-                    row = Rows - 1 as ::core::ffi::c_int;
-                    grid = grid_adjust(&raw mut msg_grid_adj, &raw mut row, &raw mut col);
+                    row = Rows.get() - 1 as ::core::ffi::c_int;
+                    grid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
                     maxwidth -= 1;
                     fillchar = ' ' as ::core::ffi::c_int as schar_T;
                     group = HLF_MSG;
@@ -3038,7 +3038,7 @@ unsafe extern "C" fn win_redr_custom(
                 stl = if *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL {
                     (*wp).w_onebuf_opt.wo_stl
                 } else {
-                    p_stl
+                    p_stl.get()
                 };
                 opt_scope = if *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL {
                     OPT_LOCAL as ::core::ffi::c_int
@@ -3052,7 +3052,7 @@ unsafe extern "C" fn win_redr_custom(
             }
         }
         if maxwidth > 0 as ::core::ffi::c_int {
-            ewp = if wp.is_null() { curwin } else { wp };
+            ewp = if wp.is_null() { curwin.get() } else { wp };
             p_crb_save = (*ewp).w_onebuf_opt.wo_crb;
             (*ewp).w_onebuf_opt.wo_crb = false_0;
             stl = xstrdup(stl);
@@ -3215,12 +3215,12 @@ unsafe extern "C" fn win_redr_custom(
                     curgroup = -(*sp).userhl;
                 } else {
                     let mut userhl: *mut ::core::ffi::c_int = if !wp.is_null()
-                        && wp != curwin
+                        && wp != curwin.get()
                         && (*wp).w_status_height != 0 as ::core::ffi::c_int
                     {
-                        &raw mut highlight_stlnc as *mut ::core::ffi::c_int
+                        highlight_stlnc.ptr() as *mut ::core::ffi::c_int
                     } else {
-                        &raw mut highlight_user as *mut ::core::ffi::c_int
+                        highlight_user.ptr() as *mut ::core::ffi::c_int
                     };
                     let mut userbuf: [::core::ffi::c_char; 5] =
                         ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"User\0");
@@ -3246,7 +3246,7 @@ unsafe extern "C" fn win_redr_custom(
                 grid_line_fill(col, maxcol, fillchar, curattr);
                 grid_line_flush();
                 click_defs = if wp.is_null() {
-                    tab_page_click_defs
+                    tab_page_click_defs.get()
                 } else if draw_winbar as ::core::ffi::c_int != 0 {
                     (*wp).w_winbar_click_defs
                 } else {
@@ -3272,7 +3272,7 @@ pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
     }
     entered.set(true_0 != 0);
     if !((*wp).w_winbar_height == 0 as ::core::ffi::c_int || !redrawing()) {
-        if *p_wbr as ::core::ffi::c_int != NUL
+        if *p_wbr.get() as ::core::ffi::c_int != NUL
             || *(*wp).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL
         {
             win_redr_custom(wp, true_0 != 0, false_0 != 0, false_0 != 0);
@@ -3284,17 +3284,18 @@ pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
 pub unsafe extern "C" fn redraw_ruler() {
     static did_ruler_col: GlobalCell<::core::ffi::c_int> =
         GlobalCell::new(-1 as ::core::ffi::c_int);
-    let mut wp: *mut win_T =
-        if !is_aucmd_win(curwin) && (*curwin).w_status_height == 0 as ::core::ffi::c_int {
-            curwin
-        } else {
-            lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>())
-        };
+    let mut wp: *mut win_T = if !is_aucmd_win(curwin.get())
+        && (*curwin.get()).w_status_height == 0 as ::core::ffi::c_int
+    {
+        curwin.get()
+    } else {
+        lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>())
+    };
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
-    if p_ru == 0
+    if p_ru.get() == 0
         || (*wp).w_status_height > 0 as ::core::ffi::c_int
         || is_stl_global as ::core::ffi::c_int != 0
-        || p_ch == 0 as OptInt && !ui_has(kUIMessages)
+        || p_ch.get() == 0 as OptInt && !ui_has(kUIMessages)
     {
         if did_show_ext_ruler.get() as ::core::ffi::c_int != 0
             && ui_has(kUIMessages) as ::core::ffi::c_int != 0
@@ -3302,8 +3303,8 @@ pub unsafe extern "C" fn redraw_ruler() {
             ui_call_msg_ruler(ARRAY_DICT_INIT);
             did_show_ext_ruler.set(false_0 != 0);
         } else if did_ruler_col.get() > 0 as ::core::ffi::c_int {
-            msg_col = did_ruler_col.get();
-            msg_row = Rows - 1 as ::core::ffi::c_int;
+            msg_col.set(did_ruler_col.get());
+            msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
             msg_clr_eos();
         }
         did_ruler_col.set(-1 as ::core::ffi::c_int);
@@ -3312,14 +3313,17 @@ pub unsafe extern "C" fn redraw_ruler() {
     if (*wp).w_cursor.lnum > (*(*wp).w_buffer).b_ml.ml_line_count {
         return;
     }
-    if (*wp).w_status_height == 0 as ::core::ffi::c_int && !is_stl_global && !edit_submode.is_null()
+    if (*wp).w_status_height == 0 as ::core::ffi::c_int
+        && !is_stl_global
+        && !(*edit_submode.ptr()).is_null()
     {
         return;
     }
     let mut part_of_status: bool =
         (*wp).w_status_height != 0 || is_stl_global as ::core::ffi::c_int != 0;
-    if *p_ruf as ::core::ffi::c_int != 0
-        && (p_ch > 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0 && !part_of_status)
+    if *p_ruf.get() as ::core::ffi::c_int != 0
+        && (p_ch.get() > 0 as OptInt
+            || ui_has(kUIMessages) as ::core::ffi::c_int != 0 && !part_of_status)
     {
         win_redr_custom(wp, false_0 != 0, true_0 != 0, ui_has(kUIMessages));
         return;
@@ -3333,7 +3337,7 @@ pub unsafe extern "C" fn redraw_ruler() {
     let mut width: ::core::ffi::c_int = if (*wp).w_status_height != 0 {
         (*wp).w_width
     } else {
-        Columns
+        Columns.get()
     };
     let mut fillchar: schar_T = if part_of_status as ::core::ffi::c_int != 0 {
         fillchar_status(&raw mut group, wp)
@@ -3343,7 +3347,7 @@ pub unsafe extern "C" fn redraw_ruler() {
     let mut attr: ::core::ffi::c_int = if part_of_status as ::core::ffi::c_int != 0 {
         win_hl_attr(wp, group as ::core::ffi::c_int)
     } else {
-        *hl_attr_active.offset(group as ::core::ffi::c_int as isize)
+        *(*hl_attr_active.ptr()).offset(group as ::core::ffi::c_int as isize)
     };
     let mut virtcol: colnr_T = (*wp).w_virtcol;
     if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T {
@@ -3357,7 +3361,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         );
         (*wp).w_onebuf_opt.wo_list = true_0;
     }
-    let mut empty_line: ::core::ffi::c_int = (State & MODE_INSERT as ::core::ffi::c_int
+    let mut empty_line: ::core::ffi::c_int = (State.get() & MODE_INSERT as ::core::ffi::c_int
         == 0 as ::core::ffi::c_int
         && *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) as ::core::ffi::c_int == NUL)
         as ::core::ffi::c_int;
@@ -3393,7 +3397,7 @@ pub unsafe extern "C" fn redraw_ruler() {
     if (*wp).w_status_height == 0 as ::core::ffi::c_int && !is_stl_global {
         n1 += 1;
     }
-    let mut this_ru_col: ::core::ffi::c_int = ru_col - (Columns - width);
+    let mut this_ru_col: ::core::ffi::c_int = ru_col.get() - (Columns.get() - width);
     let mut n2: ::core::ffi::c_int = (width + 1 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int;
     this_ru_col = if this_ru_col > n2 { this_ru_col } else { n2 };
     if this_ru_col + n1 < width {
@@ -3453,7 +3457,7 @@ pub unsafe extern "C" fn redraw_ruler() {
             },
         };
         '_c2rust_label: {
-            if attr == *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize) {
+            if attr == *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize) {
             } else {
                 __assert_fail(
                     b"attr == HL_ATTR(HLF_MSG)\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3490,7 +3494,7 @@ pub unsafe extern "C" fn redraw_ruler() {
                     utfc_ptr2len((&raw mut buffer as *mut ::core::ffi::c_char).offset(n1 as isize));
             }
         }
-        grid_line_start(&raw mut msg_grid_adj, Rows - 1 as ::core::ffi::c_int);
+        grid_line_start(msg_grid_adj.ptr(), Rows.get() - 1 as ::core::ffi::c_int);
         did_ruler_col.set(off + this_ru_col);
         let mut w: ::core::ffi::c_int = grid_line_puts(
             did_ruler_col.get(),
@@ -3505,7 +3509,7 @@ pub unsafe extern "C" fn redraw_ruler() {
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn fillchar_status(mut group: *mut hlf_T, mut wp: *mut win_T) -> schar_T {
-    if wp == curwin {
+    if wp == curwin.get() {
         *group = HLF_S;
         return (*wp).w_p_fcs_chars.stl;
     } else {
@@ -3526,13 +3530,13 @@ pub unsafe extern "C" fn redraw_custom_statusline(mut wp: *mut win_T) {
 unsafe extern "C" fn ui_ext_tabline_update() {
     let mut arena: Arena = ARENA_EMPTY;
     let mut n_tabs: size_t = 0 as size_t;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
         n_tabs = n_tabs.wrapping_add(1);
         tp = (*tp).tp_next as *mut tabpage_T;
     }
     let mut tabs: Array = arena_array(&raw mut arena, n_tabs);
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
         let mut tab_info: Dict = arena_dict(&raw mut arena, 2 as size_t);
         let c2rust_fresh45 = tab_info.size;
@@ -3546,8 +3550,8 @@ unsafe extern "C" fn ui_ext_tabline_update() {
                 },
             },
         };
-        let mut cwp: *mut win_T = if tp_0 == curtab {
-            curwin
+        let mut cwp: *mut win_T = if tp_0 == curtab.get() {
+            curwin.get()
         } else {
             (*tp_0).tp_curwin
         };
@@ -3561,7 +3565,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
                 data: C2Rust_Unnamed {
                     string: arena_string(
                         &raw mut arena,
-                        cstr_as_string(&raw mut NameBuff as *mut ::core::ffi::c_char),
+                        cstr_as_string(NameBuff.ptr() as *mut ::core::ffi::c_char),
                     ),
                 },
             },
@@ -3575,7 +3579,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         tp_0 = (*tp_0).tp_next as *mut tabpage_T;
     }
     let mut n_buffers: size_t = 0 as size_t;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         n_buffers = n_buffers.wrapping_add(
             (if (*buf).b_p_bl != 0 {
@@ -3587,7 +3591,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         buf = (*buf).b_next;
     }
     let mut buffers: Array = arena_array(&raw mut arena, n_buffers);
-    let mut buf_0: *mut buf_T = firstbuf;
+    let mut buf_0: *mut buf_T = firstbuf.get();
     while !buf_0.is_null() {
         if (*buf_0).b_p_bl != 0 {
             let mut buffer_info: Dict = arena_dict(&raw mut arena, 2 as size_t);
@@ -3612,7 +3616,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
                     data: C2Rust_Unnamed {
                         string: arena_string(
                             &raw mut arena,
-                            cstr_as_string(&raw mut NameBuff as *mut ::core::ffi::c_char),
+                            cstr_as_string(NameBuff.ptr() as *mut ::core::ffi::c_char),
                         ),
                     },
                 },
@@ -3627,9 +3631,9 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         buf_0 = (*buf_0).b_next;
     }
     ui_call_tabline_update(
-        (*curtab).handle as Tabpage,
+        (*curtab.get()).handle as Tabpage,
         tabs,
-        (*curbuf).handle as Buffer,
+        (*curbuf.get()).handle as Buffer,
         buffers,
     );
     arena_mem_free(arena_finish(&raw mut arena));
@@ -3638,14 +3642,14 @@ unsafe extern "C" fn ui_ext_tabline_update() {
 pub unsafe extern "C" fn draw_tabline() {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut attr_nosel: ::core::ffi::c_int =
-        *hl_attr_active.offset(HLF_TP as ::core::ffi::c_int as isize);
+        *(*hl_attr_active.ptr()).offset(HLF_TP as ::core::ffi::c_int as isize);
     let mut attr_fill: ::core::ffi::c_int =
-        *hl_attr_active.offset(HLF_TPF as ::core::ffi::c_int as isize);
-    let mut use_sep_chars: bool = t_colors < 8 as ::core::ffi::c_int;
-    if default_grid.chars.is_null() {
+        *(*hl_attr_active.ptr()).offset(HLF_TPF as ::core::ffi::c_int as isize);
+    let mut use_sep_chars: bool = t_colors.get() < 8 as ::core::ffi::c_int;
+    if (*default_grid.ptr()).chars.is_null() {
         return;
     }
-    redraw_tabline = false_0 != 0;
+    redraw_tabline.set(false_0 != 0);
     if ui_has(kUITabline) {
         ui_ext_tabline_update();
         return;
@@ -3654,7 +3658,7 @@ pub unsafe extern "C" fn draw_tabline() {
         return;
     }
     '_c2rust_label: {
-        if tab_page_click_defs_size >= Columns as size_t {
+        if tab_page_click_defs_size.get() >= Columns.get() as size_t {
         } else {
             __assert_fail(
                 b"tab_page_click_defs_size >= (size_t)Columns\0".as_ptr()
@@ -3665,8 +3669,8 @@ pub unsafe extern "C" fn draw_tabline() {
             );
         }
     };
-    stl_clear_click_defs(tab_page_click_defs, tab_page_click_defs_size);
-    if *p_tal as ::core::ffi::c_int != NUL {
+    stl_clear_click_defs(tab_page_click_defs.get(), tab_page_click_defs_size.get());
+    if *p_tal.get() as ::core::ffi::c_int != NUL {
         win_redr_custom(
             ::core::ptr::null_mut::<win_T>(),
             false_0 != 0,
@@ -3678,20 +3682,22 @@ pub unsafe extern "C" fn draw_tabline() {
         let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut cwp: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut wincount: ::core::ffi::c_int = 0;
-        grid_line_start(&raw mut default_gridview, 0 as ::core::ffi::c_int);
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        grid_line_start(default_gridview.ptr(), 0 as ::core::ffi::c_int);
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
             tabcount += 1;
             tp = (*tp).tp_next as *mut tabpage_T;
         }
         let mut tabwidth: ::core::ffi::c_int = if (if tabcount > 0 as ::core::ffi::c_int {
-            (Columns - 1 as ::core::ffi::c_int + tabcount / 2 as ::core::ffi::c_int) / tabcount
+            (Columns.get() - 1 as ::core::ffi::c_int + tabcount / 2 as ::core::ffi::c_int)
+                / tabcount
         } else {
             0 as ::core::ffi::c_int
         }) > 6 as ::core::ffi::c_int
         {
             if tabcount > 0 as ::core::ffi::c_int {
-                (Columns - 1 as ::core::ffi::c_int + tabcount / 2 as ::core::ffi::c_int) / tabcount
+                (Columns.get() - 1 as ::core::ffi::c_int + tabcount / 2 as ::core::ffi::c_int)
+                    / tabcount
             } else {
                 0 as ::core::ffi::c_int
             }
@@ -3700,20 +3706,20 @@ pub unsafe extern "C" fn draw_tabline() {
         };
         let mut attr: ::core::ffi::c_int = attr_nosel;
         tabcount = 0 as ::core::ffi::c_int;
-        let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp_0.is_null() {
-            if col >= Columns - 4 as ::core::ffi::c_int {
+            if col >= Columns.get() - 4 as ::core::ffi::c_int {
                 break;
             }
             let mut scol: ::core::ffi::c_int = col;
-            if tp_0 == curtab {
-                cwp = curwin;
-                wp = firstwin;
+            if tp_0 == curtab.get() {
+                cwp = curwin.get();
+                wp = firstwin.get();
             } else {
                 cwp = (*tp_0).tp_curwin;
                 wp = (*tp_0).tp_firstwin;
             }
-            if (*tp_0).tp_topframe == topframe {
+            if (*tp_0).tp_topframe == topframe.get() {
                 attr = win_hl_attr(cwp, HLF_TPS as ::core::ffi::c_int);
             }
             if use_sep_chars as ::core::ffi::c_int != 0 && col > 0 as ::core::ffi::c_int {
@@ -3721,7 +3727,7 @@ pub unsafe extern "C" fn draw_tabline() {
                 col = col + 1;
                 grid_line_put_schar(c2rust_fresh39, '|' as ::core::ffi::c_int as schar_T, attr);
             }
-            if (*tp_0).tp_topframe != topframe {
+            if (*tp_0).tp_topframe != topframe.get() {
                 attr = win_hl_attr(cwp, HLF_TP as ::core::ffi::c_int);
             }
             let c2rust_fresh40 = col;
@@ -3741,17 +3747,17 @@ pub unsafe extern "C" fn draw_tabline() {
             if modified as ::core::ffi::c_int != 0 || wincount > 1 as ::core::ffi::c_int {
                 if wincount > 1 as ::core::ffi::c_int {
                     let mut len: ::core::ffi::c_int = vim_snprintf(
-                        &raw mut NameBuff as *mut ::core::ffi::c_char,
+                        NameBuff.ptr() as *mut ::core::ffi::c_char,
                         MAXPATHL as size_t,
                         b"%d\0".as_ptr() as *const ::core::ffi::c_char,
                         wincount,
                     );
-                    if col + len >= Columns - 3 as ::core::ffi::c_int {
+                    if col + len >= Columns.get() - 3 as ::core::ffi::c_int {
                         break;
                     }
                     grid_line_puts(
                         col,
-                        &raw mut NameBuff as *mut ::core::ffi::c_char,
+                        NameBuff.ptr() as *mut ::core::ffi::c_char,
                         len,
                         hl_combine_attr(attr, win_hl_attr(cwp, HLF_T as ::core::ffi::c_int)),
                     );
@@ -3769,15 +3775,15 @@ pub unsafe extern "C" fn draw_tabline() {
             let mut room: ::core::ffi::c_int = scol - col + tabwidth - 1 as ::core::ffi::c_int;
             if room > 0 as ::core::ffi::c_int {
                 get_trans_bufname((*cwp).w_buffer);
-                shorten_dir(&raw mut NameBuff as *mut ::core::ffi::c_char);
+                shorten_dir(NameBuff.ptr() as *mut ::core::ffi::c_char);
                 let mut len_0: ::core::ffi::c_int =
-                    vim_strsize(&raw mut NameBuff as *mut ::core::ffi::c_char);
-                let mut p: *mut ::core::ffi::c_char = &raw mut NameBuff as *mut ::core::ffi::c_char;
+                    vim_strsize(NameBuff.ptr() as *mut ::core::ffi::c_char);
+                let mut p: *mut ::core::ffi::c_char = NameBuff.ptr() as *mut ::core::ffi::c_char;
                 while len_0 > room {
                     len_0 -= ptr2cells(p);
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }
-                let mut n: ::core::ffi::c_int = Columns - col - 1 as ::core::ffi::c_int;
+                let mut n: ::core::ffi::c_int = Columns.get() - col - 1 as ::core::ffi::c_int;
                 len_0 = if len_0 < n { len_0 } else { n };
                 grid_line_puts(col, p, -1 as ::core::ffi::c_int, attr);
                 col += len_0;
@@ -3789,17 +3795,18 @@ pub unsafe extern "C" fn draw_tabline() {
             while scol < col {
                 let c2rust_fresh44 = scol;
                 scol = scol + 1;
-                *tab_page_click_defs.offset(c2rust_fresh44 as isize) = StlClickDefinition {
-                    type_0: kStlClickTabSwitch,
-                    tabnr: tabcount,
-                    func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                };
+                *(*tab_page_click_defs.ptr()).offset(c2rust_fresh44 as isize) =
+                    StlClickDefinition {
+                        type_0: kStlClickTabSwitch,
+                        tabnr: tabcount,
+                        func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                    };
             }
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
         let mut scol_0: ::core::ffi::c_int = col;
-        while scol_0 < Columns {
-            *tab_page_click_defs.offset(scol_0 as isize) = StlClickDefinition {
+        while scol_0 < Columns.get() {
+            *(*tab_page_click_defs.ptr()).offset(scol_0 as isize) = StlClickDefinition {
                 type_0: kStlClickTabSwitch,
                 tabnr: 0 as ::core::ffi::c_int,
                 func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -3811,9 +3818,9 @@ pub unsafe extern "C" fn draw_tabline() {
         } else {
             ' ' as ::core::ffi::c_int
         }) as ::core::ffi::c_char;
-        grid_line_fill(col, Columns, c as schar_T, attr_fill);
-        if p_sc != 0 && *p_sloc as ::core::ffi::c_int == 't' as ::core::ffi::c_int {
-            let mut n_0: ::core::ffi::c_int = Columns
+        grid_line_fill(col, Columns.get(), c as schar_T, attr_fill);
+        if p_sc.get() != 0 && *p_sloc.get() as ::core::ffi::c_int == 't' as ::core::ffi::c_int {
+            let mut n_0: ::core::ffi::c_int = Columns.get()
                 - col
                 - (tabcount > 1 as ::core::ffi::c_int) as ::core::ffi::c_int
                     * 3 as ::core::ffi::c_int;
@@ -3824,11 +3831,11 @@ pub unsafe extern "C" fn draw_tabline() {
             };
             if sc_width > 0 as ::core::ffi::c_int {
                 grid_line_puts(
-                    Columns
+                    Columns.get()
                         - sc_width
                         - (tabcount > 1 as ::core::ffi::c_int) as ::core::ffi::c_int
                             * 2 as ::core::ffi::c_int,
-                    &raw mut showcmd_buf as *mut ::core::ffi::c_char,
+                    showcmd_buf.ptr() as *mut ::core::ffi::c_char,
                     sc_width,
                     attr_nosel,
                 );
@@ -3836,20 +3843,20 @@ pub unsafe extern "C" fn draw_tabline() {
         }
         if tabcount > 1 as ::core::ffi::c_int {
             grid_line_put_schar(
-                Columns - 1 as ::core::ffi::c_int,
+                Columns.get() - 1 as ::core::ffi::c_int,
                 'X' as ::core::ffi::c_int as schar_T,
                 attr_nosel,
             );
-            *tab_page_click_defs.offset((Columns - 1 as ::core::ffi::c_int) as isize) =
-                StlClickDefinition {
-                    type_0: kStlClickTabClose,
-                    tabnr: 999 as ::core::ffi::c_int,
-                    func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                };
+            *(*tab_page_click_defs.ptr())
+                .offset((Columns.get() - 1 as ::core::ffi::c_int) as isize) = StlClickDefinition {
+                type_0: kStlClickTabClose,
+                tabnr: 999 as ::core::ffi::c_int,
+                func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            };
         }
         grid_line_flush();
     }
-    redraw_tabline = false_0 != 0;
+    redraw_tabline.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn build_statuscol_str(
@@ -3936,11 +3943,11 @@ pub unsafe extern "C" fn build_stl_str_hl(
     static curitem: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut buf_tmp: [::core::ffi::c_char; 70] = [0; 70];
     let mut usefmt: *mut ::core::ffi::c_char = fmt;
-    let save_redraw_not_allowed: bool = redraw_not_allowed;
-    let save_KeyTyped: bool = KeyTyped;
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    if updating_screen {
-        redraw_not_allowed = true_0 != 0;
+    let save_redraw_not_allowed: bool = redraw_not_allowed.get();
+    let save_KeyTyped: bool = KeyTyped.get();
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
+    if updating_screen.get() {
+        redraw_not_allowed.set(true_0 != 0);
     }
     if (*stl_items.ptr()).is_null() {
         stl_items.set(xmalloc(
@@ -4466,7 +4473,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 buf_spname((*wp).w_buffer);
                                             if !name.is_null() {
                                                 xstrlcpy(
-                                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                                                     name,
                                                     MAXPATHL as size_t,
                                                 );
@@ -4482,22 +4489,22 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 home_replace(
                                                     (*wp).w_buffer,
                                                     t_1,
-                                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                                                     MAXPATHL as size_t,
                                                     true_0 != 0,
                                                 );
                                             }
                                             trans_characters(
-                                                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                                NameBuff.ptr() as *mut ::core::ffi::c_char,
                                                 MAXPATHL,
                                             );
                                             if opt as ::core::ffi::c_int
                                                 != STL_FILENAME as ::core::ffi::c_int
                                             {
-                                                str = &raw mut NameBuff as *mut ::core::ffi::c_char;
+                                                str = NameBuff.ptr() as *mut ::core::ffi::c_char;
                                             } else {
                                                 str = path_tail(
-                                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                                    NameBuff.ptr() as *mut ::core::ffi::c_char
                                                 );
                                             }
                                             break 's_1848;
@@ -4549,7 +4556,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
                                                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                                                    (*curbuf).handle,
+                                                    (*curbuf.get()).handle,
                                                 );
                                                 set_internal_string_var(
                                                     b"g:actual_curbuf\0".as_ptr()
@@ -4561,30 +4568,30 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
                                                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                                                    (*curwin).handle,
+                                                    (*curwin.get()).handle,
                                                 );
                                                 set_internal_string_var(
                                                     b"g:actual_curwin\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                 );
-                                                let save_curbuf: *mut buf_T = curbuf;
-                                                let save_curwin: *mut win_T = curwin;
+                                                let save_curbuf: *mut buf_T = curbuf.get();
+                                                let save_curwin: *mut win_T = curwin.get();
                                                 let save_VIsual_active: ::core::ffi::c_int =
-                                                    VIsual_active as ::core::ffi::c_int;
-                                                curwin = wp;
-                                                curbuf = (*wp).w_buffer;
-                                                if curwin != save_curwin {
-                                                    VIsual_active = false_0 != 0;
+                                                    VIsual_active.get() as ::core::ffi::c_int;
+                                                curwin.set(wp);
+                                                curbuf.set((*wp).w_buffer);
+                                                if curwin.get() != save_curwin {
+                                                    VIsual_active.set(false_0 != 0);
                                                 }
                                                 str = eval_to_string_safe(
                                                     out_p,
                                                     use_sandbox,
                                                     false_0 != 0,
                                                 );
-                                                curwin = save_curwin;
-                                                curbuf = save_curbuf;
-                                                VIsual_active = save_VIsual_active != 0;
+                                                curwin.set(save_curwin);
+                                                curbuf.set(save_curbuf);
+                                                VIsual_active.set(save_VIsual_active != 0);
                                                 do_unlet(
                                                     b"g:actual_curbuf\0".as_ptr() as *const ::core::ffi::c_char,
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 16]>()
@@ -4755,7 +4762,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             break 's_1848;
                                         }
                                         99 => {
-                                            num = if State & MODE_INSERT as ::core::ffi::c_int
+                                            num = if State.get() & MODE_INSERT as ::core::ffi::c_int
                                                 == 0 as ::core::ffi::c_int
                                                 && empty_line as ::core::ffi::c_int != 0
                                             {
@@ -4771,7 +4778,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             if opt as ::core::ffi::c_int
                                                 == STL_VIRTCOL_ALT as ::core::ffi::c_int
                                                 && virtcol
-                                                    == (if State & MODE_INSERT as ::core::ffi::c_int
+                                                    == (if State.get()
+                                                        & MODE_INSERT as ::core::ffi::c_int
                                                         == 0 as ::core::ffi::c_int
                                                         && empty_line as ::core::ffi::c_int != 0
                                                     {
@@ -4803,14 +4811,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             break 's_1848;
                                         }
                                         83 => {
-                                            if p_sc != 0
+                                            if p_sc.get() != 0
                                                 && (opt_idx as ::core::ffi::c_int
                                                     == kOptInvalid as ::core::ffi::c_int
-                                                    || find_option(p_sloc) as ::core::ffi::c_int
+                                                    || find_option(p_sloc.get())
+                                                        as ::core::ffi::c_int
                                                         == opt_idx as ::core::ffi::c_int)
                                             {
-                                                str = &raw mut showcmd_buf
-                                                    as *mut ::core::ffi::c_char;
+                                                str = showcmd_buf.ptr() as *mut ::core::ffi::c_char;
                                             }
                                             break 's_1848;
                                         }
@@ -4965,9 +4973,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                         113 => {
                                             if bt_quickfix((*wp).w_buffer) {
                                                 str = if !(*wp).w_llist_ref.is_null() {
-                                                    gettext(msg_loclist)
+                                                    gettext(msg_loclist.get())
                                                 } else {
-                                                    gettext(msg_qflist)
+                                                    gettext(msg_qflist.get())
                                                 };
                                             }
                                             break 's_1848;
@@ -5078,7 +5086,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     0 as ::core::ffi::c_int
                                 } else {
                                     l + 1 as ::core::ffi::c_int
-                                        + (if State & MODE_INSERT as ::core::ffi::c_int
+                                        + (if State.get() & MODE_INSERT as ::core::ffi::c_int
                                             == 0 as ::core::ffi::c_int
                                             && empty_line as ::core::ffi::c_int != 0
                                         {
@@ -5677,9 +5685,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
         (*cur_tab_rec).def.tabnr = 0 as ::core::ffi::c_int;
         (*cur_tab_rec).def.func = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    redraw_not_allowed = save_redraw_not_allowed;
+    redraw_not_allowed.set(save_redraw_not_allowed);
     if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && did_emsg > did_emsg_before
+        && did_emsg.get() > did_emsg_before
     {
         set_option_direct(
             opt_idx,
@@ -5688,7 +5696,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
             SID_ERROR,
         );
     }
-    KeyTyped = save_KeyTyped;
+    KeyTyped.set(save_KeyTyped);
     return width_0;
 }
 pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;

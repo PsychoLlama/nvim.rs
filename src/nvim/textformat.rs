@@ -27,8 +27,8 @@ extern "C" {
         backward: bool,
         include_space: bool,
     ) -> ::core::ffi::c_int;
-    static mut p_paste: ::core::ffi::c_int;
-    static mut p_smd: ::core::ffi::c_int;
+    static p_paste: GlobalCell<::core::ffi::c_int>;
+    static p_smd: GlobalCell<::core::ffi::c_int>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -64,24 +64,24 @@ extern "C" {
     fn set_vim_var_char(c: ::core::ffi::c_int);
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn beep_flush();
-    static mut current_sctx: sctx_T;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut did_ai: bool;
-    static mut did_si: bool;
-    static mut can_si: bool;
-    static mut can_si_back: bool;
-    static mut old_indent: ::core::ffi::c_int;
-    static mut saved_cursor: pos_T;
-    static mut Insstart: pos_T;
-    static mut State: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut got_int: bool;
-    static mut replace_offset: ::core::ffi::c_int;
-    static mut cmdwin_buf: *mut buf_T;
+    static current_sctx: GlobalCell<sctx_T>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static did_ai: GlobalCell<bool>;
+    static did_si: GlobalCell<bool>;
+    static can_si: GlobalCell<bool>;
+    static can_si_back: GlobalCell<bool>;
+    static old_indent: GlobalCell<::core::ffi::c_int>;
+    static saved_cursor: GlobalCell<pos_T>;
+    static Insstart: GlobalCell<pos_T>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static got_int: GlobalCell<bool>;
+    static replace_offset: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
     fn get_indent() -> ::core::ffi::c_int;
     fn get_indent_lnum(lnum: linenr_T) -> ::core::ffi::c_int;
     fn set_indent(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> bool;
@@ -2465,10 +2465,10 @@ pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
 static did_add_space: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn has_format_option(mut x: ::core::ffi::c_int) -> bool {
-    if p_paste != 0 {
+    if p_paste.get() != 0 {
         return false_0 != 0;
     }
-    return !vim_strchr((*curbuf).b_p_fo, x).is_null();
+    return !vim_strchr((*curbuf.get()).b_p_fo, x).is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn internal_format(
@@ -2489,16 +2489,16 @@ pub unsafe extern "C" fn internal_format(
     let mut leader_len: colnr_T = 0;
     let mut no_leader: bool = false_0 != 0;
     let mut do_comments: bool = flags & INSCHAR_DO_COM as ::core::ffi::c_int != 0;
-    let mut has_lbr: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_lbr;
-    (*curwin).w_onebuf_opt.wo_lbr = false_0;
-    if (*curbuf).b_p_ai == 0 && State & VREPLACE_FLAG as ::core::ffi::c_int == 0 {
+    let mut has_lbr: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_lbr;
+    (*curwin.get()).w_onebuf_opt.wo_lbr = false_0;
+    if (*curbuf.get()).b_p_ai == 0 && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0 {
         cc = gchar_cursor();
         if ascii_iswhite(cc) {
             save_char = cc as ::core::ffi::c_char;
             pchar_cursor('x' as ::core::ffi::c_char);
         }
     }
-    while !got_int {
+    while !got_int.get() {
         let mut startcol: ::core::ffi::c_int = 0;
         let mut wantcol: ::core::ffi::c_int = 0;
         let mut foundcol: ::core::ffi::c_int = 0;
@@ -2528,7 +2528,7 @@ pub unsafe extern "C" fn internal_format(
                 false_0 != 0,
                 true_0 != 0,
             ) as colnr_T;
-            if leader_len == 0 as ::core::ffi::c_int && (*curbuf).b_p_cin != 0 {
+            if leader_len == 0 as ::core::ffi::c_int && (*curbuf.get()).b_p_cin != 0 {
                 let mut comment_start: ::core::ffi::c_int = check_linecomment(line);
                 if comment_start != MAXCOL as ::core::ffi::c_int {
                     leader_len = get_leader_len(
@@ -2554,21 +2554,21 @@ pub unsafe extern "C" fn internal_format(
         {
             break;
         }
-        startcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
+        startcol = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
         if startcol == 0 as ::core::ffi::c_int {
             break;
         }
-        coladvance(curwin, textwidth);
-        wantcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
-        (*curwin).w_cursor.col = startcol as colnr_T;
+        coladvance(curwin.get(), textwidth);
+        wantcol = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
+        (*curwin.get()).w_cursor.col = startcol as colnr_T;
         foundcol = 0 as ::core::ffi::c_int;
         let mut skip_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while !fo_ins_blank && !has_format_option(FO_INS_VI)
             || flags & INSCHAR_FORMAT as ::core::ffi::c_int != 0
-            || (*curwin).w_cursor.lnum != Insstart.lnum
-            || (*curwin).w_cursor.col >= Insstart.col
+            || (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
+            || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
         {
-            if (*curwin).w_cursor.col == startcol && c != NUL {
+            if (*curwin.get()).w_cursor.col == startcol && c != NUL {
                 cc = c;
             } else {
                 cc = gchar_cursor();
@@ -2578,9 +2578,9 @@ pub unsafe extern "C" fn internal_format(
                     get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
                 ))
             {
-                let mut end_col: colnr_T = (*curwin).w_cursor.col;
+                let mut end_col: colnr_T = (*curwin.get()).w_cursor.col;
                 let mut wcc: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
+                while (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
                     && (ascii_iswhite(cc) as ::core::ffi::c_int != 0
                         && !utf_iscomposing_first(utf_ptr2char(
                             get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
@@ -2592,7 +2592,7 @@ pub unsafe extern "C" fn internal_format(
                         wcc += 1;
                     }
                 }
-                if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
+                if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
                     && (ascii_iswhite(cc) as ::core::ffi::c_int != 0
                         && !utf_iscomposing_first(utf_ptr2char(
                             get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
@@ -2606,17 +2606,17 @@ pub unsafe extern "C" fn internal_format(
                     {
                         continue;
                     }
-                    if (*curwin).w_cursor.col < leader_len {
+                    if (*curwin.get()).w_cursor.col < leader_len {
                         break;
                     }
                     if has_format_option(FO_ONE_LETTER) {
-                        if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int {
+                        if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
                             break;
                         }
-                        if (*curwin).w_cursor.col <= leader_len {
+                        if (*curwin.get()).w_cursor.col <= leader_len {
                             break;
                         }
-                        col = (*curwin).w_cursor.col;
+                        col = (*curwin.get()).w_cursor.col;
                         dec_cursor();
                         cc = gchar_cursor();
                         if ascii_iswhite(cc) as ::core::ffi::c_int != 0
@@ -2626,13 +2626,13 @@ pub unsafe extern "C" fn internal_format(
                         {
                             continue;
                         } else {
-                            (*curwin).w_cursor.col = col;
+                            (*curwin.get()).w_cursor.col = col;
                         }
                     }
                     inc_cursor();
                     end_foundcol = end_col as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-                    foundcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
-                    if (*curwin).w_cursor.col <= wantcol {
+                    foundcol = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
+                    if (*curwin.get()).w_cursor.col <= wantcol {
                         break;
                     }
                 }
@@ -2641,29 +2641,30 @@ pub unsafe extern "C" fn internal_format(
             {
                 let mut ncc: ::core::ffi::c_int = 0;
                 let mut allow_break: bool = false;
-                if (*curwin).w_cursor.col != startcol {
-                    if (*curwin).w_cursor.col < leader_len {
+                if (*curwin.get()).w_cursor.col != startcol {
+                    if (*curwin.get()).w_cursor.col < leader_len {
                         break;
                     }
-                    col = (*curwin).w_cursor.col;
+                    col = (*curwin.get()).w_cursor.col;
                     inc_cursor();
                     ncc = gchar_cursor();
                     allow_break = utf_allow_break(cc, ncc);
-                    if (*curwin).w_cursor.col != skip_pos && allow_break as ::core::ffi::c_int != 0
+                    if (*curwin.get()).w_cursor.col != skip_pos
+                        && allow_break as ::core::ffi::c_int != 0
                     {
-                        foundcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
+                        foundcol = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                         end_foundcol = foundcol;
-                        if (*curwin).w_cursor.col <= wantcol {
+                        if (*curwin.get()).w_cursor.col <= wantcol {
                             break;
                         }
                     }
-                    (*curwin).w_cursor.col = col;
+                    (*curwin.get()).w_cursor.col = col;
                 }
-                if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int {
+                if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
                     break;
                 }
                 ncc = cc;
-                col = (*curwin).w_cursor.col;
+                col = (*curwin.get()).w_cursor.col;
                 dec_cursor();
                 cc = gchar_cursor();
                 if ascii_iswhite(cc) as ::core::ffi::c_int != 0
@@ -2673,28 +2674,28 @@ pub unsafe extern "C" fn internal_format(
                 {
                     continue;
                 } else {
-                    if (*curwin).w_cursor.col < leader_len {
+                    if (*curwin.get()).w_cursor.col < leader_len {
                         break;
                     }
-                    (*curwin).w_cursor.col = col;
-                    skip_pos = (*curwin).w_cursor.col as ::core::ffi::c_int;
+                    (*curwin.get()).w_cursor.col = col;
+                    skip_pos = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                     allow_break = utf_allow_break(cc, ncc);
                     if allow_break {
-                        foundcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
+                        foundcol = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                         end_foundcol = foundcol;
                     }
-                    if (*curwin).w_cursor.col <= wantcol {
+                    if (*curwin.get()).w_cursor.col <= wantcol {
                         let ncc_allow_break: bool = utf_allow_break_before(ncc);
                         if allow_break {
                             break;
                         }
                         if !ncc_allow_break && !fo_rigor_tw {
-                            if (*curwin).w_cursor.col == startcol {
+                            if (*curwin.get()).w_cursor.col == startcol {
                                 foundcol = 0 as ::core::ffi::c_int;
                                 end_foundcol = foundcol;
                                 break;
                             } else {
-                                col = (*curwin).w_cursor.col;
+                                col = (*curwin.get()).w_cursor.col;
                                 inc_cursor();
                                 cc = ncc;
                                 ncc = gchar_cursor();
@@ -2704,61 +2705,61 @@ pub unsafe extern "C" fn internal_format(
                                     foundcol = if ncc == NUL {
                                         0 as ::core::ffi::c_int
                                     } else {
-                                        (*curwin).w_cursor.col as ::core::ffi::c_int
+                                        (*curwin.get()).w_cursor.col as ::core::ffi::c_int
                                     };
                                     end_foundcol = foundcol;
                                     break;
                                 } else {
-                                    (*curwin).w_cursor.col = col;
+                                    (*curwin.get()).w_cursor.col = col;
                                 }
                             }
                         }
                     }
                 }
             }
-            if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int {
+            if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
                 break;
             }
             dec_cursor();
         }
         if foundcol == 0 as ::core::ffi::c_int {
-            (*curwin).w_cursor.col = startcol as colnr_T;
+            (*curwin.get()).w_cursor.col = startcol as colnr_T;
             break;
         } else {
             undisplay_dollar();
-            if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
                 orig_col = startcol;
             } else {
-                replace_offset = startcol - end_foundcol;
+                replace_offset.set(startcol - end_foundcol);
             }
-            (*curwin).w_cursor.col = foundcol as colnr_T;
+            (*curwin.get()).w_cursor.col = foundcol as colnr_T;
             loop {
                 cc = gchar_cursor();
                 if !(ascii_iswhite(cc) as ::core::ffi::c_int != 0
                     && !utf_iscomposing_first(utf_ptr2char(
                         get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
                     ))
-                    && (!fo_white_par || (*curwin).w_cursor.col < startcol))
+                    && (!fo_white_par || (*curwin.get()).w_cursor.col < startcol))
                 {
                     break;
                 }
                 inc_cursor();
             }
-            startcol -= (*curwin).w_cursor.col as ::core::ffi::c_int;
+            startcol -= (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
             startcol = if startcol > 0 as ::core::ffi::c_int {
                 startcol
             } else {
                 0 as ::core::ffi::c_int
             };
-            if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
                 saved_text = xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
-                (*curwin).w_cursor.col = orig_col as colnr_T;
+                (*curwin.get()).w_cursor.col = orig_col as colnr_T;
                 *saved_text.offset(startcol as isize) = NUL as ::core::ffi::c_char;
                 if !fo_white_par {
                     backspace_until_column(foundcol);
                 }
             } else if !fo_white_par {
-                (*curwin).w_cursor.col = foundcol as colnr_T;
+                (*curwin.get()).w_cursor.col = foundcol as colnr_T;
             }
             open_line(
                 FORWARD as ::core::ffi::c_int,
@@ -2783,26 +2784,27 @@ pub unsafe extern "C" fn internal_format(
                 if flags & INSCHAR_COM_LIST as ::core::ffi::c_int != 0 {
                     second_indent
                 } else {
-                    old_indent
+                    old_indent.get()
                 },
                 &raw mut did_do_comment,
             );
             if flags & INSCHAR_COM_LIST as ::core::ffi::c_int == 0 {
-                old_indent = 0 as ::core::ffi::c_int;
+                old_indent.set(0 as ::core::ffi::c_int);
             }
             if did_do_comment {
                 no_leader = false_0 != 0;
             }
-            replace_offset = 0 as ::core::ffi::c_int;
+            replace_offset.set(0 as ::core::ffi::c_int);
             if first_line {
                 if flags & INSCHAR_COM_LIST as ::core::ffi::c_int == 0 {
                     if second_indent < 0 as ::core::ffi::c_int
                         && has_format_option(FO_Q_NUMBER) as ::core::ffi::c_int != 0
                     {
-                        second_indent = get_number_indent((*curwin).w_cursor.lnum - 1 as linenr_T);
+                        second_indent =
+                            get_number_indent((*curwin.get()).w_cursor.lnum - 1 as linenr_T);
                     }
                     if second_indent >= 0 as ::core::ffi::c_int {
-                        if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+                        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
                             change_indent(
                                 INDENT_SET as ::core::ffi::c_int,
                                 second_indent,
@@ -2831,33 +2833,33 @@ pub unsafe extern "C" fn internal_format(
                 }
                 first_line = false_0 != 0;
             }
-            if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
                 ins_bytes(saved_text);
                 xfree(saved_text as *mut ::core::ffi::c_void);
             } else {
-                (*curwin).w_cursor.col += startcol;
+                (*curwin.get()).w_cursor.col += startcol;
                 let mut len: colnr_T = get_cursor_line_len();
-                (*curwin).w_cursor.col = if (*curwin).w_cursor.col < len {
-                    (*curwin).w_cursor.col
+                (*curwin.get()).w_cursor.col = if (*curwin.get()).w_cursor.col < len {
+                    (*curwin.get()).w_cursor.col
                 } else {
                     len
                 };
             }
             haveto_redraw = true_0 != 0;
             set_can_cindent(true_0 != 0);
-            did_ai = false_0 != 0;
-            did_si = false_0 != 0;
-            can_si = false_0 != 0;
-            can_si_back = false_0 != 0;
+            did_ai.set(false_0 != 0);
+            did_si.set(false_0 != 0);
+            can_si.set(false_0 != 0);
+            can_si_back.set(false_0 != 0);
             line_breakcheck();
         }
     }
     if save_char as ::core::ffi::c_int != NUL {
         pchar_cursor(save_char);
     }
-    (*curwin).w_onebuf_opt.wo_lbr = has_lbr;
+    (*curwin.get()).w_onebuf_opt.wo_lbr = has_lbr;
     if !format_only && haveto_redraw as ::core::ffi::c_int != 0 {
-        update_topline(curwin);
+        update_topline(curwin.get());
         redraw_curbuf_later(UPD_VALID as ::core::ffi::c_int);
     }
 }
@@ -3024,7 +3026,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
     if !has_format_option(FO_AUTO) {
         return;
     }
-    let mut pos: pos_T = (*curwin).w_cursor;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut old: *mut ::core::ffi::c_char = get_cursor_line_ptr();
     check_auto_format(false_0 != 0);
     let mut wasatend: bool = pos.col == get_cursor_line_len();
@@ -3035,7 +3037,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
             && !utf_iscomposing_first(utf_ptr2char(
                 get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
             )))
-            && (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
+            && (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
             && has_format_option(FO_ONE_LETTER) as ::core::ffi::c_int != 0
         {
             dec_cursor();
@@ -3046,16 +3048,16 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
                 get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
             ))
         {
-            (*curwin).w_cursor = pos;
+            (*curwin.get()).w_cursor = pos;
             return;
         }
-        (*curwin).w_cursor = pos;
+        (*curwin.get()).w_cursor = pos;
     }
     if *old as ::core::ffi::c_int != NUL
         && !trailblank
         && !wasatend
         && pos.col > 0 as ::core::ffi::c_int
-        && State & MODE_INSERT as ::core::ffi::c_int != 0
+        && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
     {
         let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
         if ascii_iswhite(
@@ -3067,7 +3069,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
                 get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
             ))
         {
-            (*curwin).w_cursor = pos;
+            (*curwin.get()).w_cursor = pos;
             return;
         }
     }
@@ -3082,38 +3084,38 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
     {
         return;
     }
-    if prev_line as ::core::ffi::c_int != 0 && !paragraph_start((*curwin).w_cursor.lnum) {
-        (*curwin).w_cursor.lnum -= 1;
+    if prev_line as ::core::ffi::c_int != 0 && !paragraph_start((*curwin.get()).w_cursor.lnum) {
+        (*curwin.get()).w_cursor.lnum -= 1;
         if u_save_cursor() == FAIL {
             return;
         }
     }
-    saved_cursor = pos;
+    saved_cursor.set(pos);
     format_lines(-1 as linenr_T, false_0 != 0);
-    (*curwin).w_cursor = saved_cursor;
-    saved_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    if (*curwin).w_cursor.lnum > (*curbuf).b_ml.ml_line_count {
-        (*curwin).w_cursor.lnum = (*curbuf).b_ml.ml_line_count;
-        coladvance(curwin, MAXCOL as ::core::ffi::c_int);
+    (*curwin.get()).w_cursor = saved_cursor.get();
+    (*saved_cursor.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
+    if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_ml.ml_line_count {
+        (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
+        coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
     } else {
-        check_cursor_col(curwin);
+        check_cursor_col(curwin.get());
     }
     if !wasatend && has_format_option(FO_WHITE_PAR) as ::core::ffi::c_int != 0 {
         let mut linep: *mut ::core::ffi::c_char = get_cursor_line_ptr();
         let mut len: colnr_T = get_cursor_line_len();
-        if (*curwin).w_cursor.col == len {
+        if (*curwin.get()).w_cursor.col == len {
             let mut plinep: *mut ::core::ffi::c_char =
                 xstrnsave(linep, (len as size_t).wrapping_add(2 as size_t));
             *plinep.offset(len as isize) = ' ' as ::core::ffi::c_char;
             *plinep.offset((len as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize) =
                 NUL as ::core::ffi::c_char;
-            ml_replace((*curwin).w_cursor.lnum, plinep, false_0 != 0);
+            ml_replace((*curwin.get()).w_cursor.lnum, plinep, false_0 != 0);
             did_add_space.set(true_0 != 0);
         } else {
             check_auto_format(false_0 != 0);
         }
     }
-    check_cursor(curwin);
+    check_cursor(curwin.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
@@ -3142,15 +3144,15 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
-    let mut textwidth: ::core::ffi::c_int = (*curbuf).b_p_tw as ::core::ffi::c_int;
-    if textwidth == 0 as ::core::ffi::c_int && (*curbuf).b_p_wm != 0 {
-        textwidth = (*curwin).w_view_width - (*curbuf).b_p_wm as ::core::ffi::c_int;
-        if curbuf == cmdwin_buf {
+    let mut textwidth: ::core::ffi::c_int = (*curbuf.get()).b_p_tw as ::core::ffi::c_int;
+    if textwidth == 0 as ::core::ffi::c_int && (*curbuf.get()).b_p_wm != 0 {
+        textwidth = (*curwin.get()).w_view_width - (*curbuf.get()).b_p_wm as ::core::ffi::c_int;
+        if curbuf.get() == cmdwin_buf.get() {
             textwidth -= 1 as ::core::ffi::c_int;
         }
-        textwidth -= win_fdccol_count(curwin);
-        textwidth -= (*curwin).w_scwidth;
-        if (*curwin).w_onebuf_opt.wo_nu != 0 || (*curwin).w_onebuf_opt.wo_rnu != 0 {
+        textwidth -= win_fdccol_count(curwin.get());
+        textwidth -= (*curwin.get()).w_scwidth;
+        if (*curwin.get()).w_onebuf_opt.wo_nu != 0 || (*curwin.get()).w_onebuf_opt.wo_rnu != 0 {
             textwidth -= 8 as ::core::ffi::c_int;
         }
     }
@@ -3160,9 +3162,10 @@ pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
         0 as ::core::ffi::c_int
     };
     if ff as ::core::ffi::c_int != 0 && textwidth == 0 as ::core::ffi::c_int {
-        textwidth = if ((*curwin).w_view_width - 1 as ::core::ffi::c_int) < 79 as ::core::ffi::c_int
+        textwidth = if ((*curwin.get()).w_view_width - 1 as ::core::ffi::c_int)
+            < 79 as ::core::ffi::c_int
         {
-            (*curwin).w_view_width - 1 as ::core::ffi::c_int
+            (*curwin.get()).w_view_width - 1 as ::core::ffi::c_int
         } else {
             79 as ::core::ffi::c_int
         };
@@ -3171,8 +3174,8 @@ pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool) {
-    let mut old_line_count: linenr_T = (*curbuf).b_ml.ml_line_count;
-    (*curwin).w_cursor = (*oap).cursor_start;
+    let mut old_line_count: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
+    (*curwin.get()).w_cursor = (*oap).cursor_start;
     if u_save(
         (*oap).start.lnum - 1 as linenr_T,
         (*oap).end.lnum + 1 as linenr_T,
@@ -3180,38 +3183,40 @@ pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool)
     {
         return;
     }
-    (*curwin).w_cursor = (*oap).start;
+    (*curwin.get()).w_cursor = (*oap).start;
     if (*oap).is_VIsual {
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
     }
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        (*curbuf).b_op_start = (*oap).start;
+    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    {
+        (*curbuf.get()).b_op_start = (*oap).start;
     }
     if keep_cursor {
-        saved_cursor = (*oap).cursor_start;
+        saved_cursor.set((*oap).cursor_start);
     }
     format_lines((*oap).line_count, keep_cursor);
     if (*oap).end_adjusted as ::core::ffi::c_int != 0
-        && (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count
+        && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
     {
-        (*curwin).w_cursor.lnum += 1;
+        (*curwin.get()).w_cursor.lnum += 1;
     }
     beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-    old_line_count = (*curbuf).b_ml.ml_line_count - old_line_count;
+    old_line_count = (*curbuf.get()).b_ml.ml_line_count - old_line_count;
     msgmore(old_line_count as ::core::ffi::c_int);
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        (*curbuf).b_op_end = (*curwin).w_cursor;
+    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    {
+        (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
     }
     if keep_cursor {
-        (*curwin).w_cursor = saved_cursor;
-        saved_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
-        check_cursor(curwin);
+        (*curwin.get()).w_cursor = saved_cursor.get();
+        (*saved_cursor.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
+        check_cursor(curwin.get());
     }
     if (*oap).is_VIsual {
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_old_cursor_lnum != 0 as linenr_T {
@@ -3245,20 +3250,24 @@ pub unsafe extern "C" fn fex_format(
     mut count: ::core::ffi::c_long,
     mut c: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut use_sandbox: bool =
-        was_set_insecurely(curwin, kOptFormatexpr, OPT_LOCAL as ::core::ffi::c_int) != 0;
-    let save_sctx: sctx_T = current_sctx;
+    let mut use_sandbox: bool = was_set_insecurely(
+        curwin.get(),
+        kOptFormatexpr,
+        OPT_LOCAL as ::core::ffi::c_int,
+    ) != 0;
+    let save_sctx: sctx_T = current_sctx.get();
     set_vim_var_nr(VV_LNUM, lnum as varnumber_T);
     set_vim_var_nr(VV_COUNT, count as varnumber_T);
     set_vim_var_char(c);
-    let mut fex: *mut ::core::ffi::c_char = xstrdup((*curbuf).b_p_fex);
-    current_sctx = (*curbuf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize];
+    let mut fex: *mut ::core::ffi::c_char = xstrdup((*curbuf.get()).b_p_fex);
+    current_sctx
+        .set((*curbuf.get()).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize]);
     if use_sandbox {
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
     }
     let mut r: ::core::ffi::c_int = eval_to_number(fex, true_0 != 0) as ::core::ffi::c_int;
     if use_sandbox {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
     }
     set_vim_var_string(
         VV_CHAR,
@@ -3266,7 +3275,7 @@ pub unsafe extern "C" fn fex_format(
         -1 as ptrdiff_t,
     );
     xfree(fex as *mut ::core::ffi::c_void);
-    current_sctx = save_sctx;
+    current_sctx.set(save_sctx);
     return r;
 }
 #[no_mangle]
@@ -3287,18 +3296,18 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
     let mut smd_save: ::core::ffi::c_int = 0;
     let mut count: ::core::ffi::c_long = 0;
     let mut need_set_indent: bool = true_0 != 0;
-    let mut first_line: linenr_T = (*curwin).w_cursor.lnum;
+    let mut first_line: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut force_format: bool = false_0 != 0;
-    let old_State: ::core::ffi::c_int = State;
+    let old_State: ::core::ffi::c_int = State.get();
     let max_len: ::core::ffi::c_int = comp_textwidth(true_0 != 0) * 3 as ::core::ffi::c_int;
     let do_comments: bool = has_format_option(FO_Q_COMS);
     let mut do_comments_list: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let do_second_indent: bool = has_format_option(FO_Q_SECOND);
     let do_number_indent: bool = has_format_option(FO_Q_NUMBER);
     let do_trail_white: bool = has_format_option(FO_WHITE_PAR);
-    if (*curwin).w_cursor.lnum > 1 as linenr_T {
+    if (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
         is_not_par = fmt_check_par(
-            (*curwin).w_cursor.lnum - 1 as linenr_T,
+            (*curwin.get()).w_cursor.lnum - 1 as linenr_T,
             &raw mut leader_len,
             &raw mut leader_flags,
             do_comments,
@@ -3307,7 +3316,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
         is_not_par = true_0 != 0;
     }
     next_is_not_par = fmt_check_par(
-        (*curwin).w_cursor.lnum,
+        (*curwin.get()).w_cursor.lnum,
         &raw mut next_leader_len,
         &raw mut next_leader_flags,
         do_comments,
@@ -3315,34 +3324,35 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
     is_end_par =
         is_not_par as ::core::ffi::c_int != 0 || next_is_not_par as ::core::ffi::c_int != 0;
     if !is_end_par && do_trail_white as ::core::ffi::c_int != 0 {
-        is_end_par = !ends_in_white((*curwin).w_cursor.lnum - 1 as linenr_T);
+        is_end_par = !ends_in_white((*curwin.get()).w_cursor.lnum - 1 as linenr_T);
     }
-    (*curwin).w_cursor.lnum -= 1;
+    (*curwin.get()).w_cursor.lnum -= 1;
     count = line_count as ::core::ffi::c_long;
-    while count != 0 as ::core::ffi::c_long && !got_int {
+    while count != 0 as ::core::ffi::c_long && !got_int.get() {
         if advance {
-            (*curwin).w_cursor.lnum += 1;
+            (*curwin.get()).w_cursor.lnum += 1;
             prev_is_end_par = is_end_par;
             is_not_par = next_is_not_par;
             leader_len = next_leader_len;
             leader_flags = next_leader_flags;
         }
         if count == 1 as ::core::ffi::c_long
-            || (*curwin).w_cursor.lnum == (*curbuf).b_ml.ml_line_count
+            || (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count
         {
             next_is_not_par = true_0 != 0;
             next_leader_len = 0 as ::core::ffi::c_int;
             next_leader_flags = ::core::ptr::null_mut::<::core::ffi::c_char>();
         } else {
             next_is_not_par = fmt_check_par(
-                (*curwin).w_cursor.lnum + 1 as linenr_T,
+                (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
                 &raw mut next_leader_len,
                 &raw mut next_leader_flags,
                 do_comments,
             ) != 0;
             if do_number_indent {
-                next_is_start_par = get_number_indent((*curwin).w_cursor.lnum + 1 as linenr_T)
-                    > 0 as ::core::ffi::c_int;
+                next_is_start_par =
+                    get_number_indent((*curwin.get()).w_cursor.lnum + 1 as linenr_T)
+                        > 0 as ::core::ffi::c_int;
             }
         }
         advance = true_0 != 0;
@@ -3350,7 +3360,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
             || next_is_not_par as ::core::ffi::c_int != 0
             || next_is_start_par as ::core::ffi::c_int != 0;
         if !is_end_par && do_trail_white as ::core::ffi::c_int != 0 {
-            is_end_par = !ends_in_white((*curwin).w_cursor.lnum);
+            is_end_par = !ends_in_white((*curwin.get()).w_cursor.lnum);
         }
         if is_not_par {
             if line_count < 0 as linenr_T {
@@ -3361,16 +3371,18 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                 && (do_second_indent as ::core::ffi::c_int != 0
                     || do_number_indent as ::core::ffi::c_int != 0)
                 && prev_is_end_par as ::core::ffi::c_int != 0
-                && (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count
+                && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
             {
                 if do_second_indent as ::core::ffi::c_int != 0
-                    && !(*ml_get((*curwin).w_cursor.lnum + 1 as linenr_T) as ::core::ffi::c_int
+                    && !(*ml_get((*curwin.get()).w_cursor.lnum + 1 as linenr_T)
+                        as ::core::ffi::c_int
                         == NUL)
                 {
                     if leader_len == 0 as ::core::ffi::c_int
                         && next_leader_len == 0 as ::core::ffi::c_int
                     {
-                        second_indent = get_indent_lnum((*curwin).w_cursor.lnum + 1 as linenr_T);
+                        second_indent =
+                            get_indent_lnum((*curwin.get()).w_cursor.lnum + 1 as linenr_T);
                     } else {
                         second_indent = next_leader_len;
                         do_comments_list = 1 as ::core::ffi::c_int;
@@ -3379,16 +3391,16 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     if leader_len == 0 as ::core::ffi::c_int
                         && next_leader_len == 0 as ::core::ffi::c_int
                     {
-                        second_indent = get_number_indent((*curwin).w_cursor.lnum);
+                        second_indent = get_number_indent((*curwin.get()).w_cursor.lnum);
                     } else {
-                        second_indent = get_number_indent((*curwin).w_cursor.lnum);
+                        second_indent = get_number_indent((*curwin.get()).w_cursor.lnum);
                         do_comments_list = 1 as ::core::ffi::c_int;
                     }
                 }
             }
-            if (*curwin).w_cursor.lnum >= (*curbuf).b_ml.ml_line_count
+            if (*curwin.get()).w_cursor.lnum >= (*curbuf.get()).b_ml.ml_line_count
                 || !same_leader(
-                    (*curwin).w_cursor.lnum,
+                    (*curwin.get()).w_cursor.lnum,
                     leader_len,
                     leader_flags,
                     next_leader_len,
@@ -3409,12 +3421,12 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
             if is_end_par as ::core::ffi::c_int != 0 || force_format as ::core::ffi::c_int != 0 {
                 if need_set_indent {
                     let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if (*curwin).w_cursor.lnum == first_line {
+                    if (*curwin.get()).w_cursor.lnum == first_line {
                         indent = get_indent();
-                    } else if (*curbuf).b_p_lisp != 0 {
+                    } else if (*curbuf.get()).b_p_lisp != 0 {
                         indent = get_lisp_indent();
                     } else if cindent_on() {
-                        indent = if *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL {
+                        indent = if *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL {
                             get_expr_indent()
                         } else {
                             get_c_indent()
@@ -3424,16 +3436,16 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     }
                     set_indent(indent, SIN_CHANGED as ::core::ffi::c_int);
                 }
-                State = MODE_NORMAL as ::core::ffi::c_int;
-                coladvance(curwin, MAXCOL as ::core::ffi::c_int);
-                while (*curwin).w_cursor.col != 0
+                State.set(MODE_NORMAL as ::core::ffi::c_int);
+                coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
+                while (*curwin.get()).w_cursor.col != 0
                     && ascii_isspace(gchar_cursor()) as ::core::ffi::c_int != 0
                 {
                     dec_cursor();
                 }
-                State = MODE_INSERT as ::core::ffi::c_int;
-                smd_save = p_smd;
-                p_smd = false_0;
+                State.set(MODE_INSERT as ::core::ffi::c_int);
+                smd_save = p_smd.get();
+                p_smd.set(false_0);
                 insertchar(
                     NUL,
                     INSCHAR_FORMAT as ::core::ffi::c_int
@@ -3454,8 +3466,8 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                         }),
                     second_indent,
                 );
-                State = old_State;
-                p_smd = smd_save;
+                State.set(old_State);
+                p_smd.set(smd_save);
                 ui_cursor_shape();
                 second_indent = -1 as ::core::ffi::c_int;
                 need_set_indent = is_end_par;
@@ -3469,15 +3481,15 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
             }
             if !is_end_par {
                 advance = false_0 != 0;
-                (*curwin).w_cursor.lnum += 1;
-                (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                (*curwin.get()).w_cursor.lnum += 1;
+                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                 if line_count < 0 as linenr_T && u_save_cursor() == FAIL {
                     break;
                 }
                 if next_leader_len > 0 as ::core::ffi::c_int {
                     del_bytes(next_leader_len as colnr_T, false_0 != 0, false_0 != 0);
                     mark_col_adjust(
-                        (*curwin).w_cursor.lnum,
+                        (*curwin.get()).w_cursor.lnum,
                         0 as colnr_T,
                         0 as linenr_T,
                         -(next_leader_len as colnr_T),
@@ -3489,7 +3501,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     if indent_0 > 0 as ::core::ffi::c_int {
                         del_bytes(indent_0 as colnr_T, false_0 != 0, false_0 != 0);
                         mark_col_adjust(
-                            (*curwin).w_cursor.lnum,
+                            (*curwin.get()).w_cursor.lnum,
                             0 as colnr_T,
                             0 as linenr_T,
                             -(indent_0 as colnr_T),
@@ -3497,7 +3509,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                         );
                     }
                 }
-                (*curwin).w_cursor.lnum -= 1;
+                (*curwin.get()).w_cursor.lnum -= 1;
                 if do_join(
                     2 as size_t,
                     true_0 != 0,

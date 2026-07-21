@@ -24,7 +24,7 @@ extern "C" {
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
     fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    static mut cb_flags: ::core::ffi::c_uint;
+    static cb_flags: GlobalCell<::core::ffi::c_uint>;
     fn get_y_register(reg: ::core::ffi::c_int) -> *mut yankreg_T;
     fn get_y_previous() -> *mut yankreg_T;
     fn update_yankreg_width(reg: *mut yankreg_T);
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn adjust_clipboard_name(
     let mut explicit_cb_reg: bool =
         *name == '*' as ::core::ffi::c_int || *name == '+' as ::core::ffi::c_int;
     let mut implicit_cb_reg: bool = *name == NUL
-        && cb_flags
+        && cb_flags.get()
             & (kOptCbFlagUnnamed as ::core::ffi::c_int
                 | kOptCbFlagUnnamedplus as ::core::ffi::c_int) as ::core::ffi::c_uint
             != 0;
@@ -353,7 +353,7 @@ pub unsafe extern "C" fn adjust_clipboard_name(
                 PLUS_REGISTER as ::core::ffi::c_int
             });
             if writing as ::core::ffi::c_int != 0
-                && cb_flags
+                && cb_flags.get()
                     & (if *name == '*' as ::core::ffi::c_int {
                         kOptCbFlagUnnamed as ::core::ffi::c_int
                     } else {
@@ -368,8 +368,11 @@ pub unsafe extern "C" fn adjust_clipboard_name(
         {
             clipboard_needs_update.set(true_0 != 0);
         } else if !(!writing && clipboard_needs_update.get() as ::core::ffi::c_int != 0) {
-            if cb_flags & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-                *name = if cb_flags & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint
+            if cb_flags.get() & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
+            {
+                *name = if cb_flags.get()
+                    & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint
                     != 0
                     && writing as ::core::ffi::c_int != 0
                 {

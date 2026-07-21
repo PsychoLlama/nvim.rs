@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -70,11 +71,11 @@ extern "C" {
         dsize: size_t,
     ) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut p_fic: ::core::ffi::c_int;
-    static mut p_path: *mut ::core::ffi::c_char;
-    static mut p_cdpath: *mut ::core::ffi::c_char;
-    static mut p_su: *mut ::core::ffi::c_char;
-    static mut p_wig: *mut ::core::ffi::c_char;
+    static p_fic: GlobalCell<::core::ffi::c_int>;
+    static p_path: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cdpath: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_su: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wig: GlobalCell<*mut ::core::ffi::c_char>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -151,11 +152,11 @@ extern "C" {
         s1: *const ::core::ffi::c_char,
         s2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut curbuf: *mut buf_T;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut got_int: bool;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static got_int: GlobalCell<bool>;
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_can_exe(
@@ -2451,7 +2452,7 @@ pub unsafe extern "C" fn path_fnamecmp(
     mut fname1: *const ::core::ffi::c_char,
     mut fname2: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    return mb_strcmp_ic(p_fic != 0, fname1, fname2);
+    return mb_strcmp_ic(p_fic.get() != 0, fname1, fname2);
 }
 #[no_mangle]
 pub unsafe extern "C" fn path_fnamencmp(
@@ -2459,7 +2460,7 @@ pub unsafe extern "C" fn path_fnamencmp(
     fname2: *const ::core::ffi::c_char,
     mut len: size_t,
 ) -> ::core::ffi::c_int {
-    if p_fic != 0 {
+    if p_fic.get() != 0 {
         return mb_strnicmp(fname1, fname2, len);
     }
     return strncmp(fname1, fname2, len);
@@ -2629,14 +2630,14 @@ unsafe extern "C" fn path_expand(
     return do_path_expand(gap, path, 0 as size_t, flags, false_0 != 0);
 }
 unsafe extern "C" fn scandir_next_with_dots(mut dir: *mut Directory) -> *const ::core::ffi::c_char {
-    static mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if dir.is_null() {
-        count = 0 as ::core::ffi::c_int;
+        count.set(0 as ::core::ffi::c_int);
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    count += 1 as ::core::ffi::c_int;
-    if count == 1 as ::core::ffi::c_int || count == 2 as ::core::ffi::c_int {
-        return if count == 1 as ::core::ffi::c_int {
+    (*count.ptr()) += 1 as ::core::ffi::c_int;
+    if count.get() == 1 as ::core::ffi::c_int || count.get() == 2 as ::core::ffi::c_int {
+        return if count.get() == 1 as ::core::ffi::c_int {
             b".\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"..\0".as_ptr() as *const ::core::ffi::c_char
@@ -2653,10 +2654,10 @@ unsafe extern "C" fn do_path_expand(
 ) -> size_t {
     let mut start_len: ::core::ffi::c_int = (*gap).ga_len;
     let mut starstar: bool = false_0 != 0;
-    static mut stardepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if stardepth > 0 as ::core::ffi::c_int && flags & EW_NOBREAK as ::core::ffi::c_int == 0 {
+    static stardepth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    if stardepth.get() > 0 as ::core::ffi::c_int && flags & EW_NOBREAK as ::core::ffi::c_int == 0 {
         os_breakcheck();
-        if got_int {
+        if got_int.get() {
             return 0 as size_t;
         }
     }
@@ -2686,7 +2687,7 @@ unsafe extern "C" fn do_path_expand(
                 *path_end as uint8_t as ::core::ffi::c_int,
             )
             .is_null()
-                || p_fic == 0
+                || p_fic.get() == 0
                     && flags & EW_ICASE as ::core::ffi::c_int != 0
                     && mb_isalpha(utf_ptr2char(path_end)) as ::core::ffi::c_int != 0)
         {
@@ -2746,9 +2747,9 @@ unsafe extern "C" fn do_path_expand(
         rm_matchcol: 0,
         rm_ic: false,
     };
-    regmatch.rm_ic = flags & EW_ICASE as ::core::ffi::c_int != 0 || p_fic != 0;
+    regmatch.rm_ic = flags & EW_ICASE as ::core::ffi::c_int != 0 || p_fic.get() != 0;
     if flags & (EW_NOERROR as ::core::ffi::c_int | EW_NOTWILD as ::core::ffi::c_int) != 0 {
-        emsg_silent += 1;
+        (*emsg_silent.ptr()) += 1;
     }
     let mut nobreak: bool = flags & EW_NOBREAK as ::core::ffi::c_int != 0;
     regmatch.regprog = vim_regcomp(
@@ -2761,7 +2762,7 @@ unsafe extern "C" fn do_path_expand(
             }),
     );
     if flags & (EW_NOERROR as ::core::ffi::c_int | EW_NOTWILD as ::core::ffi::c_int) != 0 {
-        emsg_silent -= 1;
+        (*emsg_silent.ptr()) -= 1;
     }
     xfree(pat as *mut ::core::ffi::c_void);
     if regmatch.regprog.is_null()
@@ -2772,7 +2773,7 @@ unsafe extern "C" fn do_path_expand(
     }
     let mut len: size_t = s.offset_from(buf) as size_t;
     if !didstar
-        && stardepth < 100 as ::core::ffi::c_int
+        && stardepth.get() < 100 as ::core::ffi::c_int
         && starstar as ::core::ffi::c_int != 0
         && e.offset_from(s) == 2 as isize
         && *path_end as ::core::ffi::c_int == '/' as ::core::ffi::c_int
@@ -2783,9 +2784,9 @@ unsafe extern "C" fn do_path_expand(
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
             path_end.offset(1 as ::core::ffi::c_int as isize),
         );
-        stardepth += 1;
+        (*stardepth.ptr()) += 1;
         do_path_expand(gap, buf, len, flags, true_0 != 0);
-        stardepth -= 1;
+        (*stardepth.ptr()) -= 1;
     }
     *s = NUL as ::core::ffi::c_char;
     let mut dir: Directory = Directory {
@@ -2869,7 +2870,7 @@ unsafe extern "C" fn do_path_expand(
     {
         let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         scandir_next_with_dots(::core::ptr::null_mut::<Directory>());
-        while !got_int && {
+        while !got_int.get() && {
             name = scandir_next_with_dots(&raw mut dir);
             !name.is_null()
         } {
@@ -2904,16 +2905,16 @@ unsafe extern "C" fn do_path_expand(
             if len.wrapping_add(1 as size_t) >= buflen {
                 continue;
             }
-            if starstar as ::core::ffi::c_int != 0 && stardepth < 100 as ::core::ffi::c_int {
+            if starstar as ::core::ffi::c_int != 0 && stardepth.get() < 100 as ::core::ffi::c_int {
                 vim_snprintf(
                     buf.offset(len as isize),
                     buflen.wrapping_sub(len),
                     b"/**%s\0".as_ptr() as *const ::core::ffi::c_char,
                     path_end,
                 );
-                stardepth += 1;
+                (*stardepth.ptr()) += 1;
                 do_path_expand(gap, buf, len.wrapping_add(1 as size_t), flags, true_0 != 0);
-                stardepth -= 1;
+                (*stardepth.ptr()) -= 1;
             }
             vim_snprintf(
                 buf.offset(len as isize),
@@ -2922,10 +2923,10 @@ unsafe extern "C" fn do_path_expand(
                 path_end,
             );
             if path_has_exp_wildcard(path_end) {
-                if stardepth < 100 as ::core::ffi::c_int {
-                    stardepth += 1;
+                if stardepth.get() < 100 as ::core::ffi::c_int {
+                    (*stardepth.ptr()) += 1;
                     do_path_expand(gap, buf, len.wrapping_add(1 as size_t), flags, false_0 != 0);
-                    stardepth -= 1;
+                    (*stardepth.ptr()) -= 1;
                 }
             } else {
                 let mut file_info: FileInfo = FileInfo {
@@ -2981,7 +2982,7 @@ unsafe extern "C" fn do_path_expand(
     xfree(buf as *mut ::core::ffi::c_void);
     vim_regfree(regmatch.regprog);
     let mut matches: size_t = ((*gap).ga_len - start_len) as size_t;
-    if matches > 0 as size_t && !got_int {
+    if matches > 0 as size_t && !got_int.get() {
         qsort(
             ((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(start_len as isize)
                 as *mut ::core::ffi::c_void,
@@ -3070,11 +3071,11 @@ unsafe extern "C" fn expand_path_option(
                     as ::core::ffi::c_int
                     != 0)
         {
-            if (*curbuf).b_ffname.is_null() {
+            if (*curbuf.get()).b_ffname.is_null() {
                 continue;
             }
-            let mut p: *mut ::core::ffi::c_char = path_tail((*curbuf).b_ffname);
-            let mut plen: size_t = p.offset_from((*curbuf).b_ffname) as size_t;
+            let mut p: *mut ::core::ffi::c_char = path_tail((*curbuf.get()).b_ffname);
+            let mut plen: size_t = p.offset_from((*curbuf.get()).b_ffname) as size_t;
             if plen.wrapping_add(strlen(buf)) >= MAXPATHL as size_t {
                 continue;
             }
@@ -3089,7 +3090,7 @@ unsafe extern "C" fn expand_path_option(
             }
             memmove(
                 buf as *mut ::core::ffi::c_void,
-                (*curbuf).b_ffname as *const ::core::ffi::c_void,
+                (*curbuf.get()).b_ffname as *const ::core::ffi::c_void,
                 plen,
             );
             buflen = simplify_filename(buf);
@@ -3224,7 +3225,7 @@ unsafe extern "C" fn uniquefy_paths(
         ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
     ) as *mut *mut ::core::ffi::c_char;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*gap).ga_len && !got_int {
+    while i < (*gap).ga_len && !got_int.get() {
         let mut path: *mut ::core::ffi::c_char = *fnames.offset(i as isize);
         let mut dir_end: *const ::core::ffi::c_char = gettail_dir(path);
         len = strlen(path);
@@ -3304,7 +3305,7 @@ unsafe extern "C" fn uniquefy_paths(
         i += 1;
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < (*gap).ga_len && !got_int {
+    while i_0 < (*gap).ga_len && !got_int.get() {
         let mut path_0: *mut ::core::ffi::c_char = *in_curdir.offset(i_0 as isize);
         if !path_0.is_null() {
             short_name = path_shorten_fname(path_0, curdir);
@@ -3388,10 +3389,10 @@ unsafe extern "C" fn expand_in_path(
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut path_option: *mut ::core::ffi::c_char =
-        if *(*curbuf).b_p_path as ::core::ffi::c_int == NUL {
-            p_path
+        if *(*curbuf.get()).b_p_path as ::core::ffi::c_int == NUL {
+            p_path.get()
         } else {
-            (*curbuf).b_p_path
+            (*curbuf.get()).b_p_path
         };
     let curdir: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     os_dirname(curdir, MAXPATHL as size_t);
@@ -3401,7 +3402,7 @@ unsafe extern "C" fn expand_in_path(
         1 as ::core::ffi::c_int,
     );
     if flags & EW_CDPATH as ::core::ffi::c_int != 0 {
-        expand_path_option(curdir, p_cdpath, &raw mut path_ga);
+        expand_path_option(curdir, p_cdpath.get(), &raw mut path_ga);
     } else {
         expand_path_option(curdir, path_option, &raw mut path_ga);
     }
@@ -3508,16 +3509,16 @@ pub unsafe extern "C" fn gen_expand_wildcards(
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    static mut recursive: bool = false_0 != 0;
+    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut add_pat: ::core::ffi::c_int = 0;
     let mut did_expand_in_path: bool = false_0 != 0;
     let mut path_option: *mut ::core::ffi::c_char =
-        if *(*curbuf).b_p_path as ::core::ffi::c_int == NUL {
-            p_path
+        if *(*curbuf.get()).b_p_path as ::core::ffi::c_int == NUL {
+            p_path.get()
         } else {
-            (*curbuf).b_p_path
+            (*curbuf.get()).b_p_path
         };
-    if recursive {
+    if recursive.get() {
         return os_expand_wildcards(num_pat, pat, num_file, file, flags);
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3532,20 +3533,20 @@ pub unsafe extern "C" fn gen_expand_wildcards(
         }
         i += 1;
     }
-    recursive = true_0 != 0;
+    recursive.set(true_0 != 0);
     ga_init(
         &raw mut ga,
         ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
         30 as ::core::ffi::c_int,
     );
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < num_pat && !got_int {
+    while i_0 < num_pat && !got_int.get() {
         add_pat = -1 as ::core::ffi::c_int;
         p = *pat.offset(i_0 as isize);
         if vim_backtick(p) {
             add_pat = expand_backtick(&raw mut ga, p, flags);
             if add_pat == -1 as ::core::ffi::c_int {
-                recursive = false_0 != 0;
+                recursive.set(false_0 != 0);
                 ga_clear_strings(&raw mut ga);
                 *num_file = 0 as ::core::ffi::c_int;
                 *file = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
@@ -3571,7 +3572,7 @@ pub unsafe extern "C" fn gen_expand_wildcards(
                         file,
                         flags | EW_KEEPDOLLAR as ::core::ffi::c_int,
                     );
-                    recursive = false_0 != 0;
+                    recursive.set(false_0 != 0);
                     return i_0;
                 }
             }
@@ -3593,14 +3594,14 @@ pub unsafe extern "C" fn gen_expand_wildcards(
                                     as ::core::ffi::c_int
                                     != 0))
                 {
-                    recursive = false_0 != 0;
+                    recursive.set(false_0 != 0);
                     add_pat = expand_in_path(&raw mut ga, p, flags);
-                    recursive = true_0 != 0;
+                    recursive.set(true_0 != 0);
                     did_expand_in_path = true_0 != 0;
                 } else {
-                    recursive = false_0 != 0;
+                    recursive.set(false_0 != 0);
                     let mut tmp_add_pat: size_t = path_expand(&raw mut ga, p, flags);
-                    recursive = true_0 != 0;
+                    recursive.set(true_0 != 0);
                     '_c2rust_label: {
                         if tmp_add_pat <= 2147483647 as ::core::ffi::c_int as size_t {
                         } else {
@@ -3639,9 +3640,9 @@ pub unsafe extern "C" fn gen_expand_wildcards(
             && !(ga.ga_len <= 0 as ::core::ffi::c_int)
             && flags & (EW_PATH as ::core::ffi::c_int | EW_CDPATH as ::core::ffi::c_int) != 0
         {
-            recursive = false_0 != 0;
+            recursive.set(false_0 != 0);
             uniquefy_paths(&raw mut ga, p, path_option);
-            recursive = true_0 != 0;
+            recursive.set(true_0 != 0);
         }
         if p != *pat.offset(i_0 as isize) {
             xfree(p as *mut ::core::ffi::c_void);
@@ -3654,7 +3655,7 @@ pub unsafe extern "C" fn gen_expand_wildcards(
     } else {
         NULL
     }) as *mut *mut ::core::ffi::c_char;
-    recursive = false_0 != 0;
+    recursive.set(false_0 != 0);
     return if flags & EW_EMPTYOK as ::core::ffi::c_int != 0 || !ga.ga_data.is_null() {
         OK
     } else {
@@ -4172,7 +4173,7 @@ pub unsafe extern "C" fn path_with_extension(
         return false_0 != 0;
     }
     return mb_strcmp_ic(
-        p_fic != 0,
+        p_fic.get() != 0,
         last_dot.offset(1 as ::core::ffi::c_int as isize),
         extension,
     ) == 0 as ::core::ffi::c_int;
@@ -4470,7 +4471,7 @@ pub unsafe extern "C" fn pathcmp(
             s = p;
             break;
         } else {
-            if if p_fic != 0 {
+            if if p_fic.get() != 0 {
                 (mb_toupper(c1) != mb_toupper(c2)) as ::core::ffi::c_int
             } else {
                 (c1 != c2) as ::core::ffi::c_int
@@ -4482,7 +4483,7 @@ pub unsafe extern "C" fn pathcmp(
                 if vim_ispathsep(c2) {
                     return 1 as ::core::ffi::c_int;
                 }
-                return if p_fic != 0 {
+                return if p_fic.get() != 0 {
                     mb_toupper(c1) - mb_toupper(c2)
                 } else {
                     c1 - c2
@@ -4585,7 +4586,7 @@ pub unsafe extern "C" fn expand_wildcards_eval(
     if is_cur_alt_file as ::core::ffi::c_int != 0
         || *exp_pat as ::core::ffi::c_int == '<' as ::core::ffi::c_int
     {
-        emsg_off += 1;
+        (*emsg_off.ptr()) += 1;
         eval_pat = eval_vars(
             exp_pat,
             exp_pat,
@@ -4595,7 +4596,7 @@ pub unsafe extern "C" fn expand_wildcards_eval(
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             true_0 != 0,
         );
-        emsg_off -= 1;
+        (*emsg_off.ptr()) -= 1;
         if !eval_pat.is_null() {
             star_follows = strcmp(
                 exp_pat.offset(usedlen as isize),
@@ -4643,7 +4644,7 @@ pub unsafe extern "C" fn expand_wildcards(
     if flags & EW_KEEPALL as ::core::ffi::c_int != 0 || retval == FAIL {
         return retval;
     }
-    if *p_wig != 0 {
+    if *p_wig.get() != 0 {
         '_c2rust_label: {
             if *num_files == 0 as ::core::ffi::c_int || !(*files).is_null() {
             } else {
@@ -4684,7 +4685,7 @@ pub unsafe extern "C" fn expand_wildcards(
                     );
                 }
             };
-            if match_file_list(p_wig, *(*files).offset(i as isize), ffname) {
+            if match_file_list(p_wig.get(), *(*files).offset(i as isize), ffname) {
                 xfree(*(*files).offset(i as isize) as *mut ::core::ffi::c_void);
                 let mut j: ::core::ffi::c_int = i;
                 while (j + 1 as ::core::ffi::c_int) < *num_files {
@@ -4711,7 +4712,7 @@ pub unsafe extern "C" fn expand_wildcards(
             );
         }
     };
-    if *num_files > 1 as ::core::ffi::c_int && !got_int {
+    if *num_files > 1 as ::core::ffi::c_int && !got_int.get() {
         let mut non_suf_match: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < *num_files {
@@ -4745,7 +4746,7 @@ pub unsafe extern "C" fn match_suffix(mut fname: *mut ::core::ffi::c_char) -> bo
     let mut suf_buf: [::core::ffi::c_char; 30] = [0; 30];
     let mut fnamelen: size_t = strlen(fname);
     let mut setsuflen: size_t = 0 as size_t;
-    let mut setsuf: *mut ::core::ffi::c_char = p_su;
+    let mut setsuf: *mut ::core::ffi::c_char = p_su.get();
     while *setsuf != 0 {
         setsuflen = copy_option_part(
             &raw mut setsuf,
@@ -4965,26 +4966,26 @@ pub unsafe extern "C" fn path_guess_exepath(
                 <= ::core::mem::size_of::<[::core::ffi::c_char; 4096]>()
             {
                 xmemcpyz(
-                    &raw mut NameBuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
                     dir as *const ::core::ffi::c_void,
                     dir_len,
                 );
                 xstrlcat(
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                     PATHSEPSTR.as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
                 );
                 xstrlcat(
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                     argv0,
                     ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
                 );
                 if os_can_exe(
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                     ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
                     false_0 != 0,
                 ) {
-                    xstrlcpy(buf, &raw mut NameBuff as *mut ::core::ffi::c_char, bufsize);
+                    xstrlcpy(buf, NameBuff.ptr() as *mut ::core::ffi::c_char, bufsize);
                     return;
                 }
             }

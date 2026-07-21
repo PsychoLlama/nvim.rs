@@ -49,8 +49,8 @@ extern "C" {
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn vim_gettempdir() -> *mut ::core::ffi::c_char;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
     fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
@@ -127,26 +127,26 @@ pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::
         os_getenv_noalloc(b"NVIM_APPNAME\0".as_ptr() as *const ::core::ffi::c_char);
     if env_val.is_null() {
         xstrlcpy(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             b"nvim\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         );
     }
     if namelike {
         memchrsub(
-            &raw mut NameBuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             '/' as ::core::ffi::c_char,
             '-' as ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         );
         memchrsub(
-            &raw mut NameBuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             '\\' as ::core::ffi::c_char,
             '-' as ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         );
     }
-    return &raw mut NameBuff as *mut ::core::ffi::c_char;
+    return NameBuff.ptr() as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn appname_is_valid() -> bool {
@@ -301,15 +301,11 @@ pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_ch
     };
     if !dir.is_null() {
         xmemcpyz(
-            &raw mut IObuff as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+            IObuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             appname as *const ::core::ffi::c_void,
             appname_len,
         );
-        dir = concat_fnames_realloc(
-            dir,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
-            true_0 != 0,
-        );
+        dir = concat_fnames_realloc(dir, IObuff.ptr() as *mut ::core::ffi::c_char, true_0 != 0);
     }
     return dir;
 }

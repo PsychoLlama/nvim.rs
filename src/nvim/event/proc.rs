@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(
@@ -47,9 +47,9 @@ extern "C" {
     fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
     fn os_hrtime() -> uint64_t;
     fn rstream_may_close(stream: *mut RStream);
-    static mut exiting: bool;
-    static mut got_int: bool;
-    static mut main_loop: Loop;
+    static exiting: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static main_loop: SharedCell<Loop>;
     fn os_exit(r: ::core::ffi::c_int) -> !;
     fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
     fn stream_init(
@@ -66,8 +66,8 @@ extern "C" {
     fn pty_proc_close_master(ptyproc: *mut PtyProc);
     fn pty_proc_teardown(loop_0: *mut Loop);
     fn shell_free_argv(argv: *mut *mut ::core::ffi::c_char);
-    static mut ui_client_channel_id: uint64_t;
-    static mut ui_client_exit_status: ::core::ffi::c_int;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
+    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
     fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
 }
 pub type __uid_t = ::core::ffi::c_uint;
@@ -1032,7 +1032,8 @@ pub unsafe extern "C" fn proc_wait(
     } else {
         0 as uint64_t
     };
-    while !(got_int as ::core::ffi::c_int != 0 || (*proc).refcount == 1 as ::core::ffi::c_int) {
+    while !(got_int.get() as ::core::ffi::c_int != 0 || (*proc).refcount == 1 as ::core::ffi::c_int)
+    {
         if !events.is_null() && !multiqueue_empty(events) {
             multiqueue_process_events(events);
         } else {
@@ -1051,8 +1052,8 @@ pub unsafe extern "C" fn proc_wait(
             break;
         }
     }
-    if got_int {
-        got_int = false_0 != 0;
+    if got_int.get() {
+        got_int.set(false_0 != 0);
         proc_stop(proc);
         if ms == -1 as ::core::ffi::c_int {
             let mut remaining_0: int64_t = -1 as int64_t;
@@ -1335,13 +1336,13 @@ unsafe extern "C" fn proc_close_handles(mut argv: *mut *mut ::core::ffi::c_void)
     (*exit_need_delay.ptr()) -= 1;
 }
 unsafe extern "C" fn exit_delay_cb(mut _handle: *mut uv_timer_t) {
-    uv_timer_stop(&raw mut main_loop.exit_delay_timer);
+    uv_timer_stop(&raw mut (*main_loop.ptr()).exit_delay_timer);
     multiqueue_put_event(
-        main_loop.fast_events,
+        (*main_loop.ptr()).fast_events,
         Event {
             handler: Some(exit_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()),
             argv: [
-                main_loop.exit_delay_timer.data,
+                (*main_loop.ptr()).exit_delay_timer.data,
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -1359,18 +1360,18 @@ unsafe extern "C" fn exit_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut status: ::core::ffi::c_int = (*argv.offset(0 as ::core::ffi::c_int as isize))
         .expose_addr() as intptr_t as ::core::ffi::c_int;
     if exit_need_delay.get() != 0 {
-        main_loop.exit_delay_timer.data = *argv.offset(0 as ::core::ffi::c_int as isize);
+        (*main_loop.ptr()).exit_delay_timer.data = *argv.offset(0 as ::core::ffi::c_int as isize);
         uv_timer_start(
-            &raw mut main_loop.exit_delay_timer,
+            &raw mut (*main_loop.ptr()).exit_delay_timer,
             Some(exit_delay_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
             0 as uint64_t,
             0 as uint64_t,
         );
         return;
     }
-    if !exiting {
-        if ui_client_channel_id != 0 {
-            ui_client_exit_status = status;
+    if !exiting.get() {
+        if ui_client_channel_id.get() != 0 {
+            ui_client_exit_status.set(status);
             os_exit(status);
         } else {
             '_c2rust_label: {
@@ -1399,7 +1400,7 @@ pub unsafe extern "C" fn exit_on_closed_chan(mut status: ::core::ffi::c_int) {
         b"self-exit triggered by closed RPC channel...\0".as_ptr() as *const ::core::ffi::c_char,
     );
     multiqueue_put_event(
-        main_loop.fast_events,
+        (*main_loop.ptr()).fast_events,
         Event {
             handler: Some(exit_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()),
             argv: [

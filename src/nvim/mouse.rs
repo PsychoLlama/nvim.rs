@@ -22,12 +22,12 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn bt_prompt(buf: *mut buf_T) -> bool;
     fn bt_quickfix(buf: *const buf_T) -> bool;
-    static mut p_ch: OptInt;
-    static mut p_mousem: *mut ::core::ffi::c_char;
-    static mut p_mousescroll_vert: OptInt;
-    static mut p_mousescroll_hor: OptInt;
-    static mut p_sel: *mut ::core::ffi::c_char;
-    static mut p_smd: ::core::ffi::c_int;
+    static p_ch: GlobalCell<OptInt>;
+    static p_mousem: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mousescroll_vert: GlobalCell<OptInt>;
+    static p_mousescroll_hor: GlobalCell<OptInt>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_smd: GlobalCell<::core::ffi::c_int>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -52,8 +52,8 @@ extern "C" {
         rettv: *mut typval_T,
     ) -> ::core::ffi::c_int;
     fn eval_has_provider(feat: *const ::core::ffi::c_char, throw_if_fast: bool) -> bool;
-    static mut msg_grid: ScreenGrid;
-    static mut msg_grid_pos: ::core::ffi::c_int;
+    static msg_grid: GlobalCell<ScreenGrid>;
+    static msg_grid_pos: GlobalCell<::core::ffi::c_int>;
     fn siemsg(s: *const ::core::ffi::c_char, ...);
     fn tv_dict_add_nr(
         d: *mut dict_T,
@@ -82,35 +82,35 @@ extern "C" {
     fn safe_vgetc() -> ::core::ffi::c_int;
     fn vpeekc() -> ::core::ffi::c_int;
     fn vungetc(c: ::core::ffi::c_int);
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut mod_mask: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut mode_displayed: bool;
-    static mut mouse_grid: ::core::ffi::c_int;
-    static mut mouse_row: ::core::ffi::c_int;
-    static mut mouse_col: ::core::ffi::c_int;
-    static mut mouse_past_bottom: bool;
-    static mut mouse_past_eol: bool;
-    static mut mouse_dragging: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_select: bool;
-    static mut VIsual_reselect: ::core::ffi::c_int;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut where_paste_started: pos_T;
-    static mut State: ::core::ffi::c_int;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut KeyStuffed: ::core::ffi::c_int;
-    static mut cmdwin_type: ::core::ffi::c_int;
-    static mut cmdwin_win: *mut win_T;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static mod_mask: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static mode_displayed: GlobalCell<bool>;
+    static mouse_grid: GlobalCell<::core::ffi::c_int>;
+    static mouse_row: GlobalCell<::core::ffi::c_int>;
+    static mouse_col: GlobalCell<::core::ffi::c_int>;
+    static mouse_past_bottom: GlobalCell<bool>;
+    static mouse_past_eol: GlobalCell<bool>;
+    static mouse_dragging: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_select: GlobalCell<bool>;
+    static VIsual_reselect: GlobalCell<::core::ffi::c_int>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static where_paste_started: GlobalCell<pos_T>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static KeyStuffed: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_win: GlobalCell<*mut win_T>;
     fn grid_adjust(
         grid: *mut GridView,
         row_off: *mut ::core::ffi::c_int,
@@ -202,7 +202,7 @@ extern "C" {
         lnum: linenr_T,
         limit_winheight: bool,
     ) -> ::core::ffi::c_int;
-    static mut pum_grid: ScreenGrid;
+    static pum_grid: GlobalCell<ScreenGrid>;
     fn pum_visible() -> bool;
     fn yank_register_mline(regname: ::core::ffi::c_int, reg: *mut *mut yankreg_T) -> bool;
     fn insert_reg(
@@ -218,7 +218,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
     );
     fn findmatch(oap: *mut oparg_T, initc: ::core::ffi::c_int) -> *mut pos_T;
-    static mut tab_page_click_defs: *mut StlClickDefinition;
+    static tab_page_click_defs: GlobalCell<*mut StlClickDefinition>;
     fn virtual_active(wp: *mut win_T) -> bool;
     fn stl_connected(wp: *mut win_T) -> bool;
     fn ui_flush();
@@ -2353,7 +2353,7 @@ unsafe extern "C" fn find_start_of_word(mut pos: *mut pos_T) {
 }
 unsafe extern "C" fn find_end_of_word(mut pos: *mut pos_T) {
     let mut line: *mut ::core::ffi::c_char = ml_get((*pos).lnum);
-    if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
         && (*pos).col > 0 as ::core::ffi::c_int
     {
         (*pos).col -= 1;
@@ -2364,7 +2364,7 @@ unsafe extern "C" fn find_end_of_word(mut pos: *mut pos_T) {
         let mut col: ::core::ffi::c_int =
             (*pos).col as ::core::ffi::c_int + utfc_ptr2len(line.offset((*pos).col as isize));
         if get_mouse_class(line.offset(col as isize)) != cclass {
-            if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+            if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                 (*pos).col = col as colnr_T;
             }
             break;
@@ -2374,10 +2374,11 @@ unsafe extern "C" fn find_end_of_word(mut pos: *mut pos_T) {
     }
 }
 unsafe extern "C" fn move_tab_to_mouse() {
-    let mut tabnr: ::core::ffi::c_int = (*tab_page_click_defs.offset(mouse_col as isize)).tabnr;
+    let mut tabnr: ::core::ffi::c_int =
+        (*(*tab_page_click_defs.ptr()).offset(mouse_col.get() as isize)).tabnr;
     if tabnr <= 0 as ::core::ffi::c_int {
         tabpage_move(9999 as ::core::ffi::c_int);
-    } else if tabnr < tabpage_index(curtab) {
+    } else if tabnr < tabpage_index(curtab.get()) {
         tabpage_move(tabnr - 1 as ::core::ffi::c_int);
     } else {
         tabpage_move(tabnr);
@@ -2386,12 +2387,12 @@ unsafe extern "C" fn move_tab_to_mouse() {
 unsafe extern "C" fn mouse_tab_close(mut c1: ::core::ffi::c_int) {
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     if c1 == 999 as ::core::ffi::c_int {
-        tp = curtab;
+        tp = curtab.get();
     } else {
         tp = find_tabpage(c1);
     }
-    if tp == curtab {
-        if !(*first_tabpage).tp_next.is_null() {
+    if tp == curtab.get() {
+        if !(*first_tabpage.get()).tp_next.is_null() {
             tabpage_close(false_0);
         }
     } else if !tp.is_null() {
@@ -2405,22 +2406,22 @@ unsafe extern "C" fn call_click_def_func(
     mut which_button: ::core::ffi::c_int,
 ) {
     let mut c2rust_lvalue: [::core::ffi::c_char; 5] = [
-        (if mod_mask & MOD_MASK_SHIFT != 0 {
+        (if mod_mask.get() & MOD_MASK_SHIFT != 0 {
             's' as ::core::ffi::c_int
         } else {
             ' ' as ::core::ffi::c_int
         }) as ::core::ffi::c_char,
-        (if mod_mask & MOD_MASK_CTRL != 0 {
+        (if mod_mask.get() & MOD_MASK_CTRL != 0 {
             'c' as ::core::ffi::c_int
         } else {
             ' ' as ::core::ffi::c_int
         }) as ::core::ffi::c_char,
-        (if mod_mask & MOD_MASK_ALT != 0 {
+        (if mod_mask.get() & MOD_MASK_ALT != 0 {
             'a' as ::core::ffi::c_int
         } else {
             ' ' as ::core::ffi::c_int
         }) as ::core::ffi::c_char,
-        (if mod_mask & MOD_MASK_META != 0 {
+        (if mod_mask.get() & MOD_MASK_META != 0 {
             'm' as ::core::ffi::c_int
         } else {
             ' ' as ::core::ffi::c_int
@@ -2439,11 +2440,11 @@ unsafe extern "C" fn call_click_def_func(
             v_type: VAR_NUMBER,
             v_lock: VAR_FIXED,
             vval: typval_vval_union {
-                v_number: (if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_4CLICK {
+                v_number: (if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_4CLICK {
                     4 as ::core::ffi::c_int
-                } else if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_3CLICK {
+                } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_3CLICK {
                     3 as ::core::ffi::c_int
-                } else if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+                } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                     2 as ::core::ffi::c_int
                 } else {
                     1 as ::core::ffi::c_int
@@ -2498,9 +2499,9 @@ unsafe extern "C" fn call_click_def_func(
     got_click.set(false_0 != 0);
 }
 unsafe extern "C" fn get_fpos_of_mouse(mut mpos: *mut pos_T) -> ::core::ffi::c_int {
-    let mut grid: ::core::ffi::c_int = mouse_grid;
-    let mut row: ::core::ffi::c_int = mouse_row;
-    let mut col: ::core::ffi::c_int = mouse_col;
+    let mut grid: ::core::ffi::c_int = mouse_grid.get();
+    let mut row: ::core::ffi::c_int = mouse_row.get();
+    let mut col: ::core::ffi::c_int = mouse_col.get();
     if row < 0 as ::core::ffi::c_int || col < 0 as ::core::ffi::c_int {
         return IN_UNKNOWN as ::core::ffi::c_int;
     }
@@ -2523,9 +2524,10 @@ unsafe extern "C" fn get_fpos_of_mouse(mut mpos: *mut pos_T) -> ::core::ffi::c_i
         return MOUSE_STATUSCOL as ::core::ffi::c_int;
     }
     if winrow >= (*wp).w_view_height + (*wp).w_status_height {
-        if mouse_grid <= 1 as ::core::ffi::c_int
-            && (mouse_row as OptInt) < Rows as OptInt - p_ch
-            && mouse_row as OptInt >= Rows as OptInt - p_ch - global_stl_height() as OptInt
+        if mouse_grid.get() <= 1 as ::core::ffi::c_int
+            && (mouse_row.get() as OptInt) < Rows.get() as OptInt - p_ch.get()
+            && mouse_row.get() as OptInt
+                >= Rows.get() as OptInt - p_ch.get() - global_stl_height() as OptInt
         {
             return IN_STATUS_LINE as ::core::ffi::c_int;
         }
@@ -2540,7 +2542,7 @@ unsafe extern "C" fn get_fpos_of_mouse(mut mpos: *mut pos_T) -> ::core::ffi::c_i
     if wincol >= (*wp).w_view_width {
         return IN_SEP_LINE as ::core::ffi::c_int;
     }
-    if wp != curwin || below_buffer as ::core::ffi::c_int != 0 {
+    if wp != curwin.get() || below_buffer as ::core::ffi::c_int != 0 {
         return IN_UNKNOWN as ::core::ffi::c_int;
     }
     (*mpos).col = vcol2col(wp, (*mpos).lnum, col as colnr_T, &raw mut (*mpos).coladd);
@@ -2553,41 +2555,43 @@ unsafe extern "C" fn do_popup(
 ) -> ::core::ffi::c_int {
     let mut jump_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if strcmp(
-        p_mousem,
+        p_mousem.get(),
         b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
-        if VIsual_active {
+        if VIsual_active.get() {
             if m_pos_flag != IN_BUFFER as ::core::ffi::c_int {
                 jump_flags = MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
-            } else if VIsual_mode == 'V' as ::core::ffi::c_int {
-                if (*curwin).w_cursor.lnum <= VIsual.lnum
-                    && (m_pos.lnum < (*curwin).w_cursor.lnum || VIsual.lnum < m_pos.lnum)
-                    || VIsual.lnum < (*curwin).w_cursor.lnum
-                        && (m_pos.lnum < VIsual.lnum || (*curwin).w_cursor.lnum < m_pos.lnum)
+            } else if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
+                if (*curwin.get()).w_cursor.lnum <= (*VIsual.ptr()).lnum
+                    && (m_pos.lnum < (*curwin.get()).w_cursor.lnum
+                        || (*VIsual.ptr()).lnum < m_pos.lnum)
+                    || (*VIsual.ptr()).lnum < (*curwin.get()).w_cursor.lnum
+                        && (m_pos.lnum < (*VIsual.ptr()).lnum
+                            || (*curwin.get()).w_cursor.lnum < m_pos.lnum)
                 {
                     jump_flags = MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
                 }
-            } else if ltoreq((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0
-                && (lt(m_pos, (*curwin).w_cursor) as ::core::ffi::c_int != 0
-                    || lt(VIsual, m_pos) as ::core::ffi::c_int != 0)
-                || lt(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0
-                    && (lt(m_pos, VIsual) as ::core::ffi::c_int != 0
-                        || lt((*curwin).w_cursor, m_pos) as ::core::ffi::c_int != 0)
+            } else if ltoreq((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
+                && (lt(m_pos, (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
+                    || lt(VIsual.get(), m_pos) as ::core::ffi::c_int != 0)
+                || lt(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
+                    && (lt(m_pos, VIsual.get()) as ::core::ffi::c_int != 0
+                        || lt((*curwin.get()).w_cursor, m_pos) as ::core::ffi::c_int != 0)
             {
                 jump_flags = MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
-            } else if VIsual_mode == Ctrl_V {
+            } else if VIsual_mode.get() == Ctrl_V {
                 let mut leftcol: colnr_T = 0;
                 let mut rightcol: colnr_T = 0;
                 getvcols(
-                    curwin,
-                    &raw mut (*curwin).w_cursor,
-                    &raw mut VIsual,
+                    curwin.get(),
+                    &raw mut (*curwin.get()).w_cursor,
+                    VIsual.ptr(),
                     &raw mut leftcol,
                     &raw mut rightcol,
                 );
                 getvcol(
-                    curwin,
+                    curwin.get(),
                     &raw mut m_pos,
                     ::core::ptr::null_mut::<colnr_T>(),
                     &raw mut m_pos.col,
@@ -2603,7 +2607,7 @@ unsafe extern "C" fn do_popup(
     }
     if jump_flags != 0 {
         jump_flags = jump_to_mouse(jump_flags, ::core::ptr::null_mut::<bool>(), which_button);
-        redraw_curbuf_later(if VIsual_active as ::core::ffi::c_int != 0 {
+        redraw_curbuf_later(if VIsual_active.get() as ::core::ffi::c_int != 0 {
             UPD_INVERTED as ::core::ffi::c_int
         } else {
             UPD_VALID as ::core::ffi::c_int
@@ -2643,21 +2647,21 @@ pub unsafe extern "C" fn do_mouse(
         if !is_drag {
             break;
         }
-        if !(KeyStuffed == 0 && vpeekc() != NUL) {
+        if !(KeyStuffed.get() == 0 && vpeekc() != NUL) {
             break;
         }
         let mut nc: ::core::ffi::c_int = 0;
-        let mut save_mouse_grid: ::core::ffi::c_int = mouse_grid;
-        let mut save_mouse_row: ::core::ffi::c_int = mouse_row;
-        let mut save_mouse_col: ::core::ffi::c_int = mouse_col;
+        let mut save_mouse_grid: ::core::ffi::c_int = mouse_grid.get();
+        let mut save_mouse_row: ::core::ffi::c_int = mouse_row.get();
+        let mut save_mouse_col: ::core::ffi::c_int = mouse_col.get();
         nc = safe_vgetc();
         if c == nc {
             continue;
         }
         vungetc(nc);
-        mouse_grid = save_mouse_grid;
-        mouse_row = save_mouse_row;
-        mouse_col = save_mouse_col;
+        mouse_grid.set(save_mouse_grid);
+        mouse_row.set(save_mouse_row);
+        mouse_col.set(save_mouse_col);
         break;
     }
     if c == -(253 as ::core::ffi::c_int
@@ -2680,10 +2684,10 @@ pub unsafe extern "C" fn do_mouse(
         }
     }
     if is_click as ::core::ffi::c_int != 0
-        && mod_mask & MOD_MASK_CTRL != 0
+        && mod_mask.get() & MOD_MASK_CTRL != 0
         && which_button == MOUSE_RIGHT as ::core::ffi::c_int
     {
-        if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
             stuffcharReadbuff(Ctrl_O);
         }
         if count > 1 as ::core::ffi::c_int {
@@ -2693,17 +2697,17 @@ pub unsafe extern "C" fn do_mouse(
         got_click.set(false_0 != 0);
         return false_0 != 0;
     }
-    if mod_mask & MOD_MASK_CTRL != 0 && which_button != MOUSE_LEFT as ::core::ffi::c_int {
+    if mod_mask.get() & MOD_MASK_CTRL != 0 && which_button != MOUSE_LEFT as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    if mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_META) != 0
+    if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_META) != 0
         && (!is_click
-            || mod_mask & MOD_MASK_MULTI_CLICK != 0
+            || mod_mask.get() & MOD_MASK_MULTI_CLICK != 0
             || which_button == MOUSE_MIDDLE as ::core::ffi::c_int)
-        && !(mod_mask & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0
+        && !(mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0
             && mouse_model_popup() as ::core::ffi::c_int != 0
             && which_button == MOUSE_LEFT as ::core::ffi::c_int)
-        && !(mod_mask & MOD_MASK_ALT != 0
+        && !(mod_mask.get() & MOD_MASK_ALT != 0
             && !mouse_model_popup()
             && which_button == MOUSE_RIGHT as ::core::ffi::c_int)
     {
@@ -2718,13 +2722,13 @@ pub unsafe extern "C" fn do_mouse(
         0 as ::core::ffi::c_int
     };
     if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
-        if State == MODE_NORMAL as ::core::ffi::c_int {
+        if State.get() == MODE_NORMAL as ::core::ffi::c_int {
             if !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
                 clearopbeep(oap);
                 return false_0 != 0;
             }
-            if VIsual_active {
-                if VIsual_select {
+            if VIsual_active.get() {
+                if VIsual_select.get() {
                     stuffcharReadbuff(Ctrl_G);
                     stuffReadbuff(b"\"+p\0".as_ptr() as *const ::core::ffi::c_char);
                 } else {
@@ -2736,10 +2740,10 @@ pub unsafe extern "C" fn do_mouse(
                 }
                 return false_0 != 0;
             }
-        } else if State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+        } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
             return false_0 != 0;
         }
-        if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
             if regname == '.' as ::core::ffi::c_int {
                 insert_reg(regname, ::core::ptr::null_mut::<yankreg_T>(), true_0 != 0);
             } else {
@@ -2753,7 +2757,7 @@ pub unsafe extern "C" fn do_mouse(
                     regname = '*' as ::core::ffi::c_int;
                 }
                 let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-                if State & REPLACE_FLAG as ::core::ffi::c_int != 0
+                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
                     && !yank_register_mline(regname, &raw mut reg)
                 {
                     insert_reg(regname, reg, true_0 != 0);
@@ -2790,11 +2794,11 @@ pub unsafe extern "C" fn do_mouse(
     } else {
         MOUSE_FOCUS as ::core::ffi::c_int | MOUSE_DID_MOVE as ::core::ffi::c_int
     };
-    let mut old_curwin: *mut win_T = curwin;
-    if !tab_page_click_defs.is_null() {
-        if mouse_grid <= 1 as ::core::ffi::c_int
-            && mouse_row == 0 as ::core::ffi::c_int
-            && (*firstwin).w_winrow > 0 as ::core::ffi::c_int
+    let mut old_curwin: *mut win_T = curwin.get();
+    if !(*tab_page_click_defs.ptr()).is_null() {
+        if mouse_grid.get() <= 1 as ::core::ffi::c_int
+            && mouse_row.get() == 0 as ::core::ffi::c_int
+            && (*firstwin.get()).w_winrow > 0 as ::core::ffi::c_int
         {
             if is_drag {
                 if in_tab_line.get() {
@@ -2803,19 +2807,19 @@ pub unsafe extern "C" fn do_mouse(
                 return false_0 != 0;
             }
             if is_click as ::core::ffi::c_int != 0
-                && cmdwin_type == 0 as ::core::ffi::c_int
-                && mouse_col < Columns
+                && cmdwin_type.get() == 0 as ::core::ffi::c_int
+                && mouse_col.get() < Columns.get()
             {
                 let mut tabnr: ::core::ffi::c_int =
-                    (*tab_page_click_defs.offset(mouse_col as isize)).tabnr;
+                    (*(*tab_page_click_defs.ptr()).offset(mouse_col.get() as isize)).tabnr;
                 in_tab_line.set(true_0 != 0);
                 's_464: {
-                    match (*tab_page_click_defs.offset(mouse_col as isize)).type_0
+                    match (*(*tab_page_click_defs.ptr()).offset(mouse_col.get() as isize)).type_0
                         as ::core::ffi::c_uint
                     {
                         1 => {
                             if which_button != MOUSE_MIDDLE as ::core::ffi::c_int {
-                                if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+                                if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                                     end_visual_mode();
                                     tabpage_new();
                                     tabpage_move(if tabnr == 0 as ::core::ffi::c_int {
@@ -2825,7 +2829,7 @@ pub unsafe extern "C" fn do_mouse(
                                     });
                                 } else {
                                     goto_tabpage(tabnr);
-                                    if curwin != old_curwin {
+                                    if curwin.get() != old_curwin {
                                         end_visual_mode();
                                     }
                                 }
@@ -2834,7 +2838,11 @@ pub unsafe extern "C" fn do_mouse(
                         }
                         2 => {}
                         3 => {
-                            call_click_def_func(tab_page_click_defs, mouse_col, which_button);
+                            call_click_def_func(
+                                tab_page_click_defs.get(),
+                                mouse_col.get(),
+                                which_button,
+                            );
                             break 's_464;
                         }
                         0 | _ => {
@@ -2865,7 +2873,7 @@ pub unsafe extern "C" fn do_mouse(
                 | MOUSE_STATUSCOL as ::core::ffi::c_int)
             == 0
             && which_button == MOUSE_RIGHT as ::core::ffi::c_int
-            && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+            && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
         {
             if !is_click {
                 return false_0 != 0;
@@ -2879,10 +2887,10 @@ pub unsafe extern "C" fn do_mouse(
                 | MOUSE_STATUSCOL as ::core::ffi::c_int)
             == 0
             && (which_button == MOUSE_LEFT as ::core::ffi::c_int
-                && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0)
+                && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0)
         {
             which_button = MOUSE_RIGHT as ::core::ffi::c_int;
-            mod_mask &= !MOD_MASK_SHIFT;
+            (*mod_mask.ptr()) &= !MOD_MASK_SHIFT;
         }
     }
     let mut end_visual: pos_T = pos_T {
@@ -2896,14 +2904,14 @@ pub unsafe extern "C" fn do_mouse(
         coladd: 0,
     };
     let mut mouse_can_visual: bool = ui_mouse_has(MOUSE_VISUAL);
-    if State & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
-        && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+    if State.get() & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
+        && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
     {
         if which_button == MOUSE_LEFT as ::core::ffi::c_int
             && mouse_can_visual as ::core::ffi::c_int != 0
         {
             if is_click {
-                if VIsual_active {
+                if VIsual_active.get() {
                     jump_flags |= MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
                 }
             } else {
@@ -2912,13 +2920,14 @@ pub unsafe extern "C" fn do_mouse(
         } else if which_button == MOUSE_RIGHT as ::core::ffi::c_int
             && mouse_can_visual as ::core::ffi::c_int != 0
         {
-            if is_click as ::core::ffi::c_int != 0 && VIsual_active as ::core::ffi::c_int != 0 {
-                if lt((*curwin).w_cursor, VIsual) {
-                    start_visual = (*curwin).w_cursor;
-                    end_visual = VIsual;
+            if is_click as ::core::ffi::c_int != 0 && VIsual_active.get() as ::core::ffi::c_int != 0
+            {
+                if lt((*curwin.get()).w_cursor, VIsual.get()) {
+                    start_visual = (*curwin.get()).w_cursor;
+                    end_visual = VIsual.get();
                 } else {
-                    start_visual = VIsual;
-                    end_visual = (*curwin).w_cursor;
+                    start_visual = VIsual.get();
+                    end_visual = (*curwin.get()).w_cursor;
                 }
             }
             jump_flags |= MOUSE_MAY_VIS as ::core::ffi::c_int;
@@ -2934,9 +2943,9 @@ pub unsafe extern "C" fn do_mouse(
     if !is_click && !is_drag {
         jump_flags |= MOUSE_RELEASED as ::core::ffi::c_int;
     }
-    let mut old_active: ::core::ffi::c_int = VIsual_active as ::core::ffi::c_int;
-    let mut save_cursor: pos_T = (*curwin).w_cursor;
-    if !VIsual_active || mouse_can_visual as ::core::ffi::c_int != 0 {
+    let mut old_active: ::core::ffi::c_int = VIsual_active.get() as ::core::ffi::c_int;
+    let mut save_cursor: pos_T = (*curwin.get()).w_cursor;
+    if !VIsual_active.get() || mouse_can_visual as ::core::ffi::c_int != 0 {
         jump_flags = jump_to_mouse(
             jump_flags,
             if oap.is_null() {
@@ -2959,9 +2968,9 @@ pub unsafe extern "C" fn do_mouse(
         || in_statuscol as ::core::ffi::c_int != 0)
         && is_click as ::core::ffi::c_int != 0
     {
-        let mut click_grid: ::core::ffi::c_int = mouse_grid;
-        let mut click_row: ::core::ffi::c_int = mouse_row;
-        let mut click_col: ::core::ffi::c_int = mouse_col;
+        let mut click_grid: ::core::ffi::c_int = mouse_grid.get();
+        let mut click_row: ::core::ffi::c_int = mouse_row.get();
+        let mut click_col: ::core::ffi::c_int = mouse_col.get();
         let mut wp: *mut win_T =
             mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col);
         if wp.is_null() {
@@ -2975,8 +2984,8 @@ pub unsafe extern "C" fn do_mouse(
             (*wp).w_statuscol_click_defs
         };
         if in_global_statusline {
-            click_defs = (*curwin).w_status_click_defs;
-            click_col = mouse_col;
+            click_defs = (*curwin.get()).w_status_click_defs;
+            click_col = mouse_col.get();
         }
         if in_statuscol as ::core::ffi::c_int != 0 && (*wp).w_onebuf_opt.wo_rl != 0 {
             click_col = (*wp).w_view_width - click_col - 1 as ::core::ffi::c_int;
@@ -2986,7 +2995,7 @@ pub unsafe extern "C" fn do_mouse(
             || in_status_line as ::core::ffi::c_int != 0
                 && click_col
                     >= (*(if in_global_statusline as ::core::ffi::c_int != 0 {
-                        curwin
+                        curwin.get()
                     } else {
                         wp
                     }))
@@ -3000,7 +3009,7 @@ pub unsafe extern "C" fn do_mouse(
                     if in_statuscol as ::core::ffi::c_int != 0
                         && mouse_model_popup() as ::core::ffi::c_int != 0
                         && which_button == MOUSE_RIGHT as ::core::ffi::c_int
-                        && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+                        && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
                     {
                         do_popup(which_button, m_pos_flag, m_pos);
                     }
@@ -3041,10 +3050,13 @@ pub unsafe extern "C" fn do_mouse(
     } else if in_winbar as ::core::ffi::c_int != 0 || in_statuscol as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
-    if curwin != old_curwin && !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
+    if curwin.get() != old_curwin
+        && !oap.is_null()
+        && (*oap).op_type != OP_NOP as ::core::ffi::c_int
+    {
         clearop(oap);
     }
-    if mod_mask == 0 as ::core::ffi::c_int
+    if mod_mask.get() == 0 as ::core::ffi::c_int
         && !is_drag
         && jump_flags
             & (MOUSE_FOLD_CLOSE as ::core::ffi::c_int | MOUSE_FOLD_OPEN as ::core::ffi::c_int)
@@ -3052,46 +3064,48 @@ pub unsafe extern "C" fn do_mouse(
         && which_button == MOUSE_LEFT as ::core::ffi::c_int
     {
         if jump_flags & MOUSE_FOLD_OPEN as ::core::ffi::c_int != 0 {
-            openFold((*curwin).w_cursor, 1 as ::core::ffi::c_int);
+            openFold((*curwin.get()).w_cursor, 1 as ::core::ffi::c_int);
         } else {
-            closeFold((*curwin).w_cursor, 1 as ::core::ffi::c_int);
+            closeFold((*curwin.get()).w_cursor, 1 as ::core::ffi::c_int);
         }
-        if curwin == old_curwin {
-            (*curwin).w_cursor = save_cursor;
+        if curwin.get() == old_curwin {
+            (*curwin.get()).w_cursor = save_cursor;
         }
     }
-    if VIsual_active as ::core::ffi::c_int != 0
+    if VIsual_active.get() as ::core::ffi::c_int != 0
         && is_drag as ::core::ffi::c_int != 0
-        && get_scrolloff_value(curwin) != 0
+        && get_scrolloff_value(curwin.get()) != 0
     {
-        if mouse_row == 0 as ::core::ffi::c_int {
-            mouse_dragging = 2 as ::core::ffi::c_int;
+        if mouse_row.get() == 0 as ::core::ffi::c_int {
+            mouse_dragging.set(2 as ::core::ffi::c_int);
         } else {
-            mouse_dragging = 1 as ::core::ffi::c_int;
+            mouse_dragging.set(1 as ::core::ffi::c_int);
         }
     }
-    if is_drag as ::core::ffi::c_int != 0 && mouse_row < 0 as ::core::ffi::c_int && !in_status_line
+    if is_drag as ::core::ffi::c_int != 0
+        && mouse_row.get() < 0 as ::core::ffi::c_int
+        && !in_status_line
     {
         scroll_redraw(false_0, 1 as linenr_T);
-        mouse_row = 0 as ::core::ffi::c_int;
+        mouse_row.set(0 as ::core::ffi::c_int);
     }
-    let mut old_mode: ::core::ffi::c_int = VIsual_mode;
+    let mut old_mode: ::core::ffi::c_int = VIsual_mode.get();
     if start_visual.lnum != 0 {
         let mut diff: linenr_T = 0;
-        if mod_mask & MOD_MASK_ALT != 0 {
-            VIsual_mode = Ctrl_V;
+        if mod_mask.get() & MOD_MASK_ALT != 0 {
+            VIsual_mode.set(Ctrl_V);
         }
-        if VIsual_mode == Ctrl_V {
+        if VIsual_mode.get() == Ctrl_V {
             let mut leftcol: colnr_T = 0;
             let mut rightcol: colnr_T = 0;
             getvcols(
-                curwin,
+                curwin.get(),
                 &raw mut start_visual,
                 &raw mut end_visual,
                 &raw mut leftcol,
                 &raw mut rightcol,
             );
-            if (*curwin).w_curswant
+            if (*curwin.get()).w_curswant
                 > (leftcol as ::core::ffi::c_int + rightcol as ::core::ffi::c_int)
                     / 2 as ::core::ffi::c_int
             {
@@ -3099,43 +3113,47 @@ pub unsafe extern "C" fn do_mouse(
             } else {
                 end_visual.col = rightcol;
             }
-            if (*curwin).w_cursor.lnum >= (start_visual.lnum + end_visual.lnum) / 2 as linenr_T {
+            if (*curwin.get()).w_cursor.lnum
+                >= (start_visual.lnum + end_visual.lnum) / 2 as linenr_T
+            {
                 end_visual.lnum = start_visual.lnum;
             }
-            start_visual = (*curwin).w_cursor;
-            (*curwin).w_cursor = end_visual;
-            coladvance(curwin, end_visual.col);
-            VIsual = (*curwin).w_cursor;
-            (*curwin).w_cursor = start_visual;
-        } else if lt((*curwin).w_cursor, start_visual) {
-            VIsual = end_visual;
-        } else if lt(end_visual, (*curwin).w_cursor) {
-            VIsual = start_visual;
+            start_visual = (*curwin.get()).w_cursor;
+            (*curwin.get()).w_cursor = end_visual;
+            coladvance(curwin.get(), end_visual.col);
+            VIsual.set((*curwin.get()).w_cursor);
+            (*curwin.get()).w_cursor = start_visual;
+        } else if lt((*curwin.get()).w_cursor, start_visual) {
+            VIsual.set(end_visual);
+        } else if lt(end_visual, (*curwin.get()).w_cursor) {
+            VIsual.set(start_visual);
         } else if end_visual.lnum == start_visual.lnum {
-            if (*curwin).w_cursor.col - start_visual.col > end_visual.col - (*curwin).w_cursor.col {
-                VIsual = start_visual;
+            if (*curwin.get()).w_cursor.col - start_visual.col
+                > end_visual.col - (*curwin.get()).w_cursor.col
+            {
+                VIsual.set(start_visual);
             } else {
-                VIsual = end_visual;
+                VIsual.set(end_visual);
             }
         } else {
-            diff = (*curwin).w_cursor.lnum
+            diff = (*curwin.get()).w_cursor.lnum
                 - start_visual.lnum
-                - (end_visual.lnum - (*curwin).w_cursor.lnum);
+                - (end_visual.lnum - (*curwin.get()).w_cursor.lnum);
             if diff > 0 as linenr_T {
-                VIsual = start_visual;
+                VIsual.set(start_visual);
             } else if diff < 0 as linenr_T {
-                VIsual = end_visual;
-            } else if (*curwin).w_cursor.col
+                VIsual.set(end_visual);
+            } else if (*curwin.get()).w_cursor.col
                 < (start_visual.col as ::core::ffi::c_int + end_visual.col as ::core::ffi::c_int)
                     / 2 as ::core::ffi::c_int
             {
-                VIsual = end_visual;
+                VIsual.set(end_visual);
             } else {
-                VIsual = start_visual;
+                VIsual.set(start_visual);
             }
         }
-    } else if State & MODE_INSERT as ::core::ffi::c_int != 0
-        && VIsual_active as ::core::ffi::c_int != 0
+    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && VIsual_active.get() as ::core::ffi::c_int != 0
     {
         stuffcharReadbuff(Ctrl_O);
     }
@@ -3151,10 +3169,10 @@ pub unsafe extern "C" fn do_mouse(
         }
         let mut reg_0: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
         if yank_register_mline(regname, &raw mut reg_0) {
-            if mouse_past_bottom {
+            if mouse_past_bottom.get() {
                 dir = FORWARD as ::core::ffi::c_int;
             }
-        } else if mouse_past_eol {
+        } else if mouse_past_eol.get() {
             dir = FORWARD as ::core::ffi::c_int;
         }
         let mut c1: ::core::ffi::c_int = 0;
@@ -3175,8 +3193,8 @@ pub unsafe extern "C" fn do_mouse(
             c2 = NUL;
         }
         prep_redo(regname, count, NUL, c1, NUL, c2, NUL);
-        if restart_edit != 0 as ::core::ffi::c_int {
-            where_paste_started = (*curwin).w_cursor;
+        if restart_edit.get() != 0 as ::core::ffi::c_int {
+            where_paste_started.set((*curwin.get()).w_cursor);
         }
         do_put(
             regname,
@@ -3189,27 +3207,29 @@ pub unsafe extern "C" fn do_mouse(
                 0 as ::core::ffi::c_int
             }) | PUT_CURSEND as ::core::ffi::c_int,
         );
-    } else if (mod_mask & MOD_MASK_CTRL != 0 || mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK)
-        && bt_quickfix(curbuf) as ::core::ffi::c_int != 0
+    } else if (mod_mask.get() & MOD_MASK_CTRL != 0
+        || mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK)
+        && bt_quickfix(curbuf.get()) as ::core::ffi::c_int != 0
     {
-        if (*curwin).w_llist_ref.is_null() {
+        if (*curwin.get()).w_llist_ref.is_null() {
             do_cmdline_cmd(b".cc\0".as_ptr() as *const ::core::ffi::c_char);
         } else {
             do_cmdline_cmd(b".ll\0".as_ptr() as *const ::core::ffi::c_char);
         }
         got_click.set(false_0 != 0);
-    } else if mod_mask & MOD_MASK_CTRL != 0
-        || (*curbuf).b_help as ::core::ffi::c_int != 0
-            && mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK
+    } else if mod_mask.get() & MOD_MASK_CTRL != 0
+        || (*curbuf.get()).b_help as ::core::ffi::c_int != 0
+            && mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK
     {
-        if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
             stuffcharReadbuff(Ctrl_O);
         }
         stuffcharReadbuff(Ctrl_RSB);
         got_click.set(false_0 != 0);
-    } else if mod_mask & MOD_MASK_SHIFT != 0 {
-        if State & MODE_INSERT as ::core::ffi::c_int != 0
-            || VIsual_active as ::core::ffi::c_int != 0 && VIsual_select as ::core::ffi::c_int != 0
+    } else if mod_mask.get() & MOD_MASK_SHIFT != 0 {
+        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+            || VIsual_active.get() as ::core::ffi::c_int != 0
+                && VIsual_select.get() as ::core::ffi::c_int != 0
         {
             stuffcharReadbuff(Ctrl_O);
         }
@@ -3220,37 +3240,38 @@ pub unsafe extern "C" fn do_mouse(
         }
     } else if !(in_status_line as ::core::ffi::c_int != 0 || in_sep_line as ::core::ffi::c_int != 0)
     {
-        if mod_mask & MOD_MASK_MULTI_CLICK != 0
-            && State & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
+        if mod_mask.get() & MOD_MASK_MULTI_CLICK != 0
+            && State.get() & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
+                != 0
             && mouse_can_visual as ::core::ffi::c_int != 0
         {
-            if is_click as ::core::ffi::c_int != 0 || !VIsual_active {
-                if VIsual_active {
-                    orig_cursor.set(VIsual);
+            if is_click as ::core::ffi::c_int != 0 || !VIsual_active.get() {
+                if VIsual_active.get() {
+                    orig_cursor.set(VIsual.get());
                 } else {
-                    VIsual = (*curwin).w_cursor;
-                    orig_cursor.set(VIsual);
-                    VIsual_active = true_0 != 0;
-                    VIsual_reselect = true_0;
+                    VIsual.set((*curwin.get()).w_cursor);
+                    orig_cursor.set(VIsual.get());
+                    VIsual_active.set(true_0 != 0);
+                    VIsual_reselect.set(true_0);
                     may_start_select('o' as ::core::ffi::c_int);
                     setmouse();
                 }
-                if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
-                    if mod_mask & MOD_MASK_ALT != 0 {
-                        VIsual_mode = Ctrl_V;
+                if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+                    if mod_mask.get() & MOD_MASK_ALT != 0 {
+                        VIsual_mode.set(Ctrl_V);
                     } else {
-                        VIsual_mode = 'v' as ::core::ffi::c_int;
+                        VIsual_mode.set('v' as ::core::ffi::c_int);
                     }
-                } else if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_3CLICK {
-                    VIsual_mode = 'V' as ::core::ffi::c_int;
-                } else if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_4CLICK {
-                    VIsual_mode = Ctrl_V;
+                } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_3CLICK {
+                    VIsual_mode.set('V' as ::core::ffi::c_int);
+                } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_4CLICK {
+                    VIsual_mode.set(Ctrl_V);
                 }
             }
-            if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+            if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                 let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
                 if is_click {
-                    end_visual = (*curwin).w_cursor;
+                    end_visual = (*curwin.get()).w_cursor;
                     let mut gc: ::core::ffi::c_int = 0;
                     loop {
                         gc = gchar_pos(&raw mut end_visual);
@@ -3263,24 +3284,25 @@ pub unsafe extern "C" fn do_mouse(
                         (*oap).motion_type = kMTCharWise;
                     }
                     if !oap.is_null()
-                        && VIsual_mode == 'v' as ::core::ffi::c_int
+                        && VIsual_mode.get() == 'v' as ::core::ffi::c_int
                         && !vim_iswordc(gchar_pos(&raw mut end_visual))
-                        && equalpos((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0
+                        && equalpos((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int
+                            != 0
                         && {
                             pos = findmatch(oap, NUL);
                             !pos.is_null()
                         }
                     {
-                        (*curwin).w_cursor = *pos;
+                        (*curwin.get()).w_cursor = *pos;
                         if (*oap).motion_type as ::core::ffi::c_int
                             == kMTLineWise as ::core::ffi::c_int
                         {
-                            VIsual_mode = 'V' as ::core::ffi::c_int;
-                        } else if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-                            if lt((*curwin).w_cursor, VIsual) {
-                                VIsual.col += 1;
+                            VIsual_mode.set('V' as ::core::ffi::c_int);
+                        } else if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+                            if lt((*curwin.get()).w_cursor, VIsual.get()) {
+                                (*VIsual.ptr()).col += 1;
                             } else {
-                                (*curwin).w_cursor.col += 1;
+                                (*curwin.get()).w_cursor.col += 1;
                             }
                         }
                     }
@@ -3288,47 +3310,47 @@ pub unsafe extern "C" fn do_mouse(
                 if pos.is_null()
                     && (is_click as ::core::ffi::c_int != 0 || is_drag as ::core::ffi::c_int != 0)
                 {
-                    if lt((*curwin).w_cursor, orig_cursor.get()) {
-                        find_start_of_word(&raw mut (*curwin).w_cursor);
-                        find_end_of_word(&raw mut VIsual);
+                    if lt((*curwin.get()).w_cursor, orig_cursor.get()) {
+                        find_start_of_word(&raw mut (*curwin.get()).w_cursor);
+                        find_end_of_word(VIsual.ptr());
                     } else {
-                        find_start_of_word(&raw mut VIsual);
-                        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                        find_start_of_word(VIsual.ptr());
+                        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
                             && *get_cursor_pos_ptr() as ::core::ffi::c_int != NUL
                         {
-                            (*curwin).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
+                            (*curwin.get()).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
                         }
-                        find_end_of_word(&raw mut (*curwin).w_cursor);
+                        find_end_of_word(&raw mut (*curwin.get()).w_cursor);
                     }
                 }
-                (*curwin).w_set_curswant = true_0;
+                (*curwin.get()).w_set_curswant = true_0;
             }
             if is_click {
                 redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
             }
-        } else if VIsual_active as ::core::ffi::c_int != 0 && old_active == 0 {
-            if mod_mask & MOD_MASK_ALT != 0 {
-                VIsual_mode = Ctrl_V;
+        } else if VIsual_active.get() as ::core::ffi::c_int != 0 && old_active == 0 {
+            if mod_mask.get() & MOD_MASK_ALT != 0 {
+                VIsual_mode.set(Ctrl_V);
             } else {
-                VIsual_mode = 'v' as ::core::ffi::c_int;
+                VIsual_mode.set('v' as ::core::ffi::c_int);
             }
         }
     }
-    if !VIsual_active && old_active != 0 && mode_displayed as ::core::ffi::c_int != 0
-        || VIsual_active as ::core::ffi::c_int != 0
-            && p_smd != 0
-            && msg_silent == 0 as ::core::ffi::c_int
-            && (old_active == 0 || VIsual_mode != old_mode)
+    if !VIsual_active.get() && old_active != 0 && mode_displayed.get() as ::core::ffi::c_int != 0
+        || VIsual_active.get() as ::core::ffi::c_int != 0
+            && p_smd.get() != 0
+            && msg_silent.get() == 0 as ::core::ffi::c_int
+            && (old_active == 0 || VIsual_mode.get() != old_mode)
     {
-        redraw_cmdline = true_0 != 0;
+        redraw_cmdline.set(true_0 != 0);
     }
     return moved;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
-    let mut old_curwin: *mut win_T = curwin;
+    let mut old_curwin: *mut win_T = curwin.get();
     undisplay_dollar();
-    let mut tpos: pos_T = (*curwin).w_cursor;
+    let mut tpos: pos_T = (*curwin.get()).w_cursor;
     if do_mouse(
         ::core::ptr::null_mut::<oparg_T>(),
         c,
@@ -3336,22 +3358,22 @@ pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
         1 as ::core::ffi::c_int,
         false,
     ) {
-        let mut new_curwin: *mut win_T = curwin;
-        if curwin != old_curwin && win_valid(old_curwin) as ::core::ffi::c_int != 0 {
-            curwin = old_curwin;
-            curbuf = (*curwin).w_buffer;
-            if bt_prompt(curbuf) {
-                (*curbuf).b_prompt_insert = 'A' as ::core::ffi::c_int;
+        let mut new_curwin: *mut win_T = curwin.get();
+        if curwin.get() != old_curwin && win_valid(old_curwin) as ::core::ffi::c_int != 0 {
+            curwin.set(old_curwin);
+            curbuf.set((*curwin.get()).w_buffer);
+            if bt_prompt(curbuf.get()) {
+                (*curbuf.get()).b_prompt_insert = 'A' as ::core::ffi::c_int;
             }
         }
-        start_arrow(if curwin == old_curwin {
+        start_arrow(if curwin.get() == old_curwin {
             &raw mut tpos
         } else {
             ::core::ptr::null_mut::<pos_T>()
         });
-        if curwin != new_curwin && win_valid(new_curwin) as ::core::ffi::c_int != 0 {
-            curwin = new_curwin;
-            curbuf = (*curwin).w_buffer;
+        if curwin.get() != new_curwin && win_valid(new_curwin) as ::core::ffi::c_int != 0 {
+            curwin.set(new_curwin);
+            curbuf.set((*curwin.get()).w_buffer);
         }
         set_can_cindent(true_0 != 0);
     }
@@ -3359,10 +3381,10 @@ pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
-    let mut shift_or_ctrl: bool = mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
+    let mut shift_or_ctrl: bool = mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
     if (*cap).arg == MSCR_UP as ::core::ffi::c_int || (*cap).arg == MSCR_DOWN as ::core::ffi::c_int
     {
-        if State & MODE_NORMAL as ::core::ffi::c_int != 0
+        if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
             && shift_or_ctrl as ::core::ffi::c_int != 0
         {
             pagescroll(
@@ -3376,9 +3398,10 @@ pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
             );
         } else {
             if shift_or_ctrl {
-                (*cap).count1 = ((*curwin).w_botline - (*curwin).w_topline) as ::core::ffi::c_int;
+                (*cap).count1 =
+                    ((*curwin.get()).w_botline - (*curwin.get()).w_topline) as ::core::ffi::c_int;
             } else {
-                (*cap).count1 = p_mousescroll_vert as ::core::ffi::c_int;
+                (*cap).count1 = p_mousescroll_vert.get() as ::core::ffi::c_int;
             }
             if (*cap).count1 > 0 as ::core::ffi::c_int {
                 (*cap).count0 = (*cap).count1;
@@ -3387,11 +3410,11 @@ pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
         }
     } else {
         let mut step: ::core::ffi::c_int = if shift_or_ctrl as ::core::ffi::c_int != 0 {
-            (*curwin).w_view_width
+            (*curwin.get()).w_view_width
         } else {
-            p_mousescroll_hor as ::core::ffi::c_int
+            p_mousescroll_hor.get() as ::core::ffi::c_int
         };
-        let mut leftcol: colnr_T = (*curwin).w_leftcol
+        let mut leftcol: colnr_T = (*curwin.get()).w_leftcol
             + (if (*cap).arg == MSCR_RIGHT as ::core::ffi::c_int {
                 -(step as colnr_T)
             } else {
@@ -3486,30 +3509,34 @@ pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
             );
         }
     }
-    let mut old_curwin: *mut win_T = curwin;
-    if mouse_row >= 0 as ::core::ffi::c_int && mouse_col >= 0 as ::core::ffi::c_int {
-        let mut grid: ::core::ffi::c_int = mouse_grid;
-        let mut row: ::core::ffi::c_int = mouse_row;
-        let mut col: ::core::ffi::c_int = mouse_col;
-        curwin = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
-        if curwin.is_null() {
-            curwin = old_curwin;
+    let mut old_curwin: *mut win_T = curwin.get();
+    if mouse_row.get() >= 0 as ::core::ffi::c_int && mouse_col.get() >= 0 as ::core::ffi::c_int {
+        let mut grid: ::core::ffi::c_int = mouse_grid.get();
+        let mut row: ::core::ffi::c_int = mouse_row.get();
+        let mut col: ::core::ffi::c_int = mouse_col.get();
+        curwin.set(mouse_find_win_inner(
+            &raw mut grid,
+            &raw mut row,
+            &raw mut col,
+        ));
+        if (*curwin.ptr()).is_null() {
+            curwin.set(old_curwin);
             return;
         }
-        curbuf = (*curwin).w_buffer;
+        curbuf.set((*curwin.get()).w_buffer);
     }
-    if curwin == old_curwin {
+    if curwin.get() == old_curwin {
         if pum_visible() {
             return;
         }
         undisplay_dollar();
     }
-    let mut orig_cursor: pos_T = (*curwin).w_cursor;
+    let mut orig_cursor: pos_T = (*curwin.get()).w_cursor;
     do_mousescroll(&raw mut cap);
-    (*curwin).w_redr_status = true_0 != 0;
-    curwin = old_curwin;
-    curbuf = (*curwin).w_buffer;
-    if !equalpos((*curwin).w_cursor, orig_cursor) {
+    (*curwin.get()).w_redr_status = true_0 != 0;
+    curwin.set(old_curwin);
+    curbuf.set((*curwin.get()).w_buffer);
+    if !equalpos((*curwin.get()).w_cursor, orig_cursor) {
         start_arrow(&raw mut orig_cursor);
         set_can_cindent(true_0 != 0);
     }
@@ -3563,7 +3590,7 @@ pub unsafe extern "C" fn is_mouse_key(mut c: ::core::ffi::c_int) -> bool {
             + ((KE_X2RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 }
 unsafe extern "C" fn mouse_model_popup() -> bool {
-    return *p_mousem.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+    return *(*p_mousem.ptr()).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'p' as ::core::ffi::c_int;
 }
 static dragwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
@@ -3590,13 +3617,13 @@ pub unsafe extern "C" fn jump_to_mouse(
     static did_drag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
     let mut count: ::core::ffi::c_int = 0;
     let mut first: bool = false;
-    let mut row: ::core::ffi::c_int = mouse_row;
-    let mut col: ::core::ffi::c_int = mouse_col;
-    let mut grid: ::core::ffi::c_int = mouse_grid;
+    let mut row: ::core::ffi::c_int = mouse_row.get();
+    let mut col: ::core::ffi::c_int = mouse_col.get();
+    let mut grid: ::core::ffi::c_int = mouse_grid.get();
     let mut fdc: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut keep_focus: bool = flags & MOUSE_FOCUS as ::core::ffi::c_int != 0;
-    mouse_past_bottom = false_0 != 0;
-    mouse_past_eol = false_0 != 0;
+    mouse_past_bottom.set(false_0 != 0);
+    mouse_past_eol.set(false_0 != 0);
     if flags & MOUSE_RELEASED as ::core::ffi::c_int != 0 {
         if !(*dragwin.ptr()).is_null() && did_drag.get() == 0 {
             flags &= !(MOUSE_FOCUS as ::core::ffi::c_int | MOUSE_DID_MOVE as ::core::ffi::c_int);
@@ -3605,11 +3632,11 @@ pub unsafe extern "C" fn jump_to_mouse(
         did_drag.set(false_0);
     }
     if !(flags & MOUSE_DID_MOVE as ::core::ffi::c_int != 0
-        && prev_row.get() == mouse_row
-        && prev_col.get() == mouse_col)
+        && prev_row.get() == mouse_row.get()
+        && prev_col.get() == mouse_col.get())
     {
-        prev_row.set(mouse_row);
-        prev_col.set(mouse_col);
+        prev_row.set(mouse_row.get());
+        prev_col.set(mouse_col.get());
         if flags & MOUSE_SETPOS as ::core::ffi::c_int == 0 {
             if row < 0 as ::core::ffi::c_int || col < 0 as ::core::ffi::c_int {
                 return IN_UNKNOWN as ::core::ffi::c_int;
@@ -3657,12 +3684,12 @@ pub unsafe extern "C" fn jump_to_mouse(
                 }
             }
             if keep_focus {
-                row = mouse_row;
-                col = mouse_col;
-                grid = mouse_grid;
+                row = mouse_row.get();
+                col = mouse_col.get();
+                grid = mouse_grid.get();
             }
-            let mut old_curwin: *mut win_T = curwin;
-            let mut old_cursor: pos_T = (*curwin).w_cursor;
+            let mut old_curwin: *mut win_T = curwin.get();
+            let mut old_cursor: pos_T = (*curwin.get()).w_cursor;
             if !keep_focus {
                 if on_winbar.get() {
                     return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int;
@@ -3691,15 +3718,15 @@ pub unsafe extern "C" fn jump_to_mouse(
                             status_line_offset.set(0 as ::core::ffi::c_int);
                         }
                     }
-                    if VIsual_active as ::core::ffi::c_int != 0
-                        && ((*wp).w_buffer != (*curwin).w_buffer
+                    if VIsual_active.get() as ::core::ffi::c_int != 0
+                        && ((*wp).w_buffer != (*curwin.get()).w_buffer
                             || status_line_offset.get() == 0
                                 && sep_line_offset.get() == 0
                                 && (if (*wp).w_onebuf_opt.wo_rl != 0 {
                                     (col < (*wp).w_view_width - fdc) as ::core::ffi::c_int
                                 } else {
                                     (col >= fdc
-                                        + (if wp != cmdwin_win {
+                                        + (if wp != cmdwin_win.get() {
                                             0 as ::core::ffi::c_int
                                         } else {
                                             1 as ::core::ffi::c_int
@@ -3711,35 +3738,35 @@ pub unsafe extern "C" fn jump_to_mouse(
                         end_visual_mode();
                         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
                     }
-                    if cmdwin_type != 0 as ::core::ffi::c_int && wp != cmdwin_win {
+                    if cmdwin_type.get() != 0 as ::core::ffi::c_int && wp != cmdwin_win.get() {
                         sep_line_offset.set(0 as ::core::ffi::c_int);
                         row = 0 as ::core::ffi::c_int;
                         col += (*wp).w_wincol;
-                        wp = cmdwin_win;
+                        wp = cmdwin_win.get();
                     }
                     if (*dragwin.ptr()).is_null()
                         || flags & MOUSE_RELEASED as ::core::ffi::c_int != 0
                     {
                         win_enter(wp, true_0 != 0);
                     }
-                    if curwin != old_curwin {
-                        set_mouse_topline(curwin);
+                    if curwin.get() != old_curwin {
+                        set_mouse_topline(curwin.get());
                     }
                     if status_line_offset.get() != 0 {
-                        if curwin == old_curwin {
+                        if curwin.get() == old_curwin {
                             return IN_STATUS_LINE as ::core::ffi::c_int;
                         }
                         return IN_STATUS_LINE as ::core::ffi::c_int
                             | CURSOR_MOVED as ::core::ffi::c_int;
                     }
                     if sep_line_offset.get() != 0 {
-                        if curwin == old_curwin {
+                        if curwin.get() == old_curwin {
                             return IN_SEP_LINE as ::core::ffi::c_int;
                         }
                         return IN_SEP_LINE as ::core::ffi::c_int
                             | CURSOR_MOVED as ::core::ffi::c_int;
                     }
-                    (*curwin).w_cursor.lnum = (*curwin).w_topline;
+                    (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_topline;
                 }
             } else if status_line_offset.get() != 0 {
                 if which_button == MOUSE_LEFT as ::core::ffi::c_int && !(*dragwin.ptr()).is_null() {
@@ -3778,22 +3805,26 @@ pub unsafe extern "C" fn jump_to_mouse(
                     redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
                 }
                 if grid == 0 as ::core::ffi::c_int {
-                    row -= (*curwin).w_grid_alloc.comp_row + (*curwin).w_grid.row_offset;
-                    col -= (*curwin).w_grid_alloc.comp_col + (*curwin).w_grid.col_offset;
+                    row -=
+                        (*curwin.get()).w_grid_alloc.comp_row + (*curwin.get()).w_grid.row_offset;
+                    col -=
+                        (*curwin.get()).w_grid_alloc.comp_col + (*curwin.get()).w_grid.col_offset;
                 } else if grid != DEFAULT_GRID_HANDLE {
-                    row -= (*curwin).w_grid.row_offset;
-                    col -= (*curwin).w_grid.col_offset;
+                    row -= (*curwin.get()).w_grid.row_offset;
+                    col -= (*curwin.get()).w_grid.col_offset;
                 }
                 if row < 0 as ::core::ffi::c_int {
                     count = 0 as ::core::ffi::c_int;
                     first = true_0 != 0;
-                    while (*curwin).w_topline > 1 as linenr_T {
-                        if (*curwin).w_topfill < win_get_fill(curwin, (*curwin).w_topline) {
+                    while (*curwin.get()).w_topline > 1 as linenr_T {
+                        if (*curwin.get()).w_topfill
+                            < win_get_fill(curwin.get(), (*curwin.get()).w_topline)
+                        {
                             count += 1;
                         } else {
                             count += plines_win(
-                                curwin,
-                                (*curwin).w_topline - 1 as linenr_T,
+                                curwin.get(),
+                                (*curwin.get()).w_topline - 1 as linenr_T,
                                 true_0 != 0,
                             );
                         }
@@ -3802,66 +3833,72 @@ pub unsafe extern "C" fn jump_to_mouse(
                         }
                         first = false_0 != 0;
                         hasFolding(
-                            curwin,
-                            (*curwin).w_topline,
-                            &raw mut (*curwin).w_topline,
+                            curwin.get(),
+                            (*curwin.get()).w_topline,
+                            &raw mut (*curwin.get()).w_topline,
                             ::core::ptr::null_mut::<linenr_T>(),
                         );
-                        if (*curwin).w_topfill < win_get_fill(curwin, (*curwin).w_topline) {
-                            (*curwin).w_topfill += 1;
+                        if (*curwin.get()).w_topfill
+                            < win_get_fill(curwin.get(), (*curwin.get()).w_topline)
+                        {
+                            (*curwin.get()).w_topfill += 1;
                         } else {
-                            (*curwin).w_topline -= 1;
-                            (*curwin).w_topfill = 0 as ::core::ffi::c_int;
+                            (*curwin.get()).w_topline -= 1;
+                            (*curwin.get()).w_topfill = 0 as ::core::ffi::c_int;
                         }
                     }
-                    check_topfill(curwin, false_0 != 0);
-                    (*curwin).w_valid &=
+                    check_topfill(curwin.get(), false_0 != 0);
+                    (*curwin.get()).w_valid &=
                         !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
-                    redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+                    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
                     row = 0 as ::core::ffi::c_int;
-                } else if row >= (*curwin).w_view_height {
+                } else if row >= (*curwin.get()).w_view_height {
                     count = 0 as ::core::ffi::c_int;
                     first = true_0 != 0;
-                    while (*curwin).w_topline < (*curbuf).b_ml.ml_line_count {
-                        if (*curwin).w_topfill > 0 as ::core::ffi::c_int {
+                    while (*curwin.get()).w_topline < (*curbuf.get()).b_ml.ml_line_count {
+                        if (*curwin.get()).w_topfill > 0 as ::core::ffi::c_int {
                             count += 1;
                         } else {
-                            count += plines_win(curwin, (*curwin).w_topline, true_0 != 0);
+                            count +=
+                                plines_win(curwin.get(), (*curwin.get()).w_topline, true_0 != 0);
                         }
-                        if !first && count > row - (*curwin).w_view_height + 1 as ::core::ffi::c_int
+                        if !first
+                            && count > row - (*curwin.get()).w_view_height + 1 as ::core::ffi::c_int
                         {
                             break;
                         }
                         first = false_0 != 0;
-                        if (*curwin).w_topfill > 0 as ::core::ffi::c_int {
-                            (*curwin).w_topfill -= 1;
+                        if (*curwin.get()).w_topfill > 0 as ::core::ffi::c_int {
+                            (*curwin.get()).w_topfill -= 1;
                         } else {
                             if hasFolding(
-                                curwin,
-                                (*curwin).w_topline,
+                                curwin.get(),
+                                (*curwin.get()).w_topline,
                                 ::core::ptr::null_mut::<linenr_T>(),
-                                &raw mut (*curwin).w_topline,
+                                &raw mut (*curwin.get()).w_topline,
                             ) as ::core::ffi::c_int
                                 != 0
-                                && (*curwin).w_topline == (*curbuf).b_ml.ml_line_count
+                                && (*curwin.get()).w_topline == (*curbuf.get()).b_ml.ml_line_count
                             {
                                 break;
                             }
-                            (*curwin).w_topline += 1;
-                            (*curwin).w_topfill = win_get_fill(curwin, (*curwin).w_topline);
+                            (*curwin.get()).w_topline += 1;
+                            (*curwin.get()).w_topfill =
+                                win_get_fill(curwin.get(), (*curwin.get()).w_topline);
                         }
                     }
-                    check_topfill(curwin, false_0 != 0);
-                    redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
-                    (*curwin).w_valid &=
+                    check_topfill(curwin.get(), false_0 != 0);
+                    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                    (*curwin.get()).w_valid &=
                         !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
-                    row = (*curwin).w_view_height - 1 as ::core::ffi::c_int;
+                    row = (*curwin.get()).w_view_height - 1 as ::core::ffi::c_int;
                 } else if row == 0 as ::core::ffi::c_int {
-                    if mouse_dragging > 0 as ::core::ffi::c_int
-                        && (*curwin).w_cursor.lnum == (*(*curwin).w_buffer).b_ml.ml_line_count
-                        && (*curwin).w_cursor.lnum == (*curwin).w_topline
+                    if mouse_dragging.get() > 0 as ::core::ffi::c_int
+                        && (*curwin.get()).w_cursor.lnum
+                            == (*(*curwin.get()).w_buffer).b_ml.ml_line_count
+                        && (*curwin.get()).w_cursor.lnum == (*curwin.get()).w_topline
                     {
-                        (*curwin).w_valid &= !VALID_TOPLINE;
+                        (*curwin.get()).w_valid &= !VALID_TOPLINE;
                     }
                 }
             }
@@ -3869,33 +3906,33 @@ pub unsafe extern "C" fn jump_to_mouse(
             let mut mouse_fold_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             mouse_check_grid(&raw mut col_from_screen, &raw mut mouse_fold_flags);
             if mouse_comp_pos(
-                curwin,
+                curwin.get(),
                 &raw mut row,
                 &raw mut col,
-                &raw mut (*curwin).w_cursor.lnum,
+                &raw mut (*curwin.get()).w_cursor.lnum,
             ) {
-                mouse_past_bottom = true_0 != 0;
+                mouse_past_bottom.set(true_0 != 0);
             }
-            if flags & MOUSE_MAY_VIS as ::core::ffi::c_int != 0 && !VIsual_active {
-                VIsual = old_cursor;
-                VIsual_active = true_0 != 0;
-                VIsual_reselect = true_0;
+            if flags & MOUSE_MAY_VIS as ::core::ffi::c_int != 0 && !VIsual_active.get() {
+                VIsual.set(old_cursor);
+                VIsual_active.set(true_0 != 0);
+                VIsual_reselect.set(true_0);
                 may_start_select('o' as ::core::ffi::c_int);
                 setmouse();
-                if p_smd != 0 && msg_silent == 0 as ::core::ffi::c_int {
-                    redraw_cmdline = true_0 != 0;
+                if p_smd.get() != 0 && msg_silent.get() == 0 as ::core::ffi::c_int {
+                    redraw_cmdline.set(true_0 != 0);
                 }
             }
             if col_from_screen >= 0 as ::core::ffi::c_int {
                 col = col_from_screen as ::core::ffi::c_int;
             }
-            (*curwin).w_curswant = col as colnr_T;
-            (*curwin).w_set_curswant = false_0;
-            if coladvance(curwin, col as colnr_T) == FAIL {
+            (*curwin.get()).w_curswant = col as colnr_T;
+            (*curwin.get()).w_set_curswant = false_0;
+            if coladvance(curwin.get(), col as colnr_T) == FAIL {
                 if !inclusive.is_null() {
                     *inclusive = true_0 != 0;
                 }
-                mouse_past_eol = true_0 != 0;
+                mouse_past_eol.set(true_0 != 0);
             } else if !inclusive.is_null() {
                 *inclusive = false_0 != 0;
             }
@@ -3904,9 +3941,9 @@ pub unsafe extern "C" fn jump_to_mouse(
             } else {
                 IN_BUFFER as ::core::ffi::c_int
             };
-            if curwin != old_curwin
-                || (*curwin).w_cursor.lnum != old_cursor.lnum
-                || (*curwin).w_cursor.col != old_cursor.col
+            if curwin.get() != old_curwin
+                || (*curwin.get()).w_cursor.lnum != old_cursor.lnum
+                || (*curwin.get()).w_cursor.col != old_cursor.col
             {
                 count |= CURSOR_MOVED as ::core::ffi::c_int;
             }
@@ -3933,36 +3970,40 @@ pub unsafe extern "C" fn jump_to_mouse(
     return IN_BUFFER as ::core::ffi::c_int;
 }
 unsafe extern "C" fn do_mousescroll_horiz(mut leftcol: colnr_T) -> bool {
-    if (*curwin).w_onebuf_opt.wo_wrap != 0 {
+    if (*curwin.get()).w_onebuf_opt.wo_wrap != 0 {
         return false_0 != 0;
     }
-    if (*curwin).w_leftcol == leftcol {
+    if (*curwin.get()).w_leftcol == leftcol {
         return false_0 != 0;
     }
-    if !virtual_active(curwin) && leftcol > scroll_line_len((*curwin).w_cursor.lnum) {
-        (*curwin).w_cursor.lnum = find_longest_lnum();
-        (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+    if !virtual_active(curwin.get()) && leftcol > scroll_line_len((*curwin.get()).w_cursor.lnum) {
+        (*curwin.get()).w_cursor.lnum = find_longest_lnum();
+        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     }
     return set_leftcol(leftcol);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nv_mousescroll(mut cap: *mut cmdarg_T) {
-    let old_curwin: *mut win_T = curwin;
-    if mouse_row >= 0 as ::core::ffi::c_int && mouse_col >= 0 as ::core::ffi::c_int {
-        let mut grid: ::core::ffi::c_int = mouse_grid;
-        let mut row: ::core::ffi::c_int = mouse_row;
-        let mut col: ::core::ffi::c_int = mouse_col;
-        curwin = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
-        if curwin.is_null() {
-            curwin = old_curwin;
+    let old_curwin: *mut win_T = curwin.get();
+    if mouse_row.get() >= 0 as ::core::ffi::c_int && mouse_col.get() >= 0 as ::core::ffi::c_int {
+        let mut grid: ::core::ffi::c_int = mouse_grid.get();
+        let mut row: ::core::ffi::c_int = mouse_row.get();
+        let mut col: ::core::ffi::c_int = mouse_col.get();
+        curwin.set(mouse_find_win_inner(
+            &raw mut grid,
+            &raw mut row,
+            &raw mut col,
+        ));
+        if (*curwin.ptr()).is_null() {
+            curwin.set(old_curwin);
             return;
         }
-        curbuf = (*curwin).w_buffer;
+        curbuf.set((*curwin.get()).w_buffer);
     }
     do_mousescroll(cap);
-    (*curwin).w_redr_status = true_0 != 0;
-    curwin = old_curwin;
-    curbuf = (*curwin).w_buffer;
+    (*curwin.get()).w_redr_status = true_0 != 0;
+    curwin.set(old_curwin);
+    curbuf.set((*curwin.get()).w_buffer);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nv_mouse(mut cap: *mut cmdarg_T) {
@@ -4081,8 +4122,8 @@ pub unsafe extern "C" fn mouse_find_win_inner(
     } else if *gridp > 1 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<win_T>();
     }
-    let mut fp: *mut frame_T = topframe;
-    *rowp -= (*firstwin).w_winrow;
+    let mut fp: *mut frame_T = topframe.get();
+    *rowp -= (*firstwin.get()).w_winrow;
     while (*fp).fr_layout as ::core::ffi::c_int != FR_LEAF {
         if (*fp).fr_layout as ::core::ffi::c_int == FR_ROW {
             fp = (*fp).fr_child;
@@ -4104,10 +4145,10 @@ pub unsafe extern "C" fn mouse_find_win_inner(
             }
         }
     }
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
         if wp == (*fp).fr_win {
@@ -4136,8 +4177,8 @@ unsafe extern "C" fn mouse_find_grid_win(
     mut rowp: *mut ::core::ffi::c_int,
     mut colp: *mut ::core::ffi::c_int,
 ) -> *mut win_T {
-    if *gridp == msg_grid.handle {
-        *rowp += msg_grid_pos;
+    if *gridp == (*msg_grid.ptr()).handle {
+        *rowp += msg_grid_pos.get();
         *gridp = DEFAULT_GRID_HANDLE;
     } else if *gridp > 1 as ::core::ffi::c_int {
         let mut wp: *mut win_T = get_win_by_grid_handle(*gridp as handle_T);
@@ -4162,16 +4203,16 @@ unsafe extern "C" fn mouse_find_grid_win(
         }
     } else if *gridp == 0 as ::core::ffi::c_int {
         let mut grid: *mut ScreenGrid = ui_comp_mouse_focus(*rowp, *colp);
-        if grid == &raw mut pum_grid {
+        if grid == pum_grid.ptr() {
             *gridp = (*grid).handle as ::core::ffi::c_int;
             *rowp -= (*grid).comp_row;
             *colp -= (*grid).comp_col;
             return ::core::ptr::null_mut::<win_T>();
         } else {
-            let mut wp_0: *mut win_T = if curtab == curtab {
-                firstwin
+            let mut wp_0: *mut win_T = if curtab.get() == curtab.get() {
+                firstwin.get()
             } else {
-                (*curtab).tp_firstwin
+                (*curtab.get()).tp_firstwin
             };
             while !wp_0.is_null() {
                 if &raw mut (*wp_0).w_grid_alloc != grid {
@@ -4247,7 +4288,7 @@ unsafe extern "C" fn scroll_line_len(mut lnum: linenr_T) -> colnr_T {
     let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
     if *line as ::core::ffi::c_int != NUL {
         loop {
-            let mut numchar: ::core::ffi::c_int = win_chartabsize(curwin, line, col);
+            let mut numchar: ::core::ffi::c_int = win_chartabsize(curwin.get(), line, col);
             line = line.offset(utfc_ptr2len(line) as isize);
             if *line as ::core::ffi::c_int == NUL {
                 break;
@@ -4259,27 +4300,29 @@ unsafe extern "C" fn scroll_line_len(mut lnum: linenr_T) -> colnr_T {
 }
 unsafe extern "C" fn find_longest_lnum() -> linenr_T {
     let mut ret: linenr_T = 0 as linenr_T;
-    if (*curwin).w_topline <= (*curwin).w_cursor.lnum
-        && (*curwin).w_botline > (*curwin).w_cursor.lnum
-        && (*curwin).w_botline <= (*curbuf).b_ml.ml_line_count + 1 as linenr_T
+    if (*curwin.get()).w_topline <= (*curwin.get()).w_cursor.lnum
+        && (*curwin.get()).w_botline > (*curwin.get()).w_cursor.lnum
+        && (*curwin.get()).w_botline <= (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T
     {
         let mut max: colnr_T = 0 as colnr_T;
-        let mut lnum: linenr_T = (*curwin).w_topline;
-        while lnum < (*curwin).w_botline {
+        let mut lnum: linenr_T = (*curwin.get()).w_topline;
+        while lnum < (*curwin.get()).w_botline {
             let mut len: colnr_T = scroll_line_len(lnum);
             if len > max {
                 max = len;
                 ret = lnum;
             } else if len == max
-                && abs(lnum as ::core::ffi::c_int - (*curwin).w_cursor.lnum as ::core::ffi::c_int)
-                    < abs(ret as ::core::ffi::c_int - (*curwin).w_cursor.lnum as ::core::ffi::c_int)
+                && abs(lnum as ::core::ffi::c_int
+                    - (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int)
+                    < abs(ret as ::core::ffi::c_int
+                        - (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int)
             {
                 ret = lnum;
             }
             lnum += 1;
         }
     } else {
-        ret = (*curwin).w_cursor.lnum;
+        ret = (*curwin.get()).w_cursor.lnum;
     }
     return ret;
 }
@@ -4287,18 +4330,19 @@ unsafe extern "C" fn mouse_check_grid(
     mut vcolp: *mut colnr_T,
     mut flagsp: *mut ::core::ffi::c_int,
 ) {
-    let mut click_grid: ::core::ffi::c_int = mouse_grid;
-    let mut click_row: ::core::ffi::c_int = mouse_row;
-    let mut click_col: ::core::ffi::c_int = mouse_col;
-    if mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col) != curwin
-        || (*curwin).w_redr_type != 0 as ::core::ffi::c_int
+    let mut click_grid: ::core::ffi::c_int = mouse_grid.get();
+    let mut click_row: ::core::ffi::c_int = mouse_row.get();
+    let mut click_col: ::core::ffi::c_int = mouse_col.get();
+    if mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col)
+        != curwin.get()
+        || (*curwin.get()).w_redr_type != 0 as ::core::ffi::c_int
     {
         return;
     }
     let mut start_row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut gp: *mut ScreenGrid = grid_adjust(
-        &raw mut (*curwin).w_grid,
+        &raw mut (*curwin.get()).w_grid,
         &raw mut start_row,
         &raw mut start_col,
     );
@@ -4332,9 +4376,9 @@ pub unsafe extern "C" fn f_getmousepos(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let mut row: ::core::ffi::c_int = mouse_row;
-    let mut col: ::core::ffi::c_int = mouse_col;
-    let mut grid: ::core::ffi::c_int = mouse_grid;
+    let mut row: ::core::ffi::c_int = mouse_row.get();
+    let mut col: ::core::ffi::c_int = mouse_col.get();
+    let mut grid: ::core::ffi::c_int = mouse_grid.get();
     let mut winid: varnumber_T = 0 as varnumber_T;
     let mut winrow: varnumber_T = 0 as varnumber_T;
     let mut wincol: varnumber_T = 0 as varnumber_T;
@@ -4347,13 +4391,13 @@ pub unsafe extern "C" fn f_getmousepos(
         d,
         b"screenrow\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        mouse_row as varnumber_T + 1 as varnumber_T,
+        mouse_row.get() as varnumber_T + 1 as varnumber_T,
     );
     tv_dict_add_nr(
         d,
         b"screencol\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        mouse_col as varnumber_T + 1 as varnumber_T,
+        mouse_col.get() as varnumber_T + 1 as varnumber_T,
     );
     let mut wp: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
     if !wp.is_null() {

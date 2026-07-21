@@ -52,8 +52,8 @@ extern "C" {
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -79,13 +79,13 @@ extern "C" {
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut Columns: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut got_int: bool;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static got_int: GlobalCell<bool>;
     fn replace_termcodes(
         from: *const ::core::ffi::c_char,
         from_len: size_t,
@@ -3571,7 +3571,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 }
                 found = true_0 != 0;
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int {
+                if got_int.get() {
                     break;
                 }
                 let mut len: size_t = 4 as size_t;
@@ -3620,34 +3620,34 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     0 => {
                         let c2rust_fresh2 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh2 as usize] = '0' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh2 as usize] = '0' as ::core::ffi::c_char;
                     }
                     4 => {
                         let c2rust_fresh3 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh3 as usize] = '*' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh3 as usize] = '*' as ::core::ffi::c_char;
                     }
                     20 => {
                         let c2rust_fresh4 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh4 as usize] = '?' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh4 as usize] = '?' as ::core::ffi::c_char;
                     }
                     132 => {
                         let c2rust_fresh5 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh5 as usize] = '+' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh5 as usize] = '+' as ::core::ffi::c_char;
                     }
                     148 => {
                         let c2rust_fresh6 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh6 as usize] = '1' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh6 as usize] = '1' as ::core::ffi::c_char;
                     }
                     _ => {}
                 }
                 loop {
                     let c2rust_fresh7 = len;
                     len = len.wrapping_add(1);
-                    IObuff[c2rust_fresh7 as usize] = ' ' as ::core::ffi::c_char;
+                    (*IObuff.ptr())[c2rust_fresh7 as usize] = ' ' as ::core::ffi::c_char;
                     if (len as int64_t) >= 5 as int64_t - over {
                         break;
                     }
@@ -3655,7 +3655,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 if a & (EX_RANGE as uint32_t | EX_COUNT as uint32_t) != 0 {
                     if a & EX_COUNT as uint32_t != 0 {
                         let mut rc: ::core::ffi::c_int = snprintf(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%ldc\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
@@ -3676,10 +3676,10 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     } else if a & EX_DFLALL as uint32_t != 0 {
                         let c2rust_fresh8 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh8 as usize] = '%' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh8 as usize] = '%' as ::core::ffi::c_char;
                     } else if (*cmd).uc_def >= 0 as int64_t {
                         let mut rc_0: ::core::ffi::c_int = snprintf(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
@@ -3700,13 +3700,13 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     } else {
                         let c2rust_fresh9 = len;
                         len = len.wrapping_add(1);
-                        IObuff[c2rust_fresh9 as usize] = '.' as ::core::ffi::c_char;
+                        (*IObuff.ptr())[c2rust_fresh9 as usize] = '.' as ::core::ffi::c_char;
                     }
                 }
                 loop {
                     let c2rust_fresh10 = len;
                     len = len.wrapping_add(1);
-                    IObuff[c2rust_fresh10 as usize] = ' ' as ::core::ffi::c_char;
+                    (*IObuff.ptr())[c2rust_fresh10 as usize] = ' ' as ::core::ffi::c_char;
                     if (len as int64_t) >= 8 as int64_t - over {
                         break;
                     }
@@ -3721,7 +3721,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             == (*cmd).uc_addr_type as ::core::ffi::c_uint
                     {
                         let mut rc_1: ::core::ffi::c_int = snprintf(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                             (*addr_type_complete.ptr())[j as usize].shortname,
@@ -3747,7 +3747,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 loop {
                     let c2rust_fresh11 = len;
                     len = len.wrapping_add(1);
-                    IObuff[c2rust_fresh11 as usize] = ' ' as ::core::ffi::c_char;
+                    (*IObuff.ptr())[c2rust_fresh11 as usize] = ' ' as ::core::ffi::c_char;
                     if (len as int64_t) >= 13 as int64_t - over {
                         break;
                     }
@@ -3755,7 +3755,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 let mut cmd_compl: *mut ::core::ffi::c_char = get_command_complete((*cmd).uc_compl);
                 if !cmd_compl.is_null() {
                     let mut rc_2: ::core::ffi::c_int = snprintf(
-                        (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                        (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                         (IOSIZE as size_t).wrapping_sub(len),
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                         get_command_complete((*cmd).uc_compl),
@@ -3777,14 +3777,14 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 loop {
                     let c2rust_fresh12 = len;
                     len = len.wrapping_add(1);
-                    IObuff[c2rust_fresh12 as usize] = ' ' as ::core::ffi::c_char;
+                    (*IObuff.ptr())[c2rust_fresh12 as usize] = ' ' as ::core::ffi::c_char;
                     if (len as int64_t) >= 25 as int64_t - over {
                         break;
                     }
                 }
-                IObuff[len as usize] = NUL as ::core::ffi::c_char;
+                (*IObuff.ptr())[len as usize] = NUL as ::core::ffi::c_char;
                 msg_outtrans(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
                 );
@@ -3804,16 +3804,16 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     (*cmd).uc_rep,
                     false_0 != 0,
                     if name_len == 0 as size_t {
-                        Columns - 47 as ::core::ffi::c_int
+                        Columns.get() - 47 as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     },
                 );
-                if p_verbose > 0 as OptInt {
+                if p_verbose.get() > 0 as OptInt {
                     last_set_msg((*cmd).uc_script_ctx);
                 }
                 line_breakcheck();
-                if got_int {
+                if got_int.get() {
                     break;
                 }
             }
@@ -4277,13 +4277,13 @@ pub unsafe extern "C" fn uc_add_command(
         0 as scid_T,
         0 as ::core::ffi::c_int,
         ::core::ptr::null_mut::<bool>(),
-        p_cpo,
+        p_cpo.get(),
     );
     if rep_buf.is_null() {
         rep_buf = xstrdup(rep);
     }
     if flags & UC_BUFFER as ::core::ffi::c_int != 0 {
-        gap = &raw mut (*curbuf).b_ucmds;
+        gap = &raw mut (*curbuf.get()).b_ucmds;
         if (*gap).ga_itemsize == 0 as ::core::ffi::c_int {
             ga_init(
                 gap,
@@ -4310,8 +4310,8 @@ pub unsafe extern "C" fn uc_add_command(
             }
             if cmp == 0 as ::core::ffi::c_int {
                 if !force
-                    && ((*cmd).uc_script_ctx.sc_sid != current_sctx.sc_sid
-                        || (*cmd).uc_script_ctx.sc_seq == current_sctx.sc_seq)
+                    && ((*cmd).uc_script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
+                        || (*cmd).uc_script_ctx.sc_seq == (*current_sctx.ptr()).sc_seq)
                 {
                     semsg(
                         gettext(
@@ -4369,7 +4369,7 @@ pub unsafe extern "C" fn uc_add_command(
         (*cmd).uc_argt = argt;
         (*cmd).uc_def = def;
         (*cmd).uc_compl = context;
-        (*cmd).uc_script_ctx = current_sctx;
+        (*cmd).uc_script_ctx = current_sctx.get();
         (*cmd).uc_script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum;
@@ -4492,8 +4492,8 @@ pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_comclear(mut _eap: *mut exarg_T) {
     uc_clear(ucmds.ptr());
-    if !curbuf.is_null() {
-        uc_clear(&raw mut (*curbuf).b_ucmds);
+    if !(*curbuf.ptr()).is_null() {
+        uc_clear(&raw mut (*curbuf.get()).b_ucmds);
     }
 }
 #[no_mangle]
@@ -4546,7 +4546,7 @@ pub unsafe extern "C" fn ex_delcommand(mut eap: *mut exarg_T) {
         buffer_only = true_0 != 0;
         arg = skipwhite(arg.offset(7 as ::core::ffi::c_int as isize));
     }
-    let mut gap: *mut garray_T = &raw mut (*curbuf).b_ucmds;
+    let mut gap: *mut garray_T = &raw mut (*curbuf.get()).b_ucmds;
     loop {
         i = 0 as ::core::ffi::c_int;
         while i < (*gap).ga_len {
@@ -4881,7 +4881,7 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
     }
     if (*cmod).cmod_tab > 0 as ::core::ffi::c_int {
         let mut tabnr: ::core::ffi::c_int = (*cmod).cmod_tab - 1 as ::core::ffi::c_int;
-        if tabnr == tabpage_index(curtab) {
+        if tabnr == tabpage_index(curtab.get()) {
             result = result.wrapping_add(add_cmd_modifier(
                 buf,
                 b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5308,7 +5308,7 @@ unsafe extern "C" fn uc_check_code(
             }
         }
         6 => {
-            result = uc_mods(buf, &raw mut cmdmod, quote != 0);
+            result = uc_mods(buf, cmdmod.ptr(), quote != 0);
         }
         7 => {
             result = (if (*eap).regname != 0 {
@@ -5481,8 +5481,8 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
     let mut restore_current_sctx: bool = false_0 != 0;
     if (*cmd).uc_argt & EX_KEEPSCRIPT as uint32_t == 0 as uint32_t {
         restore_current_sctx = true_0 != 0;
-        save_current_sctx = current_sctx;
-        current_sctx.sc_sid = (*cmd).uc_script_ctx.sc_sid;
+        save_current_sctx = current_sctx.get();
+        (*current_sctx.ptr()).sc_sid = (*cmd).uc_script_ctx.sc_sid;
     }
     do_cmdline(
         buf,
@@ -5493,7 +5493,7 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
             | DOCMD_KEYTYPED as ::core::ffi::c_int,
     );
     if restore_current_sctx {
-        current_sctx = save_current_sctx;
+        current_sctx.set(save_current_sctx);
     }
     xfree(buf as *mut ::core::ffi::c_void);
     xfree(split_buf as *mut ::core::ffi::c_void);

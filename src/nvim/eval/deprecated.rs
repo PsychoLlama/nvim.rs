@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -49,7 +50,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
     fn check_secure() -> bool;
-    static mut firstbuf: *mut buf_T;
+    static firstbuf: GlobalCell<*mut buf_T>;
 }
 pub type __uid_t = ::core::ffi::c_uint;
 pub type __gid_t = ::core::ffi::c_uint;
@@ -2677,7 +2678,7 @@ pub unsafe extern "C" fn f_last_buffer_nr(
     mut _fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if n < (*buf).handle {
             n = (*buf).handle as ::core::ffi::c_int;

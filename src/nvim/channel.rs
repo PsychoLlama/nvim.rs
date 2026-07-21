@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -74,7 +74,7 @@ extern "C" {
     ) -> bool;
     fn has_event(event: event_T) -> bool;
     fn libuv_proc_init(loop_0: *mut Loop, data: *mut ::core::ffi::c_void) -> LibuvProc;
-    static mut channels: Map_uint64_t_ptr_t;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn pty_proc_tty_name(ptyproc: *mut PtyProc) -> *const ::core::ffi::c_char;
     fn pty_proc_resize(ptyproc: *mut PtyProc, width: uint16_t, height: uint16_t);
     fn pty_proc_resume(ptyproc: *mut PtyProc);
@@ -170,14 +170,14 @@ extern "C" {
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    static mut curbuf: *mut buf_T;
-    static mut exiting: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut embedded_mode: bool;
-    static mut headless_mode: bool;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static exiting: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static embedded_mode: GlobalCell<bool>;
+    static headless_mode: GlobalCell<bool>;
     fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn api_free_luaref(ref_0: LuaRef);
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn rpc_init();
     fn rpc_start(channel: *mut Channel);
     fn rpc_close(channel: *mut Channel);
@@ -190,7 +190,7 @@ extern "C" {
         non_blocking: bool,
     ) -> ptrdiff_t;
     fn shell_free_argv(argv: *mut *mut ::core::ffi::c_char);
-    static mut ui_client_channel_id: uint64_t;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal;
     fn terminal_close(termpp: *mut *mut Terminal, status: ::core::ffi::c_int);
     fn terminal_set_state(term: *mut Terminal, suspended: bool);
@@ -2978,7 +2978,7 @@ unsafe extern "C" fn callback_reader_set(mut reader: CallbackReader) -> bool {
 }
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 #[inline]
 unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
@@ -3001,8 +3001,8 @@ pub unsafe extern "C" fn channel_teardown() {
     let mut chan: *mut Channel = ::core::ptr::null_mut::<Channel>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < channels.set.h.n_keys {
-        chan = *channels.values.offset(__i as isize) as *mut Channel;
+    while __i < (*channels.ptr()).set.h.n_keys {
+        chan = *(*channels.ptr()).values.offset(__i as isize) as *mut Channel;
         channel_close(
             (*chan).id,
             kChannelPartAll,
@@ -3122,7 +3122,7 @@ pub unsafe extern "C" fn channel_close(
             }
             if !(*chan).stream.err.closed {
                 (*chan).stream.err.closed = true_0 != 0;
-                if !exiting {
+                if !exiting.get() {
                     freopen(
                         b"/dev/null\0".as_ptr() as *const ::core::ffi::c_char,
                         b"w\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3173,7 +3173,7 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
         next_chan_id.set((*next_chan_id.ptr()).wrapping_add(1));
         (*chan).id = c2rust_fresh0;
     }
-    (*chan).events = multiqueue_new_child(main_loop.events);
+    (*chan).events = multiqueue_new_child((*main_loop.ptr()).events);
     (*chan).refcount = 1 as size_t;
     (*chan).exit_status = -1 as ::core::ffi::c_int;
     (*chan).streamtype = type_0;
@@ -3190,7 +3190,7 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
             );
         }
     };
-    map_put_uint64_t_ptr_t(&raw mut channels, (*chan).id, chan as ptr_t);
+    map_put_uint64_t_ptr_t(channels.ptr(), (*chan).id, chan as ptr_t);
     return chan;
 }
 #[no_mangle]
@@ -3203,10 +3203,10 @@ pub unsafe extern "C" fn channel_create_event(
         source = ext_source;
     } else {
         eval_fmt_source_name_line(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         );
-        source = &raw mut IObuff as *mut ::core::ffi::c_char;
+        source = IObuff.ptr() as *mut ::core::ffi::c_char;
     }
     '_c2rust_label: {
         if (*chan).id <= 9223372036854775807 as uint64_t {
@@ -3274,7 +3274,7 @@ pub unsafe extern "C" fn channel_decref(mut chan: *mut Channel) {
     (*chan).refcount = (*chan).refcount.wrapping_sub(1);
     if (*chan).refcount == 0 {
         multiqueue_put_event(
-            main_loop.events,
+            (*main_loop.ptr()).events,
             Event {
                 handler: Some(
                     free_channel_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -3330,7 +3330,7 @@ unsafe extern "C" fn channel_destroy(mut chan: *mut Channel) {
 unsafe extern "C" fn free_channel_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
     map_del_uint64_t_ptr_t(
-        &raw mut channels,
+        channels.ptr(),
         (*chan).id,
         ::core::ptr::null_mut::<uint64_t>(),
     );
@@ -3342,7 +3342,7 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
         abort();
     }
     map_del_uint64_t_ptr_t(
-        &raw mut channels,
+        channels.ptr(),
         (*chan).id,
         ::core::ptr::null_mut::<uint64_t>(),
     );
@@ -3352,7 +3352,7 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
         abort();
     }
     multiqueue_put_event(
-        main_loop.events,
+        (*main_loop.ptr()).events,
         Event {
             handler: Some(
                 free_channel_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -3411,7 +3411,7 @@ pub unsafe extern "C" fn channel_job_start(
             *status_out = 0 as varnumber_T;
             return ::core::ptr::null_mut::<Channel>();
         }
-        (*chan).stream.pty = pty_proc_init(&raw mut main_loop, chan as *mut ::core::ffi::c_void);
+        (*chan).stream.pty = pty_proc_init(main_loop.ptr(), chan as *mut ::core::ffi::c_void);
         if pty_width as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
             (*chan).stream.pty.width = pty_width;
         }
@@ -3419,7 +3419,7 @@ pub unsafe extern "C" fn channel_job_start(
             (*chan).stream.pty.height = pty_height;
         }
     } else {
-        (*chan).stream.uv = libuv_proc_init(&raw mut main_loop, chan as *mut ::core::ffi::c_void);
+        (*chan).stream.uv = libuv_proc_init(main_loop.ptr(), chan as *mut ::core::ffi::c_void);
     }
     let mut proc: *mut Proc = &raw mut (*chan).stream.proc;
     (*proc).argv = argv;
@@ -3545,7 +3545,7 @@ pub unsafe extern "C" fn channel_connect(
         }
         channel = channel_alloc(kChannelStreamSocket);
         if !socket_connect(
-            &raw mut main_loop,
+            main_loop.ptr(),
             &raw mut (*channel).stream.socket,
             tcp,
             address,
@@ -3610,7 +3610,7 @@ pub unsafe extern "C" fn channel_from_stdio(
     mut on_output: CallbackReader,
     mut error: *mut *const ::core::ffi::c_char,
 ) -> uint64_t {
-    if !headless_mode && !embedded_mode {
+    if !headless_mode.get() && !embedded_mode.get() {
         *error = gettext(
             b"can only be opened in headless mode\0".as_ptr() as *const ::core::ffi::c_char
         );
@@ -3624,7 +3624,7 @@ pub unsafe extern "C" fn channel_from_stdio(
     let mut channel: *mut Channel = channel_alloc(kChannelStreamStdio);
     let mut stdin_dup_fd: ::core::ffi::c_int = STDIN_FILENO;
     let mut stdout_dup_fd: ::core::ffi::c_int = STDOUT_FILENO;
-    if embedded_mode {
+    if embedded_mode.get() {
         stdin_dup_fd = fcntl(
             STDIN_FILENO,
             F_DUPFD_CLOEXEC,
@@ -3639,12 +3639,12 @@ pub unsafe extern "C" fn channel_from_stdio(
         dup2(STDERR_FILENO, STDIN_FILENO);
     }
     rstream_init_fd(
-        &raw mut main_loop,
+        main_loop.ptr(),
         &raw mut (*channel).stream.stdio.in_0,
         stdin_dup_fd,
     );
     wstream_init_fd(
-        &raw mut main_loop,
+        main_loop.ptr(),
         &raw mut (*channel).stream.stdio.out,
         stdout_dup_fd,
         0 as size_t,
@@ -3926,9 +3926,9 @@ unsafe extern "C" fn channel_proc_exit_cb(
     if !(*chan).term.is_null() {
         terminal_close(&raw mut (*chan).term, status);
     }
-    if !exiting && ui_client_channel_id == (*chan).id {
+    if !exiting.get() && ui_client_channel_id.get() == (*chan).id {
         ui_client_attach_to_restarted_server();
-        if ui_client_channel_id == (*chan).id {
+        if ui_client_channel_id.get() == (*chan).id {
             exit_on_closed_chan(status);
         }
     }
@@ -4148,7 +4148,7 @@ pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_ch
     if has_event(event) {
         channel_incref(chan);
         multiqueue_put_event(
-            main_loop.events,
+            (*main_loop.ptr()).events,
             Event {
                 handler: Some(
                     set_info_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -4231,7 +4231,7 @@ unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     restore_v_event(dict, &raw mut save_v_event);
     arena_mem_free(arena_finish(&raw mut arena));
@@ -4449,7 +4449,7 @@ pub unsafe extern "C" fn channel_all_info(mut arena: *mut Arena) -> Array {
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<int64_t>(),
     };
-    ids.capacity = channels.set.h.size as size_t;
+    ids.capacity = (*channels.ptr()).set.h.size as size_t;
     ids.items = arena_alloc(
         arena,
         ::core::mem::size_of::<int64_t>().wrapping_mul(ids.capacity),
@@ -4458,8 +4458,8 @@ pub unsafe extern "C" fn channel_all_info(mut arena: *mut Arena) -> Array {
     let mut id: uint64_t = 0;
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < channels.set.h.n_keys {
-        id = *channels.set.keys.offset(__i as isize);
+    while __i < (*channels.ptr()).set.h.n_keys {
+        id = *(*channels.ptr()).set.keys.offset(__i as isize);
         if ids.size == ids.capacity {
             ids.capacity = if ids.capacity != 0 {
                 ids.capacity << 1 as ::core::ffi::c_int

@@ -34,7 +34,7 @@ extern "C" {
         ret_len: *mut size_t,
         ret_buf: *mut *mut ::core::ffi::c_char,
     ) -> bool;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array;
     fn api_free_string(value: String_0);
@@ -1029,7 +1029,9 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hitodo_ = hitodo_.wrapping_sub(1);
             let name: *const ::core::ffi::c_char = (*hi).hi_key;
             let mut islambda: bool = strncmp(

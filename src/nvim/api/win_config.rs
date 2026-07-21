@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -73,8 +74,8 @@ extern "C" {
     ) -> bool;
     fn block_autocmds();
     fn unblock_autocmds();
-    static mut autocmd_no_enter: ::core::ffi::c_int;
-    static mut autocmd_no_leave: ::core::ffi::c_int;
+    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
+    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
     fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
     fn bufref_valid(bufref: *mut bufref_T) -> bool;
     static e_cmdwin: [::core::ffi::c_char; 0];
@@ -82,15 +83,15 @@ extern "C" {
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn set_must_redraw(type_0: ::core::ffi::c_int);
     fn expr_map_locked() -> bool;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut textlock: ::core::ffi::c_int;
-    static mut cmdwin_type: ::core::ffi::c_int;
-    static mut cmdwin_buf: *mut buf_T;
-    static mut cmdwin_win: *mut win_T;
-    static mut cmdwin_old_curwin: *mut win_T;
-    static mut cmdline_win: *mut win_T;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
+    static cmdwin_win: GlobalCell<*mut win_T>;
+    static cmdwin_old_curwin: GlobalCell<*mut win_T>;
+    static cmdline_win: GlobalCell<*mut win_T>;
     fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
@@ -103,10 +104,10 @@ extern "C" {
         maxlen: size_t,
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
-    static mut opt_winborder_values: [*const ::core::ffi::c_char; 9];
-    static mut p_sb: ::core::ffi::c_int;
-    static mut p_spr: ::core::ffi::c_int;
-    static mut p_winborder: *mut ::core::ffi::c_char;
+    static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
+    static p_sb: GlobalCell<::core::ffi::c_int>;
+    static p_spr: GlobalCell<::core::ffi::c_int>;
+    static p_winborder: GlobalCell<*mut ::core::ffi::c_char>;
     fn striequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn ui_has(ext: UIExtension) -> bool;
     fn ui_comp_remove_grid(grid: *mut ScreenGrid);
@@ -2778,7 +2779,8 @@ pub unsafe extern "C" fn nvim_open_win(
     if b.is_null() {
         return 0 as Window;
     }
-    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0 || b == cmdwin_buf
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0
+        || b == cmdwin_buf.get()
     {
         api_set_error(
             err,
@@ -2852,9 +2854,9 @@ pub unsafe extern "C" fn nvim_open_win(
         block_autocmds();
     }
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut tp: *mut tabpage_T = curtab;
+    let mut tp: *mut tabpage_T = curtab.get();
     '_c2rust_label: {
-        if !curwin.is_null() {
+        if !(*curwin.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"curwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2866,7 +2868,7 @@ pub unsafe extern "C" fn nvim_open_win(
         }
     };
     let mut parent: *mut win_T = if (*config).win == 0 as ::core::ffi::c_int {
-        curwin
+        curwin.get()
     } else {
         ::core::ptr::null_mut::<win_T>()
     };
@@ -2889,7 +2891,14 @@ pub unsafe extern "C" fn nvim_open_win(
             }
         }
         if is_split {
-            if !check_split_disallowed_err(if !parent.is_null() { parent } else { curwin }, err) {
+            if !check_split_disallowed_err(
+                if !parent.is_null() {
+                    parent
+                } else {
+                    curwin.get()
+                },
+                err,
+            ) {
                 break '_cleanup;
             } else {
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
@@ -2900,13 +2909,13 @@ pub unsafe extern "C" fn nvim_open_win(
                         != 0 as ::core::ffi::c_ulonglong)
                 {
                     if (*config).vertical {
-                        fconfig.split = (if p_spr != 0 {
+                        fconfig.split = (if p_spr.get() != 0 {
                             kWinSplitRight as ::core::ffi::c_int
                         } else {
                             kWinSplitLeft as ::core::ffi::c_int
                         }) as WinSplit;
                     } else {
-                        fconfig.split = (if p_sb != 0 {
+                        fconfig.split = (if p_sb.get() != 0 {
                             kWinSplitBelow as ::core::ffi::c_int
                         } else {
                             kWinSplitAbove as ::core::ffi::c_int
@@ -2931,7 +2940,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     did_emsg: 0,
                 };
                 try_enter(&raw mut tstate);
-                if parent.is_null() || parent == curwin {
+                if parent.is_null() || parent == curwin.get() {
                     wp = win_split_ins(
                         size,
                         flags,
@@ -2984,7 +2993,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     }
                 }
             }
-        } else if (*(*curwin).w_buffer).b_locked_split != 0 {
+        } else if (*(*curwin.get()).w_buffer).b_locked_split != 0 {
             api_set_error(
                 err,
                 kErrorTypeException,
@@ -3005,7 +3014,7 @@ pub unsafe extern "C" fn nvim_open_win(
             }
         } else {
             if fconfig._cmdline_offset < INT_MAX {
-                cmdline_win = wp;
+                cmdline_win.set(wp);
             }
             bufref = bufref_T {
                 br_buf: ::core::ptr::null_mut::<buf_T>(),
@@ -3040,7 +3049,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     false_0 != 0,
-                    curbuf,
+                    curbuf.get(),
                 ) {
                     tp = win_find_tabpage(wp);
                 }
@@ -3054,18 +3063,18 @@ pub unsafe extern "C" fn nvim_open_win(
                 && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
                 && b != (*wp).w_buffer
             {
-                let au_no_enter_leave: bool = curwin != wp && !fconfig.noautocmd;
+                let au_no_enter_leave: bool = curwin.get() != wp && !fconfig.noautocmd;
                 if au_no_enter_leave {
-                    autocmd_no_enter += 1;
-                    autocmd_no_leave += 1;
+                    (*autocmd_no_enter.ptr()) += 1;
+                    (*autocmd_no_leave.ptr()) += 1;
                 }
                 win_set_buf(wp, b, err);
                 if !fconfig.noautocmd {
                     tp = win_find_tabpage(wp);
                 }
                 if au_no_enter_leave {
-                    autocmd_no_enter -= 1;
-                    autocmd_no_leave -= 1;
+                    (*autocmd_no_enter.ptr()) -= 1;
+                    (*autocmd_no_leave.ptr()) -= 1;
                 }
             }
             if tp.is_null() {
@@ -3149,7 +3158,7 @@ unsafe extern "C" fn win_can_move_tp(
 ) -> bool {
     if one_window(
         wp,
-        if tp == curtab {
+        if tp == curtab.get() {
             ::core::ptr::null_mut::<tabpage_T>()
         } else {
             tp
@@ -3174,7 +3183,7 @@ unsafe extern "C" fn win_can_move_tp(
     if window_layout_locked_err(CMD_SIZE, err) {
         return false_0 != 0;
     }
-    if textlock != 0 || expr_map_locked() as ::core::ffi::c_int != 0 {
+    if textlock.get() != 0 || expr_map_locked() as ::core::ffi::c_int != 0 {
         api_set_error(
             err,
             kErrorTypeException,
@@ -3192,7 +3201,7 @@ unsafe extern "C" fn win_can_move_tp(
         );
         return false_0 != 0;
     }
-    if wp == cmdwin_win || wp == cmdwin_old_curwin {
+    if wp == cmdwin_win.get() || wp == cmdwin_old_curwin.get() {
         api_set_error(
             err,
             kErrorTypeException,
@@ -3207,7 +3216,7 @@ unsafe extern "C" fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T
     if (*win).w_floating {
         return win_float_find_altwin(
             win,
-            if tp == curtab {
+            if tp == curtab.get() {
                 ::core::ptr::null_mut::<tabpage_T>()
             } else {
                 tp
@@ -3218,7 +3227,7 @@ unsafe extern "C" fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T
         return winframe_find_altwin(
             win,
             &raw mut dir,
-            if tp == curtab {
+            if tp == curtab.get() {
                 ::core::ptr::null_mut::<tabpage_T>()
             } else {
                 tp
@@ -3254,7 +3263,7 @@ unsafe extern "C" fn win_config_split(
         if (*config).vertical {
             (*fconfig).split = (if old_split as ::core::ffi::c_uint
                 == kWinSplitRight as ::core::ffi::c_int as ::core::ffi::c_uint
-                || p_spr != 0
+                || p_spr.get() != 0
             {
                 kWinSplitRight as ::core::ffi::c_int
             } else {
@@ -3263,7 +3272,7 @@ unsafe extern "C" fn win_config_split(
         } else {
             (*fconfig).split = (if old_split as ::core::ffi::c_uint
                 == kWinSplitBelow as ::core::ffi::c_int as ::core::ffi::c_uint
-                || p_sb != 0
+                || p_sb.get() != 0
             {
                 kWinSplitBelow as ::core::ffi::c_int
             } else {
@@ -3282,8 +3291,8 @@ unsafe extern "C" fn win_config_split(
             parent = ::core::ptr::null_mut::<win_T>();
             parent_tp = ::core::ptr::null_mut::<tabpage_T>();
             if (*config).win == 0 as ::core::ffi::c_int {
-                parent = curwin;
-                parent_tp = curtab;
+                parent = curwin.get();
+                parent_tp = curtab.get();
             } else if (*config).win > 0 as ::core::ffi::c_int {
                 parent = find_window_by_handle((*fconfig).window, err);
                 if parent.is_null() {
@@ -3309,7 +3318,7 @@ unsafe extern "C" fn win_config_split(
                 return false_0 != 0;
             }
             to_split_ok = false_0 != 0;
-            curwin_moving_tp = win == curwin && !parent.is_null() && win_tp != parent_tp;
+            curwin_moving_tp = win == curwin.get() && !parent.is_null() && win_tp != parent_tp;
             '_restore_curwin: {
                 if curwin_moving_tp {
                     let mut altwin: *mut win_T = win_find_altwin(win, win_tp);
@@ -3327,7 +3336,7 @@ unsafe extern "C" fn win_config_split(
                         }
                     };
                     win_goto(altwin);
-                    if curwin == win {
+                    if curwin.get() == win {
                         api_set_error(
                             err,
                             kErrorTypeException,
@@ -3396,7 +3405,7 @@ unsafe extern "C" fn win_config_split(
                             altwin_0 = winframe_remove(
                                 win,
                                 &raw mut dir,
-                                if win_tp == curtab {
+                                if win_tp == curtab.get() {
                                     ::core::ptr::null_mut::<tabpage_T>()
                                 } else {
                                     win_tp
@@ -3407,7 +3416,7 @@ unsafe extern "C" fn win_config_split(
                             altwin_0 = winframe_remove(
                                 win,
                                 &raw mut dir,
-                                if win_tp == curtab {
+                                if win_tp == curtab.get() {
                                     ::core::ptr::null_mut::<tabpage_T>()
                                 } else {
                                     win_tp
@@ -3429,7 +3438,7 @@ unsafe extern "C" fn win_config_split(
                         altwin_0 = winframe_remove(
                             win,
                             &raw mut dir,
-                            if win_tp == curtab {
+                            if win_tp == curtab.get() {
                                 ::core::ptr::null_mut::<tabpage_T>()
                             } else {
                                 win_tp
@@ -3440,7 +3449,7 @@ unsafe extern "C" fn win_config_split(
                 } else {
                     altwin_0 = win_float_find_altwin(
                         win,
-                        if win_tp == curtab {
+                        if win_tp == curtab.get() {
                             ::core::ptr::null_mut::<tabpage_T>()
                         } else {
                             win_tp
@@ -3449,13 +3458,13 @@ unsafe extern "C" fn win_config_split(
                 }
                 win_remove(
                     win,
-                    if win_tp == curtab {
+                    if win_tp == curtab.get() {
                         ::core::ptr::null_mut::<tabpage_T>()
                     } else {
                         win_tp
                     },
                 );
-                if win_tp == curtab {
+                if win_tp == curtab.get() {
                     last_status(false_0 != 0);
                     win_comp_pos();
                 }
@@ -3464,7 +3473,7 @@ unsafe extern "C" fn win_config_split(
                 parent_tp = if !parent.is_null() {
                     win_find_tabpage(parent)
                 } else {
-                    curtab
+                    curtab.get()
                 };
                 let mut tstate: TryState = TryState {
                     current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -3476,7 +3485,7 @@ unsafe extern "C" fn win_config_split(
                     did_emsg: 0,
                 };
                 try_enter(&raw mut tstate);
-                let need_switch: bool = !parent.is_null() && parent != curwin;
+                let need_switch: bool = !parent.is_null() && parent != curwin.get();
                 let mut switchwin: switchwin_T = switchwin_T {
                     sw_curwin: ::core::ptr::null_mut::<win_T>(),
                     sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
@@ -3512,7 +3521,7 @@ unsafe extern "C" fn win_config_split(
                     win_append(
                         (*win).w_prev,
                         win,
-                        if win_tp == curtab {
+                        if win_tp == curtab.get() {
                             ::core::ptr::null_mut::<tabpage_T>()
                         } else {
                             win_tp
@@ -3611,10 +3620,10 @@ unsafe extern "C" fn win_config_float_tp(
                     );
                 }
             };
-            if curwin == win {
+            if curwin.get() == win {
                 curwin_moving_tp = true_0 != 0;
                 win_goto(altwin);
-                if curwin == win {
+                if curwin.get() == win {
                     api_set_error(
                         err,
                         kErrorTypeException,
@@ -3663,19 +3672,19 @@ unsafe extern "C" fn win_config_float_tp(
         if win_tp != parent_tp {
             win_remove(
                 win,
-                if win_tp == curtab {
+                if win_tp == curtab.get() {
                     ::core::ptr::null_mut::<tabpage_T>()
                 } else {
                     win_tp
                 },
             );
-            let mut append_tp: *mut tabpage_T = if parent_tp == curtab {
+            let mut append_tp: *mut tabpage_T = if parent_tp == curtab.get() {
                 ::core::ptr::null_mut::<tabpage_T>()
             } else {
                 parent_tp
             };
             win_append(lastwin_nofloating(append_tp), win, append_tp);
-            if win_tp != curtab && (*win_tp).tp_curwin == win {
+            if win_tp != curtab.get() && (*win_tp).tp_curwin == win {
                 (*win_tp).tp_curwin = altwin;
             }
             ui_comp_remove_grid(&raw mut (*win).w_grid_alloc);
@@ -3742,9 +3751,9 @@ pub unsafe extern "C" fn nvim_win_set_config(
         changed_window_setting(w);
     }
     if fconfig._cmdline_offset < INT_MAX {
-        cmdline_win = w;
-    } else if w == cmdline_win && fconfig._cmdline_offset == INT_MAX {
-        cmdline_win = ::core::ptr::null_mut::<win_T>();
+        cmdline_win.set(w);
+    } else if w == cmdline_win.get() && fconfig._cmdline_offset == INT_MAX {
+        cmdline_win.set(::core::ptr::null_mut::<win_T>());
     }
 }
 unsafe extern "C" fn config_put_bordertext(
@@ -3824,24 +3833,24 @@ pub unsafe extern "C" fn nvim_win_get_config(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> KeyDict_win_config {
-    static mut float_relative_str: [*const ::core::ffi::c_char; 6] = [
+    static float_relative_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
         b"editor\0".as_ptr() as *const ::core::ffi::c_char,
         b"win\0".as_ptr() as *const ::core::ffi::c_char,
         b"cursor\0".as_ptr() as *const ::core::ffi::c_char,
         b"mouse\0".as_ptr() as *const ::core::ffi::c_char,
         b"tabline\0".as_ptr() as *const ::core::ffi::c_char,
         b"laststatus\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
-    static mut win_split_str: [*const ::core::ffi::c_char; 4] = [
+    ]);
+    static win_split_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
         b"left\0".as_ptr() as *const ::core::ffi::c_char,
         b"right\0".as_ptr() as *const ::core::ffi::c_char,
         b"above\0".as_ptr() as *const ::core::ffi::c_char,
         b"below\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
-    static mut win_style_str: [*const ::core::ffi::c_char; 2] = [
+    ]);
+    static win_style_str: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
-    ];
+    ]);
     let mut rv: KeyDict_win_config = KEYDICT_INIT;
     let mut wp: *mut win_T = find_window_by_handle(win, err);
     if wp.is_null() {
@@ -3867,7 +3876,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
     rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
         | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__style)
         as OptionalKeys;
-    rv.style = cstr_as_string(win_style_str[(*config).style as usize]);
+    rv.style = cstr_as_string((*win_style_str.ptr())[(*config).style as usize]);
     if (*wp).w_floating {
         rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
             | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__width)
@@ -4009,11 +4018,11 @@ pub unsafe extern "C" fn nvim_win_get_config(
         rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
             | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split)
             as OptionalKeys;
-        rv.split = cstr_as_string(win_split_str[split as usize]);
+        rv.split = cstr_as_string((*win_split_str.ptr())[split as usize]);
     }
     let mut rel: *const ::core::ffi::c_char =
         if (*wp).w_floating as ::core::ffi::c_int != 0 && !(*config).external {
-            float_relative_str[(*config).relative as usize]
+            (*float_relative_str.ptr())[(*config).relative as usize]
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
         };
@@ -4241,7 +4250,7 @@ pub unsafe extern "C" fn parse_border_style(
 ) {
     let mut defaults: [C2Rust_Unnamed_15; 7] = [
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[1 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[1 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -4272,7 +4281,7 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: false_0 != 0,
         },
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[2 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[2 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -4303,7 +4312,7 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: false_0 != 0,
         },
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[3 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[3 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -4334,7 +4343,7 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: true_0 != 0,
         },
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[4 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[4 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -4365,7 +4374,7 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: false_0 != 0,
         },
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[5 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[5 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -4396,7 +4405,7 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: false_0 != 0,
         },
         C2Rust_Unnamed_15 {
-            name: opt_winborder_values[6 as ::core::ffi::c_int as usize]
+            name: (*opt_winborder_values.ptr())[6 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
                 ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
@@ -5139,7 +5148,7 @@ unsafe extern "C" fn parse_win_config(
                         }
                     }
                     if (*fconfig).window == 0 as ::core::ffi::c_int {
-                        (*fconfig).window = (*curwin).handle as Window;
+                        (*fconfig).window = (*curwin.get()).handle as Window;
                     }
                 }
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
@@ -5280,9 +5289,9 @@ unsafe extern "C" fn parse_win_config(
                             }
                         }
                     }
-                } else if *p_winborder as ::core::ffi::c_int != NUL
+                } else if *p_winborder.get() as ::core::ffi::c_int != NUL
                     && (wp.is_null() || !(*wp).w_floating)
-                    && !parse_winborder(fconfig, p_winborder, err)
+                    && !parse_winborder(fconfig, p_winborder.get(), err)
                 {
                     break '_fail;
                 }

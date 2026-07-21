@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -41,7 +42,7 @@ extern "C" {
     fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
     fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    static mut EVALARG_EVALUATE: evalarg_T;
+    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
     fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T);
     fn eval0(
         arg: *mut ::core::ffi::c_char,
@@ -66,16 +67,16 @@ extern "C" {
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut did_throw: bool;
-    static mut force_abort: bool;
-    static mut suppress_errthrow: bool;
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut redir_off: bool;
-    static mut capture_ga: *mut garray_T;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static did_throw: GlobalCell<bool>;
+    static force_abort: GlobalCell<bool>;
+    static suppress_errthrow: GlobalCell<bool>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static redir_off: GlobalCell<bool>;
+    static capture_ga: GlobalCell<*mut garray_T>;
     fn do_source_str(
         str: *const ::core::ffi::c_char,
         traceback_name: *mut ::core::ffi::c_char,
@@ -2810,10 +2811,10 @@ pub unsafe extern "C" fn exec_impl(
     mut opts: *mut KeyDict_exec_opts,
     mut err: *mut Error,
 ) -> String_0 {
-    let save_msg_silent: ::core::ffi::c_int = msg_silent;
-    let save_redir_off: bool = redir_off;
-    let save_capture_ga: *mut garray_T = capture_ga;
-    let save_msg_col: ::core::ffi::c_int = msg_col;
+    let save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+    let save_redir_off: bool = redir_off.get();
+    let save_capture_ga: *mut garray_T = capture_ga.get();
+    let save_msg_col: ::core::ffi::c_int = msg_col.get();
     let mut capture_local: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -2827,7 +2828,7 @@ pub unsafe extern "C" fn exec_impl(
             1 as ::core::ffi::c_int,
             80 as ::core::ffi::c_int,
         );
-        capture_ga = &raw mut capture_local;
+        capture_ga.set(&raw mut capture_local);
     }
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -2840,9 +2841,9 @@ pub unsafe extern "C" fn exec_impl(
     };
     try_enter(&raw mut tstate);
     if (*opts).output {
-        msg_silent += 1;
-        redir_off = false;
-        msg_col = 0 as ::core::ffi::c_int;
+        (*msg_silent.ptr()) += 1;
+        redir_off.set(false);
+        msg_col.set(0 as ::core::ffi::c_int);
     }
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     do_source_str(
@@ -2850,12 +2851,12 @@ pub unsafe extern "C" fn exec_impl(
         b"nvim_exec2()\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     if (*opts).output {
-        capture_ga = save_capture_ga;
-        msg_silent = save_msg_silent;
-        redir_off = save_redir_off;
-        msg_col = save_msg_col;
+        capture_ga.set(save_capture_ga);
+        msg_silent.set(save_msg_silent);
+        redir_off.set(save_redir_off);
+        msg_col.set(save_msg_col);
     }
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
     try_leave(&raw mut tstate, err);
     if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
         if (*opts).output as ::core::ffi::c_int != 0
@@ -2906,18 +2907,18 @@ pub unsafe extern "C" fn nvim_eval(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Object {
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut rv: Object = object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    if recursive == 0 {
-        force_abort = false_0 != 0;
-        suppress_errthrow = false_0 != 0;
-        did_throw = false_0 != 0;
-        did_emsg = false_0;
+    if recursive.get() == 0 {
+        force_abort.set(false_0 != 0);
+        suppress_errthrow.set(false_0 != 0);
+        did_throw.set(false_0 != 0);
+        did_emsg.set(false_0);
     }
-    recursive += 1;
+    (*recursive.ptr()) += 1;
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -2938,12 +2939,9 @@ pub unsafe extern "C" fn nvim_eval(
         expr.data,
         &raw mut rettv,
         ::core::ptr::null_mut::<exarg_T>(),
-        &raw mut EVALARG_EVALUATE,
+        EVALARG_EVALUATE.ptr(),
     );
-    clear_evalarg(
-        &raw mut EVALARG_EVALUATE,
-        ::core::ptr::null_mut::<exarg_T>(),
-    );
+    clear_evalarg(EVALARG_EVALUATE.ptr(), ::core::ptr::null_mut::<exarg_T>());
     try_leave(&raw mut tstate, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         if ok == FAIL {
@@ -2959,7 +2957,7 @@ pub unsafe extern "C" fn nvim_eval(
         }
     }
     tv_clear(&raw mut rettv);
-    recursive -= 1;
+    (*recursive.ptr()) -= 1;
     return rv;
 }
 unsafe extern "C" fn _call_function(
@@ -2969,7 +2967,7 @@ unsafe extern "C" fn _call_function(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Object {
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut rv: Object = object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -2996,21 +2994,21 @@ unsafe extern "C" fn _call_function(
         );
         i = i.wrapping_add(1);
     }
-    if recursive == 0 {
-        force_abort = false_0 != 0;
-        suppress_errthrow = false_0 != 0;
-        did_throw = false_0 != 0;
-        did_emsg = false_0;
+    if recursive.get() == 0 {
+        force_abort.set(false_0 != 0);
+        suppress_errthrow.set(false_0 != 0);
+        did_throw.set(false_0 != 0);
+        did_emsg.set(false_0);
     }
-    recursive += 1;
+    (*recursive.ptr()) += 1;
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     };
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
-    funcexe.fe_firstline = (*curwin).w_cursor.lnum;
-    funcexe.fe_lastline = (*curwin).w_cursor.lnum;
+    funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
+    funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
     funcexe.fe_evaluate = true_0 != 0;
     funcexe.fe_selfdict = self_0;
     let mut tstate: TryState = TryState {
@@ -3036,7 +3034,7 @@ unsafe extern "C" fn _call_function(
         rv = vim_to_object(&raw mut rettv, arena, false_0 != 0);
     }
     tv_clear(&raw mut rettv);
-    recursive -= 1;
+    (*recursive.ptr()) -= 1;
     while i > 0 as size_t {
         i = i.wrapping_sub(1);
         tv_clear((&raw mut vim_args as *mut typval_T).offset(i as isize));
@@ -3087,12 +3085,9 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                 dict.data.string.data,
                 &raw mut rettv,
                 ::core::ptr::null_mut::<exarg_T>(),
-                &raw mut EVALARG_EVALUATE,
+                EVALARG_EVALUATE.ptr(),
             );
-            clear_evalarg(
-                &raw mut EVALARG_EVALUATE,
-                ::core::ptr::null_mut::<exarg_T>(),
-            );
+            clear_evalarg(EVALARG_EVALUATE.ptr(), ::core::ptr::null_mut::<exarg_T>());
             try_leave(&raw mut tstate, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                 return rv;

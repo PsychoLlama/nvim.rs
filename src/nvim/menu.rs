@@ -60,8 +60,8 @@ extern "C" {
         force: bool,
         buf: *mut buf_T,
     ) -> bool;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_sel: *mut ::core::ffi::c_char;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -160,21 +160,21 @@ extern "C" {
         nottyped: bool,
         silent: bool,
     ) -> ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut root_menu: *mut vimmenu_T;
-    static mut sys_menu: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_select: bool;
-    static mut VIsual_reselect: ::core::ffi::c_int;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut finish_op: bool;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut ex_normal_busy: ::core::ffi::c_int;
-    static mut got_int: bool;
+    static current_sctx: GlobalCell<sctx_T>;
+    static root_menu: GlobalCell<*mut vimmenu_T>;
+    static sys_menu: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_select: GlobalCell<bool>;
+    static VIsual_reselect: GlobalCell<::core::ffi::c_int>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static finish_op: GlobalCell<bool>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn replace_termcodes(
@@ -2928,7 +2928,7 @@ unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
     ) == 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn get_root_menu(_name: *const ::core::ffi::c_char) -> *mut *mut vimmenu_T {
-    return &raw mut root_menu;
+    return root_menu.ptr();
 }
 unsafe extern "C" fn is_menus_locked() -> ::core::ffi::c_int {
     if menus_locked.get() > 0 as ::core::ffi::c_int {
@@ -3195,7 +3195,7 @@ pub unsafe extern "C" fn ex_menu(mut eap: *mut exarg_T) {
                             0 as scid_T,
                             REPTERM_DO_LT as ::core::ffi::c_int,
                             ::core::ptr::null_mut::<bool>(),
-                            p_cpo,
+                            p_cpo.get(),
                         );
                     }
                     menuarg.modes = modes;
@@ -3279,7 +3279,7 @@ unsafe extern "C" fn add_menu_path(
                         || menu_name_equal(dname, menu) as ::core::ffi::c_int != 0
                     {
                         if *next_name as ::core::ffi::c_int == NUL && !(*menu).children.is_null() {
-                            if !sys_menu {
+                            if !sys_menu.get() {
                                 emsg(gettext(
                                     b"E330: Menu path must not lead to a sub-menu\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -3292,7 +3292,7 @@ unsafe extern "C" fn add_menu_path(
                             {
                                 break;
                             }
-                            if !sys_menu {
+                            if !sys_menu.get() {
                                 emsg(gettext(
                                     (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
                                 ));
@@ -3376,7 +3376,7 @@ unsafe extern "C" fn add_menu_path(
             & (MENU_NORMAL_MODE as ::core::ffi::c_int | MENU_INSERT_MODE as ::core::ffi::c_int)
             == MENU_NORMAL_MODE as ::core::ffi::c_int | MENU_INSERT_MODE as ::core::ffi::c_int)
             as ::core::ffi::c_int;
-        if sys_menu {
+        if sys_menu.get() {
             modes &= !old_modes;
         }
         if !menu.is_null() && modes != 0 {
@@ -3889,7 +3889,7 @@ unsafe extern "C" fn show_menus_recursive(
     }
     if !menu.is_null() {
         msg_putchar('\n' as ::core::ffi::c_int);
-        if got_int {
+        if got_int.get() {
             return;
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3908,7 +3908,7 @@ unsafe extern "C" fn show_menus_recursive(
         while bit < MENU_MODES as ::core::ffi::c_int {
             if (*menu).modes & modes & (1 as ::core::ffi::c_int) << bit != 0 as ::core::ffi::c_int {
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int {
+                if got_int.get() {
                     return;
                 }
                 let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3955,12 +3955,12 @@ unsafe extern "C" fn show_menus_recursive(
         }
     } else {
         if menu.is_null() {
-            menu = root_menu;
+            menu = root_menu.get();
             depth -= 1;
         } else {
             menu = (*menu).children;
         }
-        while !menu.is_null() && !got_int {
+        while !menu.is_null() && !got_int.get() {
             if !menu_is_hidden((*menu).dname) {
                 show_menus_recursive(menu, modes, depth + 1 as ::core::ffi::c_int);
             }
@@ -4060,7 +4060,7 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
         if !unmenu {
             expand_modes.set(MENU_ALL_MODES as ::core::ffi::c_int);
         }
-        menu = root_menu;
+        menu = root_menu.get();
         if after_dot > arg {
             let mut path_len: size_t = after_dot.offset_from(arg) as size_t;
             path_name = xmalloc(path_len) as *mut ::core::ffi::c_char;
@@ -4546,31 +4546,31 @@ unsafe extern "C" fn menu_is_hidden(mut name: *mut ::core::ffi::c_char) -> bool 
             && *name.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL;
 }
 unsafe extern "C" fn get_menu_mode() -> ::core::ffi::c_int {
-    if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
         return MENU_INDEX_TERMINAL as ::core::ffi::c_int;
     }
-    if VIsual_active {
-        if VIsual_select {
+    if VIsual_active.get() {
+        if VIsual_select.get() {
             return MENU_INDEX_SELECT as ::core::ffi::c_int;
         }
         return MENU_INDEX_VISUAL as ::core::ffi::c_int;
     }
-    if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
         return MENU_INDEX_INSERT as ::core::ffi::c_int;
     }
-    if State & MODE_CMDLINE as ::core::ffi::c_int != 0
-        || State == MODE_ASKMORE as ::core::ffi::c_int
-        || State == MODE_HITRETURN as ::core::ffi::c_int
+    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+        || State.get() == MODE_ASKMORE as ::core::ffi::c_int
+        || State.get() == MODE_HITRETURN as ::core::ffi::c_int
     {
         return MENU_INDEX_CMDLINE as ::core::ffi::c_int;
     }
-    if finish_op {
+    if finish_op.get() {
         return MENU_INDEX_OP_PENDING as ::core::ffi::c_int;
     }
-    if State & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
         return MENU_INDEX_NORMAL as ::core::ffi::c_int;
     }
-    if State & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_LANGMAP as ::core::ffi::c_int != 0 {
         return MENU_INDEX_INSERT as ::core::ffi::c_int;
     }
     return MENU_INDEX_INVALID as ::core::ffi::c_int;
@@ -4596,10 +4596,10 @@ pub unsafe extern "C" fn show_popupmenu() {
         mode,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-    menu = root_menu;
+    menu = root_menu.get();
     while !menu.is_null() {
         if strncmp(
             b"PopUp\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4629,14 +4629,14 @@ pub unsafe extern "C" fn execute_menu(
 ) {
     let mut idx: ::core::ffi::c_int = mode_idx;
     if idx < 0 as ::core::ffi::c_int {
-        if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
             idx = MENU_INDEX_TERMINAL as ::core::ffi::c_int;
-        } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
             idx = MENU_INDEX_CMDLINE as ::core::ffi::c_int;
         } else if get_real_state() & MODE_VISUAL as ::core::ffi::c_int != 0 {
             idx = MENU_INDEX_VISUAL as ::core::ffi::c_int;
-        } else if (State & MODE_INSERT as ::core::ffi::c_int != 0 || restart_edit != 0)
-            && current_sctx.sc_sid == 0 as ::core::ffi::c_int
+        } else if (State.get() & MODE_INSERT as ::core::ffi::c_int != 0 || restart_edit.get() != 0)
+            && (*current_sctx.ptr()).sc_sid == 0 as ::core::ffi::c_int
         {
             idx = MENU_INDEX_INSERT as ::core::ffi::c_int;
         } else if !eap.is_null() && (*eap).addr_count != 0 {
@@ -4646,29 +4646,31 @@ pub unsafe extern "C" fn execute_menu(
                 coladd: 0,
             };
             idx = MENU_INDEX_VISUAL as ::core::ffi::c_int;
-            if (*curbuf).b_visual.vi_start.lnum == (*eap).line1
-                && (*curbuf).b_visual.vi_end.lnum == (*eap).line2
+            if (*curbuf.get()).b_visual.vi_start.lnum == (*eap).line1
+                && (*curbuf.get()).b_visual.vi_end.lnum == (*eap).line2
             {
-                VIsual_mode = (*curbuf).b_visual.vi_mode;
-                tpos = (*curbuf).b_visual.vi_end;
-                (*curwin).w_cursor = (*curbuf).b_visual.vi_start;
-                (*curwin).w_curswant = (*curbuf).b_visual.vi_curswant;
+                VIsual_mode.set((*curbuf.get()).b_visual.vi_mode);
+                tpos = (*curbuf.get()).b_visual.vi_end;
+                (*curwin.get()).w_cursor = (*curbuf.get()).b_visual.vi_start;
+                (*curwin.get()).w_curswant = (*curbuf.get()).b_visual.vi_curswant;
             } else {
-                VIsual_mode = 'V' as ::core::ffi::c_int;
-                (*curwin).w_cursor.lnum = (*eap).line1;
-                (*curwin).w_cursor.col = 1 as ::core::ffi::c_int as colnr_T;
+                VIsual_mode.set('V' as ::core::ffi::c_int);
+                (*curwin.get()).w_cursor.lnum = (*eap).line1;
+                (*curwin.get()).w_cursor.col = 1 as ::core::ffi::c_int as colnr_T;
                 tpos.lnum = (*eap).line2;
                 tpos.col = MAXCOL as ::core::ffi::c_int as colnr_T;
                 tpos.coladd = 0 as ::core::ffi::c_int as colnr_T;
             }
-            VIsual_active = true_0 != 0;
-            VIsual_reselect = true_0;
-            check_cursor(curwin);
-            VIsual = (*curwin).w_cursor;
-            (*curwin).w_cursor = tpos;
-            check_cursor(curwin);
-            if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int && gchar_cursor() != NUL {
-                (*curwin).w_cursor.col += 1;
+            VIsual_active.set(true_0 != 0);
+            VIsual_reselect.set(true_0);
+            check_cursor(curwin.get());
+            VIsual.set((*curwin.get()).w_cursor);
+            (*curwin.get()).w_cursor = tpos;
+            check_cursor(curwin.get());
+            if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                && gchar_cursor() != NUL
+            {
+                (*curwin.get()).w_cursor.col += 1;
             }
         }
     }
@@ -4678,7 +4680,7 @@ pub unsafe extern "C" fn execute_menu(
     if !(*menu).strings[idx as usize].is_null()
         && (*menu).modes & (1 as ::core::ffi::c_int) << idx != 0
     {
-        if eap.is_null() || current_sctx.sc_sid != 0 as ::core::ffi::c_int {
+        if eap.is_null() || (*current_sctx.ptr()).sc_sid != 0 as ::core::ffi::c_int {
             let mut save_state: save_state_T = save_state_T {
                 save_msg_scroll: 0,
                 save_restart_edit: 0,
@@ -4731,7 +4733,7 @@ pub unsafe extern "C" fn execute_menu(
                     },
                 },
             };
-            ex_normal_busy += 1;
+            (*ex_normal_busy.ptr()) += 1;
             if save_current_state(&raw mut save_state) {
                 exec_normal_cmd(
                     (*menu).strings[idx as usize],
@@ -4740,7 +4742,7 @@ pub unsafe extern "C" fn execute_menu(
                 );
             }
             restore_current_state(&raw mut save_state);
-            ex_normal_busy -= 1;
+            (*ex_normal_busy.ptr()) -= 1;
         } else {
             ins_typebuf(
                 (*menu).strings[idx as usize],

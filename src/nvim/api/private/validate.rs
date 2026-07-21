@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -14,7 +15,7 @@ extern "C" {
         -> *mut ::core::ffi::c_char;
     fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    static mut IObuff: [::core::ffi::c_char; 1025];
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
 }
 pub type int64_t = i64;
 pub type size_t = usize;
@@ -237,7 +238,7 @@ pub unsafe extern "C" fn check_string_array(
     mut err: *mut Error,
 ) -> bool {
     snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         b"'%s' item\0".as_ptr() as *const ::core::ffi::c_char,
         name,
@@ -249,7 +250,7 @@ pub unsafe extern "C" fn check_string_array(
         {
             api_err_exp(
                 err,
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 api_typename(kObjectTypeString),
                 api_typename((*arr.items.offset(i as isize)).type_0),
             );

@@ -37,11 +37,11 @@ extern "C" {
     fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static mut dy_flags: ::core::ffi::c_uint;
-    static mut p_isf: *mut ::core::ffi::c_char;
-    static mut p_isi: *mut ::core::ffi::c_char;
-    static mut p_isp: *mut ::core::ffi::c_char;
-    static mut curbuf: *mut buf_T;
+    static dy_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_isf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isi: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_isp: GlobalCell<*mut ::core::ffi::c_char>;
+    static curbuf: GlobalCell<*mut buf_T>;
     fn utf_char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -1683,7 +1683,7 @@ pub const CT_ID_CHAR: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const CT_FNAME_CHAR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn init_chartab() -> ::core::ffi::c_int {
-    return buf_init_chartab(curbuf, true_0 != 0);
+    return buf_init_chartab(curbuf.get(), true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn buf_init_chartab(
@@ -1695,12 +1695,14 @@ pub unsafe extern "C" fn buf_init_chartab(
         while c < ' ' as ::core::ffi::c_int {
             let c2rust_fresh0 = c;
             c = c + 1;
-            (*g_chartab.ptr())[c2rust_fresh0 as usize] =
-                (if dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-                    4 as ::core::ffi::c_int
-                } else {
-                    2 as ::core::ffi::c_int
-                }) as uint8_t;
+            (*g_chartab.ptr())[c2rust_fresh0 as usize] = (if dy_flags.get()
+                & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
+            {
+                4 as ::core::ffi::c_int
+            } else {
+                2 as ::core::ffi::c_int
+            }) as uint8_t;
         }
         while c <= '~' as ::core::ffi::c_int {
             let c2rust_fresh1 = c;
@@ -1717,13 +1719,14 @@ pub unsafe extern "C" fn buf_init_chartab(
             } else {
                 let c2rust_fresh3 = c;
                 c = c + 1;
-                (*g_chartab.ptr())[c2rust_fresh3 as usize] =
-                    (if dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-                    {
-                        4 as ::core::ffi::c_int
-                    } else {
-                        2 as ::core::ffi::c_int
-                    }) as uint8_t;
+                (*g_chartab.ptr())[c2rust_fresh3 as usize] = (if dy_flags.get()
+                    & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
+                {
+                    4 as ::core::ffi::c_int
+                } else {
+                    2 as ::core::ffi::c_int
+                }) as uint8_t;
             }
         }
     }
@@ -1749,11 +1752,11 @@ pub unsafe extern "C" fn buf_init_chartab(
     while i <= 3 as ::core::ffi::c_int {
         let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         if i == 0 as ::core::ffi::c_int {
-            p = p_isi;
+            p = p_isi.get();
         } else if i == 1 as ::core::ffi::c_int {
-            p = p_isp;
+            p = p_isp.get();
         } else if i == 2 as ::core::ffi::c_int {
-            p = p_isf;
+            p = p_isf.get();
         } else {
             p = (*buf).b_p_isk;
         }
@@ -1840,7 +1843,7 @@ unsafe extern "C" fn parse_isopt(
                 || mb_islower(c) as ::core::ffi::c_int != 0
                 || mb_isupper(c) as ::core::ffi::c_int != 0
             {
-                if var == p_isi as *const ::core::ffi::c_char {
+                if var == p_isi.get() as *const ::core::ffi::c_char {
                     if tilde {
                         (*g_chartab.ptr())[c as usize] = ((*g_chartab.ptr())[c as usize]
                             as ::core::ffi::c_int
@@ -1851,13 +1854,13 @@ unsafe extern "C" fn parse_isopt(
                             ((*g_chartab.ptr())[c as usize] as ::core::ffi::c_int | CT_ID_CHAR)
                                 as uint8_t;
                     }
-                } else if var == p_isp as *const ::core::ffi::c_char {
+                } else if var == p_isp.get() as *const ::core::ffi::c_char {
                     if c < ' ' as ::core::ffi::c_int || c > '~' as ::core::ffi::c_int {
                         if tilde {
                             (*g_chartab.ptr())[c as usize] = (((*g_chartab.ptr())[c as usize]
                                 as ::core::ffi::c_int
                                 & !CT_CELL_MASK)
-                                + (if dy_flags
+                                + (if dy_flags.get()
                                     & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
                                     != 0
                                 {
@@ -1881,7 +1884,7 @@ unsafe extern "C" fn parse_isopt(
                                     | CT_PRINT_CHAR) as uint8_t;
                         }
                     }
-                } else if var == p_isf as *const ::core::ffi::c_char {
+                } else if var == p_isf.get() as *const ::core::ffi::c_char {
                     if tilde {
                         (*g_chartab.ptr())[c as usize] = ((*g_chartab.ptr())[c as usize]
                             as ::core::ffi::c_int
@@ -2249,7 +2252,7 @@ pub unsafe extern "C" fn str_foldcase(
 static transchar_charbuf: GlobalCell<[uint8_t; 11]> = GlobalCell::new([0; 11]);
 #[no_mangle]
 pub unsafe extern "C" fn transchar(mut c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-    return transchar_buf(curbuf, c);
+    return transchar_buf(curbuf.get(), c);
 }
 #[no_mangle]
 pub unsafe extern "C" fn transchar_buf(
@@ -2293,7 +2296,7 @@ pub unsafe extern "C" fn transchar_buf(
 }
 #[no_mangle]
 pub unsafe extern "C" fn transchar_byte(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-    return transchar_byte_buf(curbuf, c);
+    return transchar_byte_buf(curbuf.get(), c);
 }
 #[no_mangle]
 pub unsafe extern "C" fn transchar_byte_buf(
@@ -2333,7 +2336,7 @@ pub unsafe extern "C" fn transchar_nonprint(
             );
         }
     };
-    if dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+    if dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         || c > 0x7f as ::core::ffi::c_int
     {
         transchar_hex(charbuf, c);
@@ -2489,7 +2492,7 @@ pub unsafe extern "C" fn vim_isIDc(mut c: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_iswordc(c: ::core::ffi::c_int) -> bool {
-    return vim_iswordc_buf(c, curbuf);
+    return vim_iswordc_buf(c, curbuf.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_iswordc_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> bool {
@@ -2509,7 +2512,7 @@ pub unsafe extern "C" fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T)
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool {
-    return vim_iswordp_buf(p, curbuf);
+    return vim_iswordp_buf(p, curbuf.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool {

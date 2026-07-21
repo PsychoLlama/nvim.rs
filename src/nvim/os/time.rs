@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type multiqueue;
     fn strncmp(
@@ -47,8 +47,8 @@ extern "C" {
     ) -> bool;
     fn multiqueue_process_events(self_0: *mut MultiQueue);
     fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    static mut got_int: bool;
-    static mut main_loop: Loop;
+    static got_int: GlobalCell<bool>;
+    static main_loop: SharedCell<Loop>;
     fn os_input_ready(events: *mut MultiQueue) -> bool;
     fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -709,7 +709,7 @@ pub unsafe extern "C" fn os_realtime() -> int64_t {
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_now() -> uint64_t {
-    return uv_now(&raw mut main_loop.uv);
+    return uv_now(&raw mut (*main_loop.ptr()).uv);
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
@@ -732,7 +732,7 @@ pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
         0 as uint64_t
     };
     while if ignoreinput as ::core::ffi::c_int != 0 {
-        got_int as ::core::ffi::c_int
+        got_int.get() as ::core::ffi::c_int
     } else {
         os_input_ready(::core::ptr::null_mut::<MultiQueue>()) as ::core::ffi::c_int
     } == 0
@@ -742,7 +742,7 @@ pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
         {
             multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;

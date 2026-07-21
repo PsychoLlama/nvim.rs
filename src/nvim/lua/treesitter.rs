@@ -290,9 +290,9 @@ extern "C" {
         key_alloc: *mut *mut cstr_t,
         new_item: *mut bool,
     ) -> *mut ptr_t;
-    static mut buffer_handles: Map_int_ptr_t;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut tslua_query_parse_count: uint64_t;
+    static buffer_handles: GlobalCell<Map_int_ptr_t>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static tslua_query_parse_count: GlobalCell<uint64_t>;
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
     fn vim_snprintf(
@@ -2160,7 +2160,7 @@ unsafe extern "C" fn load_language_from_object(
     };
     if uv_dlopen(path, &raw mut lib) != 0 {
         xstrlcpy(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             uv_dlerror(&raw mut lib),
             ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         );
@@ -2170,7 +2170,7 @@ unsafe extern "C" fn load_language_from_object(
             b"Failed to load parser for language '%s': uv_dlopen: %s\0".as_ptr()
                 as *const ::core::ffi::c_char,
             lang_name,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
         );
     }
     let mut symbol_buf: [::core::ffi::c_char; 128] = [0; 128];
@@ -2188,7 +2188,7 @@ unsafe extern "C" fn load_language_from_object(
     ) != 0
     {
         xstrlcpy(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             uv_dlerror(&raw mut lib),
             ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         );
@@ -2196,7 +2196,7 @@ unsafe extern "C" fn load_language_from_object(
         luaL_error(
             L,
             b"Failed to load parser: uv_dlsym: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
         );
     }
     let mut lang: *mut TSLanguage = lang_parser.expect("non-null function pointer")();
@@ -2700,8 +2700,8 @@ unsafe extern "C" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::c_int {
         }
         LUA_TNUMBER => {
             bufnr = lua_tointeger(L, 3 as ::core::ffi::c_int) as handle_T;
-            buf = map_get_int_ptr_t(&raw mut buffer_handles, bufnr as ::core::ffi::c_int)
-                as *mut buf_T;
+            buf =
+                map_get_int_ptr_t(buffer_handles.ptr(), bufnr as ::core::ffi::c_int) as *mut buf_T;
             if buf.is_null() {
                 let mut ebuf: [::core::ffi::c_char; 256] = [
                     0 as ::core::ffi::c_char,
@@ -4197,7 +4197,7 @@ unsafe extern "C" fn tslua_parse_query(mut L: *mut lua_State) -> ::core::ffi::c_
     let mut len: size_t = 0;
     let mut src: *const ::core::ffi::c_char =
         lua_tolstring(L, 2 as ::core::ffi::c_int, &raw mut len);
-    tslua_query_parse_count = tslua_query_parse_count.wrapping_add(1);
+    tslua_query_parse_count.set((*tslua_query_parse_count.ptr()).wrapping_add(1));
     let mut error_offset: uint32_t = 0;
     let mut error_type: TSQueryError = TSQueryErrorNone;
     let mut query: *mut TSQuery = ts_query_new(

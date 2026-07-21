@@ -38,13 +38,13 @@ extern "C" {
         firstp: *mut linenr_T,
         lastp: *mut linenr_T,
     ) -> bool;
-    static mut redraw_cmdline: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_select_exclu_adj: bool;
-    static mut VIsual_mode: ::core::ffi::c_int;
+    static redraw_cmdline: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_select_exclu_adj: GlobalCell<bool>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
     fn inindent(extra: ::core::ffi::c_int) -> bool;
     fn setpcmark();
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -63,11 +63,11 @@ extern "C" {
     fn decl(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn adjust_skipcol();
     fn unadjust_for_sel() -> bool;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_para: *mut ::core::ffi::c_char;
-    static mut p_sections: *mut ::core::ffi::c_char;
-    static mut p_sel: *mut ::core::ffi::c_char;
-    static mut p_ws: ::core::ffi::c_int;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_para: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sections: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ws: GlobalCell<::core::ffi::c_int>;
     fn findmatch(oap: *mut oparg_T, initc: ::core::ffi::c_int) -> *mut pos_T;
     fn findmatchlimit(
         oap: *mut oparg_T,
@@ -1718,7 +1718,7 @@ pub unsafe extern "C" fn findsent(
     let mut c: ::core::ffi::c_int = 0;
     let mut func: Option<unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int> = None;
     let mut noskip: bool = false_0 != 0;
-    let mut pos: pos_T = (*curwin).w_cursor;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
     if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
         func = Some(incl as unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int)
             as Option<unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int>;
@@ -1750,7 +1750,7 @@ pub unsafe extern "C" fn findsent(
                 && pos.col == 0 as ::core::ffi::c_int
                 && startPS(pos.lnum, NUL, false_0 != 0) as ::core::ffi::c_int != 0
             {
-                if pos.lnum == (*curbuf).b_ml.ml_line_count {
+                if pos.lnum == (*curbuf.get()).b_ml.ml_line_count {
                     return FAIL;
                 }
                 pos.lnum += 1;
@@ -1792,7 +1792,7 @@ pub unsafe extern "C" fn findsent(
                 decl(&raw mut pos);
             }
             startlnum = pos.lnum as ::core::ffi::c_int;
-            cpo_J = !vim_strchr(p_cpo, CPO_ENDOFSENT).is_null();
+            cpo_J = !vim_strchr(p_cpo.get(), CPO_ENDOFSENT).is_null();
             loop {
                 c = gchar_pos(&raw mut pos);
                 if c == NUL
@@ -1878,7 +1878,7 @@ pub unsafe extern "C" fn findsent(
         }
     }
     setpcmark();
-    (*curwin).w_cursor = pos;
+    (*curwin.get()).w_cursor = pos;
     return OK;
 }
 #[no_mangle]
@@ -1893,7 +1893,7 @@ pub unsafe extern "C" fn findpar(
     let mut fold_first: linenr_T = 0;
     let mut fold_last: linenr_T = 0;
     let mut fold_skipped: bool = false;
-    let mut curr: linenr_T = (*curwin).w_cursor.lnum;
+    let mut curr: linenr_T = (*curwin.get()).w_cursor.lnum;
     loop {
         let c2rust_fresh1 = count;
         count = count - 1;
@@ -1908,7 +1908,7 @@ pub unsafe extern "C" fn findpar(
             }
             fold_skipped = false_0 != 0;
             if first as ::core::ffi::c_int != 0
-                && hasFolding(curwin, curr, &raw mut fold_first, &raw mut fold_last)
+                && hasFolding(curwin.get(), curr, &raw mut fold_first, &raw mut fold_last)
                     as ::core::ffi::c_int
                     != 0
             {
@@ -1929,7 +1929,7 @@ pub unsafe extern "C" fn findpar(
                 curr = (curr as ::core::ffi::c_int - dir) as linenr_T;
             }
             curr = (curr as ::core::ffi::c_int + dir) as linenr_T;
-            if curr < 1 as linenr_T || curr > (*curbuf).b_ml.ml_line_count {
+            if curr < 1 as linenr_T || curr > (*curbuf.get()).b_ml.ml_line_count {
                 if count != 0 {
                     return false_0 != 0;
                 }
@@ -1946,21 +1946,21 @@ pub unsafe extern "C" fn findpar(
     {
         curr += 1;
     }
-    (*curwin).w_cursor.lnum = curr;
-    if curr == (*curbuf).b_ml.ml_line_count
+    (*curwin.get()).w_cursor.lnum = curr;
+    if curr == (*curbuf.get()).b_ml.ml_line_count
         && what != '}' as ::core::ffi::c_int
         && dir == FORWARD as ::core::ffi::c_int
     {
         let mut line: *mut ::core::ffi::c_char = ml_get(curr);
-        (*curwin).w_cursor.col = ml_get_len(curr);
-        if (*curwin).w_cursor.col != 0 as ::core::ffi::c_int {
-            (*curwin).w_cursor.col -= 1;
-            (*curwin).w_cursor.col -=
-                utf_head_off(line, line.offset((*curwin).w_cursor.col as isize));
+        (*curwin.get()).w_cursor.col = ml_get_len(curr);
+        if (*curwin.get()).w_cursor.col != 0 as ::core::ffi::c_int {
+            (*curwin.get()).w_cursor.col -= 1;
+            (*curwin.get()).w_cursor.col -=
+                utf_head_off(line, line.offset((*curwin.get()).w_cursor.col as isize));
             *pincl = true_0 != 0;
         }
     } else {
-        (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     }
     return true_0 != 0;
 }
@@ -2013,10 +2013,11 @@ pub unsafe extern "C" fn startPS(
         return true_0 != 0;
     }
     if *s as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-        && (inmacro(p_sections, s.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
+        && (inmacro(p_sections.get(), s.offset(1 as ::core::ffi::c_int as isize))
+            as ::core::ffi::c_int
             != 0
             || para == 0
-                && inmacro(p_para, s.offset(1 as ::core::ffi::c_int as isize))
+                && inmacro(p_para.get(), s.offset(1 as ::core::ffi::c_int as isize))
                     as ::core::ffi::c_int
                     != 0)
     {
@@ -2042,7 +2043,7 @@ pub unsafe extern "C" fn fwd_word(
     mut bigword: bool,
     mut eol: bool,
 ) -> ::core::ffi::c_int {
-    (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     cls_bigword.set(bigword);
     loop {
         count -= 1;
@@ -2050,16 +2051,17 @@ pub unsafe extern "C" fn fwd_word(
             break;
         }
         if hasFolding(
-            curwin,
-            (*curwin).w_cursor.lnum,
+            curwin.get(),
+            (*curwin.get()).w_cursor.lnum,
             ::core::ptr::null_mut::<linenr_T>(),
-            &raw mut (*curwin).w_cursor.lnum,
+            &raw mut (*curwin.get()).w_cursor.lnum,
         ) {
-            coladvance(curwin, MAXCOL as ::core::ffi::c_int);
+            coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
         }
         let mut sclass: ::core::ffi::c_int = cls();
-        let mut last_line: ::core::ffi::c_int =
-            ((*curwin).w_cursor.lnum == (*curbuf).b_ml.ml_line_count) as ::core::ffi::c_int;
+        let mut last_line: ::core::ffi::c_int = ((*curwin.get()).w_cursor.lnum
+            == (*curbuf.get()).b_ml.ml_line_count)
+            as ::core::ffi::c_int;
         let mut i: ::core::ffi::c_int = inc_cursor();
         if i == -1 as ::core::ffi::c_int || i >= 1 as ::core::ffi::c_int && last_line != 0 {
             return FAIL;
@@ -2083,7 +2085,7 @@ pub unsafe extern "C" fn fwd_word(
             }
         }
         while cls() == 0 as ::core::ffi::c_int {
-            if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
+            if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
                 && *get_cursor_line_ptr() as ::core::ffi::c_int == NUL
             {
                 break;
@@ -2107,7 +2109,7 @@ pub unsafe extern "C" fn bck_word(
     mut stop: bool,
 ) -> ::core::ffi::c_int {
     let mut sclass: ::core::ffi::c_int = 0;
-    (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     cls_bigword.set(bigword);
     loop {
         count -= 1;
@@ -2115,12 +2117,12 @@ pub unsafe extern "C" fn bck_word(
             break;
         }
         if hasFolding(
-            curwin,
-            (*curwin).w_cursor.lnum,
-            &raw mut (*curwin).w_cursor.lnum,
+            curwin.get(),
+            (*curwin.get()).w_cursor.lnum,
+            &raw mut (*curwin.get()).w_cursor.lnum,
             ::core::ptr::null_mut::<linenr_T>(),
         ) {
-            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
         }
         sclass = cls();
         if dec_cursor() == -1 as ::core::ffi::c_int {
@@ -2129,8 +2131,8 @@ pub unsafe extern "C" fn bck_word(
         '_finished: {
             if !stop || sclass == cls() || sclass == 0 as ::core::ffi::c_int {
                 while cls() == 0 as ::core::ffi::c_int {
-                    if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
-                        && *ml_get((*curwin).w_cursor.lnum) as ::core::ffi::c_int == NUL
+                    if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
+                        && *ml_get((*curwin.get()).w_cursor.lnum) as ::core::ffi::c_int == NUL
                     {
                         break '_finished;
                     }
@@ -2157,12 +2159,12 @@ pub unsafe extern "C" fn end_word(
     mut empty: bool,
 ) -> ::core::ffi::c_int {
     let mut sclass: ::core::ffi::c_int = 0;
-    (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     cls_bigword.set(bigword);
-    if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-        && VIsual_active as ::core::ffi::c_int != 0
-        && VIsual_mode == 'v' as ::core::ffi::c_int
-        && VIsual_select_exclu_adj as ::core::ffi::c_int != 0
+    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+        && VIsual_active.get() as ::core::ffi::c_int != 0
+        && VIsual_mode.get() == 'v' as ::core::ffi::c_int
+        && VIsual_select_exclu_adj.get() as ::core::ffi::c_int != 0
     {
         unadjust_for_sel();
     }
@@ -2172,12 +2174,12 @@ pub unsafe extern "C" fn end_word(
             break;
         }
         if hasFolding(
-            curwin,
-            (*curwin).w_cursor.lnum,
+            curwin.get(),
+            (*curwin.get()).w_cursor.lnum,
             ::core::ptr::null_mut::<linenr_T>(),
-            &raw mut (*curwin).w_cursor.lnum,
+            &raw mut (*curwin.get()).w_cursor.lnum,
         ) {
-            coladvance(curwin, MAXCOL as ::core::ffi::c_int);
+            coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
         }
         sclass = cls();
         if inc_cursor() == -1 as ::core::ffi::c_int {
@@ -2191,8 +2193,8 @@ pub unsafe extern "C" fn end_word(
             } else if !stop || sclass == 0 as ::core::ffi::c_int {
                 while cls() == 0 as ::core::ffi::c_int {
                     if empty as ::core::ffi::c_int != 0
-                        && (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
-                        && *ml_get((*curwin).w_cursor.lnum) as ::core::ffi::c_int == NUL
+                        && (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
+                        && *ml_get((*curwin.get()).w_cursor.lnum) as ::core::ffi::c_int == NUL
                     {
                         break '_finished;
                     }
@@ -2216,7 +2218,7 @@ pub unsafe extern "C" fn bckend_word(
     mut bigword: bool,
     mut eol: bool,
 ) -> ::core::ffi::c_int {
-    (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     cls_bigword.set(bigword);
     loop {
         count -= 1;
@@ -2243,8 +2245,8 @@ pub unsafe extern "C" fn bckend_word(
             }
         }
         while cls() == 0 as ::core::ffi::c_int {
-            if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
-                && *ml_get((*curwin).w_cursor.lnum) as ::core::ffi::c_int == NUL
+            if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
+                && *ml_get((*curwin.get()).w_cursor.lnum) as ::core::ffi::c_int == NUL
             {
                 break;
             }
@@ -2277,7 +2279,7 @@ unsafe extern "C" fn skip_chars(
 }
 unsafe extern "C" fn back_in_line() {
     let mut sclass: ::core::ffi::c_int = cls();
-    while (*curwin).w_cursor.col != 0 as ::core::ffi::c_int {
+    while (*curwin.get()).w_cursor.col != 0 as ::core::ffi::c_int {
         dec_cursor();
         if cls() == sclass {
             continue;
@@ -2305,10 +2307,10 @@ unsafe extern "C" fn findsent_forward(mut count: ::core::ffi::c_int, mut at_star
         }
         findsent(FORWARD, 1 as ::core::ffi::c_int);
         if at_start_sent {
-            find_first_blank(&raw mut (*curwin).w_cursor);
+            find_first_blank(&raw mut (*curwin.get()).w_cursor);
         }
         if count == 0 as ::core::ffi::c_int || at_start_sent as ::core::ffi::c_int != 0 {
-            decl(&raw mut (*curwin).w_cursor);
+            decl(&raw mut (*curwin.get()).w_cursor);
         }
         at_start_sent = !at_start_sent;
     }
@@ -2329,15 +2331,17 @@ pub unsafe extern "C" fn current_word(
     let mut include_white: bool = false_0 != 0;
     cls_bigword.set(bigword);
     clearpos(&raw mut start_pos);
-    if VIsual_active as ::core::ffi::c_int != 0
-        && *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-        && lt(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0
+    if VIsual_active.get() as ::core::ffi::c_int != 0
+        && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+        && lt(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
     {
         dec_cursor();
     }
-    if !VIsual_active || equalpos((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0 {
+    if !VIsual_active.get()
+        || equalpos((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
+    {
         back_in_line();
-        start_pos = (*curwin).w_cursor;
+        start_pos = (*curwin.get()).w_cursor;
         if (cls() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int == include as ::core::ffi::c_int
         {
             if end_word(1 as ::core::ffi::c_int, bigword, true_0 != 0, true_0 != 0) == FAIL {
@@ -2345,8 +2349,8 @@ pub unsafe extern "C" fn current_word(
             }
         } else {
             fwd_word(1 as ::core::ffi::c_int, bigword, true_0 != 0);
-            if (*curwin).w_cursor.col == 0 as ::core::ffi::c_int {
-                decl(&raw mut (*curwin).w_cursor);
+            if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
+                decl(&raw mut (*curwin.get()).w_cursor);
             } else {
                 oneleft();
             }
@@ -2354,8 +2358,8 @@ pub unsafe extern "C" fn current_word(
                 include_white = true_0 != 0;
             }
         }
-        if VIsual_active {
-            VIsual = start_pos;
+        if VIsual_active.get() {
+            VIsual.set(start_pos);
             redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
         } else {
             (*oap).start = start_pos;
@@ -2365,10 +2369,10 @@ pub unsafe extern "C" fn current_word(
     }
     while count > 0 as ::core::ffi::c_int {
         inclusive = true_0 != 0;
-        if VIsual_active as ::core::ffi::c_int != 0
-            && lt((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0
+        if VIsual_active.get() as ::core::ffi::c_int != 0
+            && lt((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
         {
-            if decl(&raw mut (*curwin).w_cursor) == -1 as ::core::ffi::c_int {
+            if decl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
                 return FAIL;
             }
             if include as ::core::ffi::c_int
@@ -2381,10 +2385,10 @@ pub unsafe extern "C" fn current_word(
                 if bckend_word(1 as ::core::ffi::c_int, bigword, true_0 != 0) == FAIL {
                     return FAIL;
                 }
-                incl(&raw mut (*curwin).w_cursor);
+                incl(&raw mut (*curwin.get()).w_cursor);
             }
         } else {
-            if incl(&raw mut (*curwin).w_cursor) == -1 as ::core::ffi::c_int {
+            if incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
                 return FAIL;
             }
             if include as ::core::ffi::c_int
@@ -2406,33 +2410,34 @@ pub unsafe extern "C" fn current_word(
     }
     if include_white as ::core::ffi::c_int != 0
         && (cls() != 0 as ::core::ffi::c_int
-            || (*curwin).w_cursor.col == 0 as ::core::ffi::c_int && !inclusive)
+            || (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int && !inclusive)
     {
-        let mut pos: pos_T = (*curwin).w_cursor;
-        (*curwin).w_cursor = start_pos;
+        let mut pos: pos_T = (*curwin.get()).w_cursor;
+        (*curwin.get()).w_cursor = start_pos;
         if oneleft() == OK {
             back_in_line();
-            if cls() == 0 as ::core::ffi::c_int && (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
+            if cls() == 0 as ::core::ffi::c_int
+                && (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
             {
-                if VIsual_active {
-                    VIsual = (*curwin).w_cursor;
+                if VIsual_active.get() {
+                    VIsual.set((*curwin.get()).w_cursor);
                 } else {
-                    (*oap).start = (*curwin).w_cursor;
+                    (*oap).start = (*curwin.get()).w_cursor;
                 }
             }
         }
-        (*curwin).w_cursor = pos;
+        (*curwin.get()).w_cursor = pos;
     }
-    if VIsual_active {
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+    if VIsual_active.get() {
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
             && inclusive as ::core::ffi::c_int != 0
-            && ltoreq(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0
+            && ltoreq(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
         {
             inc_cursor();
         }
-        if VIsual_mode == 'V' as ::core::ffi::c_int {
-            VIsual_mode = 'v' as ::core::ffi::c_int;
-            redraw_cmdline = true_0 != 0;
+        if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
+            VIsual_mode.set('v' as ::core::ffi::c_int);
+            redraw_cmdline.set(true_0 != 0);
         }
     } else {
         (*oap).inclusive = inclusive;
@@ -2449,11 +2454,11 @@ pub unsafe extern "C" fn current_sent(
     let mut c: ::core::ffi::c_int = 0;
     let mut at_start_sent: bool = false;
     let mut ncount: ::core::ffi::c_int = 0;
-    let mut start_pos: pos_T = (*curwin).w_cursor;
+    let mut start_pos: pos_T = (*curwin.get()).w_cursor;
     let mut pos: pos_T = start_pos;
     findsent(FORWARD, 1 as ::core::ffi::c_int);
     '_extend: {
-        if !(VIsual_active as ::core::ffi::c_int != 0 && !equalpos(start_pos, VIsual)) {
+        if !(VIsual_active.get() as ::core::ffi::c_int != 0 && !equalpos(start_pos, VIsual.get())) {
             loop {
                 c = gchar_pos(&raw mut pos);
                 if !ascii_iswhite(c) {
@@ -2461,13 +2466,13 @@ pub unsafe extern "C" fn current_sent(
                 }
                 incl(&raw mut pos);
             }
-            if equalpos(pos, (*curwin).w_cursor) {
+            if equalpos(pos, (*curwin.get()).w_cursor) {
                 start_blank = true_0 != 0;
                 find_first_blank(&raw mut start_pos);
             } else {
                 start_blank = false_0 != 0;
                 findsent(BACKWARD, 1 as ::core::ffi::c_int);
-                start_pos = (*curwin).w_cursor;
+                start_pos = (*curwin.get()).w_cursor;
             }
             if include {
                 ncount = count * 2 as ::core::ffi::c_int;
@@ -2480,14 +2485,14 @@ pub unsafe extern "C" fn current_sent(
             if ncount > 0 as ::core::ffi::c_int {
                 findsent_forward(ncount, true_0 != 0);
             } else {
-                decl(&raw mut (*curwin).w_cursor);
+                decl(&raw mut (*curwin.get()).w_cursor);
             }
             if include {
                 if start_blank {
-                    find_first_blank(&raw mut (*curwin).w_cursor);
-                    c = gchar_pos(&raw mut (*curwin).w_cursor);
+                    find_first_blank(&raw mut (*curwin.get()).w_cursor);
+                    c = gchar_pos(&raw mut (*curwin.get()).w_cursor);
                     if ascii_iswhite(c) {
-                        decl(&raw mut (*curwin).w_cursor);
+                        decl(&raw mut (*curwin.get()).w_cursor);
                     }
                 } else {
                     c = gchar_cursor();
@@ -2496,20 +2501,20 @@ pub unsafe extern "C" fn current_sent(
                     }
                 }
             }
-            if VIsual_active {
-                if equalpos(start_pos, (*curwin).w_cursor) {
+            if VIsual_active.get() {
+                if equalpos(start_pos, (*curwin.get()).w_cursor) {
                     break '_extend;
                 } else {
-                    if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-                        (*curwin).w_cursor.col += 1;
+                    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+                        (*curwin.get()).w_cursor.col += 1;
                     }
-                    VIsual = start_pos;
-                    VIsual_mode = 'v' as ::core::ffi::c_int;
-                    redraw_cmdline = true_0 != 0;
+                    VIsual.set(start_pos);
+                    VIsual_mode.set('v' as ::core::ffi::c_int);
+                    redraw_cmdline.set(true_0 != 0);
                     redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
                 }
             } else {
-                if incl(&raw mut (*curwin).w_cursor) == -1 as ::core::ffi::c_int {
+                if incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
                     (*oap).inclusive = true_0 != 0;
                 } else {
                     (*oap).inclusive = false_0 != 0;
@@ -2520,10 +2525,10 @@ pub unsafe extern "C" fn current_sent(
             return OK;
         }
     }
-    if lt(start_pos, VIsual) {
+    if lt(start_pos, VIsual.get()) {
         at_start_sent = true_0 != 0;
         decl(&raw mut pos);
-        while lt(pos, (*curwin).w_cursor) {
+        while lt(pos, (*curwin.get()).w_cursor) {
             c = gchar_pos(&raw mut pos);
             if !ascii_iswhite(c) {
                 at_start_sent = false_0 != 0;
@@ -2534,7 +2539,7 @@ pub unsafe extern "C" fn current_sent(
         }
         if !at_start_sent {
             findsent(BACKWARD, 1 as ::core::ffi::c_int);
-            if equalpos((*curwin).w_cursor, start_pos) {
+            if equalpos((*curwin.get()).w_cursor, start_pos) {
                 at_start_sent = true_0 != 0;
             } else {
                 findsent(FORWARD, 1 as ::core::ffi::c_int);
@@ -2550,7 +2555,7 @@ pub unsafe extern "C" fn current_sent(
                 break;
             }
             if at_start_sent {
-                find_first_blank(&raw mut (*curwin).w_cursor);
+                find_first_blank(&raw mut (*curwin.get()).w_cursor);
             }
             c = gchar_cursor();
             if !at_start_sent || !include && !ascii_iswhite(c) {
@@ -2561,9 +2566,9 @@ pub unsafe extern "C" fn current_sent(
     } else {
         incl(&raw mut pos);
         at_start_sent = true_0 != 0;
-        if !equalpos(pos, (*curwin).w_cursor) {
+        if !equalpos(pos, (*curwin.get()).w_cursor) {
             at_start_sent = false_0 != 0;
-            while lt(pos, (*curwin).w_cursor) {
+            while lt(pos, (*curwin.get()).w_cursor) {
                 c = gchar_pos(&raw mut pos);
                 if !ascii_iswhite(c) {
                     at_start_sent = true_0 != 0;
@@ -2575,15 +2580,15 @@ pub unsafe extern "C" fn current_sent(
             if at_start_sent {
                 findsent(BACKWARD, 1 as ::core::ffi::c_int);
             } else {
-                (*curwin).w_cursor = start_pos;
+                (*curwin.get()).w_cursor = start_pos;
             }
         }
         if include {
             count *= 2 as ::core::ffi::c_int;
         }
         findsent_forward(count, at_start_sent);
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            (*curwin).w_cursor.col += 1;
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+            (*curwin.get()).w_cursor.col += 1;
         }
     }
     return OK;
@@ -2604,10 +2609,12 @@ pub unsafe extern "C" fn current_block(
     };
     let mut end_pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut sol: bool = false_0 != 0;
-    let mut old_pos: pos_T = (*curwin).w_cursor;
-    let mut old_end: pos_T = (*curwin).w_cursor;
+    let mut old_pos: pos_T = (*curwin.get()).w_cursor;
+    let mut old_end: pos_T = (*curwin.get()).w_cursor;
     let mut old_start: pos_T = old_end;
-    if !VIsual_active || equalpos(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0 {
+    if !VIsual_active.get()
+        || equalpos(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
+    {
         setpcmark();
         if what == '{' as ::core::ffi::c_int {
             while inindent(1 as ::core::ffi::c_int) {
@@ -2617,20 +2624,22 @@ pub unsafe extern "C" fn current_block(
             }
         }
         if gchar_cursor() == what {
-            (*curwin).w_cursor.col += 1;
+            (*curwin.get()).w_cursor.col += 1;
         }
-    } else if lt(VIsual, (*curwin).w_cursor) {
-        old_start = VIsual;
-        (*curwin).w_cursor = VIsual;
+    } else if lt(VIsual.get(), (*curwin.get()).w_cursor) {
+        old_start = VIsual.get();
+        (*curwin.get()).w_cursor = VIsual.get();
     } else {
-        old_end = VIsual;
+        old_end = VIsual.get();
     }
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo;
-    p_cpo = (if !vim_strchr(p_cpo, CPO_MATCHBSL).is_null() {
-        b"%M\0".as_ptr() as *const ::core::ffi::c_char
-    } else {
-        b"%\0".as_ptr() as *const ::core::ffi::c_char
-    }) as *mut ::core::ffi::c_char;
+    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
+    p_cpo.set(
+        (if !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null() {
+            b"%M\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            b"%\0".as_ptr() as *const ::core::ffi::c_char
+        }) as *mut ::core::ffi::c_char,
+    );
     pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
     if !pos.is_null() {
         loop {
@@ -2643,7 +2652,7 @@ pub unsafe extern "C" fn current_block(
             if pos.is_null() {
                 break;
             }
-            (*curwin).w_cursor = *pos;
+            (*curwin.get()).w_cursor = *pos;
             start_pos = *pos;
         }
     } else {
@@ -2662,67 +2671,67 @@ pub unsafe extern "C" fn current_block(
             if pos.is_null() {
                 break;
             }
-            (*curwin).w_cursor = *pos;
+            (*curwin.get()).w_cursor = *pos;
             start_pos = *pos;
         }
     }
-    p_cpo = save_cpo;
+    p_cpo.set(save_cpo);
     if pos.is_null() || {
         end_pos = findmatch(::core::ptr::null_mut::<oparg_T>(), other);
         end_pos.is_null()
     } {
-        (*curwin).w_cursor = old_pos;
+        (*curwin.get()).w_cursor = old_pos;
         return FAIL;
     }
-    (*curwin).w_cursor = *end_pos;
+    (*curwin.get()).w_cursor = *end_pos;
     while !include {
         incl(&raw mut start_pos);
-        sol = (*curwin).w_cursor.col == 0 as ::core::ffi::c_int;
-        decl(&raw mut (*curwin).w_cursor);
+        sol = (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int;
+        decl(&raw mut (*curwin.get()).w_cursor);
         while inindent(1 as ::core::ffi::c_int) {
             sol = true_0 != 0;
-            if decl(&raw mut (*curwin).w_cursor) != 0 as ::core::ffi::c_int {
+            if decl(&raw mut (*curwin.get()).w_cursor) != 0 as ::core::ffi::c_int {
                 break;
             }
         }
         if equalpos(start_pos, *end_pos) as ::core::ffi::c_int != 0
-            && VIsual_active as ::core::ffi::c_int != 0
+            && VIsual_active.get() as ::core::ffi::c_int != 0
         {
-            (*curwin).w_cursor = old_pos;
+            (*curwin.get()).w_cursor = old_pos;
             return FAIL;
         }
         if !(!lt(start_pos, old_start)
-            && !lt(old_end, (*curwin).w_cursor)
-            && !equalpos(start_pos, (*curwin).w_cursor)
-            && VIsual_active as ::core::ffi::c_int != 0)
+            && !lt(old_end, (*curwin.get()).w_cursor)
+            && !equalpos(start_pos, (*curwin.get()).w_cursor)
+            && VIsual_active.get() as ::core::ffi::c_int != 0)
         {
             break;
         }
-        (*curwin).w_cursor = old_start;
-        decl(&raw mut (*curwin).w_cursor);
+        (*curwin.get()).w_cursor = old_start;
+        decl(&raw mut (*curwin.get()).w_cursor);
         pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
         if pos.is_null() {
-            (*curwin).w_cursor = old_pos;
+            (*curwin.get()).w_cursor = old_pos;
             return FAIL;
         }
         start_pos = *pos;
-        (*curwin).w_cursor = *pos;
+        (*curwin.get()).w_cursor = *pos;
         end_pos = findmatch(::core::ptr::null_mut::<oparg_T>(), other);
         if end_pos.is_null() {
-            (*curwin).w_cursor = old_pos;
+            (*curwin.get()).w_cursor = old_pos;
             return FAIL;
         }
-        (*curwin).w_cursor = *end_pos;
+        (*curwin.get()).w_cursor = *end_pos;
     }
-    if VIsual_active {
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            inc(&raw mut (*curwin).w_cursor);
+    if VIsual_active.get() {
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+            inc(&raw mut (*curwin.get()).w_cursor);
         }
         if sol as ::core::ffi::c_int != 0 && gchar_cursor() != NUL {
-            inc(&raw mut (*curwin).w_cursor);
+            inc(&raw mut (*curwin.get()).w_cursor);
         }
-        VIsual = start_pos;
-        VIsual_mode = 'v' as ::core::ffi::c_int;
+        VIsual.set(start_pos);
+        VIsual_mode.set('v' as ::core::ffi::c_int);
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
         showmode();
     } else {
@@ -2730,11 +2739,11 @@ pub unsafe extern "C" fn current_block(
         (*oap).motion_type = kMTCharWise;
         (*oap).inclusive = false_0 != 0;
         if sol {
-            incl(&raw mut (*curwin).w_cursor);
-        } else if ltoreq(start_pos, (*curwin).w_cursor) {
+            incl(&raw mut (*curwin.get()).w_cursor);
+        } else if ltoreq(start_pos, (*curwin.get()).w_cursor) {
             (*oap).inclusive = true_0 != 0;
         } else {
-            (*curwin).w_cursor = start_pos;
+            (*curwin.get()).w_cursor = start_pos;
         }
     }
     return OK;
@@ -2748,7 +2757,7 @@ unsafe extern "C" fn in_html_tag(mut end_tag: bool) -> bool {
         col: 0,
         coladd: 0,
     };
-    p = line.offset((*curwin).w_cursor.col as isize);
+    p = line.offset((*curwin.get()).w_cursor.col as isize);
     while p > line {
         if *p as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
             break;
@@ -2764,7 +2773,7 @@ unsafe extern "C" fn in_html_tag(mut end_tag: bool) -> bool {
     if *p as ::core::ffi::c_int != '<' as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    pos.lnum = (*curwin).w_cursor.lnum;
+    pos.lnum = (*curwin.get()).w_cursor.lnum;
     pos.col = p.offset_from(line) as colnr_T;
     p = p.offset(utfc_ptr2len(p) as isize);
     if end_tag {
@@ -2811,17 +2820,19 @@ pub unsafe extern "C" fn current_tagblock(
     let mut count: ::core::ffi::c_int = count_arg;
     let mut cp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut do_include: bool = include;
-    let mut save_p_ws: bool = p_ws != 0;
+    let mut save_p_ws: bool = p_ws.get() != 0;
     let mut retval: ::core::ffi::c_int = FAIL;
     let mut is_inclusive: bool = true_0 != 0;
-    p_ws = false_0;
-    let mut old_pos: pos_T = (*curwin).w_cursor;
-    let mut old_end: pos_T = (*curwin).w_cursor;
+    p_ws.set(false_0);
+    let mut old_pos: pos_T = (*curwin.get()).w_cursor;
+    let mut old_end: pos_T = (*curwin.get()).w_cursor;
     let mut old_start: pos_T = old_end;
-    if !VIsual_active || *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+    if !VIsual_active.get() || *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
         decl(&raw mut old_end);
     }
-    if !VIsual_active || equalpos(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0 {
+    if !VIsual_active.get()
+        || equalpos(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
+    {
         setpcmark();
         while inindent(1 as ::core::ffi::c_int) {
             if inc_cursor() != 0 as ::core::ffi::c_int {
@@ -2841,13 +2852,13 @@ pub unsafe extern "C" fn current_tagblock(
                 }
             }
             dec_cursor();
-            old_end = (*curwin).w_cursor;
+            old_end = (*curwin.get()).w_cursor;
         }
-    } else if lt(VIsual, (*curwin).w_cursor) {
-        old_start = VIsual;
-        (*curwin).w_cursor = VIsual;
+    } else if lt(VIsual.get(), (*curwin.get()).w_cursor) {
+        old_start = VIsual.get();
+        (*curwin.get()).w_cursor = VIsual.get();
     } else {
-        old_end = VIsual;
+        old_end = VIsual.get();
     }
     '_theend: {
         loop {
@@ -2866,13 +2877,13 @@ pub unsafe extern "C" fn current_tagblock(
                     0 as int64_t,
                 ) <= 0 as ::core::ffi::c_int
                 {
-                    (*curwin).w_cursor = old_pos;
+                    (*curwin.get()).w_cursor = old_pos;
                     break '_theend;
                 } else {
                     n += 1;
                 }
             }
-            start_pos = (*curwin).w_cursor;
+            start_pos = (*curwin.get()).w_cursor;
             inc_cursor();
             p = get_cursor_pos_ptr();
             cp = p;
@@ -2884,7 +2895,7 @@ pub unsafe extern "C" fn current_tagblock(
             }
             len = cp.offset_from(p) as ::core::ffi::c_int;
             if len == 0 as ::core::ffi::c_int {
-                (*curwin).w_cursor = old_pos;
+                (*curwin.get()).w_cursor = old_pos;
                 break '_theend;
             } else {
                 spat_len = (len as size_t).wrapping_add(39 as size_t);
@@ -2920,10 +2931,10 @@ pub unsafe extern "C" fn current_tagblock(
                 xfree(spat as *mut ::core::ffi::c_void);
                 xfree(epat as *mut ::core::ffi::c_void);
                 if r < 1 as ::core::ffi::c_int
-                    || lt((*curwin).w_cursor, old_end) as ::core::ffi::c_int != 0
+                    || lt((*curwin.get()).w_cursor, old_end) as ::core::ffi::c_int != 0
                 {
                     count = 1 as ::core::ffi::c_int;
-                    (*curwin).w_cursor = start_pos;
+                    (*curwin.get()).w_cursor = start_pos;
                 } else {
                     if do_include {
                         while *get_cursor_pos_ptr() as ::core::ffi::c_int
@@ -2936,25 +2947,25 @@ pub unsafe extern "C" fn current_tagblock(
                     } else {
                         let mut c: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
                         if *c as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-                            && !VIsual_active
-                            && (*curwin).w_cursor.col == 0 as ::core::ffi::c_int
+                            && !VIsual_active.get()
+                            && (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
                         {
                             is_inclusive = false_0 != 0;
                         } else if *c as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
                             dec_cursor();
                         }
                     }
-                    end_pos = (*curwin).w_cursor;
+                    end_pos = (*curwin.get()).w_cursor;
                     if do_include {
                         break;
                     }
                     let mut in_quotes: bool = false_0 != 0;
-                    (*curwin).w_cursor = start_pos;
+                    (*curwin.get()).w_cursor = start_pos;
                     while inc_cursor() >= 0 as ::core::ffi::c_int {
                         p = get_cursor_pos_ptr();
                         if *p as ::core::ffi::c_int == '>' as ::core::ffi::c_int && !in_quotes {
                             inc_cursor();
-                            start_pos = (*curwin).w_cursor;
+                            start_pos = (*curwin.get()).w_cursor;
                             break;
                         } else if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int
                             || *p as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
@@ -2962,34 +2973,34 @@ pub unsafe extern "C" fn current_tagblock(
                             in_quotes = !in_quotes;
                         }
                     }
-                    (*curwin).w_cursor = end_pos;
-                    if !(VIsual_active as ::core::ffi::c_int != 0
+                    (*curwin.get()).w_cursor = end_pos;
+                    if !(VIsual_active.get() as ::core::ffi::c_int != 0
                         && equalpos(start_pos, old_start) as ::core::ffi::c_int != 0
                         && equalpos(end_pos, old_end) as ::core::ffi::c_int != 0)
                     {
                         break;
                     }
                     do_include = true_0 != 0;
-                    (*curwin).w_cursor = old_start;
+                    (*curwin.get()).w_cursor = old_start;
                     count = count_arg;
                 }
             }
         }
-        if VIsual_active {
+        if VIsual_active.get() {
             if lt(end_pos, start_pos) {
-                (*curwin).w_cursor = start_pos;
-            } else if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+                (*curwin.get()).w_cursor = start_pos;
+            } else if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                 inc_cursor();
             }
-            VIsual = start_pos;
-            VIsual_mode = 'v' as ::core::ffi::c_int;
+            VIsual.set(start_pos);
+            VIsual_mode.set('v' as ::core::ffi::c_int);
             redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
             showmode();
         } else {
             (*oap).start = start_pos;
             (*oap).motion_type = kMTCharWise;
             if lt(end_pos, start_pos) {
-                (*curwin).w_cursor = start_pos;
+                (*curwin.get()).w_cursor = start_pos;
                 (*oap).inclusive = false_0 != 0;
             } else {
                 (*oap).inclusive = is_inclusive;
@@ -2997,7 +3008,7 @@ pub unsafe extern "C" fn current_tagblock(
         }
         retval = OK;
     }
-    p_ws = save_p_ws as ::core::ffi::c_int;
+    p_ws.set(save_p_ws as ::core::ffi::c_int);
     return retval;
 }
 #[no_mangle]
@@ -3013,9 +3024,9 @@ pub unsafe extern "C" fn current_par(
     if type_0 == 'S' as ::core::ffi::c_int {
         return FAIL;
     }
-    let mut start_lnum: linenr_T = (*curwin).w_cursor.lnum;
+    let mut start_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
     '_extend: {
-        if !(VIsual_active as ::core::ffi::c_int != 0 && start_lnum != VIsual.lnum) {
+        if !(VIsual_active.get() as ::core::ffi::c_int != 0 && start_lnum != (*VIsual.ptr()).lnum) {
             let mut white_in_front: bool = linewhite(start_lnum);
             while start_lnum > 1 as linenr_T {
                 if white_in_front {
@@ -3031,7 +3042,7 @@ pub unsafe extern "C" fn current_par(
                 start_lnum -= 1;
             }
             let mut end_lnum: linenr_T = start_lnum;
-            while end_lnum <= (*curbuf).b_ml.ml_line_count
+            while end_lnum <= (*curbuf.get()).b_ml.ml_line_count
                 && linewhite(end_lnum) as ::core::ffi::c_int != 0
             {
                 end_lnum += 1;
@@ -3047,7 +3058,7 @@ pub unsafe extern "C" fn current_par(
                 if c2rust_fresh6 == 0 {
                     break;
                 }
-                if end_lnum == (*curbuf).b_ml.ml_line_count {
+                if end_lnum == (*curbuf.get()).b_ml.ml_line_count {
                     return FAIL;
                 }
                 if !include {
@@ -3055,7 +3066,7 @@ pub unsafe extern "C" fn current_par(
                 }
                 if include as ::core::ffi::c_int != 0 || do_white == 0 {
                     end_lnum += 1;
-                    while end_lnum < (*curbuf).b_ml.ml_line_count
+                    while end_lnum < (*curbuf.get()).b_ml.ml_line_count
                         && !linewhite(end_lnum + 1 as linenr_T)
                         && !startPS(end_lnum + 1 as linenr_T, 0 as ::core::ffi::c_int, false)
                     {
@@ -3069,7 +3080,7 @@ pub unsafe extern "C" fn current_par(
                     break;
                 }
                 if include as ::core::ffi::c_int != 0 || do_white != 0 {
-                    while end_lnum < (*curbuf).b_ml.ml_line_count
+                    while end_lnum < (*curbuf.get()).b_ml.ml_line_count
                         && linewhite(end_lnum + 1 as linenr_T) as ::core::ffi::c_int != 0
                     {
                         end_lnum += 1;
@@ -3083,16 +3094,17 @@ pub unsafe extern "C" fn current_par(
                     start_lnum -= 1;
                 }
             }
-            if VIsual_active {
-                if VIsual_mode == 'V' as ::core::ffi::c_int && start_lnum == (*curwin).w_cursor.lnum
+            if VIsual_active.get() {
+                if VIsual_mode.get() == 'V' as ::core::ffi::c_int
+                    && start_lnum == (*curwin.get()).w_cursor.lnum
                 {
                     break '_extend;
                 } else {
-                    if VIsual.lnum != start_lnum {
-                        VIsual.lnum = start_lnum;
-                        VIsual.col = 0 as ::core::ffi::c_int as colnr_T;
+                    if (*VIsual.ptr()).lnum != start_lnum {
+                        (*VIsual.ptr()).lnum = start_lnum;
+                        (*VIsual.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
                     }
-                    VIsual_mode = 'V' as ::core::ffi::c_int;
+                    VIsual_mode.set('V' as ::core::ffi::c_int);
                     redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
                     showmode();
                 }
@@ -3101,12 +3113,12 @@ pub unsafe extern "C" fn current_par(
                 (*oap).start.col = 0 as ::core::ffi::c_int as colnr_T;
                 (*oap).motion_type = kMTLineWise;
             }
-            (*curwin).w_cursor.lnum = end_lnum;
-            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.lnum = end_lnum;
+            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
             return OK;
         }
     }
-    dir = if start_lnum < VIsual.lnum {
+    dir = if start_lnum < (*VIsual.ptr()).lnum {
         BACKWARD as ::core::ffi::c_int
     } else {
         FORWARD as ::core::ffi::c_int
@@ -3121,7 +3133,7 @@ pub unsafe extern "C" fn current_par(
             == (if dir == BACKWARD as ::core::ffi::c_int {
                 1 as linenr_T
             } else {
-                (*curbuf).b_ml.ml_line_count
+                (*curbuf.get()).b_ml.ml_line_count
             })
         {
             retval = FAIL;
@@ -3141,7 +3153,7 @@ pub unsafe extern "C" fn current_par(
                         != (if dir == BACKWARD as ::core::ffi::c_int {
                             1 as linenr_T
                         } else {
-                            (*curbuf).b_ml.ml_line_count
+                            (*curbuf.get()).b_ml.ml_line_count
                         })
                     {
                         if start_is_white
@@ -3170,7 +3182,7 @@ pub unsafe extern "C" fn current_par(
                         == (if dir == BACKWARD as ::core::ffi::c_int {
                             1 as linenr_T
                         } else {
-                            (*curbuf).b_ml.ml_line_count
+                            (*curbuf.get()).b_ml.ml_line_count
                         })
                     {
                         break;
@@ -3181,8 +3193,8 @@ pub unsafe extern "C" fn current_par(
             }
         }
     }
-    (*curwin).w_cursor.lnum = start_lnum;
-    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+    (*curwin.get()).w_cursor.lnum = start_lnum;
+    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     return retval;
 }
 unsafe extern "C" fn find_next_quote(
@@ -3248,7 +3260,7 @@ pub unsafe extern "C" fn current_quote(
 ) -> bool {
     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
     let mut col_end: ::core::ffi::c_int = 0;
-    let mut col_start: ::core::ffi::c_int = (*curwin).w_cursor.col as ::core::ffi::c_int;
+    let mut col_start: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
     let mut inclusive: bool = false_0 != 0;
     let mut vis_empty: bool = true_0 != 0;
     let mut vis_bef_curs: bool = false_0 != 0;
@@ -3257,25 +3269,25 @@ pub unsafe extern "C" fn current_quote(
     let mut selected_quote: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0;
     let mut restore_vis_bef: bool = false_0 != 0;
-    if VIsual_active {
-        if VIsual.lnum != (*curwin).w_cursor.lnum {
+    if VIsual_active.get() {
+        if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
             return false_0 != 0;
         }
-        vis_bef_curs = lt(VIsual, (*curwin).w_cursor);
-        vis_empty = equalpos(VIsual, (*curwin).w_cursor);
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+        vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
+        vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
             if vis_bef_curs {
                 dec_cursor();
                 did_exclusive_adj = true_0 != 0;
             } else if !vis_empty {
-                dec(&raw mut VIsual);
+                dec(VIsual.ptr());
                 did_exclusive_adj = true_0 != 0;
             }
-            vis_empty = equalpos(VIsual, (*curwin).w_cursor);
+            vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
             if !vis_bef_curs && !vis_empty {
-                let mut t: pos_T = (*curwin).w_cursor;
-                (*curwin).w_cursor = VIsual;
-                VIsual = t;
+                let mut t: pos_T = (*curwin.get()).w_cursor;
+                (*curwin.get()).w_cursor = VIsual.get();
+                VIsual.set(t);
                 vis_bef_curs = true_0 != 0;
                 restore_vis_bef = true_0 != 0;
             }
@@ -3283,33 +3295,33 @@ pub unsafe extern "C" fn current_quote(
     }
     if !vis_empty {
         if vis_bef_curs {
-            inside_quotes = VIsual.col > 0 as ::core::ffi::c_int
-                && *line
-                    .offset((VIsual.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize)
-                    as uint8_t as ::core::ffi::c_int
-                    == quotechar
-                && *line.offset((*curwin).w_cursor.col as isize) as ::core::ffi::c_int != NUL
+            inside_quotes = (*VIsual.ptr()).col > 0 as ::core::ffi::c_int
                 && *line.offset(
-                    ((*curwin).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
+                    ((*VIsual.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
+                ) as uint8_t as ::core::ffi::c_int
+                    == quotechar
+                && *line.offset((*curwin.get()).w_cursor.col as isize) as ::core::ffi::c_int != NUL
+                && *line.offset(
+                    ((*curwin.get()).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
                         as isize,
                 ) as uint8_t as ::core::ffi::c_int
                     == quotechar;
-            i = VIsual.col as ::core::ffi::c_int;
-            col_end = (*curwin).w_cursor.col as ::core::ffi::c_int;
+            i = (*VIsual.ptr()).col as ::core::ffi::c_int;
+            col_end = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
         } else {
-            inside_quotes = (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
+            inside_quotes = (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
                 && *line.offset(
-                    ((*curwin).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                    ((*curwin.get()).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
                         as isize,
                 ) as uint8_t as ::core::ffi::c_int
                     == quotechar
-                && *line.offset(VIsual.col as isize) as ::core::ffi::c_int != NUL
-                && *line
-                    .offset((VIsual.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
-                    as uint8_t as ::core::ffi::c_int
+                && *line.offset((*VIsual.ptr()).col as isize) as ::core::ffi::c_int != NUL
+                && *line.offset(
+                    ((*VIsual.ptr()).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize,
+                ) as uint8_t as ::core::ffi::c_int
                     == quotechar;
-            i = (*curwin).w_cursor.col as ::core::ffi::c_int;
-            col_end = VIsual.col as ::core::ffi::c_int;
+            i = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
+            col_end = (*VIsual.ptr()).col as ::core::ffi::c_int;
         }
         while i <= col_end {
             if *line.offset(i as isize) as ::core::ffi::c_int == NUL {
@@ -3343,11 +3355,11 @@ pub unsafe extern "C" fn current_quote(
                             line,
                             col_start + 1 as ::core::ffi::c_int,
                             quotechar,
-                            (*curbuf).b_p_qe,
+                            (*curbuf.get()).b_p_qe,
                         );
                         if col_end < 0 as ::core::ffi::c_int {
                             col_end = col_start;
-                            col_start = (*curwin).w_cursor.col as ::core::ffi::c_int;
+                            col_start = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                         }
                     }
                 } else {
@@ -3361,12 +3373,13 @@ pub unsafe extern "C" fn current_quote(
                     {
                         break '_abort_search;
                     } else {
-                        col_start = find_prev_quote(line, col_end, quotechar, (*curbuf).b_p_qe);
+                        col_start =
+                            find_prev_quote(line, col_end, quotechar, (*curbuf.get()).b_p_qe);
                         if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int
                             != quotechar
                         {
                             col_start = col_end;
-                            col_end = (*curwin).w_cursor.col as ::core::ffi::c_int;
+                            col_end = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
                         }
                     }
                 }
@@ -3406,7 +3419,7 @@ pub unsafe extern "C" fn current_quote(
                         line,
                         col_start + 1 as ::core::ffi::c_int,
                         quotechar,
-                        (*curbuf).b_p_qe,
+                        (*curbuf.get()).b_p_qe,
                     );
                     if col_end < 0 as ::core::ffi::c_int {
                         break '_abort_search;
@@ -3417,7 +3430,7 @@ pub unsafe extern "C" fn current_quote(
                     col_start = col_end + 1 as ::core::ffi::c_int;
                 }
             } else {
-                col_start = find_prev_quote(line, col_start, quotechar, (*curbuf).b_p_qe);
+                col_start = find_prev_quote(line, col_start, quotechar, (*curbuf.get()).b_p_qe);
                 if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int != quotechar {
                     col_start = find_next_quote(
                         line,
@@ -3433,7 +3446,7 @@ pub unsafe extern "C" fn current_quote(
                     line,
                     col_start + 1 as ::core::ffi::c_int,
                     quotechar,
-                    (*curbuf).b_p_qe,
+                    (*curbuf.get()).b_p_qe,
                 );
                 if col_end < 0 as ::core::ffi::c_int {
                     break '_abort_search;
@@ -3465,30 +3478,32 @@ pub unsafe extern "C" fn current_quote(
         {
             col_start += 1;
         }
-        (*curwin).w_cursor.col = col_start as colnr_T;
-        if VIsual_active {
+        (*curwin.get()).w_cursor.col = col_start as colnr_T;
+        if VIsual_active.get() {
             if vis_empty as ::core::ffi::c_int != 0
                 || vis_bef_curs as ::core::ffi::c_int != 0
                     && !selected_quote
                     && (inside_quotes as ::core::ffi::c_int != 0
-                        || *line.offset(VIsual.col as isize) as uint8_t as ::core::ffi::c_int
+                        || *line.offset((*VIsual.ptr()).col as isize) as uint8_t
+                            as ::core::ffi::c_int
                             != quotechar
-                            && (VIsual.col == 0 as ::core::ffi::c_int
+                            && ((*VIsual.ptr()).col == 0 as ::core::ffi::c_int
                                 || *line.offset(
-                                    (VIsual.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                                    ((*VIsual.ptr()).col as ::core::ffi::c_int
+                                        - 1 as ::core::ffi::c_int)
                                         as isize,
                                 ) as uint8_t
                                     as ::core::ffi::c_int
                                     != quotechar))
             {
-                VIsual = (*curwin).w_cursor;
+                VIsual.set((*curwin.get()).w_cursor);
                 redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
             }
         } else {
-            (*oap).start = (*curwin).w_cursor;
+            (*oap).start = (*curwin.get()).w_cursor;
             (*oap).motion_type = kMTCharWise;
         }
-        (*curwin).w_cursor.col = col_end as colnr_T;
+        (*curwin.get()).w_cursor.col = col_end as colnr_T;
         if (include as ::core::ffi::c_int != 0
             || count > 1 as ::core::ffi::c_int
             || !vis_empty && inside_quotes as ::core::ffi::c_int != 0)
@@ -3496,47 +3511,49 @@ pub unsafe extern "C" fn current_quote(
         {
             inclusive = true_0 != 0;
         }
-        if VIsual_active {
+        if VIsual_active.get() {
             if vis_empty as ::core::ffi::c_int != 0 || vis_bef_curs as ::core::ffi::c_int != 0 {
-                if *p_sel as ::core::ffi::c_int != 'e' as ::core::ffi::c_int {
+                if *p_sel.get() as ::core::ffi::c_int != 'e' as ::core::ffi::c_int {
                     dec_cursor();
                 }
             } else {
                 if inside_quotes as ::core::ffi::c_int != 0
                     || !selected_quote
-                        && *line.offset(VIsual.col as isize) as uint8_t as ::core::ffi::c_int
+                        && *line.offset((*VIsual.ptr()).col as isize) as uint8_t
+                            as ::core::ffi::c_int
                             != quotechar
-                        && (*line.offset(VIsual.col as isize) as ::core::ffi::c_int == NUL
+                        && (*line.offset((*VIsual.ptr()).col as isize) as ::core::ffi::c_int == NUL
                             || *line.offset(
-                                (VIsual.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
+                                ((*VIsual.ptr()).col as ::core::ffi::c_int
+                                    + 1 as ::core::ffi::c_int)
                                     as isize,
                             ) as uint8_t as ::core::ffi::c_int
                                 != quotechar)
                 {
                     dec_cursor();
-                    VIsual = (*curwin).w_cursor;
+                    VIsual.set((*curwin.get()).w_cursor);
                 }
-                (*curwin).w_cursor.col = col_start as colnr_T;
+                (*curwin.get()).w_cursor.col = col_start as colnr_T;
             }
-            if VIsual_mode == 'V' as ::core::ffi::c_int {
-                VIsual_mode = 'v' as ::core::ffi::c_int;
-                redraw_cmdline = true_0 != 0;
+            if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
+                VIsual_mode.set('v' as ::core::ffi::c_int);
+                redraw_cmdline.set(true_0 != 0);
             }
         } else {
             (*oap).inclusive = inclusive;
         }
         return true_0 != 0;
     }
-    if VIsual_active as ::core::ffi::c_int != 0
-        && *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+    if VIsual_active.get() as ::core::ffi::c_int != 0
+        && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
     {
         if did_exclusive_adj {
             inc_cursor();
         }
         if restore_vis_bef {
-            let mut t_0: pos_T = (*curwin).w_cursor;
-            (*curwin).w_cursor = VIsual;
-            VIsual = t_0;
+            let mut t_0: pos_T = (*curwin.get()).w_cursor;
+            (*curwin.get()).w_cursor = VIsual.get();
+            VIsual.set(t_0);
         }
     }
     return false_0 != 0;

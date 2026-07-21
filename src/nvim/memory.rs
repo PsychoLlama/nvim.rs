@@ -23,11 +23,11 @@ extern "C" {
     fn calloc(nmemb: usize, size: usize) -> *mut c_void;
     fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     fn free(ptr: *mut c_void);
-    static mut arena_alloc_count: usize;
+    static arena_alloc_count: GlobalCell<usize>;
     static e_outofmem: [c_char; 0];
     fn gettext(msgid: *const c_char) -> *mut c_char;
-    static mut emsg_silent: c_int;
-    static mut did_outofmem_msg: bool;
+    static emsg_silent: GlobalCell<c_int>;
+    static did_outofmem_msg: GlobalCell<bool>;
     fn preserve_exit(errmsg: *const c_char) -> !;
     fn mf_release_all() -> bool;
     fn semsg(fmt: *const c_char, ...) -> bool;
@@ -77,12 +77,12 @@ unsafe fn try_to_free_memory() {
 }
 
 unsafe fn do_outofmem_msg(size: usize) {
-    if did_outofmem_msg {
+    if did_outofmem_msg.get() {
         return;
     }
     // Message queueing would fail the allocation again; report loudly, once.
-    emsg_silent = 0;
-    did_outofmem_msg = true;
+    emsg_silent.set(0);
+    did_outofmem_msg.set(true);
     semsg(
         gettext(b"E342: Out of memory!  (allocating %lu bytes)\0".as_ptr() as *const c_char),
         size as u64,
@@ -585,7 +585,7 @@ pub unsafe extern "C" fn alloc_block() -> *mut c_void {
         (*arena_reuse_blk_count.ptr()) -= 1;
         retval
     } else {
-        arena_alloc_count = arena_alloc_count.wrapping_add(1);
+        arena_alloc_count.set((*arena_alloc_count.ptr()).wrapping_add(1));
         xmalloc(ARENA_BLOCK_SIZE)
     }
 }
@@ -639,7 +639,7 @@ pub unsafe extern "C" fn arena_alloc(arena: *mut Arena, size: usize, align: bool
         if is_oversize(size) {
             // Chain an exactly-sized block *behind* the current one, so the
             // current block's remaining space stays usable.
-            arena_alloc_count = arena_alloc_count.wrapping_add(1);
+            arena_alloc_count.set((*arena_alloc_count.ptr()).wrapping_add(1));
             let hdr_size = core::mem::size_of::<consumed_blk>();
             let aligned_hdr_size = if align {
                 align_offset(hdr_size)

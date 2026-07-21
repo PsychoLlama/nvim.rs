@@ -79,7 +79,7 @@ extern "C" {
         s_allocated: bool,
     ) -> typval_T;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
@@ -102,7 +102,7 @@ extern "C" {
     fn nlua_ref_global(lstate: *mut lua_State, index: ::core::ffi::c_int) -> LuaRef;
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
-    static mut nlua_global_refs: *mut nlua_ref_state_t;
+    static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t>;
     static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
     fn encode_vim_list_to_buf(
         list: *const list_T,
@@ -823,7 +823,7 @@ unsafe extern "C" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
     {
         ret.type_0 = kObjectTypeArray;
         if tsize == 0 as size_t && lua_getmetatable(lstate, -1 as ::core::ffi::c_int) != 0 {
-            nlua_pushref(lstate, (*nlua_global_refs).empty_dict_ref);
+            nlua_pushref(lstate, (*nlua_global_refs.get()).empty_dict_ref);
             if lua_rawequal(lstate, -2 as ::core::ffi::c_int, -1 as ::core::ffi::c_int) != 0 {
                 ret.type_0 = kObjectTypeDict;
             }
@@ -1693,7 +1693,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         (*cur.tv).vval.v_string = xstrdup(name);
                     }
                     LUA_TUSERDATA => {
-                        nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                        nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                         let mut is_nil: bool = lua_rawequal(
                             lstate,
                             -2 as ::core::ffi::c_int,
@@ -1885,7 +1885,7 @@ pub unsafe extern "C" fn nlua_push_Dict(
         dict.size as ::core::ffi::c_int,
     );
     if dict.size == 0 as size_t {
-        nlua_pushref(lstate, (*nlua_global_refs).empty_dict_ref);
+        nlua_pushref(lstate, (*nlua_global_refs.get()).empty_dict_ref);
         lua_setmetatable(lstate, -2 as ::core::ffi::c_int);
     }
     let mut i: size_t = 0 as size_t;
@@ -1941,7 +1941,7 @@ pub unsafe extern "C" fn nlua_push_Object(
             if flags & kNluaPushSpecial as ::core::ffi::c_int != 0 {
                 lua_pushnil(lstate);
             } else {
-                nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
             }
         }
         7 => {
@@ -2934,7 +2934,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                     }
                 }
                 LUA_TUSERDATA => {
-                    nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                    nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                     let mut is_nil: bool =
                         lua_rawequal(lstate, -2 as ::core::ffi::c_int, -1 as ::core::ffi::c_int)
                             != 0;
@@ -3327,7 +3327,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                 } else if typval_conv_special.get() {
                     lua_pushnil(lstate);
                 } else {
-                    nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                    nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                 }
             }
             9 => {
@@ -3362,7 +3362,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                 } else if typval_conv_special.get() {
                     lua_pushnil(lstate);
                 } else {
-                    nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                    nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                 }
             }
             4 => {
@@ -3516,7 +3516,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                     if typval_conv_special.get() {
                         lua_pushnil(lstate);
                     } else {
-                        nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                        nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                     }
                 }
                 _ => {}
@@ -3529,7 +3529,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                         nlua_create_typed_table(lstate, 0 as size_t, 0 as size_t, kObjectTypeDict);
                     } else {
                         lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-                        nlua_pushref(lstate, (*nlua_global_refs).empty_dict_ref);
+                        nlua_pushref(lstate, (*nlua_global_refs.get()).empty_dict_ref);
                         lua_setmetatable(lstate, -2 as ::core::ffi::c_int);
                     }
                 } else {
@@ -3595,7 +3595,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         if typval_conv_special.get() {
                                             lua_pushnil(lstate);
                                         } else {
-                                            nlua_pushref(lstate, (*nlua_global_refs).nil_ref);
+                                            nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                                         }
                                         break '_typval_encode_stop_converting_one_item;
                                     }
@@ -3950,7 +3950,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                     );
                                                     nlua_pushref(
                                                         lstate,
-                                                        (*nlua_global_refs).empty_dict_ref,
+                                                        (*nlua_global_refs.get()).empty_dict_ref,
                                                     );
                                                     lua_setmetatable(
                                                         lstate,
@@ -4225,7 +4225,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                 } else {
                                                     nlua_pushref(
                                                         lstate,
-                                                        (*nlua_global_refs).nil_ref,
+                                                        (*nlua_global_refs.get()).nil_ref,
                                                     );
                                                 }
                                                 xfree(buf_0 as *mut ::core::ffi::c_void);
@@ -4445,7 +4445,8 @@ unsafe extern "C" fn encode_vim_to_lua(
                                 lua_rawset(lstate, -3 as ::core::ffi::c_int);
                             }
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }
@@ -4674,7 +4675,10 @@ unsafe extern "C" fn encode_vim_to_lua(
                                             0 as ::core::ffi::c_int,
                                             0 as ::core::ffi::c_int,
                                         );
-                                        nlua_pushref(lstate, (*nlua_global_refs).empty_dict_ref);
+                                        nlua_pushref(
+                                            lstate,
+                                            (*nlua_global_refs.get()).empty_dict_ref,
+                                        );
                                         lua_setmetatable(lstate, -2 as ::core::ffi::c_int);
                                     }
                                     continue;

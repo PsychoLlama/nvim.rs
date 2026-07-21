@@ -71,10 +71,10 @@ extern "C" {
     fn xstrndup(str: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
     fn aucmd_restbuf(aco: *mut aco_save_T);
-    static mut p_ccv: *mut ::core::ffi::c_char;
-    static mut p_dex: *mut ::core::ffi::c_char;
-    static mut p_pex: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
+    static p_ccv: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -107,7 +107,7 @@ extern "C" {
     static e_missing_close_curly_str: [::core::ffi::c_char; 0];
     static e_unknown_option2: [::core::ffi::c_char; 0];
     static eval_lavars_used: GlobalCell<*mut bool>;
-    static mut EVALARG_EVALUATE: evalarg_T;
+    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
     fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
     fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
     fn fill_evalarg_from_eap(evalarg: *mut evalarg_T, eap: *mut exarg_T, skip: bool);
@@ -202,7 +202,7 @@ extern "C" {
     fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
     fn tv_get_buf(tv: *mut typval_T, curtab_only: ::core::ffi::c_int) -> *mut buf_T;
     fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
@@ -313,21 +313,21 @@ extern "C" {
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut emsg_severe: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut lastused_tabpage: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut sc_col: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut no_hlsearch: bool;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static emsg_severe: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static lastused_tabpage: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static sc_col: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static no_hlsearch: GlobalCell<bool>;
     fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn nlua_set_sctx(current: *mut sctx_T);
@@ -7225,7 +7225,7 @@ pub unsafe extern "C" fn evalvars_init() {
     set_vim_var_nr(VV_MAXCOL, MAXCOL as ::core::ffi::c_int as varnumber_T);
     set_vim_var_nr(
         VV_ECHOSPACE,
-        (sc_col - 1 as ::core::ffi::c_int) as varnumber_T,
+        (sc_col.get() - 1 as ::core::ffi::c_int) as varnumber_T,
     );
     let mut vvlua_partial: *mut partial_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<partial_T>()) as *mut partial_T;
@@ -7291,18 +7291,18 @@ pub unsafe extern "C" fn eval_charconvert(
     fname_from: *const ::core::ffi::c_char,
     fname_to: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     set_vim_var_string(VV_CC_FROM, enc_from, -1 as ptrdiff_t);
     set_vim_var_string(VV_CC_TO, enc_to, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_IN, fname_from, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_OUT, fname_to, -1 as ptrdiff_t);
     let mut ctx: *mut sctx_T = get_option_sctx(kOptCharconvert);
     if !ctx.is_null() {
-        current_sctx = *ctx;
+        current_sctx.set(*ctx);
     }
     let mut err: bool = false_0 != 0;
     if eval_to_bool(
-        p_ccv,
+        p_ccv.get(),
         &raw mut err,
         ::core::ptr::null_mut::<exarg_T>(),
         false_0 != 0,
@@ -7330,7 +7330,7 @@ pub unsafe extern "C" fn eval_charconvert(
         ::core::ptr::null::<::core::ffi::c_char>(),
         -1 as ptrdiff_t,
     );
-    current_sctx = saved_sctx;
+    current_sctx.set(saved_sctx);
     if err {
         return FAIL;
     }
@@ -7342,16 +7342,16 @@ pub unsafe extern "C" fn eval_diff(
     newfile: *const ::core::ffi::c_char,
     outfile: *const ::core::ffi::c_char,
 ) {
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     set_vim_var_string(VV_FNAME_IN, origfile, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_NEW, newfile, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_OUT, outfile, -1 as ptrdiff_t);
     let mut ctx: *mut sctx_T = get_option_sctx(kOptDiffexpr);
     if !ctx.is_null() {
-        current_sctx = *ctx;
+        current_sctx.set(*ctx);
     }
     let mut tv: *mut typval_T =
-        eval_expr_ext(p_dex, ::core::ptr::null_mut::<exarg_T>(), true_0 != 0);
+        eval_expr_ext(p_dex.get(), ::core::ptr::null_mut::<exarg_T>(), true_0 != 0);
     tv_free(tv);
     set_vim_var_string(
         VV_FNAME_IN,
@@ -7368,7 +7368,7 @@ pub unsafe extern "C" fn eval_diff(
         ::core::ptr::null::<::core::ffi::c_char>(),
         -1 as ptrdiff_t,
     );
-    current_sctx = saved_sctx;
+    current_sctx.set(saved_sctx);
 }
 #[no_mangle]
 pub unsafe extern "C" fn eval_patch(
@@ -7376,16 +7376,16 @@ pub unsafe extern "C" fn eval_patch(
     difffile: *const ::core::ffi::c_char,
     outfile: *const ::core::ffi::c_char,
 ) {
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     set_vim_var_string(VV_FNAME_IN, origfile, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_DIFF, difffile, -1 as ptrdiff_t);
     set_vim_var_string(VV_FNAME_OUT, outfile, -1 as ptrdiff_t);
     let mut ctx: *mut sctx_T = get_option_sctx(kOptPatchexpr);
     if !ctx.is_null() {
-        current_sctx = *ctx;
+        current_sctx.set(*ctx);
     }
     let mut tv: *mut typval_T =
-        eval_expr_ext(p_pex, ::core::ptr::null_mut::<exarg_T>(), true_0 != 0);
+        eval_expr_ext(p_pex.get(), ::core::ptr::null_mut::<exarg_T>(), true_0 != 0);
     tv_free(tv);
     set_vim_var_string(
         VV_FNAME_IN,
@@ -7402,7 +7402,7 @@ pub unsafe extern "C" fn eval_patch(
         ::core::ptr::null::<::core::ffi::c_char>(),
         -1 as ptrdiff_t,
     );
-    current_sctx = saved_sctx;
+    current_sctx.set(saved_sctx);
 }
 #[no_mangle]
 pub unsafe extern "C" fn eval_spell_expr(
@@ -7421,19 +7421,19 @@ pub unsafe extern "C" fn eval_spell_expr(
     };
     let mut list: *mut list_T = ::core::ptr::null_mut::<list_T>();
     let mut p: *mut ::core::ffi::c_char = skipwhite(expr);
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     prepare_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
     set_vim_var_string(VV_VAL, badword, -1 as ptrdiff_t);
-    if p_verbose == 0 as OptInt {
-        emsg_off += 1;
+    if p_verbose.get() == 0 as OptInt {
+        (*emsg_off.ptr()) += 1;
     }
     let mut ctx: *mut sctx_T = get_option_sctx(kOptSpellsuggest);
     if !ctx.is_null() {
-        current_sctx = *ctx;
+        current_sctx.set(*ctx);
     }
     let mut r: ::core::ffi::c_int = may_call_simple_func(p, &raw mut rettv);
     if r == NOTDONE {
-        r = eval1(&raw mut p, &raw mut rettv, &raw mut EVALARG_EVALUATE);
+        r = eval1(&raw mut p, &raw mut rettv, EVALARG_EVALUATE.ptr());
     }
     if r == OK {
         if rettv.v_type as ::core::ffi::c_uint
@@ -7444,12 +7444,12 @@ pub unsafe extern "C" fn eval_spell_expr(
             list = rettv.vval.v_list;
         }
     }
-    if p_verbose == 0 as OptInt {
-        emsg_off -= 1;
+    if p_verbose.get() == 0 as OptInt {
+        (*emsg_off.ptr()) -= 1;
     }
     tv_clear(get_vim_var_tv(VV_VAL));
     restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
-    current_sctx = saved_sctx;
+    current_sctx.set(saved_sctx);
     return list;
 }
 #[no_mangle]
@@ -7504,7 +7504,8 @@ pub unsafe extern "C" fn restore_vimvar(mut idx: ::core::ffi::c_int, mut save_tv
             .vv_di
             .di_key as *mut ::core::ffi::c_char,
     );
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         internal_error(b"restore_vimvar()\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
         hash_remove(&raw mut (*vimvardict.ptr()).dv_hashtab, hi);
@@ -7519,12 +7520,13 @@ unsafe extern "C" fn list_vim_vars(mut first: *mut ::core::ffi::c_int) {
     );
 }
 unsafe extern "C" fn list_script_vars(mut first: *mut ::core::ffi::c_int) {
-    if current_sctx.sc_sid > 0 as ::core::ffi::c_int
-        && current_sctx.sc_sid <= (*script_items.ptr()).ga_len
+    if (*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
+        && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len
     {
         list_hashtable_vars(
             &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
+                ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                    as isize,
             ))
             .sn_vars)
                 .sv_dict
@@ -7945,7 +7947,7 @@ pub unsafe extern "C" fn ex_let(mut eap: *mut exarg_T) {
     }
     expr = skipwhite(expr);
     if (*eap).skip != 0 {
-        emsg_skip += 1;
+        (*emsg_skip.ptr()) += 1;
     }
     let mut evalarg: evalarg_T = evalarg_T {
         eval_flags: 0,
@@ -7956,7 +7958,7 @@ pub unsafe extern "C" fn ex_let(mut eap: *mut exarg_T) {
     fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0);
     let mut eval_res: ::core::ffi::c_int = eval0(expr, &raw mut rettv, eap, &raw mut evalarg);
     if (*eap).skip != 0 {
-        emsg_skip -= 1;
+        (*emsg_skip.ptr()) -= 1;
     }
     clear_evalarg(&raw mut evalarg, eap);
     if (*eap).skip == 0 && eval_res != FAIL {
@@ -8162,8 +8164,10 @@ pub unsafe extern "C" fn list_hashtable_vars(
     let mut todo: ::core::ffi::c_int = 0;
     todo = (*ht).ht_used as ::core::ffi::c_int;
     hi = (*ht).ht_array;
-    while todo > 0 as ::core::ffi::c_int && !got_int {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+    while todo > 0 as ::core::ffi::c_int && !got_int.get() {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             todo -= 1;
             di = (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
             let mut buf: [::core::ffi::c_char; 1025] = [0; 1025];
@@ -8200,7 +8204,7 @@ unsafe extern "C" fn list_glob_vars(mut first: *mut ::core::ffi::c_int) {
 }
 unsafe extern "C" fn list_buf_vars(mut first: *mut ::core::ffi::c_int) {
     list_hashtable_vars(
-        &raw mut (*(*curbuf).b_vars).dv_hashtab,
+        &raw mut (*(*curbuf.get()).b_vars).dv_hashtab,
         b"b:\0".as_ptr() as *const ::core::ffi::c_char,
         true_0,
         first,
@@ -8208,7 +8212,7 @@ unsafe extern "C" fn list_buf_vars(mut first: *mut ::core::ffi::c_int) {
 }
 unsafe extern "C" fn list_win_vars(mut first: *mut ::core::ffi::c_int) {
     list_hashtable_vars(
-        &raw mut (*(*curwin).w_vars).dv_hashtab,
+        &raw mut (*(*curwin.get()).w_vars).dv_hashtab,
         b"w:\0".as_ptr() as *const ::core::ffi::c_char,
         true_0,
         first,
@@ -8216,7 +8220,7 @@ unsafe extern "C" fn list_win_vars(mut first: *mut ::core::ffi::c_int) {
 }
 unsafe extern "C" fn list_tab_vars(mut first: *mut ::core::ffi::c_int) {
     list_hashtable_vars(
-        &raw mut (*(*curtab).tp_vars).dv_hashtab,
+        &raw mut (*(*curtab.get()).tp_vars).dv_hashtab,
         b"t:\0".as_ptr() as *const ::core::ffi::c_char,
         true_0,
         first,
@@ -8236,7 +8240,7 @@ unsafe extern "C" fn list_arg_vars(
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     };
-    while ends_excmd(*arg as ::core::ffi::c_int) == 0 && !got_int {
+    while ends_excmd(*arg as ::core::ffi::c_int) == 0 && !got_int.get() {
         if error as ::core::ffi::c_int != 0 || (*eap).skip != 0 {
             arg = find_name_end(
                 arg,
@@ -8247,7 +8251,7 @@ unsafe extern "C" fn list_arg_vars(
             if !ascii_iswhite(*arg as ::core::ffi::c_int)
                 && ends_excmd(*arg as ::core::ffi::c_int) == 0
             {
-                emsg_severe = true_0 != 0;
+                emsg_severe.set(true_0 != 0);
                 semsg(
                     gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                     arg,
@@ -8262,7 +8266,7 @@ unsafe extern "C" fn list_arg_vars(
             len = get_name_len(&raw mut arg, &raw mut tofree, true_0 != 0, true_0 != 0);
             if len <= 0 as ::core::ffi::c_int {
                 if len < 0 as ::core::ffi::c_int && !aborting() {
-                    emsg_severe = true_0 != 0;
+                    emsg_severe.set(true_0 != 0);
                     semsg(
                         gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                         arg,
@@ -8290,7 +8294,7 @@ unsafe extern "C" fn list_arg_vars(
                     if handle_subscript(
                         &raw mut arg,
                         &raw mut tv,
-                        &raw mut EVALARG_EVALUATE,
+                        EVALARG_EVALUATE.ptr(),
                         true_0 != 0,
                     ) == FAIL
                     {
@@ -8863,7 +8867,7 @@ unsafe extern "C" fn ex_unletlock(
                     && ends_excmd(*name_end as ::core::ffi::c_int) == 0
             {
                 if !name_end.is_null() {
-                    emsg_severe = true_0 != 0;
+                    emsg_severe.set(true_0 != 0);
                     semsg(
                         gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                         name_end,
@@ -9036,10 +9040,15 @@ pub unsafe extern "C" fn do_unlet(
             }
         }
         let mut hi: *mut hashitem_T = hash_find(ht, varname);
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+        if (*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi = find_hi_in_scoped_ht(name, &raw mut ht);
         }
-        if !hi.is_null() && !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !hi.is_null()
+            && !((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             let di_0: *mut dictitem_T =
                 (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
             if var_check_fixed(
@@ -9162,7 +9171,9 @@ pub unsafe extern "C" fn del_menutrans_vars() {
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hitodo_ = hitodo_.wrapping_sub(1);
             if strncmp(
                 (*hi).hi_key,
@@ -9278,7 +9289,9 @@ pub unsafe extern "C" fn get_user_var_name(
         } else {
             hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+        while (*hi.get()).hi_key.is_null()
+            || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi.set((*hi.ptr()).offset(1));
         }
         if strncmp(
@@ -9303,7 +9316,9 @@ pub unsafe extern "C" fn get_user_var_name(
         } else {
             hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+        while (*hi.get()).hi_key.is_null()
+            || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi.set((*hi.ptr()).offset(1));
         }
         return cat_prefix_varname('b' as ::core::ffi::c_int, (*hi.get()).hi_key);
@@ -9318,12 +9333,14 @@ pub unsafe extern "C" fn get_user_var_name(
         } else {
             hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+        while (*hi.get()).hi_key.is_null()
+            || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi.set((*hi.ptr()).offset(1));
         }
         return cat_prefix_varname('w' as ::core::ffi::c_int, (*hi.get()).hi_key);
     }
-    ht = &raw mut (*(*curtab).tp_vars).dv_hashtab;
+    ht = &raw mut (*(*curtab.get()).tp_vars).dv_hashtab;
     if tdone.get() < (*ht).ht_used {
         let c2rust_fresh3 = tdone.get();
         tdone.set((*tdone.ptr()).wrapping_add(1));
@@ -9332,7 +9349,9 @@ pub unsafe extern "C" fn get_user_var_name(
         } else {
             hi.set((*hi.ptr()).offset(1));
         }
-        while (*hi.get()).hi_key.is_null() || (*hi.get()).hi_key == &raw mut hash_removed {
+        while (*hi.get()).hi_key.is_null()
+            || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hi.set((*hi.ptr()).offset(1));
         }
         return cat_prefix_varname('t' as ::core::ffi::c_int, (*hi.get()).hi_key);
@@ -9761,17 +9780,17 @@ pub unsafe extern "C" fn find_var_in_ht(
             115 => {
                 return &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
                     .offset(
-                        (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                            as isize,
+                        ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int
+                            - 1 as ::core::ffi::c_int) as isize,
                     ))
                 .sn_vars)
                     .sv_var as *mut dictitem_T;
             }
             103 => return globvars_var.ptr() as *mut dictitem_T,
             118 => return vimvars_var.ptr() as *mut dictitem_T,
-            98 => return &raw mut (*curbuf).b_bufvar as *mut dictitem_T,
-            119 => return &raw mut (*curwin).w_winvar as *mut dictitem_T,
-            116 => return &raw mut (*curtab).tp_winvar as *mut dictitem_T,
+            98 => return &raw mut (*curbuf.get()).b_bufvar as *mut dictitem_T,
+            119 => return &raw mut (*curwin.get()).w_winvar as *mut dictitem_T,
+            116 => return &raw mut (*curtab.get()).tp_winvar as *mut dictitem_T,
             108 => return get_funccal_local_var(),
             97 => return get_funccal_args_var(),
             _ => {}
@@ -9779,7 +9798,8 @@ pub unsafe extern "C" fn find_var_in_ht(
         return ::core::ptr::null_mut::<dictitem_T>();
     }
     let mut hi: *mut hashitem_T = hash_find_len(ht, varname, varname_len);
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         if ht == get_globvar_ht() && no_autoload == 0 {
             if !script_autoload(varname, varname_len, false_0 != 0)
                 || aborting() as ::core::ffi::c_int != 0
@@ -9788,7 +9808,9 @@ pub unsafe extern "C" fn find_var_in_ht(
             }
             hi = hash_find_len(ht, varname, varname_len);
         }
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+        if (*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             return ::core::ptr::null_mut::<dictitem_T>();
         }
     }
@@ -9816,7 +9838,9 @@ unsafe extern "C" fn find_var_ht_dict(
         }
         *varname = name;
         let mut hi: *mut hashitem_T = hash_find_len(compat_hashtab.ptr(), name, name_len);
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             return compat_hashtab.ptr();
         }
         *d = get_funccal_local_dict();
@@ -9844,11 +9868,11 @@ unsafe extern "C" fn find_var_ht_dict(
             return ::core::ptr::null_mut::<hashtab_T>();
         }
         if *name as ::core::ffi::c_int == 'b' as ::core::ffi::c_int {
-            *d = (*curbuf).b_vars;
+            *d = (*curbuf.get()).b_vars;
         } else if *name as ::core::ffi::c_int == 'w' as ::core::ffi::c_int {
-            *d = (*curwin).w_vars;
+            *d = (*curwin.get()).w_vars;
         } else if *name as ::core::ffi::c_int == 't' as ::core::ffi::c_int {
-            *d = (*curtab).tp_vars;
+            *d = (*curtab.get()).tp_vars;
         } else if *name as ::core::ffi::c_int == 'v' as ::core::ffi::c_int {
             *d = get_vimvar_dict();
         } else if *name as ::core::ffi::c_int == 'a' as ::core::ffi::c_int {
@@ -9856,20 +9880,21 @@ unsafe extern "C" fn find_var_ht_dict(
         } else if *name as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
             *d = get_funccal_local_dict();
         } else if *name as ::core::ffi::c_int == 's' as ::core::ffi::c_int
-            && (current_sctx.sc_sid > 0 as ::core::ffi::c_int
-                || current_sctx.sc_sid == SID_STR
-                || current_sctx.sc_sid == SID_LUA)
-            && current_sctx.sc_sid <= (*script_items.ptr()).ga_len
+            && ((*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
+                || (*current_sctx.ptr()).sc_sid == SID_STR
+                || (*current_sctx.ptr()).sc_sid == SID_LUA)
+            && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len
         {
-            nlua_set_sctx(&raw mut current_sctx);
-            if current_sctx.sc_sid == SID_STR || current_sctx.sc_sid == SID_LUA {
+            nlua_set_sctx(current_sctx.ptr());
+            if (*current_sctx.ptr()).sc_sid == SID_STR || (*current_sctx.ptr()).sc_sid == SID_LUA {
                 new_script_item(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    &raw mut current_sctx.sc_sid,
+                    &raw mut (*current_sctx.ptr()).sc_sid,
                 );
             }
             *d = &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
+                ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                    as isize,
             ))
             .sn_vars)
                 .sv_dict;
@@ -9953,7 +9978,9 @@ pub unsafe extern "C" fn vars_clear_ext(mut ht: *mut hashtab_T, mut free_val: bo
     todo = (*ht).ht_used as ::core::ffi::c_int;
     hi = (*ht).ht_array;
     while todo > 0 as ::core::ffi::c_int {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             todo -= 1;
             v = (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
             if free_val {
@@ -10124,7 +10151,7 @@ pub unsafe extern "C" fn before_set_vvar(
             b"hlsearch\0".as_ptr() as *const ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
         {
-            no_hlsearch = (*di).di_tv.vval.v_number == 0;
+            no_hlsearch.set((*di).di_tv.vval.v_number == 0);
             redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
         }
         if watched {
@@ -10301,7 +10328,7 @@ pub unsafe extern "C" fn var_check_ro(
     if flags & DI_FLAGS_RO as ::core::ffi::c_int != 0 {
         error_message =
             &raw const e_cannot_change_readonly_variable_str as *const ::core::ffi::c_char;
-    } else if flags & DI_FLAGS_RO_SBX as ::core::ffi::c_int != 0 && sandbox != 0 {
+    } else if flags & DI_FLAGS_RO_SBX as ::core::ffi::c_int != 0 && sandbox.get() != 0 {
         error_message =
             &raw const e_cannot_set_variable_in_sandbox_str as *const ::core::ffi::c_char;
     }
@@ -10447,7 +10474,7 @@ unsafe extern "C" fn get_var_from(
 ) {
     let mut done: bool = false_0 != 0;
     let do_change_curbuf: bool = !buf.is_null() && htname == 'b' as ::core::ffi::c_int;
-    emsg_off += 1;
+    (*emsg_off.ptr()) += 1;
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !varname.is_null()
@@ -10455,7 +10482,8 @@ unsafe extern "C" fn get_var_from(
         && !win.is_null()
         && (htname != 'b' as ::core::ffi::c_int || !buf.is_null())
     {
-        let need_switch_win: bool = !(tp == curtab && win == curwin) && !do_change_curbuf;
+        let need_switch_win: bool =
+            !(tp == curtab.get() && win == curwin.get()) && !do_change_curbuf;
         let mut switchwin: switchwin_T = switchwin_T {
             sw_curwin: ::core::ptr::null_mut::<win_T>(),
             sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
@@ -10466,9 +10494,9 @@ unsafe extern "C" fn get_var_from(
             if *varname as ::core::ffi::c_int == '&' as ::core::ffi::c_int
                 && htname != 't' as ::core::ffi::c_int
             {
-                let save_curbuf: *mut buf_T = curbuf;
+                let save_curbuf: *mut buf_T = curbuf.get();
                 if do_change_curbuf {
-                    curbuf = buf;
+                    curbuf.set(buf);
                 }
                 if *varname.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
                     let mut opts: *mut dict_T = get_winbuf_options(
@@ -10481,7 +10509,7 @@ unsafe extern "C" fn get_var_from(
                 } else if eval_option(&raw mut varname, rettv, true_0 != 0) == OK {
                     done = true_0 != 0;
                 }
-                curbuf = save_curbuf;
+                curbuf.set(save_curbuf);
             } else if *varname as ::core::ffi::c_int == NUL {
                 let mut v: *const ScopeDictDictItem = ::core::ptr::null::<ScopeDictDictItem>();
                 if htname == 'b' as ::core::ffi::c_int {
@@ -10520,7 +10548,7 @@ unsafe extern "C" fn get_var_from(
     {
         tv_copy(deftv, rettv);
     }
-    emsg_off -= 1;
+    (*emsg_off.ptr()) -= 1;
 }
 unsafe extern "C" fn getwinvar(
     mut argvars: *mut typval_T,
@@ -10534,7 +10562,7 @@ unsafe extern "C" fn getwinvar(
             ::core::ptr::null_mut::<bool>(),
         ) as ::core::ffi::c_int);
     } else {
-        tp = curtab;
+        tp = curtab.get();
     }
     let win: *mut win_T = find_win_by_nr(argvars.offset(off as isize), tp);
     let varname: *const ::core::ffi::c_char =
@@ -10733,7 +10761,7 @@ unsafe extern "C" fn setwinvar(mut argvars: *mut typval_T, mut off: ::core::ffi:
             ::core::ptr::null_mut::<bool>(),
         ) as ::core::ffi::c_int);
     } else {
-        tp = curtab;
+        tp = curtab.get();
     }
     let win: *mut win_T = find_win_by_nr(argvars.offset(off as isize), tp);
     let mut varname: *const ::core::ffi::c_char =
@@ -10742,7 +10770,7 @@ unsafe extern "C" fn setwinvar(mut argvars: *mut typval_T, mut off: ::core::ffi:
     if win.is_null() || varname.is_null() {
         return;
     }
-    let mut need_switch_win: bool = !(tp == curtab && win == curwin);
+    let mut need_switch_win: bool = !(tp == curtab.get() && win == curwin.get());
     let mut switchwin: switchwin_T = switchwin_T {
         sw_curwin: ::core::ptr::null_mut::<win_T>(),
         sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
@@ -10854,7 +10882,7 @@ pub unsafe extern "C" fn var_exists(mut var: *const ::core::ffi::c_char) -> bool
             n = handle_subscript(
                 &raw mut var,
                 &raw mut tv,
-                &raw mut EVALARG_EVALUATE,
+                EVALARG_EVALUATE.ptr(),
                 false_0 != 0,
             ) == OK;
             if n {
@@ -10925,8 +10953,8 @@ pub unsafe extern "C" fn var_redir_start(
         var_redir_stop();
         return FAIL;
     }
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
-    did_emsg = false_0;
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
+    did_emsg.set(false_0);
     let mut tv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -10954,7 +10982,7 @@ pub unsafe extern "C" fn var_redir_start(
         );
     }
     clear_lval(redir_lval.get());
-    if called_emsg > called_emsg_before {
+    if called_emsg.get() > called_emsg_before {
         redir_endp.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         var_redir_stop();
         return FAIL;
@@ -11047,8 +11075,8 @@ pub unsafe extern "C" fn f_gettabvar(
     ) as ::core::ffi::c_int);
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if !tp.is_null() {
-        win = if tp == curtab || (*tp).tp_firstwin.is_null() {
-            firstwin
+        win = if tp == curtab.get() || (*tp).tp_firstwin.is_null() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -11093,8 +11121,8 @@ pub unsafe extern "C" fn f_getbufvar(
         rettv,
         argvars.offset(2 as ::core::ffi::c_int as isize),
         'b' as ::core::ffi::c_int,
-        curtab,
-        curwin,
+        curtab.get(),
+        curwin.get(),
         buf,
     );
 }
@@ -11117,8 +11145,8 @@ pub unsafe extern "C" fn f_settabvar(
     if varname.is_null() || tp.is_null() {
         return;
     }
-    let save_curtab: *mut tabpage_T = curtab;
-    let save_lu_tp: *mut tabpage_T = lastused_tabpage;
+    let save_curtab: *mut tabpage_T = curtab.get();
+    let save_lu_tp: *mut tabpage_T = lastused_tabpage.get();
     goto_tabpage_tp(tp, false_0 != 0, false_0 != 0);
     let varname_len: size_t = strlen(varname);
     let tabvarname: *mut ::core::ffi::c_char =
@@ -11143,7 +11171,7 @@ pub unsafe extern "C" fn f_settabvar(
     if valid_tabpage(save_curtab) {
         goto_tabpage_tp(save_curtab, false_0 != 0, false_0 != 0);
         if valid_tabpage(save_lu_tp) {
-            lastused_tabpage = save_lu_tp;
+            lastused_tabpage.set(save_lu_tp);
         }
     }
 }
@@ -11204,8 +11232,8 @@ pub unsafe extern "C" fn f_setbufvar(
         let varname_len: size_t = strlen(varname);
         let bufvarname: *mut ::core::ffi::c_char =
             xmalloc(varname_len.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
-        let save_curbuf: *mut buf_T = curbuf;
-        curbuf = buf;
+        let save_curbuf: *mut buf_T = curbuf.get();
+        curbuf.set(buf);
         memcpy(
             bufvarname as *mut ::core::ffi::c_void,
             b"b:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
@@ -11223,7 +11251,7 @@ pub unsafe extern "C" fn f_setbufvar(
             true_0 != 0,
         );
         xfree(bufvarname as *mut ::core::ffi::c_void);
-        curbuf = save_curbuf;
+        curbuf.set(save_curbuf);
     };
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;

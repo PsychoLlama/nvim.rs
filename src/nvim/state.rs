@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -51,28 +51,28 @@ extern "C" {
     fn safe_vgetc() -> ::core::ffi::c_int;
     fn vpeekc() -> ::core::ffi::c_int;
     fn check_end_reg_executing(advance: bool);
-    static mut mod_mask: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_select: bool;
-    static mut restart_VIsual_select: ::core::ffi::c_int;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut debug_mode: bool;
-    static mut finish_op: bool;
-    static mut motion_force: ::core::ffi::c_int;
-    static mut exmode_active: bool;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut typebuf: typebuf_T;
-    static mut must_redraw: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut global_busy: ::core::ffi::c_int;
-    static mut last_mode: [::core::ffi::c_char; 4];
-    static mut virtual_op: TriState;
+    static mod_mask: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_select: GlobalCell<bool>;
+    static restart_VIsual_select: GlobalCell<::core::ffi::c_int>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static debug_mode: GlobalCell<bool>;
+    static finish_op: GlobalCell<bool>;
+    static motion_force: GlobalCell<::core::ffi::c_int>;
+    static exmode_active: GlobalCell<bool>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static typebuf: GlobalCell<typebuf_T>;
+    static must_redraw: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
+    static last_mode: GlobalCell<[::core::ffi::c_char; 4]>;
+    static virtual_op: GlobalCell<TriState>;
     fn ctrl_x_mode_not_defined_yet() -> bool;
     fn ins_compl_active() -> bool;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn get_special_key_name(
         c: ::core::ffi::c_int,
         modifiers: ::core::ffi::c_int,
@@ -2597,16 +2597,16 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
         }
         let mut key: ::core::ffi::c_int = 0;
         loop {
-            if vpeekc() != NUL || typebuf.tb_len > 0 as ::core::ffi::c_int {
+            if vpeekc() != NUL || (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
                 key = safe_vgetc();
-            } else if !multiqueue_empty(main_loop.events) {
+            } else if !multiqueue_empty((*main_loop.ptr()).events) {
                 ui_flush();
                 key = -(253 as ::core::ffi::c_int
                     + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
             } else {
-                if must_redraw != 0 as ::core::ffi::c_int
-                    && !need_wait_return
-                    && State & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                if must_redraw.get() != 0 as ::core::ffi::c_int
+                    && !need_wait_return.get()
+                    && State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                 {
                     update_screen();
                     setcursor();
@@ -2616,10 +2616,10 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
                     ::core::ptr::null_mut::<uint8_t>(),
                     0 as ::core::ffi::c_int,
                     -1 as ::core::ffi::c_int,
-                    typebuf.tb_change_cnt,
-                    main_loop.events,
+                    (*typebuf.ptr()).tb_change_cnt,
+                    (*main_loop.ptr()).events,
                 );
-                if !(input_available() == 0 && !multiqueue_empty(main_loop.events)) {
+                if !(input_available() == 0 && !multiqueue_empty((*main_loop.ptr()).events)) {
                     continue;
                 }
                 key = -(253 as ::core::ffi::c_int
@@ -2638,7 +2638,7 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
             {
                 b"K_EVENT\0".as_ptr() as *const ::core::ffi::c_char
             } else {
-                get_special_key_name(key, mod_mask) as *const ::core::ffi::c_char
+                get_special_key_name(key, mod_mask.get()) as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
             logmsg(
                 LOGLVL_DBG,
@@ -2663,85 +2663,85 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
 #[no_mangle]
 pub unsafe extern "C" fn state_handle_k_event() {
     loop {
-        let mut event: Event = multiqueue_get(main_loop.events);
+        let mut event: Event = multiqueue_get((*main_loop.ptr()).events);
         if event.handler.is_some() {
             event.handler.expect("non-null function pointer")(
                 &raw mut event.argv as *mut *mut ::core::ffi::c_void,
             );
         }
-        if multiqueue_empty(main_loop.events) {
+        if multiqueue_empty((*main_loop.ptr()).events) {
             return;
         }
         os_breakcheck();
-        if input_available() != 0 || got_int as ::core::ffi::c_int != 0 {
+        if input_available() != 0 || got_int.get() as ::core::ffi::c_int != 0 {
             return;
         }
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
-    if virtual_op as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
-        return virtual_op as u64 != 0;
+    if virtual_op.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+        return virtual_op.get() as u64 != 0;
     }
-    if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
         return true_0 != 0;
     }
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(wp);
     return cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
         || cur_ve_flags & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && VIsual_active as ::core::ffi::c_int != 0
-            && VIsual_mode == Ctrl_V
+            && VIsual_active.get() as ::core::ffi::c_int != 0
+            && VIsual_mode.get() == Ctrl_V
         || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && State & MODE_INSERT as ::core::ffi::c_int != 0;
+            && State.get() & MODE_INSERT as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
-    if State & MODE_NORMAL as ::core::ffi::c_int != 0 {
-        if VIsual_active {
-            if VIsual_select {
+    if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
+        if VIsual_active.get() {
+            if VIsual_select.get() {
                 return MODE_SELECT as ::core::ffi::c_int;
             }
             return MODE_VISUAL as ::core::ffi::c_int;
-        } else if finish_op {
+        } else if finish_op.get() {
             return MODE_OP_PENDING as ::core::ffi::c_int;
         }
     }
-    return State;
+    return State.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if State == MODE_HITRETURN as ::core::ffi::c_int
-        || State == MODE_ASKMORE as ::core::ffi::c_int
-        || State == MODE_SETWSIZE as ::core::ffi::c_int
-        || State & MODE_CMDLINE as ::core::ffi::c_int != 0
+    if State.get() == MODE_HITRETURN as ::core::ffi::c_int
+        || State.get() == MODE_ASKMORE as ::core::ffi::c_int
+        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
+        || State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
             && (*get_cmdline_info()).one_key as ::core::ffi::c_int != 0
     {
         let c2rust_fresh0 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh0 as isize) = 'r' as ::core::ffi::c_char;
-        if State == MODE_ASKMORE as ::core::ffi::c_int {
+        if State.get() == MODE_ASKMORE as ::core::ffi::c_int {
             let c2rust_fresh1 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh1 as isize) = 'm' as ::core::ffi::c_char;
-        } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
             let c2rust_fresh2 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh2 as isize) = '?' as ::core::ffi::c_char;
         }
-    } else if State == MODE_EXTERNCMD as ::core::ffi::c_int {
+    } else if State.get() == MODE_EXTERNCMD as ::core::ffi::c_int {
         let c2rust_fresh3 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh3 as isize) = '!' as ::core::ffi::c_char;
-    } else if State & MODE_INSERT as ::core::ffi::c_int != 0 {
-        if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
             let c2rust_fresh4 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh4 as isize) = 'R' as ::core::ffi::c_char;
             let c2rust_fresh5 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh5 as isize) = 'v' as ::core::ffi::c_char;
-        } else if State & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
             let c2rust_fresh6 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh6 as isize) = 'R' as ::core::ffi::c_char;
@@ -2759,40 +2759,40 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
             i = i + 1;
             *buf.offset(c2rust_fresh9 as isize) = 'x' as ::core::ffi::c_char;
         }
-    } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0
-        || exmode_active as ::core::ffi::c_int != 0
+    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+        || exmode_active.get() as ::core::ffi::c_int != 0
     {
         let c2rust_fresh10 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh10 as isize) = 'c' as ::core::ffi::c_char;
-        if exmode_active {
+        if exmode_active.get() {
             let c2rust_fresh11 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh11 as isize) = 'v' as ::core::ffi::c_char;
         }
-        if State & MODE_CMDLINE as ::core::ffi::c_int != 0
+        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
             && cmdline_overstrike() as ::core::ffi::c_int != 0
         {
             let c2rust_fresh12 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh12 as isize) = 'r' as ::core::ffi::c_char;
         }
-    } else if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
         let c2rust_fresh13 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh13 as isize) = 't' as ::core::ffi::c_char;
-    } else if VIsual_active {
-        if VIsual_select {
+    } else if VIsual_active.get() {
+        if VIsual_select.get() {
             let c2rust_fresh14 = i;
             i = i + 1;
-            *buf.offset(c2rust_fresh14 as isize) = (VIsual_mode + 's' as ::core::ffi::c_int
+            *buf.offset(c2rust_fresh14 as isize) = (VIsual_mode.get() + 's' as ::core::ffi::c_int
                 - 'v' as ::core::ffi::c_int)
                 as ::core::ffi::c_char;
         } else {
             let c2rust_fresh15 = i;
             i = i + 1;
-            *buf.offset(c2rust_fresh15 as isize) = VIsual_mode as ::core::ffi::c_char;
-            if restart_VIsual_select != 0 {
+            *buf.offset(c2rust_fresh15 as isize) = VIsual_mode.get() as ::core::ffi::c_char;
+            if restart_VIsual_select.get() != 0 {
                 let c2rust_fresh16 = i;
                 i = i + 1;
                 *buf.offset(c2rust_fresh16 as isize) = 's' as ::core::ffi::c_char;
@@ -2802,39 +2802,39 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
         let c2rust_fresh17 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh17 as isize) = 'n' as ::core::ffi::c_char;
-        if finish_op {
+        if finish_op.get() {
             let c2rust_fresh18 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh18 as isize) = 'o' as ::core::ffi::c_char;
             let c2rust_fresh19 = i;
             i = i + 1;
-            *buf.offset(c2rust_fresh19 as isize) = motion_force as ::core::ffi::c_char;
-        } else if !(*curbuf).terminal.is_null() {
+            *buf.offset(c2rust_fresh19 as isize) = motion_force.get() as ::core::ffi::c_char;
+        } else if !(*curbuf.get()).terminal.is_null() {
             let c2rust_fresh20 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh20 as isize) = 't' as ::core::ffi::c_char;
-            if restart_edit == 'I' as ::core::ffi::c_int {
+            if restart_edit.get() == 'I' as ::core::ffi::c_int {
                 let c2rust_fresh21 = i;
                 i = i + 1;
                 *buf.offset(c2rust_fresh21 as isize) = 'T' as ::core::ffi::c_char;
             }
-        } else if restart_edit == 'I' as ::core::ffi::c_int
-            || restart_edit == 'R' as ::core::ffi::c_int
-            || restart_edit == 'V' as ::core::ffi::c_int
+        } else if restart_edit.get() == 'I' as ::core::ffi::c_int
+            || restart_edit.get() == 'R' as ::core::ffi::c_int
+            || restart_edit.get() == 'V' as ::core::ffi::c_int
         {
             let c2rust_fresh22 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh22 as isize) = 'i' as ::core::ffi::c_char;
             let c2rust_fresh23 = i;
             i = i + 1;
-            *buf.offset(c2rust_fresh23 as isize) = restart_edit as ::core::ffi::c_char;
+            *buf.offset(c2rust_fresh23 as isize) = restart_edit.get() as ::core::ffi::c_char;
         }
     }
     *buf.offset(i as isize) = NUL as ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_trigger_modechanged() {
-    if !has_event(EVENT_MODECHANGED) || got_int as ::core::ffi::c_int != 0 {
+    if !has_event(EVENT_MODECHANGED) || got_int.get() as ::core::ffi::c_int != 0 {
         return;
     }
     let mut curr_mode: [::core::ffi::c_char; 4] = [0; 4];
@@ -2842,7 +2842,7 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
     get_mode(&raw mut curr_mode as *mut ::core::ffi::c_char);
     if strcmp(
         &raw mut curr_mode as *mut ::core::ffi::c_char,
-        &raw mut last_mode as *mut ::core::ffi::c_char,
+        last_mode.ptr() as *mut ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
         return;
@@ -2873,14 +2873,14 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
         v_event,
         b"old_mode\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-        &raw mut last_mode as *mut ::core::ffi::c_char,
+        last_mode.ptr() as *mut ::core::ffi::c_char,
     );
     tv_dict_set_keys_readonly(v_event);
     vim_snprintf(
         &raw mut pattern_buf as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>(),
         b"%s:%s\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut last_mode as *mut ::core::ffi::c_char,
+        last_mode.ptr() as *mut ::core::ffi::c_char,
         &raw mut curr_mode as *mut ::core::ffi::c_char,
     );
     apply_autocmds(
@@ -2888,10 +2888,10 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
         &raw mut pattern_buf as *mut ::core::ffi::c_char,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     strcpy(
-        &raw mut last_mode as *mut ::core::ffi::c_char,
+        last_mode.ptr() as *mut ::core::ffi::c_char,
         &raw mut curr_mode as *mut ::core::ffi::c_char,
     );
     restore_v_event(v_event, &raw mut save_v_event);
@@ -2899,10 +2899,10 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
 static was_safe: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 unsafe extern "C" fn is_safe_now() -> bool {
     return stuff_empty() as ::core::ffi::c_int != 0
-        && typebuf.tb_len == 0 as ::core::ffi::c_int
+        && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
         && using_script() == 0
-        && global_busy == 0
-        && !debug_mode;
+        && global_busy.get() == 0
+        && !debug_mode.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
@@ -2928,7 +2928,7 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
     }
     was_safe.set(is_safe);

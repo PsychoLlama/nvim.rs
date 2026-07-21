@@ -36,10 +36,10 @@ extern "C" {
         dsize: size_t,
     ) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut empty_string_option: [::core::ffi::c_char; 0];
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
-    static mut p_vfile: *mut ::core::ffi::c_char;
+    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_vfile: GlobalCell<*mut ::core::ffi::c_char>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn concat_str(
         str1: *const ::core::ffi::c_char,
@@ -124,26 +124,26 @@ extern "C" {
     fn modifier_len(cmd: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn find_nextcmd(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut did_endif: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut debug_break_level: ::core::ffi::c_int;
-    static mut current_exception: *mut except_T;
-    static mut did_throw: bool;
-    static mut need_rethrow: bool;
-    static mut trylevel: ::core::ffi::c_int;
-    static mut force_abort: bool;
-    static mut msg_list: *mut *mut msglist_T;
-    static mut suppress_errthrow: bool;
-    static mut caught_stack: *mut except_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut got_int: bool;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static did_endif: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static debug_break_level: GlobalCell<::core::ffi::c_int>;
+    static current_exception: GlobalCell<*mut except_T>;
+    static did_throw: GlobalCell<bool>;
+    static need_rethrow: GlobalCell<bool>;
+    static trylevel: GlobalCell<::core::ffi::c_int>;
+    static force_abort: GlobalCell<bool>;
+    static msg_list: GlobalCell<*mut *mut msglist_T>;
+    static suppress_errthrow: GlobalCell<bool>;
+    static caught_stack: GlobalCell<*mut except_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static got_int: GlobalCell<bool>;
     static exestack: GlobalCell<garray_T>;
     fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
     fn stacktrace_create() -> *mut list_T;
@@ -1547,24 +1547,24 @@ unsafe extern "C" fn discard_pending_return(mut p: *mut typval_T) {
 static cause_abort: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn aborting() -> bool {
-    return did_emsg != 0 && force_abort as ::core::ffi::c_int != 0
-        || got_int as ::core::ffi::c_int != 0
-        || did_throw as ::core::ffi::c_int != 0;
+    return did_emsg.get() != 0 && force_abort.get() as ::core::ffi::c_int != 0
+        || got_int.get() as ::core::ffi::c_int != 0
+        || did_throw.get() as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn update_force_abort() {
     if cause_abort.get() {
-        force_abort = true_0 != 0;
+        force_abort.set(true_0 != 0);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn should_abort(mut retcode: ::core::ffi::c_int) -> bool {
-    return retcode == FAIL && trylevel != 0 as ::core::ffi::c_int && emsg_silent == 0
+    return retcode == FAIL && trylevel.get() != 0 as ::core::ffi::c_int && emsg_silent.get() == 0
         || aborting() as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn aborted_in_try() -> bool {
-    return force_abort;
+    return force_abort.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn cause_errthrow(
@@ -1575,14 +1575,15 @@ pub unsafe extern "C" fn cause_errthrow(
     mut ignore: *mut bool,
 ) -> bool {
     let mut elem: *mut msglist_T = ::core::ptr::null_mut::<msglist_T>();
-    if suppress_errthrow {
+    if suppress_errthrow.get() {
         return false_0 != 0;
     }
-    if did_emsg == 0 {
-        cause_abort.set(force_abort);
-        force_abort = false_0 != 0;
+    if did_emsg.get() == 0 {
+        cause_abort.set(force_abort.get());
+        force_abort.set(false_0 != 0);
     }
-    if (trylevel == 0 as ::core::ffi::c_int && !cause_abort.get() || emsg_silent != 0) && !did_throw
+    if (trylevel.get() == 0 as ::core::ffi::c_int && !cause_abort.get() || emsg_silent.get() != 0)
+        && !did_throw.get()
     {
         return false_0 != 0;
     }
@@ -1593,16 +1594,16 @@ pub unsafe extern "C" fn cause_errthrow(
         return true_0 != 0;
     }
     cause_abort.set(true_0 != 0);
-    if did_throw {
-        if (*current_exception).type_0 as ::core::ffi::c_uint
+    if did_throw.get() {
+        if (*current_exception.get()).type_0 as ::core::ffi::c_uint
             == ET_INTERRUPT as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            got_int = false_0 != 0;
+            got_int.set(false_0 != 0);
         }
         discard_current_exception();
     }
-    if !msg_list.is_null() {
-        let mut plist: *mut *mut msglist_T = msg_list;
+    if !(*msg_list.ptr()).is_null() {
+        let mut plist: *mut *mut msglist_T = msg_list.get();
         while !(*plist).is_null() {
             if (**plist).next.is_null() && concat as ::core::ffi::c_int != 0 {
                 (**plist).msg = xrealloc(
@@ -1622,7 +1623,7 @@ pub unsafe extern "C" fn cause_errthrow(
         (*elem).next = ::core::ptr::null_mut::<msglist_T>();
         (*elem).throw_msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
         *plist = elem;
-        if plist == msg_list || severe as ::core::ffi::c_int != 0 {
+        if plist == msg_list.get() || severe as ::core::ffi::c_int != 0 {
             let mut tmsg: *mut ::core::ffi::c_char = (*elem).msg;
             if strncmp(
                 tmsg,
@@ -1646,9 +1647,9 @@ pub unsafe extern "C" fn cause_errthrow(
                 && *tmsg.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ' ' as ::core::ffi::c_int
             {
-                (**msg_list).throw_msg = tmsg.offset(4 as ::core::ffi::c_int as isize);
+                (**msg_list.get()).throw_msg = tmsg.offset(4 as ::core::ffi::c_int as isize);
             } else {
-                (**msg_list).throw_msg = tmsg;
+                (**msg_list.get()).throw_msg = tmsg;
             }
         }
         (*elem).sfile = estack_sfile(ESTACK_NONE);
@@ -1670,8 +1671,8 @@ unsafe extern "C" fn free_msglist(mut l: *mut msglist_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_global_msglist() {
-    free_msglist(*msg_list);
-    *msg_list = ::core::ptr::null_mut::<msglist_T>();
+    free_msglist(*msg_list.get());
+    *msg_list.get() = ::core::ptr::null_mut::<msglist_T>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_errthrow(
@@ -1680,27 +1681,32 @@ pub unsafe extern "C" fn do_errthrow(
 ) {
     if cause_abort.get() {
         cause_abort.set(false_0 != 0);
-        force_abort = true_0 != 0;
+        force_abort.set(true_0 != 0);
     }
-    if msg_list.is_null() || (*msg_list).is_null() {
+    if (*msg_list.ptr()).is_null() || (*msg_list.get()).is_null() {
         return;
     }
-    if throw_exception(*msg_list as *mut ::core::ffi::c_void, ET_ERROR, cmdname) == FAIL {
-        free_msglist(*msg_list);
+    if throw_exception(
+        *msg_list.get() as *mut ::core::ffi::c_void,
+        ET_ERROR,
+        cmdname,
+    ) == FAIL
+    {
+        free_msglist(*msg_list.get());
     } else if !cstack.is_null() {
         do_throw(cstack);
     } else {
-        need_rethrow = true_0 != 0;
+        need_rethrow.set(true_0 != 0);
     }
-    *msg_list = ::core::ptr::null_mut::<msglist_T>();
+    *msg_list.get() = ::core::ptr::null_mut::<msglist_T>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_intthrow(mut cstack: *mut cstack_T) -> bool {
-    if !got_int || trylevel == 0 as ::core::ffi::c_int && !did_throw {
+    if !got_int.get() || trylevel.get() == 0 as ::core::ffi::c_int && !did_throw.get() {
         return false_0 != 0;
     }
-    if did_throw {
-        if (*current_exception).type_0 as ::core::ffi::c_uint
+    if did_throw.get() {
+        if (*current_exception.get()).type_0 as ::core::ffi::c_uint
             == ET_INTERRUPT as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             return false_0 != 0;
@@ -1849,7 +1855,7 @@ unsafe extern "C" fn throw_exception(
         (*excp).value = get_exception_string(value, type_0, cmdname, &raw mut should_free);
         if (*excp).value.is_null() && should_free as ::core::ffi::c_int != 0 {
             xfree(excp as *mut ::core::ffi::c_void);
-            suppress_errthrow = true_0 != 0;
+            suppress_errthrow.set(true_0 != 0);
             emsg(gettext(&raw const e_outofmem as *const ::core::ffi::c_char));
         } else {
             (*excp).type_0 = type_0;
@@ -1872,18 +1878,19 @@ unsafe extern "C" fn throw_exception(
             }
             (*excp).stacktrace = stacktrace_create();
             tv_list_ref((*excp).stacktrace);
-            if p_verbose >= 13 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-                let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-                if debug_break_level > 0 as ::core::ffi::c_int {
-                    msg_silent = false_0;
+            if p_verbose.get() >= 13 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int
+            {
+                let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+                if debug_break_level.get() > 0 as ::core::ffi::c_int {
+                    msg_silent.set(false_0);
                 } else {
                     verbose_enter();
                 }
-                no_wait_return += 1;
-                if debug_break_level > 0 as ::core::ffi::c_int
-                    || *p_vfile as ::core::ffi::c_int == NUL
+                (*no_wait_return.ptr()) += 1;
+                if debug_break_level.get() > 0 as ::core::ffi::c_int
+                    || *p_vfile.get() as ::core::ffi::c_int == NUL
                 {
-                    msg_scroll = true_0;
+                    msg_scroll.set(true_0);
                 }
                 smsg(
                     0 as ::core::ffi::c_int,
@@ -1891,45 +1898,47 @@ unsafe extern "C" fn throw_exception(
                     (*excp).value,
                 );
                 msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-                if debug_break_level > 0 as ::core::ffi::c_int
-                    || *p_vfile as ::core::ffi::c_int == NUL
+                if debug_break_level.get() > 0 as ::core::ffi::c_int
+                    || *p_vfile.get() as ::core::ffi::c_int == NUL
                 {
-                    cmdline_row = msg_row;
+                    cmdline_row.set(msg_row.get());
                 }
-                no_wait_return -= 1;
-                if debug_break_level > 0 as ::core::ffi::c_int {
-                    msg_silent = save_msg_silent;
+                (*no_wait_return.ptr()) -= 1;
+                if debug_break_level.get() > 0 as ::core::ffi::c_int {
+                    msg_silent.set(save_msg_silent);
                 } else {
                     verbose_leave();
                 }
             }
-            current_exception = excp;
+            current_exception.set(excp);
             return OK;
         }
     }
-    current_exception = ::core::ptr::null_mut::<except_T>();
+    current_exception.set(::core::ptr::null_mut::<except_T>());
     return FAIL;
 }
 unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished: bool) {
-    if current_exception == excp {
-        current_exception = ::core::ptr::null_mut::<except_T>();
+    if current_exception.get() == excp {
+        current_exception.set(::core::ptr::null_mut::<except_T>());
     }
     if excp.is_null() {
         internal_error(b"discard_exception()\0".as_ptr() as *const ::core::ffi::c_char);
         return;
     }
-    if p_verbose >= 13 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-        let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
+    if p_verbose.get() >= 13 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int {
+        let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
         let mut saved_IObuff: *mut ::core::ffi::c_char =
-            xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
-        if debug_break_level > 0 as ::core::ffi::c_int {
-            msg_silent = false_0;
+            xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
+        if debug_break_level.get() > 0 as ::core::ffi::c_int {
+            msg_silent.set(false_0);
         } else {
             verbose_enter();
         }
-        no_wait_return += 1;
-        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
-            msg_scroll = true_0;
+        (*no_wait_return.ptr()) += 1;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int
+            || *p_vfile.get() as ::core::ffi::c_int == NUL
+        {
+            msg_scroll.set(true_0);
         }
         smsg(
             0 as ::core::ffi::c_int,
@@ -1941,17 +1950,19 @@ unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished
             (*excp).value,
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
-            cmdline_row = msg_row;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int
+            || *p_vfile.get() as ::core::ffi::c_int == NUL
+        {
+            cmdline_row.set(msg_row.get());
         }
-        no_wait_return -= 1;
-        if debug_break_level > 0 as ::core::ffi::c_int {
-            msg_silent = save_msg_silent;
+        (*no_wait_return.ptr()) -= 1;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int {
+            msg_silent.set(save_msg_silent);
         } else {
             verbose_leave();
         }
         xstrlcpy(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             saved_IObuff,
             IOSIZE as size_t,
         );
@@ -1973,22 +1984,22 @@ unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished
 }
 #[no_mangle]
 pub unsafe extern "C" fn discard_current_exception() {
-    if !current_exception.is_null() {
-        discard_exception(current_exception, false_0 != 0);
+    if !(*current_exception.ptr()).is_null() {
+        discard_exception(current_exception.get(), false_0 != 0);
     }
-    did_throw = false_0 != 0;
-    need_rethrow = false_0 != 0;
+    did_throw.set(false_0 != 0);
+    need_rethrow.set(false_0 != 0);
 }
 unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
-    (*excp).caught = caught_stack;
-    caught_stack = excp;
+    (*excp).caught = caught_stack.get();
+    caught_stack.set(excp);
     set_vim_var_string(VV_EXCEPTION, (*excp).value, -1 as ptrdiff_t);
     set_vim_var_list(VV_STACKTRACE, (*excp).stacktrace);
     if *(*excp).throw_name as ::core::ffi::c_int != NUL {
         let mut IObufflen: size_t = 0;
         if (*excp).throw_lnum != 0 as linenr_T {
             IObufflen = vim_snprintf_safelen(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 gettext(b"%s, line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 (*excp).throw_name,
@@ -1996,7 +2007,7 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
             );
         } else {
             IObufflen = vim_snprintf_safelen(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                 (*excp).throw_name,
@@ -2004,7 +2015,7 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
         }
         set_vim_var_string(
             VV_THROWPOINT,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IObufflen as ptrdiff_t,
         );
     } else {
@@ -2014,16 +2025,18 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
             -1 as ptrdiff_t,
         );
     }
-    if p_verbose >= 13 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-        let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-        if debug_break_level > 0 as ::core::ffi::c_int {
-            msg_silent = false_0;
+    if p_verbose.get() >= 13 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int {
+        let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+        if debug_break_level.get() > 0 as ::core::ffi::c_int {
+            msg_silent.set(false_0);
         } else {
             verbose_enter();
         }
-        no_wait_return += 1;
-        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
-            msg_scroll = true_0;
+        (*no_wait_return.ptr()) += 1;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int
+            || *p_vfile.get() as ::core::ffi::c_int == NUL
+        {
+            msg_scroll.set(true_0);
         }
         smsg(
             0 as ::core::ffi::c_int,
@@ -2031,46 +2044,48 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
             (*excp).value,
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
-            cmdline_row = msg_row;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int
+            || *p_vfile.get() as ::core::ffi::c_int == NUL
+        {
+            cmdline_row.set(msg_row.get());
         }
-        no_wait_return -= 1;
-        if debug_break_level > 0 as ::core::ffi::c_int {
-            msg_silent = save_msg_silent;
+        (*no_wait_return.ptr()) -= 1;
+        if debug_break_level.get() > 0 as ::core::ffi::c_int {
+            msg_silent.set(save_msg_silent);
         } else {
             verbose_leave();
         }
     }
 }
 unsafe extern "C" fn finish_exception(mut excp: *mut except_T) {
-    if excp != caught_stack {
+    if excp != caught_stack.get() {
         internal_error(b"finish_exception()\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    caught_stack = (*caught_stack).caught;
-    if !caught_stack.is_null() {
-        set_vim_var_string(VV_EXCEPTION, (*caught_stack).value, -1 as ptrdiff_t);
-        set_vim_var_list(VV_STACKTRACE, (*caught_stack).stacktrace);
-        if *(*caught_stack).throw_name as ::core::ffi::c_int != NUL {
+    caught_stack.set((*caught_stack.get()).caught);
+    if !(*caught_stack.ptr()).is_null() {
+        set_vim_var_string(VV_EXCEPTION, (*caught_stack.get()).value, -1 as ptrdiff_t);
+        set_vim_var_list(VV_STACKTRACE, (*caught_stack.get()).stacktrace);
+        if *(*caught_stack.get()).throw_name as ::core::ffi::c_int != NUL {
             let mut IObufflen: size_t = 0;
-            if (*caught_stack).throw_lnum != 0 as linenr_T {
+            if (*caught_stack.get()).throw_lnum != 0 as linenr_T {
                 IObufflen = vim_snprintf_safelen(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     gettext(b"%s, line %ld\0".as_ptr() as *const ::core::ffi::c_char),
-                    (*caught_stack).throw_name,
-                    (*caught_stack).throw_lnum as int64_t,
+                    (*caught_stack.get()).throw_name,
+                    (*caught_stack.get()).throw_lnum as int64_t,
                 );
             } else {
                 IObufflen = vim_snprintf_safelen(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*caught_stack).throw_name,
+                    (*caught_stack.get()).throw_name,
                 );
             }
             set_vim_var_string(
                 VV_THROWPOINT,
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IObufflen as ptrdiff_t,
             );
         } else {
@@ -2097,30 +2112,30 @@ unsafe extern "C" fn finish_exception(mut excp: *mut except_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn exception_state_save(mut estate: *mut exception_state_T) {
-    (*estate).estate_current_exception = current_exception;
-    (*estate).estate_did_throw = did_throw;
-    (*estate).estate_need_rethrow = need_rethrow;
-    (*estate).estate_trylevel = trylevel;
-    (*estate).estate_did_emsg = did_emsg;
+    (*estate).estate_current_exception = current_exception.get();
+    (*estate).estate_did_throw = did_throw.get();
+    (*estate).estate_need_rethrow = need_rethrow.get();
+    (*estate).estate_trylevel = trylevel.get();
+    (*estate).estate_did_emsg = did_emsg.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn exception_state_restore(mut estate: *mut exception_state_T) {
-    if did_throw {
+    if did_throw.get() {
         handle_did_throw();
     }
-    current_exception = (*estate).estate_current_exception;
-    did_throw = (*estate).estate_did_throw;
-    need_rethrow = (*estate).estate_need_rethrow;
-    trylevel = (*estate).estate_trylevel;
-    did_emsg = (*estate).estate_did_emsg;
+    current_exception.set((*estate).estate_current_exception);
+    did_throw.set((*estate).estate_did_throw);
+    need_rethrow.set((*estate).estate_need_rethrow);
+    trylevel.set((*estate).estate_trylevel);
+    did_emsg.set((*estate).estate_did_emsg);
 }
 #[no_mangle]
 pub unsafe extern "C" fn exception_state_clear() {
-    current_exception = ::core::ptr::null_mut::<except_T>();
-    did_throw = false_0 != 0;
-    need_rethrow = false_0 != 0;
-    trylevel = 0 as ::core::ffi::c_int;
-    did_emsg = 0 as ::core::ffi::c_int;
+    current_exception.set(::core::ptr::null_mut::<except_T>());
+    did_throw.set(false_0 != 0);
+    need_rethrow.set(false_0 != 0);
+    trylevel.set(0 as ::core::ffi::c_int);
+    did_emsg.set(0 as ::core::ffi::c_int);
 }
 pub const RP_MAKE: ::core::ffi::c_int = 0;
 pub const RP_RESUME: ::core::ffi::c_int = 1;
@@ -2171,13 +2186,13 @@ unsafe extern "C" fn report_pending(
         _ => {
             if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     mesg,
                     gettext(b"Exception\0".as_ptr() as *const ::core::ffi::c_char),
                 );
                 mesg = concat_str(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     b": %s\0".as_ptr() as *const ::core::ffi::c_char,
                 );
                 s = (*(value as *mut except_T)).value;
@@ -2192,18 +2207,18 @@ unsafe extern "C" fn report_pending(
             }
         }
     }
-    let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-    if debug_break_level > 0 as ::core::ffi::c_int {
-        msg_silent = false_0;
+    let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
+    if debug_break_level.get() > 0 as ::core::ffi::c_int {
+        msg_silent.set(false_0);
     }
-    no_wait_return += 1;
-    msg_scroll = true_0;
+    (*no_wait_return.ptr()) += 1;
+    msg_scroll.set(true_0);
     smsg(0 as ::core::ffi::c_int, mesg, s);
     msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-    cmdline_row = msg_row;
-    no_wait_return -= 1;
-    if debug_break_level > 0 as ::core::ffi::c_int {
-        msg_silent = save_msg_silent;
+    cmdline_row.set(msg_row.get());
+    (*no_wait_return.ptr()) -= 1;
+    if debug_break_level.get() > 0 as ::core::ffi::c_int {
+        msg_silent.set(save_msg_silent);
     }
     if pending == CSTP_RETURN as ::core::ffi::c_int {
         xfree(s as *mut ::core::ffi::c_void);
@@ -2216,12 +2231,12 @@ pub unsafe extern "C" fn report_make_pending(
     mut pending: ::core::ffi::c_int,
     mut value: *mut ::core::ffi::c_void,
 ) {
-    if p_verbose >= 14 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+    if p_verbose.get() >= 14 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_enter();
         }
         report_pending(RP_MAKE, pending, value);
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_leave();
         }
     }
@@ -2230,12 +2245,12 @@ unsafe extern "C" fn report_resume_pending(
     mut pending: ::core::ffi::c_int,
     mut value: *mut ::core::ffi::c_void,
 ) {
-    if p_verbose >= 14 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+    if p_verbose.get() >= 14 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_enter();
         }
         report_pending(RP_RESUME, pending, value);
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_leave();
         }
     }
@@ -2244,12 +2259,12 @@ unsafe extern "C" fn report_discard_pending(
     mut pending: ::core::ffi::c_int,
     mut value: *mut ::core::ffi::c_void,
 ) {
-    if p_verbose >= 14 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+    if p_verbose.get() >= 14 as OptInt || debug_break_level.get() > 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_enter();
         }
         report_pending(RP_DISCARD, pending, value);
-        if debug_break_level <= 0 as ::core::ffi::c_int {
+        if debug_break_level.get() <= 0 as ::core::ffi::c_int {
             verbose_leave();
         }
     }
@@ -2282,9 +2297,9 @@ pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
     } else {
         (*cstack).cs_idx += 1;
         (*cstack).cs_flags[(*cstack).cs_idx as usize] = 0 as ::core::ffi::c_int;
-        let mut skip: bool = did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0
+        let mut skip: bool = did_emsg.get() != 0
+            || got_int.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
                 && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
                     & CSF_ACTIVE as ::core::ffi::c_int
@@ -2303,7 +2318,7 @@ pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
-    did_endif = true_0 != 0;
+    did_endif.set(true_0 != 0);
     if (*(*eap).cstack).cs_idx < 0 as ::core::ffi::c_int
         || (*(*eap).cstack).cs_flags[(*(*eap).cstack).cs_idx as usize]
             & (CSF_WHILE as ::core::ffi::c_int
@@ -2327,9 +2342,9 @@ pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
-    let mut skip: bool = did_emsg != 0
-        || got_int as ::core::ffi::c_int != 0
-        || did_throw as ::core::ffi::c_int != 0
+    let mut skip: bool = did_emsg.get() != 0
+        || got_int.get() as ::core::ffi::c_int != 0
+        || did_throw.get() as ::core::ffi::c_int != 0
         || (*cstack).cs_idx > 0 as ::core::ffi::c_int
             && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
                 & CSF_ACTIVE as ::core::ffi::c_int
@@ -2371,7 +2386,7 @@ pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
     }
     if !skip
         && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
-        && got_int as ::core::ffi::c_int != 0
+        && got_int.get() as ::core::ffi::c_int != 0
     {
         do_intthrow(cstack);
         skip = true_0 != 0;
@@ -2424,9 +2439,9 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
             } else {
                 CSF_FOR as ::core::ffi::c_int
             };
-        let mut skip: ::core::ffi::c_int = (did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0
+        let mut skip: ::core::ffi::c_int = (did_emsg.get() != 0
+            || got_int.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
                 && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
                     & CSF_ACTIVE as ::core::ffi::c_int
@@ -2656,9 +2671,10 @@ pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
             }
         }
         (*cstack).cs_flags[idx as usize] &= !(CSF_ACTIVE as ::core::ffi::c_int);
-        (*cstack).cs_pend.csp_ex[idx as usize] = current_exception as *mut ::core::ffi::c_void;
+        (*cstack).cs_pend.csp_ex[idx as usize] =
+            current_exception.get() as *mut ::core::ffi::c_void;
     }
-    did_throw = true_0 != 0;
+    did_throw.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
@@ -2672,9 +2688,9 @@ pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
         (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRY as ::core::ffi::c_int;
         (*cstack).cs_pending[(*cstack).cs_idx as usize] =
             CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
-        let mut skip: ::core::ffi::c_int = (did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0
+        let mut skip: ::core::ffi::c_int = (did_emsg.get() != 0
+            || got_int.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
                 && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
                     & CSF_ACTIVE as ::core::ffi::c_int
@@ -2682,14 +2698,14 @@ pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
         if skip == 0 {
             (*cstack).cs_flags[(*cstack).cs_idx as usize] |=
                 CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
-            if emsg_silent != 0 {
+            if emsg_silent.get() != 0 {
                 let mut elem: *mut eslist_T =
                     xmalloc(::core::mem::size_of::<eslist_T>()) as *mut eslist_T;
-                (*elem).saved_emsg_silent = emsg_silent;
+                (*elem).saved_emsg_silent = emsg_silent.get();
                 (*elem).next = (*cstack).cs_emsg_silent_list;
                 (*cstack).cs_emsg_silent_list = elem;
                 (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_SILENT as ::core::ffi::c_int;
-                emsg_silent = 0 as ::core::ffi::c_int;
+                emsg_silent.set(0 as ::core::ffi::c_int);
             }
         }
     };
@@ -2754,7 +2770,9 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
     }
     if !give_up {
         let mut caught: bool = false_0 != 0;
-        if !did_throw || (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0 {
+        if !did_throw.get()
+            || (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0
+        {
             skip = true_0 != 0;
         }
         if !skip
@@ -2779,27 +2797,30 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
                     save_char = *end;
                     *end = NUL as ::core::ffi::c_char;
                 }
-                save_cpo = p_cpo;
-                p_cpo = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-                emsg_off += 1;
+                save_cpo = p_cpo.get();
+                p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
+                (*emsg_off.ptr()) += 1;
                 regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-                emsg_off -= 1;
+                (*emsg_off.ptr()) -= 1;
                 regmatch.rm_ic = false_0 != 0;
                 if !end.is_null() {
                     *end = save_char;
                 }
-                p_cpo = save_cpo;
+                p_cpo.set(save_cpo);
                 if regmatch.regprog.is_null() {
                     semsg(
                         gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                         pat,
                     );
                 } else {
-                    let mut prev_got_int: ::core::ffi::c_int = got_int as ::core::ffi::c_int;
-                    got_int = false_0 != 0;
-                    caught =
-                        vim_regexec_nl(&raw mut regmatch, (*current_exception).value, 0 as colnr_T);
-                    got_int = got_int as ::core::ffi::c_int | prev_got_int != 0;
+                    let mut prev_got_int: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
+                    got_int.set(false_0 != 0);
+                    caught = vim_regexec_nl(
+                        &raw mut regmatch,
+                        (*current_exception.get()).value,
+                        0 as colnr_T,
+                    );
+                    got_int.set(got_int.get() as ::core::ffi::c_int | prev_got_int != 0);
                     vim_regfree(regmatch.regprog);
                 }
             }
@@ -2807,12 +2828,12 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
         if caught {
             (*cstack).cs_flags[idx as usize] |=
                 CSF_ACTIVE as ::core::ffi::c_int | CSF_CAUGHT as ::core::ffi::c_int;
-            did_throw = false_0 != 0;
-            got_int = did_throw;
-            did_emsg = got_int as ::core::ffi::c_int;
+            did_throw.set(false_0 != 0);
+            got_int.set(did_throw.get());
+            did_emsg.set(got_int.get() as ::core::ffi::c_int);
             catch_exception((*cstack).cs_pend.csp_ex[idx as usize] as *mut except_T);
             if (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize]
-                != current_exception as *mut ::core::ffi::c_void
+                != current_exception.get() as *mut ::core::ffi::c_void
             {
                 internal_error(b"ex_catch()\0".as_ptr() as *const ::core::ffi::c_char);
             }
@@ -2865,9 +2886,9 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         }
         cleanup_conditionals(cstack, CSF_TRY as ::core::ffi::c_int, false_0);
         if pending == CSTP_ERROR as ::core::ffi::c_int
-            || did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0
+            || did_emsg.get() != 0
+            || got_int.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0
         {
             if (*cstack).cs_pending[(*cstack).cs_idx as usize] as ::core::ffi::c_int
                 == CSTP_RETURN as ::core::ffi::c_int
@@ -2880,25 +2901,25 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
                     (*cstack).cs_pend.csp_rv[(*cstack).cs_idx as usize] as *mut typval_T,
                 );
             }
-            if pending == CSTP_ERROR as ::core::ffi::c_int && did_emsg == 0 {
+            if pending == CSTP_ERROR as ::core::ffi::c_int && did_emsg.get() == 0 {
                 pending |= if THROW_ON_ERROR != 0 {
                     CSTP_THROW as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 };
             } else {
-                pending |= if did_throw as ::core::ffi::c_int != 0 {
+                pending |= if did_throw.get() as ::core::ffi::c_int != 0 {
                     CSTP_THROW as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 };
             }
-            pending |= if did_emsg != 0 {
+            pending |= if did_emsg.get() != 0 {
                 CSTP_ERROR as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             };
-            pending |= if got_int as ::core::ffi::c_int != 0 {
+            pending |= if got_int.get() as ::core::ffi::c_int != 0 {
                 CSTP_INTERRUPT as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
@@ -2918,9 +2939,9 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
                 }
             };
             (*cstack).cs_pending[(*cstack).cs_idx as usize] = pending as ::core::ffi::c_char;
-            if did_throw as ::core::ffi::c_int != 0
+            if did_throw.get() as ::core::ffi::c_int != 0
                 && (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize]
-                    != current_exception as *mut ::core::ffi::c_void
+                    != current_exception.get() as *mut ::core::ffi::c_void
             {
                 internal_error(b"ex_finally()\0".as_ptr() as *const ::core::ffi::c_char);
             }
@@ -2947,9 +2968,9 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             gettext(b"E602: :endtry without :try\0".as_ptr() as *const ::core::ffi::c_char);
         return;
     }
-    let mut skip: bool = did_emsg != 0
-        || got_int as ::core::ffi::c_int != 0
-        || did_throw as ::core::ffi::c_int != 0
+    let mut skip: bool = did_emsg.get() != 0
+        || got_int.get() as ::core::ffi::c_int != 0
+        || did_throw.get() as ::core::ffi::c_int != 0
         || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0;
     if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0 {
         (*eap).errmsg = get_end_emsg(cstack);
@@ -2960,13 +2981,13 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             &raw mut (*cstack).cs_looplevel,
         );
         skip = true_0 != 0;
-        if did_throw {
+        if did_throw.get() {
             discard_current_exception();
         }
-        did_emsg = false_0;
+        did_emsg.set(false_0);
     } else {
         idx = (*cstack).cs_idx;
-        if did_throw as ::core::ffi::c_int != 0
+        if did_throw.get() as ::core::ffi::c_int != 0
             && (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int != 0
             && (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int == 0
         {
@@ -2979,11 +3000,11 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             && (*cstack).cs_pending[idx as usize] == 0)
         && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
     {
-        if got_int {
+        if got_int.get() {
             skip = true_0 != 0;
             do_intthrow(cstack);
             rethrow = false_0 != 0;
-            if did_throw as ::core::ffi::c_int != 0
+            if did_throw.get() as ::core::ffi::c_int != 0
                 && (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int == 0
             {
                 rethrow = true_0 != 0;
@@ -2996,7 +3017,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
         if pending as ::core::ffi::c_int == CSTP_RETURN as ::core::ffi::c_int {
             rettv = (*cstack).cs_pend.csp_rv[idx as usize];
         } else if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
-            current_exception = (*cstack).cs_pend.csp_ex[idx as usize] as *mut except_T;
+            current_exception.set((*cstack).cs_pend.csp_ex[idx as usize] as *mut except_T);
         }
     }
     cleanup_conditionals(
@@ -3016,7 +3037,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             if pending as ::core::ffi::c_int == CSTP_RETURN as ::core::ffi::c_int {
                 rettv
             } else if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
-                current_exception as *mut ::core::ffi::c_void
+                current_exception.get() as *mut ::core::ffi::c_void
             } else {
                 NULL
             },
@@ -3037,10 +3058,10 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             }
             _ => {
                 if pending as ::core::ffi::c_int & CSTP_ERROR as ::core::ffi::c_int != 0 {
-                    did_emsg = true_0;
+                    did_emsg.set(true_0);
                 }
                 if pending as ::core::ffi::c_int & CSTP_INTERRUPT as ::core::ffi::c_int != 0 {
-                    got_int = true_0 != 0;
+                    got_int.set(true_0 != 0);
                 }
                 if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
                     rethrow = true_0 != 0;
@@ -3055,44 +3076,48 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
     let mut pending: ::core::ffi::c_int = CSTP_NONE as ::core::ffi::c_int;
-    if did_emsg != 0
-        || got_int as ::core::ffi::c_int != 0
-        || did_throw as ::core::ffi::c_int != 0
-        || need_rethrow as ::core::ffi::c_int != 0
+    if did_emsg.get() != 0
+        || got_int.get() as ::core::ffi::c_int != 0
+        || did_throw.get() as ::core::ffi::c_int != 0
+        || need_rethrow.get() as ::core::ffi::c_int != 0
     {
-        (*csp).pending = (if did_emsg != 0 {
+        (*csp).pending = (if did_emsg.get() != 0 {
             CSTP_ERROR as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        }) | (if got_int as ::core::ffi::c_int != 0 {
+        }) | (if got_int.get() as ::core::ffi::c_int != 0 {
             CSTP_INTERRUPT as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        }) | (if did_throw as ::core::ffi::c_int != 0 {
+        }) | (if did_throw.get() as ::core::ffi::c_int != 0 {
             CSTP_THROW as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        }) | (if need_rethrow as ::core::ffi::c_int != 0 {
+        }) | (if need_rethrow.get() as ::core::ffi::c_int != 0 {
             CSTP_THROW as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
         });
-        if did_throw as ::core::ffi::c_int != 0 || need_rethrow as ::core::ffi::c_int != 0 {
-            (*csp).exception = current_exception;
-            current_exception = ::core::ptr::null_mut::<except_T>();
+        if did_throw.get() as ::core::ffi::c_int != 0
+            || need_rethrow.get() as ::core::ffi::c_int != 0
+        {
+            (*csp).exception = current_exception.get();
+            current_exception.set(::core::ptr::null_mut::<except_T>());
         } else {
             (*csp).exception = ::core::ptr::null_mut::<except_T>();
-            if did_emsg != 0 {
-                force_abort = force_abort as ::core::ffi::c_int
-                    | cause_abort.get() as ::core::ffi::c_int
-                    != 0;
+            if did_emsg.get() != 0 {
+                force_abort.set(
+                    force_abort.get() as ::core::ffi::c_int
+                        | cause_abort.get() as ::core::ffi::c_int
+                        != 0,
+                );
                 cause_abort.set(false_0 != 0);
             }
         }
-        need_rethrow = false_0 != 0;
-        did_throw = need_rethrow;
-        got_int = did_throw;
-        did_emsg = got_int as ::core::ffi::c_int;
+        need_rethrow.set(false_0 != 0);
+        did_throw.set(need_rethrow.get());
+        got_int.set(did_throw.get());
+        did_emsg.set(got_int.get() as ::core::ffi::c_int);
         report_make_pending(pending, (*csp).exception as *mut ::core::ffi::c_void);
     } else {
         (*csp).pending = CSTP_NONE as ::core::ffi::c_int;
@@ -3105,35 +3130,35 @@ pub unsafe extern "C" fn leave_cleanup(mut csp: *mut cleanup_T) {
     if pending == CSTP_NONE as ::core::ffi::c_int {
         return;
     }
-    if aborting() as ::core::ffi::c_int != 0 || need_rethrow as ::core::ffi::c_int != 0 {
+    if aborting() as ::core::ffi::c_int != 0 || need_rethrow.get() as ::core::ffi::c_int != 0 {
         if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
             discard_exception((*csp).exception, false_0 != 0);
         } else {
             report_discard_pending(pending, NULL);
         }
-        if !msg_list.is_null() {
+        if !(*msg_list.ptr()).is_null() {
             free_global_msglist();
         }
     } else {
         if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
-            current_exception = (*csp).exception;
+            current_exception.set((*csp).exception);
         } else if pending & CSTP_ERROR as ::core::ffi::c_int != 0 {
-            cause_abort.set(force_abort);
-            force_abort = false_0 != 0;
+            cause_abort.set(force_abort.get());
+            force_abort.set(false_0 != 0);
         }
         if pending & CSTP_ERROR as ::core::ffi::c_int != 0 {
-            did_emsg = true_0;
+            did_emsg.set(true_0);
         }
         if pending & CSTP_INTERRUPT as ::core::ffi::c_int != 0 {
-            got_int = true_0 != 0;
+            got_int.set(true_0 != 0);
         }
         if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
-            need_rethrow = true_0 != 0;
+            need_rethrow.set(true_0 != 0);
         }
         report_resume_pending(
             pending,
             if pending & CSTP_THROW as ::core::ffi::c_int != 0 {
-                current_exception as *mut ::core::ffi::c_void
+                current_exception.get() as *mut ::core::ffi::c_void
             } else {
                 NULL
             },
@@ -3151,8 +3176,8 @@ pub unsafe extern "C" fn cleanup_conditionals(
     idx = (*cstack).cs_idx;
     while idx >= 0 as ::core::ffi::c_int {
         if (*cstack).cs_flags[idx as usize] & CSF_TRY as ::core::ffi::c_int != 0 {
-            if did_emsg != 0
-                || got_int as ::core::ffi::c_int != 0
+            if did_emsg.get() != 0
+                || got_int.get() as ::core::ffi::c_int != 0
                 || (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0
             {
                 match (*cstack).cs_pending[idx as usize] as ::core::ffi::c_int {
@@ -3234,7 +3259,7 @@ pub unsafe extern "C" fn cleanup_conditionals(
             let mut elem: *mut eslist_T = ::core::ptr::null_mut::<eslist_T>();
             elem = (*cstack).cs_emsg_silent_list;
             (*cstack).cs_emsg_silent_list = (*elem).next;
-            emsg_silent = (*elem).saved_emsg_silent;
+            emsg_silent.set((*elem).saved_emsg_silent);
             xfree(elem as *mut ::core::ffi::c_void);
             (*cstack).cs_flags[idx as usize] &= !(CSF_SILENT as ::core::ffi::c_int);
         }

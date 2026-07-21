@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type MsgpackRpcRequestHandler;
     pub type terminal;
@@ -26,15 +27,15 @@ extern "C" {
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_rdt: OptInt;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_rdt: GlobalCell<OptInt>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut search_hl_has_cursor_lnum: linenr_T;
+    static search_hl_has_cursor_lnum: GlobalCell<linenr_T>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: linenr_T);
@@ -112,13 +113,13 @@ extern "C" {
         firstp: *mut linenr_T,
         lastp: *mut linenr_T,
     ) -> bool;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut search_first_line: linenr_T;
-    static mut search_last_line: linenr_T;
-    static mut curwin: *mut win_T;
-    static mut got_int: bool;
-    static mut ns_hl_fast: NS;
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static search_first_line: GlobalCell<linenr_T>;
+    static search_last_line: GlobalCell<linenr_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static got_int: GlobalCell<bool>;
+    static ns_hl_fast: GlobalCell<NS>;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
@@ -2492,10 +2493,10 @@ unsafe extern "C" fn win_hl_attr(
     mut wp: *mut win_T,
     mut hlf: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast < 0 as ::core::ffi::c_int {
+    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
         (*wp).w_ns_hl_attr
     } else {
-        hl_attr_active
+        hl_attr_active.get()
     }
     .offset(hlf as isize);
 }
@@ -2799,7 +2800,7 @@ pub unsafe extern "C" fn init_search_hl(mut wp: *mut win_T, mut search_hl: *mut 
         (*cur).mit_hl.buf = (*wp).w_buffer;
         (*cur).mit_hl.lnum = 0 as ::core::ffi::c_int as linenr_T;
         (*cur).mit_hl.first_lnum = 0 as ::core::ffi::c_int as linenr_T;
-        (*cur).mit_hl.tm = profile_setlimit(p_rdt as int64_t);
+        (*cur).mit_hl.tm = profile_setlimit(p_rdt.get() as int64_t);
         cur = (*cur).mit_next;
     }
     (*search_hl).buf = (*wp).w_buffer;
@@ -2874,8 +2875,8 @@ unsafe extern "C" fn next_search_hl(
 ) {
     let mut matchcol: colnr_T = 0;
     let mut nmatched: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
-    if (lnum < search_first_line || lnum > search_last_line) && cur.is_null() {
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
+    if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
         (*shl).lnum = 0 as ::core::ffi::c_int as linenr_T;
         return;
     }
@@ -2895,7 +2896,7 @@ unsafe extern "C" fn next_search_hl(
         } else {
             if (*shl).lnum == 0 as linenr_T {
                 matchcol = 0 as ::core::ffi::c_int as colnr_T;
-            } else if vim_strchr(p_cpo, CPO_SEARCH).is_null()
+            } else if vim_strchr(p_cpo.get(), CPO_SEARCH).is_null()
                 || (*shl).rm.endpos[0 as ::core::ffi::c_int as usize].lnum == 0 as linenr_T
                     && (*shl).rm.endpos[0 as ::core::ffi::c_int as usize].col
                         <= (*shl).rm.startpos[0 as ::core::ffi::c_int as usize].col
@@ -2932,8 +2933,8 @@ unsafe extern "C" fn next_search_hl(
                 if regprog_is_copy {
                     (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog;
                 }
-                if called_emsg > called_emsg_before
-                    || got_int as ::core::ffi::c_int != 0
+                if called_emsg.get() > called_emsg_before
+                    || got_int.get() as ::core::ffi::c_int != 0
                     || timed_out != 0
                 {
                     if shl == search_hl {
@@ -2942,7 +2943,7 @@ unsafe extern "C" fn next_search_hl(
                     }
                     (*shl).rm.regprog = ::core::ptr::null_mut::<regprog_T>();
                     (*shl).lnum = 0 as ::core::ffi::c_int as linenr_T;
-                    got_int = false_0 != 0;
+                    got_int.set(false_0 != 0);
                     break;
                 }
             } else if !cur.is_null() {
@@ -3175,7 +3176,7 @@ pub unsafe extern "C" fn update_search_hl(
                 if shl == search_hl && (*shl).has_cursor as ::core::ffi::c_int != 0 {
                     (*shl).attr_cur = win_hl_attr(wp, HLF_LC as ::core::ffi::c_int);
                     if (*shl).attr_cur != (*shl).attr {
-                        search_hl_has_cursor_lnum = lnum;
+                        search_hl_has_cursor_lnum.set(lnum);
                     }
                 } else {
                     (*shl).attr_cur = (*shl).attr;
@@ -3697,7 +3698,7 @@ pub unsafe extern "C" fn f_matchadd(
     let mut id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut error: bool = false_0 != 0;
     let mut conceal_char: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut win: *mut win_T = curwin;
+    let mut win: *mut win_T = curwin.get();
     (*rettv).vval.v_number = -1 as varnumber_T;
     if grp.is_null() || pat.is_null() {
         return;
@@ -3785,7 +3786,7 @@ pub unsafe extern "C" fn f_matchaddpos(
     let mut prio: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
     let mut id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut conceal_char: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut win: *mut win_T = curwin;
+    let mut win: *mut win_T = curwin.get();
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -3851,7 +3852,7 @@ pub unsafe extern "C" fn f_matcharg(
         }) as ptrdiff_t,
     );
     if id >= 1 as ::core::ffi::c_int && id <= 3 as ::core::ffi::c_int {
-        let m: *mut matchitem_T = get_match(curwin, id);
+        let m: *mut matchitem_T = get_match(curwin.get(), id);
         if !m.is_null() {
             tv_list_append_string(
                 (*rettv).vval.v_list,
@@ -3902,7 +3903,7 @@ pub unsafe extern "C" fn ex_match(mut eap: *mut exarg_T) {
         return;
     }
     if (*eap).skip == 0 {
-        match_delete(curwin, id, false_0 != 0);
+        match_delete(curwin.get(), id, false_0 != 0);
     }
     if ends_excmd(*(*eap).arg as ::core::ffi::c_int) != 0 {
         end = (*eap).arg;
@@ -3963,7 +3964,7 @@ pub unsafe extern "C" fn ex_match(mut eap: *mut exarg_T) {
             let mut c: ::core::ffi::c_int = *end as uint8_t as ::core::ffi::c_int;
             *end = NUL as ::core::ffi::c_char;
             match_add(
-                curwin,
+                curwin.get(),
                 g,
                 p.offset(1 as ::core::ffi::c_int as isize),
                 10 as ::core::ffi::c_int,

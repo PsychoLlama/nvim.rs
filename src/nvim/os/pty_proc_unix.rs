@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(
@@ -970,7 +971,7 @@ unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ffi::c_int {
-    static mut termios_default: termios = termios {
+    static termios_default: GlobalCell<termios> = GlobalCell::new(termios {
         c_iflag: 0,
         c_oflag: 0,
         c_cflag: 0,
@@ -979,9 +980,9 @@ pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ff
         c_cc: [0; 32],
         c_ispeed: 0,
         c_ospeed: 0,
-    };
-    if termios_default.c_cflag == 0 {
-        init_termios(&raw mut termios_default);
+    });
+    if (*termios_default.ptr()).c_cflag == 0 {
+        init_termios(termios_default.ptr());
     }
     let mut status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut proc: *mut Proc = ptyproc as *mut Proc;
@@ -1012,7 +1013,7 @@ pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ff
     let mut pid: ::core::ffi::c_int = forkpty(
         &raw mut master,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        &raw mut termios_default,
+        termios_default.ptr(),
         &raw mut (*ptyproc).winsize,
     );
     if pid < 0 as ::core::ffi::c_int {

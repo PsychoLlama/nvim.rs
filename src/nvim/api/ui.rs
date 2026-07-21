@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type multiqueue;
@@ -58,7 +58,7 @@ extern "C" {
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    static mut ui_ext_names: [*const ::core::ffi::c_char; 0];
+    static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
     fn may_trigger_vim_suspend_resume(suspend: bool);
     fn do_autocmd_focusgained(gained: bool);
     fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
@@ -71,16 +71,16 @@ extern "C" {
         refcount: size_t,
         cb: wbuffer_data_finalizer,
     ) -> *mut WBuffer;
-    static mut Columns: ::core::ffi::c_int;
-    static mut current_ui: uint64_t;
-    static mut t_colors: ::core::ffi::c_int;
-    static mut starting: ::core::ffi::c_int;
-    static mut stdin_isatty: bool;
-    static mut stdout_isatty: bool;
-    static mut stdin_fd: ::core::ffi::c_int;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static current_ui: GlobalCell<uint64_t>;
+    static t_colors: GlobalCell<::core::ffi::c_int>;
+    static starting: GlobalCell<::core::ffi::c_int>;
+    static stdin_isatty: GlobalCell<bool>;
+    static stdout_isatty: GlobalCell<bool>;
+    static stdin_fd: GlobalCell<::core::ffi::c_int>;
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    static mut p_bg: *mut ::core::ffi::c_char;
+    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
     fn hl_get_url(index: uint32_t) -> *const ::core::ffi::c_char;
     fn syn_attr2entry(attr: ::core::ffi::c_int) -> HlAttrs;
     fn hlattrs2dict(
@@ -90,7 +90,7 @@ extern "C" {
         use_rgb: bool,
         short_keys: bool,
     );
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn utf_ambiguous_width(p: *const ::core::ffi::c_char) -> bool;
     fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool;
     fn mpack_object_array(arr: Array, packer: *mut PackerBuffer);
@@ -108,8 +108,8 @@ extern "C" {
         height: ::core::ffi::c_int,
         err: *mut Error,
     );
-    static mut noargs: Array;
-    static mut channels: Map_uint64_t_ptr_t;
+    static noargs: GlobalCell<Array>;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
 }
 pub type __uid_t = ::core::ffi::c_uint;
 pub type __gid_t = ::core::ffi::c_uint;
@@ -1483,10 +1483,10 @@ pub unsafe extern "C" fn remote_ui_wait_for_attach() {
         0 as uint64_t
     };
     while ui_active() == 0 {
-        if !main_loop.events.is_null() && !multiqueue_empty(main_loop.events) {
-            multiqueue_process_events(main_loop.events);
+        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
+            multiqueue_process_events((*main_loop.ptr()).events);
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;
@@ -1592,7 +1592,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
     };
     (*ui).wildmenu_active = false_0 != 0;
     map_put_uint64_t_ptr_t(connected_uis.ptr(), channel_id, ui as ptr_t);
-    current_ui = channel_id;
+    current_ui.set(channel_id);
     ui_attach_impl(ui, channel_id);
     let mut chan: *mut Channel = find_channel(channel_id);
     if !chan.is_null() {
@@ -1648,7 +1648,7 @@ pub unsafe extern "C" fn nvim_ui_set_focus(
         return;
     }
     if gained {
-        current_ui = channel_id;
+        current_ui.set(channel_id);
         may_trigger_vim_suspend_resume(false_0 != 0);
     }
     do_autocmd_focusgained(gained);
@@ -1810,7 +1810,7 @@ unsafe extern "C" fn ui_set_option(
             );
             return;
         }
-        t_colors = value.data.integer as ::core::ffi::c_int;
+        t_colors.set(value.data.integer as ::core::ffi::c_int);
         (*ui).term_colors = value.data.integer as ::core::ffi::c_int;
         return;
     }
@@ -1839,7 +1839,7 @@ unsafe extern "C" fn ui_set_option(
             );
             return;
         }
-        if !(starting == 2 as ::core::ffi::c_int) {
+        if !(starting.get() == 2 as ::core::ffi::c_int) {
             api_set_error(
                 err,
                 kErrorTypeValidation,
@@ -1849,7 +1849,7 @@ unsafe extern "C" fn ui_set_option(
             );
             return;
         }
-        stdin_fd = value.data.integer as ::core::ffi::c_int;
+        stdin_fd.set(value.data.integer as ::core::ffi::c_int);
         return;
     }
     if strequal(
@@ -1868,7 +1868,7 @@ unsafe extern "C" fn ui_set_option(
             return;
         }
         if (*ui).channel_id == CHAN_STDIO as uint64_t {
-            stdin_isatty = value.data.boolean as bool;
+            stdin_isatty.set(value.data.boolean as bool);
         }
         (*ui).stdin_tty = value.data.boolean as bool;
         return;
@@ -1889,7 +1889,7 @@ unsafe extern "C" fn ui_set_option(
             return;
         }
         if (*ui).channel_id == CHAN_STDIO as uint64_t {
-            stdout_isatty = value.data.boolean as bool;
+            stdout_isatty.set(value.data.boolean as bool);
         }
         (*ui).stdout_tty = value.data.boolean as bool;
         return;
@@ -1902,7 +1902,7 @@ unsafe extern "C" fn ui_set_option(
     while (i as ::core::ffi::c_uint) < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint {
         if strequal(
             name.data,
-            *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(i as isize),
+            *(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char).offset(i as isize),
         ) as ::core::ffi::c_int
             != 0
             || i as ::core::ffi::c_uint == kUIPopupmenu as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2371,7 +2371,7 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
     mut cterm_bg: Integer,
 ) {
     if !(*ui).ui_ext[kUITermColors as ::core::ffi::c_int as usize] {
-        let mut dark_: bool = *p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
+        let mut dark_: bool = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
         rgb_fg = if rgb_fg != -1 as Integer {
             rgb_fg
         } else {
@@ -2943,7 +2943,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
         if endcol < clearcol {
             remote_ui_cursor_goto(ui, row, endcol);
             remote_ui_highlight_set(ui, clearattr as ::core::ffi::c_int);
-            if clearattr == 0 as Integer && clearcol == Columns as Integer {
+            if clearattr == 0 as Integer && clearcol == Columns.get() as Integer {
                 let mut args: Array = Array {
                     size: 0 as size_t,
                     capacity: 0 as size_t,
@@ -3331,7 +3331,7 @@ pub unsafe extern "C" fn remote_ui_update_menu(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"update_menu\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3339,7 +3339,7 @@ pub unsafe extern "C" fn remote_ui_busy_start(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"busy_start\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3347,7 +3347,7 @@ pub unsafe extern "C" fn remote_ui_busy_stop(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"busy_stop\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3355,7 +3355,7 @@ pub unsafe extern "C" fn remote_ui_mouse_on(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"mouse_on\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3363,7 +3363,7 @@ pub unsafe extern "C" fn remote_ui_mouse_off(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"mouse_off\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3403,14 +3403,18 @@ pub unsafe extern "C" fn remote_ui_mode_change(
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_bell(mut ui: *mut RemoteUI) {
-    push_call(ui, b"bell\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"bell\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs.get(),
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_visual_bell(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"visual_bell\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3418,7 +3422,7 @@ pub unsafe extern "C" fn remote_ui_suspend(mut ui: *mut RemoteUI) {
     push_call(
         ui,
         b"suspend\0".as_ptr() as *const ::core::ffi::c_char,
-        noargs,
+        noargs.get(),
     );
 }
 #[no_mangle]
@@ -3904,5 +3908,5 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }

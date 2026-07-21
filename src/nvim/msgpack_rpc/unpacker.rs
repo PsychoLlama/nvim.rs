@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -48,9 +49,9 @@ extern "C" {
         exit_cb: mpack_walk_cb,
     ) -> ::core::ffi::c_int;
     fn arena_printf(arena: *mut Arena, fmt: *const ::core::ffi::c_char, ...) -> String_0;
-    static mut grid_line_buf_size: size_t;
-    static mut grid_line_buf_char: *mut schar_T;
-    static mut grid_line_buf_attr: *mut sattr_T;
+    static grid_line_buf_size: GlobalCell<size_t>;
+    static grid_line_buf_char: GlobalCell<*mut schar_T>;
+    static grid_line_buf_attr: GlobalCell<*mut sattr_T>;
     fn ui_client_get_redraw_handler(
         name: *const ::core::ffi::c_char,
         name_len: size_t,
@@ -1370,14 +1371,15 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 let mut sc: schar_T = schar_from_buf(cellbuf, cellsize);
                 let mut r: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while r < repeat {
-                    if (*g).coloff >= grid_line_buf_size as ::core::ffi::c_int {
+                    if (*g).coloff >= grid_line_buf_size.get() as ::core::ffi::c_int {
                         (*p).state = -1 as ::core::ffi::c_int;
                         return false_0 != 0;
                     }
-                    *grid_line_buf_char.offset((*g).coloff as isize) = sc;
+                    *(*grid_line_buf_char.ptr()).offset((*g).coloff as isize) = sc;
                     let c2rust_fresh1 = (*g).coloff;
                     (*g).coloff = (*g).coloff + 1;
-                    *grid_line_buf_attr.offset(c2rust_fresh1 as isize) = (*g).cur_attr as sattr_T;
+                    *(*grid_line_buf_attr.ptr()).offset(c2rust_fresh1 as isize) =
+                        (*g).cur_attr as sattr_T;
                     r += 1;
                 }
             }

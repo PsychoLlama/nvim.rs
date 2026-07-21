@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(
@@ -87,7 +88,7 @@ extern "C" {
     fn stream_may_close(stream: *mut Stream);
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn try_getdigits(pp: *mut *mut ::core::ffi::c_char, nr: *mut intmax_t) -> bool;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn logmsg(
         log_level: ::core::ffi::c_int,
         context: *const ::core::ffi::c_char,
@@ -1194,7 +1195,7 @@ unsafe extern "C" fn socket_alive(
         {
             multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;
@@ -1327,7 +1328,7 @@ pub unsafe extern "C" fn socket_watcher_start(
                         {
                             multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
                         } else {
-                            loop_poll_events(&raw mut main_loop, remaining);
+                            loop_poll_events(main_loop.ptr(), remaining);
                         }
                         if remaining == 0 as int64_t {
                             break;
@@ -1659,7 +1660,7 @@ pub unsafe extern "C" fn socket_connect(
                     {
                         multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
                     } else {
-                        loop_poll_events(&raw mut main_loop, remaining);
+                        loop_poll_events(main_loop.ptr(), remaining);
                     }
                     if remaining == 0 as int64_t {
                         break;
@@ -1692,7 +1693,7 @@ pub unsafe extern "C" fn socket_connect(
                         {
                             multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
                         } else {
-                            loop_poll_events(&raw mut main_loop, remaining_0);
+                            loop_poll_events(main_loop.ptr(), remaining_0);
                         }
                         if remaining_0 == 0 as int64_t {
                             break;

@@ -89,22 +89,22 @@ extern "C" {
     fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider;
     fn screen_invalidate_highlights();
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut curwin: *mut win_T;
-    static mut must_redraw_pum: bool;
-    static mut need_highlight_changed: bool;
-    static mut p_bg: *mut ::core::ffi::c_char;
-    static mut p_pb: OptInt;
-    static mut hlf_names: [*const ::core::ffi::c_char; 0];
-    static mut highlight_attr: [::core::ffi::c_int; 76];
-    static mut highlight_attr_last: [::core::ffi::c_int; 76];
-    static mut normal_fg: RgbValue;
-    static mut normal_bg: RgbValue;
-    static mut normal_sp: RgbValue;
-    static mut ns_hl_global: NS;
-    static mut ns_hl_win: NS;
-    static mut ns_hl_fast: NS;
-    static mut ns_hl_active: NS;
-    static mut hl_attr_active: *mut ::core::ffi::c_int;
+    static curwin: GlobalCell<*mut win_T>;
+    static must_redraw_pum: GlobalCell<bool>;
+    static need_highlight_changed: GlobalCell<bool>;
+    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_pb: GlobalCell<OptInt>;
+    static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
+    static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]>;
+    static highlight_attr_last: GlobalCell<[::core::ffi::c_int; 76]>;
+    static normal_fg: GlobalCell<RgbValue>;
+    static normal_bg: GlobalCell<RgbValue>;
+    static normal_sp: GlobalCell<RgbValue>;
+    static ns_hl_global: GlobalCell<NS>;
+    static ns_hl_win: GlobalCell<NS>;
+    static ns_hl_fast: GlobalCell<NS>;
+    static ns_hl_active: GlobalCell<NS>;
+    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
     fn set_hl_group(
         id: ::core::ffi::c_int,
         attrs: HlAttrs,
@@ -2409,9 +2409,9 @@ pub unsafe extern "C" fn ui_send_all_hls(mut ui: *mut RemoteUI) {
         remote_ui_hl_group_set(
             ui,
             cstr_as_string(
-                *(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize),
+                *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
             ),
-            highlight_attr[hlf as usize] as Integer,
+            (*highlight_attr.ptr())[hlf as usize] as Integer,
         );
         hlf = hlf.wrapping_add(1);
     }
@@ -2512,10 +2512,10 @@ pub unsafe extern "C" fn ns_get_hl(
         return -1 as ::core::ffi::c_int;
     }
     if *ns_hl < 0 as ::core::ffi::c_int {
-        if ns_hl_active <= 0 as ::core::ffi::c_int {
+        if ns_hl_active.get() <= 0 as ::core::ffi::c_int {
             return -1 as ::core::ffi::c_int;
         }
-        *ns_hl = ns_hl_active;
+        *ns_hl = ns_hl_active.get();
     }
     let mut ns_id: ::core::ffi::c_int = *ns_hl as ::core::ffi::c_int;
     let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true_0 != 0);
@@ -2722,35 +2722,37 @@ pub unsafe extern "C" fn ns_get_hl(
 #[no_mangle]
 pub unsafe extern "C" fn hl_check_ns() -> bool {
     let mut ns: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if ns_hl_fast > 0 as ::core::ffi::c_int {
-        ns = ns_hl_fast as ::core::ffi::c_int;
-    } else if ns_hl_win >= 0 as ::core::ffi::c_int {
-        ns = ns_hl_win as ::core::ffi::c_int;
+    if ns_hl_fast.get() > 0 as ::core::ffi::c_int {
+        ns = ns_hl_fast.get() as ::core::ffi::c_int;
+    } else if ns_hl_win.get() >= 0 as ::core::ffi::c_int {
+        ns = ns_hl_win.get() as ::core::ffi::c_int;
     } else {
-        ns = ns_hl_global as ::core::ffi::c_int;
+        ns = ns_hl_global.get() as ::core::ffi::c_int;
     }
-    if ns_hl_active == ns {
+    if ns_hl_active.get() == ns {
         return false_0 != 0;
     }
-    ns_hl_active = ns as NS;
-    hl_attr_active = &raw mut highlight_attr as *mut ::core::ffi::c_int;
+    ns_hl_active.set(ns as NS);
+    hl_attr_active.set(highlight_attr.ptr() as *mut ::core::ffi::c_int);
     if ns > 0 as ::core::ffi::c_int {
         update_ns_hl(ns);
         let mut hl_def: *mut NSHlAttr = map_get_int_ptr_t(ns_hl_attr.ptr(), ns) as *mut NSHlAttr;
         if !hl_def.is_null() {
-            hl_attr_active = &raw mut *hl_def as *mut ::core::ffi::c_int;
+            hl_attr_active.set(&raw mut *hl_def as *mut ::core::ffi::c_int);
         }
     }
-    need_highlight_changed = true_0 != 0;
+    need_highlight_changed.set(true_0 != 0);
     return true_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_check_ns_hl(mut wp: *mut win_T) -> bool {
-    ns_hl_win = (if !wp.is_null() {
-        (*wp).w_ns_hl
-    } else {
-        -1 as ::core::ffi::c_int
-    }) as NS;
+    ns_hl_win.set(
+        (if !wp.is_null() {
+            (*wp).w_ns_hl
+        } else {
+            -1 as ::core::ffi::c_int
+        }) as NS,
+    );
     return hl_check_ns();
 }
 #[no_mangle]
@@ -2788,11 +2790,11 @@ pub unsafe extern "C" fn hl_get_ui_attr(
         available = hl_ns_get_attrs(ns_id, final_id, &raw mut optional, &raw mut attrs);
     }
     if HLF_PNI as ::core::ffi::c_int <= idx && idx <= HLF_PST as ::core::ffi::c_int {
-        if attrs.hl_blend == -1 as int32_t && p_pb > 0 as OptInt {
-            attrs.hl_blend = p_pb as ::core::ffi::c_int as int32_t;
+        if attrs.hl_blend == -1 as int32_t && p_pb.get() > 0 as OptInt {
+            attrs.hl_blend = p_pb.get() as ::core::ffi::c_int as int32_t;
         }
         if pum_drawn() {
-            must_redraw_pum = true_0 != 0;
+            must_redraw_pum.set(true_0 != 0);
         }
     }
     if optional as ::core::ffi::c_int != 0 && !available {
@@ -2829,7 +2831,7 @@ pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool)
         if !hl_def_ptr.is_null() {
             (*wp).w_ns_hl_attr = &raw mut *hl_def_ptr as *mut ::core::ffi::c_int;
         } else {
-            (*wp).w_ns_hl_attr = &raw mut highlight_attr as *mut ::core::ffi::c_int;
+            (*wp).w_ns_hl_attr = highlight_attr.ptr() as *mut ::core::ffi::c_int;
         }
     }
     let mut hl_def: *mut ::core::ffi::c_int = (*wp).w_ns_hl_attr;
@@ -2847,13 +2849,13 @@ pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool)
     } else if *hl_def.offset(HLF_NONE as ::core::ffi::c_int as isize) > 0 as ::core::ffi::c_int {
         (*wp).w_hl_attr_normal = *hl_def.offset(HLF_NONE as ::core::ffi::c_int as isize);
     } else if float_win {
-        (*wp).w_hl_attr_normal = if *hl_attr_active
+        (*wp).w_hl_attr_normal = if *(*hl_attr_active.ptr())
             .offset(HLF_NFLOAT as ::core::ffi::c_int as isize)
             > 0 as ::core::ffi::c_int
         {
-            *hl_attr_active.offset(HLF_NFLOAT as ::core::ffi::c_int as isize)
+            *(*hl_attr_active.ptr()).offset(HLF_NFLOAT as ::core::ffi::c_int as isize)
         } else {
-            highlight_attr[HLF_NFLOAT as ::core::ffi::c_int as usize]
+            (*highlight_attr.ptr())[HLF_NFLOAT as ::core::ffi::c_int as usize]
         };
     } else {
         (*wp).w_hl_attr_normal = 0 as ::core::ffi::c_int;
@@ -2891,7 +2893,7 @@ pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool)
     check_blending(wp);
     if *hl_def.offset(HLF_INACTIVE as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         (*wp).w_hl_attr_normalnc = hl_combine_attr(
-            *hl_attr_active.offset(HLF_INACTIVE as ::core::ffi::c_int as isize),
+            *(*hl_attr_active.ptr()).offset(HLF_INACTIVE as ::core::ffi::c_int as isize),
             (*wp).w_hl_attr_normal,
         );
     } else {
@@ -2926,8 +2928,8 @@ pub unsafe extern "C" fn update_ns_hl(mut ns_id: ::core::ffi::c_int) {
     let mut hlf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while hlf < HLF_COUNT as ::core::ffi::c_int {
         let mut id: ::core::ffi::c_int = syn_check_group(
-            *(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize),
-            strlen(*(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize)),
+            *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
+            strlen(*(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize)),
         );
         let mut optional: bool =
             hlf == HLF_INACTIVE as ::core::ffi::c_int || hlf == HLF_NFLOAT as ::core::ffi::c_int;
@@ -2945,8 +2947,8 @@ pub unsafe extern "C" fn update_ns_hl(mut ns_id: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_bg_attr(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    if ns_hl_fast < 0 as ::core::ffi::c_int {
-        let mut local: ::core::ffi::c_int = if wp == curwin {
+    if ns_hl_fast.get() < 0 as ::core::ffi::c_int {
+        let mut local: ::core::ffi::c_int = if wp == curwin.get() {
             (*wp).w_hl_attr_normal
         } else {
             (*wp).w_hl_attr_normalnc
@@ -2955,13 +2957,13 @@ pub unsafe extern "C" fn win_bg_attr(mut wp: *mut win_T) -> ::core::ffi::c_int {
             return local;
         }
     }
-    if wp == curwin
-        || *hl_attr_active.offset(HLF_INACTIVE as ::core::ffi::c_int as isize)
+    if wp == curwin.get()
+        || *(*hl_attr_active.ptr()).offset(HLF_INACTIVE as ::core::ffi::c_int as isize)
             == 0 as ::core::ffi::c_int
     {
-        return *hl_attr_active.offset(HLF_NONE as ::core::ffi::c_int as isize);
+        return *(*hl_attr_active.ptr()).offset(HLF_NONE as ::core::ffi::c_int as isize);
     } else {
-        return *hl_attr_active.offset(HLF_INACTIVE as ::core::ffi::c_int as isize);
+        return *(*hl_attr_active.ptr()).offset(HLF_INACTIVE as ::core::ffi::c_int as isize);
     };
 }
 #[no_mangle]
@@ -3041,7 +3043,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
         mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
         mh_clear(&raw mut (*urls.ptr()).h);
         memset(
-            &raw mut highlight_attr_last as *mut ::core::ffi::c_int as *mut ::core::ffi::c_void,
+            highlight_attr_last.ptr() as *mut ::core::ffi::c_int as *mut ::core::ffi::c_void,
             -1 as ::core::ffi::c_int,
             ::core::mem::size_of::<[::core::ffi::c_int; 76]>(),
         );
@@ -3112,7 +3114,7 @@ pub unsafe extern "C" fn hl_invalidate_blends() {
     mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
     mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
     highlight_changed();
-    update_window_hl(curwin, true_0 != 0);
+    update_window_hl(curwin.get(), true_0 != 0);
 }
 unsafe extern "C" fn hl_combine_ae(mut char_ae: int32_t, mut prim_ae: int32_t) -> int32_t {
     let mut char_ul: int32_t = char_ae & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t;
@@ -3202,15 +3204,15 @@ pub unsafe extern "C" fn hl_combine_attr(
 }
 unsafe extern "C" fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     if attrs.rgb_bg_color == -1 as RgbValue {
-        attrs.rgb_bg_color = normal_bg;
+        attrs.rgb_bg_color = normal_bg.get();
     }
     if attrs.rgb_fg_color == -1 as RgbValue {
-        attrs.rgb_fg_color = normal_fg;
+        attrs.rgb_fg_color = normal_fg.get();
     }
     if attrs.rgb_sp_color == -1 as RgbValue {
-        attrs.rgb_sp_color = normal_sp;
+        attrs.rgb_sp_color = normal_sp.get();
     }
-    let mut dark_: bool = *p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
+    let mut dark_: bool = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
     attrs.rgb_fg_color = if attrs.rgb_fg_color != -1 as RgbValue {
         attrs.rgb_fg_color
     } else if dark_ as ::core::ffi::c_int != 0 {
@@ -4757,7 +4759,7 @@ unsafe extern "C" fn hl_inspect_impl(
             ui_name = if e.id1 == -1 as ::core::ffi::c_int {
                 b"Normal\0".as_ptr() as *const ::core::ffi::c_char
             } else {
-                *(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(e.id1 as isize)
+                *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(e.id1 as isize)
             };
             let c2rust_fresh3 = item.size;
             item.size = item.size.wrapping_add(1);

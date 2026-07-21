@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -151,10 +151,10 @@ extern "C" {
         do_concat: bool,
     ) -> *mut ::core::ffi::c_char;
     fn may_trigger_vim_suspend_resume(suspend: bool);
-    static mut autocmd_fname: *mut ::core::ffi::c_char;
-    static mut autocmd_fname_full: bool;
-    static mut autocmd_bufnr: ::core::ffi::c_int;
-    static mut autocmd_match: *mut ::core::ffi::c_char;
+    static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char>;
+    static autocmd_fname_full: GlobalCell<bool>;
+    static autocmd_bufnr: GlobalCell<::core::ffi::c_int>;
+    static autocmd_match: GlobalCell<*mut ::core::ffi::c_char>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn ngettext(
         __msgid1: *const ::core::ffi::c_char,
@@ -208,7 +208,7 @@ extern "C" {
     fn buf_hide(buf: *const buf_T) -> bool;
     fn buf_spname(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
     fn deleted_lines_mark(lnum: linenr_T, count: ::core::ffi::c_int);
-    static mut channels: Map_uint64_t_ptr_t;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn channel_close(
         id: uint64_t,
         part: ChannelPart,
@@ -231,25 +231,25 @@ extern "C" {
         env: *mut dict_T,
         status_out: *mut varnumber_T,
     ) -> *mut Channel;
-    static mut p_awa: ::core::ffi::c_int;
-    static mut p_confirm: ::core::ffi::c_int;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_gp: *mut ::core::ffi::c_char;
-    static mut p_ei: *mut ::core::ffi::c_char;
-    static mut p_ffu: *mut ::core::ffi::c_char;
-    static mut p_hls: ::core::ffi::c_int;
-    static mut p_lz: ::core::ffi::c_int;
-    static mut p_mp: *mut ::core::ffi::c_char;
-    static mut p_mfd: OptInt;
-    static mut p_mmd: OptInt;
-    static mut p_pvh: OptInt;
-    static mut p_rtp: *mut ::core::ffi::c_char;
-    static mut p_sh: *mut ::core::ffi::c_char;
-    static mut p_shada: *mut ::core::ffi::c_char;
-    static mut p_verbose: OptInt;
-    static mut p_wic: ::core::ffi::c_int;
-    static mut p_write: ::core::ffi::c_int;
-    static mut p_cdh: ::core::ffi::c_int;
+    static p_awa: GlobalCell<::core::ffi::c_int>;
+    static p_confirm: GlobalCell<::core::ffi::c_int>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_gp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ei: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ffu: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hls: GlobalCell<::core::ffi::c_int>;
+    static p_lz: GlobalCell<::core::ffi::c_int>;
+    static p_mp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_mfd: GlobalCell<OptInt>;
+    static p_mmd: GlobalCell<OptInt>;
+    static p_pvh: GlobalCell<OptInt>;
+    static p_rtp: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sh: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_shada: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_wic: GlobalCell<::core::ffi::c_int>;
+    static p_write: GlobalCell<::core::ffi::c_int>;
+    static p_cdh: GlobalCell<::core::ffi::c_int>;
     fn vim_strsave_escaped(
         string: *const ::core::ffi::c_char,
         esc_chars: *const ::core::ffi::c_char,
@@ -663,104 +663,104 @@ extern "C" {
     fn save_typeahead(tp: *mut tasave_T);
     fn restore_typeahead(tp: *mut tasave_T);
     fn vpeekc() -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut exec_from_reg: bool;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut msg_didout: bool;
-    static mut msg_didany: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut did_endif: bool;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut did_emsg_syntax: bool;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut need_maketitle: bool;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut ex_nesting_level: ::core::ffi::c_int;
-    static mut debug_break_level: ::core::ffi::c_int;
-    static mut debug_tick: ::core::ffi::c_int;
-    static mut do_profiling: ::core::ffi::c_int;
-    static mut current_exception: *mut except_T;
-    static mut did_throw: bool;
-    static mut need_rethrow: bool;
-    static mut check_cstack: bool;
-    static mut trylevel: ::core::ffi::c_int;
-    static mut force_abort: bool;
-    static mut msg_list: *mut *mut msglist_T;
-    static mut suppress_errthrow: bool;
-    static mut caught_stack: *mut except_T;
-    static mut current_sctx: sctx_T;
-    static mut current_ui: uint64_t;
-    static mut firstwin: *mut win_T;
-    static mut lastwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut lastused_tabpage: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut lastbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut arg_had_last: bool;
-    static mut exiting: bool;
-    static mut secure: ::core::ffi::c_int;
-    static mut textlock: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut VIsual_active: bool;
-    static mut did_syncbind: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut finish_op: bool;
-    static mut opcount: ::core::ffi::c_int;
-    static mut exmode_active: bool;
-    static mut pending_exmode_active: bool;
-    static mut ex_no_reprint: bool;
-    static mut cmdpreview: bool;
-    static mut reg_executing: ::core::ffi::c_int;
-    static mut pending_end_reg_executing: bool;
-    static mut force_restart_edit: bool;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut readonlymode: bool;
-    static mut recoverymode: bool;
-    static mut typebuf: typebuf_T;
-    static mut ex_normal_busy: ::core::ffi::c_int;
-    static mut expr_map_lock: ::core::ffi::c_int;
-    static mut stop_insert_mode: bool;
-    static mut KeyTyped: bool;
-    static mut must_redraw: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut searchcmdlen: ::core::ffi::c_int;
-    static mut global_busy: ::core::ffi::c_int;
-    static mut last_cmdline: *mut ::core::ffi::c_char;
-    static mut repeat_cmdline: *mut ::core::ffi::c_char;
-    static mut new_last_cmdline: *mut ::core::ffi::c_char;
-    static mut postponed_split: ::core::ffi::c_int;
-    static mut postponed_split_flags: ::core::ffi::c_int;
-    static mut postponed_split_tab: ::core::ffi::c_int;
-    static mut g_do_tagpreview: ::core::ffi::c_int;
-    static mut escape_chars: *mut ::core::ffi::c_char;
-    static mut redir_off: bool;
-    static mut redir_fd: *mut FILE;
-    static mut redir_reg: ::core::ffi::c_int;
-    static mut redir_vname: bool;
-    static mut globaldir: *mut ::core::ffi::c_char;
-    static mut last_chdir_reason: *mut ::core::ffi::c_char;
-    static mut cmdwin_type: ::core::ffi::c_int;
-    static mut cmdwin_result: ::core::ffi::c_int;
-    static mut no_hlsearch: bool;
-    static mut virtual_op: TriState;
-    static mut magic_overruled: optmagic_T;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static exec_from_reg: GlobalCell<bool>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static msg_didout: GlobalCell<bool>;
+    static msg_didany: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static did_endif: GlobalCell<bool>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static did_emsg_syntax: GlobalCell<bool>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static need_maketitle: GlobalCell<bool>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
+    static debug_break_level: GlobalCell<::core::ffi::c_int>;
+    static debug_tick: GlobalCell<::core::ffi::c_int>;
+    static do_profiling: GlobalCell<::core::ffi::c_int>;
+    static current_exception: GlobalCell<*mut except_T>;
+    static did_throw: GlobalCell<bool>;
+    static need_rethrow: GlobalCell<bool>;
+    static check_cstack: GlobalCell<bool>;
+    static trylevel: GlobalCell<::core::ffi::c_int>;
+    static force_abort: GlobalCell<bool>;
+    static msg_list: GlobalCell<*mut *mut msglist_T>;
+    static suppress_errthrow: GlobalCell<bool>;
+    static caught_stack: GlobalCell<*mut except_T>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static current_ui: GlobalCell<uint64_t>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static lastwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static lastused_tabpage: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static lastbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static arg_had_last: GlobalCell<bool>;
+    static exiting: GlobalCell<bool>;
+    static secure: GlobalCell<::core::ffi::c_int>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static VIsual_active: GlobalCell<bool>;
+    static did_syncbind: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static finish_op: GlobalCell<bool>;
+    static opcount: GlobalCell<::core::ffi::c_int>;
+    static exmode_active: GlobalCell<bool>;
+    static pending_exmode_active: GlobalCell<bool>;
+    static ex_no_reprint: GlobalCell<bool>;
+    static cmdpreview: GlobalCell<bool>;
+    static reg_executing: GlobalCell<::core::ffi::c_int>;
+    static pending_end_reg_executing: GlobalCell<bool>;
+    static force_restart_edit: GlobalCell<bool>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static readonlymode: GlobalCell<bool>;
+    static recoverymode: GlobalCell<bool>;
+    static typebuf: GlobalCell<typebuf_T>;
+    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
+    static expr_map_lock: GlobalCell<::core::ffi::c_int>;
+    static stop_insert_mode: GlobalCell<bool>;
+    static KeyTyped: GlobalCell<bool>;
+    static must_redraw: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static searchcmdlen: GlobalCell<::core::ffi::c_int>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
+    static last_cmdline: GlobalCell<*mut ::core::ffi::c_char>;
+    static repeat_cmdline: GlobalCell<*mut ::core::ffi::c_char>;
+    static new_last_cmdline: GlobalCell<*mut ::core::ffi::c_char>;
+    static postponed_split: GlobalCell<::core::ffi::c_int>;
+    static postponed_split_flags: GlobalCell<::core::ffi::c_int>;
+    static postponed_split_tab: GlobalCell<::core::ffi::c_int>;
+    static g_do_tagpreview: GlobalCell<::core::ffi::c_int>;
+    static escape_chars: GlobalCell<*mut ::core::ffi::c_char>;
+    static redir_off: GlobalCell<bool>;
+    static redir_fd: GlobalCell<*mut FILE>;
+    static redir_reg: GlobalCell<::core::ffi::c_int>;
+    static redir_vname: GlobalCell<bool>;
+    static globaldir: GlobalCell<*mut ::core::ffi::c_char>;
+    static last_chdir_reason: GlobalCell<*mut ::core::ffi::c_char>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
+    static cmdwin_result: GlobalCell<::core::ffi::c_int>;
+    static no_hlsearch: GlobalCell<bool>;
+    static virtual_op: GlobalCell<TriState>;
+    static magic_overruled: GlobalCell<optmagic_T>;
     fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn find_ucmd(
         eap: *mut exarg_T,
@@ -783,7 +783,7 @@ extern "C" {
         multi_mods: *mut bool,
     ) -> size_t;
     fn do_ucmd(eap: *mut exarg_T, preview: bool) -> ::core::ffi::c_int;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn nlua_exec(
         str: String_0,
         chunkname: *const ::core::ffi::c_char,
@@ -6008,7 +6008,7 @@ pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static mut value_init_ptr_t: ptr_t = NULL;
+static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn map_get_uint64_t_ptr_t(
@@ -6017,7 +6017,7 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 ) -> ptr_t {
     let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t
+        value_init_ptr_t.get()
     } else {
         *(*map).values.offset(k as isize)
     };
@@ -6107,7 +6107,7 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
 }
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 pub const CPO_ALTREAD: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
 pub const CPO_BAR: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
@@ -6120,100 +6120,110 @@ unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     }
     return (*l).lv_len;
 }
-static mut e_ambiguous_use_of_user_defined_command: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-        *b"E464: Ambiguous use of user-defined command\0",
-    )
-};
-static mut e_no_call_stack_to_substitute_for_stack: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E489: No call stack to substitute for \"<stack>\"\0",
-    )
-};
-static mut e_not_an_editor_command: [::core::ffi::c_char; 28] = unsafe {
+static e_ambiguous_use_of_user_defined_command: GlobalCell<[::core::ffi::c_char; 44]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+            *b"E464: Ambiguous use of user-defined command\0",
+        )
+    });
+static e_no_call_stack_to_substitute_for_stack: GlobalCell<[::core::ffi::c_char; 48]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+            *b"E489: No call stack to substitute for \"<stack>\"\0",
+        )
+    });
+static e_not_an_editor_command: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E492: Not an editor command\0")
-};
-static mut e_no_autocommand_file_name_to_substitute_for_afile: [::core::ffi::c_char; 59] = unsafe {
-    ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
-        *b"E495: No autocommand file name to substitute for \"<afile>\"\0",
-    )
-};
-static mut e_no_autocommand_buffer_number_to_substitute_for_abuf: [::core::ffi::c_char; 62] = unsafe {
+});
+static e_no_autocommand_file_name_to_substitute_for_afile: GlobalCell<[::core::ffi::c_char; 59]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+            *b"E495: No autocommand file name to substitute for \"<afile>\"\0",
+        )
+    });
+static e_no_autocommand_buffer_number_to_substitute_for_abuf: GlobalCell<
+    [::core::ffi::c_char; 62],
+> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
         *b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0",
     )
-};
-static mut e_no_autocommand_match_name_to_substitute_for_amatch: [::core::ffi::c_char; 61] = unsafe {
-    ::core::mem::transmute::<[u8; 61], [::core::ffi::c_char; 61]>(
-        *b"E497: No autocommand match name to substitute for \"<amatch>\"\0",
-    )
-};
-static mut e_no_source_file_name_to_substitute_for_sfile: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
-        *b"E498: No :source file name to substitute for \"<sfile>\"\0",
-    )
-};
-static mut e_no_line_number_to_use_for_slnum: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-        *b"E842: No line number to use for \"<slnum>\"\0",
-    )
-};
-static mut e_no_line_number_to_use_for_sflnum: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-        *b"E961: No line number to use for \"<sflnum>\"\0",
-    )
-};
-static mut e_no_script_file_name_to_substitute_for_script: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
-        *b"E1274: No script file name to substitute for \"<script>\"\0",
-    )
-};
-static mut quitmore: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut ex_pressedreturn: bool = false_0 != 0;
-static mut dollar_command: [::core::ffi::c_char; 2] =
-    ['$' as ::core::ffi::c_char, 0 as ::core::ffi::c_char];
+});
+static e_no_autocommand_match_name_to_substitute_for_amatch: GlobalCell<[::core::ffi::c_char; 61]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 61], [::core::ffi::c_char; 61]>(
+            *b"E497: No autocommand match name to substitute for \"<amatch>\"\0",
+        )
+    });
+static e_no_source_file_name_to_substitute_for_sfile: GlobalCell<[::core::ffi::c_char; 55]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+            *b"E498: No :source file name to substitute for \"<sfile>\"\0",
+        )
+    });
+static e_no_line_number_to_use_for_slnum: GlobalCell<[::core::ffi::c_char; 42]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+            *b"E842: No line number to use for \"<slnum>\"\0",
+        )
+    });
+static e_no_line_number_to_use_for_sflnum: GlobalCell<[::core::ffi::c_char; 43]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+            *b"E961: No line number to use for \"<sflnum>\"\0",
+        )
+    });
+static e_no_script_file_name_to_substitute_for_script: GlobalCell<[::core::ffi::c_char; 56]> =
+    GlobalCell::new(unsafe {
+        ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+            *b"E1274: No script file name to substitute for \"<script>\"\0",
+        )
+    });
+static quitmore: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static dollar_command: GlobalCell<[::core::ffi::c_char; 2]> =
+    GlobalCell::new(['$' as ::core::ffi::c_char, 0 as ::core::ffi::c_char]);
 unsafe extern "C" fn save_dbg_stuff(mut dsp: *mut dbg_stuff) {
-    (*dsp).trylevel = trylevel;
-    trylevel = 0 as ::core::ffi::c_int;
-    (*dsp).force_abort = force_abort as ::core::ffi::c_int;
-    force_abort = false_0 != 0;
-    (*dsp).caught_stack = caught_stack;
-    caught_stack = ::core::ptr::null_mut::<except_T>();
+    (*dsp).trylevel = trylevel.get();
+    trylevel.set(0 as ::core::ffi::c_int);
+    (*dsp).force_abort = force_abort.get() as ::core::ffi::c_int;
+    force_abort.set(false_0 != 0);
+    (*dsp).caught_stack = caught_stack.get();
+    caught_stack.set(::core::ptr::null_mut::<except_T>());
     (*dsp).vv_exception = v_exception(::core::ptr::null_mut::<::core::ffi::c_char>());
     (*dsp).vv_throwpoint = v_throwpoint(::core::ptr::null_mut::<::core::ffi::c_char>());
-    (*dsp).did_emsg = did_emsg;
-    did_emsg = false_0;
-    (*dsp).got_int = got_int as ::core::ffi::c_int;
-    got_int = false_0 != 0;
-    (*dsp).did_throw = did_throw;
-    did_throw = false_0 != 0;
-    (*dsp).need_rethrow = need_rethrow as ::core::ffi::c_int;
-    need_rethrow = false_0 != 0;
-    (*dsp).check_cstack = check_cstack as ::core::ffi::c_int;
-    check_cstack = false_0 != 0;
-    (*dsp).current_exception = current_exception;
-    current_exception = ::core::ptr::null_mut::<except_T>();
+    (*dsp).did_emsg = did_emsg.get();
+    did_emsg.set(false_0);
+    (*dsp).got_int = got_int.get() as ::core::ffi::c_int;
+    got_int.set(false_0 != 0);
+    (*dsp).did_throw = did_throw.get();
+    did_throw.set(false_0 != 0);
+    (*dsp).need_rethrow = need_rethrow.get() as ::core::ffi::c_int;
+    need_rethrow.set(false_0 != 0);
+    (*dsp).check_cstack = check_cstack.get() as ::core::ffi::c_int;
+    check_cstack.set(false_0 != 0);
+    (*dsp).current_exception = current_exception.get();
+    current_exception.set(::core::ptr::null_mut::<except_T>());
 }
 unsafe extern "C" fn restore_dbg_stuff(mut dsp: *mut dbg_stuff) {
-    suppress_errthrow = false_0 != 0;
-    trylevel = (*dsp).trylevel;
-    force_abort = (*dsp).force_abort != 0;
-    caught_stack = (*dsp).caught_stack;
+    suppress_errthrow.set(false_0 != 0);
+    trylevel.set((*dsp).trylevel);
+    force_abort.set((*dsp).force_abort != 0);
+    caught_stack.set((*dsp).caught_stack);
     v_exception((*dsp).vv_exception);
     v_throwpoint((*dsp).vv_throwpoint);
-    did_emsg = (*dsp).did_emsg;
-    got_int = (*dsp).got_int != 0;
-    did_throw = (*dsp).did_throw;
-    need_rethrow = (*dsp).need_rethrow != 0;
-    check_cstack = (*dsp).check_cstack != 0;
-    current_exception = (*dsp).current_exception;
+    did_emsg.set((*dsp).did_emsg);
+    got_int.set((*dsp).got_int != 0);
+    did_throw.set((*dsp).did_throw);
+    need_rethrow.set((*dsp).need_rethrow != 0);
+    check_cstack.set((*dsp).check_cstack != 0);
+    current_exception.set((*dsp).current_exception);
 }
 unsafe extern "C" fn is_other_file(
     mut fnum: ::core::ffi::c_int,
     mut ffname: *mut ::core::ffi::c_char,
 ) -> bool {
     if fnum != 0 as ::core::ffi::c_int {
-        if fnum == (*curbuf).handle {
+        if fnum == (*curbuf.get()).handle {
             return false_0 != 0;
         }
         return true_0 != 0;
@@ -6224,25 +6234,25 @@ unsafe extern "C" fn is_other_file(
     if *ffname as ::core::ffi::c_int == NUL {
         return false_0 != 0;
     }
-    if !(*curbuf).file_id_valid
-        && !(*curbuf).b_sfname.is_null()
-        && *(*curbuf).b_sfname as ::core::ffi::c_int != NUL
+    if !(*curbuf.get()).file_id_valid
+        && !(*curbuf.get()).b_sfname.is_null()
+        && *(*curbuf.get()).b_sfname as ::core::ffi::c_int != NUL
     {
-        return path_fnamecmp(ffname, (*curbuf).b_sfname) != 0 as ::core::ffi::c_int;
+        return path_fnamecmp(ffname, (*curbuf.get()).b_sfname) != 0 as ::core::ffi::c_int;
     }
     return otherfile(ffname);
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_exmode() {
-    exmode_active = true_0 != 0;
-    State = MODE_NORMAL as ::core::ffi::c_int;
+    exmode_active.set(true_0 != 0);
+    State.set(MODE_NORMAL as ::core::ffi::c_int);
     may_trigger_modechanged();
-    if global_busy != 0 {
+    if global_busy.get() != 0 {
         return;
     }
-    let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll;
-    RedrawingDisabled += 1;
-    no_wait_return += 1;
+    let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
+    (*RedrawingDisabled.ptr()) += 1;
+    (*no_wait_return.ptr()) += 1;
     msg(
         gettext(
             b"Entering Ex mode.  Type \"visual\" to go to Normal mode.\0".as_ptr()
@@ -6250,19 +6260,21 @@ pub unsafe extern "C" fn do_exmode() {
         ),
         0 as ::core::ffi::c_int,
     );
-    while exmode_active {
-        if ex_normal_busy > 0 as ::core::ffi::c_int && typebuf.tb_len == 0 as ::core::ffi::c_int {
-            exmode_active = false_0 != 0;
+    while exmode_active.get() {
+        if ex_normal_busy.get() > 0 as ::core::ffi::c_int
+            && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
+        {
+            exmode_active.set(false_0 != 0);
             break;
         } else {
-            msg_scroll = true_0;
-            need_wait_return = false_0 != 0;
-            ex_pressedreturn = false_0 != 0;
-            ex_no_reprint = false_0 != 0;
-            let mut changedtick: varnumber_T = buf_get_changedtick(curbuf);
-            let mut prev_msg_row: ::core::ffi::c_int = msg_row;
-            let mut prev_line: linenr_T = (*curwin).w_cursor.lnum;
-            cmdline_row = msg_row;
+            msg_scroll.set(true_0);
+            need_wait_return.set(false_0 != 0);
+            ex_pressedreturn.set(false_0 != 0);
+            ex_no_reprint.set(false_0 != 0);
+            let mut changedtick: varnumber_T = buf_get_changedtick(curbuf.get());
+            let mut prev_msg_row: ::core::ffi::c_int = msg_row.get();
+            let mut prev_line: linenr_T = (*curwin.get()).w_cursor.lnum;
+            cmdline_row.set(msg_row.get());
             do_cmdline(
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 Some(
@@ -6278,28 +6290,29 @@ pub unsafe extern "C" fn do_exmode() {
                 NULL_1,
                 0 as ::core::ffi::c_int,
             );
-            lines_left = Rows - 1 as ::core::ffi::c_int;
-            if (prev_line != (*curwin).w_cursor.lnum || changedtick != buf_get_changedtick(curbuf))
-                && !ex_no_reprint
+            lines_left.set(Rows.get() - 1 as ::core::ffi::c_int);
+            if (prev_line != (*curwin.get()).w_cursor.lnum
+                || changedtick != buf_get_changedtick(curbuf.get()))
+                && !ex_no_reprint.get()
             {
-                if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
                     emsg(gettext(
                         &raw const e_empty_buffer as *const ::core::ffi::c_char,
                     ));
                 } else {
-                    if ex_pressedreturn {
+                    if ex_pressedreturn.get() {
                         msg_scroll_flush();
-                        msg_row = prev_msg_row;
-                        if prev_msg_row == Rows - 1 as ::core::ffi::c_int {
-                            msg_row -= 1;
+                        msg_row.set(prev_msg_row);
+                        if prev_msg_row == Rows.get() - 1 as ::core::ffi::c_int {
+                            (*msg_row.ptr()) -= 1;
                         }
                     }
-                    msg_col = 0 as ::core::ffi::c_int;
-                    print_line_no_prefix((*curwin).w_cursor.lnum, false_0 != 0, false_0 != 0);
+                    msg_col.set(0 as ::core::ffi::c_int);
+                    print_line_no_prefix((*curwin.get()).w_cursor.lnum, false_0 != 0, false_0 != 0);
                     msg_clr_eos();
                 }
-            } else if ex_pressedreturn as ::core::ffi::c_int != 0 && !ex_no_reprint {
-                if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+            } else if ex_pressedreturn.get() as ::core::ffi::c_int != 0 && !ex_no_reprint.get() {
+                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
                     emsg(gettext(
                         &raw const e_empty_buffer as *const ::core::ffi::c_char,
                     ));
@@ -6311,15 +6324,15 @@ pub unsafe extern "C" fn do_exmode() {
             }
         }
     }
-    RedrawingDisabled -= 1;
-    no_wait_return -= 1;
+    (*RedrawingDisabled.ptr()) -= 1;
+    (*no_wait_return.ptr()) -= 1;
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
     update_screen();
-    need_wait_return = false_0 != 0;
-    msg_scroll = save_msg_scroll;
+    need_wait_return.set(false_0 != 0);
+    msg_scroll.set(save_msg_scroll);
 }
 unsafe extern "C" fn msg_verbose_cmd(mut lnum: linenr_T, mut cmd: *mut ::core::ffi::c_char) {
-    no_wait_return += 1;
+    (*no_wait_return.ptr()) += 1;
     verbose_enter_scroll();
     if lnum == 0 as linenr_T {
         smsg(
@@ -6335,16 +6348,17 @@ unsafe extern "C" fn msg_verbose_cmd(mut lnum: linenr_T, mut cmd: *mut ::core::f
             cmd,
         );
     }
-    if msg_silent == 0 as ::core::ffi::c_int {
+    if msg_silent.get() == 0 as ::core::ffi::c_int {
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     }
     verbose_leave_scroll();
-    no_wait_return -= 1;
+    (*no_wait_return.ptr()) -= 1;
 }
-static mut cmdline_call_depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static cmdline_call_depth: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
 unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if cmdline_call_depth >= 0 as ::core::ffi::c_int {
+        if cmdline_call_depth.get() >= 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6354,17 +6368,19 @@ unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
             );
         }
     };
-    if cmdline_call_depth >= 200 as ::core::ffi::c_int && cmdline_call_depth as OptInt >= p_mfd {
+    if cmdline_call_depth.get() >= 200 as ::core::ffi::c_int
+        && cmdline_call_depth.get() as OptInt >= p_mfd.get()
+    {
         return FAIL;
     }
-    cmdline_call_depth += 1;
+    (*cmdline_call_depth.ptr()) += 1;
     start_batch_changes();
     return OK;
 }
 unsafe extern "C" fn do_cmdline_end() {
-    cmdline_call_depth -= 1;
+    (*cmdline_call_depth.ptr()) -= 1;
     '_c2rust_label: {
-        if cmdline_call_depth >= 0 as ::core::ffi::c_int {
+        if cmdline_call_depth.get() >= 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6397,7 +6413,7 @@ pub unsafe extern "C" fn do_cmdline(
     let mut next_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut cmdline_copy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut used_getline: bool = false_0 != 0;
-    static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    static recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     let mut msg_didout_before_start: bool = false_0 != 0;
     let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut did_inc: bool = false_0 != 0;
@@ -6458,8 +6474,8 @@ pub unsafe extern "C" fn do_cmdline(
         lc_getline: None,
         cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    let mut saved_msg_list: *mut *mut msglist_T = msg_list;
-    msg_list = &raw mut private_msg_list;
+    let mut saved_msg_list: *mut *mut msglist_T = msg_list.get();
+    msg_list.set(&raw mut private_msg_list);
     private_msg_list = ::core::ptr::null_mut::<msglist_T>();
     if do_cmdline_start() == FAIL {
         emsg(gettext(
@@ -6469,7 +6485,7 @@ pub unsafe extern "C" fn do_cmdline(
             NULL_1 as *mut cstack_T,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         );
-        msg_list = saved_msg_list;
+        msg_list.set(saved_msg_list);
         return FAIL;
     }
     ga_init(
@@ -6491,8 +6507,10 @@ pub unsafe extern "C" fn do_cmdline(
                 ) -> *mut ::core::ffi::c_char,
         ),
     );
-    if getline_is_func as ::core::ffi::c_int != 0 && ex_nesting_level == func_level(real_cookie) {
-        ex_nesting_level += 1;
+    if getline_is_func as ::core::ffi::c_int != 0
+        && ex_nesting_level.get() == func_level(real_cookie)
+    {
+        (*ex_nesting_level.ptr()) += 1;
     }
     if getline_is_func {
         fname = func_name(real_cookie);
@@ -6517,9 +6535,9 @@ pub unsafe extern "C" fn do_cmdline(
         breakpoint = source_breakpoint(real_cookie);
         dbg_tick = source_dbg_tick(real_cookie);
     }
-    if recursive == 0 {
-        force_abort = false_0 != 0;
-        suppress_errthrow = false_0 != 0;
+    if recursive.get() == 0 {
+        force_abort.set(false_0 != 0);
+        suppress_errthrow.set(false_0 != 0);
     }
     if flags & DOCMD_EXCRESET as ::core::ffi::c_int != 0 {
         save_dbg_stuff(&raw mut debug_saved);
@@ -6530,9 +6548,9 @@ pub unsafe extern "C" fn do_cmdline(
             ::core::mem::size_of::<dbg_stuff>(),
         );
     }
-    let mut initial_trylevel: ::core::ffi::c_int = trylevel;
-    did_throw = false_0 != 0;
-    did_emsg = false_0;
+    let mut initial_trylevel: ::core::ffi::c_int = trylevel.get();
+    did_throw.set(false_0 != 0);
+    did_emsg.set(false_0);
     if flags & DOCMD_KEYTYPED as ::core::ffi::c_int == 0
         && !getline_equal(
             fgetline,
@@ -6548,7 +6566,7 @@ pub unsafe extern "C" fn do_cmdline(
             ),
         )
     {
-        KeyTyped = false_0 != 0;
+        KeyTyped.set(false_0 != 0);
     }
     next_cmdline = cmdline;
     loop {
@@ -6566,11 +6584,11 @@ pub unsafe extern "C" fn do_cmdline(
             ),
         );
         if next_cmdline.is_null()
-            && !force_abort
+            && !force_abort.get()
             && cstack.cs_idx < 0 as ::core::ffi::c_int
             && !(getline_is_func as ::core::ffi::c_int != 0 && func_has_abort(real_cookie) != 0)
         {
-            did_emsg = false_0;
+            did_emsg.set(false_0);
         }
         if cstack.cs_looplevel > 0 as ::core::ffi::c_int && current_line < lines_ga.ga_len {
             let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -6579,14 +6597,14 @@ pub unsafe extern "C" fn do_cmdline(
             *ptr_ = NULL_1;
             *ptr_;
             if getline_is_func {
-                if do_profiling == PROF_YES {
+                if do_profiling.get() == PROF_YES {
                     func_line_end(real_cookie);
                 }
                 if func_has_ended(real_cookie) != 0 {
                     retval = FAIL;
                     break;
                 }
-            } else if do_profiling == PROF_YES
+            } else if do_profiling.get() == PROF_YES
                 && getline_equal(
                     fgetline,
                     cookie,
@@ -6609,7 +6627,7 @@ pub unsafe extern "C" fn do_cmdline(
                 retval = FAIL;
                 break;
             } else {
-                if !breakpoint.is_null() && !dbg_tick.is_null() && *dbg_tick != debug_tick {
+                if !breakpoint.is_null() && !dbg_tick.is_null() && *dbg_tick != debug_tick.get() {
                     *breakpoint = dbg_find_breakpoint(
                         getline_equal(
                             fgetline,
@@ -6630,7 +6648,7 @@ pub unsafe extern "C" fn do_cmdline(
                             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                     );
-                    *dbg_tick = debug_tick;
+                    *dbg_tick = debug_tick.get();
                 }
                 next_cmdline =
                     (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).line;
@@ -6670,9 +6688,9 @@ pub unsafe extern "C" fn do_cmdline(
                             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
                     );
-                    *dbg_tick = debug_tick;
+                    *dbg_tick = debug_tick.get();
                 }
-                if do_profiling == PROF_YES {
+                if do_profiling.get() == PROF_YES {
                     if getline_is_func {
                         func_line_start(real_cookie);
                     } else if getline_equal(
@@ -6718,10 +6736,10 @@ pub unsafe extern "C" fn do_cmdline(
                     != 0
             {
                 if ui_has(kUICmdline) {
-                    ui_ext_cmdline_block_append(0 as size_t, last_cmdline);
+                    ui_ext_cmdline_block_append(0 as size_t, last_cmdline.get());
                     did_block = true_0 != 0;
                 }
-                msg_didout = true_0 != 0;
+                msg_didout.set(true_0 != 0);
             }
             if fgetline.is_none() || {
                 next_cmdline = fgetline.expect("non-null function pointer")(
@@ -6732,10 +6750,10 @@ pub unsafe extern "C" fn do_cmdline(
                 );
                 next_cmdline.is_null()
             } {
-                if KeyTyped as ::core::ffi::c_int != 0
+                if KeyTyped.get() as ::core::ffi::c_int != 0
                     && flags & DOCMD_REPEAT as ::core::ffi::c_int == 0
                 {
-                    need_wait_return = false_0 != 0;
+                    need_wait_return.set(false_0 != 0);
                 }
                 retval = FAIL;
                 break;
@@ -6762,11 +6780,11 @@ pub unsafe extern "C" fn do_cmdline(
                     ui_ext_cmdline_block_append(indent as size_t, next_cmdline);
                 }
                 if flags & DOCMD_KEEPLINE as ::core::ffi::c_int != 0 {
-                    xfree(repeat_cmdline as *mut ::core::ffi::c_void);
+                    xfree(repeat_cmdline.get() as *mut ::core::ffi::c_void);
                     if count == 0 as ::core::ffi::c_int {
-                        repeat_cmdline = xstrdup(next_cmdline);
+                        repeat_cmdline.set(xstrdup(next_cmdline));
                     } else {
-                        repeat_cmdline = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                        repeat_cmdline.set(::core::ptr::null_mut::<::core::ffi::c_char>());
                     }
                 }
             }
@@ -6817,26 +6835,26 @@ pub unsafe extern "C" fn do_cmdline(
                 >;
             cmd_cookie = cookie;
         }
-        did_endif = false_0 != 0;
+        did_endif.set(false_0 != 0);
         let c2rust_fresh0 = count;
         count = count + 1;
         if c2rust_fresh0 == 0 as ::core::ffi::c_int {
-            if flags & DOCMD_NOWAIT as ::core::ffi::c_int == 0 && recursive == 0 {
-                msg_didout_before_start = msg_didout;
-                msg_didany = false_0 != 0;
+            if flags & DOCMD_NOWAIT as ::core::ffi::c_int == 0 && recursive.get() == 0 {
+                msg_didout_before_start = msg_didout.get();
+                msg_didany.set(false_0 != 0);
                 msg_start();
-                msg_scroll = true_0;
-                no_wait_return += 1;
-                RedrawingDisabled += 1;
+                msg_scroll.set(true_0);
+                (*no_wait_return.ptr()) += 1;
+                (*RedrawingDisabled.ptr()) += 1;
                 did_inc = true_0 != 0;
             }
         }
-        if p_verbose >= 15 as OptInt
+        if p_verbose.get() >= 15 as OptInt
             && !(*((*exestack.ptr()).ga_data as *mut estack_T)
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_name
             .is_null()
-            || p_verbose >= 16 as OptInt
+            || p_verbose.get() >= 16 as OptInt
         {
             msg_verbose_cmd(
                 (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -6845,7 +6863,7 @@ pub unsafe extern "C" fn do_cmdline(
                 cmdline_copy,
             );
         }
-        recursive += 1;
+        (*recursive.ptr()) += 1;
         next_cmdline = do_one_cmd(
             &raw mut cmdline_copy,
             flags,
@@ -6853,7 +6871,7 @@ pub unsafe extern "C" fn do_cmdline(
             cmd_getline as LineGetter,
             cmd_cookie,
         );
-        recursive -= 1;
+        (*recursive.ptr()) -= 1;
         if cmd_cookie == &raw mut cmd_loop_cookie as *mut ::core::ffi::c_void {
             current_line = cmd_loop_cookie.current_line;
         }
@@ -6878,11 +6896,11 @@ pub unsafe extern "C" fn do_cmdline(
                 ),
             ) as ::core::ffi::c_int
                 != 0
-                && !new_last_cmdline.is_null()
+                && !(*new_last_cmdline.ptr()).is_null()
             {
-                xfree(last_cmdline as *mut ::core::ffi::c_void);
-                last_cmdline = new_last_cmdline;
-                new_last_cmdline = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                xfree(last_cmdline.get() as *mut ::core::ffi::c_void);
+                last_cmdline.set(new_last_cmdline.get());
+                new_last_cmdline.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             }
         } else {
             memmove(
@@ -6892,8 +6910,8 @@ pub unsafe extern "C" fn do_cmdline(
             );
             next_cmdline = cmdline_copy;
         }
-        if did_emsg != 0
-            && !force_abort
+        if did_emsg.get() != 0
+            && !force_abort.get()
             && getline_equal(
                 fgetline,
                 cookie,
@@ -6911,7 +6929,7 @@ pub unsafe extern "C" fn do_cmdline(
                 != 0
             && func_has_abort(real_cookie) == 0
         {
-            did_emsg = false_0;
+            did_emsg.set(false_0);
         }
         if cstack.cs_looplevel > 0 as ::core::ffi::c_int {
             current_line += 1;
@@ -6921,9 +6939,9 @@ pub unsafe extern "C" fn do_cmdline(
             {
                 cstack.cs_lflags &=
                     !(CSL_HAD_CONT as ::core::ffi::c_int | CSL_HAD_ENDLOOP as ::core::ffi::c_int);
-                if did_emsg == 0
-                    && !got_int
-                    && !did_throw
+                if did_emsg.get() == 0
+                    && !got_int.get()
+                    && !did_throw.get()
                     && cstack.cs_idx >= 0 as ::core::ffi::c_int
                     && cstack.cs_flags[cstack.cs_idx as usize]
                         & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int)
@@ -6955,7 +6973,7 @@ pub unsafe extern "C" fn do_cmdline(
                             (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).lnum
                                 - 1 as linenr_T,
                         );
-                        *dbg_tick = debug_tick;
+                        *dbg_tick = debug_tick.get();
                     }
                 } else if cstack.cs_idx >= 0 as ::core::ffi::c_int {
                     rewind_conditionals(
@@ -6998,30 +7016,34 @@ pub unsafe extern "C" fn do_cmdline(
                     & (CSTP_ERROR as ::core::ffi::c_int
                         | CSTP_INTERRUPT as ::core::ffi::c_int
                         | CSTP_THROW as ::core::ffi::c_int),
-                (if did_throw as ::core::ffi::c_int != 0 {
-                    current_exception
+                (if did_throw.get() as ::core::ffi::c_int != 0 {
+                    current_exception.get()
                 } else {
                     ::core::ptr::null_mut::<except_T>()
                 }) as *mut ::core::ffi::c_void,
             );
-            did_throw = false_0 != 0;
-            got_int = did_throw;
-            did_emsg = got_int as ::core::ffi::c_int;
+            did_throw.set(false_0 != 0);
+            got_int.set(did_throw.get());
+            did_emsg.set(got_int.get() as ::core::ffi::c_int);
             cstack.cs_flags[cstack.cs_idx as usize] |=
                 CSF_ACTIVE as ::core::ffi::c_int | CSF_FINALLY as ::core::ffi::c_int;
         }
-        trylevel = initial_trylevel + cstack.cs_trylevel;
-        if trylevel == 0 as ::core::ffi::c_int && did_emsg == 0 && !got_int && !did_throw {
-            force_abort = false_0 != 0;
+        trylevel.set(initial_trylevel + cstack.cs_trylevel);
+        if trylevel.get() == 0 as ::core::ffi::c_int
+            && did_emsg.get() == 0
+            && !got_int.get()
+            && !did_throw.get()
+        {
+            force_abort.set(false_0 != 0);
         }
         do_intthrow(&raw mut cstack);
-        if !(!((got_int as ::core::ffi::c_int != 0
-            || did_emsg != 0 && force_abort as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0)
+        if !(!((got_int.get() as ::core::ffi::c_int != 0
+            || did_emsg.get() != 0 && force_abort.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0)
             && cstack.cs_trylevel == 0 as ::core::ffi::c_int)
-            && !(did_emsg != 0
+            && !(did_emsg.get() != 0
                 && (cstack.cs_trylevel == 0 as ::core::ffi::c_int
-                    || did_emsg_syntax as ::core::ffi::c_int != 0)
+                    || did_emsg_syntax.get() as ::core::ffi::c_int != 0)
                 && used_getline as ::core::ffi::c_int != 0
                 && getline_equal(
                     fgetline,
@@ -7046,7 +7068,7 @@ pub unsafe extern "C" fn do_cmdline(
         }
     }
     xfree(cmdline_copy as *mut ::core::ffi::c_void);
-    did_emsg_syntax = false_0 != 0;
+    did_emsg_syntax.set(false_0 != 0);
     let mut _gap_0: *mut garray_T = &raw mut lines_ga;
     if !(*_gap_0).ga_data.is_null() {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -7058,8 +7080,8 @@ pub unsafe extern "C" fn do_cmdline(
     }
     ga_clear(_gap_0);
     if cstack.cs_idx >= 0 as ::core::ffi::c_int {
-        if !got_int
-            && !did_throw
+        if !got_int.get()
+            && !did_throw.get()
             && !aborting()
             && (getline_equal(
                 fgetline,
@@ -7121,7 +7143,7 @@ pub unsafe extern "C" fn do_cmdline(
                 break;
             }
         }
-        trylevel = initial_trylevel;
+        trylevel.set(initial_trylevel);
     }
     do_errthrow(
         &raw mut cstack,
@@ -7145,17 +7167,17 @@ pub unsafe extern "C" fn do_cmdline(
             ::core::ptr::null::<::core::ffi::c_char>()
         }) as *mut ::core::ffi::c_char,
     );
-    if trylevel == 0 as ::core::ffi::c_int {
-        if did_throw {
+    if trylevel.get() == 0 as ::core::ffi::c_int {
+        if did_throw.get() {
             handle_did_throw();
-        } else if got_int as ::core::ffi::c_int != 0
-            || did_emsg != 0 && force_abort as ::core::ffi::c_int != 0
+        } else if got_int.get() as ::core::ffi::c_int != 0
+            || did_emsg.get() != 0 && force_abort.get() as ::core::ffi::c_int != 0
         {
-            suppress_errthrow = true_0 != 0;
+            suppress_errthrow.set(true_0 != 0);
         }
     }
-    if did_throw {
-        need_rethrow = true_0 != 0;
+    if did_throw.get() {
+        need_rethrow.set(true_0 != 0);
     }
     if getline_equal(
         fgetline,
@@ -7171,7 +7193,7 @@ pub unsafe extern "C" fn do_cmdline(
         ),
     ) as ::core::ffi::c_int
         != 0
-        && ex_nesting_level > source_level(real_cookie)
+        && ex_nesting_level.get() > source_level(real_cookie)
         || getline_equal(
             fgetline,
             cookie,
@@ -7186,10 +7208,10 @@ pub unsafe extern "C" fn do_cmdline(
             ),
         ) as ::core::ffi::c_int
             != 0
-            && ex_nesting_level > func_level(real_cookie) + 1 as ::core::ffi::c_int
+            && ex_nesting_level.get() > func_level(real_cookie) + 1 as ::core::ffi::c_int
     {
-        if !did_throw {
-            check_cstack = true_0 != 0;
+        if !did_throw.get() {
+            check_cstack.set(true_0 != 0);
         }
     } else {
         if getline_equal(
@@ -7205,7 +7227,7 @@ pub unsafe extern "C" fn do_cmdline(
                     ) -> *mut ::core::ffi::c_char,
             ),
         ) {
-            ex_nesting_level -= 1;
+            (*ex_nesting_level.ptr()) -= 1;
         }
         if (getline_equal(
             fgetline,
@@ -7236,7 +7258,7 @@ pub unsafe extern "C" fn do_cmdline(
                 ),
             ) as ::core::ffi::c_int
                 != 0)
-            && ex_nesting_level + 1 as ::core::ffi::c_int <= debug_break_level
+            && ex_nesting_level.get() + 1 as ::core::ffi::c_int <= debug_break_level.get()
         {
             do_debug(
                 if getline_equal(
@@ -7265,7 +7287,7 @@ pub unsafe extern "C" fn do_cmdline(
     if flags & DOCMD_EXCRESET as ::core::ffi::c_int != 0 {
         restore_dbg_stuff(&raw mut debug_saved);
     }
-    msg_list = saved_msg_list;
+    msg_list.set(saved_msg_list);
     if !cstack.cs_emsg_silent_list.is_null() {
         let mut temp: *mut eslist_T = ::core::ptr::null_mut::<eslist_T>();
         let mut elem: *mut eslist_T = cstack.cs_emsg_silent_list;
@@ -7276,34 +7298,36 @@ pub unsafe extern "C" fn do_cmdline(
         }
     }
     if did_inc {
-        RedrawingDisabled -= 1;
-        no_wait_return -= 1;
-        msg_scroll = false_0;
+        (*RedrawingDisabled.ptr()) -= 1;
+        (*no_wait_return.ptr()) -= 1;
+        msg_scroll.set(false_0);
         if retval == FAIL
-            || did_endif as ::core::ffi::c_int != 0
-                && KeyTyped as ::core::ffi::c_int != 0
-                && did_emsg == 0
+            || did_endif.get() as ::core::ffi::c_int != 0
+                && KeyTyped.get() as ::core::ffi::c_int != 0
+                && did_emsg.get() == 0
         {
-            need_wait_return = false_0 != 0;
-            msg_didany = false_0 != 0;
-        } else if need_wait_return {
-            msg_didout = msg_didout as ::core::ffi::c_int
-                | msg_didout_before_start as ::core::ffi::c_int
-                != 0;
+            need_wait_return.set(false_0 != 0);
+            msg_didany.set(false_0 != 0);
+        } else if need_wait_return.get() {
+            msg_didout.set(
+                msg_didout.get() as ::core::ffi::c_int
+                    | msg_didout_before_start as ::core::ffi::c_int
+                    != 0,
+            );
             wait_return(false_0);
         }
     }
     if did_block {
         ui_ext_cmdline_block_leave();
     }
-    did_endif = false_0 != 0;
+    did_endif.set(false_0 != 0);
     do_cmdline_end();
     return retval;
 }
 #[no_mangle]
 pub unsafe extern "C" fn handle_did_throw() {
     '_c2rust_label: {
-        if !current_exception.is_null() {
+        if !(*current_exception.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"current_exception != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7315,32 +7339,32 @@ pub unsafe extern "C" fn handle_did_throw() {
     };
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut messages: *mut msglist_T = ::core::ptr::null_mut::<msglist_T>();
-    match (*current_exception).type_0 as ::core::ffi::c_uint {
+    match (*current_exception.get()).type_0 as ::core::ffi::c_uint {
         0 => {
             vim_snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 gettext(b"E605: Exception not caught: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                (*current_exception).value,
+                (*current_exception.get()).value,
             );
-            p = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
+            p = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
         }
         1 => {
-            messages = (*current_exception).messages;
-            (*current_exception).messages = ::core::ptr::null_mut::<msglist_T>();
+            messages = (*current_exception.get()).messages;
+            (*current_exception.get()).messages = ::core::ptr::null_mut::<msglist_T>();
         }
         2 | _ => {}
     }
     estack_push(
         ETYPE_EXCEPT,
-        (*current_exception).throw_name,
-        (*current_exception).throw_lnum,
+        (*current_exception.get()).throw_name,
+        (*current_exception.get()).throw_lnum,
     );
-    (*current_exception).throw_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    (*current_exception.get()).throw_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
     discard_current_exception();
-    if emsg_silent == 0 as ::core::ffi::c_int {
-        suppress_errthrow = true_0 != 0;
-        force_abort = true_0 != 0;
+    if emsg_silent.get() == 0 as ::core::ffi::c_int {
+        suppress_errthrow.set(true_0 != 0);
+        force_abort.set(true_0 != 0);
     }
     if !messages.is_null() {
         loop {
@@ -7398,7 +7422,7 @@ unsafe extern "C" fn get_loop_line(
         }
         return line;
     }
-    KeyTyped = false_0 != 0;
+    KeyTyped.set(false_0 != 0);
     (*cp).current_line += 1;
     let mut wp: *mut wcmd_T =
         ((*(*cp).lines_gap).ga_data as *mut wcmd_T).offset((*cp).current_line as isize);
@@ -7468,7 +7492,7 @@ unsafe extern "C" fn compute_buffer_local_count(
     mut offset: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut count: ::core::ffi::c_int = offset;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !(*buf).b_next.is_null() && ((*buf).handle as linenr_T) < lnum {
         buf = (*buf).b_next;
     }
@@ -7522,10 +7546,10 @@ unsafe extern "C" fn compute_buffer_local_count(
 }
 unsafe extern "C" fn current_win_nr(mut win: *const win_T) -> ::core::ffi::c_int {
     let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
         nr += 1;
@@ -7538,7 +7562,7 @@ unsafe extern "C" fn current_win_nr(mut win: *const win_T) -> ::core::ffi::c_int
 }
 unsafe extern "C" fn current_tab_nr(mut tab: *mut tabpage_T) -> ::core::ffi::c_int {
     let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
         nr += 1;
         if tp == tab {
@@ -7589,7 +7613,8 @@ pub unsafe extern "C" fn set_cmd_addr_type(mut eap: *mut exarg_T, mut p: *mut ::
         return;
     }
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_SIZE as ::core::ffi::c_int {
-        (*eap).addr_type = cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_addr_type;
+        (*eap).addr_type =
+            (*cmdnames.ptr())[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_addr_type;
     } else {
         (*eap).addr_type = ADDR_LINES;
     }
@@ -7598,7 +7623,7 @@ pub unsafe extern "C" fn set_cmd_addr_type(mut eap: *mut exarg_T, mut p: *mut ::
     }
     if ((*eap).cmdidx as ::core::ffi::c_int == CMD_cc as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_ll as ::core::ffi::c_int)
-        && bt_quickfix(curbuf) as ::core::ffi::c_int != 0
+        && bt_quickfix(curbuf.get()) as ::core::ffi::c_int != 0
     {
         (*eap).addr_type = ADDR_OTHER;
     }
@@ -7607,24 +7632,24 @@ pub unsafe extern "C" fn set_cmd_addr_type(mut eap: *mut exarg_T, mut p: *mut ::
 pub unsafe extern "C" fn get_cmd_default_range(mut eap: *mut exarg_T) -> linenr_T {
     match (*eap).addr_type as ::core::ffi::c_uint {
         0 | 10 => {
-            return if (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count {
-                (*curwin).w_cursor.lnum
+            return if (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count {
+                (*curwin.get()).w_cursor.lnum
             } else {
-                (*curbuf).b_ml.ml_line_count
+                (*curbuf.get()).b_ml.ml_line_count
             };
         }
-        1 => return current_win_nr(curwin) as linenr_T,
+        1 => return current_win_nr(curwin.get()) as linenr_T,
         2 => {
-            return if ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int)
-                < (*(*curwin).w_alist).al_ga.ga_len
+            return if ((*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int)
+                < (*(*curwin.get()).w_alist).al_ga.ga_len
             {
-                (*curwin).w_arg_idx as linenr_T + 1 as linenr_T
+                (*curwin.get()).w_arg_idx as linenr_T + 1 as linenr_T
             } else {
-                (*(*curwin).w_alist).al_ga.ga_len as linenr_T
+                (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T
             };
         }
-        3 | 4 => return (*curbuf).handle as linenr_T,
-        5 => return current_tab_nr(curtab) as linenr_T,
+        3 | 4 => return (*curbuf.get()).handle as linenr_T,
+        5 => return current_tab_nr(curtab.get()) as linenr_T,
         6 | 9 => return 1 as linenr_T,
         8 => return qf_get_cur_idx(eap) as linenr_T,
         7 => return qf_get_cur_valid_idx(eap) as linenr_T,
@@ -7637,23 +7662,23 @@ pub unsafe extern "C" fn set_cmd_dflall_range(mut eap: *mut exarg_T) {
     (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
     match (*eap).addr_type as ::core::ffi::c_uint {
         0 | 10 => {
-            (*eap).line2 = (*curbuf).b_ml.ml_line_count;
+            (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
         }
         3 => {
-            buf = firstbuf;
+            buf = firstbuf.get();
             while !(*buf).b_next.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                 buf = (*buf).b_next;
             }
             (*eap).line1 = (*buf).handle as linenr_T;
-            buf = lastbuf;
+            buf = lastbuf.get();
             while !(*buf).b_prev.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                 buf = (*buf).b_prev;
             }
             (*eap).line2 = (*buf).handle as linenr_T;
         }
         4 => {
-            (*eap).line1 = (*firstbuf).handle as linenr_T;
-            (*eap).line2 = (*lastbuf).handle as linenr_T;
+            (*eap).line1 = (*firstbuf.get()).handle as linenr_T;
+            (*eap).line2 = (*lastbuf.get()).handle as linenr_T;
         }
         1 => {
             (*eap).line2 = current_win_nr(::core::ptr::null::<win_T>()) as linenr_T;
@@ -7665,11 +7690,11 @@ pub unsafe extern "C" fn set_cmd_dflall_range(mut eap: *mut exarg_T) {
             (*eap).line2 = 1 as ::core::ffi::c_int as linenr_T;
         }
         2 => {
-            if (*(*curwin).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
+            if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
                 (*eap).line2 = 0 as ::core::ffi::c_int as linenr_T;
                 (*eap).line1 = (*eap).line2;
             } else {
-                (*eap).line2 = (*(*curwin).w_alist).al_ga.ga_len as linenr_T;
+                (*eap).line2 = (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T;
             }
         }
         7 => {
@@ -7740,8 +7765,9 @@ pub unsafe extern "C" fn set_cmd_count(
                 as linenr_T;
         }
         (*eap).addr_count += 1;
-        if validate as ::core::ffi::c_int != 0 && (*eap).line2 > (*curbuf).b_ml.ml_line_count {
-            (*eap).line2 = (*curbuf).b_ml.ml_line_count;
+        if validate as ::core::ffi::c_int != 0 && (*eap).line2 > (*curbuf.get()).b_ml.ml_line_count
+        {
+            (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
         }
     };
 }
@@ -7808,9 +7834,9 @@ unsafe extern "C" fn parse_count(
 #[no_mangle]
 pub unsafe extern "C" fn is_cmd_ni(mut cmdidx: cmdidx_T) -> bool {
     return !((cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
-        && (cmdnames[cmdidx as usize].cmd_func
+        && ((*cmdnames.ptr())[cmdidx as usize].cmd_func
             == Some(ex_ni as unsafe extern "C" fn(*mut exarg_T) -> ())
-            || cmdnames[cmdidx as usize].cmd_func
+            || (*cmdnames.ptr())[cmdidx as usize].cmd_func
                 == Some(ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> ()));
 }
 unsafe extern "C" fn find_excmd_after_range(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
@@ -7854,8 +7880,8 @@ pub unsafe extern "C" fn parse_cmdline(
     let mut after_modifier: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: bool = false_0 != 0;
-    let save_ex_pressedreturn: bool = ex_pressedreturn;
-    let save_cursor: pos_T = (*curwin).w_cursor;
+    let save_ex_pressedreturn: bool = ex_pressedreturn.get();
+    let save_cursor: pos_T = (*curwin.get()).w_cursor;
     save_last_search_pattern();
     memset(
         cmdinfo as *mut ::core::ffi::c_void,
@@ -7906,7 +7932,8 @@ pub unsafe extern "C" fn parse_cmdline(
         p = find_excmd_after_range(eap);
         if p.is_null() {
             *errormsg = gettext(
-                &raw const e_ambiguous_use_of_user_defined_command as *const ::core::ffi::c_char,
+                (e_ambiguous_use_of_user_defined_command.ptr() as *const _)
+                    as *const ::core::ffi::c_char,
             );
         } else {
             set_cmd_addr_type(eap, p);
@@ -7932,9 +7959,9 @@ pub unsafe extern "C" fn parse_cmdline(
                             == CMD_SIZE as ::core::ffi::c_int
                         {
                             xstrlcpy(
-                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                 gettext(
-                                    &raw const e_not_an_editor_command
+                                    (e_not_an_editor_command.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 ),
                                 IOSIZE as size_t,
@@ -7946,12 +7973,13 @@ pub unsafe extern "C" fn parse_cmdline(
                                 *cmdline
                             };
                             append_command(cmdname);
-                            *errormsg = &raw mut IObuff as *mut ::core::ffi::c_char;
+                            *errormsg = IObuff.ptr() as *mut ::core::ffi::c_char;
                         } else {
                             (*eap).forceit = parse_bang(eap, &raw mut p) as ::core::ffi::c_int;
                             if !(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
-                                (*eap).argt =
-                                    cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_argt;
+                                (*eap).argt = (*cmdnames.ptr())
+                                    [(*eap).cmdidx as ::core::ffi::c_int as usize]
+                                    .cmd_argt;
                             }
                             (*eap).arg = if (*eap).cmdidx as ::core::ffi::c_int
                                 == CMD_bang as ::core::ffi::c_int
@@ -7974,9 +8002,9 @@ pub unsafe extern "C" fn parse_cmdline(
                                     && *arg as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
                                 {
                                     let mut start: *mut ::core::ffi::c_char = arg;
-                                    emsg_skip += 1;
+                                    (*emsg_skip.ptr()) += 1;
                                     skip_expr(&raw mut arg, ::core::ptr::null_mut::<evalarg_T>());
-                                    emsg_skip -= 1;
+                                    (*emsg_skip.ptr()) -= 1;
                                     if arg == start {
                                         arg = arg.offset(1);
                                     }
@@ -8026,8 +8054,8 @@ pub unsafe extern "C" fn parse_cmdline(
     if !retval {
         undo_cmdmod(&raw mut (*cmdinfo).cmdmod);
     }
-    ex_pressedreturn = save_ex_pressedreturn;
-    (*curwin).w_cursor = save_cursor;
+    ex_pressedreturn.set(save_ex_pressedreturn);
+    (*curwin.get()).w_cursor = save_cursor;
     restore_last_search_pattern();
     return retval;
 }
@@ -8135,22 +8163,22 @@ unsafe extern "C" fn execute_cmd0(
         }
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_try as ::core::ffi::c_int
-        && cmdmod.cmod_did_esilent > 0 as ::core::ffi::c_int
+        && (*cmdmod.ptr()).cmod_did_esilent > 0 as ::core::ffi::c_int
     {
-        emsg_silent -= cmdmod.cmod_did_esilent;
-        emsg_silent = if emsg_silent > 0 as ::core::ffi::c_int {
-            emsg_silent
+        (*emsg_silent.ptr()) -= (*cmdmod.ptr()).cmod_did_esilent;
+        emsg_silent.set(if emsg_silent.get() > 0 as ::core::ffi::c_int {
+            emsg_silent.get()
         } else {
             0 as ::core::ffi::c_int
-        };
-        cmdmod.cmod_did_esilent = 0 as ::core::ffi::c_int;
+        });
+        (*cmdmod.ptr()).cmod_did_esilent = 0 as ::core::ffi::c_int;
     }
     if ((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
         *retv = do_ucmd(eap, preview);
     } else {
         (*eap).errmsg = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if preview {
-            *retv = cmdnames[(*eap).cmdidx as usize]
+            *retv = (*cmdnames.ptr())[(*eap).cmdidx as usize]
                 .cmd_preview_func
                 .expect("non-null function pointer")(
                 eap,
@@ -8158,7 +8186,7 @@ unsafe extern "C" fn execute_cmd0(
                 cmdpreview_get_bufnr(),
             );
         } else {
-            cmdnames[(*eap).cmdidx as usize]
+            (*cmdnames.ptr())[(*eap).cmdidx as usize]
                 .cmd_func
                 .expect("non-null function pointer")(eap);
         }
@@ -8196,20 +8224,20 @@ pub unsafe extern "C" fn execute_cmd(
         return retv;
     }
     let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut save_cmdmod: cmdmod_T = cmdmod;
-    cmdmod = (*cmdinfo).cmdmod;
-    apply_cmdmod(&raw mut cmdmod);
+    let mut save_cmdmod: cmdmod_T = cmdmod.get();
+    cmdmod.set((*cmdinfo).cmdmod);
+    apply_cmdmod(cmdmod.ptr());
     '_end: {
-        if (*curbuf).b_p_ma == 0
+        if (*curbuf.get()).b_p_ma == 0
             && (*eap).argt & EX_MODIFY as uint32_t != 0
-            && !(!(*curbuf).terminal.is_null()
+            && !(!(*curbuf.get()).terminal.is_null()
                 && ((*eap).cmdidx as ::core::ffi::c_int == CMD_put as ::core::ffi::c_int
                     || (*eap).cmdidx as ::core::ffi::c_int == CMD_iput as ::core::ffi::c_int))
         {
             errormsg = gettext(&raw const e_modifiable as *const ::core::ffi::c_char);
         } else {
             if !(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
-                if cmdwin_type != 0 as ::core::ffi::c_int
+                if cmdwin_type.get() != 0 as ::core::ffi::c_int
                     && (*eap).argt & EX_CMDWIN as uint32_t == 0
                 {
                     errormsg = gettext(&raw const e_cmdwin as *const ::core::ffi::c_char);
@@ -8237,18 +8265,18 @@ pub unsafe extern "C" fn execute_cmd(
                 } else {
                     if ((*eap).argt & EX_WHOLEFOLD as uint32_t != 0
                         || (*eap).addr_count >= 2 as ::core::ffi::c_int)
-                        && global_busy == 0
+                        && global_busy.get() == 0
                         && (*eap).addr_type as ::core::ffi::c_uint
                             == ADDR_LINES as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         hasFolding(
-                            curwin,
+                            curwin.get(),
                             (*eap).line1,
                             &raw mut (*eap).line1,
                             ::core::ptr::null_mut::<linenr_T>(),
                         );
                         hasFolding(
-                            curwin,
+                            curwin.get(),
                             (*eap).line2,
                             ::core::ptr::null_mut::<linenr_T>(),
                             &raw mut (*eap).line2,
@@ -8279,8 +8307,8 @@ pub unsafe extern "C" fn execute_cmd(
     if !errormsg.is_null() && *errormsg as ::core::ffi::c_int != NUL {
         emsg(errormsg);
     }
-    undo_cmdmod(&raw mut cmdmod);
-    cmdmod = save_cmdmod;
+    undo_cmdmod(cmdmod.ptr());
+    cmdmod.set(save_cmdmod);
     do_cmdline_end();
     return retv;
 }
@@ -8290,7 +8318,7 @@ unsafe extern "C" fn profile_cmd(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,
 ) {
-    if do_profiling == PROF_YES
+    if do_profiling.get() == PROF_YES
         && ((*eap).skip == 0
             || (*cstack).cs_idx == 0 as ::core::ffi::c_int
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
@@ -8298,9 +8326,9 @@ unsafe extern "C" fn profile_cmd(
                     & CSF_ACTIVE as ::core::ffi::c_int
                     != 0)
     {
-        let mut skip: bool = did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0
-            || did_throw as ::core::ffi::c_int != 0;
+        let mut skip: bool = did_emsg.get() != 0
+            || got_int.get() as ::core::ffi::c_int != 0
+            || did_throw.get() as ::core::ffi::c_int != 0;
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_catch as ::core::ffi::c_int {
             skip = !skip
                 && !((*cstack).cs_idx >= 0 as ::core::ffi::c_int
@@ -8389,8 +8417,8 @@ unsafe extern "C" fn do_one_cmd(
     let mut ni: ::core::ffi::c_int = 0;
     let mut retv: ::core::ffi::c_int = 0;
     let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let save_reg_executing: ::core::ffi::c_int = reg_executing;
-    let save_pending_end_reg_executing: bool = pending_end_reg_executing;
+    let save_reg_executing: ::core::ffi::c_int = reg_executing.get();
+    let save_pending_end_reg_executing: bool = pending_end_reg_executing.get();
     let mut ea: exarg_T = exarg {
         arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
@@ -8427,8 +8455,8 @@ unsafe extern "C" fn do_one_cmd(
         cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         cstack: ::core::ptr::null_mut::<cstack_T>(),
     };
-    ex_nesting_level += 1;
-    if quitmore != 0
+    (*ex_nesting_level.ptr()) += 1;
+    if quitmore.get() != 0
         && !getline_equal(
             fgetline,
             cookie,
@@ -8456,9 +8484,9 @@ unsafe extern "C" fn do_one_cmd(
             ),
         )
     {
-        quitmore -= 1;
+        (*quitmore.ptr()) -= 1;
     }
-    let mut save_cmdmod: cmdmod_T = cmdmod;
+    let mut save_cmdmod: cmdmod_T = cmdmod.get();
     '_doend: {
         if !(*(*cmdlinep).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '#' as ::core::ffi::c_int
@@ -8470,28 +8498,24 @@ unsafe extern "C" fn do_one_cmd(
             ea.ea_getline = fgetline;
             ea.cookie = cookie;
             ea.cstack = cstack;
-            if parse_command_modifiers(
-                &raw mut ea,
-                &raw mut errormsg,
-                &raw mut cmdmod,
-                false_0 != 0,
-            ) != FAIL
+            if parse_command_modifiers(&raw mut ea, &raw mut errormsg, cmdmod.ptr(), false_0 != 0)
+                != FAIL
             {
-                apply_cmdmod(&raw mut cmdmod);
+                apply_cmdmod(cmdmod.ptr());
                 after_modifier = ea.cmd;
-                ea.skip = (did_emsg != 0
-                    || got_int as ::core::ffi::c_int != 0
-                    || did_throw as ::core::ffi::c_int != 0
+                ea.skip = (did_emsg.get() != 0
+                    || got_int.get() as ::core::ffi::c_int != 0
+                    || did_throw.get() as ::core::ffi::c_int != 0
                     || (*cstack).cs_idx >= 0 as ::core::ffi::c_int
                         && (*cstack).cs_flags[(*cstack).cs_idx as usize]
                             & CSF_ACTIVE as ::core::ffi::c_int
                             == 0) as ::core::ffi::c_int;
                 p = find_excmd_after_range(&raw mut ea);
                 profile_cmd(&raw mut ea, cstack, fgetline, cookie);
-                if !exiting {
+                if !exiting.get() {
                     dbg_check_breakpoint(&raw mut ea);
                 }
-                if ea.skip == 0 && got_int as ::core::ffi::c_int != 0 {
+                if ea.skip == 0 && got_int.get() as ::core::ffi::c_int != 0 {
                     ea.skip = true_0;
                     do_intthrow(cstack);
                 }
@@ -8566,7 +8590,7 @@ unsafe extern "C" fn do_one_cmd(
                         if p.is_null() {
                             if ea.skip == 0 {
                                 errormsg = gettext(
-                                    &raw const e_ambiguous_use_of_user_defined_command
+                                    (e_ambiguous_use_of_user_defined_command.ptr() as *const _)
                                         as *const ::core::ffi::c_char,
                                 );
                             }
@@ -8574,9 +8598,9 @@ unsafe extern "C" fn do_one_cmd(
                         {
                             if ea.skip == 0 {
                                 xstrlcpy(
-                                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                                    IObuff.ptr() as *mut ::core::ffi::c_char,
                                     gettext(
-                                        &raw const e_not_an_editor_command
+                                        (e_not_an_editor_command.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
                                     IOSIZE as size_t,
@@ -8590,27 +8614,28 @@ unsafe extern "C" fn do_one_cmd(
                                 if flags & DOCMD_VERBOSE as ::core::ffi::c_int == 0 {
                                     append_command(cmdname_0);
                                 }
-                                errormsg = &raw mut IObuff as *mut ::core::ffi::c_char;
-                                did_emsg_syntax = true_0 != 0;
+                                errormsg = IObuff.ptr() as *mut ::core::ffi::c_char;
+                                did_emsg_syntax.set(true_0 != 0);
                                 verify_command(cmdname_0);
                             }
                         } else {
                             ni = is_cmd_ni(ea.cmdidx) as ::core::ffi::c_int;
                             ea.forceit = parse_bang(&raw mut ea, &raw mut p) as ::core::ffi::c_int;
                             if !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
-                                ea.argt =
-                                    cmdnames[ea.cmdidx as ::core::ffi::c_int as usize].cmd_argt;
+                                ea.argt = (*cmdnames.ptr())
+                                    [ea.cmdidx as ::core::ffi::c_int as usize]
+                                    .cmd_argt;
                             }
                             if ea.skip == 0 {
-                                if sandbox != 0 as ::core::ffi::c_int
+                                if sandbox.get() != 0 as ::core::ffi::c_int
                                     && ea.argt & EX_SBOXOK as uint32_t == 0
                                 {
                                     errormsg =
                                         gettext(&raw const e_sandbox as *const ::core::ffi::c_char);
                                     break '_doend;
-                                } else if (*curbuf).b_p_ma == 0
+                                } else if (*curbuf.get()).b_p_ma == 0
                                     && ea.argt & EX_MODIFY as uint32_t != 0
-                                    && !(!(*curbuf).terminal.is_null()
+                                    && !(!(*curbuf.get()).terminal.is_null()
                                         && (ea.cmdidx as ::core::ffi::c_int
                                             == CMD_put as ::core::ffi::c_int
                                             || ea.cmdidx as ::core::ffi::c_int
@@ -8624,7 +8649,7 @@ unsafe extern "C" fn do_one_cmd(
                                     if !((ea.cmdidx as ::core::ffi::c_int)
                                         < 0 as ::core::ffi::c_int)
                                     {
-                                        if cmdwin_type != 0 as ::core::ffi::c_int
+                                        if cmdwin_type.get() != 0 as ::core::ffi::c_int
                                             && ea.argt & EX_CMDWIN as uint32_t == 0
                                         {
                                             errormsg = gettext(
@@ -8666,10 +8691,10 @@ unsafe extern "C" fn do_one_cmd(
                                     gettext(&raw const e_nobang as *const ::core::ffi::c_char);
                             } else {
                                 if ea.skip == 0 && ni == 0 && ea.argt & EX_RANGE as uint32_t != 0 {
-                                    if global_busy == 0 && ea.line1 > ea.line2 {
-                                        if msg_silent == 0 as ::core::ffi::c_int {
+                                    if global_busy.get() == 0 && ea.line1 > ea.line2 {
+                                        if msg_silent.get() == 0 as ::core::ffi::c_int {
                                             if flags & DOCMD_VERBOSE as ::core::ffi::c_int != 0
-                                                || exmode_active as ::core::ffi::c_int != 0
+                                                || exmode_active.get() as ::core::ffi::c_int != 0
                                             {
                                                 errormsg = gettext(
                                                     b"E493: Backwards range given\0".as_ptr()
@@ -8702,18 +8727,18 @@ unsafe extern "C" fn do_one_cmd(
                                 correct_range(&raw mut ea);
                                 if (ea.argt & EX_WHOLEFOLD as uint32_t != 0
                                     || ea.addr_count >= 2 as ::core::ffi::c_int)
-                                    && global_busy == 0
+                                    && global_busy.get() == 0
                                     && ea.addr_type as ::core::ffi::c_uint
                                         == ADDR_LINES as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
                                     hasFolding(
-                                        curwin,
+                                        curwin.get(),
                                         ea.line1,
                                         &raw mut ea.line1,
                                         ::core::ptr::null_mut::<linenr_T>(),
                                     );
                                     hasFolding(
-                                        curwin,
+                                        curwin.get(),
                                         ea.line2,
                                         ::core::ptr::null_mut::<linenr_T>(),
                                         &raw mut ea.line2,
@@ -8907,9 +8932,9 @@ unsafe extern "C" fn do_one_cmd(
                                                     false_0 != 0,
                                                 ) != FAIL
                                                 {
-                                                    if need_rethrow {
+                                                    if need_rethrow.get() {
                                                         do_throw(cstack);
-                                                    } else if check_cstack {
+                                                    } else if check_cstack.get() {
                                                         if source_finished(fgetline, cookie) {
                                                             do_finish(&raw mut ea, true_0 != 0);
                                                         } else if getline_equal(
@@ -8929,8 +8954,8 @@ unsafe extern "C" fn do_one_cmd(
                                                             do_return(&raw mut ea, true_0 != 0, false_0 != 0, NULL_1);
                                                         }
                                                     }
-                                                    check_cstack = false_0 != 0;
-                                                    need_rethrow = check_cstack;
+                                                    check_cstack.set(false_0 != 0);
+                                                    need_rethrow.set(check_cstack.get());
                                                 }
                                             }
                                         }
@@ -8943,20 +8968,19 @@ unsafe extern "C" fn do_one_cmd(
             }
         }
     }
-    if (*curwin).w_cursor.lnum == 0 as linenr_T {
-        (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
-        (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+    if (*curwin.get()).w_cursor.lnum == 0 as linenr_T {
+        (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
+        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     }
-    if !errormsg.is_null() && *errormsg as ::core::ffi::c_int != NUL && did_emsg == 0 {
+    if !errormsg.is_null() && *errormsg as ::core::ffi::c_int != NUL && did_emsg.get() == 0 {
         if flags & DOCMD_VERBOSE as ::core::ffi::c_int != 0 {
-            if errormsg != &raw mut IObuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
-            {
+            if errormsg != IObuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_char {
                 xstrlcpy(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     errormsg,
                     IOSIZE as size_t,
                 );
-                errormsg = &raw mut IObuff as *mut ::core::ffi::c_char;
+                errormsg = IObuff.ptr() as *mut ::core::ffi::c_char;
             }
             append_command(*ea.cmdlinep);
         }
@@ -8967,44 +8991,45 @@ unsafe extern "C" fn do_one_cmd(
         if ea.cmdidx as ::core::ffi::c_int != CMD_SIZE as ::core::ffi::c_int
             && !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
         {
-            cmdnames[ea.cmdidx as ::core::ffi::c_int as usize].cmd_name
+            (*cmdnames.ptr())[ea.cmdidx as ::core::ffi::c_int as usize].cmd_name
         } else {
             ::core::ptr::null_mut::<::core::ffi::c_char>()
         },
     );
-    undo_cmdmod(&raw mut cmdmod);
-    cmdmod = save_cmdmod;
-    reg_executing = save_reg_executing;
-    pending_end_reg_executing = save_pending_end_reg_executing;
+    undo_cmdmod(cmdmod.ptr());
+    cmdmod.set(save_cmdmod);
+    reg_executing.set(save_reg_executing);
+    pending_end_reg_executing.set(save_pending_end_reg_executing);
     if !ea.nextcmd.is_null() && *ea.nextcmd as ::core::ffi::c_int == NUL {
         ea.nextcmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    ex_nesting_level -= 1;
+    (*ex_nesting_level.ptr()) -= 1;
     xfree(ea.cmdline_tofree as *mut ::core::ffi::c_void);
     return ea.nextcmd;
 }
-static mut ex_error_buf: [::core::ffi::c_char; 480] = [0; 480];
+static ex_error_buf: GlobalCell<[::core::ffi::c_char; 480]> = GlobalCell::new([0; 480]);
 #[no_mangle]
 pub unsafe extern "C" fn ex_errmsg(
     msg_0: *const ::core::ffi::c_char,
     arg: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     vim_snprintf(
-        &raw mut ex_error_buf as *mut ::core::ffi::c_char,
+        ex_error_buf.ptr() as *mut ::core::ffi::c_char,
         MSG_BUF_LEN as size_t,
         gettext(msg_0),
         arg,
     );
-    return &raw mut ex_error_buf as *mut ::core::ffi::c_char;
+    return ex_error_buf.ptr() as *mut ::core::ffi::c_char;
 }
-static mut exmode_plus: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"+\0") };
+static exmode_plus: GlobalCell<[::core::ffi::c_char; 2]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"+\0")
+});
 unsafe extern "C" fn ex_range_without_command(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
     let mut errormsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *(*eap).cmd as ::core::ffi::c_int == '|' as ::core::ffi::c_int
-        || exmode_active as ::core::ffi::c_int != 0
+        || exmode_active.get() as ::core::ffi::c_int != 0
             && (*eap).cmd
-                != (&raw mut exmode_plus as *mut ::core::ffi::c_char)
+                != (exmode_plus.ptr() as *mut ::core::ffi::c_char)
                     .offset(1 as ::core::ffi::c_int as isize)
     {
         (*eap).cmdidx = CMD_print;
@@ -9015,18 +9040,18 @@ unsafe extern "C" fn ex_range_without_command(mut eap: *mut exarg_T) -> *mut ::c
             ex_print(eap);
         }
     } else if (*eap).addr_count != 0 as ::core::ffi::c_int {
-        (*eap).line2 = if (*eap).line2 < (*curbuf).b_ml.ml_line_count {
+        (*eap).line2 = if (*eap).line2 < (*curbuf.get()).b_ml.ml_line_count {
             (*eap).line2
         } else {
-            (*curbuf).b_ml.ml_line_count
+            (*curbuf.get()).b_ml.ml_line_count
         };
         if (*eap).line2 < 0 as linenr_T {
             errormsg = gettext(&raw const e_invrange as *const ::core::ffi::c_char);
         } else {
             if (*eap).line2 == 0 as linenr_T {
-                (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
+                (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
             } else {
-                (*curwin).w_cursor.lnum = (*eap).line2;
+                (*curwin.get()).w_cursor.lnum = (*eap).line2;
             }
             beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
         }
@@ -9072,7 +9097,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
             (*eap).cmd = (*eap).cmd.offset(1);
         }
         if *(*eap).cmd as ::core::ffi::c_int == NUL
-            && exmode_active as ::core::ffi::c_int != 0
+            && exmode_active.get() as ::core::ffi::c_int != 0
             && getline_equal(
                 (*eap).ea_getline,
                 (*eap).cookie,
@@ -9088,12 +9113,12 @@ pub unsafe extern "C" fn parse_command_modifiers(
                 ),
             ) as ::core::ffi::c_int
                 != 0
-            && (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count
+            && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
         {
-            (*eap).cmd = &raw mut exmode_plus as *mut ::core::ffi::c_char;
+            (*eap).cmd = exmode_plus.ptr() as *mut ::core::ffi::c_char;
             use_plus_cmd = true_0 != 0;
             if !skip_only {
-                ex_pressedreturn = true_0 != 0;
+                ex_pressedreturn.set(true_0 != 0);
             }
             break;
         } else {
@@ -9110,7 +9135,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
             }
             if *(*eap).cmd as ::core::ffi::c_int == NUL {
                 if !skip_only {
-                    ex_pressedreturn = true_0 != 0;
+                    ex_pressedreturn.set(true_0 != 0);
                 }
                 return FAIL;
             }
@@ -9354,7 +9379,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                                 return false_0;
                             }
                             if tabnr == MAXLNUM as ::core::ffi::c_int {
-                                (*cmod).cmod_tab = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
+                                (*cmod).cmod_tab =
+                                    tabpage_index(curtab.get()) + 1 as ::core::ffi::c_int;
                             } else {
                                 if tabnr < 0 as ::core::ffi::c_int
                                     || tabnr > current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
@@ -9455,7 +9481,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
             (*eap).cmd = orig_cmd;
         }
     } else if use_plus_cmd {
-        (*eap).cmd = &raw mut exmode_plus as *mut ::core::ffi::c_char;
+        (*eap).cmd = exmode_plus.ptr() as *mut ::core::ffi::c_char;
     }
     return OK;
 }
@@ -9463,37 +9489,37 @@ pub unsafe extern "C" fn parse_command_modifiers(
 pub unsafe extern "C" fn apply_cmdmod(mut cmod: *mut cmdmod_T) {
     if (*cmod).cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0 && (*cmod).cmod_did_sandbox == 0
     {
-        sandbox += 1;
+        (*sandbox.ptr()) += 1;
         (*cmod).cmod_did_sandbox = true_0;
     }
     if (*cmod).cmod_verbose > 0 as ::core::ffi::c_int {
         if (*cmod).cmod_verbose_save == 0 as OptInt {
-            (*cmod).cmod_verbose_save = p_verbose + 1 as OptInt;
+            (*cmod).cmod_verbose_save = p_verbose.get() + 1 as OptInt;
         }
-        p_verbose = ((*cmod).cmod_verbose - 1 as ::core::ffi::c_int) as OptInt;
+        p_verbose.set(((*cmod).cmod_verbose - 1 as ::core::ffi::c_int) as OptInt);
     }
     if (*cmod).cmod_flags
         & (CMOD_SILENT as ::core::ffi::c_int | CMOD_UNSILENT as ::core::ffi::c_int)
         != 0
         && (*cmod).cmod_save_msg_silent == 0 as ::core::ffi::c_int
     {
-        (*cmod).cmod_save_msg_silent = msg_silent + 1 as ::core::ffi::c_int;
-        (*cmod).cmod_save_msg_scroll = msg_scroll;
+        (*cmod).cmod_save_msg_silent = msg_silent.get() + 1 as ::core::ffi::c_int;
+        (*cmod).cmod_save_msg_scroll = msg_scroll.get();
     }
     if (*cmod).cmod_flags & CMOD_SILENT as ::core::ffi::c_int != 0 {
-        msg_silent += 1;
+        (*msg_silent.ptr()) += 1;
     }
     if (*cmod).cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int != 0 {
-        msg_silent = 0 as ::core::ffi::c_int;
+        msg_silent.set(0 as ::core::ffi::c_int);
     }
     if (*cmod).cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0 {
-        emsg_silent += 1;
+        (*emsg_silent.ptr()) += 1;
         (*cmod).cmod_did_esilent += 1;
     }
     if (*cmod).cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0
         && (*cmod).cmod_save_ei.is_null()
     {
-        (*cmod).cmod_save_ei = xstrdup(p_ei);
+        (*cmod).cmod_save_ei = xstrdup(p_ei.get());
         set_option_direct(
             kOptEventignore,
             OptVal {
@@ -9515,11 +9541,11 @@ pub unsafe extern "C" fn apply_cmdmod(mut cmod: *mut cmdmod_T) {
 #[no_mangle]
 pub unsafe extern "C" fn undo_cmdmod(mut cmod: *mut cmdmod_T) {
     if (*cmod).cmod_verbose_save > 0 as OptInt {
-        p_verbose = (*cmod).cmod_verbose_save - 1 as OptInt;
+        p_verbose.set((*cmod).cmod_verbose_save - 1 as OptInt);
         (*cmod).cmod_verbose_save = 0 as OptInt;
     }
     if (*cmod).cmod_did_sandbox != 0 {
-        sandbox -= 1;
+        (*sandbox.ptr()) -= 1;
         (*cmod).cmod_did_sandbox = false_0;
     }
     if !(*cmod).cmod_save_ei.is_null() {
@@ -9540,18 +9566,20 @@ pub unsafe extern "C" fn undo_cmdmod(mut cmod: *mut cmdmod_T) {
     xfree((*cmod).cmod_filter_pat as *mut ::core::ffi::c_void);
     vim_regfree((*cmod).cmod_filter_regmatch.regprog);
     if (*cmod).cmod_save_msg_silent > 0 as ::core::ffi::c_int {
-        if did_emsg == 0 || msg_silent > (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int {
-            msg_silent = (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int;
+        if did_emsg.get() == 0
+            || msg_silent.get() > (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int
+        {
+            msg_silent.set((*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int);
         }
-        emsg_silent -= (*cmod).cmod_did_esilent;
-        emsg_silent = if emsg_silent > 0 as ::core::ffi::c_int {
-            emsg_silent
+        (*emsg_silent.ptr()) -= (*cmod).cmod_did_esilent;
+        emsg_silent.set(if emsg_silent.get() > 0 as ::core::ffi::c_int {
+            emsg_silent.get()
         } else {
             0 as ::core::ffi::c_int
-        };
-        msg_scroll = (*cmod).cmod_save_msg_scroll;
+        });
+        msg_scroll.set((*cmod).cmod_save_msg_scroll);
         if redirecting() != 0 {
-            msg_col = 0 as ::core::ffi::c_int;
+            msg_col.set(0 as ::core::ffi::c_int);
         }
         (*cmod).cmod_save_msg_silent = 0 as ::core::ffi::c_int;
         (*cmod).cmod_did_esilent = 0 as ::core::ffi::c_int;
@@ -9593,23 +9621,23 @@ pub unsafe extern "C" fn parse_cmd_address(
                     match (*eap).addr_type as ::core::ffi::c_uint {
                         0 | 10 => {
                             (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
-                            (*eap).line2 = (*curbuf).b_ml.ml_line_count;
+                            (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
                         }
                         3 => {
-                            let mut buf: *mut buf_T = firstbuf;
+                            let mut buf: *mut buf_T = firstbuf.get();
                             while !(*buf).b_next.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                                 buf = (*buf).b_next;
                             }
                             (*eap).line1 = (*buf).handle as linenr_T;
-                            buf = lastbuf;
+                            buf = lastbuf.get();
                             while !(*buf).b_prev.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                                 buf = (*buf).b_prev;
                             }
                             (*eap).line2 = (*buf).handle as linenr_T;
                         }
                         4 => {
-                            (*eap).line1 = (*firstbuf).handle as linenr_T;
-                            (*eap).line2 = (*lastbuf).handle as linenr_T;
+                            (*eap).line1 = (*firstbuf.get()).handle as linenr_T;
+                            (*eap).line2 = (*lastbuf.get()).handle as linenr_T;
                         }
                         1 | 5 => {
                             if ((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
@@ -9633,12 +9661,12 @@ pub unsafe extern "C" fn parse_cmd_address(
                             break '_theend;
                         }
                         2 => {
-                            if (*(*curwin).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
+                            if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
                                 (*eap).line2 = 0 as ::core::ffi::c_int as linenr_T;
                                 (*eap).line1 = (*eap).line2;
                             } else {
                                 (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
-                                (*eap).line2 = (*(*curwin).w_alist).al_ga.ga_len as linenr_T;
+                                (*eap).line2 = (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T;
                             }
                         }
                         7 => {
@@ -9661,7 +9689,7 @@ pub unsafe extern "C" fn parse_cmd_address(
                         (*eap).cmd = (*eap).cmd.offset(1);
                         if (*eap).skip == 0 {
                             let mut fm: *mut fmark_T =
-                                mark_get_visual(curbuf, '<' as ::core::ffi::c_int);
+                                mark_get_visual(curbuf.get(), '<' as ::core::ffi::c_int);
                             if !mark_check(fm, errormsg) {
                                 break '_theend;
                             }
@@ -9680,7 +9708,7 @@ pub unsafe extern "C" fn parse_cmd_address(
                                 }
                             };
                             (*eap).line1 = (*fm).mark.lnum;
-                            fm = mark_get_visual(curbuf, '>' as ::core::ffi::c_int);
+                            fm = mark_get_visual(curbuf.get(), '>' as ::core::ffi::c_int);
                             if !mark_check(fm, errormsg) {
                                 break '_theend;
                             }
@@ -9709,11 +9737,11 @@ pub unsafe extern "C" fn parse_cmd_address(
             (*eap).addr_count += 1;
             if *(*eap).cmd as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                 if (*eap).skip == 0 {
-                    (*curwin).w_cursor.lnum = (*eap).line2;
+                    (*curwin.get()).w_cursor.lnum = (*eap).line2;
                     if (*eap).line2 > 0 as linenr_T {
-                        check_cursor(curwin);
+                        check_cursor(curwin.get());
                     } else {
-                        check_cursor_col(curwin);
+                        check_cursor_col(curwin.get());
                     }
                     need_check_cursor = true_0 != 0;
                 }
@@ -9731,7 +9759,7 @@ pub unsafe extern "C" fn parse_cmd_address(
         ret = OK;
     }
     if need_check_cursor {
-        check_cursor(curwin);
+        check_cursor(curwin.get());
     }
     return ret;
 }
@@ -9763,29 +9791,28 @@ pub unsafe extern "C" fn checkforcmd(
     return false_0 != 0;
 }
 unsafe extern "C" fn append_command(mut cmd: *const ::core::ffi::c_char) {
-    let mut len: size_t = strlen(&raw mut IObuff as *mut ::core::ffi::c_char);
+    let mut len: size_t = strlen(IObuff.ptr() as *mut ::core::ffi::c_char);
     let mut s: *const ::core::ffi::c_char = cmd;
     let mut d: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if len > (IOSIZE - 100 as ::core::ffi::c_int) as size_t {
-        d = (&raw mut IObuff as *mut ::core::ffi::c_char)
+        d = (IObuff.ptr() as *mut ::core::ffi::c_char)
             .offset(IOSIZE as isize)
             .offset(-(100 as ::core::ffi::c_int as isize));
-        d = d.offset(-(utf_head_off(&raw mut IObuff as *mut ::core::ffi::c_char, d) as isize));
+        d = d.offset(-(utf_head_off(IObuff.ptr() as *mut ::core::ffi::c_char, d) as isize));
         strcpy(
             d,
             b"...\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
     }
     xstrlcat(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         b": \0".as_ptr() as *const ::core::ffi::c_char,
         IOSIZE as size_t,
     );
-    d = (&raw mut IObuff as *mut ::core::ffi::c_char)
-        .offset(strlen(&raw mut IObuff as *mut ::core::ffi::c_char) as isize);
+    d = (IObuff.ptr() as *mut ::core::ffi::c_char)
+        .offset(strlen(IObuff.ptr() as *mut ::core::ffi::c_char) as isize);
     while *s as ::core::ffi::c_int != NUL
-        && (d.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char) + 5 as isize)
-            < IOSIZE as isize
+        && (d.offset_from(IObuff.ptr() as *mut ::core::ffi::c_char) + 5 as isize) < IOSIZE as isize
     {
         if *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             == 0xc2 as ::core::ffi::c_int
@@ -9799,7 +9826,7 @@ unsafe extern "C" fn append_command(mut cmd: *const ::core::ffi::c_char) {
             );
             d = d.offset(4 as ::core::ffi::c_int as isize);
         } else {
-            if d.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char)
+            if d.offset_from(IObuff.ptr() as *mut ::core::ffi::c_char)
                 + utfc_ptr2len(s) as isize
                 + 1 as isize
                 >= IOSIZE as isize
@@ -9946,21 +9973,21 @@ pub unsafe extern "C" fn find_ex_command(
             } else {
                 *(*eap).cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             };
-            if command_count != CMD_SIZE as ::core::ffi::c_int {
+            if command_count.get() != CMD_SIZE as ::core::ffi::c_int {
                 iemsg(gettext(
                     b"E943: Command table needs to be updated, run 'make'\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 ));
                 getout(1 as ::core::ffi::c_int);
             }
-            (*eap).cmdidx = cmdidxs1
+            (*eap).cmdidx = (*cmdidxs1.ptr())
                 [(c1 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
                 as cmdidx_T;
             if c2 as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && c2 as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             {
                 (*eap).cmdidx = ((*eap).cmdidx as ::core::ffi::c_int
-                    + cmdidxs2
+                    + (*cmdidxs2.ptr())
                         [(c1 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
                         [(c2 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
                         as ::core::ffi::c_int) as cmdidx_T;
@@ -9997,13 +10024,13 @@ pub unsafe extern "C" fn find_ex_command(
         }
         while ((*eap).cmdidx as ::core::ffi::c_int) < CMD_SIZE as ::core::ffi::c_int {
             if strncmp(
-                cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_name,
+                (*cmdnames.ptr())[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_name,
                 (*eap).cmd,
                 len as size_t,
             ) == 0 as ::core::ffi::c_int
             {
                 if !full.is_null()
-                    && *cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize]
+                    && *(*cmdnames.ptr())[(*eap).cmdidx as ::core::ffi::c_int as usize]
                         .cmd_name
                         .offset(len as isize) as ::core::ffi::c_int
                         == NUL
@@ -10042,7 +10069,7 @@ pub unsafe extern "C" fn find_ex_command(
     }
     return p;
 }
-static mut cmdmods: [cmdmod; 24] = [
+static cmdmods: GlobalCell<[cmdmod; 24]> = GlobalCell::new([
     cmdmod {
         name: b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
@@ -10163,7 +10190,7 @@ static mut cmdmods: [cmdmod; 24] = [
         minlen: 4 as ::core::ffi::c_int,
         has_count: false_0,
     },
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn modifier_len(mut cmd: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = cmd;
@@ -10182,18 +10209,18 @@ pub unsafe extern "C" fn modifier_len(mut cmd: *mut ::core::ffi::c_char) -> ::co
         j = 0 as ::core::ffi::c_int;
         while *p.offset(j as isize) as ::core::ffi::c_int != NUL {
             if *p.offset(j as isize) as ::core::ffi::c_int
-                != *cmdmods[i as usize].name.offset(j as isize) as ::core::ffi::c_int
+                != *(*cmdmods.ptr())[i as usize].name.offset(j as isize) as ::core::ffi::c_int
             {
                 break;
             }
             j += 1;
         }
-        if j >= cmdmods[i as usize].minlen
+        if j >= (*cmdmods.ptr())[i as usize].minlen
             && !(*p.offset(j as isize) as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
                 && *p.offset(j as isize) as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
                 || *p.offset(j as isize) as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                     && *p.offset(j as isize) as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
-            && (p == cmd || cmdmods[i as usize].has_count != 0)
+            && (p == cmd || (*cmdmods.ptr())[i as usize].has_count != 0)
         {
             return j + p.offset_from(cmd) as ::core::ffi::c_int;
         }
@@ -10215,15 +10242,18 @@ pub unsafe extern "C" fn cmd_exists(name: *const ::core::ffi::c_char) -> ::core:
         j = 0 as ::core::ffi::c_int;
         while *name.offset(j as isize) as ::core::ffi::c_int != NUL {
             if *name.offset(j as isize) as ::core::ffi::c_int
-                != *cmdmods[i as usize].name.offset(j as isize) as ::core::ffi::c_int
+                != *(*cmdmods.ptr())[i as usize].name.offset(j as isize) as ::core::ffi::c_int
             {
                 break;
             }
             j += 1;
         }
-        if *name.offset(j as isize) as ::core::ffi::c_int == NUL && j >= cmdmods[i as usize].minlen
+        if *name.offset(j as isize) as ::core::ffi::c_int == NUL
+            && j >= (*cmdmods.ptr())[i as usize].minlen
         {
-            return if *cmdmods[i as usize].name.offset(j as isize) as ::core::ffi::c_int == NUL {
+            return if *(*cmdmods.ptr())[i as usize].name.offset(j as isize) as ::core::ffi::c_int
+                == NUL
+            {
                 2 as ::core::ffi::c_int
             } else {
                 1 as ::core::ffi::c_int
@@ -10365,7 +10395,7 @@ pub unsafe extern "C" fn f_fullcommand(
         if (ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
             get_user_command_name(ea.useridx, ea.cmdidx as ::core::ffi::c_int)
         } else {
-            cmdnames[ea.cmdidx as usize].cmd_name
+            (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name
         },
     );
 }
@@ -10388,7 +10418,7 @@ pub unsafe extern "C" fn excmd_get_cmdidx(
         idx = CMD_append;
         while (idx as ::core::ffi::c_int) < CMD_SIZE as ::core::ffi::c_int {
             if strncmp(
-                cmdnames[idx as ::core::ffi::c_int as usize].cmd_name,
+                (*cmdnames.ptr())[idx as ::core::ffi::c_int as usize].cmd_name,
                 cmd,
                 len,
             ) == 0 as ::core::ffi::c_int
@@ -10402,7 +10432,7 @@ pub unsafe extern "C" fn excmd_get_cmdidx(
 }
 #[no_mangle]
 pub unsafe extern "C" fn excmd_get_argt(mut idx: cmdidx_T) -> uint32_t {
-    return cmdnames[idx as ::core::ffi::c_int as usize].cmd_argt;
+    return (*cmdnames.ptr())[idx as ::core::ffi::c_int as usize].cmd_argt;
 }
 #[no_mangle]
 pub unsafe extern "C" fn skip_range(
@@ -10497,19 +10527,19 @@ pub unsafe extern "C" fn get_address(
                 cmd = cmd.offset(1);
                 match addr_type as ::core::ffi::c_uint {
                     0 | 10 => {
-                        lnum = (*curwin).w_cursor.lnum;
+                        lnum = (*curwin.get()).w_cursor.lnum;
                     }
                     1 => {
-                        lnum = current_win_nr(curwin) as linenr_T;
+                        lnum = current_win_nr(curwin.get()) as linenr_T;
                     }
                     2 => {
-                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
+                        lnum = ((*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
                     }
                     3 | 4 => {
-                        lnum = (*curbuf).handle as linenr_T;
+                        lnum = (*curbuf.get()).handle as linenr_T;
                     }
                     5 => {
-                        lnum = current_tab_nr(curtab) as linenr_T;
+                        lnum = current_tab_nr(curtab.get()) as linenr_T;
                     }
                     11 | 6 | 9 => {
                         *errormsg = addr_error(addr_type);
@@ -10529,16 +10559,16 @@ pub unsafe extern "C" fn get_address(
                 cmd = cmd.offset(1);
                 match addr_type as ::core::ffi::c_uint {
                     0 | 10 => {
-                        lnum = (*curbuf).b_ml.ml_line_count;
+                        lnum = (*curbuf.get()).b_ml.ml_line_count;
                     }
                     1 => {
                         lnum = current_win_nr(::core::ptr::null::<win_T>()) as linenr_T;
                     }
                     2 => {
-                        lnum = (*(*curwin).w_alist).al_ga.ga_len as linenr_T;
+                        lnum = (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T;
                     }
                     3 => {
-                        buf = lastbuf;
+                        buf = lastbuf.get();
                         while (*buf).b_ml.ml_mfp.is_null() {
                             if (*buf).b_prev.is_null() {
                                 break;
@@ -10548,7 +10578,7 @@ pub unsafe extern "C" fn get_address(
                         lnum = (*buf).handle as linenr_T;
                     }
                     4 => {
-                        lnum = (*lastbuf).handle as linenr_T;
+                        lnum = (*lastbuf.get()).handle as linenr_T;
                     }
                     5 => {
                         lnum = current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) as linenr_T;
@@ -10596,16 +10626,16 @@ pub unsafe extern "C" fn get_address(
                         kMarkBufLocal as ::core::ffi::c_int
                     }) as MarkGet;
                     let mut fm: *mut fmark_T = mark_get(
-                        curbuf,
-                        curwin,
+                        curbuf.get(),
+                        curwin.get(),
                         ::core::ptr::null_mut::<fmark_T>(),
                         flag,
                         *cmd as ::core::ffi::c_int,
                     );
                     cmd = cmd.offset(1);
-                    if !fm.is_null() && (*fm).fnum != (*curbuf).handle {
+                    if !fm.is_null() && (*fm).fnum != (*curbuf.get()).handle {
                         mark_move_to(fm, 0 as MarkMove);
-                        lnum = (*curwin).w_cursor.lnum;
+                        lnum = (*curwin.get()).w_cursor.lnum;
                     } else if !mark_check(fm, errormsg) {
                         cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                         break;
@@ -10644,22 +10674,23 @@ pub unsafe extern "C" fn get_address(
                     }
                 } else {
                     let mut flags: ::core::ffi::c_int = 0;
-                    pos = (*curwin).w_cursor;
+                    pos = (*curwin.get()).w_cursor;
                     if lnum > 0 as linenr_T && lnum != MAXLNUM as ::core::ffi::c_int as linenr_T {
-                        (*curwin).w_cursor.lnum = if lnum > (*curbuf).b_ml.ml_line_count {
-                            (*curbuf).b_ml.ml_line_count
+                        (*curwin.get()).w_cursor.lnum = if lnum > (*curbuf.get()).b_ml.ml_line_count
+                        {
+                            (*curbuf.get()).b_ml.ml_line_count
                         } else {
                             lnum
                         };
                     }
-                    (*curwin).w_cursor.col = (if c == '/' as ::core::ffi::c_int
-                        && (*curwin).w_cursor.lnum > 0 as linenr_T
+                    (*curwin.get()).w_cursor.col = (if c == '/' as ::core::ffi::c_int
+                        && (*curwin.get()).w_cursor.lnum > 0 as linenr_T
                     {
                         MAXCOL as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) as colnr_T;
-                    searchcmdlen = 0 as ::core::ffi::c_int;
+                    searchcmdlen.set(0 as ::core::ffi::c_int);
                     flags = if silent as ::core::ffi::c_int != 0 {
                         SEARCH_KEEP as ::core::ffi::c_int
                     } else {
@@ -10676,13 +10707,13 @@ pub unsafe extern "C" fn get_address(
                         ::core::ptr::null_mut::<searchit_arg_T>(),
                     ) == 0
                     {
-                        (*curwin).w_cursor = pos;
+                        (*curwin.get()).w_cursor = pos;
                         cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                         break;
                     } else {
-                        lnum = (*curwin).w_cursor.lnum;
-                        (*curwin).w_cursor = pos;
-                        cmd = cmd.offset(searchcmdlen as isize);
+                        lnum = (*curwin.get()).w_cursor.lnum;
+                        (*curwin.get()).w_cursor = pos;
+                        cmd = cmd.offset(searchcmdlen.get() as isize);
                     }
                 }
             }
@@ -10710,7 +10741,7 @@ pub unsafe extern "C" fn get_address(
                         pos.lnum = if lnum != MAXLNUM as ::core::ffi::c_int as linenr_T {
                             lnum
                         } else {
-                            (*curwin).w_cursor.lnum
+                            (*curwin.get()).w_cursor.lnum
                         };
                         pos.col = (if *cmd as ::core::ffi::c_int != '?' as ::core::ffi::c_int {
                             MAXCOL as ::core::ffi::c_int
@@ -10719,8 +10750,8 @@ pub unsafe extern "C" fn get_address(
                         }) as colnr_T;
                         pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
                         if searchit(
-                            curwin,
-                            curbuf,
+                            curwin.get(),
+                            curbuf.get(),
                             &raw mut pos,
                             ::core::ptr::null_mut::<pos_T>(),
                             (if *cmd as ::core::ffi::c_int == '?' as ::core::ffi::c_int {
@@ -10763,19 +10794,19 @@ pub unsafe extern "C" fn get_address(
             if lnum == MAXLNUM as ::core::ffi::c_int as linenr_T {
                 match addr_type as ::core::ffi::c_uint {
                     0 | 10 => {
-                        lnum = (*curwin).w_cursor.lnum;
+                        lnum = (*curwin.get()).w_cursor.lnum;
                     }
                     1 => {
-                        lnum = current_win_nr(curwin) as linenr_T;
+                        lnum = current_win_nr(curwin.get()) as linenr_T;
                     }
                     2 => {
-                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
+                        lnum = ((*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
                     }
                     3 | 4 => {
-                        lnum = (*curbuf).handle as linenr_T;
+                        lnum = (*curbuf.get()).handle as linenr_T;
                     }
                     5 => {
-                        lnum = current_tab_nr(curtab) as linenr_T;
+                        lnum = current_tab_nr(curtab.get()) as linenr_T;
                     }
                     6 => {
                         lnum = 1 as ::core::ffi::c_int as linenr_T;
@@ -10842,7 +10873,7 @@ pub unsafe extern "C" fn get_address(
                     && address_count >= 2 as ::core::ffi::c_int
                 {
                     hasFolding(
-                        curwin,
+                        curwin.get(),
                         lnum,
                         ::core::ptr::null_mut::<linenr_T>(),
                         &raw mut lnum,
@@ -10914,7 +10945,7 @@ pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ff
         match (*eap).addr_type as ::core::ffi::c_uint {
             0 => {
                 if (*eap).line2
-                    > (*curbuf).b_ml.ml_line_count
+                    > (*curbuf.get()).b_ml.ml_line_count
                         + ((*eap).cmdidx as ::core::ffi::c_int == CMD_diffget as ::core::ffi::c_int
                             || (*eap).cmdidx as ::core::ffi::c_int
                                 == CMD_diffput as ::core::ffi::c_int)
@@ -10925,8 +10956,8 @@ pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ff
             }
             2 => {
                 if (*eap).line2
-                    > (*(*curwin).w_alist).al_ga.ga_len as linenr_T
-                        + ((*(*curwin).w_alist).al_ga.ga_len == 0) as ::core::ffi::c_int
+                    > (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T
+                        + ((*(*curwin.get()).w_alist).al_ga.ga_len == 0) as ::core::ffi::c_int
                 {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
@@ -10937,7 +10968,7 @@ pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ff
                 }
             }
             3 => {
-                buf = firstbuf;
+                buf = firstbuf.get();
                 while (*buf).b_ml.ml_mfp.is_null() {
                     if (*buf).b_next.is_null() {
                         return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
@@ -10947,7 +10978,7 @@ pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ff
                 if (*eap).line1 < (*buf).handle as linenr_T {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
-                buf = lastbuf;
+                buf = lastbuf.get();
                 while (*buf).b_ml.ml_mfp.is_null() {
                     if (*buf).b_prev.is_null() {
                         return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
@@ -11046,15 +11077,15 @@ pub unsafe extern "C" fn replace_makeprg(
         && grep_internal((*eap).cmdidx) == 0
     {
         let mut program: *const ::core::ffi::c_char = if isgrep as ::core::ffi::c_int != 0 {
-            if *(*curbuf).b_p_gp as ::core::ffi::c_int == NUL {
-                p_gp
+            if *(*curbuf.get()).b_p_gp as ::core::ffi::c_int == NUL {
+                p_gp.get()
             } else {
-                (*curbuf).b_p_gp
+                (*curbuf.get()).b_p_gp
             }
-        } else if *(*curbuf).b_p_mp as ::core::ffi::c_int == NUL {
-            p_mp
+        } else if *(*curbuf.get()).b_p_mp as ::core::ffi::c_int == NUL {
+            p_mp.get()
         } else {
-            (*curbuf).b_p_mp
+            (*curbuf.get()).b_p_mp
         };
         arg = skipwhite(arg);
         let mut new_cmdline: *mut ::core::ffi::c_char =
@@ -11144,10 +11175,10 @@ pub unsafe extern "C" fn expand_filename(
                         ::core::ptr::null_mut::<::core::ffi::c_char>();
                     l_0 = repl;
                     while *l_0 != 0 {
-                        if !vim_strchr(escape_chars, *l_0 as uint8_t as ::core::ffi::c_int)
+                        if !vim_strchr(escape_chars.get(), *l_0 as uint8_t as ::core::ffi::c_int)
                             .is_null()
                         {
-                            l_0 = vim_strsave_escaped(repl, escape_chars);
+                            l_0 = vim_strsave_escaped(repl, escape_chars.get());
                             xfree(repl as *mut ::core::ffi::c_void);
                             repl = l_0;
                             break;
@@ -11178,14 +11209,14 @@ pub unsafe extern "C" fn expand_filename(
             {
                 expand_env_esc(
                     (*eap).arg,
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                     MAXPATHL,
                     true_0 != 0,
                     true_0 != 0,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 );
-                has_wildcards = path_has_wildcard(&raw mut NameBuff as *mut ::core::ffi::c_char);
-                p = &raw mut NameBuff as *mut ::core::ffi::c_char;
+                has_wildcards = path_has_wildcard(NameBuff.ptr() as *mut ::core::ffi::c_char);
+                p = NameBuff.ptr() as *mut ::core::ffi::c_char;
             } else {
                 p = ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
@@ -11231,7 +11262,7 @@ pub unsafe extern "C" fn expand_filename(
                 | WILD_ADD_SLASH as ::core::ffi::c_int;
             ExpandInit(&raw mut xpc);
             xpc.xp_context = EXPAND_FILES as ::core::ffi::c_int;
-            if p_wic != 0 {
+            if p_wic.get() != 0 {
                 options += WILD_ICASE as ::core::ffi::c_int;
             }
             p = ExpandOne(
@@ -11302,7 +11333,7 @@ unsafe extern "C" fn repl_cmdline(
         j = j.wrapping_add(1);
     }
     if !(*eap).do_ecmd_cmd.is_null()
-        && (*eap).do_ecmd_cmd != &raw mut dollar_command as *mut ::core::ffi::c_char
+        && (*eap).do_ecmd_cmd != dollar_command.ptr() as *mut ::core::ffi::c_char
     {
         (*eap).do_ecmd_cmd = new_cmdline.offset((*eap).do_ecmd_cmd.offset_from(*cmdlinep) as isize);
     }
@@ -11352,7 +11383,8 @@ pub unsafe extern "C" fn separate_nextcmd(mut eap: *mut exarg_T) {
                 && (*eap).cmdidx as ::core::ffi::c_int != CMD_insert as ::core::ffi::c_int
             || *p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
         {
-            if (vim_strchr(p_cpo, CPO_BAR).is_null() || (*eap).argt & EX_CTRLV as uint32_t == 0)
+            if (vim_strchr(p_cpo.get(), CPO_BAR).is_null()
+                || (*eap).argt & EX_CTRLV as uint32_t == 0)
                 && *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
             {
@@ -11385,7 +11417,7 @@ pub unsafe extern "C" fn getargcmd(
         if ascii_isspace(*arg as ::core::ffi::c_int) as ::core::ffi::c_int != 0
             || *arg as ::core::ffi::c_int == NUL
         {
-            command = &raw mut dollar_command as *mut ::core::ffi::c_char;
+            command = dollar_command.ptr() as *mut ::core::ffi::c_char;
         } else {
             command = arg;
             arg = skip_cmd_arg(command, true_0 != 0);
@@ -11453,11 +11485,11 @@ unsafe extern "C" fn get_bad_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut p_bad_values: [*mut ::core::ffi::c_char; 3] = [
+    static p_bad_values: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([
         b"?\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"keep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"drop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    ]);
     if idx
         < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 3]>()
             .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
@@ -11467,7 +11499,7 @@ unsafe extern "C" fn get_bad_name(
                     == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int
     {
-        return p_bad_values[idx as usize] as *mut ::core::ffi::c_char;
+        return (*p_bad_values.ptr())[idx as usize] as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -11613,7 +11645,7 @@ unsafe extern "C" fn get_argopt_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    static mut p_opt_values: [*mut ::core::ffi::c_char; 7] = [
+    static p_opt_values: GlobalCell<[*mut ::core::ffi::c_char; 7]> = GlobalCell::new([
         b"fileformat=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"encoding=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"binary\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -11621,7 +11653,7 @@ unsafe extern "C" fn get_argopt_name(
         b"bad=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"edit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"p\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    ]);
     if idx
         < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 7]>()
             .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
@@ -11631,7 +11663,7 @@ unsafe extern "C" fn get_argopt_name(
                     == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int
     {
-        return p_opt_values[idx as usize] as *mut ::core::ffi::c_char;
+        return (*p_opt_values.ptr())[idx as usize] as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -11788,8 +11820,8 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                 } else if strcmp(p, b"#\0".as_ptr() as *const ::core::ffi::c_char)
                     == 0 as ::core::ffi::c_int
                 {
-                    if valid_tabpage(lastused_tabpage) {
-                        tab_number = tabpage_index(lastused_tabpage);
+                    if valid_tabpage(lastused_tabpage.get()) {
+                        tab_number = tabpage_index(lastused_tabpage.get());
                     } else {
                         (*eap).errmsg = ex_errmsg(
                             &raw const e_invargval as *const ::core::ffi::c_char,
@@ -11823,7 +11855,7 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                     );
                     break '_theend;
                 }
-                tab_number = tab_number * relative + tabpage_index(curtab);
+                tab_number = tab_number * relative + tabpage_index(curtab.get());
                 if unaccept_arg0 == 0 && relative == -1 as ::core::ffi::c_int {
                     tab_number -= 1;
                 }
@@ -11868,7 +11900,7 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
         } else {
             match (*eap).cmdidx as ::core::ffi::c_int {
                 461 => {
-                    tab_number = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
+                    tab_number = tabpage_index(curtab.get()) + 1 as ::core::ffi::c_int;
                     if tab_number > current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) {
                         tab_number = 1 as ::core::ffi::c_int;
                     }
@@ -11877,7 +11909,7 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                     tab_number = current_tab_nr(::core::ptr::null_mut::<tabpage_T>());
                 }
                 _ => {
-                    tab_number = tabpage_index(curtab);
+                    tab_number = tabpage_index(curtab.get());
                 }
             }
         }
@@ -11885,8 +11917,8 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
     return tab_number;
 }
 unsafe extern "C" fn ex_autocmd(mut eap: *mut exarg_T) {
-    if secure != 0 {
-        secure = 2 as ::core::ffi::c_int;
+    if secure.get() != 0 {
+        secure.set(2 as ::core::ffi::c_int);
         (*eap).errmsg = gettext(&raw const e_curdir as *const ::core::ffi::c_char);
     } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_autocmd as ::core::ffi::c_int {
         do_autocmd(eap, (*eap).arg, (*eap).forceit);
@@ -12039,18 +12071,20 @@ pub unsafe extern "C" fn check_nextcmd(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn check_more(mut message: bool, mut forceit: bool) -> ::core::ffi::c_int {
-    let mut n: ::core::ffi::c_int =
-        (*(*curwin).w_alist).al_ga.ga_len - (*curwin).w_arg_idx - 1 as ::core::ffi::c_int;
+    let mut n: ::core::ffi::c_int = (*(*curwin.get()).w_alist).al_ga.ga_len
+        - (*curwin.get()).w_arg_idx
+        - 1 as ::core::ffi::c_int;
     if !forceit
         && only_one_window() as ::core::ffi::c_int != 0
-        && (*(*curwin).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int
-        && !arg_had_last
+        && (*(*curwin.get()).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int
+        && !arg_had_last.get()
         && n > 0 as ::core::ffi::c_int
-        && quitmore == 0 as ::core::ffi::c_int
+        && quitmore.get() == 0 as ::core::ffi::c_int
     {
         if message {
-            if (p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
-                && !(*curbuf).b_fname.is_null()
+            if (p_confirm.get() != 0
+                || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+                && !(*curbuf.get()).b_fname.is_null()
             {
                 let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
                 vim_snprintf(
@@ -12084,7 +12118,7 @@ unsafe extern "C" fn check_more(mut message: bool, mut forceit: bool) -> ::core:
                 ),
                 n,
             );
-            quitmore = 2 as ::core::ffi::c_int;
+            quitmore.set(2 as ::core::ffi::c_int);
         }
         return FAIL;
     }
@@ -12098,15 +12132,15 @@ pub unsafe extern "C" fn get_command_name(
     if idx >= CMD_SIZE as ::core::ffi::c_int {
         return expand_user_command_name(idx);
     }
-    return cmdnames[idx as usize].cmd_name;
+    return (*cmdnames.ptr())[idx as usize].cmd_name;
 }
 unsafe extern "C" fn ex_colorscheme(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
         let mut expr: *mut ::core::ffi::c_char =
             xstrdup(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char);
-        emsg_off += 1;
+        (*emsg_off.ptr()) += 1;
         let mut p: *mut ::core::ffi::c_char = eval_to_string(expr, false_0 != 0, false_0 != 0);
-        emsg_off -= 1;
+        (*emsg_off.ptr()) -= 1;
         xfree(expr as *mut ::core::ffi::c_void);
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
         if !p.is_null() {
@@ -12139,7 +12173,7 @@ unsafe extern "C" fn ex_highlight(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn not_exiting(mut save_exiting: bool) {
-    exiting = save_exiting;
+    exiting.set(save_exiting);
     set_vim_var_string(
         VV_EXITREASON,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -12187,12 +12221,12 @@ pub unsafe extern "C" fn before_quit_autocmds(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
         if !win_valid(wp)
             || curbuf_locked() as ::core::ffi::c_int != 0
-            || (*curbuf).b_nwindows == 1 as ::core::ffi::c_int
-                && (*curbuf).b_locked > 0 as ::core::ffi::c_int
+            || (*curbuf.get()).b_nwindows == 1 as ::core::ffi::c_int
+                && (*curbuf.get()).b_locked > 0 as ::core::ffi::c_int
         {
             set_vim_var_string(
                 VV_EXITREASON,
@@ -12205,8 +12239,8 @@ pub unsafe extern "C" fn before_quit_autocmds(
     return false_0 != 0;
 }
 unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = Ctrl_C;
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(Ctrl_C);
         return;
     }
     if text_locked() {
@@ -12216,7 +12250,7 @@ unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         let mut wnr: linenr_T = (*eap).line2;
-        wp = firstwin;
+        wp = firstwin.get();
         while !(*wp).w_next.is_null() {
             wnr -= 1;
             if wnr <= 0 as linenr_T {
@@ -12225,7 +12259,7 @@ unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
             wp = (*wp).w_next;
         }
     } else {
-        wp = curwin;
+        wp = curwin.get();
     }
     if curbuf_locked() {
         return;
@@ -12233,16 +12267,16 @@ unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
     if before_quit_autocmds(wp, false_0 != 0, (*eap).forceit != 0) {
         return;
     }
-    let mut save_exiting: bool = exiting;
+    let mut save_exiting: bool = exiting.get();
     if check_more(false_0 != 0, (*eap).forceit != 0) == OK
         && only_one_window() as ::core::ffi::c_int != 0
     {
-        exiting = true_0 != 0;
+        exiting.set(true_0 != 0);
     }
     if !buf_hide((*wp).w_buffer)
         && check_changed(
             (*wp).w_buffer,
-            (if p_awa != 0 {
+            (if p_awa.get() != 0 {
                 CCGD_AW as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
@@ -12260,7 +12294,7 @@ unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
         not_exiting(save_exiting);
     } else {
         if only_one_window() as ::core::ffi::c_int != 0
-            && (firstwin == lastwin || (*eap).addr_count == 0 as ::core::ffi::c_int)
+            && (firstwin.get() == lastwin.get() || (*eap).addr_count == 0 as ::core::ffi::c_int)
         {
             getout(0 as ::core::ffi::c_int);
         }
@@ -12283,21 +12317,21 @@ unsafe extern "C" fn ex_cquit(mut eap: *mut exarg_T) -> ! {
 }
 #[no_mangle]
 pub unsafe extern "C" fn before_quit_all(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = if (*eap).forceit != 0 {
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(if (*eap).forceit != 0 {
             -(253 as ::core::ffi::c_int
                 + ((KE_XF1 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         } else {
             -(253 as ::core::ffi::c_int
                 + ((KE_XF2 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        };
+        });
         return FAIL;
     }
     if text_locked() {
         text_locked_msg();
         return FAIL;
     }
-    if before_quit_autocmds(curwin, true_0 != 0, (*eap).forceit != 0) {
+    if before_quit_autocmds(curwin.get(), true_0 != 0, (*eap).forceit != 0) {
         return FAIL;
     }
     return OK;
@@ -12306,8 +12340,8 @@ unsafe extern "C" fn ex_quitall(mut eap: *mut exarg_T) {
     if before_quit_all(eap) == FAIL {
         return;
     }
-    let mut save_exiting: bool = exiting;
-    exiting = true_0 != 0;
+    let mut save_exiting: bool = exiting.get();
+    exiting.set(true_0 != 0);
     if (*eap).forceit != 0 || !check_changed_any(false_0 != 0, false_0 != 0) {
         getout(0 as ::core::ffi::c_int);
     }
@@ -12659,7 +12693,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                             b"qall\0".as_ptr() as *const ::core::ffi::c_char
                         }) as *mut ::core::ffi::c_char;
                         quit_cmd_copy = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        if cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0 {
+                        if (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0 {
                             quit_cmd_copy = concat_str(
                                 b"confirm \0".as_ptr() as *const ::core::ffi::c_char,
                                 quit_cmd,
@@ -12672,7 +12706,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                         {
                             emsg(err.msg);
                             api_clear_error(&raw mut err);
-                        } else if !exiting {
+                        } else if !exiting.get() {
                             emsg(b"restart failed: +cmd did not quit the server\0".as_ptr()
                                 as *const ::core::ffi::c_char);
                         }
@@ -12743,16 +12777,20 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_close(mut eap: *mut exarg_T) {
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut winnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = Ctrl_C;
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(Ctrl_C);
     } else if !text_locked() && !curbuf_locked() {
         if (*eap).addr_count == 0 as ::core::ffi::c_int {
-            ex_win_close((*eap).forceit, curwin, ::core::ptr::null_mut::<tabpage_T>());
+            ex_win_close(
+                (*eap).forceit,
+                curwin.get(),
+                ::core::ptr::null_mut::<tabpage_T>(),
+            );
         } else {
-            let mut wp: *mut win_T = if curtab == curtab {
-                firstwin
+            let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+                firstwin.get()
             } else {
-                (*curtab).tp_firstwin
+                (*curtab.get()).tp_firstwin
             };
             while !wp.is_null() {
                 winnr += 1;
@@ -12764,17 +12802,17 @@ unsafe extern "C" fn ex_close(mut eap: *mut exarg_T) {
                 }
             }
             if win.is_null() {
-                win = lastwin;
+                win = lastwin.get();
             }
             ex_win_close((*eap).forceit, win, ::core::ptr::null_mut::<tabpage_T>());
         }
     }
 }
 unsafe extern "C" fn ex_pclose(mut eap: *mut exarg_T) {
-    let mut win: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut win: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !win.is_null() {
         if (*win).w_onebuf_opt.wo_pvw != 0 {
@@ -12804,8 +12842,9 @@ pub unsafe extern "C" fn ex_win_close(
     let mut need_hide: bool = bufIsChanged(buf) as ::core::ffi::c_int != 0
         && (*buf).b_nwindows <= 1 as ::core::ffi::c_int;
     if need_hide as ::core::ffi::c_int != 0 && !buf_hide(buf) && forceit == 0 {
-        if (p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
-            && p_write != 0
+        if (p_confirm.get() != 0
+            || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+            && p_write.get() != 0
         {
             let mut bufref: bufref_T = bufref_T {
                 br_buf: ::core::ptr::null_mut::<buf_T>(),
@@ -12837,12 +12876,14 @@ pub unsafe extern "C" fn ex_win_close(
     };
 }
 unsafe extern "C" fn ex_tabclose(mut eap: *mut exarg_T) {
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = -(253 as ::core::ffi::c_int
-            + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(
+            -(253 as ::core::ffi::c_int
+                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
+        );
         return;
     }
-    if (*first_tabpage).tp_next.is_null() {
+    if (*first_tabpage.get()).tp_next.is_null() {
         emsg(gettext(
             b"E784: Cannot close last tab page\0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -12860,7 +12901,7 @@ unsafe extern "C" fn ex_tabclose(mut eap: *mut exarg_T) {
         beep_flush();
         return;
     }
-    if tp != curtab {
+    if tp != curtab.get() {
         tabpage_close_other(tp, (*eap).forceit);
         return;
     } else if !text_locked() && !curbuf_locked() {
@@ -12868,12 +12909,14 @@ unsafe extern "C" fn ex_tabclose(mut eap: *mut exarg_T) {
     }
 }
 unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = -(253 as ::core::ffi::c_int
-            + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(
+            -(253 as ::core::ffi::c_int
+                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
+        );
         return;
     }
-    if (*first_tabpage).tp_next.is_null() {
+    if (*first_tabpage.get()).tp_next.is_null() {
         msg(
             gettext(b"Already only one tab page\0".as_ptr() as *const ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
@@ -12890,9 +12933,9 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
     goto_tabpage(tab_number);
     let mut done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while done < 1000 as ::core::ffi::c_int {
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
-            if (*tp).tp_topframe != topframe {
+            if (*tp).tp_topframe != topframe.get() {
                 tabpage_close_other(tp as *mut tabpage_T, (*eap).forceit);
                 if valid_tabpage(tp as *mut tabpage_T) {
                     done = 1000 as ::core::ffi::c_int;
@@ -12903,7 +12946,7 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
             }
         }
         '_c2rust_label: {
-            if !first_tabpage.is_null() {
+            if !(*first_tabpage.ptr()).is_null() {
             } else {
                 __assert_fail(
                     b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
@@ -12913,7 +12956,7 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
                 );
             }
         };
-        if (*first_tabpage).tp_next.is_null() {
+        if (*first_tabpage.get()).tp_next.is_null() {
             break;
         }
         done += 1;
@@ -12924,20 +12967,20 @@ pub unsafe extern "C" fn tabpage_close(mut forceit: ::core::ffi::c_int) {
     if window_layout_locked(CMD_tabclose) {
         return;
     }
-    trigger_tabclosedpre(curtab);
-    (*curtab).tp_did_tabclosedpre = true_0 != 0;
-    let save_curtab: *mut tabpage_T = curtab;
-    while (*curwin).w_floating {
-        ex_win_close(forceit, curwin, ::core::ptr::null_mut::<tabpage_T>());
+    trigger_tabclosedpre(curtab.get());
+    (*curtab.get()).tp_did_tabclosedpre = true_0 != 0;
+    let save_curtab: *mut tabpage_T = curtab.get();
+    while (*curwin.get()).w_floating {
+        ex_win_close(forceit, curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
     }
-    if !(firstwin == lastwin) {
+    if !(firstwin.get() == lastwin.get()) {
         close_others(true_0, forceit);
     }
-    if firstwin == lastwin {
-        ex_win_close(forceit, curwin, ::core::ptr::null_mut::<tabpage_T>());
+    if firstwin.get() == lastwin.get() {
+        ex_win_close(forceit, curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
     }
-    if curtab == save_curtab {
-        (*curtab).tp_did_tabclosedpre = false_0 != 0;
+    if curtab.get() == save_curtab {
+        (*curtab.get()).tp_did_tabclosedpre = false_0 != 0;
     }
 }
 #[no_mangle]
@@ -12986,7 +13029,7 @@ unsafe extern "C" fn ex_only(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut wnr: linenr_T = (*eap).line2;
-        wp = firstwin;
+        wp = firstwin.get();
         loop {
             wnr -= 1;
             if wnr <= 0 as linenr_T {
@@ -12997,7 +13040,7 @@ unsafe extern "C" fn ex_only(mut eap: *mut exarg_T) {
             }
             wp = (*wp).w_next;
         }
-        if wp != curwin {
+        if wp != curwin.get() {
             win_goto(wp);
         }
     }
@@ -13009,13 +13052,13 @@ unsafe extern "C" fn ex_hide(mut eap: *mut exarg_T) {
     }
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if (*eap).addr_count == 0 as ::core::ffi::c_int {
-        win = curwin;
+        win = curwin.get();
     } else {
         let mut winnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             winnr += 1;
@@ -13027,7 +13070,7 @@ unsafe extern "C" fn ex_hide(mut eap: *mut exarg_T) {
             }
         }
         if win.is_null() {
-            win = lastwin;
+            win = lastwin.get();
         }
     }
     if !(*win).w_floating && window_layout_locked(CMD_hide) as ::core::ffi::c_int != 0 {
@@ -13044,24 +13087,25 @@ unsafe extern "C" fn ex_stop(mut eap: *mut exarg_T) {
     ui_flush();
 }
 unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
-    if cmdwin_type != 0 as ::core::ffi::c_int {
-        cmdwin_result = Ctrl_C;
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
+        cmdwin_result.set(Ctrl_C);
         return;
     }
     if text_locked() {
         text_locked_msg();
         return;
     }
-    let mut save_exiting: bool = exiting;
+    let mut save_exiting: bool = exiting.get();
     if check_more(false_0 != 0, (*eap).forceit != 0) == OK
         && only_one_window() as ::core::ffi::c_int != 0
     {
-        exiting = true_0 != 0;
+        exiting.set(true_0 != 0);
     }
     if ((*eap).cmdidx as ::core::ffi::c_int == CMD_wq as ::core::ffi::c_int
         || curbufIsChanged() as ::core::ffi::c_int != 0)
         && do_write(eap) == FAIL
-        || before_quit_autocmds(curwin, false_0 != 0, (*eap).forceit != 0) as ::core::ffi::c_int
+        || before_quit_autocmds(curwin.get(), false_0 != 0, (*eap).forceit != 0)
+            as ::core::ffi::c_int
             != 0
         || check_more(true_0 != 0, (*eap).forceit != 0) == FAIL
         || only_one_window() as ::core::ffi::c_int != 0
@@ -13073,17 +13117,21 @@ unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
             getout(0 as ::core::ffi::c_int);
         }
         not_exiting(save_exiting);
-        win_close(curwin, !buf_hide((*curwin).w_buffer), (*eap).forceit != 0);
+        win_close(
+            curwin.get(),
+            !buf_hide((*curwin.get()).w_buffer),
+            (*eap).forceit != 0,
+        );
     };
 }
 unsafe extern "C" fn ex_print(mut eap: *mut exarg_T) {
-    if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+    if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         emsg(gettext(
             &raw const e_empty_buffer as *const ::core::ffi::c_char,
         ));
     } else {
         let mut line: linenr_T = (*eap).line1;
-        while line <= (*eap).line2 && !got_int {
+        while line <= (*eap).line2 && !got_int.get() {
             print_line(
                 line,
                 (*eap).cmdidx as ::core::ffi::c_int == CMD_number as ::core::ffi::c_int
@@ -13097,22 +13145,22 @@ unsafe extern "C" fn ex_print(mut eap: *mut exarg_T) {
             os_breakcheck();
         }
         setpcmark();
-        (*curwin).w_cursor.lnum = (*eap).line2;
+        (*curwin.get()).w_cursor.lnum = (*eap).line2;
         beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
     }
-    ex_no_reprint = true_0 != 0;
+    ex_no_reprint.set(true_0 != 0);
 }
 unsafe extern "C" fn ex_goto(mut eap: *mut exarg_T) {
     goto_byte((*eap).line2 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn ex_preserve(mut _eap: *mut exarg_T) {
-    ml_preserve(curbuf, true_0 != 0, true_0 != 0);
+    ml_preserve(curbuf.get(), true_0 != 0, true_0 != 0);
 }
 unsafe extern "C" fn ex_recover(mut eap: *mut exarg_T) {
-    recoverymode = true_0 != 0;
+    recoverymode.set(true_0 != 0);
     if !check_changed(
-        curbuf,
-        (if p_awa != 0 {
+        curbuf.get(),
+        (if p_awa.get() != 0 {
             CCGD_AW as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
@@ -13125,7 +13173,7 @@ unsafe extern "C" fn ex_recover(mut eap: *mut exarg_T) {
             | CCGD_EXCMD as ::core::ffi::c_int,
     ) && (*(*eap).arg as ::core::ffi::c_int == NUL
         || setfname(
-            curbuf,
+            curbuf.get(),
             (*eap).arg,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0 != 0,
@@ -13133,29 +13181,29 @@ unsafe extern "C" fn ex_recover(mut eap: *mut exarg_T) {
     {
         ml_recover(true_0 != 0);
     }
-    recoverymode = false_0 != 0;
+    recoverymode.set(false_0 != 0);
 }
 unsafe extern "C" fn ex_wrongmodifier(mut eap: *mut exarg_T) {
     (*eap).errmsg = gettext(&raw const e_invcmd as *const ::core::ffi::c_char);
 }
-static mut ffu_cb: Callback = Callback {
+static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_20 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
-};
+});
 unsafe extern "C" fn get_findfunc_callback() -> *mut Callback {
-    return if *(*curbuf).b_p_ffu as ::core::ffi::c_int != NUL {
-        &raw mut (*curbuf).b_ffu_cb
+    return if *(*curbuf.get()).b_p_ffu as ::core::ffi::c_int != NUL {
+        &raw mut (*curbuf.get()).b_ffu_cb
     } else {
-        &raw mut ffu_cb
+        ffu_cb.ptr()
     };
 }
 unsafe extern "C" fn call_findfunc(
     mut pat: *mut ::core::ffi::c_char,
     mut cmdcomplete: BoolVarValue,
 ) -> *mut list_T {
-    let saved_sctx: sctx_T = current_sctx;
+    let saved_sctx: sctx_T = current_sctx.get();
     let mut args: [typval_T; 3] = [typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -13166,10 +13214,10 @@ unsafe extern "C" fn call_findfunc(
     args[1 as ::core::ffi::c_int as usize].v_type = VAR_BOOL;
     args[1 as ::core::ffi::c_int as usize].vval.v_bool = cmdcomplete;
     args[2 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     let mut ctx: *mut sctx_T = get_option_sctx(kOptFindfunc);
     if !ctx.is_null() {
-        current_sctx = *ctx;
+        current_sctx.set(*ctx);
     }
     let mut cb: *mut Callback = get_findfunc_callback();
     let mut rettv: typval_T = typval_T {
@@ -13183,8 +13231,8 @@ unsafe extern "C" fn call_findfunc(
         &raw mut args as *mut typval_T,
         &raw mut rettv,
     ) as ::core::ffi::c_int;
-    current_sctx = saved_sctx;
-    textlock -= 1;
+    current_sctx.set(saved_sctx);
+    (*textlock.ptr()) -= 1;
     let mut retlist: *mut list_T = ::core::ptr::null_mut::<list_T>();
     if retval == OK {
         if rettv.v_type as ::core::ffi::c_uint
@@ -13284,7 +13332,7 @@ pub unsafe extern "C" fn did_set_findfunc(mut args: *mut optset_T) -> *const ::c
     if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         retval = option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb);
     } else {
-        retval = option_set_callback_func(p_ffu, &raw mut ffu_cb);
+        retval = option_set_callback_func(p_ffu.get(), ffu_cb.ptr());
         if (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
             callback_free(&raw mut (*buf).b_ffu_cb);
         }
@@ -13302,13 +13350,13 @@ pub unsafe extern "C" fn did_set_findfunc(mut args: *mut optset_T) -> *const ::c
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_findfunc_option() {
-    callback_free(&raw mut ffu_cb);
+    callback_free(ffu_cb.ptr());
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_ref_in_findfunc(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort_0: bool = false_0 != 0;
     abort_0 = set_ref_in_callback(
-        &raw mut ffu_cb,
+        ffu_cb.ptr(),
         copyID,
         ::core::ptr::null_mut::<*mut ht_stack_T>(),
         ::core::ptr::null_mut::<*mut list_stack_T>(),
@@ -13317,12 +13365,13 @@ pub unsafe extern "C" fn set_ref_in_findfunc(mut copyID: ::core::ffi::c_int) -> 
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
-    let mut old_curwin: *mut win_T = curwin;
+    let mut old_curwin: *mut win_T = curwin.get();
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let use_tab: bool = (*eap).cmdidx as ::core::ffi::c_int == CMD_tabedit as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabfind as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabnew as ::core::ffi::c_int;
-    if bt_quickfix(curbuf) as ::core::ffi::c_int != 0 && cmdmod.cmod_tab == 0 as ::core::ffi::c_int
+    if bt_quickfix(curbuf.get()) as ::core::ffi::c_int != 0
+        && (*cmdmod.ptr()).cmod_tab == 0 as ::core::ffi::c_int
     {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_split as ::core::ffi::c_int {
             (*eap).cmdidx = CMD_new;
@@ -13355,7 +13404,7 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
                     strlen((*eap).arg),
                     FNAME_MESS as ::core::ffi::c_int,
                     true_0,
-                    (*curbuf).b_ffname,
+                    (*curbuf.get()).b_ffname,
                     &raw mut file_to_find,
                     &raw mut search_ctx,
                 );
@@ -13370,8 +13419,8 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
         }
         if use_tab {
             if !win_new_tabpage(
-                if cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
-                    cmdmod.cmod_tab
+                if (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int {
+                    (*cmdmod.ptr()).cmod_tab
                 } else if (*eap).addr_count == 0 as ::core::ffi::c_int {
                     0 as ::core::ffi::c_int
                 } else {
@@ -13389,15 +13438,15 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     false_0 != 0,
-                    curbuf,
+                    curbuf.get(),
                 );
-                if curwin != old_curwin
+                if curwin.get() != old_curwin
                     && win_valid(old_curwin) as ::core::ffi::c_int != 0
-                    && (*old_curwin).w_buffer != curbuf
-                    && cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
+                    && (*old_curwin).w_buffer != curbuf.get()
+                    && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
                         == 0 as ::core::ffi::c_int
                 {
-                    (*old_curwin).w_alt_fnum = (*curbuf).handle as ::core::ffi::c_int;
+                    (*old_curwin).w_alt_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
                 }
             }
         } else if win_split(
@@ -13414,8 +13463,8 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
         ) != FAIL
         {
             if *(*eap).arg as ::core::ffi::c_int != NUL {
-                (*curwin).w_onebuf_opt.wo_scb = false_0;
-                (*curwin).w_onebuf_opt.wo_crb = false_0;
+                (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+                (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
             } else {
                 do_check_scrollbind(false_0 != 0);
             }
@@ -13520,47 +13569,47 @@ unsafe extern "C" fn ex_tabs(mut _eap: *mut exarg_T) {
     let mut tabcount: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_start();
-    msg_scroll = true_0;
-    let mut lastused_win: *mut win_T = if valid_tabpage(lastused_tabpage) as ::core::ffi::c_int != 0
-    {
-        (*lastused_tabpage).tp_curwin
-    } else {
-        ::core::ptr::null_mut::<win_T>()
-    };
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    msg_scroll.set(true_0);
+    let mut lastused_win: *mut win_T =
+        if valid_tabpage(lastused_tabpage.get()) as ::core::ffi::c_int != 0 {
+            (*lastused_tabpage.get()).tp_curwin
+        } else {
+            ::core::ptr::null_mut::<win_T>()
+        };
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        if got_int {
+        if got_int.get() {
             break;
         }
-        if msg_col > 0 as ::core::ffi::c_int {
+        if msg_col.get() > 0 as ::core::ffi::c_int {
             msg_putchar('\n' as ::core::ffi::c_int);
         }
         let c2rust_fresh1 = tabcount;
         tabcount = tabcount + 1;
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             gettext(b"Tab page %d\0".as_ptr() as *const ::core::ffi::c_char),
             c2rust_fresh1,
         );
         msg_outtrans(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             HLF_T as ::core::ffi::c_int,
             false_0 != 0,
         );
         os_breakcheck();
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
         while !wp.is_null() {
-            if got_int {
+            if got_int.get() {
                 break;
             }
             if !(!(*wp).w_config.focusable || (*wp).w_config.hide as ::core::ffi::c_int != 0) {
                 msg_putchar('\n' as ::core::ffi::c_int);
-                msg_putchar(if wp == curwin {
+                msg_putchar(if wp == curwin.get() {
                     '>' as ::core::ffi::c_int
                 } else if wp == lastused_win {
                     '#' as ::core::ffi::c_int
@@ -13576,7 +13625,7 @@ unsafe extern "C" fn ex_tabs(mut _eap: *mut exarg_T) {
                 msg_putchar(' ' as ::core::ffi::c_int);
                 if !buf_spname((*wp).w_buffer).is_null() {
                     xstrlcpy(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         buf_spname((*wp).w_buffer),
                         IOSIZE as size_t,
                     );
@@ -13584,13 +13633,13 @@ unsafe extern "C" fn ex_tabs(mut _eap: *mut exarg_T) {
                     home_replace(
                         (*wp).w_buffer,
                         (*(*wp).w_buffer).b_fname,
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         true_0 != 0,
                     );
                 }
                 msg_outtrans(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
                 );
@@ -13605,11 +13654,11 @@ unsafe extern "C" fn ex_detach(mut eap: *mut exarg_T) {
     if !eap.is_null() && (*eap).forceit != 0 {
         emsg(b"bang (!) not supported yet\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
-        if current_ui == 0 {
+        if current_ui.get() == 0 {
             emsg(b"UI not attached\0".as_ptr() as *const ::core::ffi::c_char);
             return;
         }
-        let mut chan: *mut Channel = find_channel(current_ui);
+        let mut chan: *mut Channel = find_channel(current_ui.get());
         if chan.is_null() {
             emsg(&raw const e_invchan as *const ::core::ffi::c_char);
             return;
@@ -13657,7 +13706,7 @@ unsafe extern "C" fn ex_connect(mut eap: *mut exarg_T) {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
-    remote_ui_connect(current_ui, (*eap).arg, &raw mut err);
+    remote_ui_connect(current_ui.get(), (*eap).arg, &raw mut err);
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         emsg(err.msg);
         api_clear_error(&raw mut err);
@@ -13665,13 +13714,13 @@ unsafe extern "C" fn ex_connect(mut eap: *mut exarg_T) {
     }
     ex_detach(::core::ptr::null_mut::<exarg_T>());
     if stop_server {
-        exiting = true_0 != 0;
+        exiting.set(true_0 != 0);
         getout(0 as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn ex_mode(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
-        must_redraw = UPD_CLEAR as ::core::ffi::c_int;
+        must_redraw.set(UPD_CLEAR as ::core::ffi::c_int);
         ex_redraw(eap);
     } else {
         emsg(gettext(
@@ -13680,10 +13729,10 @@ unsafe extern "C" fn ex_mode(mut eap: *mut exarg_T) {
     };
 }
 unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
-    let mut wp: *mut win_T = curwin;
+    let mut wp: *mut win_T = curwin.get();
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         let mut n: ::core::ffi::c_int = (*eap).line2 as ::core::ffi::c_int;
-        wp = firstwin;
+        wp = firstwin.get();
         while !(*wp).w_next.is_null() && {
             n -= 1;
             n > 0 as ::core::ffi::c_int
@@ -13692,7 +13741,7 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
         }
     }
     let mut n_0: ::core::ffi::c_int = atol((*eap).arg) as ::core::ffi::c_int;
-    if cmdmod.cmod_split & WSP_VERT as ::core::ffi::c_int != 0 {
+    if (*cmdmod.ptr()).cmod_split & WSP_VERT as ::core::ffi::c_int != 0 {
         if *(*eap).arg as ::core::ffi::c_int == '-' as ::core::ffi::c_int
             || *(*eap).arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int
         {
@@ -13700,7 +13749,7 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
         } else if n_0 == 0 as ::core::ffi::c_int
             && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
-            n_0 = Columns;
+            n_0 = Columns.get();
         }
         win_setwidth_win(n_0, wp);
     } else {
@@ -13711,7 +13760,7 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
         } else if n_0 == 0 as ::core::ffi::c_int
             && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
-            n_0 = Rows - 1 as ::core::ffi::c_int;
+            n_0 = Rows.get() - 1 as ::core::ffi::c_int;
         }
         win_setheight_win(n_0, wp);
     };
@@ -13741,7 +13790,7 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
             strlen((*eap).arg),
             FNAME_MESS as ::core::ffi::c_int,
             true_0,
-            (*curbuf).b_ffname,
+            (*curbuf.get()).b_ffname,
             &raw mut file_to_find,
             &raw mut search_ctx,
         );
@@ -13757,7 +13806,7 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
                     0 as size_t,
                     FNAME_MESS as ::core::ffi::c_int,
                     false_0,
-                    (*curbuf).b_ffname,
+                    (*curbuf.get()).b_ffname,
                     &raw mut file_to_find,
                     &raw mut search_ctx,
                 );
@@ -13787,7 +13836,7 @@ unsafe extern "C" fn ex_edit(mut eap: *mut exarg_T) {
     {
         return;
     }
-    if bt_prompt(curbuf) as ::core::ffi::c_int != 0
+    if bt_prompt(curbuf.get()) as ::core::ffi::c_int != 0
         && (*eap).cmdidx as ::core::ffi::c_int == CMD_edit as ::core::ffi::c_int
         && *(*eap).arg as ::core::ffi::c_int == NUL
     {
@@ -13798,35 +13847,35 @@ unsafe extern "C" fn ex_edit(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut win_T) {
-    if exmode_active as ::core::ffi::c_int != 0
+    if exmode_active.get() as ::core::ffi::c_int != 0
         && ((*eap).cmdidx as ::core::ffi::c_int == CMD_visual as ::core::ffi::c_int
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_view as ::core::ffi::c_int)
     {
-        exmode_active = false_0 != 0;
-        ex_pressedreturn = false_0 != 0;
+        exmode_active.set(false_0 != 0);
+        ex_pressedreturn.set(false_0 != 0);
         if ui_has(kUICmdline) {
             ui_ext_cmdline_block_leave();
         }
         if *(*eap).arg as ::core::ffi::c_int == NUL {
-            if global_busy != 0 {
+            if global_busy.get() != 0 {
                 if !(*eap).nextcmd.is_null() {
                     stuffReadbuff((*eap).nextcmd);
                     (*eap).nextcmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
-                let save_rd: ::core::ffi::c_int = RedrawingDisabled;
-                RedrawingDisabled = 0 as ::core::ffi::c_int;
-                let save_nwr: ::core::ffi::c_int = no_wait_return;
-                no_wait_return = 0 as ::core::ffi::c_int;
-                need_wait_return = false_0 != 0;
-                let save_ms: ::core::ffi::c_int = msg_scroll;
-                msg_scroll = 0 as ::core::ffi::c_int;
+                let save_rd: ::core::ffi::c_int = RedrawingDisabled.get();
+                RedrawingDisabled.set(0 as ::core::ffi::c_int);
+                let save_nwr: ::core::ffi::c_int = no_wait_return.get();
+                no_wait_return.set(0 as ::core::ffi::c_int);
+                need_wait_return.set(false_0 != 0);
+                let save_ms: ::core::ffi::c_int = msg_scroll.get();
+                msg_scroll.set(0 as ::core::ffi::c_int);
                 redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-                pending_exmode_active = true_0 != 0;
+                pending_exmode_active.set(true_0 != 0);
                 normal_enter(false_0 != 0, true_0 != 0);
-                pending_exmode_active = false_0 != 0;
-                RedrawingDisabled = save_rd;
-                no_wait_return = save_nwr;
-                msg_scroll = save_ms;
+                pending_exmode_active.set(false_0 != 0);
+                RedrawingDisabled.set(save_rd);
+                no_wait_return.set(save_nwr);
+                msg_scroll.set(save_ms);
             }
             return;
         }
@@ -13851,7 +13900,7 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
                     0 as ::core::ffi::c_int
                 }),
             if old_curwin.is_null() {
-                curwin
+                curwin.get()
             } else {
                 ::core::ptr::null_mut::<win_T>()
             },
@@ -13865,13 +13914,13 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
         {
             return;
         }
-        let mut n: ::core::ffi::c_int = readonlymode as ::core::ffi::c_int;
+        let mut n: ::core::ffi::c_int = readonlymode.get() as ::core::ffi::c_int;
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_view as ::core::ffi::c_int
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_sview as ::core::ffi::c_int
         {
-            readonlymode = true_0 != 0;
+            readonlymode.set(true_0 != 0);
         } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_enew as ::core::ffi::c_int {
-            readonlymode = false_0 != 0;
+            readonlymode.set(false_0 != 0);
         }
         if (*eap).cmdidx as ::core::ffi::c_int != CMD_balt as ::core::ffi::c_int
             && (*eap).cmdidx as ::core::ffi::c_int != CMD_badd as ::core::ffi::c_int
@@ -13888,7 +13937,7 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             eap,
             (*eap).do_ecmd_lnum,
-            (if buf_hide(curbuf) as ::core::ffi::c_int != 0 {
+            (if buf_hide(curbuf.get()) as ::core::ffi::c_int != 0 {
                 ECMD_HIDE as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
@@ -13910,7 +13959,7 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
                 0 as ::core::ffi::c_int
             }),
             if old_curwin.is_null() {
-                curwin
+                curwin.get()
             } else {
                 ::core::ptr::null_mut::<win_T>()
             },
@@ -13918,43 +13967,48 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
         {
             if !old_curwin.is_null() {
                 let mut need_hide: bool = curbufIsChanged() as ::core::ffi::c_int != 0
-                    && (*curbuf).b_nwindows <= 1 as ::core::ffi::c_int;
-                if !need_hide || buf_hide(curbuf) as ::core::ffi::c_int != 0 {
+                    && (*curbuf.get()).b_nwindows <= 1 as ::core::ffi::c_int;
+                if !need_hide || buf_hide(curbuf.get()) as ::core::ffi::c_int != 0 {
                     let mut cs: cleanup_T = cleanup_T {
                         pending: 0,
                         exception: ::core::ptr::null_mut::<except_T>(),
                     };
                     enter_cleanup(&raw mut cs);
-                    win_close(curwin, !need_hide && !buf_hide(curbuf), false_0 != 0);
+                    win_close(
+                        curwin.get(),
+                        !need_hide && !buf_hide(curbuf.get()),
+                        false_0 != 0,
+                    );
                     leave_cleanup(&raw mut cs);
                 }
             }
-        } else if readonlymode as ::core::ffi::c_int != 0
-            && (*curbuf).b_nwindows == 1 as ::core::ffi::c_int
+        } else if readonlymode.get() as ::core::ffi::c_int != 0
+            && (*curbuf.get()).b_nwindows == 1 as ::core::ffi::c_int
         {
-            (*curbuf).b_p_ro = true_0;
+            (*curbuf.get()).b_p_ro = true_0;
         }
-        readonlymode = n != 0;
+        readonlymode.set(n != 0);
     } else {
         if !(*eap).do_ecmd_cmd.is_null() {
             do_cmdline_cmd((*eap).do_ecmd_cmd);
         }
-        let mut n_0: ::core::ffi::c_int = (*curwin).w_arg_idx_invalid;
-        check_arg_idx(curwin);
-        if n_0 != (*curwin).w_arg_idx_invalid {
+        let mut n_0: ::core::ffi::c_int = (*curwin.get()).w_arg_idx_invalid;
+        check_arg_idx(curwin.get());
+        if n_0 != (*curwin.get()).w_arg_idx_invalid {
             maketitle();
         }
     }
     if !old_curwin.is_null()
         && *(*eap).arg as ::core::ffi::c_int != NUL
-        && curwin != old_curwin
+        && curwin.get() != old_curwin
         && win_valid(old_curwin) as ::core::ffi::c_int != 0
-        && (*old_curwin).w_buffer != curbuf
-        && cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        && (*old_curwin).w_buffer != curbuf.get()
+        && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
+            == 0 as ::core::ffi::c_int
     {
-        (*old_curwin).w_alt_fnum = (*curbuf).handle as ::core::ffi::c_int;
+        (*old_curwin).w_alt_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
     }
-    ex_no_reprint = true_0 != 0;
+    ex_no_reprint.set(true_0 != 0);
 }
 unsafe extern "C" fn ex_nogui(mut eap: *mut exarg_T) {
     (*eap).errmsg =
@@ -13964,32 +14018,35 @@ unsafe extern "C" fn ex_popup(mut eap: *mut exarg_T) {
     pum_make_popup((*eap).arg, (*eap).forceit);
 }
 unsafe extern "C" fn ex_swapname(mut _eap: *mut exarg_T) {
-    if (*curbuf).b_ml.ml_mfp.is_null() || (*(*curbuf).b_ml.ml_mfp).mf_fname.is_null() {
+    if (*curbuf.get()).b_ml.ml_mfp.is_null() || (*(*curbuf.get()).b_ml.ml_mfp).mf_fname.is_null() {
         msg(
             gettext(b"No swap file\0".as_ptr() as *const ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
     } else {
-        msg((*(*curbuf).b_ml.ml_mfp).mf_fname, 0 as ::core::ffi::c_int);
+        msg(
+            (*(*curbuf.get()).b_ml.ml_mfp).mf_fname,
+            0 as ::core::ffi::c_int,
+        );
     };
 }
 unsafe extern "C" fn ex_syncbind(mut _eap: *mut exarg_T) {
     let mut vtopline: linenr_T = 0;
-    let mut old_linenr: linenr_T = (*curwin).w_cursor.lnum;
+    let mut old_linenr: linenr_T = (*curwin.get()).w_cursor.lnum;
     setpcmark();
-    if (*curwin).w_onebuf_opt.wo_scb != 0 {
-        vtopline = get_vtopline(curwin) as linenr_T;
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+    if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+        vtopline = get_vtopline(curwin.get()) as linenr_T;
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_scb != 0 && !(*wp).w_buffer.is_null() {
                 let mut y: linenr_T =
                     plines_m_win_fill(wp, 1 as linenr_T, (*(*wp).w_buffer).b_ml.ml_line_count)
                         as linenr_T
-                        - get_scrolloff_value(curwin) as linenr_T;
+                        - get_scrolloff_value(curwin.get()) as linenr_T;
                 vtopline = if vtopline < y { vtopline } else { y };
             }
             wp = (*wp).w_next;
@@ -14002,10 +14059,10 @@ unsafe extern "C" fn ex_syncbind(mut _eap: *mut exarg_T) {
     } else {
         vtopline = 1 as ::core::ffi::c_int as linenr_T;
     }
-    let mut wp_0: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp_0: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp_0.is_null() {
         if (*wp_0).w_onebuf_opt.wo_scb != 0 {
@@ -14022,10 +14079,10 @@ unsafe extern "C" fn ex_syncbind(mut _eap: *mut exarg_T) {
         }
         wp_0 = (*wp_0).w_next;
     }
-    if (*curwin).w_onebuf_opt.wo_scb != 0 {
-        did_syncbind = true_0 != 0;
+    if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+        did_syncbind.set(true_0 != 0);
         checkpcmark();
-        if old_linenr != (*curwin).w_cursor.lnum {
+        if old_linenr != (*curwin.get()).w_cursor.lnum {
             let mut ctrl_o: [::core::ffi::c_char; 2] = [0; 2];
             ctrl_o[0 as ::core::ffi::c_int as usize] = Ctrl_O as ::core::ffi::c_char;
             ctrl_o[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
@@ -14040,7 +14097,7 @@ unsafe extern "C" fn ex_syncbind(mut _eap: *mut exarg_T) {
     }
 }
 unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
-    let mut empty: ::core::ffi::c_int = (*curbuf).b_ml.ml_flags & ML_EMPTY;
+    let mut empty: ::core::ffi::c_int = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY;
     if (*eap).usefilter != 0 {
         do_bang(
             1 as ::core::ffi::c_int,
@@ -14060,8 +14117,8 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
             return;
         }
         i = readfile(
-            (*curbuf).b_ffname,
-            (*curbuf).b_fname,
+            (*curbuf.get()).b_ffname,
+            (*curbuf.get()).b_fname,
             (*eap).line2,
             0 as linenr_T,
             MAXLNUM as ::core::ffi::c_int as linenr_T,
@@ -14070,7 +14127,7 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
             false_0 != 0,
         );
     } else {
-        if !vim_strchr(p_cpo, CPO_ALTREAD).is_null() {
+        if !vim_strchr(p_cpo.get(), CPO_ALTREAD).is_null() {
             setaltfname((*eap).arg, (*eap).arg, 1 as linenr_T);
         }
         i = readfile(
@@ -14092,17 +14149,19 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
             );
         }
     } else {
-        if empty != 0 && exmode_active as ::core::ffi::c_int != 0 {
+        if empty != 0 && exmode_active.get() as ::core::ffi::c_int != 0 {
             let mut lnum: linenr_T = 0;
             if (*eap).line2 == 0 as linenr_T {
-                lnum = (*curbuf).b_ml.ml_line_count;
+                lnum = (*curbuf.get()).b_ml.ml_line_count;
             } else {
                 lnum = 1 as ::core::ffi::c_int as linenr_T;
             }
             if *ml_get(lnum) as ::core::ffi::c_int == NUL && u_savedel(lnum, 1 as linenr_T) == OK {
                 ml_delete(lnum);
-                if (*curwin).w_cursor.lnum > 1 as linenr_T && (*curwin).w_cursor.lnum >= lnum {
-                    (*curwin).w_cursor.lnum -= 1;
+                if (*curwin.get()).w_cursor.lnum > 1 as linenr_T
+                    && (*curwin.get()).w_cursor.lnum >= lnum
+                {
+                    (*curwin.get()).w_cursor.lnum -= 1;
                 }
                 deleted_lines_mark(lnum, 1 as ::core::ffi::c_int);
             }
@@ -14110,31 +14169,32 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
         redraw_curbuf_later(UPD_VALID as ::core::ffi::c_int);
     };
 }
-static mut prev_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static prev_dir: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 unsafe extern "C" fn get_prevdir(mut scope: CdScope) -> *mut ::core::ffi::c_char {
     match scope as ::core::ffi::c_int {
-        1 => return (*curtab).tp_prevdir,
-        0 => return (*curwin).w_prevdir,
-        _ => return prev_dir,
+        1 => return (*curtab.get()).tp_prevdir,
+        0 => return (*curwin.get()).w_prevdir,
+        _ => return prev_dir.get(),
     };
 }
 unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool) {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut (*curwin).w_localdir as *mut *mut ::core::ffi::c_void;
+        &raw mut (*curwin.get()).w_localdir as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_1;
     *ptr_;
     if scope as ::core::ffi::c_int >= kCdScopeTabpage as ::core::ffi::c_int {
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*curtab).tp_localdir as *mut *mut ::core::ffi::c_void;
+            &raw mut (*curtab.get()).tp_localdir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_1;
         *ptr__0;
     }
     if (scope as ::core::ffi::c_int) < kCdScopeGlobal as ::core::ffi::c_int {
         let mut pdir: *mut ::core::ffi::c_char = get_prevdir(scope);
-        if globaldir.is_null() && !pdir.is_null() {
-            globaldir = xstrdup(pdir);
+        if (*globaldir.ptr()).is_null() && !pdir.is_null() {
+            globaldir.set(xstrdup(pdir));
         }
     }
     let mut cwd: [::core::ffi::c_char; 4096] = [0; 4096];
@@ -14144,24 +14204,24 @@ unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool
     match scope as ::core::ffi::c_int {
         2 => {
             let mut ptr__1: *mut *mut ::core::ffi::c_void =
-                &raw mut globaldir as *mut *mut ::core::ffi::c_void;
+                globaldir.ptr() as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__1);
             *ptr__1 = NULL_1;
             *ptr__1;
         }
         1 => {
-            (*curtab).tp_localdir = xstrdup(&raw mut cwd as *mut ::core::ffi::c_char);
+            (*curtab.get()).tp_localdir = xstrdup(&raw mut cwd as *mut ::core::ffi::c_char);
         }
         0 => {
-            (*curwin).w_localdir = xstrdup(&raw mut cwd as *mut ::core::ffi::c_char);
+            (*curwin.get()).w_localdir = xstrdup(&raw mut cwd as *mut ::core::ffi::c_char);
         }
         -1 => {
             abort();
         }
         _ => {}
     }
-    last_chdir_reason = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    shorten_fnames(vim_strchr(p_cpo, CPO_NOSYMLINKS).is_null() as ::core::ffi::c_int);
+    last_chdir_reason.set(::core::ptr::null_mut::<::core::ffi::c_char>());
+    shorten_fnames(vim_strchr(p_cpo.get(), CPO_NOSYMLINKS).is_null() as ::core::ffi::c_int);
     if trigger_dirchanged {
         do_autocmd_dirchanged(
             &raw mut cwd as *mut ::core::ffi::c_char,
@@ -14191,21 +14251,21 @@ pub unsafe extern "C" fn changedir_func(
         new_dir = pdir;
     }
     if os_dirname(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         MAXPATHL as size_t,
     ) == OK
     {
-        pdir = xstrdup(&raw mut NameBuff as *mut ::core::ffi::c_char);
+        pdir = xstrdup(NameBuff.ptr() as *mut ::core::ffi::c_char);
     } else {
         pdir = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if *new_dir as ::core::ffi::c_int == NUL && p_cdh != 0 {
+    if *new_dir as ::core::ffi::c_int == NUL && p_cdh.get() != 0 {
         expand_env(
             b"$HOME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             MAXPATHL,
         );
-        new_dir = &raw mut NameBuff as *mut ::core::ffi::c_char;
+        new_dir = NameBuff.ptr() as *mut ::core::ffi::c_char;
     }
     let mut dir_differs: bool = pdir.is_null()
         || pathcmp(pdir, new_dir, -1 as ::core::ffi::c_int) != 0 as ::core::ffi::c_int;
@@ -14220,13 +14280,13 @@ pub unsafe extern "C" fn changedir_func(
     let mut pp: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     match scope as ::core::ffi::c_int {
         1 => {
-            pp = &raw mut (*curtab).tp_prevdir;
+            pp = &raw mut (*curtab.get()).tp_prevdir;
         }
         0 => {
-            pp = &raw mut (*curwin).w_prevdir;
+            pp = &raw mut (*curwin.get()).w_prevdir;
         }
         _ => {
-            pp = &raw mut prev_dir;
+            pp = prev_dir.ptr();
         }
     }
     xfree(*pp as *mut ::core::ffi::c_void);
@@ -14237,7 +14297,7 @@ pub unsafe extern "C" fn changedir_func(
 #[no_mangle]
 pub unsafe extern "C" fn ex_cd(mut eap: *mut exarg_T) {
     let mut new_dir: *mut ::core::ffi::c_char = (*eap).arg;
-    if *new_dir as ::core::ffi::c_int == NUL && p_cdh == 0 {
+    if *new_dir as ::core::ffi::c_int == NUL && p_cdh.get() == 0 {
         ex_pwd(::core::ptr::null_mut::<exarg_T>());
         return;
     }
@@ -14252,26 +14312,26 @@ pub unsafe extern "C" fn ex_cd(mut eap: *mut exarg_T) {
         _ => {}
     }
     if changedir_func(new_dir, scope) {
-        if KeyTyped as ::core::ffi::c_int != 0 || p_verbose >= 5 as OptInt {
+        if KeyTyped.get() as ::core::ffi::c_int != 0 || p_verbose.get() >= 5 as OptInt {
             ex_pwd(eap);
         }
     }
 }
 unsafe extern "C" fn ex_pwd(mut _eap: *mut exarg_T) {
     if os_dirname(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         MAXPATHL as size_t,
     ) == OK
     {
-        if p_verbose > 0 as OptInt {
+        if p_verbose.get() > 0 as OptInt {
             let mut context: *mut ::core::ffi::c_char =
                 b"global\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            if !last_chdir_reason.is_null() {
-                context = last_chdir_reason;
-            } else if !(*curwin).w_localdir.is_null() {
+            if !(*last_chdir_reason.ptr()).is_null() {
+                context = last_chdir_reason.get();
+            } else if !(*curwin.get()).w_localdir.is_null() {
                 context =
                     b"window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            } else if !(*curtab).tp_localdir.is_null() {
+            } else if !(*curtab.get()).tp_localdir.is_null() {
                 context =
                     b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
@@ -14279,11 +14339,11 @@ unsafe extern "C" fn ex_pwd(mut _eap: *mut exarg_T) {
                 0 as ::core::ffi::c_int,
                 b"[%s] %s\0".as_ptr() as *const ::core::ffi::c_char,
                 context,
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         } else {
             msg(
-                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                NameBuff.ptr() as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
             );
         }
@@ -14308,8 +14368,8 @@ unsafe extern "C" fn ex_equal(mut eap: *mut exarg_T) {
     };
 }
 unsafe extern "C" fn ex_sleep(mut eap: *mut exarg_T) {
-    if cursor_valid(curwin) != 0 {
-        setcursor_mayforce(curwin, true_0 != 0);
+    if cursor_valid(curwin.get()) != 0 {
+        setcursor_mayforce(curwin.get(), true_0 != 0);
     }
     let mut len: int64_t = (*eap).line2 as int64_t;
     match *(*eap).arg as ::core::ffi::c_int {
@@ -14339,11 +14399,11 @@ pub unsafe extern "C" fn do_sleep(mut msec: int64_t, mut hide_cursor: bool) {
     } else {
         0 as uint64_t
     };
-    while !got_int {
-        if !main_loop.events.is_null() && !multiqueue_empty(main_loop.events) {
-            multiqueue_process_events(main_loop.events);
+    while !got_int.get() {
+        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
+            multiqueue_process_events((*main_loop.ptr()).events);
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;
@@ -14358,7 +14418,7 @@ pub unsafe extern "C" fn do_sleep(mut msec: int64_t, mut hide_cursor: bool) {
             break;
         }
     }
-    if got_int {
+    if got_int.get() {
         vpeekc();
     }
     if hide_cursor {
@@ -14413,8 +14473,8 @@ unsafe extern "C" fn ex_wincmd(mut eap: *mut exarg_T) {
     {
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
     } else if (*eap).skip == 0 {
-        postponed_split_flags = cmdmod.cmod_split;
-        postponed_split_tab = cmdmod.cmod_tab;
+        postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
+        postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
         do_window(
             *(*eap).arg as ::core::ffi::c_int,
             if (*eap).addr_count > 0 as ::core::ffi::c_int {
@@ -14424,8 +14484,8 @@ unsafe extern "C" fn ex_wincmd(mut eap: *mut exarg_T) {
             },
             xchar,
         );
-        postponed_split_flags = 0 as ::core::ffi::c_int;
-        postponed_split_tab = 0 as ::core::ffi::c_int;
+        postponed_split_flags.set(0 as ::core::ffi::c_int);
+        postponed_split_tab.set(0 as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn ex_operators(mut eap: *mut exarg_T) {
@@ -14467,13 +14527,13 @@ unsafe extern "C" fn ex_operators(mut eap: *mut exarg_T) {
     oa.end.lnum = (*eap).line2;
     oa.line_count = (*eap).line2 - (*eap).line1 + 1 as linenr_T;
     oa.motion_type = kMTLineWise;
-    virtual_op = kFalse;
+    virtual_op.set(kFalse);
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_yank as ::core::ffi::c_int {
         setpcmark();
-        (*curwin).w_cursor.lnum = (*eap).line1;
+        (*curwin.get()).w_cursor.lnum = (*eap).line1;
         beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
     }
-    if VIsual_active {
+    if VIsual_active.get() {
         end_visual_mode();
     }
     match (*eap).cmdidx as ::core::ffi::c_int {
@@ -14488,7 +14548,7 @@ unsafe extern "C" fn ex_operators(mut eap: *mut exarg_T) {
         _ => {
             if ((*eap).cmdidx as ::core::ffi::c_int == CMD_rshift as ::core::ffi::c_int)
                 as ::core::ffi::c_int
-                ^ (*curwin).w_onebuf_opt.wo_rl
+                ^ (*curwin.get()).w_onebuf_opt.wo_rl
                 != 0
             {
                 oa.op_type = OP_RSHIFT as ::core::ffi::c_int;
@@ -14498,7 +14558,7 @@ unsafe extern "C" fn ex_operators(mut eap: *mut exarg_T) {
             op_shift(&raw mut oa, false_0 != 0, (*eap).amount);
         }
     }
-    virtual_op = kNone;
+    virtual_op.set(kNone);
     ex_may_print(eap);
 }
 unsafe extern "C" fn ex_put(mut eap: *mut exarg_T) {
@@ -14506,8 +14566,8 @@ unsafe extern "C" fn ex_put(mut eap: *mut exarg_T) {
         (*eap).line2 = 1 as ::core::ffi::c_int as linenr_T;
         (*eap).forceit = true_0;
     }
-    (*curwin).w_cursor.lnum = (*eap).line2;
-    check_cursor_col(curwin);
+    (*curwin.get()).w_cursor.lnum = (*eap).line2;
+    check_cursor_col(curwin.get());
     do_put(
         (*eap).regname,
         ::core::ptr::null_mut::<yankreg_T>(),
@@ -14525,8 +14585,8 @@ unsafe extern "C" fn ex_iput(mut eap: *mut exarg_T) {
         (*eap).line2 = 1 as ::core::ffi::c_int as linenr_T;
         (*eap).forceit = true_0;
     }
-    (*curwin).w_cursor.lnum = (*eap).line2;
-    check_cursor_col(curwin);
+    (*curwin.get()).w_cursor.lnum = (*eap).line2;
+    check_cursor_col(curwin.get());
     do_put(
         (*eap).regname,
         ::core::ptr::null_mut::<yankreg_T>(),
@@ -14563,7 +14623,7 @@ unsafe extern "C" fn ex_copymove(mut eap: *mut exarg_T) {
     get_flags(eap);
     if n == MAXLNUM as ::core::ffi::c_int as linenr_T
         || n < 0 as linenr_T
-        || n > (*curbuf).b_ml.ml_line_count
+        || n > (*curbuf.get()).b_ml.ml_line_count
     {
         emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
         return;
@@ -14575,7 +14635,7 @@ unsafe extern "C" fn ex_copymove(mut eap: *mut exarg_T) {
     } else {
         ex_copy((*eap).line1, (*eap).line2, n);
     }
-    u_clearline(curbuf);
+    u_clearline(curbuf.get());
     beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
     ex_may_print(eap);
 }
@@ -14583,46 +14643,50 @@ unsafe extern "C" fn ex_copymove(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn ex_may_print(mut eap: *mut exarg_T) {
     if (*eap).flags != 0 as ::core::ffi::c_int {
         print_line(
-            (*curwin).w_cursor.lnum,
+            (*curwin.get()).w_cursor.lnum,
             (*eap).flags & EXFLAG_NR != 0,
             (*eap).flags & EXFLAG_LIST != 0,
             true_0 != 0,
         );
-        ex_no_reprint = true_0 != 0;
+        ex_no_reprint.set(true_0 != 0);
     }
 }
 unsafe extern "C" fn ex_submagic(mut eap: *mut exarg_T) {
-    let saved: optmagic_T = magic_overruled;
-    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
-        OPTION_MAGIC_ON as ::core::ffi::c_int
-    } else {
-        OPTION_MAGIC_OFF as ::core::ffi::c_int
-    }) as optmagic_T;
+    let saved: optmagic_T = magic_overruled.get();
+    magic_overruled.set(
+        (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
+            OPTION_MAGIC_ON as ::core::ffi::c_int
+        } else {
+            OPTION_MAGIC_OFF as ::core::ffi::c_int
+        }) as optmagic_T,
+    );
     ex_substitute(eap);
-    magic_overruled = saved;
+    magic_overruled.set(saved);
 }
 unsafe extern "C" fn ex_submagic_preview(
     mut eap: *mut exarg_T,
     mut cmdpreview_ns: ::core::ffi::c_int,
     mut cmdpreview_bufnr: handle_T,
 ) -> ::core::ffi::c_int {
-    let saved: optmagic_T = magic_overruled;
-    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
-        OPTION_MAGIC_ON as ::core::ffi::c_int
-    } else {
-        OPTION_MAGIC_OFF as ::core::ffi::c_int
-    }) as optmagic_T;
+    let saved: optmagic_T = magic_overruled.get();
+    magic_overruled.set(
+        (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
+            OPTION_MAGIC_ON as ::core::ffi::c_int
+        } else {
+            OPTION_MAGIC_OFF as ::core::ffi::c_int
+        }) as optmagic_T,
+    );
     let mut retv: ::core::ffi::c_int = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
-    magic_overruled = saved;
+    magic_overruled.set(saved);
     return retv;
 }
 unsafe extern "C" fn ex_join(mut eap: *mut exarg_T) {
-    (*curwin).w_cursor.lnum = (*eap).line1;
+    (*curwin.get()).w_cursor.lnum = (*eap).line1;
     if (*eap).line1 == (*eap).line2 {
         if (*eap).addr_count >= 2 as ::core::ffi::c_int {
             return;
         }
-        if (*eap).line2 == (*curbuf).b_ml.ml_line_count {
+        if (*eap).line2 == (*curbuf.get()).b_ml.ml_line_count {
             beep_flush();
             return;
         }
@@ -14639,9 +14703,9 @@ unsafe extern "C" fn ex_join(mut eap: *mut exarg_T) {
     ex_may_print(eap);
 }
 unsafe extern "C" fn ex_at(mut eap: *mut exarg_T) {
-    let mut prev_len: ::core::ffi::c_int = typebuf.tb_len;
-    (*curwin).w_cursor.lnum = (*eap).line2;
-    check_cursor_col(curwin);
+    let mut prev_len: ::core::ffi::c_int = (*typebuf.ptr()).tb_len;
+    (*curwin.get()).w_cursor.lnum = (*eap).line2;
+    check_cursor_col(curwin.get());
     let mut c: ::core::ffi::c_int = *(*eap).arg as uint8_t as ::core::ffi::c_int;
     if c == NUL {
         c = '@' as ::core::ffi::c_int;
@@ -14649,16 +14713,16 @@ unsafe extern "C" fn ex_at(mut eap: *mut exarg_T) {
     if do_execreg(
         c,
         true_0,
-        !vim_strchr(p_cpo, CPO_EXECBUF).is_null() as ::core::ffi::c_int,
+        !vim_strchr(p_cpo.get(), CPO_EXECBUF).is_null() as ::core::ffi::c_int,
         true_0,
     ) == FAIL
     {
         beep_flush();
         return;
     }
-    let save_efr: bool = exec_from_reg;
-    exec_from_reg = true_0 != 0;
-    while !stuff_empty() || typebuf.tb_len > prev_len {
+    let save_efr: bool = exec_from_reg.get();
+    exec_from_reg.set(true_0 != 0);
+    while !stuff_empty() || (*typebuf.ptr()).tb_len > prev_len {
         do_cmdline(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             Some(
@@ -14674,7 +14738,7 @@ unsafe extern "C" fn ex_at(mut eap: *mut exarg_T) {
             DOCMD_NOWAIT as ::core::ffi::c_int | DOCMD_VERBOSE as ::core::ffi::c_int,
         );
     }
-    exec_from_reg = save_efr;
+    exec_from_reg.set(save_efr);
 }
 unsafe extern "C" fn ex_bang(mut eap: *mut exarg_T) {
     do_bang(
@@ -14696,7 +14760,7 @@ unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
     }
     let mut step: linenr_T = (*eap).line2;
     if (*eap).forceit != 0 {
-        if step >= (*curbuf).b_u_seq_cur as linenr_T {
+        if step >= (*curbuf.get()).b_u_seq_cur as linenr_T {
             emsg(gettext(
                 &raw const e_undobang_cannot_redo_or_move_branch as *const ::core::ffi::c_char,
             ));
@@ -14704,10 +14768,10 @@ unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
         }
         let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
         let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        uhp = if !(*curbuf).b_u_curhead.is_null() {
-            (*curbuf).b_u_curhead
+        uhp = if !(*curbuf.get()).b_u_curhead.is_null() {
+            (*curbuf.get()).b_u_curhead
         } else {
-            (*curbuf).b_u_newhead
+            (*curbuf.get()).b_u_newhead
         };
         while !uhp.is_null() && (*uhp).uh_seq as linenr_T > step {
             uhp = (*uhp).uh_next.ptr;
@@ -14731,17 +14795,17 @@ unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn ex_wundo(mut eap: *mut exarg_T) {
     let mut hash: [uint8_t; 32] = [0; 32];
-    u_compute_hash(curbuf, &raw mut hash as *mut uint8_t);
+    u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
     u_write_undo(
         (*eap).arg,
         (*eap).forceit != 0,
-        curbuf,
+        curbuf.get(),
         &raw mut hash as *mut uint8_t,
     );
 }
 unsafe extern "C" fn ex_rundo(mut eap: *mut exarg_T) {
     let mut hash: [uint8_t; 32] = [0; 32];
-    u_compute_hash(curbuf, &raw mut hash as *mut uint8_t);
+    u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
     u_read_undo(
         (*eap).arg,
         &raw mut hash as *mut uint8_t,
@@ -14833,7 +14897,7 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
         if fname.is_null() {
             return;
         }
-        redir_fd = open_exfile(fname, (*eap).forceit, mode);
+        redir_fd.set(open_exfile(fname, (*eap).forceit, mode));
         xfree(fname as *mut ::core::ffi::c_void);
     } else if *arg as ::core::ffi::c_int == '@' as ::core::ffi::c_int {
         close_redir();
@@ -14843,7 +14907,7 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
         {
             let c2rust_fresh15 = arg;
             arg = arg.offset(1);
-            redir_reg = *c2rust_fresh15 as uint8_t as ::core::ffi::c_int;
+            redir_reg.set(*c2rust_fresh15 as uint8_t as ::core::ffi::c_int);
             if *arg as ::core::ffi::c_int == '>' as ::core::ffi::c_int
                 && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '>' as ::core::ffi::c_int
@@ -14854,13 +14918,13 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
                     arg = arg.offset(1);
                 }
                 if *arg as ::core::ffi::c_int == NUL
-                    && *(*__ctype_b_loc()).offset(redir_reg as isize) as ::core::ffi::c_int
+                    && *(*__ctype_b_loc()).offset(redir_reg.get() as isize) as ::core::ffi::c_int
                         & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
                             as ::core::ffi::c_int
                         == 0
                 {
                     write_reg_contents(
-                        redir_reg,
+                        redir_reg.get(),
                         b"\0".as_ptr() as *const ::core::ffi::c_char,
                         0 as ssize_t,
                         false_0,
@@ -14869,7 +14933,7 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
             }
         }
         if *arg as ::core::ffi::c_int != NUL {
-            redir_reg = 0 as ::core::ffi::c_int;
+            redir_reg.set(0 as ::core::ffi::c_int);
             semsg(
                 gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                 (*eap).arg,
@@ -14889,7 +14953,7 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
             append = false_0 != 0;
         }
         if var_redir_start(skipwhite(arg), append) == OK {
-            redir_vname = true_0 != 0;
+            redir_vname.set(true_0 != 0);
         }
     } else {
         semsg(
@@ -14897,81 +14961,84 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
             (*eap).arg,
         );
     }
-    if !redir_fd.is_null() || redir_reg != 0 || redir_vname as ::core::ffi::c_int != 0 {
-        redir_off = false_0 != 0;
+    if !(*redir_fd.ptr()).is_null()
+        || redir_reg.get() != 0
+        || redir_vname.get() as ::core::ffi::c_int != 0
+    {
+        redir_off.set(false_0 != 0);
     }
 }
 unsafe extern "C" fn ex_redraw(mut eap: *mut exarg_T) {
-    if cmdpreview {
+    if cmdpreview.get() {
         return;
     }
-    let mut r: ::core::ffi::c_int = RedrawingDisabled;
-    let mut p: ::core::ffi::c_int = p_lz;
-    RedrawingDisabled = 0 as ::core::ffi::c_int;
-    p_lz = false_0;
-    validate_cursor(curwin);
-    update_topline(curwin);
+    let mut r: ::core::ffi::c_int = RedrawingDisabled.get();
+    let mut p: ::core::ffi::c_int = p_lz.get();
+    RedrawingDisabled.set(0 as ::core::ffi::c_int);
+    p_lz.set(false_0);
+    validate_cursor(curwin.get());
+    update_topline(curwin.get());
     if (*eap).forceit != 0 {
         redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-        redraw_cmdline = true_0 != 0;
-    } else if VIsual_active {
+        redraw_cmdline.set(true_0 != 0);
+    } else if VIsual_active.get() {
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
     }
     update_screen();
-    if need_maketitle {
+    if need_maketitle.get() {
         maketitle();
     }
-    RedrawingDisabled = r;
-    p_lz = p;
-    msg_didout = false_0 != 0;
-    msg_col = 0 as ::core::ffi::c_int;
-    need_wait_return = false_0 != 0;
+    RedrawingDisabled.set(r);
+    p_lz.set(p);
+    msg_didout.set(false_0 != 0);
+    msg_col.set(0 as ::core::ffi::c_int);
+    need_wait_return.set(false_0 != 0);
     ui_flush();
 }
 unsafe extern "C" fn ex_redrawstatus(mut eap: *mut exarg_T) {
-    if cmdpreview {
+    if cmdpreview.get() {
         return;
     }
-    let mut r: ::core::ffi::c_int = RedrawingDisabled;
-    let mut p: ::core::ffi::c_int = p_lz;
+    let mut r: ::core::ffi::c_int = RedrawingDisabled.get();
+    let mut p: ::core::ffi::c_int = p_lz.get();
     if (*eap).forceit != 0 {
         status_redraw_all();
     } else {
         status_redraw_curbuf();
     }
-    RedrawingDisabled = 0 as ::core::ffi::c_int;
-    p_lz = false_0;
-    if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    RedrawingDisabled.set(0 as ::core::ffi::c_int);
+    p_lz.set(false_0);
+    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
         redraw_statuslines();
     } else {
-        if VIsual_active {
+        if VIsual_active.get() {
             redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
         }
         update_screen();
     }
-    RedrawingDisabled = r;
-    p_lz = p;
+    RedrawingDisabled.set(r);
+    p_lz.set(p);
     ui_flush();
 }
 unsafe extern "C" fn ex_redrawtabline(mut _eap: *mut exarg_T) {
-    let r: ::core::ffi::c_int = RedrawingDisabled;
-    let p: ::core::ffi::c_int = p_lz;
-    RedrawingDisabled = 0 as ::core::ffi::c_int;
-    p_lz = false_0;
+    let r: ::core::ffi::c_int = RedrawingDisabled.get();
+    let p: ::core::ffi::c_int = p_lz.get();
+    RedrawingDisabled.set(0 as ::core::ffi::c_int);
+    p_lz.set(false_0);
     draw_tabline();
-    RedrawingDisabled = r;
-    p_lz = p;
+    RedrawingDisabled.set(r);
+    p_lz.set(p);
     ui_flush();
 }
 unsafe extern "C" fn close_redir() {
-    if !redir_fd.is_null() {
-        fclose(redir_fd);
-        redir_fd = ::core::ptr::null_mut::<FILE>();
+    if !(*redir_fd.ptr()).is_null() {
+        fclose(redir_fd.get());
+        redir_fd.set(::core::ptr::null_mut::<FILE>());
     }
-    redir_reg = 0 as ::core::ffi::c_int;
-    if redir_vname {
+    redir_reg.set(0 as ::core::ffi::c_int);
+    if redir_vname.get() {
         var_redir_stop();
-        redir_vname = false_0 != 0;
+        redir_vname.set(false_0 != 0);
     }
 }
 #[no_mangle]
@@ -15040,8 +15107,8 @@ unsafe extern "C" fn ex_mark(mut eap: *mut exarg_T) {
         );
         return;
     }
-    let mut pos: pos_T = (*curwin).w_cursor;
-    (*curwin).w_cursor.lnum = (*eap).line2;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
+    (*curwin.get()).w_cursor.lnum = (*eap).line2;
     beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
     if setmark(*(*eap).arg as ::core::ffi::c_int) == FAIL {
         emsg(gettext(
@@ -15049,56 +15116,59 @@ unsafe extern "C" fn ex_mark(mut eap: *mut exarg_T) {
                 as *const ::core::ffi::c_char,
         ));
     }
-    (*curwin).w_cursor = pos;
+    (*curwin.get()).w_cursor = pos;
 }
 #[no_mangle]
 pub unsafe extern "C" fn update_topline_cursor() {
-    check_cursor(curwin);
-    update_topline(curwin);
-    if (*curwin).w_onebuf_opt.wo_wrap == 0 {
-        validate_cursor(curwin);
+    check_cursor(curwin.get());
+    update_topline(curwin.get());
+    if (*curwin.get()).w_onebuf_opt.wo_wrap == 0 {
+        validate_cursor(curwin.get());
     }
     update_curswant();
 }
 #[no_mangle]
 pub unsafe extern "C" fn save_current_state(mut sst: *mut save_state_T) -> bool {
-    (*sst).save_msg_scroll = msg_scroll;
-    (*sst).save_restart_edit = restart_edit;
-    (*sst).save_msg_didout = msg_didout;
-    (*sst).save_State = State;
-    (*sst).save_finish_op = finish_op;
-    (*sst).save_opcount = opcount;
-    (*sst).save_reg_executing = reg_executing;
-    (*sst).save_pending_end_reg_executing = pending_end_reg_executing;
-    msg_scroll = false_0;
-    restart_edit = 0 as ::core::ffi::c_int;
+    (*sst).save_msg_scroll = msg_scroll.get();
+    (*sst).save_restart_edit = restart_edit.get();
+    (*sst).save_msg_didout = msg_didout.get();
+    (*sst).save_State = State.get();
+    (*sst).save_finish_op = finish_op.get();
+    (*sst).save_opcount = opcount.get();
+    (*sst).save_reg_executing = reg_executing.get();
+    (*sst).save_pending_end_reg_executing = pending_end_reg_executing.get();
+    msg_scroll.set(false_0);
+    restart_edit.set(0 as ::core::ffi::c_int);
     save_typeahead(&raw mut (*sst).tabuf);
     return (*sst).tabuf.typebuf_valid;
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_current_state(mut sst: *mut save_state_T) {
     restore_typeahead(&raw mut (*sst).tabuf);
-    msg_scroll = (*sst).save_msg_scroll;
-    if force_restart_edit {
-        force_restart_edit = false_0 != 0;
+    msg_scroll.set((*sst).save_msg_scroll);
+    if force_restart_edit.get() {
+        force_restart_edit.set(false_0 != 0);
     } else {
-        restart_edit = (*sst).save_restart_edit;
+        restart_edit.set((*sst).save_restart_edit);
     }
-    finish_op = (*sst).save_finish_op;
-    opcount = (*sst).save_opcount;
-    reg_executing = (*sst).save_reg_executing;
-    pending_end_reg_executing = (*sst).save_pending_end_reg_executing;
-    msg_didout =
-        msg_didout as ::core::ffi::c_int | (*sst).save_msg_didout as ::core::ffi::c_int != 0;
-    State = (*sst).save_State;
+    finish_op.set((*sst).save_finish_op);
+    opcount.set((*sst).save_opcount);
+    reg_executing.set((*sst).save_reg_executing);
+    pending_end_reg_executing.set((*sst).save_pending_end_reg_executing);
+    msg_didout.set(
+        msg_didout.get() as ::core::ffi::c_int | (*sst).save_msg_didout as ::core::ffi::c_int != 0,
+    );
+    State.set((*sst).save_State);
     ui_cursor_shape();
 }
 #[no_mangle]
 pub unsafe extern "C" fn expr_map_locked() -> bool {
-    return expr_map_lock > 0 as ::core::ffi::c_int && (*curbuf).b_flags & BF_DUMMY == 0;
+    return expr_map_lock.get() > 0 as ::core::ffi::c_int
+        && (*curbuf.get()).b_flags & BF_DUMMY == 0;
 }
 unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
-    if !(*curbuf).terminal.is_null() && State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    if !(*curbuf.get()).terminal.is_null() && State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+    {
         emsg(b"Can't re-enter normal mode from terminal mode\0".as_ptr()
             as *const ::core::ffi::c_char);
         return;
@@ -15108,7 +15178,7 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
         emsg(gettext(&raw const e_secure as *const ::core::ffi::c_char));
         return;
     }
-    if ex_normal_busy as OptInt >= p_mmd {
+    if ex_normal_busy.get() as OptInt >= p_mmd.get() {
         emsg(gettext(
             b"E192: Recursive use of :normal too deep\0".as_ptr() as *const ::core::ffi::c_char,
         ));
@@ -15162,7 +15232,7 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
             p_0 = p_0.offset(1);
         }
     }
-    ex_normal_busy += 1;
+    (*ex_normal_busy.ptr()) += 1;
     let mut save_state: save_state_T = save_state_T {
         save_msg_scroll: 0,
         save_restart_edit: 0,
@@ -15220,9 +15290,9 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
             if (*eap).addr_count != 0 as ::core::ffi::c_int {
                 let c2rust_fresh21 = (*eap).line1;
                 (*eap).line1 = (*eap).line1 + 1;
-                (*curwin).w_cursor.lnum = c2rust_fresh21;
-                (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                check_cursor_moved(curwin);
+                (*curwin.get()).w_cursor.lnum = c2rust_fresh21;
+                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                check_cursor_moved(curwin.get());
             }
             exec_normal_cmd(
                 if !arg.is_null() { arg } else { (*eap).arg },
@@ -15235,7 +15305,7 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
             );
             if !((*eap).addr_count > 0 as ::core::ffi::c_int
                 && (*eap).line1 <= (*eap).line2
-                && !got_int)
+                && !got_int.get())
             {
                 break;
             }
@@ -15243,41 +15313,41 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
     }
     update_topline_cursor();
     restore_current_state(&raw mut save_state);
-    ex_normal_busy -= 1;
+    (*ex_normal_busy.ptr()) -= 1;
     setmouse();
     ui_cursor_shape();
     xfree(arg as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn ex_startinsert(mut eap: *mut exarg_T) {
     if (*eap).forceit != 0 {
-        if (*curwin).w_cursor.lnum == 0 {
-            (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
+        if (*curwin.get()).w_cursor.lnum == 0 {
+            (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
         }
         set_cursor_for_append_to_line();
     }
-    if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
         return;
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_startinsert as ::core::ffi::c_int {
-        restart_edit = 'a' as ::core::ffi::c_int;
+        restart_edit.set('a' as ::core::ffi::c_int);
     } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_startreplace as ::core::ffi::c_int {
-        restart_edit = 'R' as ::core::ffi::c_int;
+        restart_edit.set('R' as ::core::ffi::c_int);
     } else {
-        restart_edit = 'V' as ::core::ffi::c_int;
+        restart_edit.set('V' as ::core::ffi::c_int);
     }
     if (*eap).forceit == 0 {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_startinsert as ::core::ffi::c_int {
-            restart_edit = 'i' as ::core::ffi::c_int;
+            restart_edit.set('i' as ::core::ffi::c_int);
         }
-        (*curwin).w_curswant = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_curswant = 0 as ::core::ffi::c_int as colnr_T;
     }
-    if VIsual_active {
+    if VIsual_active.get() {
         showmode();
     }
 }
 unsafe extern "C" fn ex_stopinsert(mut _eap: *mut exarg_T) {
-    restart_edit = 0 as ::core::ffi::c_int;
-    stop_insert_mode = true_0 != 0;
+    restart_edit.set(0 as ::core::ffi::c_int);
+    stop_insert_mode.set(true_0 != 0);
     clearmode();
 }
 #[no_mangle]
@@ -15325,17 +15395,17 @@ pub unsafe extern "C" fn exec_normal(mut was_typed: bool, mut use_vpeekc: bool) 
     };
     let mut c: ::core::ffi::c_int = 0;
     clear_oparg(&raw mut oa);
-    finish_op = false_0 != 0;
+    finish_op.set(false_0 != 0);
     while (!stuff_empty()
         || (was_typed as ::core::ffi::c_int != 0 || typebuf_typed() == 0)
-            && typebuf.tb_len > 0 as ::core::ffi::c_int
+            && (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int
         || use_vpeekc as ::core::ffi::c_int != 0
             && {
                 c = vpeekc();
                 c != NUL
             }
             && c != Ctrl_C)
-        && !got_int
+        && !got_int.get()
     {
         update_topline_cursor();
         normal_cmd(&raw mut oa, true_0 != 0);
@@ -15362,19 +15432,19 @@ unsafe extern "C" fn ex_checkpath(mut eap: *mut exarg_T) {
     );
 }
 unsafe extern "C" fn ex_psearch(mut eap: *mut exarg_T) {
-    g_do_tagpreview = p_pvh as ::core::ffi::c_int;
+    g_do_tagpreview.set(p_pvh.get() as ::core::ffi::c_int);
     ex_findpat(eap);
-    g_do_tagpreview = 0 as ::core::ffi::c_int;
+    g_do_tagpreview.set(0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn ex_findpat(mut eap: *mut exarg_T) {
     let mut whole: bool = true_0 != 0;
     let mut action: ::core::ffi::c_int = 0;
-    match *cmdnames[(*eap).cmdidx as usize]
+    match *(*cmdnames.ptr())[(*eap).cmdidx as usize]
         .cmd_name
         .offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
     {
         101 => {
-            if *cmdnames[(*eap).cmdidx as usize]
+            if *(*cmdnames.ptr())[(*eap).cmdidx as usize]
                 .cmd_name
                 .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == 'p' as ::core::ffi::c_int
@@ -15442,53 +15512,53 @@ unsafe extern "C" fn ex_findpat(mut eap: *mut exarg_T) {
     }
 }
 unsafe extern "C" fn ex_ptag(mut eap: *mut exarg_T) {
-    g_do_tagpreview = p_pvh as ::core::ffi::c_int;
+    g_do_tagpreview.set(p_pvh.get() as ::core::ffi::c_int);
     ex_tag_cmd(
         eap,
-        cmdnames[(*eap).cmdidx as usize]
+        (*cmdnames.ptr())[(*eap).cmdidx as usize]
             .cmd_name
             .offset(1 as ::core::ffi::c_int as isize),
     );
 }
 unsafe extern "C" fn ex_pedit(mut eap: *mut exarg_T) {
-    let mut curwin_save: *mut win_T = curwin;
+    let mut curwin_save: *mut win_T = curwin.get();
     prepare_preview_window();
     do_exedit(eap, ::core::ptr::null_mut::<win_T>());
     back_to_current_window(curwin_save);
 }
 unsafe extern "C" fn ex_pbuffer(mut eap: *mut exarg_T) {
-    let mut curwin_save: *mut win_T = curwin;
+    let mut curwin_save: *mut win_T = curwin.get();
     prepare_preview_window();
     do_exbuffer(eap);
     back_to_current_window(curwin_save);
 }
 unsafe extern "C" fn prepare_preview_window() {
-    g_do_tagpreview = p_pvh as ::core::ffi::c_int;
+    g_do_tagpreview.set(p_pvh.get() as ::core::ffi::c_int);
     prepare_tagpreview(true_0 != 0);
 }
 unsafe extern "C" fn back_to_current_window(mut curwin_save: *mut win_T) {
-    if curwin != curwin_save && win_valid(curwin_save) as ::core::ffi::c_int != 0 {
-        validate_cursor(curwin);
-        redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+    if curwin.get() != curwin_save && win_valid(curwin_save) as ::core::ffi::c_int != 0 {
+        validate_cursor(curwin.get());
+        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
         win_enter(curwin_save, true_0 != 0);
     }
-    g_do_tagpreview = 0 as ::core::ffi::c_int;
+    g_do_tagpreview.set(0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn ex_stag(mut eap: *mut exarg_T) {
-    postponed_split = -1 as ::core::ffi::c_int;
-    postponed_split_flags = cmdmod.cmod_split;
-    postponed_split_tab = cmdmod.cmod_tab;
+    postponed_split.set(-1 as ::core::ffi::c_int);
+    postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
+    postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
     ex_tag_cmd(
         eap,
-        cmdnames[(*eap).cmdidx as usize]
+        (*cmdnames.ptr())[(*eap).cmdidx as usize]
             .cmd_name
             .offset(1 as ::core::ffi::c_int as isize),
     );
-    postponed_split_flags = 0 as ::core::ffi::c_int;
-    postponed_split_tab = 0 as ::core::ffi::c_int;
+    postponed_split_flags.set(0 as ::core::ffi::c_int);
+    postponed_split_tab.set(0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn ex_tag(mut eap: *mut exarg_T) {
-    ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name);
+    ex_tag_cmd(eap, (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name);
 }
 unsafe extern "C" fn ex_tag_cmd(mut eap: *mut exarg_T, mut name: *const ::core::ffi::c_char) {
     let mut cmd: ::core::ffi::c_int = 0;
@@ -15540,7 +15610,7 @@ pub unsafe extern "C" fn find_cmdline_var(
     mut src: *const ::core::ffi::c_char,
     mut usedlen: *mut size_t,
 ) -> ssize_t {
-    static mut spec_str: [*mut ::core::ffi::c_char; 15] = [
+    static spec_str: GlobalCell<[*mut ::core::ffi::c_char; 15]> = GlobalCell::new([
         b"%\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"#\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"<cword>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -15556,7 +15626,7 @@ pub unsafe extern "C" fn find_cmdline_var(
         b"<amatch>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"<sflnum>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"<SID>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    ]);
     let mut i: size_t = 0 as size_t;
     while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 15]>()
         .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
@@ -15566,9 +15636,12 @@ pub unsafe extern "C" fn find_cmdline_var(
                 == 0) as ::core::ffi::c_int as usize,
         )
     {
-        let mut len: size_t = strlen(spec_str[i as usize] as *const ::core::ffi::c_char);
-        if strncmp(src, spec_str[i as usize] as *const ::core::ffi::c_char, len)
-            == 0 as ::core::ffi::c_int
+        let mut len: size_t = strlen((*spec_str.ptr())[i as usize] as *const ::core::ffi::c_char);
+        if strncmp(
+            src,
+            (*spec_str.ptr())[i as usize] as *const ::core::ffi::c_char,
+            len,
+        ) == 0 as ::core::ffi::c_int
         {
             *usedlen = len;
             '_c2rust_label: {
@@ -15655,12 +15728,12 @@ pub unsafe extern "C" fn eval_vars(
         let mut i: ::core::ffi::c_int = 0;
         match spec_idx {
             0 => {
-                if (*curbuf).b_fname.is_null() {
+                if (*curbuf.get()).b_fname.is_null() {
                     result =
                         b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                     valid = 0 as ::core::ffi::c_int;
                 } else {
-                    result = (*curbuf).b_fname;
+                    result = (*curbuf.get()).b_fname;
                     tilde_file = strcmp(result, b"~\0".as_ptr() as *const ::core::ffi::c_char)
                         == 0 as ::core::ffi::c_int;
                 }
@@ -15750,16 +15823,16 @@ pub unsafe extern "C" fn eval_vars(
                 resultbuf = result;
             }
             10 => {
-                if !autocmd_fname.is_null() && !autocmd_fname_full {
-                    autocmd_fname_full = true_0 != 0;
-                    result = FullName_save(autocmd_fname, false_0 != 0);
-                    xstrlcpy(autocmd_fname, result, MAXPATHL as size_t);
+                if !(*autocmd_fname.ptr()).is_null() && !autocmd_fname_full.get() {
+                    autocmd_fname_full.set(true_0 != 0);
+                    result = FullName_save(autocmd_fname.get(), false_0 != 0);
+                    xstrlcpy(autocmd_fname.get(), result, MAXPATHL as size_t);
                     xfree(result as *mut ::core::ffi::c_void);
                 }
-                result = autocmd_fname;
+                result = autocmd_fname.get();
                 if result.is_null() {
                     *errormsg = gettext(
-                        &raw const e_no_autocommand_file_name_to_substitute_for_afile
+                        (e_no_autocommand_file_name_to_substitute_for_afile.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15767,9 +15840,9 @@ pub unsafe extern "C" fn eval_vars(
                 result = path_try_shorten_fname(result);
             }
             11 => {
-                if autocmd_bufnr <= 0 as ::core::ffi::c_int {
+                if autocmd_bufnr.get() <= 0 as ::core::ffi::c_int {
                     *errormsg = gettext(
-                        &raw const e_no_autocommand_buffer_number_to_substitute_for_abuf
+                        (e_no_autocommand_buffer_number_to_substitute_for_abuf.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15778,15 +15851,15 @@ pub unsafe extern "C" fn eval_vars(
                     &raw mut strbuf as *mut ::core::ffi::c_char,
                     ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                    autocmd_bufnr,
+                    autocmd_bufnr.get(),
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
             12 => {
-                result = autocmd_match;
+                result = autocmd_match.get();
                 if result.is_null() {
                     *errormsg = gettext(
-                        &raw const e_no_autocommand_match_name_to_substitute_for_amatch
+                        (e_no_autocommand_match_name_to_substitute_for_amatch.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15796,7 +15869,7 @@ pub unsafe extern "C" fn eval_vars(
                 result = estack_sfile(ESTACK_SFILE);
                 if result.is_null() {
                     *errormsg = gettext(
-                        &raw const e_no_source_file_name_to_substitute_for_sfile
+                        (e_no_source_file_name_to_substitute_for_sfile.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15807,7 +15880,7 @@ pub unsafe extern "C" fn eval_vars(
                 result = estack_sfile(ESTACK_STACK);
                 if result.is_null() {
                     *errormsg = gettext(
-                        &raw const e_no_call_stack_to_substitute_for_stack
+                        (e_no_call_stack_to_substitute_for_stack.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15818,7 +15891,7 @@ pub unsafe extern "C" fn eval_vars(
                 result = estack_sfile(ESTACK_SCRIPT);
                 if result.is_null() {
                     *errormsg = gettext(
-                        &raw const e_no_script_file_name_to_substitute_for_script
+                        (e_no_script_file_name_to_substitute_for_script.ptr() as *const _)
                             as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15836,7 +15909,8 @@ pub unsafe extern "C" fn eval_vars(
                         == 0 as linenr_T
                 {
                     *errormsg = gettext(
-                        &raw const e_no_line_number_to_use_for_slnum as *const ::core::ffi::c_char,
+                        (e_no_line_number_to_use_for_slnum.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
@@ -15851,14 +15925,15 @@ pub unsafe extern "C" fn eval_vars(
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
             13 => {
-                if current_sctx.sc_lnum
+                if (*current_sctx.ptr()).sc_lnum
                     + (*((*exestack.ptr()).ga_data as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum
                     == 0 as linenr_T
                 {
                     *errormsg = gettext(
-                        &raw const e_no_line_number_to_use_for_sflnum as *const ::core::ffi::c_char,
+                        (e_no_line_number_to_use_for_sflnum.ptr() as *const _)
+                            as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
@@ -15866,7 +15941,7 @@ pub unsafe extern "C" fn eval_vars(
                     &raw mut strbuf as *mut ::core::ffi::c_char,
                     ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                    current_sctx.sc_lnum
+                    (*current_sctx.ptr()).sc_lnum
                         + (*((*exestack.ptr()).ga_data as *mut estack_T)
                             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                         .es_lnum,
@@ -15874,7 +15949,7 @@ pub unsafe extern "C" fn eval_vars(
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
             14 => {
-                if current_sctx.sc_sid <= 0 as ::core::ffi::c_int {
+                if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int {
                     *errormsg = gettext(&raw const e_usingsid as *const ::core::ffi::c_char);
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
@@ -15882,7 +15957,7 @@ pub unsafe extern "C" fn eval_vars(
                     &raw mut strbuf as *mut ::core::ffi::c_char,
                     ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
                     b"<SNR>%d_\0".as_ptr() as *const ::core::ffi::c_char,
-                    current_sctx.sc_sid,
+                    (*current_sctx.ptr()).sc_sid,
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
@@ -15996,9 +16071,9 @@ pub unsafe extern "C" fn expand_sfile(
     return result;
 }
 unsafe extern "C" fn ex_shada(mut eap: *mut exarg_T) {
-    let mut save_shada: *mut ::core::ffi::c_char = p_shada;
-    if *p_shada as ::core::ffi::c_int == NUL {
-        p_shada = b"'100\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    let mut save_shada: *mut ::core::ffi::c_char = p_shada.get();
+    if *p_shada.get() as ::core::ffi::c_int == NUL {
+        p_shada.set(b"'100\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_rviminfo as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_rshada as ::core::ffi::c_int
@@ -16007,7 +16082,7 @@ unsafe extern "C" fn ex_shada(mut eap: *mut exarg_T) {
     } else {
         shada_write_file((*eap).arg, (*eap).forceit != 0);
     }
-    p_shada = save_shada;
+    p_shada.set(save_shada);
 }
 #[no_mangle]
 pub unsafe extern "C" fn dialog_msg(
@@ -16025,21 +16100,21 @@ pub unsafe extern "C" fn dialog_msg(
         fname,
     );
 }
-static mut filetype_detect: TriState = kNone;
-static mut filetype_plugin: TriState = kNone;
-static mut filetype_indent: TriState = kNone;
+static filetype_detect: GlobalCell<TriState> = GlobalCell::new(kNone);
+static filetype_plugin: GlobalCell<TriState> = GlobalCell::new(kNone);
+static filetype_indent: GlobalCell<TriState> = GlobalCell::new(kNone);
 unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
         smsg(
             0 as ::core::ffi::c_int,
             b"filetype detection:%s  plugin:%s  indent:%s\0".as_ptr() as *const ::core::ffi::c_char,
-            if filetype_detect as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+            if filetype_detect.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
                 b"ON\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"OFF\0".as_ptr() as *const ::core::ffi::c_char
             },
-            if filetype_plugin as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
-                if filetype_detect as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+            if filetype_plugin.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+                if filetype_detect.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
                     b"ON\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"(on)\0".as_ptr() as *const ::core::ffi::c_char
@@ -16047,8 +16122,8 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
             } else {
                 b"OFF\0".as_ptr() as *const ::core::ffi::c_char
             },
-            if filetype_indent as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
-                if filetype_detect as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+            if filetype_indent.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+                if filetype_detect.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
                     b"ON\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"(on)\0".as_ptr() as *const ::core::ffi::c_char
@@ -16089,26 +16164,26 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
             == 0 as ::core::ffi::c_int
     {
         if *arg as ::core::ffi::c_int == 'o' as ::core::ffi::c_int
-            || filetype_detect as ::core::ffi::c_int != kTrue as ::core::ffi::c_int
+            || filetype_detect.get() as ::core::ffi::c_int != kTrue as ::core::ffi::c_int
         {
             source_runtime(
                 FILETYPE_FILE.as_ptr() as *mut ::core::ffi::c_char,
                 DIP_ALL as ::core::ffi::c_int,
             );
-            filetype_detect = kTrue;
+            filetype_detect.set(kTrue);
             if plugin {
                 source_runtime(
                     FTPLUGIN_FILE.as_ptr() as *mut ::core::ffi::c_char,
                     DIP_ALL as ::core::ffi::c_int,
                 );
-                filetype_plugin = kTrue;
+                filetype_plugin.set(kTrue);
             }
             if indent {
                 source_runtime(
                     INDENT_FILE.as_ptr() as *mut ::core::ffi::c_char,
                     DIP_ALL as ::core::ffi::c_int,
                 );
-                filetype_indent = kTrue;
+                filetype_indent.set(kTrue);
             }
         }
         if *arg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
@@ -16129,21 +16204,21 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
                     FTPLUGOF_FILE.as_ptr() as *mut ::core::ffi::c_char,
                     DIP_ALL as ::core::ffi::c_int,
                 );
-                filetype_plugin = kFalse;
+                filetype_plugin.set(kFalse);
             }
             if indent {
                 source_runtime(
                     INDOFF_FILE.as_ptr() as *mut ::core::ffi::c_char,
                     DIP_ALL as ::core::ffi::c_int,
                 );
-                filetype_indent = kFalse;
+                filetype_indent.set(kFalse);
             }
         } else {
             source_runtime(
                 FTOFF_FILE.as_ptr() as *mut ::core::ffi::c_char,
                 DIP_ALL as ::core::ffi::c_int,
             );
-            filetype_detect = kFalse;
+            filetype_detect.set(kFalse);
         }
     } else {
         semsg(
@@ -16154,33 +16229,33 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn filetype_plugin_enable() {
-    if filetype_plugin as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
+    if filetype_plugin.get() as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
         source_runtime(
             FTPLUGIN_FILE.as_ptr() as *mut ::core::ffi::c_char,
             DIP_ALL as ::core::ffi::c_int,
         );
-        filetype_plugin = kTrue;
+        filetype_plugin.set(kTrue);
     }
-    if filetype_indent as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
+    if filetype_indent.get() as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
         source_runtime(
             INDENT_FILE.as_ptr() as *mut ::core::ffi::c_char,
             DIP_ALL as ::core::ffi::c_int,
         );
-        filetype_indent = kTrue;
+        filetype_indent.set(kTrue);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn filetype_maybe_enable() {
-    if filetype_detect as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
+    if filetype_detect.get() as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
         source_runtime(
             FILETYPE_FILE.as_ptr() as *mut ::core::ffi::c_char,
             DIP_ALL as ::core::ffi::c_int,
         );
-        filetype_detect = kTrue;
+        filetype_detect.set(kTrue);
     }
 }
 unsafe extern "C" fn ex_setfiletype(mut eap: *mut exarg_T) {
-    if (*curbuf).b_did_filetype {
+    if (*curbuf.get()).b_did_filetype {
         return;
     }
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
@@ -16203,7 +16278,7 @@ unsafe extern "C" fn ex_setfiletype(mut eap: *mut exarg_T) {
         OPT_LOCAL as ::core::ffi::c_int,
     );
     if arg != (*eap).arg {
-        (*curbuf).b_did_filetype = false_0 != 0;
+        (*curbuf.get()).b_did_filetype = false_0 != 0;
     }
 }
 unsafe extern "C" fn ex_digraphs(mut eap: *mut exarg_T) {
@@ -16215,10 +16290,10 @@ unsafe extern "C" fn ex_digraphs(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_no_hlsearch(mut flag: bool) {
-    no_hlsearch = flag;
+    no_hlsearch.set(flag);
     set_vim_var_nr(
         VV_HLSEARCH,
-        (!no_hlsearch && p_hls != 0) as ::core::ffi::c_int as varnumber_T,
+        (!no_hlsearch.get() && p_hls.get() != 0) as ::core::ffi::c_int as varnumber_T,
     );
 }
 unsafe extern "C" fn ex_nohlsearch(mut _eap: *mut exarg_T) {
@@ -16237,7 +16312,7 @@ unsafe extern "C" fn ex_fold(mut eap: *mut exarg_T) {
             col: 1 as colnr_T,
             coladd: 0 as colnr_T,
         };
-        foldCreate(curwin, start, end);
+        foldCreate(curwin.get(), start, end);
     }
 }
 unsafe extern "C" fn ex_foldopen(mut eap: *mut exarg_T) {
@@ -16264,7 +16339,7 @@ unsafe extern "C" fn ex_folddo(mut eap: *mut exarg_T) {
     let mut lnum: linenr_T = (*eap).line1;
     while lnum <= (*eap).line2 {
         if hasFolding(
-            curwin,
+            curwin.get(),
             lnum,
             ::core::ptr::null_mut::<linenr_T>(),
             ::core::ptr::null_mut::<linenr_T>(),
@@ -16284,18 +16359,18 @@ pub unsafe extern "C" fn is_loclist_cmd(mut cmdidx: ::core::ffi::c_int) -> bool 
     if cmdidx < 0 as ::core::ffi::c_int || cmdidx >= CMD_SIZE as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    return *cmdnames[cmdidx as usize]
+    return *(*cmdnames.ptr())[cmdidx as usize]
         .cmd_name
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'l' as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_pressedreturn() -> bool {
-    return ex_pressedreturn;
+    return ex_pressedreturn.get();
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_pressedreturn(mut val: bool) {
-    ex_pressedreturn = val;
+    ex_pressedreturn.set(val);
 }
 unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
     let mut err: Error = Error {
@@ -16316,11 +16391,13 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
     let mut mods: [::core::ffi::c_char; 1024] = [0; 1024];
     let mut mods_len: size_t = 0 as size_t;
     mods[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int || cmdmod.cmod_split != 0 as ::core::ffi::c_int {
+    if (*cmdmod.ptr()).cmod_tab > 0 as ::core::ffi::c_int
+        || (*cmdmod.ptr()).cmod_split != 0 as ::core::ffi::c_int
+    {
         let mut multi_mods: bool = false_0 != 0;
         mods_len = add_win_cmd_modifiers(
             &raw mut mods as *mut ::core::ffi::c_char,
-            &raw mut cmdmod,
+            cmdmod.ptr(),
             &raw mut multi_mods,
         );
         '_c2rust_label: {
@@ -16376,7 +16453,7 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
             b"E5009: $VIMRUNTIME is empty or unset\0".as_ptr() as *const ::core::ffi::c_char
         ));
     } else {
-        let mut rtp_ok: bool = !strstr(p_rtp, vimruntime_env).is_null();
+        let mut rtp_ok: bool = !strstr(p_rtp.get(), vimruntime_env).is_null();
         if rtp_ok {
             semsg(
                 gettext(b"E5009: Invalid $VIMRUNTIME: %s\0".as_ptr() as *const ::core::ffi::c_char),
@@ -16394,12 +16471,14 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
     let mut ex_cmd: [::core::ffi::c_char; 1024] = [0; 1024];
     let mut len: size_t = 0 as size_t;
-    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int || cmdmod.cmod_split != 0 as ::core::ffi::c_int {
+    if (*cmdmod.ptr()).cmod_tab > 0 as ::core::ffi::c_int
+        || (*cmdmod.ptr()).cmod_split != 0 as ::core::ffi::c_int
+    {
         let mut multi_mods: bool = false_0 != 0;
         ex_cmd[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         len = add_win_cmd_modifiers(
             &raw mut ex_cmd as *mut ::core::ffi::c_char,
-            &raw mut cmdmod,
+            cmdmod.ptr(),
             &raw mut multi_mods,
         );
         '_c2rust_label: {
@@ -16476,7 +16555,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
         );
         xfree(name as *mut ::core::ffi::c_void);
     } else {
-        if *p_sh as ::core::ffi::c_int == NUL {
+        if *p_sh.get() as ::core::ffi::c_int == NUL {
             emsg(gettext(
                 &raw const e_shellempty as *const ::core::ffi::c_char,
             ));
@@ -17797,7 +17876,7 @@ pub unsafe extern "C" fn is_map_cmd(mut cmdidx: cmdidx_T) -> bool {
     if (cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    let mut func: ex_func_T = cmdnames[cmdidx as usize].cmd_func;
+    let mut func: ex_func_T = (*cmdnames.ptr())[cmdidx as usize].cmd_func;
     return func == Some(ex_map as unsafe extern "C" fn(*mut exarg_T) -> ())
         || func == Some(ex_unmap as unsafe extern "C" fn(*mut exarg_T) -> ())
         || func == Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())
@@ -17824,8 +17903,8 @@ pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-static mut command_count: ::core::ffi::c_int = 557 as ::core::ffi::c_int;
-static mut cmdnames: [CommandDefinition; 557] = unsafe {
+static command_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(557 as ::core::ffi::c_int);
+static cmdnames: GlobalCell<[CommandDefinition; 557]> = GlobalCell::new(unsafe {
     [
         CommandDefinition {
             cmd_name: b"append\0".as_ptr() as *const ::core::ffi::c_char
@@ -24084,8 +24163,8 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
     ]
-};
-static mut cmdidxs1: [uint16_t; 26] = [
+});
+static cmdidxs1: GlobalCell<[uint16_t; 26]> = GlobalCell::new([
     0 as uint16_t,
     20 as uint16_t,
     43 as uint16_t,
@@ -24112,8 +24191,8 @@ static mut cmdidxs1: [uint16_t; 26] = [
     537 as uint16_t,
     546 as uint16_t,
     547 as uint16_t,
-];
-static mut cmdidxs2: [[uint8_t; 26]; 26] = [
+]);
+static cmdidxs2: GlobalCell<[[uint8_t; 26]; 26]> = GlobalCell::new([
     [
         0 as uint8_t,
         1 as uint8_t,
@@ -24842,7 +24921,7 @@ static mut cmdidxs2: [[uint8_t; 26]; 26] = [
         0 as uint8_t,
         0 as uint8_t,
     ],
-];
+]);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

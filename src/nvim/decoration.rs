@@ -30,7 +30,7 @@ extern "C" {
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    static mut namespace_localscope: Set_uint32_t;
+    static namespace_localscope: GlobalCell<Set_uint32_t>;
     fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
@@ -44,8 +44,8 @@ extern "C" {
     );
     static virt_text_pos_str: [*const ::core::ffi::c_char; 0];
     static hl_mode_str: [*const ::core::ffi::c_char; 0];
-    static mut decor_state: DecorState;
-    static mut decor_items: C2Rust_Unnamed_26;
+    static decor_state: GlobalCell<DecorState>;
+    static decor_items: GlobalCell<C2Rust_Unnamed_26>;
     fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int) -> bool;
     fn extmark_set(
         buf: *mut buf_T,
@@ -73,10 +73,10 @@ extern "C" {
         firstp: *mut linenr_T,
         lastp: *mut linenr_T,
     ) -> bool;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
     fn schar_high(sc: schar_T) -> bool;
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn schar_get_first_codepoint(sc: schar_T) -> ::core::ffi::c_int;
@@ -2088,7 +2088,7 @@ unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint3
 pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
 #[inline]
 unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
-    if !set_has_uint32_t(&raw mut namespace_localscope, ns_id) {
+    if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
         return true_0 != 0;
     }
     return set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id);
@@ -2205,7 +2205,7 @@ pub unsafe extern "C" fn decor_redraw(
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             decor_redraw_sh(buf, row1, row2, *sh);
             idx = (*sh).next;
         }
@@ -2238,10 +2238,10 @@ pub unsafe extern "C" fn decor_redraw_sh(
         }
     }
     if sh.flags as ::core::ffi::c_int & kSHConcealLines as ::core::ffi::c_int != 0 {
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
@@ -2258,26 +2258,32 @@ pub unsafe extern "C" fn decor_redraw_sh(
 pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t {
     if decor_freelist.get() != UINT32_MAX as uint32_t {
         let mut pos: uint32_t = decor_freelist.get();
-        decor_freelist.set((*decor_items.items.offset(decor_freelist.get() as isize)).next);
-        *decor_items.items.offset(pos as isize) = item;
+        decor_freelist.set(
+            (*(*decor_items.ptr())
+                .items
+                .offset(decor_freelist.get() as isize))
+            .next,
+        );
+        *(*decor_items.ptr()).items.offset(pos as isize) = item;
         return pos;
     } else {
-        let mut pos_0: uint32_t = decor_items.size as uint32_t;
-        if decor_items.size == decor_items.capacity {
-            decor_items.capacity = if decor_items.capacity != 0 {
-                decor_items.capacity << 1 as ::core::ffi::c_int
+        let mut pos_0: uint32_t = (*decor_items.ptr()).size as uint32_t;
+        if (*decor_items.ptr()).size == (*decor_items.ptr()).capacity {
+            (*decor_items.ptr()).capacity = if (*decor_items.ptr()).capacity != 0 {
+                (*decor_items.ptr()).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
             };
-            decor_items.items = xrealloc(
-                decor_items.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<DecorSignHighlight>().wrapping_mul(decor_items.capacity),
+            (*decor_items.ptr()).items = xrealloc(
+                (*decor_items.ptr()).items as *mut ::core::ffi::c_void,
+                ::core::mem::size_of::<DecorSignHighlight>()
+                    .wrapping_mul((*decor_items.ptr()).capacity),
             ) as *mut DecorSignHighlight;
         } else {
         };
-        let c2rust_fresh0 = decor_items.size;
-        decor_items.size = decor_items.size.wrapping_add(1);
-        *decor_items.items.offset(c2rust_fresh0 as isize) = item;
+        let c2rust_fresh0 = (*decor_items.ptr()).size;
+        (*decor_items.ptr()).size = (*decor_items.ptr()).size.wrapping_add(1);
+        *(*decor_items.ptr()).items.offset(c2rust_fresh0 as isize) = item;
         return pos_0;
     };
 }
@@ -2338,17 +2344,17 @@ pub unsafe extern "C" fn buf_put_decor(
             row2 as linenr_T
         }) as ::core::ffi::c_int;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             buf_put_decor_sh(buf, sh, row, row2);
             idx = (*sh).next;
         }
     }
 }
 unsafe extern "C" fn may_force_numberwidth_recompute(mut buf: *mut buf_T, mut unplace: bool) {
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -2402,7 +2408,7 @@ pub unsafe extern "C" fn buf_decor_remove(
             row2 as linenr_T
         }) as ::core::ffi::c_int;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             buf_remove_decor_sh(buf, row1, row2, sh);
             idx = (*sh).next;
         }
@@ -2437,7 +2443,7 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
     }
     let mut vt: *mut DecorVirtText = decor.data.ext.vt;
     let mut idx: uint32_t = decor.data.ext.sh_idx;
-    if decor_state.running_decor_provider {
+    if (*decor_state.ptr()).running_decor_provider {
         while !vt.is_null() {
             if (*vt).next.is_null() {
                 (*vt).next = to_free_virt.get();
@@ -2448,7 +2454,7 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
             }
         }
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             if (*sh).next == DECOR_ID_INVALID as uint32_t {
                 (*sh).next = to_free_sh.get();
                 to_free_sh.set(decor.data.ext.sh_idx);
@@ -2474,7 +2480,7 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
     }
     let mut idx: uint32_t = first_idx;
     while idx != DECOR_ID_INVALID as uint32_t {
-        let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+        let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
         if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
             let mut ptr_: *mut *mut ::core::ffi::c_void =
                 &raw mut (*sh).sign_name as *mut *mut ::core::ffi::c_void;
@@ -2501,14 +2507,14 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_state_invalidate(mut buf: *mut buf_T) {
-    if !decor_state.win.is_null() && (*decor_state.win).w_buffer == buf {
-        decor_state.itr_valid = false_0 != 0;
+    if !(*decor_state.ptr()).win.is_null() && (*(*decor_state.ptr()).win).w_buffer == buf {
+        (*decor_state.ptr()).itr_valid = false_0 != 0;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_check_to_be_deleted() {
     '_c2rust_label: {
-        if !decor_state.running_decor_provider {
+        if !(*decor_state.ptr()).running_decor_provider {
         } else {
             __assert_fail(
                 b"!decor_state.running_decor_provider\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2521,7 +2527,7 @@ pub unsafe extern "C" fn decor_check_to_be_deleted() {
     decor_free_inner(to_free_virt.get(), to_free_sh.get());
     to_free_virt.set(::core::ptr::null_mut::<DecorVirtText>());
     to_free_sh.set(DECOR_ID_INVALID as uint32_t);
-    decor_state.win = ::core::ptr::null_mut::<win_T>();
+    (*decor_state.ptr()).win = ::core::ptr::null_mut::<win_T>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_state_free(mut state: *mut DecorState) {
@@ -2571,8 +2577,8 @@ pub unsafe extern "C" fn clear_virtlines(mut lines: *mut VirtLines) {
 #[no_mangle]
 pub unsafe extern "C" fn decor_check_invalid_glyphs() {
     let mut i: size_t = 0 as size_t;
-    while i < decor_items.size {
-        let mut it: *mut DecorSignHighlight = decor_items.items.offset(i as isize);
+    while i < (*decor_items.ptr()).size {
+        let mut it: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(i as isize);
         let mut width: ::core::ffi::c_int =
             if (*it).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                 SIGN_WIDTH as ::core::ffi::c_int
@@ -2851,7 +2857,7 @@ unsafe extern "C" fn decor_range_add_from_inline(
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             decor_range_add_sh(
                 state,
                 start_row,
@@ -3309,7 +3315,7 @@ pub unsafe extern "C" fn decor_conceal_line(
     if row < 0 as ::core::ffi::c_int
         || (*wp).w_onebuf_opt.wo_cole < 2 as OptInt
         || !check_cursor
-            && wp == curwin
+            && wp == curwin.get()
             && row as linenr_T + 1 as linenr_T == (*wp).w_cursor.lnum
             && !conceal_cursor_line(wp)
     {
@@ -3619,7 +3625,7 @@ pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSi
         if decor_id == DECOR_ID_INVALID as uint32_t {
             return ::core::ptr::null_mut::<DecorSignHighlight>();
         }
-        let mut sh: *mut DecorSignHighlight = decor_items.items.offset(decor_id as isize);
+        let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(decor_id as isize);
         if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
             return sh;
         }
@@ -4007,7 +4013,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                 sh_sign = *sh;
             } else {
@@ -4392,7 +4398,7 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
             type_flags = (type_flags as ::core::ffi::c_int
                 | if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                     kExtmarkSign as ::core::ffi::c_int

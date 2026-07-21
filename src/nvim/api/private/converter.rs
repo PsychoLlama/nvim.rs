@@ -25,7 +25,7 @@ extern "C" {
         force_blob: bool,
         s_allocated: bool,
     ) -> typval_T;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn internal_error(where_0: *const ::core::ffi::c_char);
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
@@ -4027,7 +4027,8 @@ unsafe extern "C" fn encode_vim_to_object(
                                 typval_encode_between_dict_items(edata);
                             }
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }

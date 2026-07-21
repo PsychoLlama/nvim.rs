@@ -75,7 +75,7 @@ extern "C" {
         arguments: *mut list_T,
         discard: bool,
     ) -> typval_T;
-    static mut msg_listdo_overwrite: ::core::ffi::c_int;
+    static msg_listdo_overwrite: GlobalCell<::core::ffi::c_int>;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
     fn msg_source(hl_id: ::core::ffi::c_int);
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
@@ -128,33 +128,33 @@ extern "C" {
     fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::ffi::c_char;
     fn check_timestamps(focus: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn buf_check_timestamp(buf: *mut buf_T) -> ::core::ffi::c_int;
-    static mut cmdline_row: ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_didout: bool;
-    static mut msg_didany: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut vgetc_busy: ::core::ffi::c_int;
-    static mut no_check_timestamps: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut prevwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut exiting: bool;
-    static mut cmdmod: cmdmod_T;
-    static mut got_int: bool;
-    static mut listcmd_busy: bool;
+    static cmdline_row: GlobalCell<::core::ffi::c_int>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_didout: GlobalCell<bool>;
+    static msg_didany: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
+    static no_check_timestamps: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static prevwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static exiting: GlobalCell<bool>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static got_int: GlobalCell<bool>;
+    static listcmd_busy: GlobalCell<bool>;
     fn setpcmark();
     fn validate_cursor(wp: *mut win_T);
     fn do_check_scrollbind(check: bool);
-    static mut p_aw: ::core::ffi::c_int;
-    static mut p_awa: ::core::ffi::c_int;
-    static mut p_confirm: ::core::ffi::c_int;
-    static mut p_write: ::core::ffi::c_int;
+    static p_aw: GlobalCell<::core::ffi::c_int>;
+    static p_awa: GlobalCell<::core::ffi::c_int>;
+    static p_confirm: GlobalCell<::core::ffi::c_int>;
+    static p_write: GlobalCell<::core::ffi::c_int>;
     fn vim_FullName(
         fname: *const ::core::ffi::c_char,
         buf: *mut ::core::ffi::c_char,
@@ -2949,8 +2949,8 @@ pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::
         br_fnum: 0,
         br_buf_free_count: 0,
     };
-    if !(p_aw != 0 || p_awa != 0)
-        || p_write == 0
+    if !(p_aw.get() != 0 || p_awa.get() != 0)
+        || p_write.get() == 0
         || bt_dontwrite(buf) as ::core::ffi::c_int != 0
         || !forceit && (*buf).b_p_ro != 0
         || (*buf).b_ffname.is_null()
@@ -2968,10 +2968,10 @@ pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::
 }
 #[no_mangle]
 pub unsafe extern "C" fn autowrite_all() {
-    if !(p_aw != 0 || p_awa != 0) || p_write == 0 {
+    if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
         return;
     }
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if bufIsChanged(buf) as ::core::ffi::c_int != 0 && (*buf).b_p_ro == 0 && !bt_dontwrite(buf)
         {
@@ -2983,7 +2983,7 @@ pub unsafe extern "C" fn autowrite_all() {
             set_bufref(&raw mut bufref, buf);
             buf_write_all(buf, false_0 != 0);
             if !bufref_valid(&raw mut bufref) {
-                buf = firstbuf;
+                buf = firstbuf.get();
             }
         }
         buf = (*buf).b_next;
@@ -3004,12 +3004,13 @@ pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::f
             || (*buf).b_nwindows <= 1 as ::core::ffi::c_int)
         && (flags & CCGD_AW as ::core::ffi::c_int == 0 || autowrite(buf, forceit) == FAIL)
     {
-        if (p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
-            && p_write != 0
+        if (p_confirm.get() != 0
+            || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+            && p_write.get() != 0
         {
             let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             if flags & CCGD_ALLBUF as ::core::ffi::c_int != 0 {
-                let mut buf2: *mut buf_T = firstbuf;
+                let mut buf2: *mut buf_T = firstbuf.get();
                 while !buf2.is_null() {
                     if bufIsChanged(buf2) as ::core::ffi::c_int != 0 && !(*buf2).b_ffname.is_null()
                     {
@@ -3030,7 +3031,7 @@ pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::f
         if flags & CCGD_EXCMD as ::core::ffi::c_int != 0 {
             no_write_message();
         } else {
-            no_write_message_nobang(curbuf);
+            no_write_message_nobang(curbuf.get());
         }
         return true_0 != 0;
     }
@@ -3132,7 +3133,7 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
     } else if ret == VIM_NO as ::core::ffi::c_int {
         unchanged(buf, true_0 != 0, false_0 != 0);
     } else if ret == VIM_ALL as ::core::ffi::c_int {
-        let mut buf2: *mut buf_T = firstbuf;
+        let mut buf2: *mut buf_T = firstbuf.get();
         while !buf2.is_null() {
             if bufIsChanged(buf2) as ::core::ffi::c_int != 0
                 && !(*buf2).b_ffname.is_null()
@@ -3156,13 +3157,13 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
                     buf_write_all(buf2, false_0 != 0);
                 }
                 if !bufref_valid(&raw mut bufref) {
-                    buf2 = firstbuf;
+                    buf2 = firstbuf.get();
                 }
             }
             buf2 = (*buf2).b_next;
         }
     } else if ret == VIM_DISCARDALL as ::core::ffi::c_int {
-        let mut buf2_0: *mut buf_T = firstbuf;
+        let mut buf2_0: *mut buf_T = firstbuf.get();
         while !buf2_0.is_null() {
             unchanged(buf2_0, true_0 != 0, false_0 != 0);
             buf2_0 = (*buf2_0).b_next;
@@ -3218,7 +3219,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
     let mut i: ::core::ffi::c_int = 0;
     let mut bufnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut bufcount: size_t = 0 as size_t;
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         bufcount = bufcount.wrapping_add(1);
         buf = (*buf).b_next;
@@ -3231,14 +3232,14 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
             as *mut ::core::ffi::c_int;
     let c2rust_fresh0 = bufnum;
     bufnum = bufnum + 1;
-    *bufnrs.offset(c2rust_fresh0 as isize) = (*curbuf).handle as ::core::ffi::c_int;
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    *bufnrs.offset(c2rust_fresh0 as isize) = (*curbuf.get()).handle as ::core::ffi::c_int;
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
-        if (*wp).w_buffer != curbuf {
+        if (*wp).w_buffer != curbuf.get() {
             add_bufnum(
                 bufnrs,
                 &raw mut bufnum,
@@ -3247,11 +3248,11 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
         }
         wp = (*wp).w_next;
     }
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        if tp != curtab {
-            let mut wp_0: *mut win_T = if tp == curtab {
-                firstwin
+        if tp != curtab.get() {
+            let mut wp_0: *mut win_T = if tp == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp).tp_firstwin
             };
@@ -3266,7 +3267,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
         }
         tp = (*tp).tp_next as *mut tabpage_T;
     }
-    let mut buf_0: *mut buf_T = firstbuf;
+    let mut buf_0: *mut buf_T = firstbuf.get();
     while !buf_0.is_null() {
         add_bufnum(
             bufnrs,
@@ -3291,7 +3292,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                 set_bufref(&raw mut bufref, buf_1);
                 if check_changed(
                     buf_1,
-                    (if p_awa != 0 {
+                    (if p_awa.get() != 0 {
                         CCGD_AW as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
@@ -3310,12 +3311,14 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
     '_theend: {
         if i < bufnum {
             ret = true_0 != 0;
-            exiting = false_0 != 0;
-            if !(p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0) {
-                if vgetc_busy > 0 as ::core::ffi::c_int {
-                    msg_row = cmdline_row;
-                    msg_col = 0 as ::core::ffi::c_int;
-                    msg_didout = false_0 != 0;
+            exiting.set(false_0 != 0);
+            if !(p_confirm.get() != 0
+                || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+            {
+                if vgetc_busy.get() > 0 as ::core::ffi::c_int {
+                    msg_row.set(cmdline_row.get());
+                    msg_col.set(0 as ::core::ffi::c_int);
+                    msg_didout.set(false_0 != 0);
                 }
                 if (if !(*buf_1).terminal.is_null()
                     && channel_job_running((*buf_1).b_p_channel as uint64_t) as ::core::ffi::c_int
@@ -3339,23 +3342,23 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                         },
                     ) as ::core::ffi::c_int
                 }) != 0
-                    && msg_didany as ::core::ffi::c_int != 0
+                    && msg_didany.get() as ::core::ffi::c_int != 0
                 {
-                    let mut save: ::core::ffi::c_int = no_wait_return;
-                    no_wait_return = false_0;
+                    let mut save: ::core::ffi::c_int = no_wait_return.get();
+                    no_wait_return.set(false_0);
                     wait_return(false_0);
-                    no_wait_return = save;
+                    no_wait_return.set(save);
                 }
             }
             '_buf_found: {
-                if buf_1 != curbuf {
-                    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+                if buf_1 != curbuf.get() {
+                    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
                     loop {
                         if tp_0.is_null() {
                             break '_buf_found;
                         }
-                        let mut wp_1: *mut win_T = if tp_0 == curtab {
-                            firstwin
+                        let mut wp_1: *mut win_T = if tp_0 == curtab.get() {
+                            firstwin.get()
                         } else {
                             (*tp_0).tp_firstwin
                         };
@@ -3381,7 +3384,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                     }
                 }
             }
-            if buf_1 != curbuf {
+            if buf_1 != curbuf.get() {
                 set_curbuf(
                     buf_1,
                     if unload as ::core::ffi::c_int != 0 {
@@ -3399,7 +3402,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_fname() -> ::core::ffi::c_int {
-    if (*curbuf).b_ffname.is_null() {
+    if (*curbuf.get()).b_ffname.is_null() {
         emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
         return FAIL;
     }
@@ -3410,7 +3413,7 @@ pub unsafe extern "C" fn buf_write_all(
     mut buf: *mut buf_T,
     mut forceit: bool,
 ) -> ::core::ffi::c_int {
-    let mut old_curbuf: *mut buf_T = curbuf;
+    let mut old_curbuf: *mut buf_T = curbuf.get();
     let mut retval: ::core::ffi::c_int = buf_write(
         buf,
         (*buf).b_ffname,
@@ -3423,7 +3426,7 @@ pub unsafe extern "C" fn buf_write_all(
         true_0 != 0,
         false_0 != 0,
     );
-    if curbuf != old_curbuf {
+    if curbuf.get() != old_curbuf {
         msg_source(HLF_W as ::core::ffi::c_int);
         msg(
             gettext(
@@ -3437,7 +3440,7 @@ pub unsafe extern "C" fn buf_write_all(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
-    if (*curwin).w_onebuf_opt.wo_wfb != 0 {
+    if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
         if ((*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int)
             && (*eap).forceit == 0
@@ -3447,12 +3450,14 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
             ));
             return;
         }
-        if win_valid(prevwin) as ::core::ffi::c_int != 0 && (*prevwin).w_onebuf_opt.wo_wfb == 0 {
-            win_goto(prevwin);
+        if win_valid(prevwin.get()) as ::core::ffi::c_int != 0
+            && (*prevwin.get()).w_onebuf_opt.wo_wfb == 0
+        {
+            win_goto(prevwin.get());
         }
-        if (*curwin).w_onebuf_opt.wo_wfb != 0 {
+        if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
             win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-            if (*curwin).w_onebuf_opt.wo_wfb != 0 {
+            if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
                 emsg(gettext(
                     &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
                 ));
@@ -3461,14 +3466,14 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
         }
     }
     let mut save_ei: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    msg_listdo_overwrite += 1;
+    (*msg_listdo_overwrite.ptr()) += 1;
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_windo as ::core::ffi::c_int
         && (*eap).cmdidx as ::core::ffi::c_int != CMD_tabdo as ::core::ffi::c_int
     {
         save_ei = au_event_disable(
             b",Syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char
         );
-        let mut buf: *mut buf_T = firstbuf;
+        let mut buf: *mut buf_T = firstbuf.get();
         while !buf.is_null() {
             (*buf).b_flags &= !BF_SYN_SET;
             buf = (*buf).b_next;
@@ -3476,9 +3481,9 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabdo as ::core::ffi::c_int
-        || buf_hide(curbuf) as ::core::ffi::c_int != 0
+        || buf_hide(curbuf.get()) as ::core::ffi::c_int != 0
         || !check_changed(
-            curbuf,
+            curbuf.get(),
             CCGD_AW as ::core::ffi::c_int
                 | (if (*eap).forceit != 0 {
                     CCGD_FORCEIT as ::core::ffi::c_int
@@ -3490,8 +3495,8 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
     {
         let mut next_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = firstwin;
-        let mut tp: *mut tabpage_T = first_tabpage;
+        let mut wp: *mut win_T = firstwin.get();
+        let mut tp: *mut tabpage_T = first_tabpage.get();
         match (*eap).cmdidx as ::core::ffi::c_int {
             528 => {
                 while !wp.is_null() && (i as linenr_T + 1 as linenr_T) < (*eap).line1 {
@@ -3510,10 +3515,10 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
             }
             _ => {}
         }
-        let mut buf_0: *mut buf_T = curbuf;
+        let mut buf_0: *mut buf_T = curbuf.get();
         let mut qf_size: size_t = 0 as size_t;
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
-            buf_0 = firstbuf;
+            buf_0 = firstbuf.get();
             while !buf_0.is_null()
                 && (((*buf_0).handle as linenr_T) < (*eap).line1 || (*buf_0).b_p_bl == 0)
             {
@@ -3553,7 +3558,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                 buf_0 = ::core::ptr::null_mut::<buf_T>();
             } else {
                 ex_cc(eap);
-                buf_0 = curbuf;
+                buf_0 = curbuf.get();
                 i = (*eap).line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
                 if (*eap).addr_count <= 0 as ::core::ffi::c_int {
                     '_c2rust_label_0: {
@@ -3574,17 +3579,17 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
         } else {
             setpcmark();
         }
-        listcmd_busy = true_0 != 0;
-        while !got_int && !buf_0.is_null() {
+        listcmd_busy.set(true_0 != 0);
+        while !got_int.get() && !buf_0.is_null() {
             let mut execute: bool = true_0 != 0;
             if (*eap).cmdidx as ::core::ffi::c_int == CMD_argdo as ::core::ffi::c_int {
-                if i == (*(*curwin).w_alist).al_ga.ga_len {
+                if i == (*(*curwin.get()).w_alist).al_ga.ga_len {
                     break;
                 }
-                if (*curwin).w_arg_idx != i || !editing_arg_idx(curwin) {
+                if (*curwin.get()).w_arg_idx != i || !editing_arg_idx(curwin.get()) {
                     do_argfile(eap, i);
                 }
-                if (*curwin).w_arg_idx != i {
+                if (*curwin.get()).w_arg_idx != i {
                     break;
                 }
             } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int {
@@ -3606,7 +3611,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     || !(*wp).w_config.hide && (*wp).w_config.focusable as ::core::ffi::c_int != 0;
                 if execute {
                     win_goto(wp);
-                    if curwin != wp {
+                    if curwin.get() != wp {
                         break;
                     }
                 }
@@ -3630,7 +3635,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                 tp = (*tp).tp_next;
             } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
                 next_fnum = -1 as ::core::ffi::c_int;
-                let mut bp: *mut buf_T = (*curbuf).b_next;
+                let mut bp: *mut buf_T = (*curbuf.get()).b_next;
                 while !bp.is_null() {
                     if (*bp).b_p_bl != 0 {
                         next_fnum = (*bp).handle as ::core::ffi::c_int;
@@ -3654,7 +3659,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     break;
                 }
                 let mut buf_still_exists: bool = false_0 != 0;
-                let mut bp_0: *mut buf_T = firstbuf;
+                let mut bp_0: *mut buf_T = firstbuf.get();
                 while !bp_0.is_null() {
                     if (*bp_0).handle == next_fnum {
                         buf_still_exists = true_0 != 0;
@@ -3672,7 +3677,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     FORWARD as ::core::ffi::c_int,
                     next_fnum,
                 );
-                if (*curbuf).handle != next_fnum {
+                if (*curbuf.get()).handle != next_fnum {
                     break;
                 }
             }
@@ -3704,8 +3709,8 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
             if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int
                 && execute as ::core::ffi::c_int != 0
             {
-                validate_cursor(curwin);
-                if (*curwin).w_onebuf_opt.wo_scb != 0 {
+                validate_cursor(curwin.get());
+                if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
                     do_check_scrollbind(true_0 != 0);
                 }
             }
@@ -3722,9 +3727,9 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                 break;
             }
         }
-        listcmd_busy = false_0 != 0;
+        listcmd_busy.set(false_0 != 0);
     }
-    msg_listdo_overwrite -= 1;
+    (*msg_listdo_overwrite.ptr()) -= 1;
     if !save_ei.is_null() {
         let mut bnext: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
         let mut aco: aco_save_T = aco_save_T {
@@ -3743,18 +3748,18 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
             save_prompt_insert: 0,
         };
         au_event_restore(save_ei);
-        let mut buf_1: *mut buf_T = firstbuf;
+        let mut buf_1: *mut buf_T = firstbuf.get();
         while !buf_1.is_null() {
             bnext = (*buf_1).b_next;
             if (*buf_1).b_nwindows > 0 as ::core::ffi::c_int && (*buf_1).b_flags & BF_SYN_SET != 0 {
                 (*buf_1).b_flags &= !BF_SYN_SET;
-                if buf_1 == curbuf {
+                if buf_1 == curbuf.get() {
                     apply_autocmds(
                         EVENT_SYNTAX,
-                        (*curbuf).b_p_syn,
-                        (*curbuf).b_fname,
+                        (*curbuf.get()).b_p_syn,
+                        (*curbuf.get()).b_fname,
                         true_0 != 0,
-                        curbuf,
+                        curbuf.get(),
                     );
                 } else {
                     aucmd_prepbuf(&raw mut aco, buf_1);
@@ -3767,7 +3772,7 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
                     );
                     aucmd_restbuf(&raw mut aco);
                 }
-                bnext = firstbuf;
+                bnext = firstbuf.get();
             }
             buf_1 = bnext;
         }
@@ -3853,8 +3858,8 @@ pub unsafe extern "C" fn ex_compiler(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_checktime(mut eap: *mut exarg_T) {
-    let mut save_no_check_timestamps: ::core::ffi::c_int = no_check_timestamps;
-    no_check_timestamps = 0 as ::core::ffi::c_int;
+    let mut save_no_check_timestamps: ::core::ffi::c_int = no_check_timestamps.get();
+    no_check_timestamps.set(0 as ::core::ffi::c_int);
     if (*eap).addr_count == 0 as ::core::ffi::c_int {
         check_timestamps(false_0);
     } else {
@@ -3863,7 +3868,7 @@ pub unsafe extern "C" fn ex_checktime(mut eap: *mut exarg_T) {
             buf_check_timestamp(buf);
         }
     }
-    no_check_timestamps = save_no_check_timestamps;
+    no_check_timestamps.set(save_no_check_timestamps);
 }
 unsafe extern "C" fn script_host_execute(
     mut name: *mut ::core::ffi::c_char,
@@ -3933,38 +3938,38 @@ unsafe extern "C" fn script_host_do_range(
 pub unsafe extern "C" fn ex_drop(mut eap: *mut exarg_T) {
     let mut split: bool = false_0 != 0;
     set_arglist((*eap).arg);
-    if (*(*curwin).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
+    if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
         return;
     }
-    if cmdmod.cmod_tab != 0 {
+    if (*cmdmod.ptr()).cmod_tab != 0 {
         ex_all(eap);
-        cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_tab = 0 as ::core::ffi::c_int;
         ex_rewind(eap);
         return;
     }
     let mut buf: *mut buf_T = buflist_findnr(
-        (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+        (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
             .offset(0 as ::core::ffi::c_int as isize))
         .ae_fnum,
     );
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
                 goto_tabpage_win(tp as *mut tabpage_T, wp);
-                (*curwin).w_arg_idx = 0 as ::core::ffi::c_int;
-                if !bufIsChanged(curbuf) {
-                    let save_ar: ::core::ffi::c_int = (*curbuf).b_p_ar;
-                    (*curbuf).b_p_ar = true_0;
-                    buf_check_timestamp(curbuf);
-                    (*curbuf).b_p_ar = save_ar;
+                (*curwin.get()).w_arg_idx = 0 as ::core::ffi::c_int;
+                if !bufIsChanged(curbuf.get()) {
+                    let save_ar: ::core::ffi::c_int = (*curbuf.get()).b_p_ar;
+                    (*curbuf.get()).b_p_ar = true_0;
+                    buf_check_timestamp(curbuf.get());
+                    (*curbuf.get()).b_p_ar = save_ar;
                 }
-                if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
                     ex_rewind(eap);
                 }
                 if !(*eap).do_ecmd_cmd.is_null() {
@@ -3990,13 +3995,13 @@ pub unsafe extern "C" fn ex_drop(mut eap: *mut exarg_T) {
         }
         tp = (*tp).tp_next as *mut tabpage_T;
     }
-    if !buf_hide(curbuf) {
-        emsg_off += 1;
+    if !buf_hide(curbuf.get()) {
+        (*emsg_off.ptr()) += 1;
         split = check_changed(
-            curbuf,
+            curbuf.get(),
             CCGD_AW as ::core::ffi::c_int | CCGD_EXCMD as ::core::ffi::c_int,
         );
-        emsg_off -= 1;
+        (*emsg_off.ptr()) -= 1;
     }
     if split {
         (*eap).cmdidx = CMD_sfirst;

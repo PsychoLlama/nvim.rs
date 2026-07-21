@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -62,11 +63,11 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn restore_win(switchwin: *mut switchwin_T, no_display: bool);
     fn ex_win_close(forceit: ::core::ffi::c_int, win: *mut win_T, tp: *mut tabpage_T);
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut cmdwin_buf: *mut buf_T;
-    static mut cmdwin_win: *mut win_T;
-    static mut cmdwin_old_curwin: *mut win_T;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static cmdwin_buf: GlobalCell<*mut buf_T>;
+    static cmdwin_win: GlobalCell<*mut win_T>;
+    static cmdwin_old_curwin: GlobalCell<*mut win_T>;
     fn nlua_call_ref(
         ref_0: LuaRef,
         name: *const ::core::ffi::c_char,
@@ -1873,7 +1874,7 @@ pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut 
     if w.is_null() || b.is_null() {
         return;
     }
-    if w == cmdwin_win || w == cmdwin_old_curwin || b == cmdwin_buf {
+    if w == cmdwin_win.get() || w == cmdwin_old_curwin.get() || b == cmdwin_buf.get() {
         api_set_error(
             err,
             kErrorTypeException,
@@ -1976,8 +1977,8 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
         ::core::ptr::null_mut::<tabpage_T>(),
         true_0 != 0,
     );
-    update_topline(curwin);
-    validate_cursor(curwin);
+    update_topline(curwin.get());
+    validate_cursor(curwin.get());
     restore_win(&raw mut switchwin, true_0 != 0);
     redraw_later(w, UPD_VALID as ::core::ffi::c_int);
     (*w).w_redr_status = true_0 != 0;
@@ -2184,7 +2185,7 @@ pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
         emsg(gettext(
             &raw const e_autocmd_close as *const ::core::ffi::c_char,
         ));
-    } else if tabpage == curtab {
+    } else if tabpage == curtab.get() {
         win_close(w, false, false);
     } else {
         win_close_othertab(w, 0 as ::core::ffi::c_int, tabpage, false);
@@ -2211,7 +2212,7 @@ pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut
     ex_win_close(
         force as ::core::ffi::c_int,
         w,
-        if tabpage == curtab {
+        if tabpage == curtab.get() {
             ::core::ptr::null_mut::<tabpage_T>()
         } else {
             tabpage

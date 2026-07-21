@@ -40,7 +40,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn get_var_value(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut current_sctx: sctx_T;
+    static current_sctx: GlobalCell<sctx_T>;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -1450,14 +1450,14 @@ pub unsafe extern "C" fn replace_termcodes(
             {
                 if sid_arg < 0 as ::core::ffi::c_int
                     || sid_arg == 0 as ::core::ffi::c_int
-                        && current_sctx.sc_sid <= 0 as ::core::ffi::c_int
+                        && (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int
                 {
                     emsg(gettext(&raw const e_usingsid as *const ::core::ffi::c_char));
                 } else {
                     let sid: scid_T = if sid_arg != 0 as ::core::ffi::c_int {
                         sid_arg
                     } else {
-                        current_sctx.sc_sid
+                        (*current_sctx.ptr()).sc_sid
                     };
                     src = src.offset(5 as ::core::ffi::c_int as isize);
                     let c2rust_fresh20 = dlen;

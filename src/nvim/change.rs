@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -36,7 +37,7 @@ extern "C" {
         len: size_t,
     ) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut curbuf_splice_pending: ::core::ffi::c_int;
+    static curbuf_splice_pending: GlobalCell<::core::ffi::c_int>;
     fn apply_autocmds(
         event: event_T,
         fname: *mut ::core::ffi::c_char,
@@ -44,9 +45,9 @@ extern "C" {
         force: bool,
         buf: *mut buf_T,
     ) -> bool;
-    static mut last_cursormoved_win: *mut win_T;
-    static mut last_cursormoved: pos_T;
-    static mut autocmd_busy: bool;
+    static last_cursormoved_win: GlobalCell<*mut win_T>;
+    static last_cursormoved: GlobalCell<pos_T>;
+    static autocmd_busy: GlobalCell<bool>;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn bt_prompt(buf: *mut buf_T) -> bool;
     fn bt_dontwrite(buf: *const buf_T) -> bool;
@@ -57,12 +58,12 @@ extern "C" {
         num_added: int64_t,
         num_removed: int64_t,
     );
-    static mut p_deco: ::core::ffi::c_int;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_paste: ::core::ffi::c_int;
-    static mut p_ri: ::core::ffi::c_int;
-    static mut p_sr: ::core::ffi::c_int;
-    static mut p_sm: ::core::ffi::c_int;
+    static p_deco: GlobalCell<::core::ffi::c_int>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_paste: GlobalCell<::core::ffi::c_int>;
+    static p_ri: GlobalCell<::core::ffi::c_int>;
+    static p_sr: GlobalCell<::core::ffi::c_int>;
+    static p_sm: GlobalCell<::core::ffi::c_int>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -91,8 +92,8 @@ extern "C" {
     fn diff_internal() -> ::core::ffi::c_int;
     fn diff_update_line(lnum: linenr_T);
     fn diff_lnum_win(lnum: linenr_T, wp: *mut win_T) -> linenr_T;
-    static mut redraw_not_allowed: bool;
-    static mut search_hl_has_cursor_lnum: linenr_T;
+    static redraw_not_allowed: GlobalCell<bool>;
+    static search_hl_has_cursor_lnum: GlobalCell<linenr_T>;
     fn prompt_text() -> *mut ::core::ffi::c_char;
     fn truncate_spaces(line: *mut ::core::ffi::c_char, len: size_t);
     fn replace_push(str: *mut ::core::ffi::c_char, len: size_t);
@@ -141,38 +142,38 @@ extern "C" {
     ) -> bool;
     fn foldUpdate(wp: *mut win_T, top: linenr_T, bot: linenr_T);
     fn find_wl_entry(win: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut need_maketitle: bool;
-    static mut highlight_match: bool;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut redraw_tabline: bool;
-    static mut curbuf: *mut buf_T;
-    static mut silent_mode: bool;
-    static mut VIsual_active: bool;
-    static mut did_ai: bool;
-    static mut ai_col: colnr_T;
-    static mut end_comment_pending: ::core::ffi::c_int;
-    static mut did_si: bool;
-    static mut can_si: bool;
-    static mut can_si_back: bool;
-    static mut Insstart: pos_T;
-    static mut orig_line_count: linenr_T;
-    static mut vr_lines_changed: ::core::ffi::c_int;
-    static mut inhibit_delete_count: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut in_assert_fails: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static need_maketitle: GlobalCell<bool>;
+    static highlight_match: GlobalCell<bool>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static redraw_tabline: GlobalCell<bool>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static silent_mode: GlobalCell<bool>;
+    static VIsual_active: GlobalCell<bool>;
+    static did_ai: GlobalCell<bool>;
+    static ai_col: GlobalCell<colnr_T>;
+    static end_comment_pending: GlobalCell<::core::ffi::c_int>;
+    static did_si: GlobalCell<bool>;
+    static can_si: GlobalCell<bool>;
+    static can_si_back: GlobalCell<bool>;
+    static Insstart: GlobalCell<pos_T>;
+    static orig_line_count: GlobalCell<linenr_T>;
+    static vr_lines_changed: GlobalCell<::core::ffi::c_int>;
+    static inhibit_delete_count: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static in_assert_fails: GlobalCell<bool>;
     fn cin_is_cinword(line: *const ::core::ffi::c_char) -> bool;
     fn in_cinkeys(
         keytyped: ::core::ffi::c_int,
@@ -2458,11 +2459,12 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
 }
 #[no_mangle]
 pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ffi::c_int) {
-    static mut w_readonly: *const ::core::ffi::c_char =
-        b"W10: Warning: Changing a readonly file\0".as_ptr() as *const ::core::ffi::c_char;
+    static w_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
+        b"W10: Warning: Changing a readonly file\0".as_ptr() as *const ::core::ffi::c_char,
+    );
     if (*buf).b_did_warn as ::core::ffi::c_int == false_0
         && curbufIsChanged() as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-        && !autocmd_busy
+        && !autocmd_busy.get()
         && (*buf).b_p_ro != 0
     {
         (*buf).b_ro_locked += 1;
@@ -2478,25 +2480,25 @@ pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ff
             return;
         }
         msg_start();
-        if msg_row == Rows - 1 as ::core::ffi::c_int {
-            msg_col = col;
+        if msg_row.get() == Rows.get() - 1 as ::core::ffi::c_int {
+            msg_col.set(col);
         }
         msg_source(HLF_W as ::core::ffi::c_int);
         msg_ext_set_kind(b"wmsg\0".as_ptr() as *const ::core::ffi::c_char);
         msg_puts_hl(
-            gettext(w_readonly),
+            gettext(w_readonly.get()),
             HLF_W as ::core::ffi::c_int,
             true_0 != 0,
         );
-        set_vim_var_string(VV_WARNINGMSG, gettext(w_readonly), -1 as ptrdiff_t);
+        set_vim_var_string(VV_WARNINGMSG, gettext(w_readonly.get()), -1 as ptrdiff_t);
         msg_clr_eos();
         msg_end();
-        if msg_silent == 0 as ::core::ffi::c_int && !silent_mode && ui_active() != 0 {
+        if msg_silent.get() == 0 as ::core::ffi::c_int && !silent_mode.get() && ui_active() != 0 {
             msg_delay(1002 as uint64_t, true_0 != 0);
         }
         (*buf).b_did_warn = true_0 != 0;
-        redraw_cmdline = false_0 != 0;
-        if msg_row < Rows - 1 as ::core::ffi::c_int {
+        redraw_cmdline.set(false_0 != 0);
+        if msg_row.get() < Rows.get() - 1 as ::core::ffi::c_int {
             showmode();
         }
     }
@@ -2504,28 +2506,28 @@ pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ff
 #[no_mangle]
 pub unsafe extern "C" fn changed(mut buf: *mut buf_T) {
     if (*buf).b_changed == 0 {
-        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll;
+        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
         change_warning(buf, 0 as ::core::ffi::c_int);
         if (*buf).b_may_swap as ::core::ffi::c_int != 0 && !bt_dontwrite(buf) {
-            let mut save_need_wait_return: bool = need_wait_return;
-            need_wait_return = false_0 != 0;
+            let mut save_need_wait_return: bool = need_wait_return.get();
+            need_wait_return.set(false_0 != 0);
             ml_open_file(buf);
-            if need_wait_return as ::core::ffi::c_int != 0
-                && emsg_silent == 0 as ::core::ffi::c_int
-                && !in_assert_fails
+            if need_wait_return.get() as ::core::ffi::c_int != 0
+                && emsg_silent.get() == 0 as ::core::ffi::c_int
+                && !in_assert_fails.get()
                 && !ui_has(kUIMessages)
             {
                 msg_delay(2002 as uint64_t, true_0 != 0);
                 wait_return(true_0);
-                msg_scroll = save_msg_scroll;
+                msg_scroll.set(save_msg_scroll);
             } else {
-                need_wait_return = save_need_wait_return;
+                need_wait_return.set(save_need_wait_return);
             }
         }
         changed_internal(buf);
     }
     buf_inc_changedtick(buf);
-    highlight_match = false_0 != 0;
+    highlight_match.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn changed_internal(mut buf: *mut buf_T) {
@@ -2533,8 +2535,8 @@ pub unsafe extern "C" fn changed_internal(mut buf: *mut buf_T) {
     (*buf).b_changed_invalid = true_0 != 0;
     ml_setflags(buf);
     redraw_buf_status_later(buf);
-    redraw_tabline = true_0 != 0;
-    need_maketitle = true_0 != 0;
+    redraw_tabline.set(true_0 != 0);
+    need_maketitle.set(true_0 != 0);
 }
 unsafe extern "C" fn changed_lines_invalidate_win(
     mut wp: *mut win_T,
@@ -2598,10 +2600,10 @@ pub unsafe extern "C" fn changed_lines_invalidate_buf(
     mut lnume: linenr_T,
     mut xtra: linenr_T,
 ) {
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -2622,26 +2624,27 @@ unsafe extern "C" fn changed_common(
     mut xtra: linenr_T,
 ) {
     changed(buf);
-    let mut win: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut win: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !win.is_null() {
         if (*win).w_buffer == buf && (*win).w_onebuf_opt.wo_diff != 0 && diff_internal() != 0 {
-            (*curtab).tp_diff_update = true_0;
+            (*curtab.get()).tp_diff_update = true_0;
             diff_update_line(lnum);
         }
         win = (*win).w_next;
     }
-    if cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    {
         let mut view: fmarkv_T = fmarkv_T {
             topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
             skipcol: 0 as colnr_T,
         };
-        if (*curwin).w_buffer == buf {
-            if lnum >= (*curwin).w_topline && lnum <= (*curwin).w_botline {
-                view = mark_view_make(curwin, (*curwin).w_cursor);
+        if (*curwin.get()).w_buffer == buf {
+            if lnum >= (*curwin.get()).w_topline && lnum <= (*curwin.get()).w_botline {
+                view = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
             }
         }
         let fmarkp___: *mut fmark_T = &raw mut (*buf).b_last_change;
@@ -2689,10 +2692,10 @@ unsafe extern "C" fn changed_common(
                         ::core::mem::size_of::<fmark_T>()
                             .wrapping_mul((JUMPLISTSIZE - 1 as ::core::ffi::c_int) as size_t),
                     );
-                    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+                    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
                     while !tp.is_null() {
-                        let mut wp: *mut win_T = if tp == curtab {
-                            firstwin
+                        let mut wp: *mut win_T = if tp == curtab.get() {
+                            firstwin.get()
                         } else {
                             (*tp).tp_firstwin
                         };
@@ -2707,10 +2710,10 @@ unsafe extern "C" fn changed_common(
                         tp = (*tp).tp_next as *mut tabpage_T;
                     }
                 }
-                let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+                let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
                 while !tp_0.is_null() {
-                    let mut wp_0: *mut win_T = if tp_0 == curtab {
-                        firstwin
+                    let mut wp_0: *mut win_T = if tp_0 == curtab.get() {
+                        firstwin.get()
                     } else {
                         (*tp_0).tp_firstwin
                     };
@@ -2729,23 +2732,25 @@ unsafe extern "C" fn changed_common(
         }
         (*buf).b_changelist[((*buf).b_changelistlen - 1 as ::core::ffi::c_int) as usize] =
             (*buf).b_last_change;
-        if (*curwin).w_buffer == buf {
-            (*curwin).w_changelistidx = (*buf).b_changelistlen;
+        if (*curwin.get()).w_buffer == buf {
+            (*curwin.get()).w_changelistidx = (*buf).b_changelistlen;
         }
     }
-    if (*curwin).w_buffer == buf && VIsual_active as ::core::ffi::c_int != 0 {
+    if (*curwin.get()).w_buffer == buf && VIsual_active.get() as ::core::ffi::c_int != 0 {
         check_visual_pos();
     }
-    let mut tp_1: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_1: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_1.is_null() {
-        let mut wp_1: *mut win_T = if tp_1 == curtab {
-            firstwin
+        let mut wp_1: *mut win_T = if tp_1 == curtab.get() {
+            firstwin.get()
         } else {
             (*tp_1).tp_firstwin
         };
         while !wp_1.is_null() {
             if (*wp_1).w_buffer == buf {
-                if !redraw_not_allowed && (*wp_1).w_redr_type < UPD_VALID as ::core::ffi::c_int {
+                if !redraw_not_allowed.get()
+                    && (*wp_1).w_redr_type < UPD_VALID as ::core::ffi::c_int
+                {
                     (*wp_1).w_redr_type = UPD_VALID as ::core::ffi::c_int;
                 }
                 if xtra != 0 as linenr_T && (*wp_1).w_redraw_top != 0 as linenr_T {
@@ -2800,41 +2805,44 @@ unsafe extern "C" fn changed_common(
                     }
                 }
             }
-            if wp_1 == curwin && xtra != 0 as linenr_T && search_hl_has_cursor_lnum >= lnum {
-                search_hl_has_cursor_lnum += xtra;
+            if wp_1 == curwin.get()
+                && xtra != 0 as linenr_T
+                && search_hl_has_cursor_lnum.get() >= lnum
+            {
+                (*search_hl_has_cursor_lnum.ptr()) += xtra;
             }
             wp_1 = (*wp_1).w_next;
         }
         tp_1 = (*tp_1).tp_next as *mut tabpage_T;
     }
     set_must_redraw(UPD_VALID as ::core::ffi::c_int);
-    if last_cursormoved_win == curwin
-        && (*curwin).w_buffer == buf
-        && lnum <= (*curwin).w_cursor.lnum
-        && lnume + (if xtra < 0 as linenr_T { -xtra } else { xtra }) > (*curwin).w_cursor.lnum
+    if last_cursormoved_win.get() == curwin.get()
+        && (*curwin.get()).w_buffer == buf
+        && lnum <= (*curwin.get()).w_cursor.lnum
+        && lnume + (if xtra < 0 as linenr_T { -xtra } else { xtra }) > (*curwin.get()).w_cursor.lnum
     {
-        last_cursormoved.lnum = 0 as ::core::ffi::c_int as linenr_T;
+        (*last_cursormoved.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn changed_bytes(mut lnum: linenr_T, mut col: colnr_T) {
-    changed_lines_redraw_buf(curbuf, lnum, lnum + 1 as linenr_T, 0 as linenr_T);
-    changed_common(curbuf, lnum, col, lnum + 1 as linenr_T, 0 as linenr_T);
-    if spell_check_window(curwin) as ::core::ffi::c_int != 0
-        && lnum < (*curbuf).b_ml.ml_line_count
-        && vim_strchr(p_cpo, CPO_DOLLAR).is_null()
+    changed_lines_redraw_buf(curbuf.get(), lnum, lnum + 1 as linenr_T, 0 as linenr_T);
+    changed_common(curbuf.get(), lnum, col, lnum + 1 as linenr_T, 0 as linenr_T);
+    if spell_check_window(curwin.get()) as ::core::ffi::c_int != 0
+        && lnum < (*curbuf.get()).b_ml.ml_line_count
+        && vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
     {
-        redrawWinline(curwin, lnum + 1 as linenr_T);
+        redrawWinline(curwin.get(), lnum + 1 as linenr_T);
     }
-    buf_updates_send_changes(curbuf, lnum, 1 as int64_t, 1 as int64_t);
-    if (*curwin).w_onebuf_opt.wo_diff != 0 {
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+    buf_updates_send_changes(curbuf.get(), lnum, 1 as int64_t, 1 as int64_t);
+    if (*curwin.get()).w_onebuf_opt.wo_diff != 0 {
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin {
+            if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin.get() {
                 redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
                 let mut wlnum: linenr_T = diff_lnum_win(lnum, wp);
                 if wlnum > 0 as linenr_T {
@@ -2857,9 +2865,9 @@ pub unsafe extern "C" fn inserted_bytes(
     mut old_col: ::core::ffi::c_int,
     mut new_col: ::core::ffi::c_int,
 ) {
-    if curbuf_splice_pending == 0 as ::core::ffi::c_int {
+    if curbuf_splice_pending.get() == 0 as ::core::ffi::c_int {
         extmark_splice_cols(
-            curbuf,
+            curbuf.get(),
             lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
             start_col,
             old_col as colnr_T,
@@ -2886,7 +2894,7 @@ pub unsafe extern "C" fn appended_lines_buf(
 }
 #[no_mangle]
 pub unsafe extern "C" fn appended_lines(mut lnum: linenr_T, mut count: linenr_T) {
-    appended_lines_buf(curbuf, lnum, count);
+    appended_lines_buf(curbuf.get(), lnum, count);
 }
 #[no_mangle]
 pub unsafe extern "C" fn appended_lines_mark(mut lnum: linenr_T, mut count: ::core::ffi::c_int) {
@@ -2898,7 +2906,7 @@ pub unsafe extern "C" fn appended_lines_mark(mut lnum: linenr_T, mut count: ::co
         kExtmarkUndo,
     );
     changed_lines(
-        curbuf,
+        curbuf.get(),
         lnum + 1 as linenr_T,
         0 as colnr_T,
         lnum + 1 as linenr_T,
@@ -2916,12 +2924,12 @@ pub unsafe extern "C" fn deleted_lines_buf(
 }
 #[no_mangle]
 pub unsafe extern "C" fn deleted_lines(mut lnum: linenr_T, mut count: linenr_T) {
-    deleted_lines_buf(curbuf, lnum, count);
+    deleted_lines_buf(curbuf.get(), lnum, count);
 }
 #[no_mangle]
 pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::core::ffi::c_int) {
     let mut made_empty: bool =
-        count > 0 as ::core::ffi::c_int && (*curbuf).b_ml.ml_flags & ML_EMPTY != 0;
+        count > 0 as ::core::ffi::c_int && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0;
     mark_adjust(
         lnum,
         lnum + count as linenr_T - 1 as linenr_T,
@@ -2930,7 +2938,7 @@ pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::cor
         kExtmarkNOOP,
     );
     extmark_adjust(
-        curbuf,
+        curbuf.get(),
         lnum,
         lnum + count as linenr_T - 1 as linenr_T,
         MAXLNUM as ::core::ffi::c_int as linenr_T,
@@ -2943,7 +2951,7 @@ pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::cor
         kExtmarkUndo,
     );
     changed_lines(
-        curbuf,
+        curbuf.get(),
         lnum,
         0 as colnr_T,
         lnum + count as linenr_T,
@@ -3004,18 +3012,18 @@ pub unsafe extern "C" fn changed_lines(
 ) {
     changed_lines_redraw_buf(buf, lnum, lnume, xtra);
     if xtra == 0 as linenr_T
-        && (*curwin).w_onebuf_opt.wo_diff != 0
-        && (*curwin).w_buffer == buf
+        && (*curwin.get()).w_onebuf_opt.wo_diff != 0
+        && (*curwin.get()).w_buffer == buf
         && diff_internal() == 0
     {
         let mut wlnum: linenr_T = 0;
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
-            if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin {
+            if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin.get() {
                 redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
                 wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > 0 as linenr_T {
@@ -3054,8 +3062,8 @@ pub unsafe extern "C" fn unchanged(
             save_file_ff(buf);
         }
         redraw_buf_status_later(buf);
-        redraw_tabline = true_0 != 0;
-        need_maketitle = true_0 != 0;
+        redraw_tabline.set(true_0 != 0);
+        need_maketitle.set(true_0 != 0);
         buf_inc_changedtick(buf);
     } else if always_inc_changedtick {
         buf_inc_changedtick(buf);
@@ -3130,37 +3138,37 @@ pub unsafe extern "C" fn ins_char(mut c: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut charlen: size_t) {
-    if virtual_active(curwin) as ::core::ffi::c_int != 0
-        && (*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
+    if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
+        && (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
     {
         coladvance_force(getviscol());
     }
-    let mut col: size_t = (*curwin).w_cursor.col as size_t;
-    let mut lnum: linenr_T = (*curwin).w_cursor.lnum;
+    let mut col: size_t = (*curwin.get()).w_cursor.col as size_t;
+    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut oldp: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut linelen: size_t = (ml_get_len(lnum) as size_t).wrapping_add(1 as size_t);
     let mut oldlen: size_t = 0 as size_t;
     let mut newlen: size_t = charlen;
-    if State & REPLACE_FLAG as ::core::ffi::c_int != 0 {
-        if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-            let mut old_list: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_list;
-            if old_list != 0 && vim_strchr(p_cpo, CPO_LISTWM).is_null() {
-                (*curwin).w_onebuf_opt.wo_list = false_0;
+    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            let mut old_list: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
+            if old_list != 0 && vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
+                (*curwin.get()).w_onebuf_opt.wo_list = false_0;
             }
             let mut vcol: colnr_T = 0;
             getvcol(
-                curwin,
-                &raw mut (*curwin).w_cursor,
+                curwin.get(),
+                &raw mut (*curwin.get()).w_cursor,
                 ::core::ptr::null_mut::<colnr_T>(),
                 &raw mut vcol,
                 ::core::ptr::null_mut::<colnr_T>(),
             );
-            let mut new_vcol: colnr_T = vcol + win_chartabsize(curwin, buf, vcol);
+            let mut new_vcol: colnr_T = vcol + win_chartabsize(curwin.get(), buf, vcol);
             while *oldp.offset(col.wrapping_add(oldlen) as isize) as ::core::ffi::c_int != NUL
                 && vcol < new_vcol
             {
                 vcol += win_chartabsize(
-                    curwin,
+                    curwin.get(),
                     oldp.offset(col as isize).offset(oldlen as isize),
                     vcol,
                 );
@@ -3176,7 +3184,7 @@ pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut c
                     newlen = newlen.wrapping_add((vcol - new_vcol) as size_t);
                 }
             }
-            (*curwin).w_onebuf_opt.wo_list = old_list;
+            (*curwin.get()).w_onebuf_opt.wo_list = old_list;
         } else if *oldp.offset(col as isize) as ::core::ffi::c_int != NUL {
             oldlen = utfc_ptr2len(oldp.offset(col as isize)) as size_t;
         }
@@ -3217,26 +3225,26 @@ pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut c
         oldlen as ::core::ffi::c_int,
         newlen as ::core::ffi::c_int,
     );
-    if p_sm != 0
-        && State & MODE_INSERT as ::core::ffi::c_int != 0
-        && msg_silent == 0 as ::core::ffi::c_int
+    if p_sm.get() != 0
+        && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && msg_silent.get() == 0 as ::core::ffi::c_int
         && !ins_compl_active()
     {
         showmatch(utf_ptr2char(buf));
     }
-    if p_ri == 0 || State & REPLACE_FLAG as ::core::ffi::c_int != 0 {
-        (*curwin).w_cursor.col += charlen as colnr_T;
+    if p_ri.get() == 0 || State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        (*curwin.get()).w_cursor.col += charlen as colnr_T;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size_t) {
-    let mut lnum: linenr_T = (*curwin).w_cursor.lnum;
-    if virtual_active(curwin) as ::core::ffi::c_int != 0
-        && (*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
+    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
+    if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
+        && (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
     {
         coladvance_force(getviscol());
     }
-    let mut col: colnr_T = (*curwin).w_cursor.col;
+    let mut col: colnr_T = (*curwin.get()).w_cursor.col;
     let mut oldp: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut oldlen: ::core::ffi::c_int = ml_get_len(lnum);
     let mut newp: *mut ::core::ffi::c_char = xmalloc(
@@ -3281,7 +3289,7 @@ pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size
         0 as ::core::ffi::c_int,
         slen as ::core::ffi::c_int,
     );
-    (*curwin).w_cursor.col += slen as colnr_T;
+    (*curwin.get()).w_cursor.col += slen as colnr_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn del_char(mut fixpos: bool) -> ::core::ffi::c_int {
@@ -3313,8 +3321,8 @@ pub unsafe extern "C" fn del_bytes(
     mut fixpos_arg: bool,
     mut use_delcombine: bool,
 ) -> ::core::ffi::c_int {
-    let mut lnum: linenr_T = (*curwin).w_cursor.lnum;
-    let mut col: colnr_T = (*curwin).w_cursor.col;
+    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
+    let mut col: colnr_T = (*curwin.get()).w_cursor.col;
     let mut fixpos: bool = fixpos_arg;
     let mut oldp: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut oldlen: colnr_T = ml_get_len(lnum);
@@ -3331,7 +3339,7 @@ pub unsafe extern "C" fn del_bytes(
         );
         return FAIL;
     }
-    if p_deco != 0
+    if p_deco.get() != 0
         && use_delcombine as ::core::ffi::c_int != 0
         && utfc_ptr2len(oldp.offset(col as isize)) >= count
     {
@@ -3360,14 +3368,15 @@ pub unsafe extern "C" fn del_bytes(
     if movelen <= 1 as ::core::ffi::c_int {
         if col > 0 as ::core::ffi::c_int
             && fixpos as ::core::ffi::c_int != 0
-            && restart_edit == 0 as ::core::ffi::c_int
-            && get_ve_flags(curwin) & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint
+            && restart_edit.get() == 0 as ::core::ffi::c_int
+            && get_ve_flags(curwin.get())
+                & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint
                 == 0 as ::core::ffi::c_uint
         {
-            (*curwin).w_cursor.col -= 1;
-            (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-            (*curwin).w_cursor.col -=
-                utf_head_off(oldp, oldp.offset((*curwin).w_cursor.col as isize));
+            (*curwin.get()).w_cursor.col -= 1;
+            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.col -=
+                utf_head_off(oldp, oldp.offset((*curwin.get()).w_cursor.col as isize));
         }
         count = oldlen - col;
         movelen = 1 as ::core::ffi::c_int;
@@ -3376,7 +3385,7 @@ pub unsafe extern "C" fn del_bytes(
     let mut alloc_newp: bool = ml_line_alloced() == 0;
     let mut newp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !alloc_newp {
-        ml_add_deleted_len((*curbuf).b_ml.ml_line_ptr, oldlen as ssize_t);
+        ml_add_deleted_len((*curbuf.get()).b_ml.ml_line_ptr, oldlen as ssize_t);
         newp = oldp;
     } else {
         newp = xmallocz(newlen as size_t) as *mut ::core::ffi::c_char;
@@ -3394,7 +3403,7 @@ pub unsafe extern "C" fn del_bytes(
     if alloc_newp {
         ml_replace(lnum, newp, false_0 != 0);
     } else {
-        (*curbuf).b_ml.ml_line_textlen =
+        (*curbuf.get()).b_ml.ml_line_textlen =
             (newlen as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
     }
     inserted_bytes(
@@ -3439,30 +3448,30 @@ pub unsafe extern "C" fn open_line(
     let mut first_char: ::core::ffi::c_int = NUL;
     let mut vreplace_mode: ::core::ffi::c_int = 0;
     let mut did_append: bool = false;
-    let mut saved_pi: ::core::ffi::c_int = (*curbuf).b_p_pi;
-    let mut lnum: linenr_T = (*curwin).w_cursor.lnum;
-    let mut mincol: colnr_T = (*curwin).w_cursor.col + 1 as colnr_T;
+    let mut saved_pi: ::core::ffi::c_int = (*curbuf.get()).b_p_pi;
+    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
+    let mut mincol: colnr_T = (*curwin.get()).w_cursor.col + 1 as colnr_T;
     let mut saved_line: *mut ::core::ffi::c_char =
         xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-    if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-        if (*curwin).w_cursor.lnum < orig_line_count {
+    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if (*curwin.get()).w_cursor.lnum < orig_line_count.get() {
             next_line = xstrnsave(
-                ml_get((*curwin).w_cursor.lnum + 1 as linenr_T),
-                ml_get_len((*curwin).w_cursor.lnum + 1 as linenr_T) as size_t,
+                ml_get((*curwin.get()).w_cursor.lnum + 1 as linenr_T),
+                ml_get_len((*curwin.get()).w_cursor.lnum + 1 as linenr_T) as size_t,
             );
         } else {
             next_line = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
         }
         replace_push_nul();
         replace_push_nul();
-        p = saved_line.offset((*curwin).w_cursor.col as isize);
+        p = saved_line.offset((*curwin.get()).w_cursor.col as isize);
         replace_push(p, strlen(p));
-        *saved_line.offset((*curwin).w_cursor.col as isize) = NUL as ::core::ffi::c_char;
+        *saved_line.offset((*curwin.get()).w_cursor.col as isize) = NUL as ::core::ffi::c_char;
     }
-    if State & MODE_INSERT as ::core::ffi::c_int != 0
-        && State & VREPLACE_FLAG as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
-        p_extra = saved_line.offset((*curwin).w_cursor.col as isize);
+        p_extra = saved_line.offset((*curwin.get()).w_cursor.col as isize);
         if do_si {
             p = skipwhite(p_extra);
             first_char = *p as ::core::ffi::c_uchar as ::core::ffi::c_int;
@@ -3471,16 +3480,20 @@ pub unsafe extern "C" fn open_line(
         saved_char = *p_extra;
         *p_extra = NUL as ::core::ffi::c_char;
     }
-    u_clearline(curbuf);
-    did_si = false_0 != 0;
-    ai_col = 0 as ::core::ffi::c_int as colnr_T;
-    if dir == FORWARD as ::core::ffi::c_int && did_ai as ::core::ffi::c_int != 0 {
+    u_clearline(curbuf.get());
+    did_si.set(false_0 != 0);
+    ai_col.set(0 as ::core::ffi::c_int as colnr_T);
+    if dir == FORWARD as ::core::ffi::c_int && did_ai.get() as ::core::ffi::c_int != 0 {
         trunc_line = true_0 != 0;
     }
     if flags & OPENLINE_FORCE_INDENT as ::core::ffi::c_int != 0 {
         newindent = second_line_indent;
-    } else if (*curbuf).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0 {
-        newindent = indent_size_ts(saved_line, (*curbuf).b_p_ts, (*curbuf).b_p_vts_array);
+    } else if (*curbuf.get()).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0 {
+        newindent = indent_size_ts(
+            saved_line,
+            (*curbuf.get()).b_p_ts,
+            (*curbuf.get()).b_p_vts_array,
+        );
         if newindent == 0 as ::core::ffi::c_int
             && flags & OPENLINE_COM_LIST as ::core::ffi::c_int == 0
         {
@@ -3491,7 +3504,7 @@ pub unsafe extern "C" fn open_line(
             && *saved_line as ::core::ffi::c_int != NUL
             && (p_extra.is_null() || first_char != '{' as ::core::ffi::c_int)
         {
-            old_cursor = (*curwin).w_cursor;
+            old_cursor = (*curwin.get()).w_cursor;
             let mut ptr: *mut ::core::ffi::c_char = saved_line;
             if flags & OPENLINE_DO_COM as ::core::ffi::c_int != 0 {
                 lead_len = get_leader_len(
@@ -3510,10 +3523,10 @@ pub unsafe extern "C" fn open_line(
                 {
                     while *ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '#' as ::core::ffi::c_int
-                        && (*curwin).w_cursor.lnum > 1 as linenr_T
+                        && (*curwin.get()).w_cursor.lnum > 1 as linenr_T
                     {
-                        (*curwin).w_cursor.lnum -= 1;
-                        ptr = ml_get((*curwin).w_cursor.lnum);
+                        (*curwin.get()).w_cursor.lnum -= 1;
+                        ptr = ml_get((*curwin.get()).w_cursor.lnum);
                     }
                     newindent = get_indent();
                 }
@@ -3547,15 +3560,15 @@ pub unsafe extern "C" fn open_line(
                                     as ::core::ffi::c_int
                                     == '*' as ::core::ffi::c_int
                             {
-                                (*curwin).w_cursor.col = p.offset_from(ptr) as colnr_T;
+                                (*curwin.get()).w_cursor.col = p.offset_from(ptr) as colnr_T;
                                 pos = findmatch(::core::ptr::null_mut::<oparg_T>(), NUL);
                                 if !pos.is_null() {
-                                    (*curwin).w_cursor.lnum = (*pos).lnum;
+                                    (*curwin.get()).w_cursor.lnum = (*pos).lnum;
                                     newindent = get_indent();
                                     break;
                                 } else {
-                                    ptr = ml_get((*curwin).w_cursor.lnum);
-                                    p = ptr.offset((*curwin).w_cursor.col as isize);
+                                    ptr = ml_get((*curwin.get()).w_cursor.lnum);
+                                    p = ptr.offset((*curwin.get()).w_cursor.col as isize);
                                 }
                             }
                             p = p.offset(1);
@@ -3584,25 +3597,25 @@ pub unsafe extern "C" fn open_line(
                         }
                     }
                     if *p as ::core::ffi::c_int == ')' as ::core::ffi::c_int {
-                        (*curwin).w_cursor.col = p.offset_from(ptr) as colnr_T;
+                        (*curwin.get()).w_cursor.col = p.offset_from(ptr) as colnr_T;
                         pos = findmatch(
                             ::core::ptr::null_mut::<oparg_T>(),
                             '(' as ::core::ffi::c_int,
                         );
                         if !pos.is_null() {
-                            (*curwin).w_cursor.lnum = (*pos).lnum;
+                            (*curwin.get()).w_cursor.lnum = (*pos).lnum;
                             newindent = get_indent();
                             ptr = get_cursor_line_ptr();
                         }
                     }
                     if last_char as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-                        did_si = true_0 != 0;
+                        did_si.set(true_0 != 0);
                         no_si = true_0 != 0;
                     } else if last_char as ::core::ffi::c_int != ';' as ::core::ffi::c_int
                         && last_char as ::core::ffi::c_int != '}' as ::core::ffi::c_int
                         && cin_is_cinword(ptr) as ::core::ffi::c_int != 0
                     {
-                        did_si = true_0 != 0;
+                        did_si.set(true_0 != 0);
                     }
                 }
             } else {
@@ -3614,7 +3627,7 @@ pub unsafe extern "C" fn open_line(
                     while (*ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '#' as ::core::ffi::c_int
                         || was_backslashed as ::core::ffi::c_int != 0)
-                        && (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count
+                        && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
                     {
                         if *ptr as ::core::ffi::c_int != 0
                             && *ptr.offset(strlen(ptr).wrapping_sub(1 as size_t) as isize)
@@ -3625,8 +3638,8 @@ pub unsafe extern "C" fn open_line(
                         } else {
                             was_backslashed = false_0 != 0;
                         }
-                        (*curwin).w_cursor.lnum += 1;
-                        ptr = ml_get((*curwin).w_cursor.lnum);
+                        (*curwin.get()).w_cursor.lnum += 1;
+                        ptr = ml_get((*curwin.get()).w_cursor.lnum);
                     }
                     if was_backslashed {
                         newindent = 0 as ::core::ffi::c_int;
@@ -3636,20 +3649,20 @@ pub unsafe extern "C" fn open_line(
                 }
                 p = skipwhite(ptr);
                 if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
-                    did_si = true_0 != 0;
+                    did_si.set(true_0 != 0);
                 } else {
-                    can_si_back = true_0 != 0;
+                    can_si_back.set(true_0 != 0);
                 }
             }
-            (*curwin).w_cursor = old_cursor;
+            (*curwin.get()).w_cursor = old_cursor;
         }
         if do_si {
-            can_si = true_0 != 0;
+            can_si.set(true_0 != 0);
         }
-        did_ai = true_0 != 0;
+        did_ai.set(true_0 != 0);
     }
-    let mut do_cindent: bool = p_paste == 0
-        && ((*curbuf).b_p_cin != 0 || *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL)
+    let mut do_cindent: bool = p_paste.get() == 0
+        && ((*curbuf.get()).b_p_cin != 0 || *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL)
         && in_cinkeys(
             if dir == FORWARD as ::core::ffi::c_int {
                 KEY_OPEN_FORW as ::core::ffi::c_int
@@ -3657,11 +3670,11 @@ pub unsafe extern "C" fn open_line(
                 KEY_OPEN_BACK as ::core::ffi::c_int
             },
             ' ' as ::core::ffi::c_int,
-            linewhite((*curwin).w_cursor.lnum),
+            linewhite((*curwin.get()).w_cursor.lnum),
         ) as ::core::ffi::c_int
             != 0
         && flags & OPENLINE_FORCE_INDENT as ::core::ffi::c_int == 0;
-    end_comment_pending = NUL;
+    end_comment_pending.set(NUL);
     if flags & OPENLINE_DO_COM as ::core::ffi::c_int != 0 {
         lead_len = get_leader_len(
             saved_line,
@@ -3670,7 +3683,7 @@ pub unsafe extern "C" fn open_line(
             true_0 != 0,
         );
         if lead_len == 0 as ::core::ffi::c_int
-            && (*curbuf).b_p_cin != 0
+            && (*curbuf.get()).b_p_cin != 0
             && do_cindent as ::core::ffi::c_int != 0
             && dir == FORWARD as ::core::ffi::c_int
             && (!has_format_option(FO_NO_OPEN_COMS)
@@ -3752,7 +3765,7 @@ pub unsafe extern "C" fn open_line(
                         != ':' as ::core::ffi::c_int
                 {
                     if *p as ::core::ffi::c_int == COM_AUTO_END {
-                        end_comment_pending = -1 as ::core::ffi::c_int;
+                        end_comment_pending.set(-1 as ::core::ffi::c_int);
                     }
                     p = p.offset(1);
                 }
@@ -3762,10 +3775,11 @@ pub unsafe extern "C" fn open_line(
                     COM_MAX_LEN as size_t,
                     b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                if end_comment_pending == -1 as ::core::ffi::c_int {
-                    end_comment_pending = lead_end[n.wrapping_sub(1 as size_t) as usize]
-                        as ::core::ffi::c_uchar
-                        as ::core::ffi::c_int;
+                if end_comment_pending.get() == -1 as ::core::ffi::c_int {
+                    end_comment_pending.set(
+                        lead_end[n.wrapping_sub(1 as size_t) as usize] as ::core::ffi::c_uchar
+                            as ::core::ffi::c_int,
+                    );
                 }
                 if dir == FORWARD as ::core::ffi::c_int {
                     p = saved_line.offset(lead_len as isize);
@@ -3789,7 +3803,7 @@ pub unsafe extern "C" fn open_line(
                     if !ascii_iswhite(
                         *saved_line.offset((lead_len - 1 as ::core::ffi::c_int) as isize)
                             as ::core::ffi::c_int,
-                    ) && (!p_extra.is_null() && (*curwin).w_cursor.col == lead_len
+                    ) && (!p_extra.is_null() && (*curwin.get()).w_cursor.col == lead_len
                         || p_extra.is_null()
                             && *saved_line.offset(lead_len as isize) as ::core::ffi::c_int == NUL
                         || require_blank as ::core::ffi::c_int != 0)
@@ -3804,13 +3818,13 @@ pub unsafe extern "C" fn open_line(
                     lead_len = 0 as ::core::ffi::c_int;
                     break;
                 } else {
-                    while p > (*curbuf).b_p_com
+                    while p > (*curbuf.get()).b_p_com
                         && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                     {
                         p = p.offset(-1);
                     }
                     lead_repl = p;
-                    while lead_repl > (*curbuf).b_p_com
+                    while lead_repl > (*curbuf.get()).b_p_com
                         && *lead_repl.offset(-1 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int
                             != ':' as ::core::ffi::c_int
@@ -3824,19 +3838,19 @@ pub unsafe extern "C" fn open_line(
                         && *p2 as ::core::ffi::c_int != ':' as ::core::ffi::c_int
                     {
                         if *p2 as ::core::ffi::c_int == COM_AUTO_END {
-                            end_comment_pending = -1 as ::core::ffi::c_int;
+                            end_comment_pending.set(-1 as ::core::ffi::c_int);
                         }
                         p2 = p2.offset(1);
                     }
-                    if end_comment_pending == -1 as ::core::ffi::c_int {
+                    if end_comment_pending.get() == -1 as ::core::ffi::c_int {
                         while *p2 as ::core::ffi::c_int != 0
                             && *p2 as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                         {
                             p2 = p2.offset(1);
                         }
-                        end_comment_pending = *p2.offset(-1 as ::core::ffi::c_int as isize)
+                        end_comment_pending.set(*p2.offset(-1 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int;
+                            as ::core::ffi::c_int);
                     }
                     break;
                 }
@@ -4043,8 +4057,12 @@ pub unsafe extern "C" fn open_line(
                     }
                     *p = NUL as ::core::ffi::c_char;
                 }
-                if (*curbuf).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0 {
-                    newindent = indent_size_ts(leader, (*curbuf).b_p_ts, (*curbuf).b_p_vts_array);
+                if (*curbuf.get()).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0 {
+                    newindent = indent_size_ts(
+                        leader,
+                        (*curbuf.get()).b_p_ts,
+                        (*curbuf.get()).b_p_vts_array,
+                    );
                 }
                 if newindent + off < 0 as ::core::ffi::c_int {
                     off = -newindent;
@@ -4082,7 +4100,7 @@ pub unsafe extern "C" fn open_line(
                 *leader.offset(lead_len as isize) = NUL as ::core::ffi::c_char;
             }
             newcol = lead_len as colnr_T;
-            if newindent != 0 || did_si as ::core::ffi::c_int != 0 {
+            if newindent != 0 || did_si.get() as ::core::ffi::c_int != 0 {
                 while lead_len != 0
                     && ascii_iswhite(*leader as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                 {
@@ -4091,42 +4109,42 @@ pub unsafe extern "C" fn open_line(
                     leader = leader.offset(1);
                 }
             }
-            can_si = false_0 != 0;
-            did_si = can_si;
+            can_si.set(false_0 != 0);
+            did_si.set(can_si.get());
         } else if !comment_end.is_null() {
             if *comment_end.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '*' as ::core::ffi::c_int
                 && *comment_end.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '/' as ::core::ffi::c_int
-                && ((*curbuf).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0)
+                && ((*curbuf.get()).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0)
             {
-                old_cursor = (*curwin).w_cursor;
-                (*curwin).w_cursor.col = comment_end.offset_from(saved_line) as colnr_T;
+                old_cursor = (*curwin.get()).w_cursor;
+                (*curwin.get()).w_cursor.col = comment_end.offset_from(saved_line) as colnr_T;
                 pos = findmatch(::core::ptr::null_mut::<oparg_T>(), NUL);
                 if !pos.is_null() {
-                    (*curwin).w_cursor.lnum = (*pos).lnum;
+                    (*curwin.get()).w_cursor.lnum = (*pos).lnum;
                     newindent = get_indent();
                 }
-                (*curwin).w_cursor = old_cursor;
+                (*curwin.get()).w_cursor = old_cursor;
             }
         }
     }
     if !p_extra.is_null() {
         *p_extra = saved_char;
-        if State & REPLACE_FLAG as ::core::ffi::c_int != 0
-            && State & VREPLACE_FLAG as ::core::ffi::c_int == 0
+        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
+            && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
         {
             replace_push_nul();
         }
-        if (*curbuf).b_p_ai != 0 || flags & OPENLINE_DELSPACES as ::core::ffi::c_int != 0 {
+        if (*curbuf.get()).b_p_ai != 0 || flags & OPENLINE_DELSPACES as ::core::ffi::c_int != 0 {
             while (*p_extra as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
                 || *p_extra as ::core::ffi::c_int == '\t' as ::core::ffi::c_int)
                 && !utf_iscomposing_first(utf_ptr2char(
                     p_extra.offset(1 as ::core::ffi::c_int as isize),
                 ))
             {
-                if State & REPLACE_FLAG as ::core::ffi::c_int != 0
-                    && State & VREPLACE_FLAG as ::core::ffi::c_int == 0
+                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
+                    && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
                 {
                     replace_push(p_extra, 1 as size_t);
                 }
@@ -4155,20 +4173,20 @@ pub unsafe extern "C" fn open_line(
         }
         strcat(leader, p_extra);
         p_extra = leader;
-        did_ai = true_0 != 0;
+        did_ai.set(true_0 != 0);
         less_cols -= lead_len;
     } else {
-        end_comment_pending = NUL;
+        end_comment_pending.set(NUL);
     }
-    curbuf_splice_pending += 1;
-    old_cursor = (*curwin).w_cursor;
-    let mut old_cmod_flags: ::core::ffi::c_int = cmdmod.cmod_flags;
+    (*curbuf_splice_pending.ptr()) += 1;
+    old_cursor = (*curwin.get()).w_cursor;
+    let mut old_cmod_flags: ::core::ffi::c_int = (*cmdmod.ptr()).cmod_flags;
     let mut prompt_moved: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if dir == BACKWARD as ::core::ffi::c_int {
-        if bt_prompt(curbuf) as ::core::ffi::c_int != 0
-            && (*curwin).w_cursor.lnum == (*curbuf).b_prompt_start.mark.lnum
+        if bt_prompt(curbuf.get()) as ::core::ffi::c_int != 0
+            && (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_prompt_start.mark.lnum
         {
-            let mut prompt_line: *mut ::core::ffi::c_char = ml_get((*curwin).w_cursor.lnum);
+            let mut prompt_line: *mut ::core::ffi::c_char = ml_get((*curwin.get()).w_cursor.lnum);
             let mut prompt: *mut ::core::ffi::c_char = prompt_text();
             let mut prompt_len: size_t = strlen(prompt);
             if strncmp(prompt_line, prompt, prompt_len) == 0 as ::core::ffi::c_int {
@@ -4177,23 +4195,30 @@ pub unsafe extern "C" fn open_line(
                     prompt_line.offset(prompt_len as isize) as *const ::core::ffi::c_void,
                     strlen(prompt_line.offset(prompt_len as isize)).wrapping_add(1 as size_t),
                 );
-                cmdmod.cmod_flags = cmdmod.cmod_flags | CMOD_LOCKMARKS as ::core::ffi::c_int;
-                ml_replace((*curwin).w_cursor.lnum, prompt_line, true_0 != 0);
+                (*cmdmod.ptr()).cmod_flags =
+                    (*cmdmod.ptr()).cmod_flags | CMOD_LOCKMARKS as ::core::ffi::c_int;
+                ml_replace((*curwin.get()).w_cursor.lnum, prompt_line, true_0 != 0);
                 prompt_moved = concat_str(prompt, p_extra);
                 p_extra = prompt_moved;
             }
         }
-        (*curwin).w_cursor.lnum -= 1;
+        (*curwin.get()).w_cursor.lnum -= 1;
     }
     '_theend: {
-        if State & VREPLACE_FLAG as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-            || old_cursor.lnum >= orig_line_count
+        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+            || old_cursor.lnum >= orig_line_count.get()
         {
-            if ml_append((*curwin).w_cursor.lnum, p_extra, 0 as colnr_T, false_0 != 0) == FAIL {
+            if ml_append(
+                (*curwin.get()).w_cursor.lnum,
+                p_extra,
+                0 as colnr_T,
+                false_0 != 0,
+            ) == FAIL
+            {
                 break '_theend;
             } else {
                 mark_adjust(
-                    (*curwin).w_cursor.lnum + 1 as linenr_T,
+                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
                     MAXLNUM as ::core::ffi::c_int as linenr_T,
                     1 as linenr_T,
                     0 as linenr_T,
@@ -4202,54 +4227,56 @@ pub unsafe extern "C" fn open_line(
                 did_append = true_0 != 0;
             }
         } else {
-            (*curwin).w_cursor.lnum += 1;
-            if (*curwin).w_cursor.lnum >= Insstart.lnum + vr_lines_changed as linenr_T {
+            (*curwin.get()).w_cursor.lnum += 1;
+            if (*curwin.get()).w_cursor.lnum
+                >= (*Insstart.ptr()).lnum + vr_lines_changed.get() as linenr_T
+            {
                 u_save_cursor();
-                vr_lines_changed += 1;
+                (*vr_lines_changed.ptr()) += 1;
             }
-            ml_replace((*curwin).w_cursor.lnum, p_extra, true_0 != 0);
-            changed_bytes((*curwin).w_cursor.lnum, 0 as colnr_T);
-            (*curwin).w_cursor.lnum -= 1;
+            ml_replace((*curwin.get()).w_cursor.lnum, p_extra, true_0 != 0);
+            changed_bytes((*curwin.get()).w_cursor.lnum, 0 as colnr_T);
+            (*curwin.get()).w_cursor.lnum -= 1;
             did_append = false_0 != 0;
         }
-        inhibit_delete_count += 1;
-        if newindent != 0 || did_si as ::core::ffi::c_int != 0 {
-            (*curwin).w_cursor.lnum += 1;
-            if did_si {
-                let mut sw: ::core::ffi::c_int = get_sw_value(curbuf);
-                if p_sr != 0 {
+        (*inhibit_delete_count.ptr()) += 1;
+        if newindent != 0 || did_si.get() as ::core::ffi::c_int != 0 {
+            (*curwin.get()).w_cursor.lnum += 1;
+            if did_si.get() {
+                let mut sw: ::core::ffi::c_int = get_sw_value(curbuf.get());
+                if p_sr.get() != 0 {
                     newindent -= newindent % sw;
                 }
                 newindent += sw;
             }
-            if (*curbuf).b_p_ci != 0 {
+            if (*curbuf.get()).b_p_ci != 0 {
                 copy_indent(newindent, saved_line);
-                (*curbuf).b_p_pi = true_0;
+                (*curbuf.get()).b_p_pi = true_0;
             } else {
                 set_indent(
                     newindent,
                     SIN_INSERT as ::core::ffi::c_int | SIN_NOMARK as ::core::ffi::c_int,
                 );
             }
-            less_cols -= (*curwin).w_cursor.col;
-            ai_col = (*curwin).w_cursor.col;
-            if State & REPLACE_FLAG as ::core::ffi::c_int != 0
-                && State & VREPLACE_FLAG as ::core::ffi::c_int == 0
+            less_cols -= (*curwin.get()).w_cursor.col;
+            ai_col.set((*curwin.get()).w_cursor.col);
+            if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
+                && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
             {
                 let mut n_0: colnr_T = 0 as colnr_T;
-                while n_0 < (*curwin).w_cursor.col {
+                while n_0 < (*curwin.get()).w_cursor.col {
                     replace_push_nul();
                     n_0 += 1;
                 }
             }
-            newcol += (*curwin).w_cursor.col;
+            newcol += (*curwin.get()).w_cursor.col;
             if no_si {
-                did_si = false_0 != 0;
+                did_si.set(false_0 != 0);
             }
         }
-        inhibit_delete_count -= 1;
-        if State & REPLACE_FLAG as ::core::ffi::c_int != 0
-            && State & VREPLACE_FLAG as ::core::ffi::c_int == 0
+        (*inhibit_delete_count.ptr()) -= 1;
+        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
+            && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
         {
             loop {
                 let c2rust_fresh3 = lead_len;
@@ -4260,30 +4287,32 @@ pub unsafe extern "C" fn open_line(
                 replace_push_nul();
             }
         }
-        (*curwin).w_cursor = old_cursor;
+        (*curwin.get()).w_cursor = old_cursor;
         if dir == FORWARD as ::core::ffi::c_int {
             if trunc_line as ::core::ffi::c_int != 0
-                || State & MODE_INSERT as ::core::ffi::c_int != 0
+                || State.get() & MODE_INSERT as ::core::ffi::c_int != 0
             {
-                *saved_line.offset((*curwin).w_cursor.col as isize) = NUL as ::core::ffi::c_char;
+                *saved_line.offset((*curwin.get()).w_cursor.col as isize) =
+                    NUL as ::core::ffi::c_char;
                 if trunc_line as ::core::ffi::c_int != 0
                     && flags & OPENLINE_KEEPTRAIL as ::core::ffi::c_int == 0
                 {
-                    truncate_spaces(saved_line, (*curwin).w_cursor.col as size_t);
+                    truncate_spaces(saved_line, (*curwin.get()).w_cursor.col as size_t);
                 }
-                ml_replace((*curwin).w_cursor.lnum, saved_line, false_0 != 0);
+                ml_replace((*curwin.get()).w_cursor.lnum, saved_line, false_0 != 0);
                 let mut new_len: ::core::ffi::c_int = strlen(saved_line) as ::core::ffi::c_int;
                 let mut cols_spliced: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                if new_len < (*curwin).w_cursor.col {
+                if new_len < (*curwin.get()).w_cursor.col {
                     extmark_splice_cols(
-                        curbuf,
-                        (*curwin).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                        curbuf.get(),
+                        (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int
+                            - 1 as ::core::ffi::c_int,
                         new_len as colnr_T,
-                        (*curwin).w_cursor.col - new_len as colnr_T,
+                        (*curwin.get()).w_cursor.col - new_len as colnr_T,
                         0 as colnr_T,
                         kExtmarkUndo,
                     );
-                    cols_spliced = (*curwin).w_cursor.col as ::core::ffi::c_int - new_len;
+                    cols_spliced = (*curwin.get()).w_cursor.col as ::core::ffi::c_int - new_len;
                 }
                 saved_line = ::core::ptr::null_mut::<::core::ffi::c_char>();
                 if did_append {
@@ -4292,7 +4321,7 @@ pub unsafe extern "C" fn open_line(
                         + less_cols_off as ::core::ffi::c_int
                         - less_cols as ::core::ffi::c_int;
                     extmark_splice(
-                        curbuf,
+                        curbuf.get(),
                         lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                         mincol - 1 as colnr_T - cols_spliced as colnr_T,
                         0 as ::core::ffi::c_int,
@@ -4304,34 +4333,34 @@ pub unsafe extern "C" fn open_line(
                         kExtmarkUndo,
                     );
                     changed_lines(
-                        curbuf,
-                        (*curwin).w_cursor.lnum,
-                        (*curwin).w_cursor.col,
-                        (*curwin).w_cursor.lnum + 1 as linenr_T,
+                        curbuf.get(),
+                        (*curwin.get()).w_cursor.lnum,
+                        (*curwin.get()).w_cursor.col,
+                        (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
                         1 as linenr_T,
                         true_0 != 0,
                     );
                     did_append = false_0 != 0;
                     if flags & OPENLINE_MARKFIX as ::core::ffi::c_int != 0 {
                         mark_col_adjust(
-                            (*curwin).w_cursor.lnum,
-                            (*curwin).w_cursor.col + less_cols_off,
+                            (*curwin.get()).w_cursor.lnum,
+                            (*curwin.get()).w_cursor.col + less_cols_off,
                             1 as linenr_T,
                             -less_cols,
                             0 as ::core::ffi::c_int,
                         );
                     }
                 } else {
-                    changed_bytes((*curwin).w_cursor.lnum, (*curwin).w_cursor.col);
+                    changed_bytes((*curwin.get()).w_cursor.lnum, (*curwin.get()).w_cursor.col);
                 }
             }
-            (*curwin).w_cursor.lnum = old_cursor.lnum + 1 as linenr_T;
+            (*curwin.get()).w_cursor.lnum = old_cursor.lnum + 1 as linenr_T;
         }
         if did_append {
-            let mut extra: bcount_t = ml_get_len((*curwin).w_cursor.lnum) as bcount_t;
+            let mut extra: bcount_t = ml_get_len((*curwin.get()).w_cursor.lnum) as bcount_t;
             extmark_splice(
-                curbuf,
-                (*curwin).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                curbuf.get(),
+                (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                 0 as colnr_T,
                 0 as ::core::ffi::c_int,
                 0 as colnr_T,
@@ -4342,66 +4371,67 @@ pub unsafe extern "C" fn open_line(
                 kExtmarkUndo,
             );
             changed_lines(
-                curbuf,
-                (*curwin).w_cursor.lnum,
+                curbuf.get(),
+                (*curwin.get()).w_cursor.lnum,
                 0 as colnr_T,
-                (*curwin).w_cursor.lnum,
+                (*curwin.get()).w_cursor.lnum,
                 1 as linenr_T,
                 true_0 != 0,
             );
         }
-        curbuf_splice_pending -= 1;
-        (*curwin).w_cursor.col = newcol;
-        (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-        if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-            vreplace_mode = State;
-            State = MODE_INSERT as ::core::ffi::c_int;
+        (*curbuf_splice_pending.ptr()) -= 1;
+        (*curwin.get()).w_cursor.col = newcol;
+        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            vreplace_mode = State.get();
+            State.set(MODE_INSERT as ::core::ffi::c_int);
         } else {
             vreplace_mode = 0 as ::core::ffi::c_int;
         }
-        if p_paste == 0 {
+        if p_paste.get() == 0 {
             if leader.is_null()
                 && !use_indentexpr_for_lisp()
-                && (*curbuf).b_p_lisp != 0
-                && (*curbuf).b_p_ai != 0
+                && (*curbuf.get()).b_p_lisp != 0
+                && (*curbuf.get()).b_p_ai != 0
             {
                 fixthisline(Some(
                     get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
                 ));
-                ai_col = getwhitecols_curline() as colnr_T;
+                ai_col.set(getwhitecols_curline() as colnr_T);
             } else if do_cindent as ::core::ffi::c_int != 0
-                || (*curbuf).b_p_ai != 0 && use_indentexpr_for_lisp() as ::core::ffi::c_int != 0
+                || (*curbuf.get()).b_p_ai != 0
+                    && use_indentexpr_for_lisp() as ::core::ffi::c_int != 0
             {
                 do_c_expr_indent();
-                ai_col = getwhitecols_curline() as colnr_T;
+                ai_col.set(getwhitecols_curline() as colnr_T);
             }
         }
         if vreplace_mode != 0 as ::core::ffi::c_int {
-            State = vreplace_mode;
+            State.set(vreplace_mode);
         }
-        if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
             p_extra = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-            ml_replace((*curwin).w_cursor.lnum, next_line, false_0 != 0);
-            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+            ml_replace((*curwin.get()).w_cursor.lnum, next_line, false_0 != 0);
+            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
             ins_bytes(p_extra);
             xfree(p_extra as *mut ::core::ffi::c_void);
             next_line = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
         retval = true_0 != 0;
     }
-    (*curbuf).b_p_pi = saved_pi;
+    (*curbuf.get()).b_p_pi = saved_pi;
     xfree(saved_line as *mut ::core::ffi::c_void);
     xfree(next_line as *mut ::core::ffi::c_void);
     xfree(allocated as *mut ::core::ffi::c_void);
     xfree(prompt_moved as *mut ::core::ffi::c_void);
-    cmdmod.cmod_flags = old_cmod_flags;
+    (*cmdmod.ptr()).cmod_flags = old_cmod_flags;
     return retval;
 }
 #[no_mangle]
 pub unsafe extern "C" fn truncate_line(mut fixpos: ::core::ffi::c_int) {
-    let mut lnum: linenr_T = (*curwin).w_cursor.lnum;
-    let mut col: colnr_T = (*curwin).w_cursor.col;
+    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
+    let mut col: colnr_T = (*curwin.get()).w_cursor.col;
     let mut old_line: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut newp: *mut ::core::ffi::c_char = if col == 0 as ::core::ffi::c_int {
         xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char)
@@ -4412,18 +4442,18 @@ pub unsafe extern "C" fn truncate_line(mut fixpos: ::core::ffi::c_int) {
     ml_replace(lnum, newp, false_0 != 0);
     inserted_bytes(
         lnum,
-        (*curwin).w_cursor.col,
+        (*curwin.get()).w_cursor.col,
         deleted,
         0 as ::core::ffi::c_int,
     );
-    if fixpos != 0 && (*curwin).w_cursor.col > 0 as ::core::ffi::c_int {
-        (*curwin).w_cursor.col -= 1;
+    if fixpos != 0 && (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int {
+        (*curwin.get()).w_cursor.col -= 1;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn del_lines(mut nlines: linenr_T, mut undo: bool) {
     let mut n: ::core::ffi::c_int = 0;
-    let mut first: linenr_T = (*curwin).w_cursor.lnum;
+    let mut first: linenr_T = (*curwin.get()).w_cursor.lnum;
     if nlines <= 0 as linenr_T {
         return;
     }
@@ -4432,17 +4462,17 @@ pub unsafe extern "C" fn del_lines(mut nlines: linenr_T, mut undo: bool) {
     }
     n = 0 as ::core::ffi::c_int;
     while (n as linenr_T) < nlines {
-        if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
             break;
         }
         ml_delete_flags(first, ML_DEL_MESSAGE as ::core::ffi::c_int);
         n += 1;
-        if first > (*curbuf).b_ml.ml_line_count {
+        if first > (*curbuf.get()).b_ml.ml_line_count {
             break;
         }
     }
-    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    check_cursor_lnum(curwin);
+    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+    check_cursor_lnum(curwin.get());
     deleted_lines_mark(first, n);
 }
 #[no_mangle]
@@ -4465,7 +4495,7 @@ pub unsafe extern "C" fn get_leader_len(
     }
     while *line.offset(i as isize) as ::core::ffi::c_int != NUL {
         let mut found_one: bool = false_0 != 0;
-        let mut list: *mut ::core::ffi::c_char = (*curbuf).b_p_com;
+        let mut list: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_com;
         while *list != 0 {
             if !got_com && !flags.is_null() {
                 *flags = list;
@@ -4595,7 +4625,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
             break;
         }
         let mut found_one: bool = false_0 != 0;
-        let mut list: *mut ::core::ffi::c_char = (*curbuf).b_p_com;
+        let mut list: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_com;
         while *list != 0 {
             let mut flags_save: *mut ::core::ffi::c_char = list;
             copy_option_part(
@@ -4677,7 +4707,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
             com_leader = com_leader.offset(1);
         }
         let mut len1: ::core::ffi::c_int = strlen(com_leader) as ::core::ffi::c_int;
-        let mut list_0: *mut ::core::ffi::c_char = (*curbuf).b_p_com;
+        let mut list_0: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_com;
         while *list_0 != 0 {
             let mut flags_save_0: *mut ::core::ffi::c_char = list_0;
             copy_option_part(

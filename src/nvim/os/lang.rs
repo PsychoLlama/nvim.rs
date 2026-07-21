@@ -43,7 +43,7 @@ extern "C" {
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static mut time_fd: *mut FILE;
+    static time_fd: GlobalCell<*mut FILE>;
     fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn set_helplang_default(lang: *const ::core::ffi::c_char);
@@ -5113,7 +5113,7 @@ pub unsafe extern "C" fn init_locale() {
         &raw mut localepath as *mut ::core::ffi::c_char,
     );
     textdomain(PROJECT_NAME.as_ptr());
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"locale set\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),

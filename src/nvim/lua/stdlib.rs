@@ -84,7 +84,7 @@ extern "C" {
         __s1: *const ::core::ffi::c_char,
         __s2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    static mut g_min_log_level: ::core::ffi::c_int;
+    static g_min_log_level: GlobalCell<::core::ffi::c_int>;
     fn lua_cjson_new(l: *mut lua_State) -> ::core::ffi::c_int;
     fn luaopen_mpack(L: *mut lua_State) -> ::core::ffi::c_int;
     fn xfree(ptr: *mut ::core::ffi::c_void);
@@ -104,8 +104,8 @@ extern "C" {
     fn api_clear_error(value: *mut Error);
     fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
     fn aucmd_restbuf(aco: *mut aco_save_T);
-    static mut buffer_handles: Map_int_ptr_t;
-    static mut window_handles: Map_int_ptr_t;
+    static buffer_handles: GlobalCell<Map_int_ptr_t>;
+    static window_handles: GlobalCell<Map_int_ptr_t>;
     fn tv_dict_watcher_notify(
         dict: *mut dict_T,
         key: *const ::core::ffi::c_char,
@@ -139,8 +139,8 @@ extern "C" {
     fn aborting() -> bool;
     fn foldUpdate(wp: *mut win_T, top: linenr_T, bot: linenr_T);
     fn luaopen_base64(L: *mut lua_State) -> ::core::ffi::c_int;
-    static mut curbuf: *mut buf_T;
-    static mut cmdmod: cmdmod_T;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static cmdmod: GlobalCell<cmdmod_T>;
     fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> bool;
     fn nlua_push_typval(
         lstate: *mut lua_State,
@@ -2081,9 +2081,9 @@ unsafe extern "C" fn regex_match_line(mut lstate: *mut lua_State) -> ::core::ffi
         }
     }
     let mut buf: *mut buf_T = (if bufnr != 0 {
-        map_get_int_ptr_t(&raw mut buffer_handles, bufnr as ::core::ffi::c_int)
+        map_get_int_ptr_t(buffer_handles.ptr(), bufnr as ::core::ffi::c_int)
     } else {
-        curbuf as *mut ::core::ffi::c_void
+        curbuf.get() as *mut ::core::ffi::c_void
     }) as *mut buf_T;
     if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
         return luaL_error(
@@ -2636,7 +2636,7 @@ unsafe extern "C" fn nlua_iconv(mut lstate: *mut lua_State) -> ::core::ffi::c_in
 unsafe extern "C" fn nlua_foldupdate(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut window: handle_T = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int) as handle_T;
     let mut win: *mut win_T =
-        map_get_int_ptr_t(&raw mut window_handles, window as ::core::ffi::c_int) as *mut win_T;
+        map_get_int_ptr_t(window_handles.ptr(), window as ::core::ffi::c_int) as *mut win_T;
     if win.is_null() {
         return luaL_error(
             lstate,
@@ -2683,12 +2683,12 @@ unsafe extern "C" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_int {
             let mut v: bool = lua_toboolean(L, -1 as ::core::ffi::c_int) != 0;
             if strequal(b"buf\0".as_ptr() as *const ::core::ffi::c_char, k) {
                 buf = map_get_int_ptr_t(
-                    &raw mut buffer_handles,
+                    buffer_handles.ptr(),
                     luaL_checkinteger(L, -1 as ::core::ffi::c_int) as ::core::ffi::c_int,
                 ) as *mut buf_T;
             } else if strequal(b"win\0".as_ptr() as *const ::core::ffi::c_char, k) {
                 win = map_get_int_ptr_t(
-                    &raw mut window_handles,
+                    window_handles.ptr(),
                     luaL_checkinteger(L, -1 as ::core::ffi::c_int) as ::core::ffi::c_int,
                 ) as *mut win_T;
             } else if strequal(b"log_level\0".as_ptr() as *const ::core::ffi::c_char, k) {
@@ -2780,18 +2780,18 @@ unsafe extern "C" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_int {
     if flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0 {
         flags |= CMOD_SILENT as ::core::ffi::c_int;
     }
-    let save_min_log_level: ::core::ffi::c_int = g_min_log_level;
+    let save_min_log_level: ::core::ffi::c_int = g_min_log_level.get();
     if log_level >= 0 as ::core::ffi::c_int {
-        g_min_log_level = log_level;
+        g_min_log_level.set(log_level);
     }
-    let mut save_cmdmod: cmdmod_T = cmdmod;
+    let mut save_cmdmod: cmdmod_T = cmdmod.get();
     memset(
-        &raw mut cmdmod as *mut ::core::ffi::c_void,
+        cmdmod.ptr() as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<cmdmod_T>(),
     );
-    cmdmod.cmod_flags = flags;
-    apply_cmdmod(&raw mut cmdmod);
+    (*cmdmod.ptr()).cmod_flags = flags;
+    apply_cmdmod(cmdmod.ptr());
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -2864,10 +2864,10 @@ unsafe extern "C" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_int {
         }
     }
     try_leave(&raw mut tstate, &raw mut err);
-    undo_cmdmod(&raw mut cmdmod);
-    cmdmod = save_cmdmod;
+    undo_cmdmod(cmdmod.ptr());
+    cmdmod.set(save_cmdmod);
     if log_level >= 0 as ::core::ffi::c_int {
-        g_min_log_level = save_min_log_level;
+        g_min_log_level.set(save_min_log_level);
     }
     if status != 0 {
         return lua_error(L);

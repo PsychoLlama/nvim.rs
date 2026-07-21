@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -74,8 +75,8 @@ extern "C" {
         clear: TriState,
     );
     fn decor_type_flags(decor: DecorInline) -> uint16_t;
-    static mut curbuf: *mut buf_T;
-    static mut curbuf_splice_pending: ::core::ffi::c_int;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static curbuf_splice_pending: GlobalCell<::core::ffi::c_int>;
     fn marktree_put(
         b: *mut MarkTree,
         key: MTKey,
@@ -2140,8 +2141,8 @@ unsafe extern "C" fn extmark_setraw(
         buf_signcols_count_range(
             buf,
             row1,
-            if ((*curbuf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+            if ((*curbuf.get()).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
+                (*curbuf.get()).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
             } else {
                 row2
             },
@@ -2179,8 +2180,8 @@ unsafe extern "C" fn extmark_setraw(
         buf_signcols_count_range(
             buf,
             row1,
-            if ((*curbuf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+            if ((*curbuf.get()).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
+                (*curbuf.get()).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
             } else {
                 row2
             },
@@ -2791,7 +2792,7 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
         let mut splice: ExtmarkSplice = undo_info.data.splice;
         if undo {
             extmark_splice_impl(
-                curbuf,
+                curbuf.get(),
                 splice.start_row,
                 splice.start_col,
                 splice.start_byte,
@@ -2805,7 +2806,7 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
             );
         } else {
             extmark_splice_impl(
-                curbuf,
+                curbuf.get(),
                 splice.start_row,
                 splice.start_col,
                 splice.start_byte,
@@ -2823,7 +2824,13 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
     {
         let mut pos: ExtmarkSavePos = undo_info.data.savepos;
         if undo as ::core::ffi::c_int != 0 && pos.old_row >= 0 as ::core::ffi::c_int {
-            extmark_setraw(curbuf, pos.mark, pos.old_row, pos.old_col, pos.invalidated);
+            extmark_setraw(
+                curbuf.get(),
+                pos.mark,
+                pos.old_row,
+                pos.old_col,
+                pos.invalidated,
+            );
         }
     } else if undo_info.type_0 as ::core::ffi::c_uint
         == kExtmarkMove as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2831,7 +2838,7 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
         let mut move_0: ExtmarkMove = undo_info.data.move_0;
         if undo {
             extmark_move_region(
-                curbuf,
+                curbuf.get(),
                 move_0.new_row,
                 move_0.new_col as colnr_T,
                 move_0.new_byte,
@@ -2845,7 +2852,7 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
             );
         } else {
             extmark_move_region(
-                curbuf,
+                curbuf.get(),
                 move_0.start_row,
                 move_0.start_col as colnr_T,
                 move_0.start_byte,
@@ -2869,7 +2876,7 @@ pub unsafe extern "C" fn extmark_adjust(
     mut amount_after: linenr_T,
     mut undo: ExtmarkOp,
 ) {
-    if curbuf_splice_pending != 0 {
+    if curbuf_splice_pending.get() != 0 {
         return;
     }
     let mut start_byte: bcount_t = ml_find_line_or_offset(

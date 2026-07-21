@@ -31,11 +31,11 @@ extern "C" {
         nil_value: bool,
         err: *mut Error,
     ) -> bool;
-    static mut decor_state: DecorState;
+    static decor_state: GlobalCell<DecorState>;
     fn decor_check_to_be_deleted();
-    static mut textlock: ::core::ffi::c_int;
-    static mut display_tick: disptick_T;
-    static mut ns_hl_active: NS;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static display_tick: GlobalCell<disptick_T>;
+    static ns_hl_active: GlobalCell<NS>;
     fn hl_check_ns() -> bool;
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_call_ref(
@@ -1874,7 +1874,7 @@ unsafe extern "C" fn decor_provider_invoke(
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
-    textlock += 1;
+    (*textlock.ptr()) += 1;
     let mut ret: Object = nlua_call_ref(
         ref_0,
         name,
@@ -1887,7 +1887,7 @@ unsafe extern "C" fn decor_provider_invoke(
         ::core::ptr::null_mut::<Arena>(),
         &raw mut err,
     );
-    textlock -= 1;
+    (*textlock.ptr()) -= 1;
     let mut provider: *mut DecorProvider =
         (*decor_providers.ptr()).items.offset(provider_idx as isize);
     if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
@@ -2093,7 +2093,7 @@ pub unsafe extern "C" fn decor_providers_start() {
             *args.items.offset(c2rust_fresh9 as isize) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed_12 {
-                    integer: display_tick as ::core::ffi::c_int as Integer,
+                    integer: display_tick.get() as ::core::ffi::c_int as Integer,
                 },
             };
             let mut active: bool = decor_provider_invoke(
@@ -2121,8 +2121,9 @@ pub unsafe extern "C" fn decor_providers_start() {
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
     '_c2rust_label: {
-        if decor_state.current_end == 0 as ::core::ffi::c_int
-            && decor_state.future_begin == decor_state.ranges_i.size as ::core::ffi::c_int
+        if (*decor_state.ptr()).current_end == 0 as ::core::ffi::c_int
+            && (*decor_state.ptr()).future_begin
+                == (*decor_state.ptr()).ranges_i.size as ::core::ffi::c_int
         {
         } else {
             __assert_fail(
@@ -2217,7 +2218,7 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
 ) {
-    decor_state.running_decor_provider = true_0 != 0;
+    (*decor_state.ptr()).running_decor_provider = true_0 != 0;
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
         let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
@@ -2271,7 +2272,7 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
         }
         i = i.wrapping_add(1);
     }
-    decor_state.running_decor_provider = false_0 != 0;
+    (*decor_state.ptr()).running_decor_provider = false_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_range(
@@ -2281,7 +2282,7 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
     mut end_row: ::core::ffi::c_int,
     mut end_col: ::core::ffi::c_int,
 ) {
-    decor_state.running_decor_provider = true_0 != 0;
+    (*decor_state.ptr()).running_decor_provider = true_0 != 0;
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
         let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
@@ -2391,7 +2392,7 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
         }
         i = i.wrapping_add(1);
     }
-    decor_state.running_decor_provider = false_0 != 0;
+    (*decor_state.ptr()).running_decor_provider = false_0 != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
@@ -2422,7 +2423,7 @@ pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
             *args.items.offset(c2rust_fresh24 as isize) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed_12 {
-                    integer: display_tick as int64_t,
+                    integer: display_tick.get() as int64_t,
                 },
             };
             decor_provider_invoke(
@@ -2458,7 +2459,7 @@ pub unsafe extern "C" fn decor_providers_invoke_end() {
             *args.items.offset(c2rust_fresh25 as isize) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed_12 {
-                    integer: display_tick as ::core::ffi::c_int as Integer,
+                    integer: display_tick.get() as ::core::ffi::c_int as Integer,
                 },
             };
             decor_provider_invoke(
@@ -2481,8 +2482,8 @@ pub unsafe extern "C" fn decor_provider_invalidate_hl() {
         (*(*decor_providers.ptr()).items.offset(i as isize)).hl_cached = false_0 != 0;
         i = i.wrapping_add(1);
     }
-    if ns_hl_active != 0 {
-        ns_hl_active = -1 as ::core::ffi::c_int as NS;
+    if ns_hl_active.get() != 0 {
+        ns_hl_active.set(-1 as ::core::ffi::c_int as NS);
         hl_check_ns();
     }
 }

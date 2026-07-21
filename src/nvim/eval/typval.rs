@@ -152,7 +152,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     static gc_first_dict: GlobalCell<*mut dict_T>;
     static gc_first_list: GlobalCell<*mut list_T>;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
@@ -199,9 +199,9 @@ extern "C" {
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut got_int: bool;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static got_int: GlobalCell<bool>;
     fn api_free_luaref(ref_0: LuaRef);
     fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
     fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut ::core::ffi::c_char;
@@ -2731,7 +2731,7 @@ pub unsafe extern "C" fn tv_list_copy(
                 if item.is_null() {
                     break 's_99;
                 }
-                if got_int {
+                if got_int.get() {
                     break 's_99;
                 }
                 let ni: *mut listitem_T = tv_list_item_alloc();
@@ -2913,7 +2913,7 @@ pub unsafe extern "C" fn tv_list_flatten(
     while !item.is_null() && (done as int64_t) < maxitems {
         let mut next: *mut listitem_T = (*item).li_next;
         fast_breakcheck();
-        if got_int {
+        if got_int.get() {
             return;
         }
         if (*item).li_tv.v_type as ::core::ffi::c_uint
@@ -3158,7 +3158,7 @@ unsafe extern "C" fn list_join_inner(
     if !l_.is_null() {
         let mut item: *mut listitem_T = (*l_).lv_first;
         while !item.is_null() {
-            if got_int {
+            if got_int.get() {
                 break;
             }
             let mut s: String_0 = String_0 {
@@ -3186,7 +3186,7 @@ unsafe extern "C" fn list_join_inner(
     }
     ga_grow(gap, sumlen as ::core::ffi::c_int + 2 as ::core::ffi::c_int);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*join_gap).ga_len && !got_int {
+    while i < (*join_gap).ga_len && !got_int.get() {
         if first {
             first = false_0 != 0;
         } else {
@@ -4436,7 +4436,8 @@ pub unsafe extern "C" fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dicti
         &raw mut (*dict).dv_hashtab,
         &raw mut (*item).di_key as *mut ::core::ffi::c_char,
     );
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         semsg(
             gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
             b"tv_dict_item_remove()\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4483,7 +4484,9 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hitodo_ = hitodo_.wrapping_sub(1);
             let di: *mut dictitem_T =
                 (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
@@ -4549,7 +4552,8 @@ pub unsafe extern "C" fn tv_dict_find(
     } else {
         hash_find_len(&raw const (*d).dv_hashtab, key, len as size_t)
     };
-    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+    if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+    {
         return ::core::ptr::null_mut::<dictitem_T>();
     }
     return (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
@@ -4620,7 +4624,9 @@ pub unsafe extern "C" fn tv_dict_to_env(mut denv: *mut dict_T) -> *mut *mut ::co
     let mut varhi_todo_: size_t = (*varhi_ht_).ht_used;
     let mut varhi_: *mut hashitem_T = (*varhi_ht_).ht_array;
     while varhi_todo_ != 0 {
-        if !((*varhi_).hi_key.is_null() || (*varhi_).hi_key == &raw mut hash_removed) {
+        if !((*varhi_).hi_key.is_null()
+            || (*varhi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             varhi_todo_ = varhi_todo_.wrapping_sub(1);
             let var: *mut dictitem_T = (*varhi_)
                 .hi_key
@@ -4934,7 +4940,9 @@ pub unsafe extern "C" fn tv_dict_clear(d: *mut dict_T) {
     let mut hitodo_: size_t = (*hiht_).ht_used;
     let mut hi: *mut hashitem_T = (*hiht_).ht_array;
     while hitodo_ != 0 {
-        if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+        if !((*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hitodo_ = hitodo_.wrapping_sub(1);
             tv_dict_item_free(
                 (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T
@@ -4962,7 +4970,9 @@ pub unsafe extern "C" fn tv_dict_extend(
     let mut hi2todo_: size_t = (*hi2ht_).ht_used;
     let mut hi2: *mut hashitem_T = (*hi2ht_).ht_array;
     while hi2todo_ != 0 {
-        if !((*hi2).hi_key.is_null() || (*hi2).hi_key == &raw mut hash_removed) {
+        if !((*hi2).hi_key.is_null()
+            || (*hi2).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             hi2todo_ = hi2todo_.wrapping_sub(1);
             let di2: *mut dictitem_T =
                 (*hi2).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
@@ -5076,7 +5086,9 @@ pub unsafe extern "C" fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: boo
     let mut di1hi_todo_: size_t = (*di1hi_ht_).ht_used;
     let mut di1hi_: *mut hashitem_T = (*di1hi_ht_).ht_array;
     while di1hi_todo_ != 0 {
-        if !((*di1hi_).hi_key.is_null() || (*di1hi_).hi_key == &raw mut hash_removed) {
+        if !((*di1hi_).hi_key.is_null()
+            || (*di1hi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             di1hi_todo_ = di1hi_todo_.wrapping_sub(1);
             let di1: *mut dictitem_T = (*di1hi_)
                 .hi_key
@@ -5117,13 +5129,15 @@ pub unsafe extern "C" fn tv_dict_copy(
     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
     while dihi_todo_ != 0 {
-        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+        if !((*dihi_).hi_key.is_null()
+            || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
                 .offset(-(17 as ::core::ffi::c_ulong as isize))
                 as *mut dictitem_T;
-            if got_int {
+            if got_int.get() {
                 break;
             }
             let mut new_di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
@@ -5169,7 +5183,7 @@ pub unsafe extern "C" fn tv_dict_copy(
         dihi_ = dihi_.offset(1);
     }
     (*copy).dv_refcount += 1;
-    if got_int {
+    if got_int.get() {
         tv_dict_unref(copy);
         copy = ::core::ptr::null_mut::<dict_T>();
     }
@@ -5181,7 +5195,9 @@ pub unsafe extern "C" fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
     while dihi_todo_ != 0 {
-        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+        if !((*dihi_).hi_key.is_null()
+            || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
@@ -5588,7 +5604,9 @@ unsafe extern "C" fn tv_dict2list(
     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
     while dihi_todo_ != 0 {
-        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+        if !((*dihi_).hi_key.is_null()
+            || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
@@ -6161,7 +6179,9 @@ pub unsafe extern "C" fn tv_item_lock(
                     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
                     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
                     while dihi_todo_ != 0 {
-                        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed)
+                        if !((*dihi_).hi_key.is_null()
+                            || (*dihi_).hi_key
+                                == &raw const hash_removed as *mut ::core::ffi::c_char)
                         {
                             dihi_todo_ = dihi_todo_.wrapping_sub(1);
                             let di: *mut dictitem_T = (*dihi_)
@@ -6534,15 +6554,15 @@ pub unsafe extern "C" fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bo
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
-    let did_emsg_before: ::core::ffi::c_int = did_emsg;
+    let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
     let mut lnum: linenr_T = tv_get_number_chk(tv, ::core::ptr::null_mut::<bool>()) as linenr_T;
     if lnum <= 0 as linenr_T
-        && did_emsg_before == did_emsg
+        && did_emsg_before == did_emsg.get()
         && (*tv).v_type as ::core::ffi::c_uint
             != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut fnum: ::core::ffi::c_int = 0;
-        let fp: *mut pos_T = var2fpos(tv, true_0 != 0, &raw mut fnum, false_0 != 0, curwin);
+        let fp: *mut pos_T = var2fpos(tv, true_0 != 0, &raw mut fnum, false_0 != 0, curwin.get());
         if !fp.is_null() {
             lnum = (*fp).lnum;
         }
@@ -8284,7 +8304,8 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             (*cur_mpsv).data.d.todo
                                 != (*(*cur_mpsv).data.d.dict).dv_hashtab.ht_used;
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }

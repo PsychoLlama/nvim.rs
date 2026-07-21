@@ -38,7 +38,7 @@ extern "C" {
         rettv: *mut typval_T,
     ) -> ::core::ffi::c_int;
     fn get_copyID() -> ::core::ffi::c_int;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn hash_lock(ht: *mut hashtab_T);
     fn hash_unlock(ht: *mut hashtab_T);
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
@@ -125,7 +125,7 @@ extern "C" {
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static mut did_emsg: ::core::ffi::c_int;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_strnicmp(
         s1: *const ::core::ffi::c_char,
@@ -638,7 +638,7 @@ unsafe extern "C" fn filter_map_one(
                 == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             do_cmdline_cmd((*expr).vval.v_string);
-            if did_emsg == 0 {
+            if did_emsg.get() == 0 {
                 retval = OK;
             }
         } else {
@@ -714,7 +714,9 @@ unsafe extern "C" fn filter_map_dict(
     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
     while dihi_todo_ != 0 {
-        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+        if !((*dihi_).hi_key.is_null()
+            || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
@@ -756,7 +758,7 @@ unsafe extern "C" fn filter_map_dict(
                 &raw mut rem,
             );
             tv_clear(get_vim_var_tv(VV_KEY));
-            if r == 0 as ::core::ffi::c_int || did_emsg != 0 {
+            if r == 0 as ::core::ffi::c_int || did_emsg.get() != 0 {
                 tv_clear(&raw mut newtv);
                 break;
             } else if filtermap as ::core::ffi::c_uint
@@ -857,7 +859,7 @@ unsafe extern "C" fn filter_map_blob(
         };
         let mut rem: bool = false;
         if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem) == FAIL
-            || did_emsg != 0
+            || did_emsg.get() != 0
         {
             break;
         }
@@ -942,7 +944,7 @@ unsafe extern "C" fn filter_map_string(
         };
         let mut rem: bool = false;
         if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem) == FAIL
-            || did_emsg != 0
+            || did_emsg.get() != 0
         {
             tv_clear(&raw mut newtv);
             tv_clear(&raw mut tv);
@@ -1046,7 +1048,7 @@ unsafe extern "C" fn filter_map_list(
         {
             break;
         }
-        if did_emsg != 0 {
+        if did_emsg.get() != 0 {
             tv_clear(&raw mut newtv);
             break;
         } else {
@@ -1150,8 +1152,8 @@ unsafe extern "C" fn filter_map(
     };
     prepare_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
     prepare_vimvar(VV_KEY as ::core::ffi::c_int, &raw mut save_key);
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg;
-    did_emsg = false_0;
+    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    did_emsg.set(false_0);
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -1214,7 +1216,7 @@ unsafe extern "C" fn filter_map(
     }
     restore_vimvar(VV_KEY as ::core::ffi::c_int, &raw mut save_key);
     restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
-    did_emsg |= save_did_emsg;
+    (*did_emsg.ptr()) |= save_did_emsg;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_filter(
@@ -1369,7 +1371,9 @@ unsafe extern "C" fn count_dict(
     let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
     let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
     while dihi_todo_ != 0 {
-        if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+        if !((*dihi_).hi_key.is_null()
+            || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key

@@ -595,10 +595,13 @@ fn main() {
         });
     }
 
-    // Pass 1: top-level static mut defs everywhere.
+    // Pass 1: static mut defs everywhere — top-level (exportable) tracked by
+    // name, fn-local ones only counted (they still make the file a target;
+    // an earlier version omitted files whose only static muts are fn-local,
+    // which silently left ~45 of them behind).
     let mut defs: BTreeMap<PathBuf, Vec<(String, bool)>> = BTreeMap::new();
-    for (idx, fd) in files.iter().enumerate() {
-        let _ = idx;
+    let mut local_defs: BTreeMap<PathBuf, usize> = BTreeMap::new();
+    for fd in files.iter() {
         for item in &fd.ast.items {
             if let syn::Item::Static(s) = item {
                 if matches!(s.mutability, syn::StaticMutability::Mut(_)) {
@@ -608,12 +611,24 @@ fn main() {
                 }
             }
         }
+        let mut pre = Prescan::default();
+        pre.visit_file(&fd.ast);
+        if !pre.local_statics.is_empty() {
+            local_defs.insert(fd.rel.clone(), pre.local_statics.len());
+        }
     }
 
     if list {
-        let mut rows: Vec<(usize, String)> = defs
-            .iter()
-            .map(|(rel, v)| (v.len(), rel.display().to_string()))
+        let mut rows: Vec<(usize, String)> = BTreeMap::new()
+            .into_iter()
+            .chain(defs.iter().map(|(rel, v)| (rel.clone(), v.len())))
+            .chain(local_defs.iter().map(|(rel, n)| (rel.clone(), *n)))
+            .fold(BTreeMap::<PathBuf, usize>::new(), |mut acc, (rel, n)| {
+                *acc.entry(rel).or_default() += n;
+                acc
+            })
+            .into_iter()
+            .map(|(rel, n)| (n, rel.display().to_string()))
             .collect();
         rows.sort();
         for (n, rel) in rows {
@@ -623,7 +638,10 @@ fn main() {
     }
 
     let target_files: HashSet<PathBuf> = if all {
-        defs.keys().cloned().collect()
+        defs.keys()
+            .cloned()
+            .chain(local_defs.keys().cloned())
+            .collect()
     } else {
         let set: HashSet<PathBuf> = targets.iter().map(PathBuf::from).collect();
         for t in &set {
@@ -686,9 +704,7 @@ fn main() {
 
         // The GlobalCell type import goes in front of the first item.
         let mut use_lines = String::new();
-        if (rw.converted_defs > 0 || rw.retyped_decls > 0)
-            && !fd.src.contains("global_cell::GlobalCell")
-        {
+        if (rw.converted_defs > 0 || rw.retyped_decls > 0) && !fd.src.contains("::global_cell::") {
             use_lines.push_str("use crate::src::nvim::global_cell::GlobalCell;\n");
         }
         if !use_lines.is_empty() {

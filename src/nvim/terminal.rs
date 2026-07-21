@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use ::c2rust_bitfields;
 extern "C" {
     pub type multiqueue;
@@ -48,8 +48,8 @@ extern "C" {
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
     fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
     fn mh_delete_ptr_t(set: *mut Set_ptr_t, key: *mut ptr_t) -> uint32_t;
-    static mut buffer_handles: Map_int_ptr_t;
-    static mut window_handles: Map_int_ptr_t;
+    static buffer_handles: GlobalCell<Map_int_ptr_t>;
+    static window_handles: GlobalCell<Map_int_ptr_t>;
     fn dict_get_value(
         dict: *mut dict_T,
         key: String_0,
@@ -185,32 +185,32 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn map_execute_lua(may_repeat: bool, discard: bool) -> bool;
     fn paste_repeat(count: ::core::ffi::c_int);
-    static mut mod_mask: ::core::ffi::c_int;
-    static mut vgetc_mod_mask: ::core::ffi::c_int;
-    static mut vgetc_char: ::core::ffi::c_int;
-    static mut redraw_cmdline: bool;
-    static mut redraw_mode: bool;
-    static mut clear_cmdline: bool;
-    static mut mouse_grid: ::core::ffi::c_int;
-    static mut mouse_row: ::core::ffi::c_int;
-    static mut mouse_col: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut exiting: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut restart_edit: ::core::ffi::c_int;
-    static mut mapped_ctrl_c: ::core::ffi::c_int;
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut stop_insert_mode: bool;
-    static mut KeyTyped: bool;
-    static mut must_redraw: ::core::ffi::c_int;
-    static mut got_int: bool;
+    static mod_mask: GlobalCell<::core::ffi::c_int>;
+    static vgetc_mod_mask: GlobalCell<::core::ffi::c_int>;
+    static vgetc_char: GlobalCell<::core::ffi::c_int>;
+    static redraw_cmdline: GlobalCell<bool>;
+    static redraw_mode: GlobalCell<bool>;
+    static clear_cmdline: GlobalCell<bool>;
+    static mouse_grid: GlobalCell<::core::ffi::c_int>;
+    static mouse_row: GlobalCell<::core::ffi::c_int>;
+    static mouse_col: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static exiting: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static restart_edit: GlobalCell<::core::ffi::c_int>;
+    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static stop_insert_mode: GlobalCell<bool>;
+    static KeyTyped: GlobalCell<bool>;
+    static must_redraw: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
     fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    static mut p_bg: *mut ::core::ffi::c_char;
-    static mut tpf_flags: ::core::ffi::c_uint;
+    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
+    static tpf_flags: GlobalCell<::core::ffi::c_uint>;
     fn hl_add_url(attr: ::core::ffi::c_int, url: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn hl_get_term_attr(aep: *mut HlAttrs) -> ::core::ffi::c_int;
     fn hl_combine_attr(
@@ -218,7 +218,7 @@ extern "C" {
         prim_attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn mark_adjust_buf(
         buf: *mut buf_T,
         line1: linenr_T,
@@ -4919,7 +4919,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut terminator: VTermTerminator = (*argv.offset(7 as ::core::ffi::c_int as isize))
         .expose_addr() as intptr_t as VTermTerminator;
     let mut buf: *mut buf_T =
-        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
+        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
         xfree(sequence as *mut ::core::ffi::c_void);
         xfree((*pending_send).items as *mut ::core::ffi::c_void);
@@ -5096,7 +5096,7 @@ unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
     (*(*term).pending.send).items = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut line: ::core::ffi::c_int = row_to_linenr(term, (*term).cursor.row);
     multiqueue_put_event(
-        main_loop.events,
+        (*main_loop.ptr()).events,
         Event {
             handler: Some(
                 emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -5448,8 +5448,8 @@ static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermS
 });
 #[no_mangle]
 pub unsafe extern "C" fn terminal_init() {
-    time_watcher_init(&raw mut main_loop, refresh_timer.ptr(), NULL_0);
-    (*refresh_timer.ptr()).events = multiqueue_new_child(main_loop.events);
+    time_watcher_init(main_loop.ptr(), refresh_timer.ptr(), NULL_0);
+    (*refresh_timer.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
 }
 #[no_mangle]
 pub unsafe extern "C" fn terminal_teardown() {
@@ -5477,7 +5477,7 @@ unsafe extern "C" fn term_may_alloc_scrollback(
     }
     if buf.is_null() {
         buf = map_get_int_ptr_t(
-            &raw mut buffer_handles,
+            buffer_handles.ptr(),
             (*term).buf_handle as ::core::ffi::c_int,
         ) as *mut buf_T;
         if buf.is_null() {
@@ -5653,9 +5653,9 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
     if !(*buf).b_ffname.is_null() {
         buf_set_term_title(buf, (*buf).b_ffname, strlen((*buf).b_ffname));
     }
-    (*curwin).w_onebuf_opt.wo_scb = false_0;
-    (*curwin).w_onebuf_opt.wo_crb = false_0;
-    (*curwin).w_cursor = pos_T {
+    (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
+    (*curwin.get()).w_cursor = pos_T {
         lnum: 1 as linenr_T,
         col: 0 as colnr_T,
         coladd: 0 as colnr_T,
@@ -5715,13 +5715,13 @@ pub unsafe extern "C" fn terminal_close(
     }
     let mut only_destroy: bool = false_0 != 0;
     let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
+        buffer_handles.ptr(),
         (*term).buf_handle as ::core::ffi::c_int,
     ) as *mut buf_T;
     if (*term).closed {
         only_destroy = true_0 != 0;
     } else {
-        if !exiting {
+        if !exiting.get() {
             block_autocmds();
             refresh_terminal(term);
             unblock_autocmds();
@@ -5733,7 +5733,7 @@ pub unsafe extern "C" fn terminal_close(
     } else {
         0 as ::core::ffi::c_int
     };
-    if status == -1 as ::core::ffi::c_int || exiting as ::core::ffi::c_int != 0 {
+    if status == -1 as ::core::ffi::c_int || exiting.get() as ::core::ffi::c_int != 0 {
         (*term).buf_handle = 0 as ::core::ffi::c_int as handle_T;
         if !buf.is_null() {
             (*buf).terminal = ::core::ptr::null_mut::<Terminal>();
@@ -5743,10 +5743,10 @@ pub unsafe extern "C" fn terminal_close(
             (*term).opts.close_cb.expect("non-null function pointer")((*term).opts.data);
         }
     } else if !only_destroy {
-        let mut wp: *mut win_T = if curtab == curtab {
-            firstwin
+        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+            firstwin.get()
         } else {
-            (*curtab).tp_firstwin
+            (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
@@ -5836,7 +5836,7 @@ unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi
     let mut buf_handle: handle_T =
         (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
     let mut buf: *mut buf_T =
-        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
+        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if !buf.is_null() && !(*buf).terminal.is_null() {
         redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
     }
@@ -5880,10 +5880,10 @@ pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
     vterm_get_size((*term).vt, &raw mut curheight, &raw mut curwidth);
     let mut width: uint16_t = 0 as uint16_t;
     let mut height: uint16_t = 0 as uint16_t;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -5940,41 +5940,41 @@ unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
             );
         }
     };
-    (*s).save_curwin_handle = (*curwin).handle;
-    (*s).save_w_p_cul = (*curwin).w_onebuf_opt.wo_cul != 0;
+    (*s).save_curwin_handle = (*curwin.get()).handle;
+    (*s).save_w_p_cul = (*curwin.get()).w_onebuf_opt.wo_cul != 0;
     (*s).save_w_p_culopt = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*s).save_w_p_culopt_flags = (*curwin).w_p_culopt_flags;
-    (*s).save_w_p_cuc = (*curwin).w_onebuf_opt.wo_cuc;
-    (*s).save_w_p_so = (*curwin).w_onebuf_opt.wo_so;
-    (*s).save_w_p_siso = (*curwin).w_onebuf_opt.wo_siso;
-    if (*curwin).w_onebuf_opt.wo_cul != 0
-        && (*curwin).w_p_culopt_flags as ::core::ffi::c_int
+    (*s).save_w_p_culopt_flags = (*curwin.get()).w_p_culopt_flags;
+    (*s).save_w_p_cuc = (*curwin.get()).w_onebuf_opt.wo_cuc;
+    (*s).save_w_p_so = (*curwin.get()).w_onebuf_opt.wo_so;
+    (*s).save_w_p_siso = (*curwin.get()).w_onebuf_opt.wo_siso;
+    if (*curwin.get()).w_onebuf_opt.wo_cul != 0
+        && (*curwin.get()).w_p_culopt_flags as ::core::ffi::c_int
             & kOptCuloptFlagNumber as ::core::ffi::c_int
             != 0
     {
         if !strequal(
-            (*curwin).w_onebuf_opt.wo_culopt,
+            (*curwin.get()).w_onebuf_opt.wo_culopt,
             b"number\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
-            (*s).save_w_p_culopt = (*curwin).w_onebuf_opt.wo_culopt;
-            (*curwin).w_onebuf_opt.wo_culopt =
+            (*s).save_w_p_culopt = (*curwin.get()).w_onebuf_opt.wo_culopt;
+            (*curwin.get()).w_onebuf_opt.wo_culopt =
                 xstrdup(b"number\0".as_ptr() as *const ::core::ffi::c_char);
         }
-        (*curwin).w_p_culopt_flags = kOptCuloptFlagNumber as ::core::ffi::c_int as uint8_t;
+        (*curwin.get()).w_p_culopt_flags = kOptCuloptFlagNumber as ::core::ffi::c_int as uint8_t;
     } else {
-        (*curwin).w_onebuf_opt.wo_cul = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_cul = false_0;
     }
-    (*curwin).w_onebuf_opt.wo_cuc = false_0;
-    (*curwin).w_onebuf_opt.wo_so = 0 as OptInt;
-    (*curwin).w_onebuf_opt.wo_siso = 0 as OptInt;
-    if (*curwin).w_onebuf_opt.wo_cuc != (*s).save_w_p_cuc {
-        redraw_later(curwin, UPD_SOME_VALID as ::core::ffi::c_int);
-    } else if (*curwin).w_onebuf_opt.wo_cul != (*s).save_w_p_cul as ::core::ffi::c_int
-        || (*curwin).w_onebuf_opt.wo_cul != 0
-            && (*curwin).w_p_culopt_flags as ::core::ffi::c_int
+    (*curwin.get()).w_onebuf_opt.wo_cuc = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_so = 0 as OptInt;
+    (*curwin.get()).w_onebuf_opt.wo_siso = 0 as OptInt;
+    if (*curwin.get()).w_onebuf_opt.wo_cuc != (*s).save_w_p_cuc {
+        redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
+    } else if (*curwin.get()).w_onebuf_opt.wo_cul != (*s).save_w_p_cul as ::core::ffi::c_int
+        || (*curwin.get()).w_onebuf_opt.wo_cul != 0
+            && (*curwin.get()).w_p_culopt_flags as ::core::ffi::c_int
                 != (*s).save_w_p_culopt_flags as ::core::ffi::c_int
     {
-        redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
@@ -5992,7 +5992,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
         }
     };
     let wp: *mut win_T = map_get_int_ptr_t(
-        &raw mut window_handles,
+        window_handles.ptr(),
         (*s).save_curwin_handle as ::core::ffi::c_int,
     ) as *mut win_T;
     '_end: {
@@ -6000,7 +6000,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
             winopts = ::core::ptr::null_mut::<winopt_T>();
             if (*(*wp).w_buffer).handle != (*(*s).term).buf_handle {
                 let mut buf: *mut buf_T = map_get_int_ptr_t(
-                    &raw mut buffer_handles,
+                    buffer_handles.ptr(),
                     (*(*s).term).buf_handle as ::core::ffi::c_int,
                 ) as *mut buf_T;
                 if buf.is_null() {
@@ -6051,7 +6051,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn terminal_enter() -> bool {
-    let mut buf: *mut buf_T = curbuf;
+    let mut buf: *mut buf_T = curbuf.get();
     '_c2rust_label: {
         if !(*buf).terminal.is_null() {
         } else {
@@ -6084,13 +6084,13 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     }];
     (*(&raw mut s as *mut TerminalState)).term = (*buf).terminal;
     (*(&raw mut s as *mut TerminalState)).cursor_visible = true_0 != 0;
-    stop_insert_mode = false_0 != 0;
+    stop_insert_mode.set(false_0 != 0);
     terminal_check_size((*(&raw mut s as *mut TerminalState)).term);
-    let mut save_state: ::core::ffi::c_int = State;
-    (*(&raw mut s as *mut TerminalState)).save_rd = RedrawingDisabled;
-    State = MODE_TERMINAL as ::core::ffi::c_int;
-    mapped_ctrl_c |= MODE_TERMINAL as ::core::ffi::c_int;
-    RedrawingDisabled = false_0;
+    let mut save_state: ::core::ffi::c_int = State.get();
+    (*(&raw mut s as *mut TerminalState)).save_rd = RedrawingDisabled.get();
+    State.set(MODE_TERMINAL as ::core::ffi::c_int);
+    (*mapped_ctrl_c.ptr()) |= MODE_TERMINAL as ::core::ffi::c_int;
+    RedrawingDisabled.set(false_0);
     set_terminal_winopts(&raw mut s as *mut TerminalState);
     (*(*(&raw mut s as *mut TerminalState)).term).pending.cursor = true_0 != 0;
     adjust_topline_cursor(
@@ -6101,7 +6101,7 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     showmode();
     ui_cursor_shape();
     terminal_focus((*(&raw mut s as *mut TerminalState)).term, true_0 != 0);
-    (*curbuf).b_last_changedtick_i = buf_get_changedtick(curbuf);
+    (*curbuf.get()).b_last_changedtick_i = buf_get_changedtick(curbuf.get());
     (*(*(&raw mut s as *mut TerminalState)).term).refcount =
         (*(*(&raw mut s as *mut TerminalState)).term)
             .refcount
@@ -6111,7 +6111,7 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     may_trigger_modechanged();
     (*(*(&raw mut s as *mut TerminalState)).term).refcount =
@@ -6130,23 +6130,23 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
             as state_check_callback;
     state_enter(&raw mut (*(&raw mut s as *mut TerminalState)).state);
     if !(*(&raw mut s as *mut TerminalState)).got_bsl_o {
-        restart_edit = 0 as ::core::ffi::c_int;
+        restart_edit.set(0 as ::core::ffi::c_int);
     }
-    State = save_state;
-    RedrawingDisabled = (*(&raw mut s as *mut TerminalState)).save_rd;
+    State.set(save_state);
+    RedrawingDisabled.set((*(&raw mut s as *mut TerminalState)).save_rd);
     if !(*(&raw mut s as *mut TerminalState)).cursor_visible {
         ui_busy_stop();
     }
     parse_shape_opt(SHAPE_CURSOR);
     unset_terminal_winopts(&raw mut s as *mut TerminalState);
     terminal_focus((*(&raw mut s as *mut TerminalState)).term, false_0 != 0);
-    (*curbuf).b_last_changedtick = buf_get_changedtick(curbuf);
-    if (*curbuf).terminal == (*(&raw mut s as *mut TerminalState)).term
+    (*curbuf.get()).b_last_changedtick = buf_get_changedtick(curbuf.get());
+    if (*curbuf.get()).terminal == (*(&raw mut s as *mut TerminalState)).term
         && !(*(&raw mut s as *mut TerminalState)).close
     {
         terminal_check_cursor();
     }
-    if restart_edit != 0 {
+    if restart_edit.get() != 0 {
         showmode();
     } else {
         unshowmode(true_0 != 0);
@@ -6163,7 +6163,7 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     if (*(&raw mut s as *mut TerminalState)).close {
         (*(*(&raw mut s as *mut TerminalState)).term).refcount =
@@ -6191,42 +6191,46 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     return (*(&raw mut s as *mut TerminalState)).got_bsl_o;
 }
 unsafe extern "C" fn terminal_check_cursor() {
-    let mut term: *mut Terminal = (*curbuf).terminal;
-    (*curwin).w_cursor.lnum =
-        if (*curbuf).b_ml.ml_line_count < row_to_linenr(term, (*term).cursor.row) as linenr_T {
-            (*curbuf).b_ml.ml_line_count
-        } else {
-            row_to_linenr(term, (*term).cursor.row) as linenr_T
-        };
-    let topline: linenr_T = if (*curbuf).b_ml.ml_line_count - (*curwin).w_view_height as linenr_T
+    let mut term: *mut Terminal = (*curbuf.get()).terminal;
+    (*curwin.get()).w_cursor.lnum = if (*curbuf.get()).b_ml.ml_line_count
+        < row_to_linenr(term, (*term).cursor.row) as linenr_T
+    {
+        (*curbuf.get()).b_ml.ml_line_count
+    } else {
+        row_to_linenr(term, (*term).cursor.row) as linenr_T
+    };
+    let topline: linenr_T = if (*curbuf.get()).b_ml.ml_line_count
+        - (*curwin.get()).w_view_height as linenr_T
         + 1 as linenr_T
         > 1 as linenr_T
     {
-        (*curbuf).b_ml.ml_line_count - (*curwin).w_view_height as linenr_T + 1 as linenr_T
+        (*curbuf.get()).b_ml.ml_line_count - (*curwin.get()).w_view_height as linenr_T
+            + 1 as linenr_T
     } else {
         1 as linenr_T
     };
-    if topline != (*curwin).w_topline {
-        set_topline(curwin, topline);
+    if topline != (*curwin.get()).w_topline {
+        set_topline(curwin.get(), topline);
     }
     if (*term).suspended as ::core::ffi::c_int != 0
-        && State & MODE_TERMINAL as ::core::ffi::c_int != 0
+        && State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
     {
-        (*curwin).w_cursor = pos_T {
-            lnum: (*curbuf).b_ml.ml_line_count,
+        (*curwin.get()).w_cursor = pos_T {
+            lnum: (*curbuf.get()).b_ml.ml_line_count,
             col: 0,
             coladd: 0,
         };
     } else {
-        let mut off: ::core::ffi::c_int = if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+        let mut off: ::core::ffi::c_int = if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+        {
             0 as ::core::ffi::c_int
-        } else if (*curwin).w_onebuf_opt.wo_rl != 0 {
+        } else if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
             1 as ::core::ffi::c_int
         } else {
             -1 as ::core::ffi::c_int
         };
         coladvance(
-            curwin,
+            curwin.get(),
             if 0 as ::core::ffi::c_int > (*term).cursor.col + off {
                 0 as colnr_T
             } else {
@@ -6236,14 +6240,14 @@ unsafe extern "C" fn terminal_check_cursor() {
     };
 }
 unsafe extern "C" fn terminal_check_focus(s: *mut TerminalState) -> bool {
-    if (*curbuf).terminal.is_null() {
+    if (*curbuf.get()).terminal.is_null() {
         return false_0 != 0;
     }
-    if (*s).save_curwin_handle != (*curwin).handle {
+    if (*s).save_curwin_handle != (*curwin.get()).handle {
         unset_terminal_winopts(s);
         set_terminal_winopts(s);
     }
-    if (*s).term != (*curbuf).terminal {
+    if (*s).term != (*curbuf.get()).terminal {
         terminal_focus((*s).term, false_0 != 0);
         if (*s).close {
             (*(*s).term).destroy = true_0 != 0;
@@ -6253,7 +6257,7 @@ unsafe extern "C" fn terminal_check_focus(s: *mut TerminalState) -> bool {
                 .expect("non-null function pointer")((*(*s).term).opts.data);
             (*s).close = false_0 != 0;
         }
-        (*s).term = (*curbuf).terminal;
+        (*s).term = (*curbuf.get()).terminal;
         (*(*s).term).pending.cursor = true_0 != 0;
         invalidate_terminal(
             (*s).term,
@@ -6268,7 +6272,8 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
     let s: *mut TerminalState = state as *mut TerminalState;
     '_c2rust_label: {
         if !(*s).close
-            || (*(*s).term).buf_handle == 0 as ::core::ffi::c_int && (*s).term != (*curbuf).terminal
+            || (*(*s).term).buf_handle == 0 as ::core::ffi::c_int
+                && (*s).term != (*curbuf.get()).terminal
         {
         } else {
             __assert_fail(
@@ -6280,24 +6285,24 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
             );
         }
     };
-    if stop_insert_mode as ::core::ffi::c_int != 0 || !terminal_check_focus(s) {
+    if stop_insert_mode.get() as ::core::ffi::c_int != 0 || !terminal_check_focus(s) {
         return 0 as ::core::ffi::c_int;
     }
     terminal_check_refresh();
     terminal_check_cursor();
-    validate_cursor(curwin);
+    validate_cursor(curwin.get());
     (*(*s).term).refcount = (*(*s).term).refcount.wrapping_add(1);
     if has_event(EVENT_TEXTCHANGEDT) as ::core::ffi::c_int != 0
-        && (*curbuf).b_last_changedtick_i != buf_get_changedtick(curbuf)
+        && (*curbuf.get()).b_last_changedtick_i != buf_get_changedtick(curbuf.get())
     {
         apply_autocmds(
             EVENT_TEXTCHANGEDT,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
         );
-        (*curbuf).b_last_changedtick_i = buf_get_changedtick(curbuf);
+        (*curbuf.get()).b_last_changedtick_i = buf_get_changedtick(curbuf.get());
     }
     may_trigger_win_scrolled_resized();
     (*(*s).term).refcount = (*(*s).term).refcount.wrapping_sub(1);
@@ -6308,15 +6313,15 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
         return 0 as ::core::ffi::c_int;
     }
     terminal_check_cursor();
-    validate_cursor(curwin);
+    validate_cursor(curwin.get());
     show_cursor_info_later(false_0 != 0);
-    if must_redraw != 0 {
+    if must_redraw.get() != 0 {
         update_screen();
     } else {
         redraw_statuslines();
-        if clear_cmdline as ::core::ffi::c_int != 0
-            || redraw_cmdline as ::core::ffi::c_int != 0
-            || redraw_mode as ::core::ffi::c_int != 0
+        if clear_cmdline.get() as ::core::ffi::c_int != 0
+            || redraw_cmdline.get() as ::core::ffi::c_int != 0
+            || redraw_mode.get() as ::core::ffi::c_int != 0
         {
             showmode();
         }
@@ -6331,7 +6336,7 @@ unsafe extern "C" fn terminal_execute(
     mut key: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut s: *mut TerminalState = state as *mut TerminalState;
-    let mut tmp_mod_mask: ::core::ffi::c_int = mod_mask;
+    let mut tmp_mod_mask: ::core::ffi::c_int = mod_mask.get();
     let mut mod_key: ::core::ffi::c_int = merge_modifiers(key, &raw mut tmp_mod_mask);
     's_214: {
         'c_47026: {
@@ -6395,12 +6400,12 @@ unsafe extern "C" fn terminal_execute(
             }
             if (*s).got_bsl {
                 (*s).got_bsl_o = true_0 != 0;
-                restart_edit = 'I' as ::core::ffi::c_int;
+                restart_edit.set('I' as ::core::ffi::c_int);
                 return 0 as ::core::ffi::c_int;
             }
         }
         if mod_key == Ctrl_C {
-            got_int = false_0 != 0;
+            got_int.set(false_0 != 0);
         }
         if mod_key == Ctrl_BSL && !(*s).got_bsl {
             (*s).got_bsl = true_0 != 0;
@@ -6425,7 +6430,7 @@ unsafe extern "C" fn terminal_execute(
 pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
     let mut term: *mut Terminal = *termpp;
     let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
+        buffer_handles.ptr(),
         (*term).buf_handle as ::core::ffi::c_int,
     ) as *mut buf_T;
     if !buf.is_null() {
@@ -6545,15 +6550,15 @@ unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
             }
         }
     }
-    return tpf_flags & flag != 0;
+    return tpf_flags.get() & flag != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
     if (*term).streamed_paste as ::core::ffi::c_int != streamed as ::core::ffi::c_int {
         if streamed {
-            vterm_keyboard_start_paste((*(*curbuf).terminal).vt);
+            vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
         } else {
-            vterm_keyboard_end_paste((*(*curbuf).terminal).vt);
+            vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
         }
     }
     (*term).streamed_paste = streamed;
@@ -6567,8 +6572,8 @@ pub unsafe extern "C" fn terminal_paste(
     if y_size == 0 as size_t {
         return;
     }
-    if !(*(*curbuf).terminal).streamed_paste {
-        vterm_keyboard_start_paste((*(*curbuf).terminal).vt);
+    if !(*(*curbuf.get()).terminal).streamed_paste {
+        vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
     }
     let mut buff_len: size_t = (*y_array.offset(0 as ::core::ffi::c_int as isize)).size;
     let mut buff: *mut ::core::ffi::c_char = xmalloc(buff_len) as *mut ::core::ffi::c_char;
@@ -6578,7 +6583,7 @@ pub unsafe extern "C" fn terminal_paste(
         while j < y_size {
             if j != 0 {
                 terminal_send(
-                    (*curbuf).terminal,
+                    (*curbuf.get()).terminal,
                     b"\n\0".as_ptr() as *const ::core::ffi::c_char,
                     1 as size_t,
                 );
@@ -6603,14 +6608,18 @@ pub unsafe extern "C" fn terminal_paste(
                 }
                 src = src.offset(len as isize);
             }
-            terminal_send((*curbuf).terminal, buff, dst.offset_from(buff) as size_t);
+            terminal_send(
+                (*curbuf.get()).terminal,
+                buff,
+                dst.offset_from(buff) as size_t,
+            );
             j = j.wrapping_add(1);
         }
         i += 1;
     }
     xfree(buff as *mut ::core::ffi::c_void);
-    if !(*(*curbuf).terminal).streamed_paste {
-        vterm_keyboard_end_paste((*(*curbuf).terminal).vt);
+    if !(*(*curbuf.get()).terminal).streamed_paste {
+        vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
     }
 }
 unsafe extern "C" fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::ffi::c_int) {
@@ -6626,13 +6635,13 @@ unsafe extern "C" fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::f
     }
 }
 unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
-    if exiting {
+    if exiting.get() {
         return;
     }
     let mut buf_handle: handle_T =
         (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
     let mut buf: *mut buf_T =
-        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
+        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
         return;
     }
@@ -6717,7 +6726,7 @@ pub unsafe extern "C" fn terminal_receive(
         (*term).invalid_start = 0 as ::core::ffi::c_int;
         (*term).invalid_end = height;
         multiqueue_put_event(
-            main_loop.events,
+            (*main_loop.ptr()).events,
             Event {
                 handler: Some(
                     on_sync_flush as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -7074,7 +7083,7 @@ unsafe extern "C" fn term_settermprop(
         }
         4 => {
             let mut buf: *mut buf_T = map_get_int_ptr_t(
-                &raw mut buffer_handles,
+                buffer_handles.ptr(),
                 (*term).buf_handle as ::core::ffi::c_int,
             ) as *mut buf_T;
             let mut frag: VTermStringFragment = (*val).string;
@@ -7150,7 +7159,7 @@ unsafe extern "C" fn term_theme(
     mut dark: *mut bool,
     mut _data: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
-    *dark = *p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
+    *dark = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
     return 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn term_sb_push(
@@ -7389,7 +7398,7 @@ unsafe extern "C" fn term_selection_set(
             (*term).selection.size,
         ) as *mut ::core::ffi::c_char;
         multiqueue_put_event(
-            main_loop.events,
+            (*main_loop.ptr()).events,
             Event {
                 handler: Some(
                     term_clipboard_set as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -7415,23 +7424,23 @@ unsafe extern "C" fn convert_modifiers(
     mut key: *mut ::core::ffi::c_int,
     mut statep: *mut VTermModifier,
 ) {
-    if mod_mask & MOD_MASK_SHIFT != 0 {
+    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
         *statep = (*statep as ::core::ffi::c_uint
             | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
             as VTermModifier;
     }
-    if mod_mask & MOD_MASK_CTRL != 0 {
+    if mod_mask.get() & MOD_MASK_CTRL != 0 {
         *statep = (*statep as ::core::ffi::c_uint
             | VTERM_MOD_CTRL as ::core::ffi::c_int as ::core::ffi::c_uint)
             as VTermModifier;
-        if mod_mask & MOD_MASK_SHIFT == 0
+        if mod_mask.get() & MOD_MASK_SHIFT == 0
             && *key >= 'A' as ::core::ffi::c_int
             && *key <= 'Z' as ::core::ffi::c_int
         {
             *key += 'a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int;
         }
     }
-    if mod_mask & MOD_MASK_ALT != 0 {
+    if mod_mask.get() & MOD_MASK_ALT != 0 {
         *statep = (*statep as ::core::ffi::c_uint
             | VTERM_MOD_ALT as ::core::ffi::c_int as ::core::ffi::c_uint)
             as VTermModifier;
@@ -7758,9 +7767,9 @@ unsafe extern "C" fn mouse_action(
 }
 unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -> bool {
     let mut offset: ::core::ffi::c_int = 0;
-    let mut row: ::core::ffi::c_int = mouse_row;
-    let mut col: ::core::ffi::c_int = mouse_col;
-    let mut grid: ::core::ffi::c_int = mouse_grid;
+    let mut row: ::core::ffi::c_int = mouse_row.get();
+    let mut col: ::core::ffi::c_int = mouse_col.get();
+    let mut grid: ::core::ffi::c_int = mouse_grid.get();
     let mut mouse_win: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
     if !mouse_win.is_null() {
         offset = 0;
@@ -7871,9 +7880,9 @@ unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ff
             || c == -(253 as ::core::ffi::c_int
                 + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         {
-            let mut save_curwin: *mut win_T = curwin;
-            curwin = mouse_win;
-            curbuf = (*curwin).w_buffer;
+            let mut save_curwin: *mut win_T = curwin.get();
+            curwin.set(mouse_win);
+            curbuf.set((*curwin.get()).w_buffer);
             let mut cap: cmdarg_T = cmdarg_T {
                 oap: ::core::ptr::null_mut::<oparg_T>(),
                 prechar: 0,
@@ -7947,12 +7956,12 @@ unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ff
                 }
             }
             do_mousescroll(&raw mut cap);
-            (*curwin).w_redr_status = true_0 != 0;
-            curwin = save_curwin;
-            curbuf = (*curwin).w_buffer;
+            (*curwin.get()).w_redr_status = true_0 != 0;
+            curwin.set(save_curwin);
+            curbuf.set((*curwin.get()).w_buffer);
             redraw_later(mouse_win, UPD_NOT_VALID as ::core::ffi::c_int);
             invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-            return mouse_win == curwin;
+            return mouse_win == curwin.get();
         }
     }
     if c == -(253 as ::core::ffi::c_int
@@ -7964,8 +7973,9 @@ unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ff
     {
         return false_0 != 0;
     }
-    let mut len: ::core::ffi::c_int = ins_char_typebuf(vgetc_char, vgetc_mod_mask, true_0 != 0);
-    if KeyTyped {
+    let mut len: ::core::ffi::c_int =
+        ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true_0 != 0);
+    if KeyTyped.get() {
         ungetchars(len);
     }
     return true_0 != 0;
@@ -8079,7 +8089,7 @@ pub unsafe extern "C" fn terminal_check_refresh() {
 }
 unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
     let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
+        buffer_handles.ptr(),
         (*term).buf_handle as ::core::ffi::c_int,
     ) as *mut buf_T;
     if buf.is_null() {
@@ -8093,10 +8103,10 @@ unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
         (*buf).b_ml.ml_line_count as ::core::ffi::c_int - ml_before as ::core::ffi::c_int;
     adjust_topline_cursor(term, buf, ml_added);
     if resized {
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab {
-                firstwin
+            let mut wp: *mut win_T = if tp == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp).tp_firstwin
             };
@@ -8110,7 +8120,7 @@ unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
             tp = (*tp).tp_next as *mut tabpage_T;
         }
     }
-    multiqueue_move_events(main_loop.events, (*term).pending.events);
+    multiqueue_move_events((*main_loop.ptr()).events, (*term).pending.events);
 }
 unsafe extern "C" fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible: *mut bool) {
     if !is_focused(term) {
@@ -8162,7 +8172,7 @@ unsafe extern "C" fn refresh_timer_cb(
     mut _data: *mut ::core::ffi::c_void,
 ) {
     refresh_pending.set(false_0 != 0);
-    if exiting {
+    if exiting.get() {
         return;
     }
     block_autocmds();
@@ -8379,16 +8389,16 @@ unsafe extern "C" fn adjust_topline_cursor(
     mut added: ::core::ffi::c_int,
 ) {
     let mut ml_end: linenr_T = (*buf).b_ml.ml_line_count;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
-                if wp == curwin && is_focused(term) as ::core::ffi::c_int != 0 {
+                if wp == curwin.get() && is_focused(term) as ::core::ffi::c_int != 0 {
                     terminal_check_cursor();
                 } else {
                     let mut following: bool = ml_end == (*wp).w_cursor.lnum + added as linenr_T;
@@ -8448,7 +8458,8 @@ unsafe extern "C" fn linenr_to_row(
     return linenr - (*term).sb_current as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn is_focused(mut term: *mut Terminal) -> bool {
-    return State & MODE_TERMINAL as ::core::ffi::c_int != 0 && (*curbuf).terminal == term;
+    return State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
+        && (*curbuf.get()).terminal == term;
 }
 unsafe extern "C" fn get_config_string(
     mut buf: *mut buf_T,

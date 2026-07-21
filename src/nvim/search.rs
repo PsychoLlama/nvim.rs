@@ -79,22 +79,22 @@ extern "C" {
         backward: bool,
         include_space: bool,
     ) -> ::core::ffi::c_int;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_def: *mut ::core::ffi::c_char;
-    static mut p_inc: *mut ::core::ffi::c_char;
-    static mut fdo_flags: ::core::ffi::c_uint;
-    static mut p_hls: ::core::ffi::c_int;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut p_js: ::core::ffi::c_int;
-    static mut p_mat: OptInt;
-    static mut p_msc: OptInt;
-    static mut p_ri: ::core::ffi::c_int;
-    static mut p_so: OptInt;
-    static mut p_sel: *mut ::core::ffi::c_char;
-    static mut p_siso: OptInt;
-    static mut p_scs: ::core::ffi::c_int;
-    static mut p_verbose: OptInt;
-    static mut p_ws: ::core::ffi::c_int;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_def: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_inc: GlobalCell<*mut ::core::ffi::c_char>;
+    static fdo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_hls: GlobalCell<::core::ffi::c_int>;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static p_js: GlobalCell<::core::ffi::c_int>;
+    static p_mat: GlobalCell<OptInt>;
+    static p_msc: GlobalCell<OptInt>;
+    static p_ri: GlobalCell<::core::ffi::c_int>;
+    static p_so: GlobalCell<OptInt>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_siso: GlobalCell<OptInt>;
+    static p_scs: GlobalCell<::core::ffi::c_int>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_ws: GlobalCell<::core::ffi::c_int>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -137,7 +137,7 @@ extern "C" {
     static e_patnotf2: [::core::ffi::c_char; 0];
     static top_bot_msg: [::core::ffi::c_char; 0];
     static bot_top_msg: [::core::ffi::c_char; 0];
-    static mut msg_ext_overwrite: bool;
+    static msg_ext_overwrite: GlobalCell<bool>;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
     fn msg_strtrunc(
         s: *const ::core::ffi::c_char,
@@ -228,36 +228,36 @@ extern "C" {
     fn foldOpenCursor();
     fn char_avail() -> bool;
     fn is_pos_in_string(line: *const ::core::ffi::c_char, col: colnr_T) -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut dollar_vcol: colnr_T;
-    static mut msg_row: ::core::ffi::c_int;
-    static mut msg_scrolled: ::core::ffi::c_int;
-    static mut msg_nowait: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut msg_hist_off: bool;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut rc_did_emsg: bool;
-    static mut search_match_lines: linenr_T;
-    static mut search_match_endcol: colnr_T;
-    static mut no_smartcase: bool;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut sc_col: ::core::ffi::c_int;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut VIsual_mode: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut cmd_silent: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut KeyTyped: bool;
-    static mut KeyStuffed: ::core::ffi::c_int;
-    static mut got_int: bool;
-    static mut searchcmdlen: ::core::ffi::c_int;
-    static mut g_do_tagpreview: ::core::ffi::c_int;
-    static mut no_hlsearch: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static dollar_vcol: GlobalCell<colnr_T>;
+    static msg_row: GlobalCell<::core::ffi::c_int>;
+    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
+    static msg_nowait: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static msg_hist_off: GlobalCell<bool>;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static rc_did_emsg: GlobalCell<bool>;
+    static search_match_lines: GlobalCell<linenr_T>;
+    static search_match_endcol: GlobalCell<colnr_T>;
+    static no_smartcase: GlobalCell<bool>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static sc_col: GlobalCell<::core::ffi::c_int>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static cmd_silent: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static KeyTyped: GlobalCell<bool>;
+    static KeyStuffed: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
+    static searchcmdlen: GlobalCell<::core::ffi::c_int>;
+    static g_do_tagpreview: GlobalCell<::core::ffi::c_int>;
+    static no_hlsearch: GlobalCell<bool>;
     fn ctrl_x_mode_not_default() -> bool;
     fn compl_status_adding() -> bool;
     fn compl_status_sol() -> bool;
@@ -2725,7 +2725,7 @@ pub unsafe extern "C" fn search_regcomp(
     mut options: ::core::ffi::c_int,
     mut regmatch: *mut regmmatch_T,
 ) -> ::core::ffi::c_int {
-    rc_did_emsg = false_0 != 0;
+    rc_did_emsg.set(false_0 != 0);
     let mut magic: ::core::ffi::c_int = magic_isset() as ::core::ffi::c_int;
     if pat.is_null() || *pat as ::core::ffi::c_int == NUL {
         let mut i: ::core::ffi::c_int = 0;
@@ -2740,13 +2740,13 @@ pub unsafe extern "C" fn search_regcomp(
             } else {
                 emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
             }
-            rc_did_emsg = true_0 != 0;
+            rc_did_emsg.set(true_0 != 0);
             return FAIL;
         }
         pat = (*spats.ptr())[i as usize].pat;
         patlen = (*spats.ptr())[i as usize].patlen;
         magic = (*spats.ptr())[i as usize].magic as ::core::ffi::c_int;
-        no_smartcase = (*spats.ptr())[i as usize].no_scs;
+        no_smartcase.set((*spats.ptr())[i as usize].no_scs);
     } else if options & SEARCH_HIS as ::core::ffi::c_int != 0 {
         add_to_history(
             HIST_SEARCH as ::core::ffi::c_int,
@@ -2760,8 +2760,8 @@ pub unsafe extern "C" fn search_regcomp(
         *used_pat = pat;
     }
     xfree(mr_pattern.get() as *mut ::core::ffi::c_void);
-    if (*curwin).w_onebuf_opt.wo_rl != 0
-        && *(*curwin).w_onebuf_opt.wo_rlc as ::core::ffi::c_int == 's' as ::core::ffi::c_int
+    if (*curwin.get()).w_onebuf_opt.wo_rl != 0
+        && *(*curwin.get()).w_onebuf_opt.wo_rlc as ::core::ffi::c_int == 's' as ::core::ffi::c_int
     {
         mr_pattern.set(reverse_text(pat));
     } else {
@@ -2769,7 +2769,8 @@ pub unsafe extern "C" fn search_regcomp(
     }
     mr_patternlen.set(patlen);
     if options & SEARCH_KEEP as ::core::ffi::c_int == 0
-        && cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int
+            == 0 as ::core::ffi::c_int
     {
         if pat_save == RE_SEARCH as ::core::ffi::c_int || pat_save == RE_BOTH as ::core::ffi::c_int
         {
@@ -2812,11 +2813,11 @@ pub unsafe extern "C" fn save_re_pat(
     (*spats.ptr())[idx as usize].pat = xstrnsave(pat, patlen);
     (*spats.ptr())[idx as usize].patlen = patlen;
     (*spats.ptr())[idx as usize].magic = magic != 0;
-    (*spats.ptr())[idx as usize].no_scs = no_smartcase;
+    (*spats.ptr())[idx as usize].no_scs = no_smartcase.get();
     (*spats.ptr())[idx as usize].timestamp = os_time();
     (*spats.ptr())[idx as usize].additional_data = ::core::ptr::null_mut::<AdditionalData>();
     last_idx.set(idx);
-    if p_hls != 0 {
+    if p_hls.get() != 0 {
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
     }
     set_no_hlsearch(false_0 != 0);
@@ -2856,7 +2857,7 @@ pub unsafe extern "C" fn save_search_patterns() {
         saved_mr_patternlen.set(mr_patternlen.get());
     }
     saved_spats_last_idx.set(last_idx.get());
-    saved_spats_no_hlsearch.set(no_hlsearch);
+    saved_spats_no_hlsearch.set(no_hlsearch.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_search_patterns() {
@@ -2928,7 +2929,7 @@ pub unsafe extern "C" fn save_last_search_pattern() {
             (*spats.ptr())[RE_SEARCH as ::core::ffi::c_int as usize].patlen;
     }
     saved_last_idx.set(last_idx.get());
-    saved_no_hlsearch.set(no_hlsearch);
+    saved_no_hlsearch.set(no_hlsearch.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn restore_last_search_pattern() {
@@ -2952,12 +2953,12 @@ pub unsafe extern "C" fn restore_last_search_pattern() {
     set_no_hlsearch(saved_no_hlsearch.get());
 }
 unsafe extern "C" fn save_incsearch_state() {
-    saved_search_match_endcol.set(search_match_endcol);
-    saved_search_match_lines.set(search_match_lines);
+    saved_search_match_endcol.set(search_match_endcol.get());
+    saved_search_match_lines.set(search_match_lines.get());
 }
 unsafe extern "C" fn restore_incsearch_state() {
-    search_match_endcol = saved_search_match_endcol.get();
-    search_match_lines = saved_search_match_lines.get();
+    search_match_endcol.set(saved_search_match_endcol.get());
+    search_match_lines.set(saved_search_match_lines.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn last_search_pattern() -> *mut ::core::ffi::c_char {
@@ -2969,7 +2970,7 @@ pub unsafe extern "C" fn last_search_pattern_len() -> size_t {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ignorecase(mut pat: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return ignorecase_opt(pat, p_ic, p_scs);
+    return ignorecase_opt(pat, p_ic.get(), p_scs.get());
 }
 #[no_mangle]
 pub unsafe extern "C" fn ignorecase_opt(
@@ -2979,13 +2980,13 @@ pub unsafe extern "C" fn ignorecase_opt(
 ) -> ::core::ffi::c_int {
     let mut ic: ::core::ffi::c_int = ic_in;
     if ic != 0
-        && !no_smartcase
+        && !no_smartcase.get()
         && scs != 0
-        && !(ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 && (*curbuf).b_p_inf != 0)
+        && !(ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 && (*curbuf.get()).b_p_inf != 0)
     {
         ic = !pat_has_uppercase(pat) as ::core::ffi::c_int;
     }
-    no_smartcase = false_0 != 0;
+    no_smartcase.set(false_0 != 0);
     return ic;
 }
 #[no_mangle]
@@ -3138,7 +3139,7 @@ pub unsafe extern "C" fn set_last_search_pat(
         }
         saved_spats_last_idx.set(last_idx.get());
     }
-    if p_hls != 0 && idx == last_idx.get() && !no_hlsearch {
+    if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
     }
 }
@@ -3148,7 +3149,7 @@ pub unsafe extern "C" fn last_pat_prog(mut regmatch: *mut regmmatch_T) {
         (*regmatch).regprog = ::core::ptr::null_mut::<regprog_T>();
         return;
     }
-    emsg_off += 1;
+    (*emsg_off.ptr()) += 1;
     search_regcomp(
         b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         0 as size_t,
@@ -3158,7 +3159,7 @@ pub unsafe extern "C" fn last_pat_prog(mut regmatch: *mut regmmatch_T) {
         SEARCH_KEEP as ::core::ffi::c_int,
         regmatch,
     );
-    emsg_off -= 1;
+    (*emsg_off.ptr()) -= 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn searchit(
@@ -3195,7 +3196,7 @@ pub unsafe extern "C" fn searchit(
     let mut nmatched: ::core::ffi::c_int = 0;
     let mut submatch: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut first_match: bool = true_0 != 0;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut break_loop: bool = false_0 != 0;
     let mut stop_lnum: linenr_T = 0 as linenr_T;
     let mut tm: *mut proftime_T = ::core::ptr::null_mut::<proftime_T>();
@@ -3215,7 +3216,7 @@ pub unsafe extern "C" fn searchit(
         &raw mut regmatch,
     ) == FAIL
     {
-        if options & SEARCH_MSG as ::core::ffi::c_int != 0 && !rc_did_emsg {
+        if options & SEARCH_MSG as ::core::ffi::c_int != 0 && !rc_did_emsg.get() {
             semsg(
                 gettext(b"E383: Invalid search string: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 mr_pattern.get(),
@@ -3223,7 +3224,7 @@ pub unsafe extern "C" fn searchit(
         }
         return FAIL;
     }
-    let search_from_match_end: bool = !vim_strchr(p_cpo, CPO_SEARCH).is_null();
+    let search_from_match_end: bool = !vim_strchr(p_cpo.get(), CPO_SEARCH).is_null();
     loop {
         if (*pos).col == MAXCOL as ::core::ffi::c_int {
             start_char_len = 0 as ::core::ffi::c_int;
@@ -3295,7 +3296,8 @@ pub unsafe extern "C" fn searchit(
                 if regmatch.regprog.is_null() {
                     break;
                 }
-                if called_emsg > called_emsg_before || !timed_out.is_null() && *timed_out != 0 {
+                if called_emsg.get() > called_emsg_before || !timed_out.is_null() && *timed_out != 0
+                {
                     break;
                 }
                 's_218: {
@@ -3504,12 +3506,12 @@ pub unsafe extern "C" fn searchit(
                         }
                         found = 1 as ::core::ffi::c_int;
                         first_match = false_0 != 0;
-                        search_match_lines = endpos.lnum - matchpos.lnum;
-                        search_match_endcol = endpos.col;
+                        search_match_lines.set(endpos.lnum - matchpos.lnum);
+                        search_match_endcol.set(endpos.col);
                         break 's_704;
                     } else {
                         line_breakcheck();
-                        if got_int {
+                        if got_int.get() {
                             break 's_704;
                         }
                         if options & SEARCH_PEEK as ::core::ffi::c_int != 0
@@ -3530,10 +3532,10 @@ pub unsafe extern "C" fn searchit(
             if regmatch.regprog.is_null() {
                 break;
             }
-            if p_ws == 0
+            if p_ws.get() == 0
                 || stop_lnum != 0 as linenr_T
-                || got_int as ::core::ffi::c_int != 0
-                || called_emsg > called_emsg_before
+                || got_int.get() as ::core::ffi::c_int != 0
+                || called_emsg.get() > called_emsg_before
                 || !timed_out.is_null() && *timed_out != 0
                 || break_loop as ::core::ffi::c_int != 0
                 || found != 0
@@ -3567,8 +3569,8 @@ pub unsafe extern "C" fn searchit(
             }
             loop_0 += 1;
         }
-        if got_int as ::core::ffi::c_int != 0
-            || called_emsg > called_emsg_before
+        if got_int.get() as ::core::ffi::c_int != 0
+            || called_emsg.get() > called_emsg_before
             || !timed_out.is_null() && *timed_out != 0
             || break_loop as ::core::ffi::c_int != 0
         {
@@ -3581,10 +3583,10 @@ pub unsafe extern "C" fn searchit(
     }
     vim_regfree(regmatch.regprog);
     if found == 0 {
-        if got_int {
+        if got_int.get() {
             emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
         } else if options & SEARCH_MSG as ::core::ffi::c_int == SEARCH_MSG as ::core::ffi::c_int {
-            if p_ws != 0 {
+            if p_ws.get() != 0 {
                 semsg(
                     gettext(&raw const e_patnotf2 as *const ::core::ffi::c_char),
                     mr_pattern.get(),
@@ -3664,15 +3666,15 @@ pub unsafe extern "C" fn do_search(
     let mut msgbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut msgbuflen: size_t = 0 as size_t;
     let mut has_offset: bool = false_0 != 0;
-    searchcmdlen = 0 as ::core::ffi::c_int;
+    searchcmdlen.set(0 as ::core::ffi::c_int);
     if (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.line as ::core::ffi::c_int != 0
-        && !vim_strchr(p_cpo, CPO_LINEOFF).is_null()
+        && !vim_strchr(p_cpo.get(), CPO_LINEOFF).is_null()
     {
         (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.line = false_0 != 0;
         (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.off = 0 as int64_t;
     }
     let mut old_off: SearchOffset = (*spats.ptr())[0 as ::core::ffi::c_int as usize].off;
-    let mut pos: pos_T = (*curwin).w_cursor;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
     if dirc == 0 as ::core::ffi::c_int {
         dirc = (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.dir as uint8_t
             as ::core::ffi::c_int;
@@ -3689,7 +3691,7 @@ pub unsafe extern "C" fn do_search(
     }
     if dirc == '/' as ::core::ffi::c_int {
         if hasFolding(
-            curwin,
+            curwin.get(),
             pos.lnum,
             ::core::ptr::null_mut::<linenr_T>(),
             &raw mut pos.lnum,
@@ -3697,14 +3699,16 @@ pub unsafe extern "C" fn do_search(
             pos.col = (MAXCOL as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as colnr_T;
         }
     } else if hasFolding(
-        curwin,
+        curwin.get(),
         pos.lnum,
         &raw mut pos.lnum,
         ::core::ptr::null_mut::<linenr_T>(),
     ) {
         pos.col = 0 as ::core::ffi::c_int as colnr_T;
     }
-    if no_hlsearch as ::core::ffi::c_int != 0 && options & SEARCH_KEEP as ::core::ffi::c_int == 0 {
+    if no_hlsearch.get() as ::core::ffi::c_int != 0
+        && options & SEARCH_KEEP as ::core::ffi::c_int == 0
+    {
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
         set_no_hlsearch(false_0 != 0);
     }
@@ -3752,7 +3756,7 @@ pub unsafe extern "C" fn do_search(
                 );
                 if strcopy != ps {
                     let mut len: size_t = strlen(strcopy);
-                    searchcmdlen += patlen.wrapping_sub(len) as ::core::ffi::c_int;
+                    (*searchcmdlen.ptr()) += patlen.wrapping_sub(len) as ::core::ffi::c_int;
                     pat = strcopy;
                     patlen = len;
                     searchstr = strcopy;
@@ -3805,21 +3809,21 @@ pub unsafe extern "C" fn do_search(
                         p = p.offset(1);
                     }
                 }
-                searchcmdlen += p.offset_from(pat) as ::core::ffi::c_int;
+                (*searchcmdlen.ptr()) += p.offset_from(pat) as ::core::ffi::c_int;
                 patlen = patlen.wrapping_sub(p.offset_from(pat) as size_t);
                 pat = p;
             }
             let mut show_search_stats: bool = false_0 != 0;
             if options & SEARCH_ECHO as ::core::ffi::c_int != 0
                 && messaging() as ::core::ffi::c_int != 0
-                && msg_silent == 0
-                && (!cmd_silent || !shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int))
+                && msg_silent.get() == 0
+                && (!cmd_silent.get() || !shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int))
             {
                 let mut off_buf: [::core::ffi::c_char; 40] = [0; 40];
                 let mut off_len: size_t = 0 as size_t;
                 msg_start();
                 msg_ext_set_kind(b"search_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-                if !cmd_silent
+                if !cmd_silent.get()
                     && ((*spats.ptr())[0 as ::core::ffi::c_int as usize].off.line
                         as ::core::ffi::c_int
                         != 0
@@ -3865,17 +3869,19 @@ pub unsafe extern "C" fn do_search(
                 }
                 let mut msgbufsize: size_t = 0;
                 if !shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int)
-                    || cmd_silent as ::core::ffi::c_int != 0
+                    || cmd_silent.get() as ::core::ffi::c_int != 0
                 {
                     if ui_has(kUIMessages) {
                         msgbufsize = 0 as size_t;
-                    } else if msg_scrolled != 0 as ::core::ffi::c_int && !cmd_silent {
-                        msgbufsize =
-                            ((Rows - msg_row) * Columns - 1 as ::core::ffi::c_int) as size_t;
-                    } else {
-                        msgbufsize = ((Rows - msg_row - 1 as ::core::ffi::c_int) * Columns + sc_col
+                    } else if msg_scrolled.get() != 0 as ::core::ffi::c_int && !cmd_silent.get() {
+                        msgbufsize = ((Rows.get() - msg_row.get()) * Columns.get()
                             - 1 as ::core::ffi::c_int)
                             as size_t;
+                    } else {
+                        msgbufsize =
+                            ((Rows.get() - msg_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
+                                + sc_col.get()
+                                - 1 as ::core::ffi::c_int) as size_t;
                     }
                     if msgbufsize
                         < plen
@@ -3900,7 +3906,7 @@ pub unsafe extern "C" fn do_search(
                 );
                 msgbuflen = msgbufsize.wrapping_sub(1 as size_t);
                 *msgbuf.offset(msgbuflen as isize) = NUL as ::core::ffi::c_char;
-                if !cmd_silent {
+                if !cmd_silent.get() {
                     ui_busy_start();
                     *msgbuf.offset(0 as ::core::ffi::c_int as isize) = dirc as ::core::ffi::c_char;
                     if utf_iscomposing_first(utf_ptr2char(p)) {
@@ -3937,8 +3943,8 @@ pub unsafe extern "C" fn do_search(
                         msgbuf = trunc;
                         msgbuflen = strlen(msgbuf);
                     }
-                    if (*curwin).w_onebuf_opt.wo_rl != 0
-                        && *(*curwin).w_onebuf_opt.wo_rlc as ::core::ffi::c_int
+                    if (*curwin.get()).w_onebuf_opt.wo_rl != 0
+                        && *(*curwin.get()).w_onebuf_opt.wo_rlc as ::core::ffi::c_int
                             == 's' as ::core::ffi::c_int
                     {
                         let mut r: *mut ::core::ffi::c_char = reverse_text(msgbuf);
@@ -3975,7 +3981,7 @@ pub unsafe extern "C" fn do_search(
                     gotocmdline(false_0 != 0);
                     ui_flush();
                     ui_busy_stop();
-                    msg_nowait = true_0 != 0;
+                    msg_nowait.set(true_0 != 0);
                 }
                 if !shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int) {
                     show_search_stats = true_0 != 0;
@@ -4006,14 +4012,14 @@ pub unsafe extern "C" fn do_search(
                         c += 1;
                     }
                     if c != 0 {
-                        pos.lnum = (*curbuf).b_ml.ml_line_count + 1 as linenr_T;
+                        pos.lnum = (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T;
                         pos.col = 0 as ::core::ffi::c_int as colnr_T;
                     }
                 }
             }
             c = searchit(
-                curwin,
-                curbuf,
+                curwin.get(),
+                curbuf.get(),
                 &raw mut pos,
                 ::core::ptr::null_mut::<pos_T>(),
                 (if dirc == '/' as ::core::ffi::c_int {
@@ -4080,8 +4086,8 @@ pub unsafe extern "C" fn do_search(
                             + (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.off;
                         if c < 1 as int64_t {
                             pos.lnum = 1 as ::core::ffi::c_int as linenr_T;
-                        } else if c > (*curbuf).b_ml.ml_line_count as int64_t {
-                            pos.lnum = (*curbuf).b_ml.ml_line_count;
+                        } else if c > (*curbuf.get()).b_ml.ml_line_count as int64_t {
+                            pos.lnum = (*curbuf.get()).b_ml.ml_line_count;
                         } else {
                             pos.lnum = c as linenr_T;
                         }
@@ -4121,23 +4127,23 @@ pub unsafe extern "C" fn do_search(
                     cmdline_search_stat(
                         dirc,
                         &raw mut pos,
-                        &raw mut (*curwin).w_cursor,
+                        &raw mut (*curwin.get()).w_cursor,
                         show_top_bot_msg,
                         msgbuf,
                         msgbuflen,
                         count != 1 as ::core::ffi::c_int
                             || has_offset as ::core::ffi::c_int != 0
-                            || fdo_flags
+                            || fdo_flags.get()
                                 & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint
                                 == 0
                                 && hasFolding(
-                                    curwin,
-                                    (*curwin).w_cursor.lnum,
+                                    curwin.get(),
+                                    (*curwin.get()).w_cursor.lnum,
                                     ::core::ptr::null_mut::<linenr_T>(),
                                     ::core::ptr::null_mut::<linenr_T>(),
                                 ) as ::core::ffi::c_int
                                     != 0,
-                        p_msc as ::core::ffi::c_int,
+                        p_msc.get() as ::core::ffi::c_int,
                         SEARCH_STAT_DEF_TIMEOUT as ::core::ffi::c_int,
                     );
                 }
@@ -4164,11 +4170,11 @@ pub unsafe extern "C" fn do_search(
         if options & SEARCH_MARK as ::core::ffi::c_int != 0 {
             setpcmark();
         }
-        (*curwin).w_cursor = pos;
-        (*curwin).w_set_curswant = true_0;
+        (*curwin.get()).w_cursor = pos;
+        (*curwin.get()).w_set_curswant = true_0;
     }
     if options & SEARCH_KEEP as ::core::ffi::c_int != 0
-        || cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0
     {
         (*spats.ptr())[0 as ::core::ffi::c_int as usize].off = old_off;
     }
@@ -4191,7 +4197,7 @@ pub unsafe extern "C" fn search_for_exact_line(
     loop {
         (*pos).lnum = ((*pos).lnum as ::core::ffi::c_int + dir as ::core::ffi::c_int) as linenr_T;
         if (*pos).lnum < 1 as linenr_T {
-            if p_ws != 0 {
+            if p_ws.get() != 0 {
                 (*pos).lnum = (*buf).b_ml.ml_line_count;
                 if !shortmess(SHM_SEARCH as ::core::ffi::c_int) {
                     give_warning(
@@ -4205,7 +4211,7 @@ pub unsafe extern "C" fn search_for_exact_line(
                 break;
             }
         } else if (*pos).lnum > (*buf).b_ml.ml_line_count {
-            if p_ws != 0 {
+            if p_ws.get() != 0 {
                 (*pos).lnum = 1 as ::core::ffi::c_int as linenr_T;
                 if !shortmess(SHM_SEARCH as ::core::ffi::c_int) {
                     give_warning(
@@ -4229,7 +4235,7 @@ pub unsafe extern "C" fn search_for_exact_line(
         let mut p: *mut ::core::ffi::c_char = skipwhite(ptr);
         (*pos).col = p.offset_from(ptr) as colnr_T;
         if compl_status_adding() as ::core::ffi::c_int != 0 && !compl_status_sol() {
-            if mb_strcmp_ic(p_ic != 0, p, pat) == 0 as ::core::ffi::c_int {
+            if mb_strcmp_ic(p_ic.get() != 0, p, pat) == 0 as ::core::ffi::c_int {
                 return OK;
             }
         } else if *p as ::core::ffi::c_int != NUL {
@@ -4245,7 +4251,7 @@ pub unsafe extern "C" fn search_for_exact_line(
                     );
                 }
             };
-            if (if p_ic != 0 {
+            if (if p_ic.get() != 0 {
                 mb_strnicmp(p, pat, compl_len as size_t)
             } else {
                 strncmp(p, pat, compl_len as size_t)
@@ -4264,7 +4270,7 @@ pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::c
     let mut count: ::core::ffi::c_int = (*cap).count1;
     let mut stop: bool = true_0 != 0;
     if c != NUL {
-        if KeyStuffed == 0 {
+        if KeyStuffed.get() == 0 {
             *(lastc.ptr() as *mut uint8_t) = c as uint8_t;
             set_csearch_direction(dir as Direction);
             set_csearch_until(t_cmd as ::core::ffi::c_int);
@@ -4296,7 +4302,7 @@ pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::c
         };
         t_cmd = last_t_cmd.get();
         c = *(lastc.ptr() as *mut uint8_t) as ::core::ffi::c_int;
-        if vim_strchr(p_cpo, CPO_SCOLON).is_null()
+        if vim_strchr(p_cpo.get(), CPO_SCOLON).is_null()
             && count == 1 as ::core::ffi::c_int
             && t_cmd as ::core::ffi::c_int != 0
         {
@@ -4305,7 +4311,7 @@ pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::c
     }
     (*(*cap).oap).inclusive = dir != BACKWARD as ::core::ffi::c_int;
     let mut p: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-    let mut col: ::core::ffi::c_int = (*curwin).w_cursor.col as ::core::ffi::c_int;
+    let mut col: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
     let mut len: ::core::ffi::c_int = get_cursor_line_len();
     loop {
         let c2rust_fresh7 = count;
@@ -4355,7 +4361,7 @@ pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::c
             col -= utf_head_off(p, p.offset(col as isize));
         }
     }
-    (*curwin).w_cursor.col = col as colnr_T;
+    (*curwin.get()).w_cursor.col = col as colnr_T;
     return OK;
 }
 #[no_mangle]
@@ -4446,7 +4452,7 @@ unsafe extern "C" fn find_mps_values(
     mut backwards: *mut bool,
     mut switchit: bool,
 ) {
-    let mut ptr: *mut ::core::ffi::c_char = (*curbuf).b_p_mps;
+    let mut ptr: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_mps;
     while *ptr as ::core::ffi::c_int != NUL {
         if utf_ptr2char(ptr) == *initc {
             if switchit {
@@ -4510,12 +4516,12 @@ pub unsafe extern "C" fn findmatchlimit(
     let mut dir: ::core::ffi::c_int = 0;
     let mut comment_col: ::core::ffi::c_int = MAXCOL as ::core::ffi::c_int;
     let mut lispcomm: bool = false_0 != 0;
-    let mut lisp: bool = (*curbuf).b_p_lisp != 0;
-    pos.set((*curwin).w_cursor);
+    let mut lisp: bool = (*curbuf.get()).b_p_lisp != 0;
+    pos.set((*curwin.get()).w_cursor);
     (*pos.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
     let mut linep: *mut ::core::ffi::c_char = ml_get((*pos.ptr()).lnum);
-    let mut cpo_match: bool = !vim_strchr(p_cpo, CPO_MATCH).is_null();
-    let mut cpo_bsl: bool = !vim_strchr(p_cpo, CPO_MATCHBSL).is_null();
+    let mut cpo_match: bool = !vim_strchr(p_cpo.get(), CPO_MATCH).is_null();
+    let mut cpo_bsl: bool = !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null();
     if flags & FM_BACKWARD as ::core::ffi::c_int != 0 {
         dir = BACKWARD as ::core::ffi::c_int;
     } else if flags & FM_FORWARD as ::core::ffi::c_int != 0 {
@@ -4697,9 +4703,9 @@ pub unsafe extern "C" fn findmatchlimit(
                 }
             }
             (*pos.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
-            while !got_int {
+            while !got_int.get() {
                 if hash_dir > 0 as ::core::ffi::c_int {
-                    if (*pos.ptr()).lnum == (*curbuf).b_ml.ml_line_count {
+                    if (*pos.ptr()).lnum == (*curbuf.get()).b_ml.ml_line_count {
                         break;
                     }
                 } else if (*pos.ptr()).lnum == 1 as linenr_T {
@@ -4775,7 +4781,7 @@ pub unsafe extern "C" fn findmatchlimit(
             return ::core::ptr::null_mut::<pos_T>();
         }
     }
-    if (*curwin).w_onebuf_opt.wo_rl != 0
+    if (*curwin.get()).w_onebuf_opt.wo_rl != 0
         && !vim_strchr(b"()[]{}<>\0".as_ptr() as *const ::core::ffi::c_char, initc).is_null()
     {
         backwards = !backwards;
@@ -4798,7 +4804,7 @@ pub unsafe extern "C" fn findmatchlimit(
     {
         lispcomm = true_0 != 0;
     }
-    while !got_int {
+    while !got_int.get() {
         if backwards {
             if lispcomm as ::core::ffi::c_int != 0 && (*pos.ptr()).col < comment_col {
                 break;
@@ -4833,7 +4839,7 @@ pub unsafe extern "C" fn findmatchlimit(
                 && comment_col != MAXCOL as ::core::ffi::c_int
                 && (*pos.ptr()).col == comment_col
         {
-            if (*pos.ptr()).lnum == (*curbuf).b_ml.ml_line_count
+            if (*pos.ptr()).lnum == (*curbuf.get()).b_ml.ml_line_count
                 || lispcomm as ::core::ffi::c_int != 0
             {
                 break;
@@ -4906,7 +4912,7 @@ pub unsafe extern "C" fn findmatchlimit(
                             if count > 0 as ::core::ffi::c_int {
                                 &raw mut match_pos
                             } else {
-                                &raw mut (*curwin).w_cursor
+                                &raw mut (*curwin.get()).w_cursor
                             },
                         ) {
                             count += 1;
@@ -5150,7 +5156,7 @@ pub unsafe extern "C" fn findmatchlimit(
                     }
                     _ => {}
                 }
-                if !((*curbuf).b_p_lisp != 0
+                if !((*curbuf.get()).b_p_lisp != 0
                     && !vim_strchr(b"(){}[]\0".as_ptr() as *const ::core::ffi::c_char, c).is_null()
                     && (*pos.ptr()).col > 1 as ::core::ffi::c_int
                     && check_prevcol(
@@ -5213,7 +5219,7 @@ pub unsafe extern "C" fn check_linecomment(
     mut line: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = line;
-    if (*curbuf).b_p_lisp != 0 {
+    if (*curbuf.get()).b_p_lisp != 0 {
         if !vim_strchr(p, ';' as ::core::ffi::c_int).is_null() {
             let mut in_str: bool = false_0 != 0;
             loop {
@@ -5281,24 +5287,24 @@ pub unsafe extern "C" fn check_linecomment(
 pub unsafe extern "C" fn showmatch(mut c: ::core::ffi::c_int) {
     let mut lpos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut vcol: colnr_T = 0;
-    let mut so: *mut OptInt = if (*curwin).w_onebuf_opt.wo_so >= 0 as OptInt {
-        &raw mut (*curwin).w_onebuf_opt.wo_so
+    let mut so: *mut OptInt = if (*curwin.get()).w_onebuf_opt.wo_so >= 0 as OptInt {
+        &raw mut (*curwin.get()).w_onebuf_opt.wo_so
     } else {
-        &raw mut p_so
+        p_so.ptr()
     };
-    let mut siso: *mut OptInt = if (*curwin).w_onebuf_opt.wo_siso >= 0 as OptInt {
-        &raw mut (*curwin).w_onebuf_opt.wo_siso
+    let mut siso: *mut OptInt = if (*curwin.get()).w_onebuf_opt.wo_siso >= 0 as OptInt {
+        &raw mut (*curwin.get()).w_onebuf_opt.wo_siso
     } else {
-        &raw mut p_siso
+        p_siso.ptr()
     };
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    p = (*curbuf).b_p_mps;
+    p = (*curbuf.get()).b_p_mps;
     while *p as ::core::ffi::c_int != NUL {
-        if utf_ptr2char(p) == c && (*curwin).w_onebuf_opt.wo_rl ^ p_ri != 0 {
+        if utf_ptr2char(p) == c && (*curwin.get()).w_onebuf_opt.wo_rl ^ p_ri.get() != 0 {
             break;
         }
         p = p.offset((utfc_ptr2len(p) + 1 as ::core::ffi::c_int) as isize);
-        if utf_ptr2char(p) == c && (*curwin).w_onebuf_opt.wo_rl ^ p_ri == 0 {
+        if utf_ptr2char(p) == c && (*curwin.get()).w_onebuf_opt.wo_rl ^ p_ri.get() == 0 {
             break;
         }
         p = p.offset(utfc_ptr2len(p) as isize);
@@ -5315,63 +5321,66 @@ pub unsafe extern "C" fn showmatch(mut c: ::core::ffi::c_int) {
         vim_beep(kOptBoFlagShowmatch as ::core::ffi::c_int as ::core::ffi::c_uint);
         return;
     }
-    if (*lpos).lnum < (*curwin).w_topline || (*lpos).lnum >= (*curwin).w_botline {
+    if (*lpos).lnum < (*curwin.get()).w_topline || (*lpos).lnum >= (*curwin.get()).w_botline {
         return;
     }
-    if (*curwin).w_onebuf_opt.wo_wrap == 0 {
+    if (*curwin.get()).w_onebuf_opt.wo_wrap == 0 {
         getvcol(
-            curwin,
+            curwin.get(),
             lpos,
             ::core::ptr::null_mut::<colnr_T>(),
             &raw mut vcol,
             ::core::ptr::null_mut::<colnr_T>(),
         );
     }
-    let mut col_visible: bool = (*curwin).w_onebuf_opt.wo_wrap != 0
-        || vcol >= (*curwin).w_leftcol
-            && vcol < (*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width;
+    let mut col_visible: bool = (*curwin.get()).w_onebuf_opt.wo_wrap != 0
+        || vcol >= (*curwin.get()).w_leftcol
+            && vcol
+                < (*curwin.get()).w_leftcol as ::core::ffi::c_int + (*curwin.get()).w_view_width;
     if !col_visible {
         return;
     }
     let mut mpos: pos_T = *lpos;
-    let mut save_cursor: pos_T = (*curwin).w_cursor;
+    let mut save_cursor: pos_T = (*curwin.get()).w_cursor;
     let mut save_so: OptInt = *so;
     let mut save_siso: OptInt = *siso;
-    if dollar_vcol >= 0 as ::core::ffi::c_int && dollar_vcol == (*curwin).w_virtcol {
-        dollar_vcol = -1 as ::core::ffi::c_int as colnr_T;
+    if dollar_vcol.get() >= 0 as ::core::ffi::c_int
+        && dollar_vcol.get() == (*curwin.get()).w_virtcol
+    {
+        dollar_vcol.set(-1 as ::core::ffi::c_int as colnr_T);
     }
-    (*curwin).w_virtcol += 1;
-    let mut save_dollar_vcol: colnr_T = dollar_vcol;
-    let mut save_state: ::core::ffi::c_int = State;
-    State = MODE_SHOWMATCH as ::core::ffi::c_int;
+    (*curwin.get()).w_virtcol += 1;
+    let mut save_dollar_vcol: colnr_T = dollar_vcol.get();
+    let mut save_state: ::core::ffi::c_int = State.get();
+    State.set(MODE_SHOWMATCH as ::core::ffi::c_int);
     ui_cursor_shape();
-    (*curwin).w_cursor = mpos;
+    (*curwin.get()).w_cursor = mpos;
     *so = 0 as OptInt;
     *siso = 0 as OptInt;
     show_cursor_info_later(false_0 != 0);
     update_screen();
     setcursor();
     ui_flush();
-    dollar_vcol = save_dollar_vcol;
-    if !vim_strchr(p_cpo, CPO_SHOWMATCH).is_null() {
+    dollar_vcol.set(save_dollar_vcol);
+    if !vim_strchr(p_cpo.get(), CPO_SHOWMATCH).is_null() {
         os_delay(
-            (p_mat as uint64_t)
+            (p_mat.get() as uint64_t)
                 .wrapping_mul(100 as uint64_t)
                 .wrapping_add(8 as uint64_t),
             true_0 != 0,
         );
     } else if !char_avail() {
         os_delay(
-            (p_mat as uint64_t)
+            (p_mat.get() as uint64_t)
                 .wrapping_mul(100 as uint64_t)
                 .wrapping_add(9 as uint64_t),
             false_0 != 0,
         );
     }
-    (*curwin).w_cursor = save_cursor;
+    (*curwin.get()).w_cursor = save_cursor;
     *so = save_so;
     *siso = save_siso;
-    State = save_state;
+    State.set(save_state);
     ui_cursor_shape();
 }
 #[no_mangle]
@@ -5379,20 +5388,20 @@ pub unsafe extern "C" fn current_search(
     mut count: ::core::ffi::c_int,
     mut forward: bool,
 ) -> ::core::ffi::c_int {
-    let mut old_p_ws: bool = p_ws != 0;
-    let mut save_VIsual: pos_T = VIsual;
-    if VIsual_active as ::core::ffi::c_int != 0
-        && *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-        && lt(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0
+    let mut old_p_ws: bool = p_ws.get() != 0;
+    let mut save_VIsual: pos_T = VIsual.get();
+    if VIsual_active.get() as ::core::ffi::c_int != 0
+        && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+        && lt(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
     {
         dec_cursor();
     }
     let skip_first_backward: bool = forward as ::core::ffi::c_int != 0
-        && VIsual_active as ::core::ffi::c_int != 0
-        && lt((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0;
-    let mut pos: pos_T = (*curwin).w_cursor;
-    let mut orig_pos: pos_T = (*curwin).w_cursor;
-    if VIsual_active {
+        && VIsual_active.get() as ::core::ffi::c_int != 0
+        && lt((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
+    let mut orig_pos: pos_T = (*curwin.get()).w_cursor;
+    if VIsual_active.get() {
         if forward {
             incl(&raw mut pos);
         } else {
@@ -5403,7 +5412,7 @@ pub unsafe extern "C" fn current_search(
         (*spats.ptr())[last_idx.get() as usize].pat,
         (*spats.ptr())[last_idx.get() as usize].patlen,
         true_0 != 0,
-        &raw mut (*curwin).w_cursor,
+        &raw mut (*curwin.get()).w_cursor,
         FORWARD,
     );
     if zero_width == -1 as ::core::ffi::c_int {
@@ -5434,11 +5443,11 @@ pub unsafe extern "C" fn current_search(
             }
             end_pos = pos;
             if i == 0 as ::core::ffi::c_int {
-                p_ws = false_0;
+                p_ws.set(false_0);
             }
             result = searchit(
-                curwin,
-                curbuf,
+                curwin.get(),
+                curbuf.get(),
                 &raw mut pos,
                 &raw mut end_pos,
                 (if dir != 0 {
@@ -5457,54 +5466,56 @@ pub unsafe extern "C" fn current_search(
                 RE_SEARCH as ::core::ffi::c_int,
                 ::core::ptr::null_mut::<searchit_arg_T>(),
             );
-            p_ws = old_p_ws as ::core::ffi::c_int;
+            p_ws.set(old_p_ws as ::core::ffi::c_int);
             if i == 1 as ::core::ffi::c_int && result == 0 {
-                (*curwin).w_cursor = orig_pos;
-                if VIsual_active {
-                    VIsual = save_VIsual;
+                (*curwin.get()).w_cursor = orig_pos;
+                if VIsual_active.get() {
+                    VIsual.set(save_VIsual);
                 }
                 return FAIL;
             } else if i == 0 as ::core::ffi::c_int && result == 0 {
                 if forward {
                     clearpos(&raw mut pos);
                 } else {
-                    pos.lnum = (*(*curwin).w_buffer).b_ml.ml_line_count;
-                    pos.col = ml_get_len((*(*curwin).w_buffer).b_ml.ml_line_count);
+                    pos.lnum = (*(*curwin.get()).w_buffer).b_ml.ml_line_count;
+                    pos.col = ml_get_len((*(*curwin.get()).w_buffer).b_ml.ml_line_count);
                 }
             }
         }
         i += 1;
     }
     let mut start_pos: pos_T = pos;
-    if !VIsual_active {
-        VIsual = start_pos;
+    if !VIsual_active.get() {
+        VIsual.set(start_pos);
     }
-    (*curwin).w_cursor = end_pos;
-    if lt(VIsual, end_pos) as ::core::ffi::c_int != 0 && forward as ::core::ffi::c_int != 0 {
+    (*curwin.get()).w_cursor = end_pos;
+    if lt(VIsual.get(), end_pos) as ::core::ffi::c_int != 0 && forward as ::core::ffi::c_int != 0 {
         if skip_first_backward {
-            (*curwin).w_cursor = pos;
+            (*curwin.get()).w_cursor = pos;
         } else {
             dec_cursor();
         }
-    } else if VIsual_active as ::core::ffi::c_int != 0
-        && lt((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0
+    } else if VIsual_active.get() as ::core::ffi::c_int != 0
+        && lt((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
         && forward as ::core::ffi::c_int != 0
     {
-        (*curwin).w_cursor = pos;
+        (*curwin.get()).w_cursor = pos;
     }
-    VIsual_active = true_0 != 0;
-    VIsual_mode = 'v' as ::core::ffi::c_int;
-    if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+    VIsual_active.set(true_0 != 0);
+    VIsual_mode.set('v' as ::core::ffi::c_int);
+    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
         if forward as ::core::ffi::c_int != 0
-            && ltoreq(VIsual, (*curwin).w_cursor) as ::core::ffi::c_int != 0
+            && ltoreq(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
         {
             inc_cursor();
-        } else if !forward && ltoreq((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0 {
-            inc(&raw mut VIsual);
+        } else if !forward
+            && ltoreq((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
+        {
+            inc(VIsual.ptr());
         }
     }
-    if fdo_flags & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && KeyTyped as ::core::ffi::c_int != 0
+    if fdo_flags.get() & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && KeyTyped.get() as ::core::ffi::c_int != 0
     {
         foldOpenCursor();
     }
@@ -5535,7 +5546,7 @@ unsafe extern "C" fn is_zero_width(
         col: 0,
         coladd: 0,
     };
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut flag: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if pattern.is_null() {
         pattern = (*spats.ptr())[last_idx.get() as usize].pat;
@@ -5561,8 +5572,8 @@ unsafe extern "C" fn is_zero_width(
         flag = SEARCH_START as ::core::ffi::c_int;
     }
     if searchit(
-        curwin,
-        curbuf,
+        curwin.get(),
+        curbuf.get(),
         &raw mut pos,
         ::core::ptr::null_mut::<pos_T>(),
         direction,
@@ -5579,8 +5590,8 @@ unsafe extern "C" fn is_zero_width(
             regmatch.startpos[0 as ::core::ffi::c_int as usize].col += 1;
             nmatched = vim_regexec_multi(
                 &raw mut regmatch,
-                curwin,
-                curbuf,
+                curwin.get(),
+                curbuf.get(),
                 pos.lnum,
                 regmatch.startpos[0 as ::core::ffi::c_int as usize].col,
                 ::core::ptr::null_mut::<proftime_T>(),
@@ -5601,7 +5612,7 @@ unsafe extern "C" fn is_zero_width(
                 break;
             }
         }
-        if called_emsg == called_emsg_before {
+        if called_emsg.get() == called_emsg_before {
             result = (nmatched != 0 as ::core::ffi::c_int
                 && regmatch.startpos[0 as ::core::ffi::c_int as usize].lnum
                     == regmatch.endpos[0 as ::core::ffi::c_int as usize].lnum
@@ -5650,8 +5661,8 @@ unsafe extern "C" fn cmdline_search_stat(
     }
     let mut t: [::core::ffi::c_char; 16] = [0; 16];
     let mut len: size_t = 0;
-    if (*curwin).w_onebuf_opt.wo_rl != 0
-        && *(*curwin).w_onebuf_opt.wo_rlc as ::core::ffi::c_int == 's' as ::core::ffi::c_int
+    if (*curwin.get()).w_onebuf_opt.wo_rl != 0
+        && *(*curwin.get()).w_onebuf_opt.wo_rlc as ::core::ffi::c_int == 's' as ::core::ffi::c_int
     {
         if stat.incomplete == 1 as ::core::ffi::c_int {
             len = vim_snprintf(
@@ -5739,7 +5750,7 @@ unsafe extern "C" fn cmdline_search_stat(
     if dirc == '?' as ::core::ffi::c_int && stat.cur == maxcount + 1 as ::core::ffi::c_int {
         stat.cur = -1 as ::core::ffi::c_int;
     }
-    msg_ext_overwrite = true_0 != 0;
+    msg_ext_overwrite.set(true_0 != 0);
     msg_ext_set_kind(b"search_count\0".as_ptr() as *const ::core::ffi::c_char);
     give_warning(msgbuf, false_0 != 0, false_0 != 0);
 }
@@ -5752,7 +5763,7 @@ unsafe extern "C" fn update_search_stat(
     mut maxcount: ::core::ffi::c_int,
     mut timeout: ::core::ffi::c_int,
 ) {
-    let mut save_ws: ::core::ffi::c_int = p_ws;
+    let mut save_ws: ::core::ffi::c_int = p_ws.get();
     let mut wraparound: bool = false_0 != 0;
     let mut p: pos_T = *pos;
     static lastpos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
@@ -5785,14 +5796,14 @@ unsafe extern "C" fn update_search_stat(
         (*stat).cnt = cnt.get();
         (*stat).exact_match = exact_match.get();
         (*stat).incomplete = incomplete.get();
-        (*stat).last_maxcount = p_msc as ::core::ffi::c_int;
+        (*stat).last_maxcount = p_msc.get() as ::core::ffi::c_int;
         return;
     }
     last_maxcount.set(maxcount);
     wraparound = dirc == '?' as ::core::ffi::c_int
         && lt(lastpos.get(), p) as ::core::ffi::c_int != 0
         || dirc == '/' as ::core::ffi::c_int && lt(p, lastpos.get()) as ::core::ffi::c_int != 0;
-    if !(chgtick.get() as varnumber_T == buf_get_changedtick(curbuf)
+    if !(chgtick.get() as varnumber_T == buf_get_changedtick(curbuf.get())
         && (!(*lastpat.ptr()).is_null()
             && strncmp(
                 lastpat.get(),
@@ -5801,7 +5812,7 @@ unsafe extern "C" fn update_search_stat(
             ) == 0 as ::core::ffi::c_int
             && lastpatlen.get() == (*spats.ptr())[last_idx.get() as usize].patlen)
         && equalpos(lastpos.get(), *cursor_pos) as ::core::ffi::c_int != 0
-        && lbuf.get() == curbuf)
+        && lbuf.get() == curbuf.get())
         || wraparound as ::core::ffi::c_int != 0
         || cur.get() < 0 as ::core::ffi::c_int
         || maxcount > 0 as ::core::ffi::c_int && cur.get() > maxcount
@@ -5812,7 +5823,7 @@ unsafe extern "C" fn update_search_stat(
         exact_match.set(false_0 != 0);
         incomplete.set(0 as ::core::ffi::c_int);
         clearpos(lastpos.ptr());
-        lbuf.set(curbuf);
+        lbuf.set(curbuf.get());
     }
     if equalpos(lastpos.get(), *cursor_pos) as ::core::ffi::c_int != 0
         && !wraparound
@@ -5837,14 +5848,14 @@ unsafe extern "C" fn update_search_stat(
             col: 0 as colnr_T,
             coladd: 0 as colnr_T,
         };
-        p_ws = false_0;
+        p_ws.set(false_0);
         if timeout > 0 as ::core::ffi::c_int {
             start = profile_setlimit(timeout as int64_t);
         }
-        while !got_int
+        while !got_int.get()
             && searchit(
-                curwin,
-                curbuf,
+                curwin.get(),
+                curbuf.get(),
                 lastpos.ptr(),
                 &raw mut endpos,
                 FORWARD,
@@ -5878,7 +5889,7 @@ unsafe extern "C" fn update_search_stat(
                 break;
             }
         }
-        if got_int {
+        if got_int.get() {
             cur.set(-1 as ::core::ffi::c_int);
         }
         if done_search {
@@ -5888,8 +5899,8 @@ unsafe extern "C" fn update_search_stat(
                 (*spats.ptr())[last_idx.get() as usize].patlen,
             ));
             lastpatlen.set((*spats.ptr())[last_idx.get() as usize].patlen);
-            chgtick.set(buf_get_changedtick(curbuf) as ::core::ffi::c_int);
-            lbuf.set(curbuf);
+            chgtick.set(buf_get_changedtick(curbuf.get()) as ::core::ffi::c_int);
+            lbuf.set(curbuf.get());
             lastpos.set(p);
         }
     }
@@ -5898,7 +5909,7 @@ unsafe extern "C" fn update_search_stat(
     (*stat).exact_match = exact_match.get();
     (*stat).incomplete = incomplete.get();
     (*stat).last_maxcount = last_maxcount.get();
-    p_ws = save_ws;
+    p_ws.set(save_ws);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_searchcount(
@@ -5906,9 +5917,9 @@ pub unsafe extern "C" fn f_searchcount(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let mut pos: pos_T = (*curwin).w_cursor;
+    let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut maxcount: ::core::ffi::c_int = p_msc as ::core::ffi::c_int;
+    let mut maxcount: ::core::ffi::c_int = p_msc.get() as ::core::ffi::c_int;
     let mut timeout: ::core::ffi::c_int = SEARCH_STAT_DEF_TIMEOUT as ::core::ffi::c_int;
     let mut recompute: bool = true_0 != 0;
     let mut stat: searchstat_T = searchstat_T {
@@ -6122,7 +6133,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
     let mut max_path_depth: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
     let mut match_count: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut new_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut curr_fname: *mut ::core::ffi::c_char = (*curbuf).b_fname;
+    let mut curr_fname: *mut ::core::ffi::c_char = (*curbuf.get()).b_fname;
     let mut prev_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut depth_displayed: ::core::ffi::c_int = 0;
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6155,7 +6166,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
     let mut already: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut startp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut curwin_save: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let l_g_do_tagpreview: ::core::ffi::c_int = g_do_tagpreview;
+    let l_g_do_tagpreview: ::core::ffi::c_int = g_do_tagpreview.get();
     regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
     incl_regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
     def_regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
@@ -6206,10 +6217,10 @@ pub unsafe extern "C" fn find_pattern_in_path(
                 break '_fpip_end;
             }
         }
-        inc_opt = if *(*curbuf).b_p_inc as ::core::ffi::c_int == NUL {
-            p_inc
+        inc_opt = if *(*curbuf.get()).b_p_inc as ::core::ffi::c_int == NUL {
+            p_inc.get()
         } else {
-            (*curbuf).b_p_inc
+            (*curbuf.get()).b_p_inc
         };
         if *inc_opt as ::core::ffi::c_int != NUL {
             incl_regmatch.regprog = vim_regcomp(
@@ -6227,14 +6238,14 @@ pub unsafe extern "C" fn find_pattern_in_path(
             }
         }
         if type_0 == FIND_DEFINE as ::core::ffi::c_int
-            && (*(*curbuf).b_p_def as ::core::ffi::c_int != NUL
-                || *p_def as ::core::ffi::c_int != NUL)
+            && (*(*curbuf.get()).b_p_def as ::core::ffi::c_int != NUL
+                || *p_def.get() as ::core::ffi::c_int != NUL)
         {
             def_regmatch.regprog = vim_regcomp(
-                if *(*curbuf).b_p_def as ::core::ffi::c_int == NUL {
-                    p_def
+                if *(*curbuf.get()).b_p_def as ::core::ffi::c_int == NUL {
+                    p_def.get()
                 } else {
-                    (*curbuf).b_p_def
+                    (*curbuf.get()).b_p_def
                 },
                 if magic_isset() as ::core::ffi::c_int != 0 {
                     RE_MAGIC
@@ -6255,10 +6266,10 @@ pub unsafe extern "C" fn find_pattern_in_path(
         old_files = max_path_depth;
         depth_displayed = -1 as ::core::ffi::c_int;
         depth = depth_displayed;
-        end_lnum = if end_lnum < (*curbuf).b_ml.ml_line_count {
+        end_lnum = if end_lnum < (*curbuf.get()).b_ml.ml_line_count {
             end_lnum
         } else {
-            (*curbuf).b_ml.ml_line_count
+            (*curbuf.get()).b_ml.ml_line_count
         };
         lnum = if start_lnum < end_lnum {
             start_lnum
@@ -6271,8 +6282,9 @@ pub unsafe extern "C" fn find_pattern_in_path(
                 && vim_regexec(&raw mut incl_regmatch, line, 0 as colnr_T) as ::core::ffi::c_int
                     != 0
             {
-                let mut p_fname: *mut ::core::ffi::c_char = if curr_fname == (*curbuf).b_fname {
-                    (*curbuf).b_ffname
+                let mut p_fname: *mut ::core::ffi::c_char = if curr_fname == (*curbuf.get()).b_fname
+                {
+                    (*curbuf.get()).b_ffname
                 } else {
                     curr_fname
                 };
@@ -6324,7 +6336,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                 && (*files.offset(i as isize)).matched != 0
                             {
                                 msg_putchar('\n' as ::core::ffi::c_int);
-                                if !got_int {
+                                if !got_int.get() {
                                     msg_home_replace(new_fname);
                                     msg_puts(gettext(
                                         b" (includes previously listed match)\0".as_ptr()
@@ -6366,7 +6378,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                         ));
                     }
                     did_show = true_0 != 0;
-                    while depth_displayed < depth && !got_int {
+                    while depth_displayed < depth && !got_int.get() {
                         depth_displayed += 1;
                         i = 0 as ::core::ffi::c_int;
                         while i < depth_displayed {
@@ -6376,7 +6388,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                         msg_home_replace((*files.offset(depth_displayed as isize)).name);
                         msg_puts(b" -->\n\0".as_ptr() as *const ::core::ffi::c_char);
                     }
-                    if !got_int {
+                    if !got_int.get() {
                         i = 0 as ::core::ffi::c_int;
                         while i <= depth_displayed {
                             msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
@@ -6503,20 +6515,20 @@ pub unsafe extern "C" fn find_pattern_in_path(
                             && !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
                             && !silent
                         {
-                            msg_hist_off = true_0 != 0;
+                            msg_hist_off.set(true_0 != 0);
                             vim_snprintf(
-                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                 IOSIZE as size_t,
                                 gettext(b"Scanning included file: %s\0".as_ptr()
                                     as *const ::core::ffi::c_char),
                                 new_fname,
                             );
                             msg_trunc(
-                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                 true_0 != 0,
                                 HLF_R as ::core::ffi::c_int,
                             );
-                        } else if p_verbose >= 5 as OptInt {
+                        } else if p_verbose.get() >= 5 as OptInt {
                             verbose_enter();
                             smsg(
                                 0 as ::core::ffi::c_int,
@@ -6557,7 +6569,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                 || compl_status_sol() as ::core::ffi::c_int != 0
                             {
                                 startp = skipwhite(p);
-                                if p_ic != 0 {
+                                if p_ic.get() != 0 {
                                     matched = mb_strnicmp(startp, ptr, len) == 0;
                                 } else {
                                     matched = strncmp(startp, ptr, len) == 0;
@@ -6660,7 +6672,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                             if action == ACTION_EXPAND as ::core::ffi::c_int {
                                 let mut cont_s_ipos: bool = false_0 != 0;
                                 if depth == -1 as ::core::ffi::c_int
-                                    && lnum == (*curwin).w_cursor.lnum
+                                    && lnum == (*curwin.get()).w_cursor.lnum
                                 {
                                     break 's_1511;
                                 }
@@ -6683,7 +6695,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                     && i == ins_compl_len()
                                 {
                                     strncpy(
-                                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                                        IObuff.ptr() as *mut ::core::ffi::c_char,
                                         aux,
                                         i as size_t,
                                     );
@@ -6711,35 +6723,38 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                     p = find_word_end(p);
                                     if p > aux {
                                         if *aux as ::core::ffi::c_int != ')' as ::core::ffi::c_int
-                                            && IObuff[(i - 1 as ::core::ffi::c_int) as usize]
+                                            && (*IObuff.ptr())
+                                                [(i - 1 as ::core::ffi::c_int) as usize]
                                                 as ::core::ffi::c_int
                                                 != TAB
                                         {
-                                            if IObuff[(i - 1 as ::core::ffi::c_int) as usize]
+                                            if (*IObuff.ptr())
+                                                [(i - 1 as ::core::ffi::c_int) as usize]
                                                 as ::core::ffi::c_int
                                                 != ' ' as ::core::ffi::c_int
                                             {
                                                 let c2rust_fresh9 = i;
                                                 i = i + 1;
-                                                IObuff[c2rust_fresh9 as usize] =
+                                                (*IObuff.ptr())[c2rust_fresh9 as usize] =
                                                     ' ' as ::core::ffi::c_char;
                                             }
-                                            if p_js != 0
-                                                && (IObuff[(i - 2 as ::core::ffi::c_int) as usize]
+                                            if p_js.get() != 0
+                                                && ((*IObuff.ptr())
+                                                    [(i - 2 as ::core::ffi::c_int) as usize]
                                                     as ::core::ffi::c_int
                                                     == '.' as ::core::ffi::c_int
-                                                    || IObuff
+                                                    || (*IObuff.ptr())
                                                         [(i - 2 as ::core::ffi::c_int) as usize]
                                                         as ::core::ffi::c_int
                                                         == '?' as ::core::ffi::c_int
-                                                    || IObuff
+                                                    || (*IObuff.ptr())
                                                         [(i - 2 as ::core::ffi::c_int) as usize]
                                                         as ::core::ffi::c_int
                                                         == '!' as ::core::ffi::c_int)
                                             {
                                                 let c2rust_fresh10 = i;
                                                 i = i + 1;
-                                                IObuff[c2rust_fresh10 as usize] =
+                                                (*IObuff.ptr())[c2rust_fresh10 as usize] =
                                                     ' ' as ::core::ffi::c_char;
                                             }
                                         }
@@ -6750,7 +6765,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                                 .offset(-(1 as ::core::ffi::c_int as isize));
                                         }
                                         strncpy(
-                                            (&raw mut IObuff as *mut ::core::ffi::c_char)
+                                            (IObuff.ptr() as *mut ::core::ffi::c_char)
                                                 .offset(i as isize),
                                             aux,
                                             p.offset_from(aux) as size_t,
@@ -6758,8 +6773,8 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                         i += p.offset_from(aux) as ::core::ffi::c_int;
                                         cont_s_ipos = true_0 != 0;
                                     }
-                                    IObuff[i as usize] = NUL as ::core::ffi::c_char;
-                                    aux = &raw mut IObuff as *mut ::core::ffi::c_char;
+                                    (*IObuff.ptr())[i as usize] = NUL as ::core::ffi::c_char;
+                                    aux = IObuff.ptr() as *mut ::core::ffi::c_char;
                                     if i == ins_compl_len() {
                                         break '_exit_matched;
                                     }
@@ -6767,8 +6782,8 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                 let add_r: ::core::ffi::c_int = ins_compl_add_infercase(
                                     aux,
                                     i,
-                                    p_ic != 0,
-                                    if curr_fname == (*curbuf).b_fname {
+                                    p_ic.get() != 0,
+                                    if curr_fname == (*curbuf.get()).b_fname {
                                         ::core::ptr::null_mut::<::core::ffi::c_char>()
                                     } else {
                                         curr_fname
@@ -6791,13 +6806,13 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                     if did_show {
                                         msg_putchar('\n' as ::core::ffi::c_int);
                                     }
-                                    if !got_int {
+                                    if !got_int.get() {
                                         msg_home_replace(curr_fname);
                                     }
                                     prev_fname = curr_fname;
                                 }
                                 did_show = true_0 != 0;
-                                if !got_int {
+                                if !got_int.get() {
                                     let c2rust_fresh11 = match_count;
                                     match_count = match_count + 1;
                                     show_pat_in_path(
@@ -6828,7 +6843,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                 if count <= 0 as ::core::ffi::c_int {
                                     found = true_0 != 0;
                                     if depth == -1 as ::core::ffi::c_int
-                                        && lnum == (*curwin).w_cursor.lnum
+                                        && lnum == (*curwin.get()).w_cursor.lnum
                                         && l_g_do_tagpreview == 0 as ::core::ffi::c_int
                                     {
                                         emsg(gettext(b"E387: Match is on current line\0".as_ptr()
@@ -6854,7 +6869,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                         did_show = true_0 != 0;
                                     } else {
                                         if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
-                                            curwin_save = curwin;
+                                            curwin_save = curwin.get();
                                             prepare_tagpreview(true_0 != 0);
                                         }
                                         if action == ACTION_SPLIT as ::core::ffi::c_int {
@@ -6865,8 +6880,8 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                             {
                                                 break 's_1511;
                                             }
-                                            (*curwin).w_onebuf_opt.wo_scb = false_0;
-                                            (*curwin).w_onebuf_opt.wo_crb = false_0;
+                                            (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+                                            (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
                                         }
                                         if depth == -1 as ::core::ffi::c_int {
                                             if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
@@ -6888,8 +6903,8 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                             } else {
                                                 setpcmark();
                                             }
-                                            (*curwin).w_cursor.lnum = lnum;
-                                            check_cursor(curwin);
+                                            (*curwin.get()).w_cursor.lnum = lnum;
+                                            check_cursor(curwin.get());
                                         } else {
                                             if !(getfile(
                                                 0 as ::core::ffi::c_int,
@@ -6902,21 +6917,21 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                             {
                                                 break 's_1511;
                                             }
-                                            (*curwin).w_cursor.lnum =
+                                            (*curwin.get()).w_cursor.lnum =
                                                 (*files.offset(depth as isize)).lnum;
                                         }
                                     }
                                     if action != ACTION_SHOW as ::core::ffi::c_int {
-                                        (*curwin).w_cursor.col =
+                                        (*curwin.get()).w_cursor.col =
                                             startp.offset_from(line) as colnr_T;
-                                        (*curwin).w_set_curswant = true_0;
+                                        (*curwin.get()).w_set_curswant = true_0;
                                     }
                                     if l_g_do_tagpreview != 0 as ::core::ffi::c_int
-                                        && curwin != curwin_save
+                                        && curwin.get() != curwin_save
                                         && win_valid(curwin_save) as ::core::ffi::c_int != 0
                                     {
-                                        validate_cursor(curwin);
-                                        redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+                                        validate_cursor(curwin.get());
+                                        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
                                         win_enter(curwin_save, true_0 != 0);
                                     }
                                     break 's_1511;
@@ -6942,7 +6957,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
             if action == ACTION_EXPAND as ::core::ffi::c_int {
                 ins_compl_check_keys(30 as ::core::ffi::c_int, false_0 != 0);
             }
-            if got_int as ::core::ffi::c_int != 0
+            if got_int.get() as ::core::ffi::c_int != 0
                 || ins_compl_interrupted() as ::core::ffi::c_int != 0
             {
                 break;
@@ -6963,7 +6978,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                     (*files.offset(depth as isize)).matched;
                 depth -= 1;
                 curr_fname = if depth == -1 as ::core::ffi::c_int {
-                    (*curbuf).b_fname
+                    (*curbuf.get()).b_fname
                 } else {
                     (*files.offset(depth as isize)).name
                 };
@@ -7027,7 +7042,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                 }
             }
         } else if !found && action != ACTION_EXPAND as ::core::ffi::c_int && !silent {
-            if got_int as ::core::ffi::c_int != 0
+            if got_int.get() as ::core::ffi::c_int != 0
                 || ins_compl_interrupted() as ::core::ffi::c_int != 0
             {
                 emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
@@ -7063,10 +7078,10 @@ unsafe extern "C" fn show_pat_in_path(
 ) {
     if did_show {
         msg_putchar('\n' as ::core::ffi::c_int);
-    } else if msg_silent == 0 {
+    } else if msg_silent.get() == 0 {
         gotocmdline(true_0 != 0);
     }
-    if got_int {
+    if got_int.get() {
         return;
     }
     let mut linelen: size_t = strlen(line);
@@ -7085,27 +7100,27 @@ unsafe extern "C" fn show_pat_in_path(
         }
         if action == ACTION_SHOW_ALL as ::core::ffi::c_int {
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%3d: \0".as_ptr() as *const ::core::ffi::c_char,
                 count,
             );
-            msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+            msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%4d\0".as_ptr() as *const ::core::ffi::c_char,
                 *lnum,
             );
             msg_puts_hl(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 HLF_N as ::core::ffi::c_int,
                 false_0 != 0,
             );
             msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
         }
         msg_prt_line(line, false_0 != 0);
-        if got_int as ::core::ffi::c_int != 0
+        if got_int.get() as ::core::ffi::c_int != 0
             || type_0 != FIND_DEFINE as ::core::ffi::c_int
             || p < line
             || *p as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
@@ -7120,7 +7135,7 @@ unsafe extern "C" fn show_pat_in_path(
             *lnum += 1;
         } else {
             *lnum += 1;
-            if *lnum > (*curbuf).b_ml.ml_line_count {
+            if *lnum > (*curbuf.get()).b_ml.ml_line_count {
                 break;
             }
             line = ml_get(*lnum);

@@ -46,9 +46,9 @@ extern "C" {
     fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata: bool) -> Object;
     fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
     fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    static mut buffer_handles: Map_int_ptr_t;
-    static mut window_handles: Map_int_ptr_t;
-    static mut tabpage_handles: Map_int_ptr_t;
+    static buffer_handles: GlobalCell<Map_int_ptr_t>;
+    static window_handles: GlobalCell<Map_int_ptr_t>;
+    static tabpage_handles: GlobalCell<Map_int_ptr_t>;
     fn api_err_invalid(
         err: *mut Error,
         name: *const ::core::ffi::c_char,
@@ -96,18 +96,18 @@ extern "C" {
         should_free: *mut bool,
     ) -> *mut ::core::ffi::c_char;
     fn discard_current_exception();
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut current_exception: *mut except_T;
-    static mut did_throw: bool;
-    static mut need_rethrow: bool;
-    static mut trylevel: ::core::ffi::c_int;
-    static mut force_abort: bool;
-    static mut msg_list: *mut *mut msglist_T;
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut got_int: bool;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static current_exception: GlobalCell<*mut except_T>;
+    static did_throw: GlobalCell<bool>;
+    static need_rethrow: GlobalCell<bool>;
+    static trylevel: GlobalCell<::core::ffi::c_int>;
+    static force_abort: GlobalCell<bool>;
+    static msg_list: GlobalCell<*mut *mut msglist_T>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static got_int: GlobalCell<bool>;
     fn highlight_num_groups() -> ::core::ffi::c_int;
     fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
@@ -2041,26 +2041,26 @@ unsafe extern "C" fn map_get_int_ptr_t(
 #[no_mangle]
 pub unsafe extern "C" fn try_enter(tstate: *mut TryState) {
     *tstate = TryState {
-        current_exception: current_exception,
+        current_exception: current_exception.get(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: msg_list as *const *const msglist_T,
-        got_int: got_int as ::core::ffi::c_int,
-        did_throw: did_throw,
-        need_rethrow: need_rethrow as ::core::ffi::c_int,
-        did_emsg: did_emsg,
+        msg_list: msg_list.get() as *const *const msglist_T,
+        got_int: got_int.get() as ::core::ffi::c_int,
+        did_throw: did_throw.get(),
+        need_rethrow: need_rethrow.get() as ::core::ffi::c_int,
+        did_emsg: did_emsg.get(),
     };
-    msg_list = &raw mut (*tstate).private_msg_list;
-    current_exception = ::core::ptr::null_mut::<except_T>();
-    got_int = false_0 != 0;
-    did_throw = false_0 != 0;
-    need_rethrow = false_0 != 0;
-    did_emsg = false_0;
-    trylevel += 1;
+    msg_list.set(&raw mut (*tstate).private_msg_list);
+    current_exception.set(::core::ptr::null_mut::<except_T>());
+    got_int.set(false_0 != 0);
+    did_throw.set(false_0 != 0);
+    need_rethrow.set(false_0 != 0);
+    did_emsg.set(false_0);
+    (*trylevel.ptr()) += 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
     '_c2rust_label: {
-        if trylevel > 0 as ::core::ffi::c_int {
+        if trylevel.get() > 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"trylevel > 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2071,11 +2071,11 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
             );
         }
     };
-    trylevel -= 1;
-    did_emsg = false_0;
-    force_abort = false_0 != 0;
-    if got_int {
-        if did_throw {
+    (*trylevel.ptr()) -= 1;
+    did_emsg.set(false_0);
+    force_abort.set(false_0 != 0);
+    if got_int.get() {
+        if did_throw.get() {
             discard_current_exception();
         }
         api_set_error(
@@ -2083,11 +2083,11 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
             kErrorTypeException,
             b"Keyboard interrupt\0".as_ptr() as *const ::core::ffi::c_char,
         );
-        got_int = false_0 != 0;
-    } else if !msg_list.is_null() && !(*msg_list).is_null() {
+        got_int.set(false_0 != 0);
+    } else if !(*msg_list.ptr()).is_null() && !(*msg_list.get()).is_null() {
         let mut should_free: bool = false;
         let mut msg: *mut ::core::ffi::c_char = get_exception_string(
-            *msg_list as *mut ::core::ffi::c_void,
+            *msg_list.get() as *mut ::core::ffi::c_void,
             ET_ERROR,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             &raw mut should_free,
@@ -2102,24 +2102,26 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
         if should_free {
             xfree(msg as *mut ::core::ffi::c_void);
         }
-    } else if did_throw as ::core::ffi::c_int != 0 || need_rethrow as ::core::ffi::c_int != 0 {
-        if *(*current_exception).throw_name as ::core::ffi::c_int != NUL {
-            if (*current_exception).throw_lnum != 0 as linenr_T {
+    } else if did_throw.get() as ::core::ffi::c_int != 0
+        || need_rethrow.get() as ::core::ffi::c_int != 0
+    {
+        if *(*current_exception.get()).throw_name as ::core::ffi::c_int != NUL {
+            if (*current_exception.get()).throw_lnum != 0 as linenr_T {
                 api_set_error(
                     err,
                     kErrorTypeException,
                     b"%s, line %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*current_exception).throw_name,
-                    (*current_exception).throw_lnum,
-                    (*current_exception).value,
+                    (*current_exception.get()).throw_name,
+                    (*current_exception.get()).throw_lnum,
+                    (*current_exception.get()).value,
                 );
             } else {
                 api_set_error(
                     err,
                     kErrorTypeException,
                     b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*current_exception).throw_name,
-                    (*current_exception).value,
+                    (*current_exception.get()).throw_name,
+                    (*current_exception.get()).value,
                 );
             }
         } else {
@@ -2127,17 +2129,17 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
                 err,
                 kErrorTypeException,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                (*current_exception).value,
+                (*current_exception.get()).value,
             );
         }
         discard_current_exception();
     }
-    msg_list = (*tstate).msg_list as *mut *mut msglist_T;
-    current_exception = (*tstate).current_exception;
-    got_int = (*tstate).got_int != 0;
-    did_throw = (*tstate).did_throw;
-    need_rethrow = (*tstate).need_rethrow != 0;
-    did_emsg = (*tstate).did_emsg;
+    msg_list.set((*tstate).msg_list as *mut *mut msglist_T);
+    current_exception.set((*tstate).current_exception);
+    got_int.set((*tstate).got_int != 0);
+    did_throw.set((*tstate).did_throw);
+    need_rethrow.set((*tstate).need_rethrow != 0);
+    did_emsg.set((*tstate).did_emsg);
 }
 #[no_mangle]
 pub unsafe extern "C" fn dict_get_value(
@@ -2318,10 +2320,10 @@ pub unsafe extern "C" fn find_buffer_by_handle(
     mut err: *mut Error,
 ) -> *mut buf_T {
     if buffer == 0 as ::core::ffi::c_int {
-        return curbuf;
+        return curbuf.get();
     }
     let mut rv: *mut buf_T =
-        map_get_int_ptr_t(&raw mut buffer_handles, buffer as ::core::ffi::c_int) as *mut buf_T;
+        map_get_int_ptr_t(buffer_handles.ptr(), buffer as ::core::ffi::c_int) as *mut buf_T;
     if rv.is_null() {
         api_err_invalid(
             err,
@@ -2340,10 +2342,10 @@ pub unsafe extern "C" fn find_window_by_handle(
     mut err: *mut Error,
 ) -> *mut win_T {
     if window == 0 as ::core::ffi::c_int {
-        return curwin;
+        return curwin.get();
     }
     let mut rv: *mut win_T =
-        map_get_int_ptr_t(&raw mut window_handles, window as ::core::ffi::c_int) as *mut win_T;
+        map_get_int_ptr_t(window_handles.ptr(), window as ::core::ffi::c_int) as *mut win_T;
     if rv.is_null() {
         api_err_invalid(
             err,
@@ -2362,11 +2364,10 @@ pub unsafe extern "C" fn find_tab_by_handle(
     mut err: *mut Error,
 ) -> *mut tabpage_T {
     if tabpage == 0 as ::core::ffi::c_int {
-        return curtab;
+        return curtab.get();
     }
     let mut rv: *mut tabpage_T =
-        map_get_int_ptr_t(&raw mut tabpage_handles, tabpage as ::core::ffi::c_int)
-            as *mut tabpage_T;
+        map_get_int_ptr_t(tabpage_handles.ptr(), tabpage as ::core::ffi::c_int) as *mut tabpage_T;
     if rv.is_null() {
         api_err_invalid(
             err,
@@ -3572,7 +3573,7 @@ pub unsafe extern "C" fn set_mark(
     mut col: Integer,
     mut err: *mut Error,
 ) -> bool {
-    buf = if buf.is_null() { curbuf } else { buf };
+    buf = if buf.is_null() { curbuf.get() } else { buf };
     let mut res: bool = false_0 != 0;
     let mut deleting: bool = false_0 != 0;
     if line == 0 as Integer {
@@ -3653,7 +3654,7 @@ pub unsafe extern "C" fn get_default_stl_hl(
     if wp.is_null() {
         return b"TabLineFill\0".as_ptr() as *const ::core::ffi::c_char;
     } else if use_winbar {
-        return if wp == curwin {
+        return if wp == curwin.get() {
             b"WinBar\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"WinBarNC\0".as_ptr() as *const ::core::ffi::c_char
@@ -3661,7 +3662,7 @@ pub unsafe extern "C" fn get_default_stl_hl(
     } else if stc_hl_id > 0 as ::core::ffi::c_int {
         return syn_id2name(stc_hl_id);
     } else {
-        return if wp == curwin {
+        return if wp == curwin.get() {
             b"StatusLine\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"StatusLineNC\0".as_ptr() as *const ::core::ffi::c_char
@@ -3670,16 +3671,16 @@ pub unsafe extern "C" fn get_default_stl_hl(
 }
 #[no_mangle]
 pub unsafe extern "C" fn api_set_sctx(mut channel_id: uint64_t) -> sctx_T {
-    let mut old_current_sctx: sctx_T = current_sctx;
+    let mut old_current_sctx: sctx_T = current_sctx.get();
     if channel_id != VIML_INTERNAL_CALL {
-        current_sctx.sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
+        (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
         if channel_id == LUA_INTERNAL_CALL {
-            if !script_is_lua(current_sctx.sc_sid) {
-                current_sctx.sc_sid = SID_LUA as scid_T;
+            if !script_is_lua((*current_sctx.ptr()).sc_sid) {
+                (*current_sctx.ptr()).sc_sid = SID_LUA as scid_T;
             }
         } else {
-            current_sctx.sc_sid = SID_API_CLIENT as scid_T;
-            current_sctx.sc_chan = channel_id;
+            (*current_sctx.ptr()).sc_sid = SID_API_CLIENT as scid_T;
+            (*current_sctx.ptr()).sc_chan = channel_id;
         }
     }
     return old_current_sctx;

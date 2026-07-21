@@ -61,7 +61,7 @@ extern "C" {
         key_alloc: *mut *mut cstr_t,
         new_item: *mut bool,
     ) -> *mut ptr_t;
-    static mut namespace_ids: Map_String_int;
+    static namespace_ids: GlobalCell<Map_String_int>;
     fn nvim_create_namespace(name: String_0) -> Integer;
     fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
@@ -88,7 +88,7 @@ extern "C" {
         def: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn backslash_halve(p: *mut ::core::ffi::c_char);
-    static mut decor_items: C2Rust_Unnamed_20;
+    static decor_items: GlobalCell<C2Rust_Unnamed_20>;
     fn check_cursor_lnum(win: *mut win_T);
     fn decor_put_sh(item: DecorSignHighlight) -> uint32_t;
     fn sign_item_cmp(
@@ -193,11 +193,11 @@ extern "C" {
     fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool;
     fn extmark_del(buf: *mut buf_T, itr: *mut MarkTreeIter, key: MTKey, restore: bool);
     fn foldOpenCursor();
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut got_int: bool;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static got_int: GlobalCell<bool>;
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn get_highlight_name_ext(
@@ -3051,8 +3051,7 @@ unsafe extern "C" fn group_get_ns(mut group: *const ::core::ffi::c_char) -> int6
     {
         return UINT32_MAX as int64_t;
     }
-    let mut ns: ::core::ffi::c_int =
-        map_get_String_int(&raw mut namespace_ids, cstr_as_string(group));
+    let mut ns: ::core::ffi::c_int = map_get_String_int(namespace_ids.ptr(), cstr_as_string(group));
     return (if ns != 0 {
         ns
     } else {
@@ -3079,7 +3078,7 @@ unsafe extern "C" fn buf_set_sign(
     mut lnum: linenr_T,
     mut sp: *mut sign_T,
 ) {
-    if !group.is_null() && map_get_String_int(&raw mut namespace_ids, cstr_as_string(group)) == 0 {
+    if !group.is_null() && map_get_String_int(namespace_ids.ptr(), cstr_as_string(group)) == 0 {
         if (*sign_ns.ptr()).size == (*sign_ns.ptr()).capacity {
             (*sign_ns.ptr()).capacity = if (*sign_ns.ptr()).capacity != 0 {
                 (*sign_ns.ptr()).capacity << 1 as ::core::ffi::c_int
@@ -3411,12 +3410,16 @@ unsafe extern "C" fn sign_list_placed(mut rbuf: *mut buf_T, mut group: *mut ::co
     let mut lbuf: [::core::ffi::c_char; 480] = [0; 480];
     let mut namebuf: [::core::ffi::c_char; 480] = [0; 480];
     let mut groupbuf: [::core::ffi::c_char; 480] = [0; 480];
-    let mut buf: *mut buf_T = if !rbuf.is_null() { rbuf } else { firstbuf };
+    let mut buf: *mut buf_T = if !rbuf.is_null() {
+        rbuf
+    } else {
+        firstbuf.get()
+    };
     let mut ns: int64_t = group_get_ns(group);
     msg_puts_title(gettext(
         b"\n--- Signs ---\0".as_ptr() as *const ::core::ffi::c_char
     ));
-    while !buf.is_null() && !got_int {
+    while !buf.is_null() && !got_int.get() {
         if buf_has_signs(buf) {
             msg_putchar('\n' as ::core::ffi::c_int);
             vim_snprintf(
@@ -3690,8 +3693,8 @@ unsafe extern "C" fn sign_define_by_name(
     if !new_sign {
         let mut did_redraw: bool = false_0 != 0;
         let mut i_0: size_t = 0 as size_t;
-        while i_0 < decor_items.size {
-            let mut sh: *mut DecorSignHighlight = decor_items.items.offset(i_0 as isize);
+        while i_0 < (*decor_items.ptr()).size {
+            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(i_0 as isize);
             if !(*sh).sign_name.is_null()
                 && strcmp((*sh).sign_name, name) == 0 as ::core::ffi::c_int
             {
@@ -3706,10 +3709,10 @@ unsafe extern "C" fn sign_define_by_name(
                 (*sh).number_hl_id = (**sp).sn_num_hl;
                 (*sh).cursorline_hl_id = (**sp).sn_cul_hl;
                 if !did_redraw {
-                    let mut wp: *mut win_T = if curtab == curtab {
-                        firstwin
+                    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+                        firstwin.get()
                     } else {
-                        (*curtab).tp_firstwin
+                        (*curtab.get()).tp_firstwin
                     };
                     while !wp.is_null() {
                         if buf_has_signs((*wp).w_buffer) {
@@ -3901,7 +3904,7 @@ unsafe extern "C" fn sign_unplace(
         return sign_unplace_inner(buf, id, group, atlnum);
     } else {
         let mut retval: ::core::ffi::c_int = OK;
-        let mut cbuf: *mut buf_T = firstbuf;
+        let mut cbuf: *mut buf_T = firstbuf.get();
         while !cbuf.is_null() {
             if sign_unplace_inner(cbuf, id, group, atlnum) == 0 {
                 retval = FAIL;
@@ -3925,8 +3928,8 @@ unsafe extern "C" fn sign_jump(
         return -1 as linenr_T;
     }
     if !buf_jump_open_win(buf).is_null() {
-        (*curwin).w_cursor.lnum = lnum;
-        check_cursor_lnum(curwin);
+        (*curwin.get()).w_cursor.lnum = lnum;
+        check_cursor_lnum(curwin.get());
         beginline(BL_WHITE as ::core::ffi::c_int);
     } else {
         if (*buf).b_fname.is_null() {
@@ -4077,8 +4080,8 @@ unsafe extern "C" fn sign_unplace_cmd(
         return;
     }
     if id == -1 as ::core::ffi::c_int {
-        lnum = (*curwin).w_cursor.lnum;
-        buf = (*curwin).w_buffer;
+        lnum = (*curwin.get()).w_cursor.lnum;
+        buf = (*curwin.get()).w_buffer;
     }
     if sign_unplace(
         buf,
@@ -4254,7 +4257,7 @@ unsafe extern "C" fn parse_sign_cmd_args(
     if filename.is_null()
         && (cmd == SIGNCMD_PLACE && lnum_arg as ::core::ffi::c_int != 0 || cmd == SIGNCMD_JUMP)
     {
-        *buf = (*curwin).w_buffer;
+        *buf = (*curwin.get()).w_buffer;
     }
     return OK;
 }
@@ -4597,7 +4600,7 @@ unsafe extern "C" fn sign_get_placed(
     if !buf.is_null() {
         sign_get_placed_in_buf(buf, lnum, id, group, retlist);
     } else {
-        let mut cbuf: *mut buf_T = firstbuf;
+        let mut cbuf: *mut buf_T = firstbuf.get();
         while !cbuf.is_null() {
             if buf_has_signs(cbuf) {
                 sign_get_placed_in_buf(cbuf, 0 as linenr_T, id, group, retlist);

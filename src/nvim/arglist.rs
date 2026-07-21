@@ -20,8 +20,8 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut autocmd_no_enter: ::core::ffi::c_int;
-    static mut autocmd_no_leave: ::core::ffi::c_int;
+    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
+    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
     fn is_aucmd_win(win: *mut win_T) -> bool;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
@@ -37,9 +37,9 @@ extern "C" {
     fn maketitle();
     fn buf_hide(buf: *const buf_T) -> bool;
     fn buf_is_empty(buf: *mut buf_T) -> bool;
-    static mut p_ea: ::core::ffi::c_int;
-    static mut p_fic: ::core::ffi::c_int;
-    static mut p_tpm: OptInt;
+    static p_ea: GlobalCell<::core::ffi::c_int>;
+    static p_fic: GlobalCell<::core::ffi::c_int>;
+    static p_tpm: GlobalCell<OptInt>;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn rem_backslash(str: *const ::core::ffi::c_char) -> bool;
     static e_cmdwin: [::core::ffi::c_char; 0];
@@ -77,20 +77,20 @@ extern "C" {
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static mut Columns: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut lastwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut lastused_tabpage: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut global_alist: alist_T;
-    static mut max_alist_id: ::core::ffi::c_int;
-    static mut arg_had_last: bool;
-    static mut cmdmod: cmdmod_T;
-    static mut got_int: bool;
-    static mut cmdwin_type: ::core::ffi::c_int;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static lastwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static lastused_tabpage: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static global_alist: GlobalCell<alist_T>;
+    static max_alist_id: GlobalCell<::core::ffi::c_int>;
+    static arg_had_last: GlobalCell<bool>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static got_int: GlobalCell<bool>;
+    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
     fn setmark(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn setpcmark();
     fn reset_VIsual_and_resel();
@@ -134,7 +134,7 @@ extern "C" {
         size: ::core::ffi::c_int,
         current: ::core::ffi::c_int,
     );
-    static mut tabpage_move_disallowed: ::core::ffi::c_int;
+    static tabpage_move_disallowed: GlobalCell<::core::ffi::c_int>;
     fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool;
     fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn win_valid(win: *const win_T) -> bool;
@@ -2583,7 +2583,7 @@ pub unsafe extern "C" fn alist_init(mut al: *mut alist_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn alist_unlink(mut al: *mut alist_T) {
-    if al != &raw mut global_alist && {
+    if al != global_alist.ptr() && {
         (*al).al_refcount -= 1;
         (*al).al_refcount <= 0 as ::core::ffi::c_int
     } {
@@ -2593,11 +2593,11 @@ pub unsafe extern "C" fn alist_unlink(mut al: *mut alist_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn alist_new() {
-    (*curwin).w_alist = xmalloc(::core::mem::size_of::<alist_T>()) as *mut alist_T;
-    (*(*curwin).w_alist).al_refcount = 1 as ::core::ffi::c_int;
-    max_alist_id += 1;
-    (*(*curwin).w_alist).id = max_alist_id;
-    alist_init((*curwin).w_alist);
+    (*curwin.get()).w_alist = xmalloc(::core::mem::size_of::<alist_T>()) as *mut alist_T;
+    (*(*curwin.get()).w_alist).al_refcount = 1 as ::core::ffi::c_int;
+    (*max_alist_id.ptr()) += 1;
+    (*(*curwin.get()).w_alist).id = max_alist_id.get();
+    alist_init((*curwin.get()).w_alist);
 }
 #[no_mangle]
 pub unsafe extern "C" fn alist_set(
@@ -2615,7 +2615,7 @@ pub unsafe extern "C" fn alist_set(
     ga_grow(&raw mut (*al).al_ga, count);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < count {
-        if got_int {
+        if got_int.get() {
             while i < count {
                 let c2rust_fresh0 = i;
                 i = i + 1;
@@ -2642,8 +2642,8 @@ pub unsafe extern "C" fn alist_set(
         }
     }
     xfree(files as *mut ::core::ffi::c_void);
-    if al == &raw mut global_alist {
-        arg_had_last = false_0 != 0;
+    if al == global_alist.ptr() {
+        arg_had_last.set(false_0 != 0);
     }
 }
 #[no_mangle]
@@ -2652,7 +2652,7 @@ pub unsafe extern "C" fn alist_add(
     mut fname: *mut ::core::ffi::c_char,
     mut set_fnum: ::core::ffi::c_int,
 ) {
-    let mut wp: *mut win_T = curwin;
+    let mut wp: *mut win_T = curwin.get();
     if fname.is_null() {
         return;
     }
@@ -2770,15 +2770,15 @@ pub unsafe extern "C" fn get_arglist_exp(
     return i;
 }
 unsafe extern "C" fn alist_check_arg_idx() {
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut win: *mut win_T = if tp == curtab {
-            firstwin
+        let mut win: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
         while !win.is_null() {
-            if (*win).w_alist == (*curwin).w_alist {
+            if (*win).w_alist == (*curwin.get()).w_alist {
                 check_arg_idx(win);
             }
             win = (*win).w_next;
@@ -2792,15 +2792,15 @@ unsafe extern "C" fn alist_add_list(
     mut after: ::core::ffi::c_int,
     mut will_edit: bool,
 ) {
-    let mut old_argcount: ::core::ffi::c_int = (*(*curwin).w_alist).al_ga.ga_len;
+    let mut old_argcount: ::core::ffi::c_int = (*(*curwin.get()).w_alist).al_ga.ga_len;
     if check_arglist_locked() != FAIL {
-        let mut wp: *mut win_T = curwin;
+        let mut wp: *mut win_T = curwin.get();
         ga_grow(&raw mut (*(*wp).w_alist).al_ga, count);
         after = if (if after > 0 as ::core::ffi::c_int {
             after
         } else {
             0 as ::core::ffi::c_int
-        }) < (*(*curwin).w_alist).al_ga.ga_len
+        }) < (*(*curwin.get()).w_alist).al_ga.ga_len
         {
             if after > 0 as ::core::ffi::c_int {
                 after
@@ -2808,15 +2808,15 @@ unsafe extern "C" fn alist_add_list(
                 0 as ::core::ffi::c_int
             }
         } else {
-            (*(*curwin).w_alist).al_ga.ga_len
+            (*(*curwin.get()).w_alist).al_ga.ga_len
         };
-        if after < (*(*curwin).w_alist).al_ga.ga_len {
+        if after < (*(*curwin.get()).w_alist).al_ga.ga_len {
             memmove(
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                     .offset((after + count) as isize) as *mut ::core::ffi::c_void,
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(after as isize)
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(after as isize)
                     as *const ::core::ffi::c_void,
-                (((*(*curwin).w_alist).al_ga.ga_len - after) as size_t)
+                (((*(*curwin.get()).w_alist).al_ga.ga_len - after) as size_t)
                     .wrapping_mul(::core::mem::size_of::<aentry_T>()),
             );
         }
@@ -2830,10 +2830,12 @@ unsafe extern "C" fn alist_add_list(
                 } else {
                     0 as ::core::ffi::c_int
                 });
-            (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset((after + i) as isize))
-                .ae_fname = *files.offset(i as isize);
-            (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset((after + i) as isize))
-                .ae_fnum = buflist_add(*files.offset(i as isize), flags);
+            (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
+                .offset((after + i) as isize))
+            .ae_fname = *files.offset(i as isize);
+            (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
+                .offset((after + i) as isize))
+            .ae_fnum = buflist_add(*files.offset(i as isize), flags);
             i += 1;
         }
         arglist_locked.set(false_0 != 0);
@@ -2853,9 +2855,9 @@ unsafe extern "C" fn arglist_del_files(mut alist_ga: *mut garray_T) {
         rm_matchcol: 0,
         rm_ic: false,
     };
-    regmatch.rm_ic = p_fic != 0;
+    regmatch.rm_ic = p_fic.get() != 0;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*alist_ga).ga_len && !got_int {
+    while i < (*alist_ga).ga_len && !got_int.get() {
         let mut p: *mut ::core::ffi::c_char =
             *((*alist_ga).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize);
         p = file_pat_to_reg_pat(
@@ -2881,36 +2883,37 @@ unsafe extern "C" fn arglist_del_files(mut alist_ga: *mut garray_T) {
         } else {
             let mut didone: bool = false_0 != 0;
             let mut match_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while match_0 < (*(*curwin).w_alist).al_ga.ga_len {
+            while match_0 < (*(*curwin.get()).w_alist).al_ga.ga_len {
                 if vim_regexec(
                     &raw mut regmatch,
                     alist_name(
-                        ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                        ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                             .offset(match_0 as isize),
                     ),
                     0 as colnr_T,
                 ) {
                     didone = true_0 != 0;
                     xfree(
-                        (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                        (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                             .offset(match_0 as isize))
                         .ae_fname as *mut ::core::ffi::c_void,
                     );
                     memmove(
-                        ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                        ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                             .offset(match_0 as isize)
                             as *mut ::core::ffi::c_void,
-                        ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                        ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                             .offset(match_0 as isize)
                             .offset(1 as ::core::ffi::c_int as isize)
                             as *const ::core::ffi::c_void,
-                        (((*(*curwin).w_alist).al_ga.ga_len - match_0 - 1 as ::core::ffi::c_int)
-                            as size_t)
+                        (((*(*curwin.get()).w_alist).al_ga.ga_len
+                            - match_0
+                            - 1 as ::core::ffi::c_int) as size_t)
                             .wrapping_mul(::core::mem::size_of::<aentry_T>()),
                     );
-                    (*(*curwin).w_alist).al_ga.ga_len -= 1;
-                    if (*curwin).w_arg_idx > match_0 {
-                        (*curwin).w_arg_idx -= 1;
+                    (*(*curwin.get()).w_alist).al_ga.ga_len -= 1;
+                    if (*curwin.get()).w_arg_idx > match_0 {
+                        (*curwin.get()).w_arg_idx -= 1;
                     }
                     match_0 -= 1;
                 }
@@ -2950,10 +2953,10 @@ unsafe extern "C" fn do_arglist(
         return FAIL;
     }
     if what == AL_ADD as ::core::ffi::c_int && *str as ::core::ffi::c_int == NUL {
-        if (*curbuf).b_ffname.is_null() {
+        if (*curbuf.get()).b_ffname.is_null() {
             return FAIL;
         }
-        str = (*curbuf).b_fname;
+        str = (*curbuf.get()).b_fname;
         arg_escaped = false_0 != 0;
     }
     get_arglist(&raw mut new_ga, str, arg_escaped);
@@ -2992,7 +2995,7 @@ unsafe extern "C" fn do_arglist(
                 }
             };
             alist_set(
-                (*curwin).w_alist,
+                (*curwin.get()).w_alist,
                 exp_count,
                 exp_files,
                 will_edit as ::core::ffi::c_int,
@@ -3038,19 +3041,23 @@ pub unsafe extern "C" fn check_arg_idx(mut win: *mut win_T) {
     if (*(*win).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int && !editing_arg_idx(win) {
         (*win).w_arg_idx_invalid = true_0;
         if (*win).w_arg_idx != (*(*win).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int
-            && arg_had_last as ::core::ffi::c_int == false_0
-            && (*win).w_alist == &raw mut global_alist
-            && global_alist.al_ga.ga_len > 0 as ::core::ffi::c_int
-            && (*win).w_arg_idx < global_alist.al_ga.ga_len
+            && arg_had_last.get() as ::core::ffi::c_int == false_0
+            && (*win).w_alist == global_alist.ptr()
+            && (*global_alist.ptr()).al_ga.ga_len > 0 as ::core::ffi::c_int
+            && (*win).w_arg_idx < (*global_alist.ptr()).al_ga.ga_len
             && ((*(*win).w_buffer).handle
-                == (*(global_alist.al_ga.ga_data as *mut aentry_T)
-                    .offset((global_alist.al_ga.ga_len - 1 as ::core::ffi::c_int) as isize))
+                == (*((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T).offset(
+                    ((*global_alist.ptr()).al_ga.ga_len - 1 as ::core::ffi::c_int) as isize,
+                ))
                 .ae_fnum
                 || !(*(*win).w_buffer).b_ffname.is_null()
                     && path_full_compare(
-                        alist_name((global_alist.al_ga.ga_data as *mut aentry_T).offset(
-                            (global_alist.al_ga.ga_len - 1 as ::core::ffi::c_int) as isize,
-                        )),
+                        alist_name(
+                            ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T).offset(
+                                ((*global_alist.ptr()).al_ga.ga_len - 1 as ::core::ffi::c_int)
+                                    as isize,
+                            ),
+                        ),
                         (*(*win).w_buffer).b_ffname,
                         true_0 != 0,
                         true_0 != 0,
@@ -3058,14 +3065,14 @@ pub unsafe extern "C" fn check_arg_idx(mut win: *mut win_T) {
                         & kEqualFiles as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0)
         {
-            arg_had_last = true_0 != 0;
+            arg_had_last.set(true_0 != 0);
         }
     } else {
         (*win).w_arg_idx_invalid = false_0;
         if (*win).w_arg_idx == (*(*win).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int
-            && (*win).w_alist == &raw mut global_alist
+            && (*win).w_alist == global_alist.ptr()
         {
-            arg_had_last = true_0 != 0;
+            arg_had_last.set(true_0 != 0);
         }
     };
 }
@@ -3075,9 +3082,9 @@ pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
         if check_arglist_locked() == FAIL {
             return;
         }
-        alist_unlink((*curwin).w_alist);
+        alist_unlink((*curwin.get()).w_alist);
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_argglobal as ::core::ffi::c_int {
-            (*curwin).w_alist = &raw mut global_alist;
+            (*curwin.get()).w_alist = global_alist.ptr();
         } else {
             alist_new();
         }
@@ -3090,47 +3097,49 @@ pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
         return;
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_args as ::core::ffi::c_int {
-        if (*(*curwin).w_alist).al_ga.ga_len <= 0 as ::core::ffi::c_int {
+        if (*(*curwin.get()).w_alist).al_ga.ga_len <= 0 as ::core::ffi::c_int {
             return;
         }
         let mut items: *mut *mut ::core::ffi::c_char = xmalloc(
             ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul((*(*curwin).w_alist).al_ga.ga_len as size_t),
+                .wrapping_mul((*(*curwin.get()).w_alist).al_ga.ga_len as size_t),
         ) as *mut *mut ::core::ffi::c_char;
         gotocmdline(true_0 != 0);
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*(*curwin).w_alist).al_ga.ga_len {
+        while i < (*(*curwin.get()).w_alist).al_ga.ga_len {
             *items.offset(i as isize) = alist_name(
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(i as isize),
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(i as isize),
             );
             i += 1;
         }
         list_in_columns(
             items,
-            (*(*curwin).w_alist).al_ga.ga_len,
-            (*curwin).w_arg_idx,
+            (*(*curwin.get()).w_alist).al_ga.ga_len,
+            (*curwin.get()).w_arg_idx,
         );
         xfree(items as *mut ::core::ffi::c_void);
         return;
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_arglocal as ::core::ffi::c_int {
-        let mut gap: *mut garray_T = &raw mut (*(*curwin).w_alist).al_ga;
-        ga_grow(gap, global_alist.al_ga.ga_len);
+        let mut gap: *mut garray_T = &raw mut (*(*curwin.get()).w_alist).al_ga;
+        ga_grow(gap, (*global_alist.ptr()).al_ga.ga_len);
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i_0 < global_alist.al_ga.ga_len {
-            if !(*(global_alist.al_ga.ga_data as *mut aentry_T).offset(i_0 as isize))
+        while i_0 < (*global_alist.ptr()).al_ga.ga_len {
+            if !(*((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T).offset(i_0 as isize))
                 .ae_fname
                 .is_null()
             {
-                (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                     .offset((*gap).ga_len as isize))
                 .ae_fname = xstrdup(
-                    (*(global_alist.al_ga.ga_data as *mut aentry_T).offset(i_0 as isize)).ae_fname,
+                    (*((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T).offset(i_0 as isize))
+                        .ae_fname,
                 );
-                (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                     .offset((*gap).ga_len as isize))
-                .ae_fnum =
-                    (*(global_alist.al_ga.ga_data as *mut aentry_T).offset(i_0 as isize)).ae_fnum;
+                .ae_fnum = (*((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
+                    .offset(i_0 as isize))
+                .ae_fnum;
                 (*gap).ga_len += 1;
             }
             i_0 += 1;
@@ -3139,16 +3148,17 @@ pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_previous(mut eap: *mut exarg_T) {
-    if (*curwin).w_arg_idx - (*eap).line2 as ::core::ffi::c_int >= (*(*curwin).w_alist).al_ga.ga_len
+    if (*curwin.get()).w_arg_idx - (*eap).line2 as ::core::ffi::c_int
+        >= (*(*curwin.get()).w_alist).al_ga.ga_len
     {
         do_argfile(
             eap,
-            (*(*curwin).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int,
+            (*(*curwin.get()).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int,
         );
     } else {
         do_argfile(
             eap,
-            (*curwin).w_arg_idx - (*eap).line2 as ::core::ffi::c_int,
+            (*curwin.get()).w_arg_idx - (*eap).line2 as ::core::ffi::c_int,
         );
     };
 }
@@ -3160,7 +3170,7 @@ pub unsafe extern "C" fn ex_rewind(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn ex_last(mut eap: *mut exarg_T) {
     do_argfile(
         eap,
-        (*(*curwin).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int,
+        (*(*curwin.get()).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int,
     );
 }
 #[no_mangle]
@@ -3169,16 +3179,16 @@ pub unsafe extern "C" fn ex_argument(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         i = (*eap).line2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     } else {
-        i = (*curwin).w_arg_idx;
+        i = (*curwin.get()).w_arg_idx;
     }
     do_argfile(eap, i);
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi::c_int) {
     let mut is_split_cmd: bool = *(*eap).cmd as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
-    let mut old_arg_idx: ::core::ffi::c_int = (*curwin).w_arg_idx;
-    if argn < 0 as ::core::ffi::c_int || argn >= (*(*curwin).w_alist).al_ga.ga_len {
-        if (*(*curwin).w_alist).al_ga.ga_len <= 1 as ::core::ffi::c_int {
+    let mut old_arg_idx: ::core::ffi::c_int = (*curwin.get()).w_arg_idx;
+    if argn < 0 as ::core::ffi::c_int || argn >= (*(*curwin.get()).w_alist).al_ga.ga_len {
+        if (*(*curwin.get()).w_alist).al_ga.ga_len <= 1 as ::core::ffi::c_int {
             emsg(gettext(
                 b"E163: There is only one file to edit\0".as_ptr() as *const ::core::ffi::c_char
             ));
@@ -3194,31 +3204,34 @@ pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi
         return;
     }
     if !is_split_cmd
-        && (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(argn as isize)).ae_fnum
-            != (*curbuf).handle
+        && (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(argn as isize))
+            .ae_fnum
+            != (*curbuf.get()).handle
         && !check_can_set_curbuf_forceit((*eap).forceit)
     {
         return;
     }
     setpcmark();
-    if is_split_cmd as ::core::ffi::c_int != 0 || cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
+    if is_split_cmd as ::core::ffi::c_int != 0
+        || (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int
+    {
         if win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int) == FAIL {
             return;
         }
-        (*curwin).w_onebuf_opt.wo_scb = false_0;
-        (*curwin).w_onebuf_opt.wo_crb = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
     } else {
         let mut other: ::core::ffi::c_int = true_0;
-        if buf_hide(curbuf) {
+        if buf_hide(curbuf.get()) {
             let mut p: *mut ::core::ffi::c_char = fix_fname(alist_name(
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(argn as isize),
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(argn as isize),
             ));
             other = otherfile(p) as ::core::ffi::c_int;
             xfree(p as *mut ::core::ffi::c_void);
         }
-        if (!buf_hide(curbuf) || other == 0)
+        if (!buf_hide(curbuf.get()) || other == 0)
             && check_changed(
-                curbuf,
+                curbuf.get(),
                 CCGD_AW as ::core::ffi::c_int
                     | (if other != 0 {
                         0 as ::core::ffi::c_int
@@ -3237,22 +3250,22 @@ pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi
             return;
         }
     }
-    (*curwin).w_arg_idx = argn;
-    if argn == (*(*curwin).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int
-        && (*curwin).w_alist == &raw mut global_alist
+    (*curwin.get()).w_arg_idx = argn;
+    if argn == (*(*curwin.get()).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int
+        && (*curwin.get()).w_alist == global_alist.ptr()
     {
-        arg_had_last = true_0 != 0;
+        arg_had_last.set(true_0 != 0);
     }
     if do_ecmd(
         0 as ::core::ffi::c_int,
         alist_name(
-            ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
-                .offset((*curwin).w_arg_idx as isize),
+            ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
+                .offset((*curwin.get()).w_arg_idx as isize),
         ),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         eap,
         ECMD_LAST as ::core::ffi::c_int as linenr_T,
-        (if buf_hide((*curwin).w_buffer) as ::core::ffi::c_int != 0 {
+        (if buf_hide((*curwin.get()).w_buffer) as ::core::ffi::c_int != 0 {
             ECMD_HIDE as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
@@ -3261,20 +3274,20 @@ pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi
         } else {
             0 as ::core::ffi::c_int
         }),
-        curwin,
+        curwin.get(),
     ) == FAIL
     {
-        (*curwin).w_arg_idx = old_arg_idx;
+        (*curwin.get()).w_arg_idx = old_arg_idx;
     } else if (*eap).cmdidx as ::core::ffi::c_int != CMD_argdo as ::core::ffi::c_int {
         setmark('\'' as ::core::ffi::c_int);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
-    if buf_hide(curbuf) as ::core::ffi::c_int != 0
+    if buf_hide(curbuf.get()) as ::core::ffi::c_int != 0
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_snext as ::core::ffi::c_int
         || !check_changed(
-            curbuf,
+            curbuf.get(),
             CCGD_AW as ::core::ffi::c_int
                 | (if (*eap).forceit != 0 {
                     CCGD_FORCEIT as ::core::ffi::c_int
@@ -3297,7 +3310,7 @@ pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
             }
             i = 0 as ::core::ffi::c_int;
         } else {
-            i = (*curwin).w_arg_idx + (*eap).line2 as ::core::ffi::c_int;
+            i = (*curwin.get()).w_arg_idx + (*eap).line2 as ::core::ffi::c_int;
         }
         do_argfile(eap, i);
     }
@@ -3305,15 +3318,16 @@ pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*(*curwin).w_alist).al_ga.ga_len {
+    while i < (*(*curwin.get()).w_alist).al_ga.ga_len {
         let mut firstFullname: *mut ::core::ffi::c_char = FullName_save(
-            (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(i as isize)).ae_fname,
+            (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(i as isize))
+                .ae_fname,
             false_0 != 0,
         );
         let mut j: ::core::ffi::c_int = i + 1 as ::core::ffi::c_int;
-        while j < (*(*curwin).w_alist).al_ga.ga_len {
+        while j < (*(*curwin.get()).w_alist).al_ga.ga_len {
             let mut secondFullname: *mut ::core::ffi::c_char = FullName_save(
-                (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(j as isize))
+                (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(j as isize))
                     .ae_fname,
                 false_0 != 0,
             );
@@ -3322,24 +3336,26 @@ pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
             xfree(secondFullname as *mut ::core::ffi::c_void);
             if areNamesDuplicate {
                 xfree(
-                    (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(j as isize))
-                        .ae_fname as *mut ::core::ffi::c_void,
+                    (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
+                        .offset(j as isize))
+                    .ae_fname as *mut ::core::ffi::c_void,
                 );
                 memmove(
-                    ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(j as isize)
+                    ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(j as isize)
                         as *mut ::core::ffi::c_void,
-                    ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                    ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                         .offset(j as isize)
                         .offset(1 as ::core::ffi::c_int as isize)
                         as *const ::core::ffi::c_void,
-                    (((*(*curwin).w_alist).al_ga.ga_len - j - 1 as ::core::ffi::c_int) as size_t)
+                    (((*(*curwin.get()).w_alist).al_ga.ga_len - j - 1 as ::core::ffi::c_int)
+                        as size_t)
                         .wrapping_mul(::core::mem::size_of::<aentry_T>()),
                 );
-                (*(*curwin).w_alist).al_ga.ga_len -= 1;
-                if (*curwin).w_arg_idx == j {
-                    (*curwin).w_arg_idx = i;
-                } else if (*curwin).w_arg_idx > j {
-                    (*curwin).w_arg_idx -= 1;
+                (*(*curwin.get()).w_alist).al_ga.ga_len -= 1;
+                if (*curwin.get()).w_arg_idx == j {
+                    (*curwin.get()).w_arg_idx = i;
+                } else if (*curwin.get()).w_arg_idx > j {
+                    (*curwin.get()).w_arg_idx -= 1;
                 }
                 j -= 1;
             }
@@ -3354,20 +3370,20 @@ pub unsafe extern "C" fn ex_argedit(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = if (*eap).addr_count != 0 {
         (*eap).line2 as ::core::ffi::c_int
     } else {
-        (*curwin).w_arg_idx + 1 as ::core::ffi::c_int
+        (*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int
     };
     let mut curbuf_is_reusable: bool = curbuf_reusable();
     if do_arglist((*eap).arg, AL_ADD as ::core::ffi::c_int, i, true_0 != 0) == FAIL {
         return;
     }
     maketitle();
-    if (*curwin).w_arg_idx == 0 as ::core::ffi::c_int
-        && (*curbuf).b_ml.ml_flags & ML_EMPTY != 0
-        && ((*curbuf).b_ffname.is_null() || curbuf_is_reusable as ::core::ffi::c_int != 0)
+    if (*curwin.get()).w_arg_idx == 0 as ::core::ffi::c_int
+        && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0
+        && ((*curbuf.get()).b_ffname.is_null() || curbuf_is_reusable as ::core::ffi::c_int != 0)
     {
         i = 0 as ::core::ffi::c_int;
     }
-    if i < (*(*curwin).w_alist).al_ga.ga_len {
+    if i < (*(*curwin.get()).w_alist).al_ga.ga_len {
         do_argfile(eap, i);
     }
 }
@@ -3379,7 +3395,7 @@ pub unsafe extern "C" fn ex_argadd(mut eap: *mut exarg_T) {
         if (*eap).addr_count > 0 as ::core::ffi::c_int {
             (*eap).line2 as ::core::ffi::c_int
         } else {
-            (*curwin).w_arg_idx + 1 as ::core::ffi::c_int
+            (*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int
         },
         false_0 != 0,
     );
@@ -3392,16 +3408,16 @@ pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
     }
     if (*eap).addr_count > 0 as ::core::ffi::c_int || *(*eap).arg as ::core::ffi::c_int == NUL {
         if (*eap).addr_count == 0 as ::core::ffi::c_int {
-            if (*curwin).w_arg_idx >= (*(*curwin).w_alist).al_ga.ga_len {
+            if (*curwin.get()).w_arg_idx >= (*(*curwin.get()).w_alist).al_ga.ga_len {
                 emsg(gettext(
                     b"E610: No argument to delete\0".as_ptr() as *const ::core::ffi::c_char
                 ));
                 return;
             }
-            (*eap).line2 = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
+            (*eap).line2 = ((*curwin.get()).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
             (*eap).line1 = (*eap).line2;
-        } else if (*eap).line2 > (*(*curwin).w_alist).al_ga.ga_len as linenr_T {
-            (*eap).line2 = (*(*curwin).w_alist).al_ga.ga_len as linenr_T;
+        } else if (*eap).line2 > (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T {
+            (*eap).line2 = (*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T;
         }
         let mut n: linenr_T = (*eap).line2 - (*eap).line1 + 1 as linenr_T;
         if *(*eap).arg as ::core::ffi::c_int != NUL {
@@ -3414,32 +3430,33 @@ pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
             let mut i: linenr_T = (*eap).line1;
             while i <= (*eap).line2 {
                 xfree(
-                    (*((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                    (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                         .offset((i - 1 as linenr_T) as isize))
                     .ae_fname as *mut ::core::ffi::c_void,
                 );
                 i += 1;
             }
             memmove(
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T)
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
                     .offset((*eap).line1 as isize)
                     .offset(-(1 as ::core::ffi::c_int as isize))
                     as *mut ::core::ffi::c_void,
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset((*eap).line2 as isize)
-                    as *const ::core::ffi::c_void,
-                (((*(*curwin).w_alist).al_ga.ga_len as linenr_T - (*eap).line2) as size_t)
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
+                    .offset((*eap).line2 as isize) as *const ::core::ffi::c_void,
+                (((*(*curwin.get()).w_alist).al_ga.ga_len as linenr_T - (*eap).line2) as size_t)
                     .wrapping_mul(::core::mem::size_of::<aentry_T>()),
             );
-            (*(*curwin).w_alist).al_ga.ga_len -= n as ::core::ffi::c_int;
-            if (*curwin).w_arg_idx as linenr_T >= (*eap).line2 {
-                (*curwin).w_arg_idx -= n as ::core::ffi::c_int;
-            } else if (*curwin).w_arg_idx as linenr_T > (*eap).line1 {
-                (*curwin).w_arg_idx = (*eap).line1 as ::core::ffi::c_int;
+            (*(*curwin.get()).w_alist).al_ga.ga_len -= n as ::core::ffi::c_int;
+            if (*curwin.get()).w_arg_idx as linenr_T >= (*eap).line2 {
+                (*curwin.get()).w_arg_idx -= n as ::core::ffi::c_int;
+            } else if (*curwin.get()).w_arg_idx as linenr_T > (*eap).line1 {
+                (*curwin.get()).w_arg_idx = (*eap).line1 as ::core::ffi::c_int;
             }
-            if (*(*curwin).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
-                (*curwin).w_arg_idx = 0 as ::core::ffi::c_int;
-            } else if (*curwin).w_arg_idx >= (*(*curwin).w_alist).al_ga.ga_len {
-                (*curwin).w_arg_idx = (*(*curwin).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int;
+            if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
+                (*curwin.get()).w_arg_idx = 0 as ::core::ffi::c_int;
+            } else if (*curwin.get()).w_arg_idx >= (*(*curwin.get()).w_alist).al_ga.ga_len {
+                (*curwin.get()).w_arg_idx =
+                    (*(*curwin.get()).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int;
             }
         }
     } else {
@@ -3457,10 +3474,12 @@ pub unsafe extern "C" fn get_arglist_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    if idx >= (*(*curwin).w_alist).al_ga.ga_len {
+    if idx >= (*(*curwin.get()).w_alist).al_ga.ga_len {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    return alist_name(((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(idx as isize));
+    return alist_name(
+        ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(idx as isize),
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn alist_name(mut aep: *mut aentry_T) -> *mut ::core::ffi::c_char {
@@ -3471,19 +3490,19 @@ pub unsafe extern "C" fn alist_name(mut aep: *mut aentry_T) -> *mut ::core::ffi:
     return (*bp).b_fname;
 }
 unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T) {
-    let mut old_curwin: *mut win_T = curwin;
-    let mut old_curtab: *mut tabpage_T = curtab;
+    let mut old_curwin: *mut win_T = curwin.get();
+    let mut old_curtab: *mut tabpage_T = curtab.get();
     if (*aall).had_tab > 0 as ::core::ffi::c_int {
-        goto_tabpage_tp(first_tabpage, true_0 != 0, true_0 != 0);
+        goto_tabpage_tp(first_tabpage.get(), true_0 != 0, true_0 != 0);
     }
-    tabpage_move_disallowed += 1;
+    (*tabpage_move_disallowed.ptr()) += 1;
     loop {
         let mut wpnext: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut tpnext: *mut tabpage_T = (*curtab).tp_next;
-        let mut wp: *mut win_T = if (*lastwin).w_floating as ::core::ffi::c_int != 0 {
-            lastwin
+        let mut tpnext: *mut tabpage_T = (*curtab.get()).tp_next;
+        let mut wp: *mut win_T = if (*lastwin.get()).w_floating as ::core::ffi::c_int != 0 {
+            lastwin.get()
         } else {
-            firstwin
+            firstwin.get()
         };
         while !wp.is_null() {
             let mut i: ::core::ffi::c_int = 0;
@@ -3491,7 +3510,7 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
                 if (*(*wp).w_prev).w_floating as ::core::ffi::c_int != 0 {
                     (*wp).w_prev
                 } else {
-                    firstwin
+                    firstwin.get()
                 }
             } else if (*wp).w_next.is_null()
                 || (*(*wp).w_next).w_floating as ::core::ffi::c_int != 0
@@ -3504,7 +3523,7 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
             if (*buf).b_ffname.is_null()
                 || !(*aall).keep_tabs
                     && ((*buf).b_nwindows > 1 as ::core::ffi::c_int
-                        || (*wp).w_width != Columns
+                        || (*wp).w_width != Columns.get()
                         || (*wp).w_floating as ::core::ffi::c_int != 0 && !is_aucmd_win(wp))
             {
                 i = (*aall).opened_len;
@@ -3528,7 +3547,7 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
                                 != 0)
                     {
                         let mut weight: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                        if old_curtab == curtab {
+                        if old_curtab == curtab.get() {
                             weight += 1;
                             if old_curwin == wp {
                                 weight += 1;
@@ -3541,7 +3560,7 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
                                     (*(*aall).new_curwin).w_arg_idx = (*aall).opened_len;
                                 }
                                 (*aall).new_curwin = wp;
-                                (*aall).new_curtab = curtab;
+                                (*aall).new_curtab = curtab.get();
                             }
                         } else if (*aall).keep_tabs {
                             i = (*aall).opened_len;
@@ -3577,25 +3596,25 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
                             set_bufref(&raw mut bufref, buf);
                             autowrite(buf, false_0 != 0);
                             if !win_valid(wp) || !bufref_valid(&raw mut bufref) {
-                                wpnext = if (*lastwin).w_floating as ::core::ffi::c_int != 0 {
-                                    lastwin
+                                wpnext = if (*lastwin.get()).w_floating as ::core::ffi::c_int != 0 {
+                                    lastwin.get()
                                 } else {
-                                    firstwin
+                                    firstwin.get()
                                 };
                                 break 's_31;
                             }
                         }
-                        if firstwin == lastwin
-                            && ((*first_tabpage).tp_next.is_null() || (*aall).had_tab == 0)
+                        if firstwin.get() == lastwin.get()
+                            && ((*first_tabpage.get()).tp_next.is_null() || (*aall).had_tab == 0)
                         {
                             (*aall).use_firstwin = true_0 != 0;
                         } else {
                             win_close(wp, !buf_hide(buf) && !bufIsChanged(buf), false_0 != 0);
                             if !win_valid(wpnext) {
-                                wpnext = if (*lastwin).w_floating as ::core::ffi::c_int != 0 {
-                                    lastwin
+                                wpnext = if (*lastwin.get()).w_floating as ::core::ffi::c_int != 0 {
+                                    lastwin.get()
                                 } else {
-                                    firstwin
+                                    firstwin.get()
                                 };
                             }
                         }
@@ -3608,11 +3627,11 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
             break;
         }
         if !valid_tabpage(tpnext) {
-            tpnext = first_tabpage;
+            tpnext = first_tabpage.get();
         }
         goto_tabpage_tp(tpnext, true_0 != 0, true_0 != 0);
     }
-    tabpage_move_disallowed -= 1;
+    (*tabpage_move_disallowed.ptr()) -= 1;
 }
 unsafe extern "C" fn arg_all_open_windows(
     mut aall: *mut arg_all_state_T,
@@ -3620,41 +3639,43 @@ unsafe extern "C" fn arg_all_open_windows(
 ) {
     let mut tab_drop_empty_window: bool = false_0 != 0;
     if (*aall).keep_tabs as ::core::ffi::c_int != 0
-        && buf_is_empty(curbuf) as ::core::ffi::c_int != 0
-        && (*curbuf).b_nwindows == 1 as ::core::ffi::c_int
-        && (*curbuf).b_ffname.is_null()
-        && (*curbuf).b_changed == 0
+        && buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0
+        && (*curbuf.get()).b_nwindows == 1 as ::core::ffi::c_int
+        && (*curbuf.get()).b_ffname.is_null()
+        && (*curbuf.get()).b_changed == 0
     {
         (*aall).use_firstwin = true_0 != 0;
         tab_drop_empty_window = true_0 != 0;
     }
     let mut split_ret: ::core::ffi::c_int = OK;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < count && !got_int {
-        if (*aall).alist == &raw mut global_alist
-            && i == global_alist.al_ga.ga_len - 1 as ::core::ffi::c_int
+    while i < count && !got_int.get() {
+        if (*aall).alist == global_alist.ptr()
+            && i == (*global_alist.ptr()).al_ga.ga_len - 1 as ::core::ffi::c_int
         {
-            arg_had_last = true_0 != 0;
+            arg_had_last.set(true_0 != 0);
         }
         's_23: {
             if *(*aall).opened.offset(i as isize) as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-                if (*curwin).w_arg_idx != i {
-                    let mut wp: *mut win_T = if curtab == curtab {
-                        firstwin
+                if (*curwin.get()).w_arg_idx != i {
+                    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+                        firstwin.get()
                     } else {
-                        (*curtab).tp_firstwin
+                        (*curtab.get()).tp_firstwin
                     };
                     while !wp.is_null() {
                         if (*wp).w_arg_idx == i {
                             if (*aall).keep_tabs {
                                 (*aall).new_curwin = wp;
-                                (*aall).new_curtab = curtab;
+                                (*aall).new_curtab = curtab.get();
                                 break;
                             } else {
                                 if (*wp).w_floating {
                                     break;
                                 }
-                                if (*(*wp).w_frame).fr_parent != (*(*curwin).w_frame).fr_parent {
+                                if (*(*wp).w_frame).fr_parent
+                                    != (*(*curwin.get()).w_frame).fr_parent
+                                {
                                     emsg(gettext(
                                         (e_window_layout_changed_unexpectedly.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
@@ -3662,7 +3683,7 @@ unsafe extern "C" fn arg_all_open_windows(
                                     i = count;
                                     break;
                                 } else {
-                                    win_move_after(wp, curwin);
+                                    win_move_after(wp, curwin.get());
                                     break;
                                 }
                             }
@@ -3675,26 +3696,26 @@ unsafe extern "C" fn arg_all_open_windows(
                 if tab_drop_empty_window as ::core::ffi::c_int != 0
                     && i == count - 1 as ::core::ffi::c_int
                 {
-                    autocmd_no_enter -= 1;
+                    (*autocmd_no_enter.ptr()) -= 1;
                 }
                 if !(*aall).use_firstwin {
-                    let mut p_ea_save: bool = p_ea != 0;
-                    p_ea = true_0;
+                    let mut p_ea_save: bool = p_ea.get() != 0;
+                    p_ea.set(true_0);
                     split_ret = win_split(
                         0 as ::core::ffi::c_int,
                         WSP_ROOM as ::core::ffi::c_int | WSP_BELOW as ::core::ffi::c_int,
                     );
-                    p_ea = p_ea_save as ::core::ffi::c_int;
+                    p_ea.set(p_ea_save as ::core::ffi::c_int);
                     if split_ret == FAIL {
                         break 's_23;
                     }
                 } else {
-                    autocmd_no_leave -= 1;
+                    (*autocmd_no_leave.ptr()) -= 1;
                 }
-                (*curwin).w_arg_idx = i;
+                (*curwin.get()).w_arg_idx = i;
                 if i == 0 as ::core::ffi::c_int {
-                    (*aall).new_curwin = curwin;
-                    (*aall).new_curtab = curtab;
+                    (*aall).new_curwin = curwin.get();
+                    (*aall).new_curtab = curtab.get();
                 }
                 do_ecmd(
                     0 as ::core::ffi::c_int,
@@ -3704,30 +3725,30 @@ unsafe extern "C" fn arg_all_open_windows(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<exarg_T>(),
                     ECMD_ONE as ::core::ffi::c_int as linenr_T,
-                    (if buf_hide((*curwin).w_buffer) as ::core::ffi::c_int != 0
-                        || bufIsChanged((*curwin).w_buffer) as ::core::ffi::c_int != 0
+                    (if buf_hide((*curwin.get()).w_buffer) as ::core::ffi::c_int != 0
+                        || bufIsChanged((*curwin.get()).w_buffer) as ::core::ffi::c_int != 0
                     {
                         ECMD_HIDE as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) + ECMD_OLDBUF as ::core::ffi::c_int,
-                    curwin,
+                    curwin.get(),
                 );
                 if tab_drop_empty_window as ::core::ffi::c_int != 0
                     && i == count - 1 as ::core::ffi::c_int
                 {
-                    autocmd_no_enter += 1;
+                    (*autocmd_no_enter.ptr()) += 1;
                 }
                 if (*aall).use_firstwin {
-                    autocmd_no_leave += 1;
+                    (*autocmd_no_leave.ptr()) += 1;
                 }
                 (*aall).use_firstwin = false_0 != 0;
             }
             os_breakcheck();
             if (*aall).had_tab > 0 as ::core::ffi::c_int
-                && tabpage_index(::core::ptr::null_mut::<tabpage_T>()) as OptInt <= p_tpm
+                && tabpage_index(::core::ptr::null_mut::<tabpage_T>()) as OptInt <= p_tpm.get()
             {
-                cmdmod.cmod_tab = 9999 as ::core::ffi::c_int;
+                (*cmdmod.ptr()).cmod_tab = 9999 as ::core::ffi::c_int;
             }
         }
         i += 1;
@@ -3742,7 +3763,7 @@ unsafe extern "C" fn do_arg_all(
     let mut last_curtab: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     let mut prev_arglist_locked: bool = arglist_locked.get();
     '_c2rust_label: {
-        if !firstwin.is_null() {
+        if !(*firstwin.ptr()).is_null() {
         } else {
             __assert_fail(
                 b"firstwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3752,38 +3773,41 @@ unsafe extern "C" fn do_arg_all(
             );
         }
     };
-    if cmdwin_type != 0 as ::core::ffi::c_int {
+    if cmdwin_type.get() != 0 as ::core::ffi::c_int {
         emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
         return;
     }
-    if (*(*curwin).w_alist).al_ga.ga_len <= 0 as ::core::ffi::c_int {
+    if (*(*curwin.get()).w_alist).al_ga.ga_len <= 0 as ::core::ffi::c_int {
         return;
     }
     setpcmark();
     let mut aall: arg_all_state_T = arg_all_state_T {
         alist: ::core::ptr::null_mut::<alist_T>(),
-        had_tab: cmdmod.cmod_tab,
+        had_tab: (*cmdmod.ptr()).cmod_tab,
         keep_tabs: keep_tabs != 0,
         forceit: forceit != 0,
         use_firstwin: false_0 != 0,
-        opened: xcalloc((*(*curwin).w_alist).al_ga.ga_len as size_t, 1 as size_t) as *mut uint8_t,
-        opened_len: (*(*curwin).w_alist).al_ga.ga_len,
+        opened: xcalloc(
+            (*(*curwin.get()).w_alist).al_ga.ga_len as size_t,
+            1 as size_t,
+        ) as *mut uint8_t,
+        opened_len: (*(*curwin.get()).w_alist).al_ga.ga_len,
         new_curwin: ::core::ptr::null_mut::<win_T>(),
         new_curtab: ::core::ptr::null_mut::<tabpage_T>(),
     };
-    aall.alist = (*curwin).w_alist;
+    aall.alist = (*curwin.get()).w_alist;
     (*aall.alist).al_refcount += 1;
     arglist_locked.set(true_0 != 0);
-    let new_lu_tp: *mut tabpage_T = curtab;
+    let new_lu_tp: *mut tabpage_T = curtab.get();
     reset_VIsual_and_resel();
     arg_all_close_unused_windows(&raw mut aall);
     if count > aall.opened_len || count <= 0 as ::core::ffi::c_int {
         count = aall.opened_len;
     }
-    autocmd_no_enter += 1;
-    autocmd_no_leave += 1;
-    last_curwin = curwin;
-    last_curtab = curtab;
+    (*autocmd_no_enter.ptr()) += 1;
+    (*autocmd_no_leave.ptr()) += 1;
+    last_curwin = curwin.get();
+    last_curtab = curtab.get();
     win_enter(
         lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()),
         false_0 != 0,
@@ -3791,7 +3815,7 @@ unsafe extern "C" fn do_arg_all(
     arg_all_open_windows(&raw mut aall, count);
     alist_unlink(aall.alist);
     arglist_locked.set(prev_arglist_locked);
-    autocmd_no_enter -= 1;
+    (*autocmd_no_enter.ptr()) -= 1;
     if last_curtab != aall.new_curtab {
         if valid_tabpage(last_curtab) {
             goto_tabpage_tp(last_curtab, true_0 != 0, true_0 != 0);
@@ -3804,12 +3828,12 @@ unsafe extern "C" fn do_arg_all(
         goto_tabpage_tp(aall.new_curtab, true_0 != 0, true_0 != 0);
     }
     if valid_tabpage(new_lu_tp) {
-        lastused_tabpage = new_lu_tp;
+        lastused_tabpage.set(new_lu_tp);
     }
     if win_valid(aall.new_curwin) {
         win_enter(aall.new_curwin, false_0 != 0);
     }
-    autocmd_no_leave -= 1;
+    (*autocmd_no_leave.ptr()) -= 1;
     xfree(aall.opened as *mut ::core::ffi::c_void);
 }
 #[no_mangle]
@@ -3830,9 +3854,9 @@ pub unsafe extern "C" fn arg_all() -> *mut ::core::ffi::c_char {
     loop {
         let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while idx < (*(*curwin).w_alist).al_ga.ga_len {
+        while idx < (*(*curwin.get()).w_alist).al_ga.ga_len {
             let mut p: *mut ::core::ffi::c_char = alist_name(
-                ((*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T).offset(idx as isize),
+                ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(idx as isize),
             );
             if !p.is_null() {
                 if len > 0 as ::core::ffi::c_int {
@@ -3878,12 +3902,12 @@ pub unsafe extern "C" fn f_argc(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        (*rettv).vval.v_number = (*(*curwin).w_alist).al_ga.ga_len as varnumber_T;
+        (*rettv).vval.v_number = (*(*curwin.get()).w_alist).al_ga.ga_len as varnumber_T;
     } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
         && tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) == -1 as varnumber_T
     {
-        (*rettv).vval.v_number = global_alist.al_ga.ga_len as varnumber_T;
+        (*rettv).vval.v_number = (*global_alist.ptr()).al_ga.ga_len as varnumber_T;
     } else {
         let mut wp: *mut win_T =
             find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3900,7 +3924,7 @@ pub unsafe extern "C" fn f_argidx(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = (*curwin).w_arg_idx as varnumber_T;
+    (*rettv).vval.v_number = (*curwin.get()).w_arg_idx as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_arglistid(
@@ -3947,8 +3971,8 @@ pub unsafe extern "C" fn f_argv(
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         get_arglist_as_rettv(
-            (*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T,
-            (*(*curwin).w_alist).al_ga.ga_len,
+            (*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T,
+            (*(*curwin.get()).w_alist).al_ga.ga_len,
             rettv,
         );
         return;
@@ -3956,14 +3980,14 @@ pub unsafe extern "C" fn f_argv(
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        arglist = (*(*curwin).w_alist).al_ga.ga_data as *mut aentry_T;
-        argcount = (*(*curwin).w_alist).al_ga.ga_len;
+        arglist = (*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T;
+        argcount = (*(*curwin.get()).w_alist).al_ga.ga_len;
     } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
         && tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) == -1 as varnumber_T
     {
-        arglist = global_alist.al_ga.ga_data as *mut aentry_T;
-        argcount = global_alist.al_ga.ga_len;
+        arglist = (*global_alist.ptr()).al_ga.ga_data as *mut aentry_T;
+        argcount = (*global_alist.ptr()).al_ga.ga_len;
     } else {
         let mut wp: *mut win_T =
             find_win_by_nr_or_id(argvars.offset(1 as ::core::ffi::c_int as isize));

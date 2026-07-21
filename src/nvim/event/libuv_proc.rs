@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(
@@ -31,7 +32,7 @@ extern "C" {
         ...
     ) -> bool;
     fn os_free_fullenv(env: *mut *mut ::core::ffi::c_char);
-    static mut ui_client_forward_stdin: bool;
+    static ui_client_forward_stdin: GlobalCell<bool>;
 }
 pub type __uid_t = ::core::ffi::c_uint;
 pub type __gid_t = ::core::ffi::c_uint;
@@ -772,7 +773,7 @@ pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core:
     (*uvproc).uvstdio[0 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
     (*uvproc).uvstdio[1 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
     (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
-    if ui_client_forward_stdin {
+    if ui_client_forward_stdin.get() {
         '_c2rust_label: {
             if 3 as ::core::ffi::c_int == 3 as ::core::ffi::c_int {
             } else {

@@ -5,9 +5,9 @@ extern "C" {
     pub type undo_object;
     pub type qf_info_S;
     fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    static mut namespace_localscope: Set_uint32_t;
-    static mut breakat_flags: [::core::ffi::c_char; 256];
-    static mut p_sel: *mut ::core::ffi::c_char;
+    static namespace_localscope: GlobalCell<Set_uint32_t>;
+    static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
     fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
@@ -37,10 +37,10 @@ extern "C" {
         infop: *mut foldinfo_T,
     ) -> bool;
     fn lineFolded(win: *mut win_T, lnum: linenr_T) -> bool;
-    static mut curwin: *mut win_T;
-    static mut VIsual: pos_T;
-    static mut VIsual_active: bool;
-    static mut State: ::core::ffi::c_int;
+    static curwin: GlobalCell<*mut win_T>;
+    static VIsual: GlobalCell<pos_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
     fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
     fn get_breakindent_win(wp: *mut win_T, line: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn marktree_itr_get_filter(
@@ -1749,7 +1749,7 @@ unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
 }
 #[inline]
 unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
-    if !set_has_uint32_t(&raw mut namespace_localscope, ns_id) {
+    if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
         return true_0 != 0;
     }
     return set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id);
@@ -1762,7 +1762,7 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
 }
 #[inline(always)]
 unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
-    return breakat_flags[c as uint8_t as usize] != 0;
+    return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
 }
 pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
 pub const MT_FLAG_INVALID: ::core::ffi::c_int =
@@ -1918,7 +1918,7 @@ pub unsafe extern "C" fn linetabsize_col(
             intersect_pos_x: MTPos { row: 0, col: 0 },
         }; 1],
     };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, curwin, 0 as linenr_T, s);
+    let cstype: CSType = init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, s);
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
         return linesize_fast(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
     } else {
@@ -2373,10 +2373,10 @@ unsafe extern "C" fn virt_text_cursor_off(
     mut on_NUL: bool,
 ) -> ::core::ffi::c_int {
     let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if !on_NUL || State & MODE_NORMAL as ::core::ffi::c_int == 0 {
+    if !on_NUL || State.get() & MODE_NORMAL as ::core::ffi::c_int == 0 {
         off += (*csarg).cur_text_width_left;
     }
-    if !on_NUL && State & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    if !on_NUL && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
         off += (*csarg).cur_text_width_right;
     }
     return off;
@@ -2471,12 +2471,12 @@ pub unsafe extern "C" fn getvcol(
     }
     if !cursor.is_null() {
         if ci.chr.value == TAB as int32_t
-            && State & MODE_NORMAL as ::core::ffi::c_int != 0
+            && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
             && (*wp).w_onebuf_opt.wo_list == 0
             && !virtual_active(wp)
-            && !(VIsual_active as ::core::ffi::c_int != 0
-                && (*p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-                    || ltoreq(*pos, VIsual) as ::core::ffi::c_int != 0))
+            && !(VIsual_active.get() as ::core::ffi::c_int != 0
+                && (*p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                    || ltoreq(*pos, VIsual.get()) as ::core::ffi::c_int != 0))
         {
             *cursor = (vcol as ::core::ffi::c_int + incr - 1 as ::core::ffi::c_int) as colnr_T;
         } else {
@@ -2487,12 +2487,12 @@ pub unsafe extern "C" fn getvcol(
 }
 #[no_mangle]
 pub unsafe extern "C" fn getvcol_nolist(mut posp: *mut pos_T) -> colnr_T {
-    let mut list_save: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_list;
+    let mut list_save: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
     let mut vcol: colnr_T = 0;
-    (*curwin).w_onebuf_opt.wo_list = false_0;
+    (*curwin.get()).w_onebuf_opt.wo_list = false_0;
     if (*posp).coladd != 0 {
         getvvcol(
-            curwin,
+            curwin.get(),
             posp,
             ::core::ptr::null_mut::<colnr_T>(),
             &raw mut vcol,
@@ -2500,14 +2500,14 @@ pub unsafe extern "C" fn getvcol_nolist(mut posp: *mut pos_T) -> colnr_T {
         );
     } else {
         getvcol(
-            curwin,
+            curwin.get(),
             posp,
             ::core::ptr::null_mut::<colnr_T>(),
             &raw mut vcol,
             ::core::ptr::null_mut::<colnr_T>(),
         );
     }
-    (*curwin).w_onebuf_opt.wo_list = list_save;
+    (*curwin.get()).w_onebuf_opt.wo_list = list_save;
     return vcol;
 }
 #[no_mangle]
@@ -2604,7 +2604,7 @@ pub unsafe extern "C" fn getvcols(
         *left = from1;
     }
     if to2 > to1 {
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
             && from2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int >= to1
         {
             *right = (from2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
@@ -2798,7 +2798,7 @@ pub unsafe extern "C" fn plines_win_col(
     }
     let mut col: colnr_T = vcol;
     if ci.chr.value == TAB as int32_t
-        && State & MODE_NORMAL as ::core::ffi::c_int != 0
+        && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
         && csarg.use_tabstop as ::core::ffi::c_int != 0
     {
         col += win_charsize(

@@ -41,7 +41,7 @@ extern "C" {
         src: *const ::core::ffi::c_char,
         dsize: size_t,
     ) -> size_t;
-    static mut p_hi: OptInt;
+    static p_hi: GlobalCell<OptInt>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -87,11 +87,11 @@ extern "C" {
         num1: *mut ::core::ffi::c_int,
         num2: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut maptick: ::core::ffi::c_int;
-    static mut got_int: bool;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static maptick: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
     fn os_time() -> Timestamp;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -1213,7 +1213,7 @@ pub unsafe extern "C" fn get_history_arg(
 #[no_mangle]
 pub unsafe extern "C" fn init_history() {
     '_c2rust_label: {
-        if p_hi >= 0 as OptInt && p_hi <= 2147483647 as OptInt {
+        if p_hi.get() >= 0 as OptInt && p_hi.get() <= 2147483647 as OptInt {
         } else {
             __assert_fail(
                 b"p_hi >= 0 && p_hi <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1223,7 +1223,7 @@ pub unsafe extern "C" fn init_history() {
             );
         }
     };
-    let mut newlen: ::core::ffi::c_int = p_hi as ::core::ffi::c_int;
+    let mut newlen: ::core::ffi::c_int = p_hi.get() as ::core::ffi::c_int;
     let mut oldlen: ::core::ffi::c_int = hislen.get();
     if newlen == oldlen {
         return;
@@ -1441,13 +1441,13 @@ pub unsafe extern "C" fn add_to_history(
             );
         }
     };
-    if cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0
+    if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0
         && histype == HIST_SEARCH as ::core::ffi::c_int
     {
         return;
     }
     if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0 {
-        if maptick == last_maptick.get()
+        if maptick.get() == last_maptick.get()
             && (*hisidx.ptr())[HIST_SEARCH as ::core::ffi::c_int as usize]
                 >= 0 as ::core::ffi::c_int
         {
@@ -1488,7 +1488,7 @@ pub unsafe extern "C" fn add_to_history(
     (*hisnum.ptr())[histype as usize] += 1;
     (*hisptr).hisnum = (*hisnum.ptr())[histype as usize];
     if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0 {
-        last_maptick.set(maptick);
+        last_maptick.set(maptick.get());
     }
 }
 unsafe extern "C" fn get_history_idx(mut histype: ::core::ffi::c_int) -> ::core::ffi::c_int {
@@ -1649,7 +1649,10 @@ unsafe extern "C" fn del_history_idx(
     hist_free_entry(
         (*(history.ptr() as *mut *mut histentry_T).offset(histype as isize)).offset(i as isize),
     );
-    if histype == HIST_SEARCH as ::core::ffi::c_int && maptick == last_maptick.get() && i == idx {
+    if histype == HIST_SEARCH as ::core::ffi::c_int
+        && maptick.get() == last_maptick.get()
+        && i == idx
+    {
         last_maptick.set(-1 as ::core::ffi::c_int);
     }
     while i != idx {
@@ -1868,7 +1871,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
         }
         return;
     }
-    while !got_int && histype1 <= histype2 {
+    while !got_int.get() && histype1 <= histype2 {
         '_c2rust_label: {
             if !(*history_names.ptr())[histype1 as usize].is_null() {
             } else {
@@ -1881,12 +1884,12 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
             }
         };
         vim_snprintf(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             b"\n      #  %s history\0".as_ptr() as *const ::core::ffi::c_char,
             (*history_names.ptr())[histype1 as usize],
         );
-        msg_puts_title(&raw mut IObuff as *mut ::core::ffi::c_char);
+        msg_puts_title(IObuff.ptr() as *mut ::core::ffi::c_char);
         let mut idx: ::core::ffi::c_int = (*hisidx.ptr())[histype1 as usize];
         let mut hist: *mut histentry_T = (*history.ptr())[histype1 as usize] as *mut histentry_T;
         let mut j: ::core::ffi::c_int = hisidx1;
@@ -1913,7 +1916,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
         }
         if idx >= 0 as ::core::ffi::c_int && j <= k {
             let mut i: ::core::ffi::c_int = idx + 1 as ::core::ffi::c_int;
-            while !got_int {
+            while !got_int.get() {
                 if i == hislen.get() {
                     i = 0 as ::core::ffi::c_int;
                 }
@@ -1924,7 +1927,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
                 {
                     msg_putchar('\n' as ::core::ffi::c_int);
                     let mut len: ::core::ffi::c_int = snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"%c%6d  \0".as_ptr() as *const ::core::ffi::c_char,
                         if i == idx {
@@ -1935,23 +1938,23 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
                         (*hist.offset(i as isize)).hisnum,
                     );
                     if vim_strsize((*hist.offset(i as isize)).hisstr)
-                        > Columns - 10 as ::core::ffi::c_int
+                        > Columns.get() - 10 as ::core::ffi::c_int
                     {
                         trunc_string(
                             (*hist.offset(i as isize)).hisstr,
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
-                            Columns - 10 as ::core::ffi::c_int,
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
+                            Columns.get() - 10 as ::core::ffi::c_int,
                             IOSIZE - len,
                         );
                     } else {
                         xstrlcpy(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                             (*hist.offset(i as isize)).hisstr,
                             (IOSIZE - len) as size_t,
                         );
                     }
                     msg_outtrans(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         0 as ::core::ffi::c_int,
                         false_0 != 0,
                     );

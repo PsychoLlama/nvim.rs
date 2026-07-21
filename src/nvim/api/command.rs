@@ -187,12 +187,12 @@ extern "C" {
     ) -> bool;
     fn uc_nargs_upper_bound(arg: *const ::core::ffi::c_char, arglen: size_t) -> size_t;
     fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut curbuf: *mut buf_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut redir_off: bool;
-    static mut capture_ga: *mut garray_T;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static redir_off: GlobalCell<bool>;
+    static capture_ga: GlobalCell<*mut garray_T>;
     fn api_free_luaref(ref_0: LuaRef);
     fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
     fn mb_islower(a: ::core::ffi::c_int) -> bool;
@@ -3249,7 +3249,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         if ea.cmdidx as ::core::ffi::c_int == CMD_USER as ::core::ffi::c_int {
             cmd = ((*ucmds.ptr()).ga_data as *mut ucmd_T).offset(ea.useridx as isize);
         } else if ea.cmdidx as ::core::ffi::c_int == CMD_USER_BUF as ::core::ffi::c_int {
-            cmd = ((*curbuf).b_ucmds.ga_data as *mut ucmd_T).offset(ea.useridx as isize);
+            cmd = ((*curbuf.get()).b_ucmds.ga_data as *mut ucmd_T).offset(ea.useridx as isize);
         }
         name = (if ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int {
             b"\0".as_ptr() as *const ::core::ffi::c_char
@@ -4663,17 +4663,17 @@ pub unsafe extern "C" fn nvim_cmd(
                             ga_growsize: 0,
                             ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
                         };
-                        save_msg_silent = msg_silent;
-                        save_redir_off = redir_off;
-                        save_capture_ga = capture_ga;
-                        save_msg_col = msg_col;
+                        save_msg_silent = msg_silent.get();
+                        save_redir_off = redir_off.get();
+                        save_capture_ga = capture_ga.get();
+                        save_msg_col = msg_col.get();
                         if (*opts).output {
                             ga_init(
                                 &raw mut capture_local,
                                 1 as ::core::ffi::c_int,
                                 80 as ::core::ffi::c_int,
                             );
-                            capture_ga = &raw mut capture_local;
+                            capture_ga.set(&raw mut capture_local);
                         }
                         let mut tstate: TryState = TryState {
                             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -4686,18 +4686,18 @@ pub unsafe extern "C" fn nvim_cmd(
                         };
                         try_enter(&raw mut tstate);
                         if (*opts).output {
-                            msg_silent += 1;
-                            redir_off = false;
-                            msg_col = 0 as ::core::ffi::c_int;
+                            (*msg_silent.ptr()) += 1;
+                            redir_off.set(false);
+                            msg_col.set(0 as ::core::ffi::c_int);
                         }
                         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
                         execute_cmd(&raw mut ea, &raw mut cmdinfo, false);
-                        current_sctx = save_current_sctx;
+                        current_sctx.set(save_current_sctx);
                         if (*opts).output {
-                            capture_ga = save_capture_ga;
-                            msg_silent = save_msg_silent;
-                            redir_off = save_redir_off;
-                            msg_col = save_msg_col;
+                            capture_ga.set(save_capture_ga);
+                            msg_silent.set(save_msg_silent);
+                            redir_off.set(save_redir_off);
+                            msg_col.set(save_msg_col);
                         }
                         try_leave(&raw mut tstate, err);
                         if (*err).type_0 as ::core::ffi::c_int
@@ -5987,8 +5987,8 @@ pub unsafe extern "C" fn nvim_buf_create_user_command(
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return;
     }
-    let mut save_curbuf: *mut buf_T = curbuf;
-    curbuf = target_buf;
+    let mut save_curbuf: *mut buf_T = curbuf.get();
+    curbuf.set(target_buf);
     create_user_command(
         channel_id,
         name,
@@ -5997,7 +5997,7 @@ pub unsafe extern "C" fn nvim_buf_create_user_command(
         UC_BUFFER as ::core::ffi::c_int,
         err,
     );
-    curbuf = save_curbuf;
+    curbuf.set(save_curbuf);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_buf_del_user_command(
@@ -6441,7 +6441,7 @@ pub unsafe extern "C" fn create_user_command(
                                 as *const ::core::ffi::c_char,
                         );
                     }
-                    current_sctx = save_current_sctx;
+                    current_sctx.set(save_current_sctx);
                     return;
                 }
             }

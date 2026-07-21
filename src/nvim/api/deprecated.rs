@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     pub type terminal;
@@ -102,13 +103,13 @@ extern "C" {
         invalidate: bool,
         err: *mut Error,
     );
-    static mut msg_didout: bool;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut got_int: bool;
+    static msg_didout: GlobalCell<bool>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
     fn hl_get_attr_by_id(
         attr_id: Integer,
         rgb: Boolean,
@@ -2969,8 +2970,8 @@ pub unsafe extern "C" fn nvim_get_option_info(
     return get_vimoption(
         name,
         OPT_GLOBAL as ::core::ffi::c_int,
-        curbuf,
-        curwin,
+        curbuf.get(),
+        curwin.get(),
         arena,
         err,
     );
@@ -3187,7 +3188,7 @@ unsafe extern "C" fn set_option_to(
     };
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_call_atomic(
@@ -3346,25 +3347,25 @@ pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: S
 #[no_mangle]
 pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
-    static mut out_line_buf: StringBuilder = StringBuilder {
+    static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    static mut err_line_buf: StringBuilder = StringBuilder {
+    });
+    static err_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+    });
     let mut line_buf: *mut StringBuilder = if to_err as ::core::ffi::c_int != 0 {
-        &raw mut err_line_buf
+        err_line_buf.ptr()
     } else {
-        &raw mut out_line_buf
+        out_line_buf.ptr()
     };
-    no_wait_return += 1;
+    (*no_wait_return.ptr()) += 1;
     let mut i: uint32_t = 0 as uint32_t;
     while (i as size_t) < message.size {
-        if got_int {
+        if got_int.get() {
             break;
         }
         if (*line_buf).capacity == 0 as size_t {
@@ -3396,8 +3397,8 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             } else {
                 msg((*line_buf).items, 0 as ::core::ffi::c_int);
             }
-            if msg_silent == 0 as ::core::ffi::c_int {
-                msg_didout = true_0 != 0;
+            if msg_silent.get() == 0 as ::core::ffi::c_int {
+                msg_didout.set(true_0 != 0);
             }
             (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
@@ -3472,8 +3473,8 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             } else {
                 msg((*line_buf).items, 0 as ::core::ffi::c_int);
             }
-            if msg_silent == 0 as ::core::ffi::c_int {
-                msg_didout = true_0 != 0;
+            if msg_silent.get() == 0 as ::core::ffi::c_int {
+                msg_didout.set(true_0 != 0);
             }
             (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
@@ -3517,7 +3518,7 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             *(*line_buf).items.offset(c2rust_fresh12 as isize) = '\n' as ::core::ffi::c_char;
         }
     }
-    no_wait_return -= 1;
+    (*no_wait_return.ptr()) -= 1;
     msg_end();
 }
 #[no_mangle]

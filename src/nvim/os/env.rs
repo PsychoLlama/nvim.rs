@@ -117,11 +117,11 @@ extern "C" {
         fnamelen: *mut size_t,
     ) -> ::core::ffi::c_int;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    static mut didset_vim: bool;
-    static mut didset_vimruntime: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut os_buf: [::core::ffi::c_char; 4096];
+    static didset_vim: GlobalCell<bool>;
+    static didset_vimruntime: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static os_buf: GlobalCell<[::core::ffi::c_char; 4096]>;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
@@ -131,8 +131,8 @@ extern "C" {
         buf: *mut ::core::ffi::c_char,
         len: size_t,
     ) -> *mut ::core::ffi::c_char;
-    static mut nvim_testing: bool;
-    static mut p_hf: *mut ::core::ffi::c_char;
+    static nvim_testing: GlobalCell<bool>;
+    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
     fn os_get_userdir(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -2082,10 +2082,10 @@ pub static default_lib_dir: GlobalCell<*mut ::core::ffi::c_char> =
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
 #[no_mangle]
 pub unsafe extern "C" fn env_init() {
-    nvim_testing = os_env_exists(
+    nvim_testing.set(os_env_exists(
         b"NVIM_TEST\0".as_ptr() as *const ::core::ffi::c_char,
         false_0 != 0,
-    );
+    ));
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_getenv(
@@ -2202,7 +2202,7 @@ pub unsafe extern "C" fn os_getenv_noalloc(
 ) -> *mut ::core::ffi::c_char {
     return os_getenv_buf(
         name,
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
     );
 }
@@ -2464,20 +2464,20 @@ pub unsafe extern "C" fn init_homedir() {
     if !var.is_null()
         && !os_realpath(
             var,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
         )
         .is_null()
     {
-        var = &raw mut IObuff as *mut ::core::ffi::c_char;
+        var = IObuff.ptr() as *mut ::core::ffi::c_char;
     }
     if (var.is_null() || *var as ::core::ffi::c_int == NUL)
         && os_dirname(
-            &raw mut os_buf as *mut ::core::ffi::c_char,
+            os_buf.ptr() as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) == OK
     {
-        var = &raw mut os_buf as *mut ::core::ffi::c_char;
+        var = os_buf.ptr() as *mut ::core::ffi::c_char;
     }
     if !var.is_null() {
         homedir.set(xstrdup(var));
@@ -2954,8 +2954,8 @@ pub unsafe extern "C" fn vim_getenv(
         }
     }
     if vim_path.is_null() {
-        if !p_hf.is_null() && vim_strchr(p_hf, '$' as ::core::ffi::c_int).is_null() {
-            vim_path = p_hf;
+        if !(*p_hf.ptr()).is_null() && vim_strchr(p_hf.get(), '$' as ::core::ffi::c_int).is_null() {
+            vim_path = p_hf.get();
         }
         let mut exe_name: [::core::ffi::c_char; 4096] = [0; 4096];
         if vim_path.is_null() {
@@ -2971,7 +2971,7 @@ pub unsafe extern "C" fn vim_getenv(
         }
         if !vim_path.is_null() {
             let mut vim_path_end: *mut ::core::ffi::c_char = path_tail(vim_path);
-            if vim_path == p_hf {
+            if vim_path == p_hf.get() {
                 vim_path_end = remove_tail(
                     vim_path,
                     vim_path_end,
@@ -3041,14 +3041,14 @@ pub unsafe extern "C" fn vim_getenv(
                 vim_path,
                 1 as ::core::ffi::c_int,
             );
-            didset_vimruntime = true_0 != 0;
+            didset_vimruntime.set(true_0 != 0);
         } else {
             os_setenv(
                 b"VIM\0".as_ptr() as *const ::core::ffi::c_char,
                 vim_path,
                 1 as ::core::ffi::c_int,
             );
-            didset_vim = true_0 != 0;
+            didset_vim.set(true_0 != 0);
         }
     }
     return vim_path;
@@ -3268,7 +3268,7 @@ pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_
         }
     };
     xmemcpyz(
-        &raw mut os_buf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+        os_buf.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
         fname as *const ::core::ffi::c_void,
         dirlen,
     );
@@ -3293,7 +3293,7 @@ pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_
                 xstrlcat(temp, ENV_SEPSTR.as_ptr(), newlen);
             }
         }
-        xstrlcat(temp, &raw mut os_buf as *mut ::core::ffi::c_char, newlen);
+        xstrlcat(temp, os_buf.ptr() as *mut ::core::ffi::c_char, newlen);
         os_setenv(
             b"PATH\0".as_ptr() as *const ::core::ffi::c_char,
             temp,
@@ -3337,13 +3337,13 @@ pub unsafe extern "C" fn vim_unsetenv_ext(mut var: *const ::core::ffi::c_char) {
         b"VIM\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
-        didset_vim = false_0 != 0;
+        didset_vim.set(false_0 != 0);
     } else if strcasecmp(
         var as *mut ::core::ffi::c_char,
         b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
-        didset_vimruntime = false_0 != 0;
+        didset_vimruntime.set(false_0 != 0);
     }
 }
 #[no_mangle]
@@ -3358,20 +3358,20 @@ pub unsafe extern "C" fn vim_setenv_ext(
     ) == 0 as ::core::ffi::c_int
     {
         init_homedir();
-    } else if didset_vim as ::core::ffi::c_int != 0
+    } else if didset_vim.get() as ::core::ffi::c_int != 0
         && strcasecmp(
             name as *mut ::core::ffi::c_char,
             b"VIM\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
     {
-        didset_vim = false_0 != 0;
-    } else if didset_vimruntime as ::core::ffi::c_int != 0
+        didset_vim.set(false_0 != 0);
+    } else if didset_vimruntime.get() as ::core::ffi::c_int != 0
         && strcasecmp(
             name as *mut ::core::ffi::c_char,
             b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
     {
-        didset_vimruntime = false_0 != 0;
+        didset_vimruntime.set(false_0 != 0);
     }
 }
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

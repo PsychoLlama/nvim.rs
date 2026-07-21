@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type _IO_wide_data;
     pub type _IO_codecvt;
@@ -78,11 +78,11 @@ extern "C" {
     fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
     fn socket_address_tcp_host_end(address: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    static mut t_colors: ::core::ffi::c_int;
-    static mut stdin_isatty: bool;
-    static mut stdout_isatty: bool;
-    static mut stderr_isatty: bool;
-    static mut time_fd: *mut FILE;
+    static t_colors: GlobalCell<::core::ffi::c_int>;
+    static stdin_isatty: GlobalCell<bool>;
+    static stdout_isatty: GlobalCell<bool>;
+    static stderr_isatty: GlobalCell<bool>;
+    static time_fd: GlobalCell<*mut FILE>;
     fn dict2hlattrs(
         dict: *mut KeyDict_highlight,
         use_rgb: bool,
@@ -90,7 +90,7 @@ extern "C" {
         base: *mut HlAttrs,
         err: *mut Error,
     ) -> HlAttrs;
-    static mut main_loop: Loop;
+    static main_loop: SharedCell<Loop>;
     fn os_exit(r: ::core::ffi::c_int) -> !;
     fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
     fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
@@ -164,14 +164,14 @@ extern "C" {
         chunk: *const schar_T,
         attrs: *const sattr_T,
     );
-    static mut grid_line_buf_size: size_t;
-    static mut grid_line_buf_char: *mut schar_T;
-    static mut grid_line_buf_attr: *mut sattr_T;
-    static mut ui_client_channel_id: uint64_t;
-    static mut ui_client_error_exit: ::core::ffi::c_int;
-    static mut ui_client_exit_status: ::core::ffi::c_int;
-    static mut ui_client_attached: bool;
-    static mut ui_client_forward_stdin: bool;
+    static grid_line_buf_size: GlobalCell<size_t>;
+    static grid_line_buf_char: GlobalCell<*mut schar_T>;
+    static grid_line_buf_attr: GlobalCell<*mut sattr_T>;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
+    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
+    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
+    static ui_client_attached: GlobalCell<bool>;
+    static ui_client_forward_stdin: GlobalCell<bool>;
 }
 pub type __uid_t = ::core::ffi::c_uint;
 pub type __gid_t = ::core::ffi::c_uint;
@@ -1625,9 +1625,9 @@ pub unsafe extern "C" fn ui_client_start_server(
     if channel.is_null() {
         return 0 as uint64_t;
     }
-    if ui_client_forward_stdin {
+    if ui_client_forward_stdin.get() {
         close(0 as ::core::ffi::c_int);
-        dup(if stderr_isatty as ::core::ffi::c_int != 0 {
+        dup(if stderr_isatty.get() as ::core::ffi::c_int != 0 {
             STDERR_FILENO
         } else {
             STDOUT_FILENO
@@ -1733,7 +1733,7 @@ pub unsafe extern "C" fn ui_client_attach(
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: t_colors as Integer,
+                integer: t_colors.get() as Integer,
             },
         },
     };
@@ -1744,7 +1744,7 @@ pub unsafe extern "C" fn ui_client_attach(
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: stdin_isatty,
+                boolean: stdin_isatty.get(),
             },
         },
     };
@@ -1755,11 +1755,11 @@ pub unsafe extern "C" fn ui_client_attach(
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: stdout_isatty,
+                boolean: stdout_isatty.get(),
             },
         },
     };
-    if ui_client_forward_stdin {
+    if ui_client_forward_stdin.get() {
         let c2rust_fresh13 = opts.size;
         opts.size = opts.size.wrapping_add(1);
         *opts.items.offset(c2rust_fresh13 as isize) = key_value_pair {
@@ -1771,7 +1771,7 @@ pub unsafe extern "C" fn ui_client_attach(
                 },
             },
         };
-        ui_client_forward_stdin = false_0 != 0;
+        ui_client_forward_stdin.set(false_0 != 0);
     }
     let c2rust_fresh14 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -1780,12 +1780,12 @@ pub unsafe extern "C" fn ui_client_attach(
         data: C2Rust_Unnamed { dict: opts },
     };
     rpc_send_event(
-        ui_client_channel_id,
+        ui_client_channel_id.get(),
         b"nvim_ui_attach\0".as_ptr() as *const ::core::ffi::c_char,
         args,
     );
-    ui_client_attached = true_0 != 0;
-    if !time_fd.is_null() {
+    ui_client_attached.set(true_0 != 0);
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"nvim_ui_attach\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -1927,11 +1927,11 @@ pub unsafe extern "C" fn ui_client_attach(
         data: C2Rust_Unnamed { dict: info },
     };
     rpc_send_event(
-        ui_client_channel_id,
+        ui_client_channel_id.get(),
         b"nvim_set_client_info\0".as_ptr() as *const ::core::ffi::c_char,
         args2,
     );
-    if !time_fd.is_null() {
+    if !(*time_fd.ptr()).is_null() {
         time_msg(
             b"nvim_set_client_info\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
@@ -1941,7 +1941,7 @@ pub unsafe extern "C" fn ui_client_attach(
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_detach() {
     rpc_send_event(
-        ui_client_channel_id,
+        ui_client_channel_id.get(),
         b"nvim_ui_detach\0".as_ptr() as *const ::core::ffi::c_char,
         Array {
             size: 0 as size_t,
@@ -1949,7 +1949,7 @@ pub unsafe extern "C" fn ui_client_detach() {
             items: ::core::ptr::null_mut::<Object>(),
         },
     );
-    ui_client_attached = false_0 != 0;
+    ui_client_attached.set(false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_run() -> ! {
@@ -1981,16 +1981,16 @@ pub unsafe extern "C" fn ui_client_run() -> ! {
     }
     time_finish();
     loop {
-        if !main_loop.events.is_null() && !multiqueue_empty(main_loop.events) {
-            multiqueue_process_events(main_loop.events);
+        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
+            multiqueue_process_events((*main_loop.ptr()).events);
         } else {
-            loop_poll_events(&raw mut main_loop, -1 as int64_t);
+            loop_poll_events(main_loop.ptr(), -1 as int64_t);
         }
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_stop() {
-    ui_client_attached = false_0 != 0;
+    ui_client_attached.set(false_0 != 0);
     if !tui_is_stopped(tui.get()) {
         tui_stop(tui.get());
     }
@@ -2000,7 +2000,7 @@ pub unsafe extern "C" fn ui_client_set_size(
     mut width: ::core::ffi::c_int,
     mut height: ::core::ffi::c_int,
 ) {
-    if ui_client_attached {
+    if ui_client_attached.get() {
         let mut args: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
@@ -2029,7 +2029,7 @@ pub unsafe extern "C" fn ui_client_set_size(
             },
         };
         rpc_send_event(
-            ui_client_channel_id,
+            ui_client_channel_id.get(),
             b"nvim_ui_try_resize\0".as_ptr() as *const ::core::ffi::c_char,
             args,
         );
@@ -2131,16 +2131,16 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
         .data
         .integer;
     tui_grid_resize(tui.get(), grid, width, height);
-    if grid_line_buf_size < width as size_t {
-        xfree(grid_line_buf_char as *mut ::core::ffi::c_void);
-        xfree(grid_line_buf_attr as *mut ::core::ffi::c_void);
-        grid_line_buf_size = width as size_t;
-        grid_line_buf_char =
-            xmalloc(grid_line_buf_size.wrapping_mul(::core::mem::size_of::<schar_T>()))
-                as *mut schar_T;
-        grid_line_buf_attr =
-            xmalloc(grid_line_buf_size.wrapping_mul(::core::mem::size_of::<sattr_T>()))
-                as *mut sattr_T;
+    if grid_line_buf_size.get() < width as size_t {
+        xfree(grid_line_buf_char.get() as *mut ::core::ffi::c_void);
+        xfree(grid_line_buf_attr.get() as *mut ::core::ffi::c_void);
+        grid_line_buf_size.set(width as size_t);
+        grid_line_buf_char.set(xmalloc(
+            (*grid_line_buf_size.ptr()).wrapping_mul(::core::mem::size_of::<schar_T>()),
+        ) as *mut schar_T);
+        grid_line_buf_attr.set(xmalloc(
+            (*grid_line_buf_size.ptr()).wrapping_mul(::core::mem::size_of::<sattr_T>()),
+        ) as *mut sattr_T);
     }
 }
 #[no_mangle]
@@ -2168,8 +2168,8 @@ pub unsafe extern "C" fn ui_client_event_raw_line(mut g: *mut GridLineEvent) {
         clearcol,
         (*g).cur_attr as Integer,
         lineflags,
-        grid_line_buf_char as *const schar_T,
-        grid_line_buf_attr,
+        grid_line_buf_char.get() as *const schar_T,
+        grid_line_buf_attr.get(),
     );
 }
 #[no_mangle]
@@ -2194,7 +2194,7 @@ pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
     let mut server_addr: *mut ::core::ffi::c_char =
         xmemdupz(s.data as *const ::core::ffi::c_void, s.size) as *mut ::core::ffi::c_char;
     multiqueue_put_event(
-        main_loop.fast_events,
+        (*main_loop.ptr()).fast_events,
         Event {
             handler: Some(
                 channel_connect_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -2213,7 +2213,7 @@ pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
             ],
         },
     );
-    ui_client_channel_id = UINT64_MAX as uint64_t;
+    ui_client_channel_id.set(UINT64_MAX as uint64_t);
 }
 unsafe extern "C" fn channel_connect_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut server_addr: *mut ::core::ffi::c_char =
@@ -2254,10 +2254,10 @@ unsafe extern "C" fn channel_connect_event(mut argv: *mut *mut ::core::ffi::c_vo
             err,
         );
         xfree(server_addr as *mut ::core::ffi::c_void);
-        ui_client_exit_status = 1 as ::core::ffi::c_int;
+        ui_client_exit_status.set(1 as ::core::ffi::c_int);
         os_exit(1 as ::core::ffi::c_int);
     }
-    ui_client_channel_id = chan;
+    ui_client_channel_id.set(chan);
     ui_client_attach(
         tui_width.get(),
         tui_height.get(),
@@ -2355,7 +2355,7 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
                 err,
             );
         } else {
-            ui_client_channel_id = chan_id;
+            ui_client_channel_id.set(chan_id);
             ui_client_attach(
                 tui_width.get(),
                 tui_height.get(),
@@ -2397,9 +2397,11 @@ pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
         );
         return;
     }
-    ui_client_error_exit = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-        .data
-        .integer as ::core::ffi::c_int;
+    ui_client_error_exit.set(
+        (*args.items.offset(0 as ::core::ffi::c_int as isize))
+            .data
+            .integer as ::core::ffi::c_int,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {

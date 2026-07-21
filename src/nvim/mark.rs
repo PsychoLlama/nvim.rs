@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -57,7 +58,7 @@ extern "C" {
         helptail: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
     fn bt_prompt(buf: *mut buf_T) -> bool;
-    static mut jop_flags: ::core::ffi::c_uint;
+    static jop_flags: GlobalCell<::core::ffi::c_uint>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -131,21 +132,21 @@ extern "C" {
         amount: linenr_T,
         amount_after: linenr_T,
     );
-    static mut Columns: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut saved_cursor: pos_T;
-    static mut cmdmod: cmdmod_T;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut got_int: bool;
-    static mut global_busy: ::core::ffi::c_int;
-    static mut listcmd_busy: bool;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static saved_cursor: GlobalCell<pos_T>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static got_int: GlobalCell<bool>;
+    static global_busy: GlobalCell<::core::ffi::c_int>;
+    static listcmd_busy: GlobalCell<bool>;
     fn os_time() -> Timestamp;
-    static mut namedfm: [xfmark_T; 36];
+    static namedfm: GlobalCell<[xfmark_T; 36]>;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_head_off(
@@ -2930,11 +2931,11 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn setmark(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let mut view: fmarkv_T = mark_view_make(curwin, (*curwin).w_cursor);
+    let mut view: fmarkv_T = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
     return setmark_pos(
         c,
-        &raw mut (*curwin).w_cursor,
-        (*curbuf).handle as ::core::ffi::c_int,
+        &raw mut (*curwin.get()).w_cursor,
+        (*curbuf.get()).handle as ::core::ffi::c_int,
         &raw mut view,
     );
 }
@@ -3058,11 +3059,11 @@ pub unsafe extern "C" fn setmark_pos(
         return FAIL;
     }
     if c == '\'' as ::core::ffi::c_int || c == '`' as ::core::ffi::c_int {
-        if pos == &raw mut (*curwin).w_cursor {
+        if pos == &raw mut (*curwin.get()).w_cursor {
             setpcmark();
-            (*curwin).w_prev_pcmark = (*curwin).w_pcmark;
+            (*curwin.get()).w_prev_pcmark = (*curwin.get()).w_pcmark;
         } else {
-            (*curwin).w_pcmark = *pos;
+            (*curwin.get()).w_pcmark = *pos;
         }
         return OK;
     }
@@ -3140,7 +3141,7 @@ pub unsafe extern "C" fn setmark_pos(
         } else {
             i = c - 'A' as ::core::ffi::c_int;
         }
-        let xfmarkp__: *mut xfmark_T = (&raw mut namedfm as *mut xfmark_T).offset(i as isize);
+        let xfmarkp__: *mut xfmark_T = (namedfm.ptr() as *mut xfmark_T).offset(i as isize);
         free_xfmark(*xfmarkp__);
         (*xfmarkp__).fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let fmarkp___2: *mut fmark_T = &raw mut (*xfmarkp__).fmark;
@@ -3207,57 +3208,57 @@ pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: ::core::
 #[no_mangle]
 pub unsafe extern "C" fn setpcmark() {
     let mut fm: *mut xfmark_T = ::core::ptr::null_mut::<xfmark_T>();
-    if global_busy != 0
-        || listcmd_busy as ::core::ffi::c_int != 0
-        || cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0
+    if global_busy.get() != 0
+        || listcmd_busy.get() as ::core::ffi::c_int != 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0
     {
         return;
     }
-    (*curwin).w_prev_pcmark = (*curwin).w_pcmark;
-    (*curwin).w_pcmark = (*curwin).w_cursor;
-    if (*curwin).w_pcmark.lnum == 0 as linenr_T {
-        (*curwin).w_pcmark.lnum = 1 as ::core::ffi::c_int as linenr_T;
+    (*curwin.get()).w_prev_pcmark = (*curwin.get()).w_pcmark;
+    (*curwin.get()).w_pcmark = (*curwin.get()).w_cursor;
+    if (*curwin.get()).w_pcmark.lnum == 0 as linenr_T {
+        (*curwin.get()).w_pcmark.lnum = 1 as ::core::ffi::c_int as linenr_T;
     }
-    if jop_flags & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if (*curwin).w_jumplistidx < (*curwin).w_jumplistlen - 1 as ::core::ffi::c_int {
-            (*curwin).w_jumplistlen = (*curwin).w_jumplistidx + 1 as ::core::ffi::c_int;
+    if jop_flags.get() & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+        if (*curwin.get()).w_jumplistidx < (*curwin.get()).w_jumplistlen - 1 as ::core::ffi::c_int {
+            (*curwin.get()).w_jumplistlen = (*curwin.get()).w_jumplistidx + 1 as ::core::ffi::c_int;
         }
     }
-    (*curwin).w_jumplistlen += 1;
-    if (*curwin).w_jumplistlen > JUMPLISTSIZE {
-        (*curwin).w_jumplistlen = JUMPLISTSIZE;
-        free_xfmark((*curwin).w_jumplist[0 as ::core::ffi::c_int as usize]);
+    (*curwin.get()).w_jumplistlen += 1;
+    if (*curwin.get()).w_jumplistlen > JUMPLISTSIZE {
+        (*curwin.get()).w_jumplistlen = JUMPLISTSIZE;
+        free_xfmark((*curwin.get()).w_jumplist[0 as ::core::ffi::c_int as usize]);
         memmove(
-            (&raw mut (*curwin).w_jumplist as *mut xfmark_T)
+            (&raw mut (*curwin.get()).w_jumplist as *mut xfmark_T)
                 .offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            (&raw mut (*curwin).w_jumplist as *mut xfmark_T)
+            (&raw mut (*curwin.get()).w_jumplist as *mut xfmark_T)
                 .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
             ((JUMPLISTSIZE - 1 as ::core::ffi::c_int) as size_t)
                 .wrapping_mul(::core::mem::size_of::<xfmark_T>()),
         );
     }
-    (*curwin).w_jumplistidx = (*curwin).w_jumplistlen;
-    fm = (&raw mut (*curwin).w_jumplist as *mut xfmark_T)
-        .offset(((*curwin).w_jumplistlen - 1 as ::core::ffi::c_int) as isize);
-    let mut view: fmarkv_T = mark_view_make(curwin, (*curwin).w_pcmark);
+    (*curwin.get()).w_jumplistidx = (*curwin.get()).w_jumplistlen;
+    fm = (&raw mut (*curwin.get()).w_jumplist as *mut xfmark_T)
+        .offset(((*curwin.get()).w_jumplistlen - 1 as ::core::ffi::c_int) as isize);
+    let mut view: fmarkv_T = mark_view_make(curwin.get(), (*curwin.get()).w_pcmark);
     let xfmarkp__: *mut xfmark_T = fm;
     (*xfmarkp__).fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let fmarkp__: *mut fmark_T = &raw mut (*xfmarkp__).fmark;
-    (*fmarkp__).mark = (*curwin).w_pcmark;
-    (*fmarkp__).fnum = (*curbuf).handle as ::core::ffi::c_int;
+    (*fmarkp__).mark = (*curwin.get()).w_pcmark;
+    (*fmarkp__).fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
     (*fmarkp__).timestamp = os_time();
     (*fmarkp__).view = view;
     (*fmarkp__).additional_data = ::core::ptr::null_mut::<AdditionalData>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn checkpcmark() {
-    if (*curwin).w_prev_pcmark.lnum != 0 as linenr_T
-        && (equalpos((*curwin).w_pcmark, (*curwin).w_cursor) as ::core::ffi::c_int != 0
-            || (*curwin).w_pcmark.lnum == 0 as linenr_T)
+    if (*curwin.get()).w_prev_pcmark.lnum != 0 as linenr_T
+        && (equalpos((*curwin.get()).w_pcmark, (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
+            || (*curwin.get()).w_pcmark.lnum == 0 as linenr_T)
     {
-        (*curwin).w_pcmark = (*curwin).w_prev_pcmark;
+        (*curwin.get()).w_pcmark = (*curwin.get()).w_prev_pcmark;
     }
-    (*curwin).w_prev_pcmark.lnum = 0 as ::core::ffi::c_int as linenr_T;
+    (*curwin.get()).w_prev_pcmark.lnum = 0 as ::core::ffi::c_int as linenr_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_jumplist(
@@ -3287,7 +3288,7 @@ pub unsafe extern "C" fn get_jumplist(
         if (*jmp).fmark.fnum == 0 as ::core::ffi::c_int {
             fname2fnum(jmp);
         }
-        if (*jmp).fmark.fnum == (*curbuf).handle {
+        if (*jmp).fmark.fnum == (*curbuf.get()).handle {
             break;
         }
         if !buflist_findnr((*jmp).fmark.fnum).is_null() {
@@ -3328,7 +3329,7 @@ pub unsafe extern "C" fn get_changelist(
     }
     (*win).w_changelistidx = n;
     fm = (&raw mut (*buf).b_changelist as *mut fmark_T).offset(n as isize);
-    (*fm).fnum = (*curbuf).handle as ::core::ffi::c_int;
+    (*fm).fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
     return (&raw mut (*buf).b_changelist as *mut fmark_T).offset(n as isize);
 }
 #[no_mangle]
@@ -3394,7 +3395,7 @@ pub unsafe extern "C" fn mark_get_global(
             );
         };
     }
-    mark = (&raw mut namedfm as *mut xfmark_T).offset(name as isize);
+    mark = (namedfm.ptr() as *mut xfmark_T).offset(name as isize);
     if resolve as ::core::ffi::c_int != 0 && (*mark).fmark.fnum == 0 as ::core::ffi::c_int {
         fname2fnum(mark);
     }
@@ -3419,7 +3420,11 @@ pub unsafe extern "C" fn mark_get_local(
     } else if name == '<' as ::core::ffi::c_int || name == '>' as ::core::ffi::c_int {
         mark = mark_get_visual(buf, name);
     } else if name == '\'' as ::core::ffi::c_int || name == '`' as ::core::ffi::c_int {
-        mark = pos_to_mark(curbuf, ::core::ptr::null_mut::<fmark_T>(), (*win).w_pcmark);
+        mark = pos_to_mark(
+            curbuf.get(),
+            ::core::ptr::null_mut::<fmark_T>(),
+            (*win).w_pcmark,
+        );
     } else if name == '"' as ::core::ffi::c_int {
         mark = &raw mut (*buf).b_last_cursor;
     } else if name == '^' as ::core::ffi::c_int {
@@ -3443,9 +3448,9 @@ pub unsafe extern "C" fn mark_get_motion(
     mut name: ::core::ffi::c_int,
 ) -> *mut fmark_T {
     let mut mark: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
-    let pos: pos_T = (*curwin).w_cursor;
-    let slcb: bool = listcmd_busy;
-    listcmd_busy = true_0 != 0;
+    let pos: pos_T = (*curwin.get()).w_cursor;
+    let slcb: bool = listcmd_busy.get();
+    listcmd_busy.set(true_0 != 0);
     if name == '{' as ::core::ffi::c_int || name == '}' as ::core::ffi::c_int {
         let mut oa: oparg_T = oparg_T {
             op_type: 0,
@@ -3505,8 +3510,8 @@ pub unsafe extern "C" fn mark_get_motion(
             mark = pos_to_mark(buf, ::core::ptr::null_mut::<fmark_T>(), (*win).w_cursor);
         }
     }
-    (*curwin).w_cursor = pos;
-    listcmd_busy = slcb;
+    (*curwin.get()).w_cursor = pos;
+    listcmd_busy.set(slcb);
     return mark;
 }
 #[no_mangle]
@@ -3544,7 +3549,7 @@ pub unsafe extern "C" fn pos_to_mark(
     mut fmp: *mut fmark_T,
     mut pos: pos_T,
 ) -> *mut fmark_T {
-    static mut fms: fmark_T = fmark_T {
+    static fms: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
             lnum: 0 as linenr_T,
             col: 0 as colnr_T,
@@ -3557,8 +3562,8 @@ pub unsafe extern "C" fn pos_to_mark(
             skipcol: 0 as colnr_T,
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    };
-    let mut fm: *mut fmark_T = if fmp.is_null() { &raw mut fms } else { fmp };
+    });
+    let mut fm: *mut fmark_T = if fmp.is_null() { fms.ptr() } else { fmp };
     (*fm).fnum = (*buf).handle as ::core::ffi::c_int;
     (*fm).mark = pos;
     return fm;
@@ -3567,7 +3572,7 @@ unsafe extern "C" fn switch_to_mark_buf(
     mut fm: *mut fmark_T,
     mut pcmark_on_switch: bool,
 ) -> MarkMoveRes {
-    if (*fm).fnum != (*curbuf).handle {
+    if (*fm).fnum != (*curbuf.get()).handle {
         let mut getfile_flag: ::core::ffi::c_int = if pcmark_on_switch as ::core::ffi::c_int != 0 {
             GETF_SETMARK as ::core::ffi::c_int
         } else {
@@ -3595,7 +3600,7 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
         col: 0,
         coladd: 0,
     };
-    static mut fm_copy: fmark_T = fmark_T {
+    static fm_copy: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
             lnum: 0 as linenr_T,
             col: 0 as colnr_T,
@@ -3608,7 +3613,7 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
             skipcol: 0 as colnr_T,
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    };
+    });
     let mut res: MarkMoveRes = kMarkMoveSuccess;
     let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     '_end: {
@@ -3618,9 +3623,9 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
             }
             res = kMarkMoveFailed;
         } else {
-            if (*fm).fnum != (*curbuf).handle {
-                fm_copy = *fm;
-                fm = &raw mut fm_copy;
+            if (*fm).fnum != (*curbuf.get()).handle {
+                fm_copy.set(*fm);
+                fm = fm_copy.ptr();
                 res = (res as ::core::ffi::c_uint
                     | switch_to_mark_buf(
                         fm,
@@ -3633,7 +3638,7 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
                     != 0
                 {
                     break '_end;
-                } else if !mark_check_line_bounds(curbuf, fm, &raw mut errormsg) {
+                } else if !mark_check_line_bounds(curbuf.get(), fm, &raw mut errormsg) {
                     if !errormsg.is_null() {
                         emsg(errormsg);
                     }
@@ -3648,9 +3653,9 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
             {
                 setpcmark();
             }
-            prev_pos = (*curwin).w_cursor;
+            prev_pos = (*curwin.get()).w_cursor;
             pos = (*fm).mark;
-            (*curwin).w_cursor = (*fm).mark;
+            (*curwin.get()).w_cursor = (*fm).mark;
             if flags as ::core::ffi::c_uint
                 & kMarkBeginLine as ::core::ffi::c_int as ::core::ffi::c_uint
                 != 0
@@ -3684,7 +3689,7 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
                     & kMarkChangedCursor as ::core::ffi::c_int as ::core::ffi::c_uint
                     != 0
             {
-                check_cursor(curwin);
+                check_cursor(curwin.get());
             }
         }
     }
@@ -3695,15 +3700,15 @@ pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
     if !fm.is_null() && (*fm).view.topline_offset >= 0 as linenr_T {
         let mut topline: linenr_T = (*fm).mark.lnum - (*fm).view.topline_offset;
         if topline >= 1 as linenr_T {
-            set_topline(curwin, topline);
-            (*curwin).w_skipcol = (if (*fm).view.skipcol > 0 as ::core::ffi::c_int
+            set_topline(curwin.get(), topline);
+            (*curwin.get()).w_skipcol = (if (*fm).view.skipcol > 0 as ::core::ffi::c_int
                 && !hasFolding(
-                    curwin,
+                    curwin.get(),
                     topline,
                     ::core::ptr::null_mut::<linenr_T>(),
                     ::core::ptr::null_mut::<linenr_T>(),
                 )
-                && (*fm).view.skipcol < linetabsize_eol(curwin, topline)
+                && (*fm).view.skipcol < linetabsize_eol(curwin.get(), topline)
             {
                 (*fm).view.skipcol as ::core::ffi::c_int
             } else {
@@ -3734,22 +3739,23 @@ pub unsafe extern "C" fn getnextmark(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS {
-        if (*curbuf).b_namedm[i as usize].mark.lnum > 0 as linenr_T {
+        if (*curbuf.get()).b_namedm[i as usize].mark.lnum > 0 as linenr_T {
             if dir == FORWARD as ::core::ffi::c_int {
                 if (result.is_null()
-                    || lt((*curbuf).b_namedm[i as usize].mark, (*result).mark)
+                    || lt((*curbuf.get()).b_namedm[i as usize].mark, (*result).mark)
                         as ::core::ffi::c_int
                         != 0)
-                    && lt(pos, (*curbuf).b_namedm[i as usize].mark) as ::core::ffi::c_int != 0
+                    && lt(pos, (*curbuf.get()).b_namedm[i as usize].mark) as ::core::ffi::c_int != 0
                 {
-                    result = (&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize);
+                    result = (&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize);
                 }
             } else if (result.is_null()
-                || lt((*result).mark, (*curbuf).b_namedm[i as usize].mark) as ::core::ffi::c_int
+                || lt((*result).mark, (*curbuf.get()).b_namedm[i as usize].mark)
+                    as ::core::ffi::c_int
                     != 0)
-                && lt((*curbuf).b_namedm[i as usize].mark, pos) as ::core::ffi::c_int != 0
+                && lt((*curbuf.get()).b_namedm[i as usize].mark, pos) as ::core::ffi::c_int != 0
             {
-                result = (&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize);
+                result = (&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize);
             }
         }
         i += 1;
@@ -3769,31 +3775,28 @@ unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
     {
         let mut len: size_t = expand_env(
             b"~/\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             MAXPATHL,
         );
         xstrlcpy(
-            (&raw mut NameBuff as *mut ::core::ffi::c_char).offset(len as isize),
+            (NameBuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
             (*fm).fname.offset(2 as ::core::ffi::c_int as isize),
             (MAXPATHL as size_t).wrapping_sub(len),
         );
     } else {
         xstrlcpy(
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             (*fm).fname,
             MAXPATHL as size_t,
         );
     }
-    os_dirname(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
-        IOSIZE as size_t,
-    );
+    os_dirname(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE as size_t);
     let mut p: *mut ::core::ffi::c_char = path_shorten_fname(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
     );
     buflist_new(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         p,
         1 as linenr_T,
         0 as ::core::ffi::c_int,
@@ -3808,16 +3811,16 @@ pub unsafe extern "C" fn fmarks_check_names(mut buf: *mut buf_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NGLOBALMARKS {
         fmarks_check_one(
-            (&raw mut namedfm as *mut xfmark_T).offset(i as isize),
+            (namedfm.ptr() as *mut xfmark_T).offset(i as isize),
             name,
             buf,
         );
         i += 1;
     }
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3863,7 +3866,7 @@ pub unsafe extern "C" fn mark_check(
         }
         return false_0 != 0;
     }
-    if (*fm).fnum == (*curbuf).handle && !mark_check_line_bounds(curbuf, fm, errormsg) {
+    if (*fm).fnum == (*curbuf.get()).handle && !mark_check_line_bounds(curbuf.get(), fm, errormsg) {
         return false_0 != 0;
     }
     return true_0 != 0;
@@ -3911,7 +3914,7 @@ pub unsafe extern "C" fn fm_getname(
     mut fmark: *mut fmark_T,
     mut lead_len: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    if (*fmark).fnum == (*curbuf).handle {
+    if (*fmark).fnum == (*curbuf.get()).handle {
         return mark_line(&raw mut (*fmark).mark, lead_len);
     }
     return buflist_nr2name((*fmark).fnum, false_0, true_0);
@@ -3921,11 +3924,11 @@ unsafe extern "C" fn mark_line(
     mut lead_len: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*mp).lnum == 0 as linenr_T || (*mp).lnum > (*curbuf).b_ml.ml_line_count {
+    if (*mp).lnum == 0 as linenr_T || (*mp).lnum > (*curbuf.get()).b_ml.ml_line_count {
         return xstrdup(b"-invalid-\0".as_ptr() as *const ::core::ffi::c_char);
     }
     '_c2rust_label: {
-        if Columns >= 0 as ::core::ffi::c_int {
+        if Columns.get() >= 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"Columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3937,13 +3940,13 @@ unsafe extern "C" fn mark_line(
     };
     let mut s: *mut ::core::ffi::c_char = xstrnsave(
         skipwhite(ml_get((*mp).lnum)),
-        (Columns as size_t).wrapping_mul(5 as size_t),
+        (Columns.get() as size_t).wrapping_mul(5 as size_t),
     );
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     p = s;
     while *p as ::core::ffi::c_int != NUL {
         len += ptr2cells(p);
-        if len >= Columns - lead_len {
+        if len >= Columns.get() - lead_len {
             break;
         }
         p = p.offset(utfc_ptr2len(p) as isize);
@@ -3963,7 +3966,7 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     show_one_mark(
         '\'' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curwin).w_pcmark,
+        &raw mut (*curwin.get()).w_pcmark,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
@@ -3972,7 +3975,7 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
         show_one_mark(
             i + 'a' as ::core::ffi::c_int,
             arg,
-            &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize)).mark,
+            &raw mut (*(&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize)).mark,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0,
         );
@@ -3980,13 +3983,13 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_0 < NGLOBALMARKS {
-        if namedfm[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
+        if (*namedfm.ptr())[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
             name = fm_getname(
-                &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize)).fmark,
+                &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize)).fmark,
                 15 as ::core::ffi::c_int,
             );
         } else {
-            name = namedfm[i_0 as usize].fname;
+            name = (*namedfm.ptr())[i_0 as usize].fname;
         }
         if !name.is_null() {
             show_one_mark(
@@ -3996,13 +3999,14 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
                     i_0 + 'A' as ::core::ffi::c_int
                 },
                 arg,
-                &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize))
+                &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize))
                     .fmark
                     .mark,
                 name,
-                (namedfm[i_0 as usize].fmark.fnum == (*curbuf).handle) as ::core::ffi::c_int,
+                ((*namedfm.ptr())[i_0 as usize].fmark.fnum == (*curbuf.get()).handle)
+                    as ::core::ffi::c_int,
             );
-            if namedfm[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
+            if (*namedfm.ptr())[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
                 xfree(name as *mut ::core::ffi::c_void);
             }
         }
@@ -4011,49 +4015,49 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     show_one_mark(
         '"' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curbuf).b_last_cursor.mark,
+        &raw mut (*curbuf.get()).b_last_cursor.mark,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
     show_one_mark(
         '[' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curbuf).b_op_start,
+        &raw mut (*curbuf.get()).b_op_start,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
     show_one_mark(
         ']' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curbuf).b_op_end,
+        &raw mut (*curbuf.get()).b_op_end,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
     show_one_mark(
         '^' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curbuf).b_last_insert.mark,
+        &raw mut (*curbuf.get()).b_last_insert.mark,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
     show_one_mark(
         '.' as ::core::ffi::c_int,
         arg,
-        &raw mut (*curbuf).b_last_change.mark,
+        &raw mut (*curbuf.get()).b_last_change.mark,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         true_0,
     );
-    if bt_prompt(curbuf) {
+    if bt_prompt(curbuf.get()) {
         show_one_mark(
             ':' as ::core::ffi::c_int,
             arg,
-            &raw mut (*curbuf).b_prompt_start.mark,
+            &raw mut (*curbuf.get()).b_prompt_start.mark,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0,
         );
     }
-    let mut startp: *mut pos_T = &raw mut (*curbuf).b_visual.vi_start;
-    let mut endp: *mut pos_T = &raw mut (*curbuf).b_visual.vi_end;
+    let mut startp: *mut pos_T = &raw mut (*curbuf.get()).b_visual.vi_start;
+    let mut endp: *mut pos_T = &raw mut (*curbuf.get()).b_visual.vi_end;
     if (lt(*startp, *endp) as ::core::ffi::c_int != 0 || (*endp).lnum == 0 as linenr_T)
         && (*startp).lnum != 0 as linenr_T
     {
@@ -4090,12 +4094,12 @@ unsafe extern "C" fn show_one_mark(
     mut name_arg: *mut ::core::ffi::c_char,
     mut current: ::core::ffi::c_int,
 ) {
-    static mut did_title: bool = false_0 != 0;
+    static did_title: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut mustfree: bool = false_0 != 0;
     let mut name: *mut ::core::ffi::c_char = name_arg;
     if c == -1 as ::core::ffi::c_int {
-        if did_title {
-            did_title = false_0 != 0;
+        if did_title.get() {
+            did_title.set(false_0 != 0);
         } else if arg.is_null() {
             msg(
                 gettext(b"No marks set\0".as_ptr() as *const ::core::ffi::c_char),
@@ -4107,7 +4111,7 @@ unsafe extern "C" fn show_one_mark(
                 arg,
             );
         }
-    } else if !got_int
+    } else if !got_int.get()
         && (arg.is_null() || !vim_strchr(arg, c).is_null())
         && (*p).lnum != 0 as linenr_T
     {
@@ -4116,16 +4120,16 @@ unsafe extern "C" fn show_one_mark(
             mustfree = true_0 != 0;
         }
         if !message_filtered(name) {
-            if !did_title {
+            if !did_title.get() {
                 msg_puts_title(gettext(
                     b"\nmark line  col file/text\0".as_ptr() as *const ::core::ffi::c_char
                 ));
-                did_title = true_0 != 0;
+                did_title.set(true_0 != 0);
             }
             msg_putchar('\n' as ::core::ffi::c_int);
-            if !got_int {
+            if !got_int.get() {
                 snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     b" %c %6d %4d \0".as_ptr() as *const ::core::ffi::c_char,
                     c,
@@ -4133,7 +4137,7 @@ unsafe extern "C" fn show_one_mark(
                     (*p).col,
                 );
                 msg_outtrans(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
                 );
@@ -4168,31 +4172,31 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL && (*eap).forceit != 0 {
         let mut i: size_t = 0 as size_t;
         while i < NMARKS as size_t {
-            if (*curbuf).b_namedm[i as usize].mark.lnum != 0 as linenr_T {
+            if (*curbuf.get()).b_namedm[i as usize].mark.lnum != 0 as linenr_T {
                 do_markset_autocmd(
                     i.wrapping_add('a' as size_t) as ::core::ffi::c_char,
                     &raw mut pos,
-                    curbuf,
+                    curbuf.get(),
                 );
             }
             i = i.wrapping_add(1);
         }
-        if (*curbuf).b_last_cursor.mark.lnum != 0 as linenr_T {
-            do_markset_autocmd('"' as ::core::ffi::c_char, &raw mut pos, curbuf);
+        if (*curbuf.get()).b_last_cursor.mark.lnum != 0 as linenr_T {
+            do_markset_autocmd('"' as ::core::ffi::c_char, &raw mut pos, curbuf.get());
         }
-        if (*curbuf).b_last_insert.mark.lnum != 0 as linenr_T {
-            do_markset_autocmd('^' as ::core::ffi::c_char, &raw mut pos, curbuf);
+        if (*curbuf.get()).b_last_insert.mark.lnum != 0 as linenr_T {
+            do_markset_autocmd('^' as ::core::ffi::c_char, &raw mut pos, curbuf.get());
         }
-        if (*curbuf).b_last_change.mark.lnum != 0 as linenr_T {
-            do_markset_autocmd('.' as ::core::ffi::c_char, &raw mut pos, curbuf);
+        if (*curbuf.get()).b_last_change.mark.lnum != 0 as linenr_T {
+            do_markset_autocmd('.' as ::core::ffi::c_char, &raw mut pos, curbuf.get());
         }
-        if (*curbuf).b_op_start.lnum != 0 as linenr_T {
-            do_markset_autocmd('[' as ::core::ffi::c_char, &raw mut pos, curbuf);
+        if (*curbuf.get()).b_op_start.lnum != 0 as linenr_T {
+            do_markset_autocmd('[' as ::core::ffi::c_char, &raw mut pos, curbuf.get());
         }
-        if (*curbuf).b_op_end.lnum != 0 as linenr_T {
-            do_markset_autocmd(']' as ::core::ffi::c_char, &raw mut pos, curbuf);
+        if (*curbuf.get()).b_op_end.lnum != 0 as linenr_T {
+            do_markset_autocmd(']' as ::core::ffi::c_char, &raw mut pos, curbuf.get());
         }
-        clrallmarks(curbuf, os_time());
+        clrallmarks(curbuf.get(), os_time());
     } else if (*eap).forceit != 0 {
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
     } else if *(*eap).arg as ::core::ffi::c_int == NUL {
@@ -4251,40 +4255,43 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                 let mut i_0: ::core::ffi::c_int = from;
                 while i_0 <= to {
                     if lower {
-                        if (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
+                        if (*curbuf.get()).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
                             .mark
                             .lnum
                             != 0 as linenr_T
                         {
-                            do_markset_autocmd(i_0 as ::core::ffi::c_char, &raw mut pos, curbuf);
+                            do_markset_autocmd(
+                                i_0 as ::core::ffi::c_char,
+                                &raw mut pos,
+                                curbuf.get(),
+                            );
                         }
-                        (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
+                        (*curbuf.get()).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
                             .mark
                             .lnum = 0 as ::core::ffi::c_int as linenr_T;
-                        (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize].timestamp =
-                            timestamp;
+                        (*curbuf.get()).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
+                            .timestamp = timestamp;
                     } else {
                         if digit {
                             n = i_0 - '0' as ::core::ffi::c_int + NMARKS;
                         } else {
                             n = i_0 - 'A' as ::core::ffi::c_int;
                         }
-                        if namedfm[n as usize].fmark.mark.lnum != 0 as linenr_T {
+                        if (*namedfm.ptr())[n as usize].fmark.mark.lnum != 0 as linenr_T {
                             let mut buf: *mut buf_T =
-                                buflist_findnr(namedfm[n as usize].fmark.fnum);
+                                buflist_findnr((*namedfm.ptr())[n as usize].fmark.fnum);
                             if buf.is_null() {
-                                buf = curbuf;
+                                buf = curbuf.get();
                             }
                             do_markset_autocmd(i_0 as ::core::ffi::c_char, &raw mut pos, buf);
                         }
-                        namedfm[n as usize].fmark.mark.lnum = 0 as ::core::ffi::c_int as linenr_T;
-                        namedfm[n as usize].fmark.fnum = 0 as ::core::ffi::c_int;
-                        namedfm[n as usize].fmark.timestamp = timestamp;
-                        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut namedfm
-                            as *mut xfmark_T)
-                            .offset(n as isize))
-                        .fname
-                            as *mut *mut ::core::ffi::c_void;
+                        (*namedfm.ptr())[n as usize].fmark.mark.lnum =
+                            0 as ::core::ffi::c_int as linenr_T;
+                        (*namedfm.ptr())[n as usize].fmark.fnum = 0 as ::core::ffi::c_int;
+                        (*namedfm.ptr())[n as usize].fmark.timestamp = timestamp;
+                        let mut ptr_: *mut *mut ::core::ffi::c_void =
+                            &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(n as isize)).fname
+                                as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
                         *ptr_;
@@ -4294,46 +4301,47 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
             } else {
                 match *p as ::core::ffi::c_int {
                     34 => {
-                        if (*curbuf).b_last_cursor.mark.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_last_cursor.mark.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        clear_fmark(&raw mut (*curbuf).b_last_cursor, timestamp);
+                        clear_fmark(&raw mut (*curbuf.get()).b_last_cursor, timestamp);
                     }
                     94 => {
-                        if (*curbuf).b_last_insert.mark.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_last_insert.mark.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        clear_fmark(&raw mut (*curbuf).b_last_insert, timestamp);
+                        clear_fmark(&raw mut (*curbuf.get()).b_last_insert, timestamp);
                     }
                     46 => {
-                        if (*curbuf).b_last_change.mark.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_last_change.mark.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        clear_fmark(&raw mut (*curbuf).b_last_change, timestamp);
+                        clear_fmark(&raw mut (*curbuf.get()).b_last_change, timestamp);
                     }
                     91 => {
-                        if (*curbuf).b_op_start.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_op_start.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        (*curbuf).b_op_start.lnum = 0 as ::core::ffi::c_int as linenr_T;
+                        (*curbuf.get()).b_op_start.lnum = 0 as ::core::ffi::c_int as linenr_T;
                     }
                     93 => {
-                        if (*curbuf).b_op_end.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_op_end.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        (*curbuf).b_op_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
+                        (*curbuf.get()).b_op_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
                     }
                     60 => {
-                        if (*curbuf).b_visual.vi_start.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_visual.vi_start.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        (*curbuf).b_visual.vi_start.lnum = 0 as ::core::ffi::c_int as linenr_T;
+                        (*curbuf.get()).b_visual.vi_start.lnum =
+                            0 as ::core::ffi::c_int as linenr_T;
                     }
                     62 => {
-                        if (*curbuf).b_visual.vi_end.lnum != 0 as linenr_T {
-                            do_markset_autocmd(*p, &raw mut pos, curbuf);
+                        if (*curbuf.get()).b_visual.vi_end.lnum != 0 as linenr_T {
+                            do_markset_autocmd(*p, &raw mut pos, curbuf.get());
                         }
-                        (*curbuf).b_visual.vi_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
+                        (*curbuf.get()).b_visual.vi_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
                     }
                     58 | 32 => {}
                     _ => {
@@ -4351,55 +4359,58 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
-    cleanup_jumplist(curwin, true_0 != 0);
+    cleanup_jumplist(curwin.get(), true_0 != 0);
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_puts_title(gettext(
         b"\n jump line  col file/text\0".as_ptr() as *const ::core::ffi::c_char
     ));
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*curwin).w_jumplistlen && !got_int {
-        if (*curwin).w_jumplist[i as usize].fmark.mark.lnum != 0 as linenr_T {
+    while i < (*curwin.get()).w_jumplistlen && !got_int.get() {
+        if (*curwin.get()).w_jumplist[i as usize].fmark.mark.lnum != 0 as linenr_T {
             let mut name: *mut ::core::ffi::c_char = fm_getname(
-                &raw mut (*(&raw mut (*curwin).w_jumplist as *mut xfmark_T).offset(i as isize))
-                    .fmark,
+                &raw mut (*(&raw mut (*curwin.get()).w_jumplist as *mut xfmark_T)
+                    .offset(i as isize))
+                .fmark,
                 16 as ::core::ffi::c_int,
             );
-            if name.is_null() && i == (*curwin).w_jumplistidx {
+            if name.is_null() && i == (*curwin.get()).w_jumplistidx {
                 name = xstrdup(b"-invalid-\0".as_ptr() as *const ::core::ffi::c_char);
             }
             if name.is_null() || message_filtered(name) as ::core::ffi::c_int != 0 {
                 xfree(name as *mut ::core::ffi::c_void);
             } else {
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int {
+                if got_int.get() {
                     xfree(name as *mut ::core::ffi::c_void);
                     break;
                 } else {
                     snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         b"%c %2d %5d %4d \0".as_ptr() as *const ::core::ffi::c_char,
-                        if i == (*curwin).w_jumplistidx {
+                        if i == (*curwin.get()).w_jumplistidx {
                             '>' as ::core::ffi::c_int
                         } else {
                             ' ' as ::core::ffi::c_int
                         },
-                        if i > (*curwin).w_jumplistidx {
-                            i - (*curwin).w_jumplistidx
+                        if i > (*curwin.get()).w_jumplistidx {
+                            i - (*curwin.get()).w_jumplistidx
                         } else {
-                            (*curwin).w_jumplistidx - i
+                            (*curwin.get()).w_jumplistidx - i
                         },
-                        (*curwin).w_jumplist[i as usize].fmark.mark.lnum,
-                        (*curwin).w_jumplist[i as usize].fmark.mark.col,
+                        (*curwin.get()).w_jumplist[i as usize].fmark.mark.lnum,
+                        (*curwin.get()).w_jumplist[i as usize].fmark.mark.col,
                     );
                     msg_outtrans(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         0 as ::core::ffi::c_int,
                         false_0 != 0,
                     );
                     msg_outtrans(
                         name,
-                        if (*curwin).w_jumplist[i as usize].fmark.fnum == (*curbuf).handle {
+                        if (*curwin.get()).w_jumplist[i as usize].fmark.fnum
+                            == (*curbuf.get()).handle
+                        {
                             HLF_D as ::core::ffi::c_int
                         } else {
                             0 as ::core::ffi::c_int
@@ -4413,15 +4424,15 @@ pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
         }
         i += 1;
     }
-    if (*curwin).w_jumplistidx == (*curwin).w_jumplistlen {
+    if (*curwin.get()).w_jumplistidx == (*curwin.get()).w_jumplistlen {
         msg_puts(b"\n>\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_clearjumps(mut _eap: *mut exarg_T) {
-    free_jumplist(curwin);
-    (*curwin).w_jumplistlen = 0 as ::core::ffi::c_int;
-    (*curwin).w_jumplistidx = 0 as ::core::ffi::c_int;
+    free_jumplist(curwin.get());
+    (*curwin.get()).w_jumplistlen = 0 as ::core::ffi::c_int;
+    (*curwin.get()).w_jumplistidx = 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
@@ -4430,37 +4441,38 @@ pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
         b"\nchange line  col text\0".as_ptr() as *const ::core::ffi::c_char
     ));
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*curbuf).b_changelistlen && !got_int {
-        if (*curbuf).b_changelist[i as usize].mark.lnum != 0 as linenr_T {
+    while i < (*curbuf.get()).b_changelistlen && !got_int.get() {
+        if (*curbuf.get()).b_changelist[i as usize].mark.lnum != 0 as linenr_T {
             msg_putchar('\n' as ::core::ffi::c_int);
-            if got_int {
+            if got_int.get() {
                 break;
             }
             snprintf(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 b"%c %3d %5d %4d \0".as_ptr() as *const ::core::ffi::c_char,
-                if i == (*curwin).w_changelistidx {
+                if i == (*curwin.get()).w_changelistidx {
                     '>' as ::core::ffi::c_int
                 } else {
                     ' ' as ::core::ffi::c_int
                 },
-                if i > (*curwin).w_changelistidx {
-                    i - (*curwin).w_changelistidx
+                if i > (*curwin.get()).w_changelistidx {
+                    i - (*curwin.get()).w_changelistidx
                 } else {
-                    (*curwin).w_changelistidx - i
+                    (*curwin.get()).w_changelistidx - i
                 },
-                (*curbuf).b_changelist[i as usize].mark.lnum,
-                (*curbuf).b_changelist[i as usize].mark.col,
+                (*curbuf.get()).b_changelist[i as usize].mark.lnum,
+                (*curbuf.get()).b_changelist[i as usize].mark.col,
             );
             msg_outtrans(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
                 false_0 != 0,
             );
             let mut name: *mut ::core::ffi::c_char = mark_line(
-                &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T).offset(i as isize))
-                    .mark,
+                &raw mut (*(&raw mut (*curbuf.get()).b_changelist as *mut fmark_T)
+                    .offset(i as isize))
+                .mark,
                 17 as ::core::ffi::c_int,
             );
             msg_outtrans(name, HLF_D as ::core::ffi::c_int, false_0 != 0);
@@ -4469,7 +4481,7 @@ pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
         }
         i += 1;
     }
-    if (*curwin).w_changelistidx == (*curbuf).b_changelistlen {
+    if (*curwin.get()).w_changelistidx == (*curbuf.get()).b_changelistlen {
         msg_puts(b"\n>\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
@@ -4482,7 +4494,7 @@ pub unsafe extern "C" fn mark_adjust(
     mut op: ExtmarkOp,
 ) {
     mark_adjust_buf(
-        curbuf,
+        curbuf.get(),
         line1,
         line2,
         amount,
@@ -4501,7 +4513,7 @@ pub unsafe extern "C" fn mark_adjust_nofold(
     mut op: ExtmarkOp,
 ) {
     mark_adjust_buf(
-        curbuf,
+        curbuf.get(),
         line1,
         line2,
         amount,
@@ -4524,11 +4536,11 @@ pub unsafe extern "C" fn mark_adjust_buf(
 ) {
     let mut fnum: ::core::ffi::c_int = (*buf).handle as ::core::ffi::c_int;
     let mut lp: *mut linenr_T = ::core::ptr::null_mut::<linenr_T>();
-    static mut initpos: pos_T = pos_T {
+    static initpos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
         lnum: 1 as linenr_T,
         col: 0 as colnr_T,
         coladd: 0 as colnr_T,
-    };
+    });
     if line2 < line1 && amount_after == 0 as linenr_T {
         return;
     }
@@ -4536,7 +4548,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
         mode as ::core::ffi::c_uint == kMarkAdjustApi as ::core::ffi::c_int as ::core::ffi::c_uint;
     let mut by_term: bool =
         mode as ::core::ffi::c_uint == kMarkAdjustTerm as ::core::ffi::c_int as ::core::ffi::c_uint;
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+    {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < NMARKS {
             lp = &raw mut (*(&raw mut (*buf).b_namedm as *mut fmark_T).offset(i as isize))
@@ -4551,8 +4564,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
             } else if amount_after != 0 && *lp > line2 {
                 *lp += amount_after;
             }
-            if namedfm[i as usize].fmark.fnum == fnum {
-                lp = &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i as isize))
+            if (*namedfm.ptr())[i as usize].fmark.fnum == fnum {
+                lp = &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i as isize))
                     .fmark
                     .mark
                     .lnum;
@@ -4570,8 +4583,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
         }
         let mut i_0: ::core::ffi::c_int = NMARKS;
         while i_0 < NGLOBALMARKS {
-            if namedfm[i_0 as usize].fmark.fnum == fnum {
-                lp = &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize))
+            if (*namedfm.ptr())[i_0 as usize].fmark.fnum == fnum {
+                lp = &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize))
                     .fmark
                     .mark
                     .lnum;
@@ -4607,7 +4620,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
         } else if amount_after != 0 && *lp > line2 {
             *lp += amount_after;
         }
-        if !equalpos((*buf).b_last_cursor.mark, initpos)
+        if !equalpos((*buf).b_last_cursor.mark, initpos.get())
             && (!by_term || (*buf).b_last_cursor.mark.lnum < (*buf).b_ml.ml_line_count)
         {
             lp = &raw mut (*buf).b_last_cursor.mark.lnum;
@@ -4680,10 +4693,10 @@ pub unsafe extern "C" fn mark_adjust_buf(
             (*buf).b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
         }
         let mut found_one: bool = false_0 != 0;
-        let mut tab: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tab: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tab.is_null() {
-            let mut win: *mut win_T = if tab == curtab {
-                firstwin
+            let mut win: *mut win_T = if tab == curtab.get() {
+                firstwin.get()
             } else {
                 (*tab).tp_firstwin
             };
@@ -4703,8 +4716,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
     if op as ::core::ffi::c_uint != kExtmarkNOOP as ::core::ffi::c_int as ::core::ffi::c_uint {
         extmark_adjust(buf, line1, line2, amount, amount_after, op);
     }
-    if (*curwin).w_buffer == buf {
-        lp = &raw mut (*curwin).w_pcmark.lnum;
+    if (*curwin.get()).w_buffer == buf {
+        lp = &raw mut (*curwin.get()).w_pcmark.lnum;
         if *lp >= line1 && *lp <= line2 {
             if amount == MAXLNUM as ::core::ffi::c_int as linenr_T {
                 *lp = 0 as ::core::ffi::c_int as linenr_T;
@@ -4714,7 +4727,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
         } else if amount_after != 0 && *lp > line2 {
             *lp += amount_after;
         }
-        lp = &raw mut (*curwin).w_prev_pcmark.lnum;
+        lp = &raw mut (*curwin.get()).w_prev_pcmark.lnum;
         if *lp >= line1 && *lp <= line2 {
             if amount == MAXLNUM as ::core::ffi::c_int as linenr_T {
                 *lp = 0 as ::core::ffi::c_int as linenr_T;
@@ -4724,8 +4737,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
         } else if amount_after != 0 && *lp > line2 {
             *lp += amount_after;
         }
-        if saved_cursor.lnum != 0 as linenr_T {
-            lp = &raw mut saved_cursor.lnum;
+        if (*saved_cursor.ptr()).lnum != 0 as linenr_T {
+            lp = &raw mut (*saved_cursor.ptr()).lnum;
             if *lp >= line1 && *lp <= line2 {
                 if amount == MAXLNUM as ::core::ffi::c_int as linenr_T {
                     *lp = line1;
@@ -4737,15 +4750,17 @@ pub unsafe extern "C" fn mark_adjust_buf(
             }
         }
     }
-    let mut tab_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tab_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tab_0.is_null() {
-        let mut win_0: *mut win_T = if tab_0 == curtab {
-            firstwin
+        let mut win_0: *mut win_T = if tab_0 == curtab.get() {
+            firstwin.get()
         } else {
             (*tab_0).tp_firstwin
         };
         while !win_0.is_null() {
-            if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+            if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
+                == 0 as ::core::ffi::c_int
+            {
                 let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i_2 < (*win_0).w_jumplistlen {
                     if (*win_0).w_jumplist[i_2 as usize].fmark.fnum == fnum {
@@ -4768,7 +4783,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                 }
             }
             if (*win_0).w_buffer == buf {
-                if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
+                if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
                     == 0 as ::core::ffi::c_int
                 {
                     let mut i_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4818,7 +4833,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                     || (if by_term as ::core::ffi::c_int != 0 {
                         ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as ::core::ffi::c_int
                     } else {
-                        (win_0 != curwin) as ::core::ffi::c_int
+                        (win_0 != curwin.get()) as ::core::ffi::c_int
                     }) != 0
                 {
                     if (*win_0).w_topline >= line1 && (*win_0).w_topline <= line2 {
@@ -4853,7 +4868,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                     && (if by_term as ::core::ffi::c_int != 0 {
                         ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as ::core::ffi::c_int
                     } else {
-                        (win_0 != curwin) as ::core::ffi::c_int
+                        (win_0 != curwin.get()) as ::core::ffi::c_int
                     }) != 0
                 {
                     let mut posp: *mut pos_T = &raw mut (*win_0).w_cursor;
@@ -4912,16 +4927,17 @@ pub unsafe extern "C" fn mark_col_adjust(
     mut col_amount: colnr_T,
     mut spaces_removed: ::core::ffi::c_int,
 ) {
-    let mut fnum: ::core::ffi::c_int = (*curbuf).handle as ::core::ffi::c_int;
+    let mut fnum: ::core::ffi::c_int = (*curbuf.get()).handle as ::core::ffi::c_int;
     let mut posp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     if col_amount == 0 as ::core::ffi::c_int && lnum_amount == 0 as linenr_T
-        || cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0
     {
         return;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS {
-        posp = &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize)).mark;
+        posp =
+            &raw mut (*(&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize)).mark;
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label: {
@@ -4947,8 +4963,8 @@ pub unsafe extern "C" fn mark_col_adjust(
                 (*posp).col += col_amount;
             }
         }
-        if namedfm[i as usize].fmark.fnum == fnum {
-            posp = &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i as isize))
+        if (*namedfm.ptr())[i as usize].fmark.fnum == fnum {
+            posp = &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i as isize))
                 .fmark
                 .mark;
             if (*posp).lnum == lnum && (*posp).col >= mincol {
@@ -4981,8 +4997,8 @@ pub unsafe extern "C" fn mark_col_adjust(
     }
     let mut i_0: ::core::ffi::c_int = NMARKS;
     while i_0 < NGLOBALMARKS {
-        if namedfm[i_0 as usize].fmark.fnum == fnum {
-            posp = &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize))
+        if (*namedfm.ptr())[i_0 as usize].fmark.fnum == fnum {
+            posp = &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize))
                 .fmark
                 .mark;
             if (*posp).lnum == lnum && (*posp).col >= mincol {
@@ -5013,7 +5029,7 @@ pub unsafe extern "C" fn mark_col_adjust(
         }
         i_0 += 1;
     }
-    posp = &raw mut (*curbuf).b_last_insert.mark;
+    posp = &raw mut (*curbuf.get()).b_last_insert.mark;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_2: {
@@ -5039,7 +5055,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    posp = &raw mut (*curbuf).b_last_change.mark;
+    posp = &raw mut (*curbuf.get()).b_last_change.mark;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_3: {
@@ -5065,8 +5081,8 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    if bt_prompt(curbuf) {
-        posp = &raw mut (*curbuf).b_prompt_start.mark;
+    if bt_prompt(curbuf.get()) {
+        posp = &raw mut (*curbuf.get()).b_prompt_start.mark;
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label_4: {
@@ -5094,9 +5110,10 @@ pub unsafe extern "C" fn mark_col_adjust(
         }
     }
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_1 < (*curbuf).b_changelistlen {
-        posp =
-            &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T).offset(i_1 as isize)).mark;
+    while i_1 < (*curbuf.get()).b_changelistlen {
+        posp = &raw mut (*(&raw mut (*curbuf.get()).b_changelist as *mut fmark_T)
+            .offset(i_1 as isize))
+        .mark;
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label_5: {
@@ -5124,7 +5141,7 @@ pub unsafe extern "C" fn mark_col_adjust(
         }
         i_1 += 1;
     }
-    posp = &raw mut (*curbuf).b_visual.vi_start;
+    posp = &raw mut (*curbuf.get()).b_visual.vi_start;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_6: {
@@ -5150,7 +5167,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    posp = &raw mut (*curbuf).b_visual.vi_end;
+    posp = &raw mut (*curbuf.get()).b_visual.vi_end;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_7: {
@@ -5176,7 +5193,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    posp = &raw mut (*curwin).w_pcmark;
+    posp = &raw mut (*curwin.get()).w_pcmark;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_8: {
@@ -5202,7 +5219,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    posp = &raw mut (*curwin).w_prev_pcmark;
+    posp = &raw mut (*curwin.get()).w_prev_pcmark;
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_9: {
@@ -5228,7 +5245,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    posp = &raw mut saved_cursor;
+    posp = saved_cursor.ptr();
     if (*posp).lnum == lnum && (*posp).col >= mincol {
         (*posp).lnum += lnum_amount;
         '_c2rust_label_10: {
@@ -5254,10 +5271,10 @@ pub unsafe extern "C" fn mark_col_adjust(
             (*posp).col += col_amount;
         }
     }
-    let mut win: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut win: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !win.is_null() {
         let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5297,7 +5314,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             }
             i_2 += 1;
         }
-        if (*win).w_buffer == curbuf {
+        if (*win).w_buffer == curbuf.get() {
             let mut i_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_3 < (*win).w_tagstacklen {
                 if (*win).w_tagstack[i_3 as usize].fmark.fnum == fnum {
@@ -5336,7 +5353,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 }
                 i_3 += 1;
             }
-            if win != curwin {
+            if win != curwin.get() {
                 posp = &raw mut (*win).w_cursor;
                 if (*posp).lnum == lnum && (*posp).col >= mincol {
                     (*posp).lnum += lnum_amount;
@@ -5405,8 +5422,9 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
         if i >= (*wp).w_jumplistlen {
             mustfree = false_0 != 0;
         } else if i > from + 1 as ::core::ffi::c_int {
-            mustfree =
-                jop_flags & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint == 0;
+            mustfree = jop_flags.get()
+                & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint
+                == 0;
         } else {
             mustfree = true_0 != 0;
         }
@@ -5430,7 +5448,7 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
     {
         let mut fm_last: *const xfmark_T = (&raw mut (*wp).w_jumplist as *mut xfmark_T)
             .offset(((*wp).w_jumplistlen - 1 as ::core::ffi::c_int) as isize);
-        if (*fm_last).fmark.fnum == (*curbuf).handle
+        if (*fm_last).fmark.fnum == (*curbuf.get()).handle
             && (*fm_last).fmark.mark.lnum == (*wp).w_cursor.lnum
         {
             xfree((*fm_last).fname as *mut ::core::ffi::c_void);
@@ -5500,13 +5518,12 @@ pub unsafe extern "C" fn mark_global_iter(
 ) -> *const ::core::ffi::c_void {
     *name = NUL as ::core::ffi::c_char;
     let mut iter_mark: *const xfmark_T = if iter.is_null() {
-        (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize)
-            as *const xfmark_T
+        (namedfm.ptr() as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize) as *const xfmark_T
     } else {
         iter as *const xfmark_T
     };
     while (iter_mark
-        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        .offset_from((namedfm.ptr() as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
         as size_t)
         < ::core::mem::size_of::<[xfmark_T; 36]>()
             .wrapping_div(::core::mem::size_of::<xfmark_T>())
@@ -5520,7 +5537,7 @@ pub unsafe extern "C" fn mark_global_iter(
         iter_mark = iter_mark.offset(1);
     }
     if iter_mark
-        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        .offset_from((namedfm.ptr() as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
         as size_t
         == ::core::mem::size_of::<[xfmark_T; 36]>()
             .wrapping_div(::core::mem::size_of::<xfmark_T>())
@@ -5534,7 +5551,7 @@ pub unsafe extern "C" fn mark_global_iter(
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
     let mut iter_off: size_t = iter_mark
-        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        .offset_from((namedfm.ptr() as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
         as size_t;
     *name = (if iter_off < NMARKS as size_t {
         'A' as ::core::ffi::c_int + iter_off as ::core::ffi::c_char as ::core::ffi::c_int
@@ -5545,9 +5562,9 @@ pub unsafe extern "C" fn mark_global_iter(
     *fm = *iter_mark;
     loop {
         iter_mark = iter_mark.offset(1);
-        if (iter_mark.offset_from(
-            (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize),
-        ) as size_t)
+        if (iter_mark
+            .offset_from((namedfm.ptr() as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+            as size_t)
             >= ::core::mem::size_of::<[xfmark_T; 36]>()
                 .wrapping_div(::core::mem::size_of::<xfmark_T>())
                 .wrapping_div(
@@ -5648,7 +5665,7 @@ pub unsafe extern "C" fn mark_set_global(
     if idx == -1 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    let fm_tgt: *mut xfmark_T = (&raw mut namedfm as *mut xfmark_T).offset(idx as isize);
+    let fm_tgt: *mut xfmark_T = (namedfm.ptr() as *mut xfmark_T).offset(idx as isize);
     if update as ::core::ffi::c_int != 0 && fm.fmark.timestamp <= (*fm_tgt).fmark.timestamp {
         return false_0 != 0;
     }
@@ -5802,8 +5819,8 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
     add_mark(
         l,
         b"''\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut (*curwin).w_pcmark,
-        (*curbuf).handle as ::core::ffi::c_int,
+        &raw mut (*curwin.get()).w_pcmark,
+        (*curbuf.get()).handle as ::core::ffi::c_int,
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
     add_mark(
@@ -5858,7 +5875,7 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_raw_global_mark(mut name: ::core::ffi::c_char) -> xfmark_T {
-    return namedfm[mark_global_index(name) as usize];
+    return (*namedfm.ptr())[mark_global_index(name) as usize];
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
@@ -5867,10 +5884,10 @@ pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS + EXTRA_MARKS {
-        if namedfm[i as usize].fmark.fnum != 0 as ::core::ffi::c_int {
-            name = buflist_nr2name(namedfm[i as usize].fmark.fnum, true_0, true_0);
+        if (*namedfm.ptr())[i as usize].fmark.fnum != 0 as ::core::ffi::c_int {
+            name = buflist_nr2name((*namedfm.ptr())[i as usize].fmark.fnum, true_0, true_0);
         } else {
-            name = namedfm[i as usize].fname;
+            name = (*namedfm.ptr())[i as usize].fname;
         }
         if !name.is_null() {
             mname[1 as ::core::ffi::c_int as usize] = (if i >= NMARKS {
@@ -5882,13 +5899,13 @@ pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
             add_mark(
                 l,
                 &raw mut mname as *mut ::core::ffi::c_char,
-                &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i as isize))
+                &raw mut (*(namedfm.ptr() as *mut xfmark_T).offset(i as isize))
                     .fmark
                     .mark,
-                namedfm[i as usize].fmark.fnum,
+                (*namedfm.ptr())[i as usize].fmark.fnum,
                 name,
             );
-            if namedfm[i as usize].fmark.fnum != 0 as ::core::ffi::c_int {
+            if (*namedfm.ptr())[i as usize].fmark.fnum != 0 as ::core::ffi::c_int {
                 xfree(name as *mut ::core::ffi::c_void);
             }
         }

@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -27,7 +28,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut p_ws: ::core::ffi::c_int;
+    static p_ws: GlobalCell<::core::ffi::c_int>;
     fn callback_call(
         callback: *mut Callback,
         argcount_in: ::core::ffi::c_int,
@@ -70,7 +71,7 @@ extern "C" {
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static mut curbuf: *mut buf_T;
+    static curbuf: GlobalCell<*mut buf_T>;
     fn ctrl_x_mode_whole_line() -> bool;
     fn find_word_start(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn find_word_end(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -2571,7 +2572,7 @@ pub unsafe extern "C" fn search_for_fuzzy_match(
     let mut found_new_match: bool = false_0 != 0;
     let mut looped_around: bool = false_0 != 0;
     let mut whole_line: bool = ctrl_x_mode_whole_line();
-    if buf == curbuf {
+    if buf == curbuf.get() {
         circly_end = *start_pos;
     } else {
         circly_end.lnum = (*buf).b_ml.ml_line_count;
@@ -2616,7 +2617,7 @@ pub unsafe extern "C" fn search_for_fuzzy_match(
         if dir == FORWARD as ::core::ffi::c_int {
             current_pos.lnum += 1;
             if current_pos.lnum > (*buf).b_ml.ml_line_count {
-                if p_ws == 0 {
+                if p_ws.get() == 0 {
                     break;
                 }
                 current_pos.lnum = 1 as ::core::ffi::c_int as linenr_T;
@@ -2625,7 +2626,7 @@ pub unsafe extern "C" fn search_for_fuzzy_match(
         } else {
             current_pos.lnum -= 1;
             if current_pos.lnum < 1 as linenr_T {
-                if p_ws == 0 {
+                if p_ws.get() == 0 {
                     break;
                 }
                 current_pos.lnum = (*buf).b_ml.ml_line_count;

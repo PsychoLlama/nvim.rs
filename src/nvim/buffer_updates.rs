@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type lua_State;
     pub type terminal;
@@ -28,10 +29,10 @@ extern "C" {
         ...
     ) -> bool;
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut textlock: ::core::ffi::c_int;
-    static mut cmdpreview: bool;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static textlock: GlobalCell<::core::ffi::c_int>;
+    static cmdpreview: GlobalCell<bool>;
     fn api_free_luaref(ref_0: LuaRef);
     fn nlua_call_ref(
         ref_0: LuaRef,
@@ -1965,8 +1966,8 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
                     integer: (*buf).handle as Integer,
                 },
             };
-            let save_cursor: pos_T = (*curwin).w_cursor;
-            textlock += 1;
+            let save_cursor: pos_T = (*curwin.get()).w_cursor;
+            (*textlock.ptr()) += 1;
             nlua_call_ref(
                 thecb,
                 if keep as ::core::ffi::c_int != 0 {
@@ -1979,8 +1980,8 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
                 ::core::ptr::null_mut::<Arena>(),
                 ::core::ptr::null_mut::<Error>(),
             );
-            textlock -= 1;
-            (*curwin).w_cursor = save_cursor;
+            (*textlock.ptr()) -= 1;
+            (*curwin.get()).w_cursor = save_cursor;
         }
         if keep {
             let c2rust_fresh12 = j;
@@ -2020,7 +2021,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     if !buf_updates_active(buf) {
         return;
     }
-    let mut send_tick: bool = !(cmdpreview as ::core::ffi::c_int != 0 && buf == curbuf);
+    let mut send_tick: bool = !(cmdpreview.get() as ::core::ffi::c_int != 0 && buf == curbuf.get());
     let mut badchannelid: uint64_t = 0 as uint64_t;
     let mut arena: Arena = ARENA_EMPTY;
     let mut linedata: Array = ARRAY_DICT_INIT;
@@ -2126,7 +2127,8 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     while i_0 < (*buf).update_callbacks.size {
         let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
         let mut keep: bool = true_0 != 0;
-        if cb.on_lines != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview) {
+        if cb.on_lines != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
+        {
             let mut args_0: Array = ARRAY_DICT_INIT;
             let mut args__items_0: [Object; 8] = [Object {
                 type_0: kObjectTypeNil,
@@ -2212,8 +2214,8 @@ pub unsafe extern "C" fn buf_updates_send_changes(
                 type_0: kObjectTypeNil,
                 data: C2Rust_Unnamed { boolean: false },
             };
-            let save_cursor: pos_T = (*curwin).w_cursor;
-            textlock += 1;
+            let save_cursor: pos_T = (*curwin.get()).w_cursor;
+            (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_lines,
                 b"lines\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2222,8 +2224,8 @@ pub unsafe extern "C" fn buf_updates_send_changes(
                 ::core::ptr::null_mut::<Arena>(),
                 ::core::ptr::null_mut::<Error>(),
             );
-            textlock -= 1;
-            (*curwin).w_cursor = save_cursor;
+            (*textlock.ptr()) -= 1;
+            (*curwin.get()).w_cursor = save_cursor;
             if res.type_0 as ::core::ffi::c_uint
                 == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                 && res.data.boolean as ::core::ffi::c_int == true_0
@@ -2266,7 +2268,8 @@ pub unsafe extern "C" fn buf_updates_send_splice(
     while i < (*buf).update_callbacks.size {
         let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i as isize);
         let mut keep: bool = true_0 != 0;
-        if cb.on_bytes != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview) {
+        if cb.on_bytes != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
+        {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 11] = [Object {
                 type_0: kObjectTypeNil,
@@ -2366,8 +2369,8 @@ pub unsafe extern "C" fn buf_updates_send_splice(
                 type_0: kObjectTypeNil,
                 data: C2Rust_Unnamed { boolean: false },
             };
-            let save_cursor: pos_T = (*curwin).w_cursor;
-            textlock += 1;
+            let save_cursor: pos_T = (*curwin.get()).w_cursor;
+            (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_bytes,
                 b"bytes\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2376,8 +2379,8 @@ pub unsafe extern "C" fn buf_updates_send_splice(
                 ::core::ptr::null_mut::<Arena>(),
                 ::core::ptr::null_mut::<Error>(),
             );
-            textlock -= 1;
-            (*curwin).w_cursor = save_cursor;
+            (*textlock.ptr()) -= 1;
+            (*curwin.get()).w_cursor = save_cursor;
             if res.type_0 as ::core::ffi::c_uint
                 == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                 && res.data.boolean as ::core::ffi::c_int == true_0
@@ -2440,8 +2443,8 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
                 type_0: kObjectTypeNil,
                 data: C2Rust_Unnamed { boolean: false },
             };
-            let save_cursor: pos_T = (*curwin).w_cursor;
-            textlock += 1;
+            let save_cursor: pos_T = (*curwin.get()).w_cursor;
+            (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_changedtick,
                 b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2450,8 +2453,8 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
                 ::core::ptr::null_mut::<Arena>(),
                 ::core::ptr::null_mut::<Error>(),
             );
-            textlock -= 1;
-            (*curwin).w_cursor = save_cursor;
+            (*textlock.ptr()) -= 1;
+            (*curwin.get()).w_cursor = save_cursor;
             if res.type_0 as ::core::ffi::c_uint
                 == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                 && res.data.boolean as ::core::ffi::c_int == true_0

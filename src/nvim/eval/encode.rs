@@ -32,7 +32,7 @@ extern "C" {
     fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
     fn get_copyID() -> ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
@@ -49,7 +49,7 @@ extern "C" {
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static mut IObuff: [::core::ffi::c_char; 1025];
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -1555,7 +1555,8 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             (*cur_mpsv).data.d.todo
                                 != (*(*cur_mpsv).data.d.dict).dv_hashtab.ht_used;
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }
@@ -3618,7 +3619,8 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                                 );
                             }
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }
@@ -5763,7 +5765,8 @@ unsafe extern "C" fn encode_vim_to_string(
                                 );
                             }
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }
@@ -7596,7 +7599,8 @@ unsafe extern "C" fn encode_vim_to_json(
                                 );
                             }
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key == &raw mut hash_removed
+                                || (*(*cur_mpsv).data.d.hi).hi_key
+                                    == &raw const hash_removed as *mut ::core::ffi::c_char
                             {
                                 (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
                             }
@@ -8270,13 +8274,13 @@ unsafe extern "C" fn conv_error(
                 let key: *mut ::core::ffi::c_char =
                     encode_tv2string(&raw mut key_tv, ::core::ptr::null_mut::<size_t>());
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     key_msg,
                     key,
                 );
                 xfree(key as *mut ::core::ffi::c_void);
-                ga_concat(&raw mut msg_ga, &raw mut IObuff as *mut ::core::ffi::c_char);
+                ga_concat(&raw mut msg_ga, IObuff.ptr() as *mut ::core::ffi::c_char);
             }
             2 | 1 => {
                 let idx: ::core::ffi::c_int = if v.data.l.li == tv_list_first(v.data.l.list) {
@@ -8299,12 +8303,12 @@ unsafe extern "C" fn conv_error(
                         && tv_list_len((*li).li_tv.vval.v_list) <= 0 as ::core::ffi::c_int
                 {
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         idx_msg,
                         idx,
                     );
-                    ga_concat(&raw mut msg_ga, &raw mut IObuff as *mut ::core::ffi::c_char);
+                    ga_concat(&raw mut msg_ga, IObuff.ptr() as *mut ::core::ffi::c_char);
                 } else {
                     '_c2rust_label: {
                         if !li.is_null() {
@@ -8338,14 +8342,14 @@ unsafe extern "C" fn conv_error(
                     let key_0: *mut ::core::ffi::c_char =
                         encode_tv2echo(&raw mut key_tv_0, ::core::ptr::null_mut::<size_t>());
                     vim_snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
                         key_pair_msg,
                         key_0,
                         idx,
                     );
                     xfree(key_0 as *mut ::core::ffi::c_void);
-                    ga_concat(&raw mut msg_ga, &raw mut IObuff as *mut ::core::ffi::c_char);
+                    ga_concat(&raw mut msg_ga, IObuff.ptr() as *mut ::core::ffi::c_char);
                 }
             }
             3 => match v.data.p.stage as ::core::ffi::c_uint {
@@ -8365,12 +8369,12 @@ unsafe extern "C" fn conv_error(
                     as ::core::ffi::c_int
                     - 1 as ::core::ffi::c_int;
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     partial_arg_i_msg,
                     idx_0,
                 );
-                ga_concat(&raw mut msg_ga, &raw mut IObuff as *mut ::core::ffi::c_char);
+                ga_concat(&raw mut msg_ga, IObuff.ptr() as *mut ::core::ffi::c_char);
             }
             _ => {}
         }

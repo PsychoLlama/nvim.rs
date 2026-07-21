@@ -22,8 +22,8 @@ extern "C" {
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    static mut p_guicursor: *mut ::core::ffi::c_char;
-    static mut p_sel: *mut ::core::ffi::c_char;
+    static p_guicursor: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -35,9 +35,9 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn cmdline_overstrike() -> bool;
     fn cmdline_at_end() -> bool;
-    static mut VIsual_active: bool;
-    static mut State: ::core::ffi::c_int;
-    static mut finish_op: bool;
+    static VIsual_active: GlobalCell<bool>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static finish_op: GlobalCell<bool>;
     fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ui_mode_info_set();
@@ -631,14 +631,14 @@ pub unsafe extern "C" fn parse_shape_opt(
     let mut found_ve: bool = false_0 != 0;
     let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while round <= 2 as ::core::ffi::c_int {
-        if round == 2 as ::core::ffi::c_int || *p_guicursor as ::core::ffi::c_int == NUL {
+        if round == 2 as ::core::ffi::c_int || *p_guicursor.get() as ::core::ffi::c_int == NUL {
             clear_shape_table();
-            if *p_guicursor as ::core::ffi::c_int == NUL {
+            if *p_guicursor.get() as ::core::ffi::c_int == NUL {
                 ui_mode_info_set();
                 return ::core::ptr::null::<::core::ffi::c_char>();
             }
         }
-        let mut modep: *mut ::core::ffi::c_char = p_guicursor;
+        let mut modep: *mut ::core::ffi::c_char = p_guicursor.get();
         while !modep.is_null() && *modep as ::core::ffi::c_int != NUL {
             let mut colonp: *mut ::core::ffi::c_char = vim_strchr(modep, ':' as ::core::ffi::c_int);
             let mut commap: *mut ::core::ffi::c_char = vim_strchr(modep, ',' as ::core::ffi::c_int);
@@ -898,7 +898,7 @@ pub unsafe extern "C" fn cursor_mode_str2int(
 }
 #[no_mangle]
 pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int) -> bool {
-    if *p_guicursor as ::core::ffi::c_int == NUL {
+    if *p_guicursor.get() as ::core::ffi::c_int == NUL {
         return false_0 != 0;
     }
     let mut mode_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -914,17 +914,17 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int)
 }
 #[no_mangle]
 pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
-    if State == MODE_SHOWMATCH as ::core::ffi::c_int {
+    if State.get() == MODE_SHOWMATCH as ::core::ffi::c_int {
         return SHAPE_IDX_SM as ::core::ffi::c_int;
-    } else if State == MODE_TERMINAL as ::core::ffi::c_int {
+    } else if State.get() == MODE_TERMINAL as ::core::ffi::c_int {
         return SHAPE_IDX_TERM as ::core::ffi::c_int;
-    } else if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
         return SHAPE_IDX_R as ::core::ffi::c_int;
-    } else if State & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
         return SHAPE_IDX_R as ::core::ffi::c_int;
-    } else if State & MODE_INSERT as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
         return SHAPE_IDX_I as ::core::ffi::c_int;
-    } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
         if cmdline_at_end() {
             return SHAPE_IDX_C as ::core::ffi::c_int;
         } else if cmdline_overstrike() {
@@ -932,10 +932,10 @@ pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
         } else {
             return SHAPE_IDX_CI as ::core::ffi::c_int;
         }
-    } else if finish_op {
+    } else if finish_op.get() {
         return SHAPE_IDX_O as ::core::ffi::c_int;
-    } else if VIsual_active {
-        if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
+    } else if VIsual_active.get() {
+        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
             return SHAPE_IDX_VE as ::core::ffi::c_int;
         } else {
             return SHAPE_IDX_V as ::core::ffi::c_int;

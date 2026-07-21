@@ -24,9 +24,9 @@ extern "C" {
         key_alloc: *mut *mut String_0,
         new_item: *mut bool,
     ) -> *mut ::core::ffi::c_int;
-    static mut namespace_ids: Map_String_int;
-    static mut namespace_localscope: Set_uint32_t;
-    static mut next_namespace_id: handle_T;
+    static namespace_ids: GlobalCell<Map_String_int>;
+    static namespace_localscope: GlobalCell<Set_uint32_t>;
+    static next_namespace_id: GlobalCell<handle_T>;
     static set_extmark_table: GlobalCell<[KeySetLink; 36]>;
     fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
     fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
@@ -55,7 +55,7 @@ extern "C" {
         expected: *const ::core::ffi::c_char,
         actual: *const ::core::ffi::c_char,
     );
-    static mut decor_state: DecorState;
+    static decor_state: GlobalCell<DecorState>;
     fn decor_put_sh(item: DecorSignHighlight) -> uint32_t;
     fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText;
     fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight;
@@ -125,9 +125,9 @@ extern "C" {
     ) -> ExtmarkInfoArray;
     fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> MTPair;
     fn redraw_all_later(type_0: ::core::ffi::c_int);
-    static mut firstwin: *mut win_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
+    static firstwin: GlobalCell<*mut win_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
     fn schar_high(sc: schar_T) -> bool;
     fn mt_inspect(b: *mut MarkTree, keys: bool, dot: bool) -> String_0;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
@@ -2317,47 +2317,47 @@ pub unsafe extern "C" fn api_extmark_free_all_mem() {
     };
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < namespace_ids.set.h.n_keys {
-        name = *namespace_ids.set.keys.offset(__i as isize);
+    while __i < (*namespace_ids.ptr()).set.h.n_keys {
+        name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
         xfree(name.data as *mut ::core::ffi::c_void);
         __i = __i.wrapping_add(1);
     }
-    xfree(namespace_ids.set.keys as *mut ::core::ffi::c_void);
-    xfree(namespace_ids.set.h.hash as *mut ::core::ffi::c_void);
-    namespace_ids.set = Set_String {
+    xfree((*namespace_ids.ptr()).set.keys as *mut ::core::ffi::c_void);
+    xfree((*namespace_ids.ptr()).set.h.hash as *mut ::core::ffi::c_void);
+    (*namespace_ids.ptr()).set = Set_String {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<String_0>(),
     };
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut namespace_ids.values as *mut *mut ::core::ffi::c_void;
+        &raw mut (*namespace_ids.ptr()).values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
-    xfree(namespace_localscope.keys as *mut ::core::ffi::c_void);
-    xfree(namespace_localscope.h.hash as *mut ::core::ffi::c_void);
-    namespace_localscope = Set_uint32_t {
+    xfree((*namespace_localscope.ptr()).keys as *mut ::core::ffi::c_void);
+    xfree((*namespace_localscope.ptr()).h.hash as *mut ::core::ffi::c_void);
+    namespace_localscope.set(Set_uint32_t {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<uint32_t>(),
-    };
+    });
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
-    let mut id: handle_T = map_get_String_int(&raw mut namespace_ids, name);
+    let mut id: handle_T = map_get_String_int(namespace_ids.ptr(), name);
     if id > 0 as ::core::ffi::c_int {
         return id as Integer;
     }
-    let c2rust_fresh0 = next_namespace_id;
-    next_namespace_id = next_namespace_id + 1;
+    let c2rust_fresh0 = next_namespace_id.get();
+    next_namespace_id.set(next_namespace_id.get() + 1);
     id = c2rust_fresh0;
     if name.size > 0 as size_t {
         let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
-        map_put_String_int(&raw mut namespace_ids, name_alloc, id as ::core::ffi::c_int);
+        map_put_String_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
     }
     return id as Integer;
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
-    let mut retval: Dict = arena_dict(arena, namespace_ids.set.h.size as size_t);
+    let mut retval: Dict = arena_dict(arena, (*namespace_ids.ptr()).set.h.size as size_t);
     let mut name: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -2365,9 +2365,9 @@ pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
     let mut id: handle_T = 0;
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < namespace_ids.set.h.n_keys {
-        name = *namespace_ids.set.keys.offset(__i as isize);
-        id = *namespace_ids.values.offset(__i as isize) as handle_T;
+    while __i < (*namespace_ids.ptr()).set.h.n_keys {
+        name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
+        id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
         let c2rust_fresh1 = retval.size;
         retval.size = retval.size.wrapping_add(1);
         *retval.items.offset(c2rust_fresh1 as isize) = key_value_pair {
@@ -2395,9 +2395,9 @@ pub unsafe extern "C" fn describe_ns(
     let mut id: handle_T = 0;
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < namespace_ids.set.h.n_keys {
-        name = *namespace_ids.set.keys.offset(__i as isize);
-        id = *namespace_ids.values.offset(__i as isize) as handle_T;
+    while __i < (*namespace_ids.ptr()).set.h.n_keys {
+        name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
+        id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
         if id == ns_id && name.size != 0 {
             return name.data;
         }
@@ -2410,7 +2410,7 @@ pub unsafe extern "C" fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false_0 != 0;
     }
-    return ns < next_namespace_id as uint32_t;
+    return ns < next_namespace_id.get() as uint32_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn virt_text_to_array(
@@ -3520,8 +3520,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             col2 = 0 as ::core::ffi::c_int as colnr_T;
                         }
                         if (*opts).ephemeral as ::core::ffi::c_int != 0
-                            && !decor_state.win.is_null()
-                            && (*decor_state.win).w_buffer == b
+                            && !(*decor_state.ptr()).win.is_null()
+                            && (*(*decor_state.ptr()).win).w_buffer == b
                         {
                             let mut r: ::core::ffi::c_int = line as ::core::ffi::c_int;
                             let mut c: ::core::ffi::c_int = col as ::core::ffi::c_int;
@@ -3552,7 +3552,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             }
                             if virt_text.data.virt_text.size != 0 {
                                 decor_range_add_virt(
-                                    &raw mut decor_state,
+                                    decor_state.ptr(),
                                     r,
                                     c,
                                     line2,
@@ -3566,7 +3566,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             }
                             if virt_lines.data.virt_lines.size != 0 {
                                 decor_range_add_virt(
-                                    &raw mut decor_state,
+                                    decor_state.ptr(),
                                     r,
                                     c,
                                     line2,
@@ -3582,7 +3582,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 let mut sh: DecorSignHighlight = decor_sh_from_inline(hl);
                                 sh.url = url;
                                 decor_range_add_sh(
-                                    &raw mut decor_state,
+                                    decor_state.ptr(),
                                     r,
                                     c,
                                     line2,
@@ -4197,10 +4197,10 @@ pub unsafe extern "C" fn nvim__ns_set(
             );
             i = i.wrapping_add(1);
         }
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
-            let mut wp_0: *mut win_T = if tp == curtab {
-                firstwin
+            let mut wp_0: *mut win_T = if tp == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp).tp_firstwin
             };
@@ -4249,17 +4249,17 @@ pub unsafe extern "C" fn nvim__ns_set(
         };
     }
     if set_scoped as ::core::ffi::c_int != 0
-        && !set_has_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t)
+        && !set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t)
     {
         set_put_uint32_t(
-            &raw mut namespace_localscope,
+            namespace_localscope.ptr(),
             ns_id as uint32_t,
             ::core::ptr::null_mut::<*mut uint32_t>(),
         );
-        let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp_0.is_null() {
-            let mut wp_1: *mut win_T = if tp_0 == curtab {
-                firstwin
+            let mut wp_1: *mut win_T = if tp_0 == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp_0).tp_firstwin
             };
@@ -4277,14 +4277,14 @@ pub unsafe extern "C" fn nvim__ns_set(
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
     } else if !set_scoped
-        && set_has_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t) as ::core::ffi::c_int
+        && set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t) as ::core::ffi::c_int
             != 0
     {
-        set_del_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t);
-        let mut tp_1: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+        set_del_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t);
+        let mut tp_1: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp_1.is_null() {
-            let mut wp_2: *mut win_T = if tp_1 == curtab {
-                firstwin
+            let mut wp_2: *mut win_T = if tp_1 == curtab.get() {
+                firstwin.get()
             } else {
                 (*tp_1).tp_firstwin
             };
@@ -4325,14 +4325,14 @@ pub unsafe extern "C" fn nvim__ns_get(
         );
         return opts;
     }
-    if !set_has_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t) {
+    if !set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t) {
         return opts;
     }
     let mut count: size_t = 0 as size_t;
-    let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab {
-            firstwin
+        let mut wp: *mut win_T = if tp == curtab.get() {
+            firstwin.get()
         } else {
             (*tp).tp_firstwin
         };
@@ -4345,10 +4345,10 @@ pub unsafe extern "C" fn nvim__ns_get(
         tp = (*tp).tp_next as *mut tabpage_T;
     }
     windows = arena_array(arena, count);
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
-        let mut wp_0: *mut win_T = if tp_0 == curtab {
-            firstwin
+        let mut wp_0: *mut win_T = if tp_0 == curtab.get() {
+            firstwin.get()
         } else {
             (*tp_0).tp_firstwin
         };

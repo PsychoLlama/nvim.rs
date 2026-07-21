@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 extern "C" {
     pub type terminal;
     pub type multiqueue;
@@ -62,7 +62,7 @@ extern "C" {
     fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn remote_ui_disconnect(channel_id: uint64_t, err: *mut Error, send_error_exit: bool);
     fn remote_ui_flush_pending_data(ui: *mut RemoteUI);
-    static mut channels: Map_uint64_t_ptr_t;
+    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn channel_close(
         id: uint64_t,
         part: ChannelPart,
@@ -88,8 +88,8 @@ extern "C" {
     ) -> *mut WBuffer;
     fn wstream_release_wbuffer(buffer: *mut WBuffer);
     fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
-    static mut main_loop: Loop;
-    static mut ch_before_blocking_events: *mut MultiQueue;
+    static main_loop: SharedCell<Loop>;
+    static ch_before_blocking_events: GlobalCell<*mut MultiQueue>;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
     fn mpack_str(str: String_0, packer: *mut PackerBuffer);
@@ -99,10 +99,10 @@ extern "C" {
     fn unpacker_teardown(p: *mut Unpacker);
     fn unpacker_advance(p: *mut Unpacker) -> bool;
     fn input_blocking() -> bool;
-    static mut resize_events: *mut MultiQueue;
-    static mut ui_client_channel_id: uint64_t;
-    static mut ui_client_error_exit: ::core::ffi::c_int;
-    static mut ui_client_attached: bool;
+    static resize_events: GlobalCell<*mut MultiQueue>;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
+    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
+    static ui_client_attached: GlobalCell<bool>;
     fn ui_client_event_raw_line(g: *mut GridLineEvent);
     fn ui_client_attach_to_restarted_server();
 }
@@ -1539,7 +1539,7 @@ pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(&raw mut channels, id) as *mut Channel;
+    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 #[inline]
 unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
@@ -1638,7 +1638,7 @@ unsafe extern "C" fn log_notify(
 }
 #[no_mangle]
 pub unsafe extern "C" fn rpc_init() {
-    ch_before_blocking_events = multiqueue_new_child(main_loop.events);
+    ch_before_blocking_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
 #[no_mangle]
 pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
@@ -1796,7 +1796,7 @@ pub unsafe extern "C" fn rpc_send_call(
         if !(*channel).events.is_null() && !multiqueue_empty((*channel).events) {
             multiqueue_process_events((*channel).events);
         } else {
-            loop_poll_events(&raw mut main_loop, remaining);
+            loop_poll_events(main_loop.ptr(), remaining);
         }
         if remaining == 0 as int64_t {
             break;
@@ -1968,7 +1968,7 @@ unsafe extern "C" fn parse_msgpack(mut channel: *mut Channel) {
     let mut p: *mut Unpacker = (*channel).rpc.unpacker;
     while unpacker_advance(p) {
         if (*p).type_0 as ::core::ffi::c_int == kMessageTypeRedrawEvent as ::core::ffi::c_int {
-            if ui_client_attached {
+            if ui_client_attached.get() {
                 if (*p).has_grid_line_event {
                     ui_client_event_raw_line(&raw mut (*p).grid_line_event);
                     (*p).has_grid_line_event = false_0 != 0;
@@ -2122,7 +2122,7 @@ unsafe extern "C" fn handle_request(
             );
         if is_get_mode as ::core::ffi::c_int != 0 && !input_blocking() {
             multiqueue_put_event(
-                ch_before_blocking_events,
+                ch_before_blocking_events.get(),
                 Event {
                     handler: Some(
                         request_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -2172,7 +2172,7 @@ unsafe extern "C" fn handle_request(
                 2 as ::core::ffi::c_int,
             );
             multiqueue_put_event((*channel).events, ev);
-            multiqueue_put_event(resize_events, ev);
+            multiqueue_put_event(resize_events.get(), ev);
         } else {
             multiqueue_put_event(
                 (*channel).events,
@@ -2392,8 +2392,8 @@ unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut a
     let mut channel: *mut Channel = ::core::ptr::null_mut::<Channel>();
     let mut __i: uint32_t = 0;
     __i = 0 as uint32_t;
-    while __i < channels.set.h.n_keys {
-        channel = *channels.values.offset(__i as isize) as *mut Channel;
+    while __i < (*channels.ptr()).set.h.n_keys {
+        channel = *(*channels.ptr()).values.offset(__i as isize) as *mut Channel;
         if (*channel).is_rpc {
             if chans.size == chans.capacity {
                 chans.capacity = if chans.capacity != 0 {
@@ -2432,7 +2432,7 @@ pub unsafe extern "C" fn rpc_close(mut channel: *mut Channel) {
     }
     (*channel).rpc.closed = true_0 != 0;
     multiqueue_put_event(
-        main_loop.fast_events,
+        (*main_loop.ptr()).fast_events,
         Event {
             handler: Some(
                 rpc_close_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
@@ -2471,15 +2471,16 @@ unsafe extern "C" fn rpc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
         ::core::ptr::null_mut::<Error>(),
         false_0 != 0,
     );
-    let mut is_ui_client: bool = ui_client_channel_id != 0 && (*channel).id == ui_client_channel_id;
+    let mut is_ui_client: bool =
+        ui_client_channel_id.get() != 0 && (*channel).id == ui_client_channel_id.get();
     if is_ui_client {
         ui_client_attach_to_restarted_server();
-        if ui_client_channel_id != (*channel).id {
+        if ui_client_channel_id.get() != (*channel).id {
             return;
         }
         if (*channel).streamtype as ::core::ffi::c_uint
             == kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
-            && ui_client_error_exit < 0 as ::core::ffi::c_int
+            && ui_client_error_exit.get() < 0 as ::core::ffi::c_int
         {
             return;
         }

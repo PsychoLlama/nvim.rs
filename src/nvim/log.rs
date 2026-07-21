@@ -71,8 +71,8 @@ extern "C" {
         dsize: size_t,
     ) -> size_t;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    static mut g_stats: nvim_stats_s;
-    static mut g_min_log_level: ::core::ffi::c_int;
+    static g_stats: GlobalCell<nvim_stats_s>;
+    static g_min_log_level: GlobalCell<::core::ffi::c_int>;
     fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, ...);
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
@@ -107,7 +107,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    static mut ui_client_channel_id: uint64_t;
+    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn backtrace(
         __array: *mut *mut ::core::ffi::c_void,
         __size: ::core::ffi::c_int,
@@ -4784,10 +4784,10 @@ pub unsafe extern "C" fn logmsg(
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     static did_msg: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if !did_log_init.get() {
-        g_stats.log_skip += 1;
+        (*g_stats.ptr()).log_skip += 1;
         return false_0 != 0;
     }
-    if log_level < g_min_log_level {
+    if log_level < g_min_log_level.get() {
         return false_0 != 0;
     }
     log_lock();
@@ -4804,7 +4804,7 @@ pub unsafe extern "C" fn logmsg(
                 line_num,
             );
         }
-        g_stats.log_skip += 1;
+        (*g_stats.ptr()).log_skip += 1;
         log_unlock();
         return false_0 != 0;
     }
@@ -9205,7 +9205,7 @@ unsafe extern "C" fn v_do_log_to_file(
     if uv_gettimeofday(&raw mut curtime) == 0 as ::core::ffi::c_int {
         millis = curtime.tv_usec as ::core::ffi::c_int / 1000 as ::core::ffi::c_int;
     }
-    let mut ui: bool = ui_client_channel_id != 0;
+    let mut ui: bool = ui_client_channel_id.get() != 0;
     let mut regen: bool = ui as ::core::ffi::c_int != 0
         || (*name.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
         || (*name.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int

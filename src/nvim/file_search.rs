@@ -65,10 +65,10 @@ extern "C" {
         buf: *mut buf_T,
     ) -> bool;
     fn has_event(event: event_T) -> bool;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_fic: ::core::ffi::c_int;
-    static mut p_path: *mut ::core::ffi::c_char;
-    static mut p_cdpath: *mut ::core::ffi::c_char;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fic: GlobalCell<::core::ffi::c_int>;
+    static p_path: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cdpath: GlobalCell<*mut ::core::ffi::c_char>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -118,12 +118,12 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn tv_dict_set_keys_readonly(dict: *mut dict_T);
     fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut VIsual_active: bool;
-    static mut NameBuff: [::core::ffi::c_char; 4096];
-    static mut got_int: bool;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static VIsual_active: GlobalCell<bool>;
+    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
+    static got_int: GlobalCell<bool>;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -2731,7 +2731,7 @@ pub unsafe extern "C" fn vim_findfile_init(
                 as ::core::ffi::c_int
                 != 0
                 || *path.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL)
-            && (tagfile == 0 || vim_strchr(p_cpo, CPO_DOTTAG).is_null())
+            && (tagfile == 0 || vim_strchr(p_cpo.get(), CPO_DOTTAG).is_null())
             && !rel_fname.is_null()
         {
             let mut len: size_t = path_tail(rel_fname).offset_from(rel_fname) as size_t;
@@ -3253,7 +3253,7 @@ pub unsafe extern "C" fn vim_findfile(
     }
     '_fail: loop {
         os_breakcheck();
-        if !got_int {
+        if !got_int.get() {
             stackp = ff_pop(search_ctx);
             if !stackp.is_null() {
                 if (*stackp).ffs_filearray.is_null()
@@ -3519,7 +3519,7 @@ pub unsafe extern "C" fn vim_findfile(
                                                     (if (*search_ctx).ffsc_tagfile != 0 {
                                                         b"\0".as_ptr() as *const ::core::ffi::c_char
                                                     } else {
-                                                        (*curbuf).b_p_sua
+                                                        (*curbuf.get()).b_p_sua
                                                             as *const ::core::ffi::c_char
                                                     })
                                                         as *mut ::core::ffi::c_char;
@@ -3701,7 +3701,7 @@ pub unsafe extern "C" fn vim_findfile(
         }
         if !(!(*search_ctx).ffsc_start_dir.data.is_null()
             && !(*search_ctx).ffsc_stopdirs_v.is_null()
-            && !got_int)
+            && !got_int.get())
         {
             break;
         }
@@ -3853,7 +3853,7 @@ unsafe extern "C" fn ff_wc_equal(
     {
         let mut c1: ::core::ffi::c_int = utf_ptr2char(s1.offset(i as isize));
         let mut c2: ::core::ffi::c_int = utf_ptr2char(s2.offset(j as isize));
-        if (if p_fic != 0 {
+        if (if p_fic.get() != 0 {
             (mb_tolower(c1) != mb_tolower(c2)) as ::core::ffi::c_int
         } else {
             (c1 != c2) as ::core::ffi::c_int
@@ -4111,14 +4111,14 @@ pub unsafe extern "C" fn find_file_in_path(
         len,
         options,
         first,
-        if *(*curbuf).b_p_path as ::core::ffi::c_int == NUL {
-            p_path
+        if *(*curbuf.get()).b_p_path as ::core::ffi::c_int == NUL {
+            p_path.get()
         } else {
-            (*curbuf).b_p_path
+            (*curbuf.get()).b_p_path
         },
         FINDFILE_BOTH as ::core::ffi::c_int,
         rel_fname,
-        (*curbuf).b_p_sua,
+        (*curbuf.get()).b_p_sua,
         file_to_find,
         search_ctx,
     );
@@ -4137,7 +4137,7 @@ pub unsafe extern "C" fn find_directory_in_path(
         len,
         options,
         true_0,
-        p_cdpath,
+        p_cdpath.get(),
         FINDFILE_DIR as ::core::ffi::c_int,
         rel_fname,
         b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4175,7 +4175,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
         *ptr.offset(len as isize) = NUL as ::core::ffi::c_char;
         file_to_findlen.set(expand_env_esc(
             ptr,
-            &raw mut NameBuff as *mut ::core::ffi::c_char,
+            NameBuff.ptr() as *mut ::core::ffi::c_char,
             MAXPATHL,
             false_0 != 0,
             true_0 != 0,
@@ -4184,7 +4184,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
         *ptr.offset(len as isize) = save_char;
         xfree(*file_to_find as *mut ::core::ffi::c_void);
         *file_to_find = xmemdupz(
-            &raw mut NameBuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
+            NameBuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
             file_to_findlen.get(),
         ) as *mut ::core::ffi::c_char;
         if options & FNAME_UNESC as ::core::ffi::c_int != 0 {
@@ -4257,7 +4257,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                 && rel_fnamelen.wrapping_add(l) < MAXPATHL as size_t
                             {
                                 l = vim_snprintf(
-                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
+                                    NameBuff.ptr() as *mut ::core::ffi::c_char,
                                     MAXPATHL as size_t,
                                     b"%.*s%s\0".as_ptr() as *const ::core::ffi::c_char,
                                     path_tail(rel_fname).offset_from(rel_fname)
@@ -4279,28 +4279,23 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                     }
                                 };
                             } else {
-                                strcpy(
-                                    &raw mut NameBuff as *mut ::core::ffi::c_char,
-                                    *file_to_find,
-                                );
+                                strcpy(NameBuff.ptr() as *mut ::core::ffi::c_char, *file_to_find);
                                 run = 2 as ::core::ffi::c_int;
                             }
                             let mut NameBufflen: size_t = l;
                             let mut suffix: *mut ::core::ffi::c_char = suffixes;
                             loop {
-                                if os_path_exists(&raw mut NameBuff as *mut ::core::ffi::c_char)
+                                if os_path_exists(NameBuff.ptr() as *mut ::core::ffi::c_char)
                                     as ::core::ffi::c_int
                                     != 0
                                     && (find_what == FINDFILE_BOTH as ::core::ffi::c_int
                                         || (find_what == FINDFILE_DIR as ::core::ffi::c_int)
                                             as ::core::ffi::c_int
-                                            == os_isdir(
-                                                &raw mut NameBuff as *mut ::core::ffi::c_char,
-                                            )
+                                            == os_isdir(NameBuff.ptr() as *mut ::core::ffi::c_char)
                                                 as ::core::ffi::c_int)
                                 {
                                     file_name = xmemdupz(
-                                        &raw mut NameBuff as *mut ::core::ffi::c_char
+                                        NameBuff.ptr() as *mut ::core::ffi::c_char
                                             as *const ::core::ffi::c_void,
                                         NameBufflen,
                                     )
@@ -4325,7 +4320,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
                                     };
                                     NameBufflen = l.wrapping_add(copy_option_part(
                                         &raw mut suffix,
-                                        (&raw mut NameBuff as *mut ::core::ffi::c_char)
+                                        (NameBuff.ptr() as *mut ::core::ffi::c_char)
                                             .offset(l as isize),
                                         (MAXPATHL as size_t).wrapping_sub(l),
                                         b",\0".as_ptr() as *const ::core::ffi::c_char
@@ -4438,7 +4433,7 @@ pub unsafe extern "C" fn grab_file_name(
         | FNAME_EXP as ::core::ffi::c_int
         | FNAME_REL as ::core::ffi::c_int
         | FNAME_UNESC as ::core::ffi::c_int;
-    if VIsual_active {
+    if VIsual_active.get() {
         let mut len: size_t = 0;
         let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if get_visual_text(
@@ -4467,7 +4462,7 @@ pub unsafe extern "C" fn grab_file_name(
             len,
             options,
             count as ::core::ffi::c_long,
-            (*curbuf).b_ffname,
+            (*curbuf.get()).b_ffname,
         );
     }
     return file_name_at_cursor(options | FNAME_HYP as ::core::ffi::c_int, count, file_lnum);
@@ -4480,10 +4475,10 @@ pub unsafe extern "C" fn file_name_at_cursor(
 ) -> *mut ::core::ffi::c_char {
     return file_name_in_line(
         get_cursor_line_ptr(),
-        (*curwin).w_cursor.col as ::core::ffi::c_int,
+        (*curwin.get()).w_cursor.col as ::core::ffi::c_int,
         options,
         count,
-        (*curbuf).b_ffname,
+        (*curbuf.get()).b_ffname,
         file_lnum,
     );
 }
@@ -4624,12 +4619,17 @@ unsafe extern "C" fn eval_includeexpr(
     ptr: *const ::core::ffi::c_char,
     len: size_t,
 ) -> *mut ::core::ffi::c_char {
-    let save_sctx: sctx_T = current_sctx;
+    let save_sctx: sctx_T = current_sctx.get();
     set_vim_var_string(VV_FNAME, ptr, len as ptrdiff_t);
-    current_sctx = (*curbuf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize];
+    current_sctx
+        .set((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize]);
     let mut res: *mut ::core::ffi::c_char = eval_to_string_safe(
-        (*curbuf).b_p_inex,
-        was_set_insecurely(curwin, kOptIncludeexpr, OPT_LOCAL as ::core::ffi::c_int) != 0,
+        (*curbuf.get()).b_p_inex,
+        was_set_insecurely(
+            curwin.get(),
+            kOptIncludeexpr,
+            OPT_LOCAL as ::core::ffi::c_int,
+        ) != 0,
         true_0 != 0,
     );
     set_vim_var_string(
@@ -4637,7 +4637,7 @@ unsafe extern "C" fn eval_includeexpr(
         ::core::ptr::null::<::core::ffi::c_char>(),
         0 as ptrdiff_t,
     );
-    current_sctx = save_sctx;
+    current_sctx.set(save_sctx);
     return res;
 }
 #[no_mangle]
@@ -4676,7 +4676,7 @@ pub unsafe extern "C" fn find_file_name_in_path(
         len = len.wrapping_sub(off);
     }
     if options & FNAME_INCL as ::core::ffi::c_int != 0
-        && *(*curbuf).b_p_inex as ::core::ffi::c_int != NUL
+        && *(*curbuf.get()).b_p_inex as ::core::ffi::c_int != NUL
     {
         tofree = eval_includeexpr(ptr, len);
         if !tofree.is_null() {
@@ -4700,7 +4700,7 @@ pub unsafe extern "C" fn find_file_name_in_path(
         );
         if file_name.is_null()
             && options & FNAME_INCL as ::core::ffi::c_int == 0
-            && *(*curbuf).b_p_inex as ::core::ffi::c_int != NUL
+            && *(*curbuf.get()).b_p_inex as ::core::ffi::c_int != NUL
         {
             tofree = eval_includeexpr(ptr, len);
             if !tofree.is_null() {
@@ -4858,7 +4858,7 @@ pub unsafe extern "C" fn do_autocmd_dirchanged(
         &raw mut buf as *mut ::core::ffi::c_char,
         new_dir,
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
     restore_v_event(dict, &raw mut save_v_event);
     recursive.set(false_0 != 0);
@@ -4876,15 +4876,15 @@ pub unsafe extern "C" fn vim_chdirfile(
     );
     *path_tail_with_sep(&raw mut dir as *mut ::core::ffi::c_char) = NUL as ::core::ffi::c_char;
     if os_dirname(
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
     ) != OK
     {
-        NameBuff[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        (*NameBuff.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     }
     if pathcmp(
         &raw mut dir as *mut ::core::ffi::c_char,
-        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut ::core::ffi::c_char,
         -1 as ::core::ffi::c_int,
     ) == 0 as ::core::ffi::c_int
     {
@@ -4919,7 +4919,7 @@ pub unsafe extern "C" fn vim_chdir(mut new_dir: *mut ::core::ffi::c_char) -> ::c
         new_dir,
         strlen(new_dir),
         FNAME_MESS as ::core::ffi::c_int,
-        (*curbuf).b_ffname,
+        (*curbuf.get()).b_ffname,
         &raw mut file_to_find,
         &raw mut search_ctx,
     );

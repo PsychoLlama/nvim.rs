@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -49,9 +50,9 @@ extern "C" {
         flags: ::core::ffi::c_int,
     ) -> *mut buf_T;
     fn wipe_buffer(buf: *mut buf_T, aucmd: bool);
-    static mut current_sctx: sctx_T;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
+    static current_sctx: GlobalCell<sctx_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
     fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int;
     fn find_option(name: *const ::core::ffi::c_char) -> OptIndex;
     fn optval_free(o: OptVal);
@@ -2658,7 +2659,7 @@ unsafe extern "C" fn wipe_ft_buf(mut buf: *mut buf_T) {
     set_bufref(&raw mut bufref, buf);
     close_windows(buf, false_0 != 0);
     if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-        && buf != curbuf
+        && buf != curbuf.get()
         && (*buf).b_nwindows == 0 as ::core::ffi::c_int
     {
         wipe_buffer(buf, false_0 != 0);
@@ -2810,7 +2811,7 @@ pub unsafe extern "C" fn nvim_set_option_value(
     }
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
-    current_sctx = save_current_sctx;
+    current_sctx.set(save_current_sctx);
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_all_options_info(
@@ -2848,14 +2849,14 @@ pub unsafe extern "C" fn nvim_get_option_info2(
     {
         from as *mut buf_T
     } else {
-        curbuf
+        curbuf.get()
     };
     let mut win: *mut win_T = if scope as ::core::ffi::c_uint
         == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         from as *mut win_T
     } else {
-        curwin
+        curwin.get()
     };
     return get_vimoption(name, opt_flags, buf, win, arena, err);
 }

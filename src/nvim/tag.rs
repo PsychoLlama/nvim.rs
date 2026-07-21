@@ -106,24 +106,24 @@ extern "C" {
     fn buflist_findname_exp(fname: *mut ::core::ffi::c_char) -> *mut buf_T;
     fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
     fn bt_help(buf: *const buf_T) -> bool;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut fdo_flags: ::core::ffi::c_uint;
-    static mut p_hf: *mut ::core::ffi::c_char;
-    static mut p_hlg: *mut ::core::ffi::c_char;
-    static mut p_ic: ::core::ffi::c_int;
-    static mut jop_flags: ::core::ffi::c_uint;
-    static mut p_sft: ::core::ffi::c_int;
-    static mut p_scs: ::core::ffi::c_int;
-    static mut swb_flags: ::core::ffi::c_uint;
-    static mut p_tbs: ::core::ffi::c_int;
-    static mut tc_flags: ::core::ffi::c_uint;
-    static mut p_tl: OptInt;
-    static mut p_tr: ::core::ffi::c_int;
-    static mut p_tags: *mut ::core::ffi::c_char;
-    static mut p_tgst: ::core::ffi::c_int;
-    static mut p_verbose: OptInt;
-    static mut p_ws: ::core::ffi::c_int;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static fdo_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_hlg: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ic: GlobalCell<::core::ffi::c_int>;
+    static jop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_sft: GlobalCell<::core::ffi::c_int>;
+    static p_scs: GlobalCell<::core::ffi::c_int>;
+    static swb_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_tbs: GlobalCell<::core::ffi::c_int>;
+    static tc_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_tl: GlobalCell<OptInt>;
+    static p_tr: GlobalCell<::core::ffi::c_int>;
+    static p_tags: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_tgst: GlobalCell<::core::ffi::c_int>;
+    static p_verbose: GlobalCell<OptInt>;
+    static p_ws: GlobalCell<::core::ffi::c_int>;
     fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
@@ -190,7 +190,7 @@ extern "C" {
         hash: hash_T,
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
     fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
@@ -296,32 +296,32 @@ extern "C" {
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn foldOpenCursor();
-    static mut Columns: ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut msg_scrolled: ::core::ffi::c_int;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut msg_didout: bool;
-    static mut emsg_off: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut curbuf: *mut buf_T;
-    static mut secure: ::core::ffi::c_int;
-    static mut sandbox: ::core::ffi::c_int;
-    static mut State: ::core::ffi::c_int;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut RedrawingDisabled: ::core::ffi::c_int;
-    static mut KeyTyped: bool;
-    static mut got_int: bool;
-    static mut postponed_split: ::core::ffi::c_int;
-    static mut postponed_split_flags: ::core::ffi::c_int;
-    static mut g_do_tagpreview: ::core::ffi::c_int;
-    static mut g_tag_at_cursor: bool;
-    static mut keep_help_flag: bool;
-    static mut no_hlsearch: bool;
-    static mut vim_ignored: ::core::ffi::c_int;
-    static mut magic_overruled: optmagic_T;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static msg_didout: GlobalCell<bool>;
+    static emsg_off: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static secure: GlobalCell<::core::ffi::c_int>;
+    static sandbox: GlobalCell<::core::ffi::c_int>;
+    static State: GlobalCell<::core::ffi::c_int>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
+    static KeyTyped: GlobalCell<bool>;
+    static got_int: GlobalCell<bool>;
+    static postponed_split: GlobalCell<::core::ffi::c_int>;
+    static postponed_split_flags: GlobalCell<::core::ffi::c_int>;
+    static g_do_tagpreview: GlobalCell<::core::ffi::c_int>;
+    static g_tag_at_cursor: GlobalCell<bool>;
+    static keep_help_flag: GlobalCell<bool>;
+    static no_hlsearch: GlobalCell<bool>;
+    static vim_ignored: GlobalCell<::core::ffi::c_int>;
+    static magic_overruled: GlobalCell<optmagic_T>;
     fn help_heuristic(
         matched_string: *mut ::core::ffi::c_char,
         offset: ::core::ffi::c_int,
@@ -4137,11 +4137,11 @@ pub unsafe extern "C" fn do_tag(
     mut forceit: ::core::ffi::c_int,
     mut verbose: bool,
 ) {
-    let mut tagstack: *mut taggy_T = &raw mut (*curwin).w_tagstack as *mut taggy_T;
-    let mut tagstackidx: ::core::ffi::c_int = (*curwin).w_tagstackidx;
-    let mut tagstacklen: ::core::ffi::c_int = (*curwin).w_tagstacklen;
+    let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
+    let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
+    let mut tagstacklen: ::core::ffi::c_int = (*curwin.get()).w_tagstacklen;
     let mut cur_match: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut cur_fnum: ::core::ffi::c_int = (*curbuf).handle as ::core::ffi::c_int;
+    let mut cur_fnum: ::core::ffi::c_int = (*curbuf.get()).handle as ::core::ffi::c_int;
     let mut oldtagstackidx: ::core::ffi::c_int = tagstackidx;
     let mut prevtagstackidx: ::core::ffi::c_int = tagstackidx;
     let mut new_tag: bool = false_0 != 0;
@@ -4167,7 +4167,7 @@ pub unsafe extern "C" fn do_tag(
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut use_tagstack: bool = false;
     let mut skip_msg: bool = false_0 != 0;
-    let mut buf_ffname: *mut ::core::ffi::c_char = (*curbuf).b_ffname;
+    let mut buf_ffname: *mut ::core::ffi::c_char = (*curbuf.get()).b_ffname;
     let mut use_tfu: bool = true_0 != 0;
     let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static num_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -4183,7 +4183,7 @@ pub unsafe extern "C" fn do_tag(
         ));
         return;
     }
-    if postponed_split == 0 as ::core::ffi::c_int && !check_can_set_curbuf_forceit(forceit) {
+    if postponed_split.get() == 0 as ::core::ffi::c_int && !check_can_set_curbuf_forceit(forceit) {
         return;
     }
     if type_0 == DT_HELP as ::core::ffi::c_int {
@@ -4213,15 +4213,15 @@ pub unsafe extern "C" fn do_tag(
         }
     };
     '_end_do_tag: {
-        if p_tgst == 0 && *tag as ::core::ffi::c_int != NUL {
+        if p_tgst.get() == 0 && *tag as ::core::ffi::c_int != NUL {
             use_tagstack = false_0 != 0;
             new_tag = true_0 != 0;
-            if g_do_tagpreview != 0 as ::core::ffi::c_int {
+            if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                 tagstack_clear_entry(ptag_entry.ptr());
                 (*ptag_entry.ptr()).tagname = xstrdup(tag);
             }
         } else {
-            if g_do_tagpreview != 0 as ::core::ffi::c_int {
+            if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                 use_tagstack = false_0 != 0;
             } else {
                 use_tagstack = true_0 != 0;
@@ -4232,7 +4232,7 @@ pub unsafe extern "C" fn do_tag(
                     || type_0 == DT_JUMP as ::core::ffi::c_int
                     || type_0 == DT_LTAG as ::core::ffi::c_int)
             {
-                if g_do_tagpreview != 0 as ::core::ffi::c_int {
+                if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                     if !(*ptag_entry.ptr()).tagname.is_null()
                         && strcmp((*ptag_entry.ptr()).tagname, tag) == 0 as ::core::ffi::c_int
                     {
@@ -4263,11 +4263,11 @@ pub unsafe extern "C" fn do_tag(
                         *c2rust_lvalue_ptr = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     }
                     (*tagstack.offset(tagstackidx as isize)).tagname = xstrdup(tag);
-                    (*curwin).w_tagstacklen = tagstacklen;
+                    (*curwin.get()).w_tagstacklen = tagstacklen;
                     save_pos = true_0 != 0;
                 }
                 new_tag = true_0 != 0;
-            } else if if g_do_tagpreview != 0 as ::core::ffi::c_int {
+            } else if if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                 (*ptag_entry.ptr()).tagname.is_null() as ::core::ffi::c_int
             } else {
                 (tagstacklen == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -4278,7 +4278,7 @@ pub unsafe extern "C" fn do_tag(
                 ));
                 break '_end_do_tag;
             } else if type_0 == DT_POP as ::core::ffi::c_int {
-                let old_KeyTyped: bool = KeyTyped;
+                let old_KeyTyped: bool = KeyTyped.get();
                 tagstackidx -= count;
                 if tagstackidx < 0 as ::core::ffi::c_int {
                     emsg(gettext(
@@ -4297,7 +4297,7 @@ pub unsafe extern "C" fn do_tag(
                     break '_end_do_tag;
                 }
                 saved_fmark = (*tagstack.offset(tagstackidx as isize)).fmark;
-                if saved_fmark.fnum != (*curbuf).handle {
+                if saved_fmark.fnum != (*curbuf.get()).handle {
                     if buflist_getfile(
                         saved_fmark.fnum,
                         saved_fmark.mark.lnum,
@@ -4308,19 +4308,22 @@ pub unsafe extern "C" fn do_tag(
                         tagstackidx = oldtagstackidx;
                         break '_end_do_tag;
                     } else {
-                        (*curwin).w_cursor.lnum = saved_fmark.mark.lnum;
+                        (*curwin.get()).w_cursor.lnum = saved_fmark.mark.lnum;
                     }
                 } else {
                     setpcmark();
-                    (*curwin).w_cursor.lnum = saved_fmark.mark.lnum;
+                    (*curwin.get()).w_cursor.lnum = saved_fmark.mark.lnum;
                 }
-                (*curwin).w_cursor.col = saved_fmark.mark.col;
-                (*curwin).w_set_curswant = true_0;
-                if jop_flags & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+                (*curwin.get()).w_cursor.col = saved_fmark.mark.col;
+                (*curwin.get()).w_set_curswant = true_0;
+                if jop_flags.get() & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
+                {
                     mark_view_restore(&raw mut saved_fmark);
                 }
-                check_cursor(curwin);
-                if fdo_flags & kOptFdoFlagTag as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                check_cursor(curwin.get());
+                if fdo_flags.get() & kOptFdoFlagTag as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
                     && old_KeyTyped as ::core::ffi::c_int != 0
                 {
                     foldOpenCursor();
@@ -4332,7 +4335,7 @@ pub unsafe extern "C" fn do_tag(
             } else if type_0 == DT_TAG as ::core::ffi::c_int
                 || type_0 == DT_LTAG as ::core::ffi::c_int
             {
-                if g_do_tagpreview != 0 as ::core::ffi::c_int {
+                if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                     cur_match = (*ptag_entry.ptr()).cur_match;
                     cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                 } else {
@@ -4358,7 +4361,7 @@ pub unsafe extern "C" fn do_tag(
                 new_tag = true_0 != 0;
             } else {
                 prevtagstackidx = tagstackidx;
-                if g_do_tagpreview != 0 as ::core::ffi::c_int {
+                if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                     cur_match = (*ptag_entry.ptr()).cur_match;
                     cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                 } else {
@@ -4393,10 +4396,10 @@ pub unsafe extern "C" fn do_tag(
                     ));
                     skip_msg = true_0 != 0;
                     cur_match = 0 as ::core::ffi::c_int;
-                    cur_fnum = (*curbuf).handle as ::core::ffi::c_int;
+                    cur_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
                 }
             }
-            if g_do_tagpreview != 0 as ::core::ffi::c_int {
+            if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                 if type_0 != DT_SELECT as ::core::ffi::c_int
                     && type_0 != DT_JUMP as ::core::ffi::c_int
                 {
@@ -4406,22 +4409,22 @@ pub unsafe extern "C" fn do_tag(
             } else {
                 saved_fmark = (*tagstack.offset(tagstackidx as isize)).fmark;
                 if save_pos {
-                    (*tagstack.offset(tagstackidx as isize)).fmark.mark = (*curwin).w_cursor;
+                    (*tagstack.offset(tagstackidx as isize)).fmark.mark = (*curwin.get()).w_cursor;
                     (*tagstack.offset(tagstackidx as isize)).fmark.fnum =
-                        (*curbuf).handle as ::core::ffi::c_int;
+                        (*curbuf.get()).handle as ::core::ffi::c_int;
                     (*tagstack.offset(tagstackidx as isize)).fmark.view =
-                        mark_view_make(curwin, (*curwin).w_cursor);
+                        mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
                 }
-                (*curwin).w_tagstackidx = tagstackidx;
+                (*curwin.get()).w_tagstackidx = tagstackidx;
                 if type_0 != DT_SELECT as ::core::ffi::c_int
                     && type_0 != DT_JUMP as ::core::ffi::c_int
                 {
-                    (*curwin).w_tagstack[tagstackidx as usize].cur_match = cur_match;
-                    (*curwin).w_tagstack[tagstackidx as usize].cur_fnum = cur_fnum;
+                    (*curwin.get()).w_tagstack[tagstackidx as usize].cur_match = cur_match;
+                    (*curwin.get()).w_tagstack[tagstackidx as usize].cur_fnum = cur_fnum;
                 }
             }
         }
-        if cur_fnum != (*curbuf).handle {
+        if cur_fnum != (*curbuf.get()).handle {
             let mut buf: *mut buf_T = buflist_findnr(cur_fnum);
             if !buf.is_null() {
                 buf_ffname = (*buf).b_ffname;
@@ -4433,7 +4436,7 @@ pub unsafe extern "C" fn do_tag(
                 name = xstrdup((*tagstack.offset(tagstackidx as isize)).tagname);
                 xfree(tofree as *mut ::core::ffi::c_void);
                 tofree = name;
-            } else if g_do_tagpreview != 0 as ::core::ffi::c_int {
+            } else if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                 name = (*ptag_entry.ptr()).tagname;
             } else {
                 name = tag;
@@ -4488,7 +4491,7 @@ pub unsafe extern "C" fn do_tag(
                 {
                     max_num_matches.set(MAXCOL as ::core::ffi::c_int);
                 }
-                if tagstack != &raw mut (*curwin).w_tagstack as *mut taggy_T {
+                if tagstack != &raw mut (*curwin.get()).w_tagstack as *mut taggy_T {
                     emsg(gettext(
                         (e_window_unexpectedly_close_while_searching_for_tags.ptr() as *const _)
                             as *const ::core::ffi::c_char,
@@ -4568,7 +4571,7 @@ pub unsafe extern "C" fn do_tag(
                         name,
                     );
                 }
-                g_do_tagpreview = 0 as ::core::ffi::c_int;
+                g_do_tagpreview.set(0 as ::core::ffi::c_int);
                 break '_end_do_tag;
             } else {
                 let mut ask_for_selection: bool = false_0 != 0;
@@ -4599,7 +4602,7 @@ pub unsafe extern "C" fn do_tag(
                     );
                     if i_1 <= 0 as ::core::ffi::c_int
                         || i_1 > num_matches.get()
-                        || got_int as ::core::ffi::c_int != 0
+                        || got_int.get() as ::core::ffi::c_int != 0
                     {
                         if use_tagstack {
                             (*tagstack.offset(tagstackidx as isize)).fmark = saved_fmark;
@@ -4665,7 +4668,7 @@ pub unsafe extern "C" fn do_tag(
                             as *mut ::core::ffi::c_char;
                     }
                     tagstackidx += 1;
-                } else if g_do_tagpreview != 0 as ::core::ffi::c_int {
+                } else if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
                     (*ptag_entry.ptr()).cur_match = cur_match;
                     (*ptag_entry.ptr()).cur_fnum = cur_fnum;
                 }
@@ -4691,7 +4694,7 @@ pub unsafe extern "C" fn do_tag(
                     && !skip_msg
                 {
                     snprintf(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
                         gettext(b"tag %d of %d%s\0".as_ptr() as *const ::core::ffi::c_char),
                         cur_match + 1 as ::core::ffi::c_int,
@@ -4705,7 +4708,7 @@ pub unsafe extern "C" fn do_tag(
                     );
                     if ic {
                         xstrlcat(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             gettext(b"  Using tag with different case!\0".as_ptr()
                                 as *const ::core::ffi::c_char),
                             IOSIZE as size_t,
@@ -4715,33 +4718,33 @@ pub unsafe extern "C" fn do_tag(
                         && num_matches.get() > 1 as ::core::ffi::c_int
                     {
                         msg(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             if ic as ::core::ffi::c_int != 0 {
                                 HLF_W as ::core::ffi::c_int
                             } else {
                                 0 as ::core::ffi::c_int
                             },
                         );
-                        msg_scroll = true_0;
+                        msg_scroll.set(true_0);
                     } else {
-                        give_warning(&raw mut IObuff as *mut ::core::ffi::c_char, ic, true_0 != 0);
+                        give_warning(IObuff.ptr() as *mut ::core::ffi::c_char, ic, true_0 != 0);
                     }
                     if ic as ::core::ffi::c_int != 0
-                        && msg_scrolled == 0
-                        && msg_silent == 0 as ::core::ffi::c_int
+                        && msg_scrolled.get() == 0
+                        && msg_silent.get() == 0 as ::core::ffi::c_int
                     {
                         msg_delay(1007 as uint64_t, true_0 != 0);
                     }
                 }
                 let mut IObufflen: size_t = vim_snprintf_safelen(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     b":ta %s\r\0".as_ptr() as *const ::core::ffi::c_char,
                     name,
                 );
                 set_vim_var_string(
                     VV_SWAPCOMMAND,
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IObufflen as ptrdiff_t,
                 );
                 let mut i_2: ::core::ffi::c_int = jumpto_tag(
@@ -4783,20 +4786,20 @@ pub unsafe extern "C" fn do_tag(
                     }
                 } else {
                     if use_tagstack as ::core::ffi::c_int != 0
-                        && tagstackidx > (*curwin).w_tagstacklen
+                        && tagstackidx > (*curwin.get()).w_tagstacklen
                     {
-                        tagstackidx = (*curwin).w_tagstackidx;
+                        tagstackidx = (*curwin.get()).w_tagstackidx;
                     }
                     break '_end_do_tag;
                 }
             }
         }
     }
-    if use_tagstack as ::core::ffi::c_int != 0 && tagstackidx <= (*curwin).w_tagstacklen {
-        (*curwin).w_tagstackidx = tagstackidx;
+    if use_tagstack as ::core::ffi::c_int != 0 && tagstackidx <= (*curwin.get()).w_tagstacklen {
+        (*curwin.get()).w_tagstackidx = tagstackidx;
     }
-    postponed_split = 0 as ::core::ffi::c_int;
-    g_do_tagpreview = 0 as ::core::ffi::c_int;
+    postponed_split.set(0 as ::core::ffi::c_int);
+    g_do_tagpreview.set(0 as ::core::ffi::c_int);
     xfree(tofree as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn print_tag_list(
@@ -4805,8 +4808,8 @@ unsafe extern "C" fn print_tag_list(
     mut num_matches: ::core::ffi::c_int,
     mut matches: *mut *mut ::core::ffi::c_char,
 ) {
-    let mut tagstack: *mut taggy_T = &raw mut (*curwin).w_tagstack as *mut taggy_T;
-    let mut tagstackidx: ::core::ffi::c_int = (*curwin).w_tagstackidx;
+    let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
+    let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
     let mut tagp: tagptrs_T = tagptrs_T {
         tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -4833,11 +4836,11 @@ unsafe extern "C" fn print_tag_list(
     } else {
         18 as ::core::ffi::c_int
     };
-    if taglen > Columns - 25 as ::core::ffi::c_int {
+    if taglen > Columns.get() - 25 as ::core::ffi::c_int {
         taglen = MAXCOL as ::core::ffi::c_int;
     }
-    if msg_col == 0 as ::core::ffi::c_int {
-        msg_didout = false_0 != 0;
+    if msg_col.get() == 0 as ::core::ffi::c_int {
+        msg_didout.set(false_0 != 0);
     }
     msg_ext_set_kind(b"confirm\0".as_ptr() as *const ::core::ffi::c_char);
     msg_start();
@@ -4854,19 +4857,20 @@ unsafe extern "C" fn print_tag_list(
         false_0 != 0,
     );
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < num_matches && !got_int {
+    while i < num_matches && !got_int.get() {
         parse_match(*matches.offset(i as isize), &raw mut tagp);
         if !new_tag
-            && (g_do_tagpreview != 0 as ::core::ffi::c_int && i == (*ptag_entry.ptr()).cur_match
+            && (g_do_tagpreview.get() != 0 as ::core::ffi::c_int
+                && i == (*ptag_entry.ptr()).cur_match
                 || use_tagstack as ::core::ffi::c_int != 0
                     && i == (*tagstack.offset(tagstackidx as isize)).cur_match)
         {
-            *(&raw mut IObuff as *mut ::core::ffi::c_char) = '>' as ::core::ffi::c_char;
+            *(IObuff.ptr() as *mut ::core::ffi::c_char) = '>' as ::core::ffi::c_char;
         } else {
-            *(&raw mut IObuff as *mut ::core::ffi::c_char) = ' ' as ::core::ffi::c_char;
+            *(IObuff.ptr() as *mut ::core::ffi::c_char) = ' ' as ::core::ffi::c_char;
         }
         vim_snprintf(
-            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
+            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
             (IOSIZE - 1 as ::core::ffi::c_int) as size_t,
             b"%2d %s \0".as_ptr() as *const ::core::ffi::c_char,
             i + 1 as ::core::ffi::c_int,
@@ -4875,7 +4879,7 @@ unsafe extern "C" fn print_tag_list(
                 as ::core::ffi::c_int
                 & MT_MASK as ::core::ffi::c_int) as usize],
         );
-        msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
+        msg_puts(IObuff.ptr() as *mut ::core::ffi::c_char);
         if !tagp.tagkind.is_null() {
             msg_outtrans_len(
                 tagp.tagkind,
@@ -4902,10 +4906,10 @@ unsafe extern "C" fn print_tag_list(
             *ptr_ = NULL_0;
             *ptr_;
         }
-        if msg_col > 0 as ::core::ffi::c_int {
+        if msg_col.get() > 0 as ::core::ffi::c_int {
             msg_putchar('\n' as ::core::ffi::c_int);
         }
-        if got_int {
+        if got_int.get() {
             break;
         }
         msg_advance(15 as ::core::ffi::c_int);
@@ -4946,9 +4950,9 @@ unsafe extern "C" fn print_tag_list(
                         && *p as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
                         && *p as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
                     {
-                        if msg_col + ptr2cells(p) >= Columns {
+                        if msg_col.get() + ptr2cells(p) >= Columns.get() {
                             msg_putchar('\n' as ::core::ffi::c_int);
-                            if got_int {
+                            if got_int.get() {
                                 break;
                             }
                             msg_advance(15 as ::core::ffi::c_int);
@@ -4967,9 +4971,9 @@ unsafe extern "C" fn print_tag_list(
                     }
                 }
             }
-            if msg_col > 15 as ::core::ffi::c_int {
+            if msg_col.get() > 15 as ::core::ffi::c_int {
                 msg_putchar('\n' as ::core::ffi::c_int);
-                if got_int {
+                if got_int.get() {
                     break;
                 }
                 msg_advance(15 as ::core::ffi::c_int);
@@ -4998,17 +5002,17 @@ unsafe extern "C" fn print_tag_list(
             p = p.offset(1);
         }
         while p != command_end {
-            if msg_col
+            if msg_col.get()
                 + (if *p as ::core::ffi::c_int == TAB {
                     1 as ::core::ffi::c_int
                 } else {
                     ptr2cells(p)
                 })
-                > Columns
+                > Columns.get()
             {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
-            if got_int {
+            if got_int.get() {
                 break;
             }
             msg_advance(15 as ::core::ffi::c_int);
@@ -5041,14 +5045,15 @@ unsafe extern "C" fn print_tag_list(
                 break;
             }
         }
-        if msg_col != 0 && (!ui_has(kUIMessages) || i < num_matches - 1 as ::core::ffi::c_int) {
+        if msg_col.get() != 0 && (!ui_has(kUIMessages) || i < num_matches - 1 as ::core::ffi::c_int)
+        {
             msg_putchar('\n' as ::core::ffi::c_int);
         }
         os_breakcheck();
         i += 1;
     }
-    if got_int {
-        got_int = false_0 != 0;
+    if got_int.get() {
+        got_int.set(false_0 != 0);
     }
 }
 unsafe extern "C" fn add_llist_tags(
@@ -5203,16 +5208,16 @@ unsafe extern "C" fn add_llist_tags(
         i += 1;
     }
     vim_snprintf(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         b"ltag %s\0".as_ptr() as *const ::core::ffi::c_char,
         tag,
     );
     set_errorlist(
-        curwin,
+        curwin.get(),
         list,
         ' ' as ::core::ffi::c_int,
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         ::core::ptr::null_mut::<dict_T>(),
     );
     tv_list_free(list);
@@ -5244,9 +5249,9 @@ unsafe extern "C" fn taglen_advance(mut l: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
-    let mut tagstack: *mut taggy_T = &raw mut (*curwin).w_tagstack as *mut taggy_T;
-    let mut tagstackidx: ::core::ffi::c_int = (*curwin).w_tagstackidx;
-    let mut tagstacklen: ::core::ffi::c_int = (*curwin).w_tagstacklen;
+    let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
+    let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
+    let mut tagstacklen: ::core::ffi::c_int = (*curwin.get()).w_tagstacklen;
     msg_puts_title(gettext(
         b"\n  # TO tag         FROM line  in file/text\0".as_ptr() as *const ::core::ffi::c_char,
     ));
@@ -5260,7 +5265,7 @@ pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
             if !name.is_null() {
                 msg_putchar('\n' as ::core::ffi::c_int);
                 vim_snprintf(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
                     b"%c%2d %2d %-15s %5d  \0".as_ptr() as *const ::core::ffi::c_char,
                     if i == tagstackidx {
@@ -5274,13 +5279,13 @@ pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
                     (*tagstack.offset(i as isize)).fmark.mark.lnum,
                 );
                 msg_outtrans(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    IObuff.ptr() as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
                 );
                 msg_outtrans(
                     name,
-                    if (*tagstack.offset(i as isize)).fmark.fnum == (*curbuf).handle {
+                    if (*tagstack.offset(i as isize)).fmark.fnum == (*curbuf.get()).handle {
                         HLF_D as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
@@ -5365,8 +5370,8 @@ unsafe extern "C" fn prepare_pats(mut pats: *mut pat_T, mut has_re: bool) {
                 (*pats).headlen += 1;
             }
         }
-        if p_tl != 0 as OptInt && (*pats).headlen as OptInt > p_tl {
-            (*pats).headlen = p_tl as ::core::ffi::c_int;
+        if p_tl.get() != 0 as OptInt && (*pats).headlen as OptInt > p_tl.get() {
+            (*pats).headlen = p_tl.get() as ::core::ffi::c_int;
         }
     }
     if has_re {
@@ -5402,17 +5407,17 @@ unsafe extern "C" fn find_tagfunc_tags(
     };
     let mut flagString: [::core::ffi::c_char; 4] = [0; 4];
     let mut tag: *mut taggy_T = ::core::ptr::null_mut::<taggy_T>();
-    if (*curwin).w_tagstacklen > 0 as ::core::ffi::c_int {
-        if (*curwin).w_tagstackidx == (*curwin).w_tagstacklen {
-            tag = (&raw mut (*curwin).w_tagstack as *mut taggy_T)
-                .offset(((*curwin).w_tagstackidx - 1 as ::core::ffi::c_int) as isize);
+    if (*curwin.get()).w_tagstacklen > 0 as ::core::ffi::c_int {
+        if (*curwin.get()).w_tagstackidx == (*curwin.get()).w_tagstacklen {
+            tag = (&raw mut (*curwin.get()).w_tagstack as *mut taggy_T)
+                .offset(((*curwin.get()).w_tagstackidx - 1 as ::core::ffi::c_int) as isize);
         } else {
-            tag = (&raw mut (*curwin).w_tagstack as *mut taggy_T)
-                .offset((*curwin).w_tagstackidx as isize);
+            tag = (&raw mut (*curwin.get()).w_tagstack as *mut taggy_T)
+                .offset((*curwin.get()).w_tagstackidx as isize);
         }
     }
-    if *(*curbuf).b_p_tfu as ::core::ffi::c_int == NUL
-        || (*curbuf).b_tfu_cb.type_0 as ::core::ffi::c_uint
+    if *(*curbuf.get()).b_p_tfu as ::core::ffi::c_int == NUL
+        || (*curbuf.get()).b_tfu_cb.type_0 as ::core::ffi::c_uint
             == kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return FAIL;
@@ -5450,7 +5455,7 @@ unsafe extern "C" fn find_tagfunc_tags(
         &raw mut flagString as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 4]>(),
         b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-        if g_tag_at_cursor as ::core::ffi::c_int != 0 {
+        if g_tag_at_cursor.get() as ::core::ffi::c_int != 0 {
             b"c\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"\0".as_ptr() as *const ::core::ffi::c_char
@@ -5466,15 +5471,15 @@ unsafe extern "C" fn find_tagfunc_tags(
             b"\0".as_ptr() as *const ::core::ffi::c_char
         },
     );
-    let mut save_pos: pos_T = (*curwin).w_cursor;
+    let mut save_pos: pos_T = (*curwin.get()).w_cursor;
     let mut result: ::core::ffi::c_int = callback_call(
-        &raw mut (*curbuf).b_tfu_cb,
+        &raw mut (*curbuf.get()).b_tfu_cb,
         3 as ::core::ffi::c_int,
         &raw mut args as *mut typval_T,
         &raw mut rettv,
     ) as ::core::ffi::c_int;
-    (*curwin).w_cursor = save_pos;
-    check_cursor(curwin);
+    (*curwin.get()).w_cursor = save_pos;
+    check_cursor(curwin.get());
     (*d).dv_refcount -= 1;
     if result == FAIL {
         return FAIL;
@@ -5529,7 +5534,9 @@ unsafe extern "C" fn find_tagfunc_tags(
                 let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
                 let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
                 while dihi_todo_ != 0 {
-                    if !((*dihi_).hi_key.is_null() || (*dihi_).hi_key == &raw mut hash_removed) {
+                    if !((*dihi_).hi_key.is_null()
+                        || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                    {
                         dihi_todo_ = dihi_todo_.wrapping_sub(1);
                         let di: *mut dictitem_T = (*dihi_)
                             .hi_key
@@ -5635,7 +5642,8 @@ unsafe extern "C" fn find_tagfunc_tags(
                             let mut dihi__0: *mut hashitem_T = (*dihi_ht__0).ht_array;
                             while dihi_todo__0 != 0 {
                                 if !((*dihi__0).hi_key.is_null()
-                                    || (*dihi__0).hi_key == &raw mut hash_removed)
+                                    || (*dihi__0).hi_key
+                                        == &raw const hash_removed as *mut ::core::ffi::c_char)
                                 {
                                     dihi_todo__0 = dihi_todo__0.wrapping_sub(1);
                                     let di_0: *mut dictitem_T = (*dihi__0)
@@ -5802,21 +5810,21 @@ unsafe extern "C" fn findtags_in_help_init(mut st: *mut findtags_state_T) -> boo
     }
     if (*st).flags & TAG_KEEP_LANG as ::core::ffi::c_int != 0
         && (*st).help_lang_find.is_null()
-        && !(*curbuf).b_fname.is_null()
+        && !(*curbuf.get()).b_fname.is_null()
         && {
-            i = strlen((*curbuf).b_fname) as ::core::ffi::c_int;
+            i = strlen((*curbuf.get()).b_fname) as ::core::ffi::c_int;
             i > 4 as ::core::ffi::c_int
         }
-        && *(*curbuf)
+        && *(*curbuf.get())
             .b_fname
             .offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == 'x' as ::core::ffi::c_int
-        && *(*curbuf)
+        && *(*curbuf.get())
             .b_fname
             .offset((i - 4 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == '.' as ::core::ffi::c_int
         && strncasecmp(
-            (*curbuf)
+            (*curbuf.get())
                 .b_fname
                 .offset(i as isize)
                 .offset(-(3 as ::core::ffi::c_int as isize)),
@@ -5828,7 +5836,7 @@ unsafe extern "C" fn findtags_in_help_init(mut st: *mut findtags_state_T) -> boo
     } else {
         (*st).help_pri = 1 as ::core::ffi::c_int;
         let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        s = p_hlg;
+        s = p_hlg.get();
         while *s as ::core::ffi::c_int != NUL {
             if strncasecmp(
                 s,
@@ -5867,7 +5875,7 @@ unsafe extern "C" fn findtags_apply_tfu(
         (*st).flags & TAG_NO_TAGFUNC as ::core::ffi::c_int == 0 as ::core::ffi::c_int;
     if !use_tfu
         || tfu_in_use.get() as ::core::ffi::c_int != 0
-        || *(*curbuf).b_p_tfu as ::core::ffi::c_int == NUL
+        || *(*curbuf.get()).b_p_tfu as ::core::ffi::c_int == NUL
     {
         return NOTDONE;
     }
@@ -5911,12 +5919,16 @@ unsafe extern "C" fn findtags_get_next_line(
             == TS_SKIP_BACK as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         (*sinfo_p).curr_offset_used = (*sinfo_p).curr_offset;
-        vim_ignored = fseeko((*st).fp, (*sinfo_p).curr_offset as __off_t, SEEK_SET);
+        vim_ignored.set(fseeko(
+            (*st).fp,
+            (*sinfo_p).curr_offset as __off_t,
+            SEEK_SET,
+        ));
         eof = vim_fgets((*st).lbuf, (*st).lbuf_size, (*st).fp);
         if !eof && (*sinfo_p).curr_offset != 0 as off_T {
             (*sinfo_p).curr_offset = ftello((*st).fp) as off_T;
             if (*sinfo_p).curr_offset == (*sinfo_p).high_offset {
-                vim_ignored = fseeko((*st).fp, (*sinfo_p).low_offset as __off_t, SEEK_SET);
+                vim_ignored.set(fseeko((*st).fp, (*sinfo_p).low_offset as __off_t, SEEK_SET));
                 (*sinfo_p).curr_offset = (*sinfo_p).low_offset;
             }
             eof = vim_fgets((*st).lbuf, (*st).lbuf_size, (*st).fp);
@@ -5979,7 +5991,7 @@ unsafe extern "C" fn findtags_hdr_parse(mut st: *mut findtags_state_T) -> bool {
         convert_setup(
             &raw mut (*st).vimconv,
             (*st).lbuf.offset(20 as ::core::ffi::c_int as isize),
-            p_enc,
+            p_enc.get(),
         );
     }
     return false_0 != 0;
@@ -6013,7 +6025,7 @@ unsafe extern "C" fn findtags_start_state_handler(
     } else if (*st).tag_file_sorted == '2' as ::core::ffi::c_int {
         (*st).state = TS_BINARY;
         *sortic = true_0 != 0;
-        (*(*st).orgpat).regmatch.rm_ic = p_ic != 0 || !noic;
+        (*(*st).orgpat).regmatch.rm_ic = p_ic.get() != 0 || !noic;
     } else {
         (*st).state = TS_LINEAR;
     }
@@ -6030,7 +6042,7 @@ unsafe extern "C" fn findtags_start_state_handler(
             (*st).state = TS_LINEAR;
         } else {
             let filesize: off_T = ftello((*st).fp);
-            vim_ignored = fseeko((*st).fp, 0 as __off_t, SEEK_SET);
+            vim_ignored.set(fseeko((*st).fp, 0 as __off_t, SEEK_SET));
             (*sinfo_p).low_offset = 0 as off_T;
             (*sinfo_p).low_char = 0 as ::core::ffi::c_int;
             (*sinfo_p).high_offset = filesize;
@@ -6061,8 +6073,8 @@ unsafe extern "C" fn findtags_parse_line(
         }
         let mut cmplen: ::core::ffi::c_int =
             (*tagpp).tagname_end.offset_from((*tagpp).tagname) as ::core::ffi::c_int;
-        if p_tl != 0 as OptInt && cmplen as OptInt > p_tl {
-            cmplen = p_tl as ::core::ffi::c_int;
+        if p_tl.get() != 0 as OptInt && cmplen as OptInt > p_tl.get() {
+            cmplen = p_tl.get() as ::core::ffi::c_int;
         }
         if (*st).flags & TAG_REGEXP as ::core::ffi::c_int != 0 && (*(*st).orgpat).headlen < cmplen {
             cmplen = (*(*st).orgpat).headlen;
@@ -6275,8 +6287,8 @@ unsafe extern "C" fn findtags_match_tag(
     let mut match_0: bool = false_0 != 0;
     let mut cmplen: ::core::ffi::c_int =
         (*tagpp).tagname_end.offset_from((*tagpp).tagname) as ::core::ffi::c_int;
-    if p_tl != 0 as OptInt && cmplen as OptInt > p_tl {
-        cmplen = p_tl as ::core::ffi::c_int;
+    if p_tl.get() != 0 as OptInt && cmplen as OptInt > p_tl.get() {
+        cmplen = p_tl.get() as ::core::ffi::c_int;
     }
     if (*(*st).orgpat).len != cmplen {
         match_0 = false_0 != 0;
@@ -6461,8 +6473,8 @@ unsafe extern "C" fn findtags_add_match(
                 (*tagpp).tagname as *const ::core::ffi::c_void,
                 len,
             );
-            if State & MODE_INSERT as ::core::ffi::c_int != 0 {
-                (*st).get_searchpat = p_sft != 0;
+            if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+                (*st).get_searchpat = p_sft.get() != 0;
             }
         }
     } else {
@@ -6499,7 +6511,9 @@ unsafe extern "C" fn findtags_add_match(
             strlen(mfp),
             *hash,
         );
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
+        if (*hi).hi_key.is_null()
+            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+        {
             hash_add_item(
                 (&raw mut (*st).ht_match as *mut hashtab_T).offset(mtt as isize),
                 hi,
@@ -6568,7 +6582,8 @@ unsafe extern "C" fn findtags_get_all_tags(
         if (*st).flags & TAG_INS_COMP as ::core::ffi::c_int != 0 {
             ins_compl_check_keys(30 as ::core::ffi::c_int, false_0 != 0);
         }
-        if got_int as ::core::ffi::c_int != 0 || ins_compl_interrupted() as ::core::ffi::c_int != 0
+        if got_int.get() as ::core::ffi::c_int != 0
+            || ins_compl_interrupted() as ::core::ffi::c_int != 0
         {
             (*st).stop_searching = true_0 != 0;
             break;
@@ -6612,7 +6627,11 @@ unsafe extern "C" fn findtags_get_all_tags(
                     || (*st).state as ::core::ffi::c_uint
                         == TS_LINEAR as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    vim_ignored = fseeko((*st).fp, search_info.curr_offset as __off_t, SEEK_SET);
+                    vim_ignored.set(fseeko(
+                        (*st).fp,
+                        search_info.curr_offset as __off_t,
+                        SEEK_SET,
+                    ));
                 }
                 search_info.curr_offset = 0 as off_T;
             } else {
@@ -6661,7 +6680,7 @@ unsafe extern "C" fn findtags_in_file(
     (*st).tag_file_sorted = NUL;
     (*st).fp = ::core::ptr::null_mut::<FILE>();
     findtags_matchargs_init(&raw mut margs, (*st).flags);
-    if (*curbuf).b_help {
+    if (*curbuf.get()).b_help {
         if !findtags_in_help_init(st) {
             return;
         }
@@ -6673,7 +6692,7 @@ unsafe extern "C" fn findtags_in_file(
     if (*st).fp.is_null() {
         return;
     }
-    if p_verbose >= 5 as OptInt {
+    if p_verbose.get() >= 5 as OptInt {
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
@@ -6829,35 +6848,35 @@ pub unsafe extern "C" fn find_tags(
     let mut has_re: bool = flags & TAG_REGEXP as ::core::ffi::c_int != 0;
     let mut noic: ::core::ffi::c_int = flags & TAG_NOIC as ::core::ffi::c_int;
     let mut verbose: ::core::ffi::c_int = flags & TAG_VERBOSE as ::core::ffi::c_int;
-    let mut save_p_ic: ::core::ffi::c_int = p_ic;
-    match if (*curbuf).b_tc_flags != 0 {
-        (*curbuf).b_tc_flags
+    let mut save_p_ic: ::core::ffi::c_int = p_ic.get();
+    match if (*curbuf.get()).b_tc_flags != 0 {
+        (*curbuf.get()).b_tc_flags
     } else {
-        tc_flags
+        tc_flags.get()
     } {
         1 => {}
         2 => {
-            p_ic = true_0;
+            p_ic.set(true_0);
         }
         4 => {
-            p_ic = false_0;
+            p_ic.set(false_0);
         }
         8 => {
-            p_ic = ignorecase(pat);
+            p_ic.set(ignorecase(pat));
         }
         16 => {
-            p_ic = ignorecase_opt(pat, true_0, true_0);
+            p_ic.set(ignorecase_opt(pat, true_0, true_0));
         }
         _ => {
             abort();
         }
     }
-    let mut help_save: ::core::ffi::c_int = (*curbuf).b_help as ::core::ffi::c_int;
+    let mut help_save: ::core::ffi::c_int = (*curbuf.get()).b_help as ::core::ffi::c_int;
     findtags_state_init(&raw mut st, pat, flags, mincount);
     if st.help_only {
-        (*curbuf).b_help = true_0 != 0;
+        (*curbuf.get()).b_help = true_0 != 0;
     }
-    if (*curbuf).b_help {
+    if (*curbuf.get()).b_help {
         if (*st.orgpat).len > 3 as ::core::ffi::c_int
             && *pat.offset(((*st.orgpat).len - 3 as ::core::ffi::c_int) as isize)
                 as ::core::ffi::c_int
@@ -6893,26 +6912,26 @@ pub unsafe extern "C" fn find_tags(
             (*st.orgpat).len -= 3 as ::core::ffi::c_int;
         }
     }
-    if p_tl != 0 as OptInt && (*st.orgpat).len as OptInt > p_tl {
-        (*st.orgpat).len = p_tl as ::core::ffi::c_int;
+    if p_tl.get() != 0 as OptInt && (*st.orgpat).len as OptInt > p_tl.get() {
+        (*st.orgpat).len = p_tl.get() as ::core::ffi::c_int;
     }
-    let mut save_emsg_off: ::core::ffi::c_int = emsg_off;
-    emsg_off = true_0;
+    let mut save_emsg_off: ::core::ffi::c_int = emsg_off.get();
+    emsg_off.set(true_0);
     prepare_pats(st.orgpat, has_re);
-    emsg_off = save_emsg_off;
+    emsg_off.set(save_emsg_off);
     if !(has_re as ::core::ffi::c_int != 0 && (*st.orgpat).regmatch.regprog.is_null()) {
         retval = findtags_apply_tfu(&raw mut st, pat, buf_ffname);
         if retval == NOTDONE {
             retval = FAIL;
             if flags & TAG_KEEP_LANG as ::core::ffi::c_int != 0
                 && st.help_lang_find.is_null()
-                && !(*curbuf).b_fname.is_null()
+                && !(*curbuf.get()).b_fname.is_null()
                 && {
-                    i = strlen((*curbuf).b_fname) as ::core::ffi::c_int;
+                    i = strlen((*curbuf.get()).b_fname) as ::core::ffi::c_int;
                     i > 4 as ::core::ffi::c_int
                 }
                 && strcasecmp(
-                    (*curbuf)
+                    (*curbuf.get())
                         .b_fname
                         .offset(i as isize)
                         .offset(-(4 as ::core::ffi::c_int as isize)),
@@ -6921,12 +6940,14 @@ pub unsafe extern "C" fn find_tags(
             {
                 st.is_txt = true_0 != 0;
             }
-            (*st.orgpat).regmatch.rm_ic = (p_ic != 0 || noic == 0)
-                && (findall != 0 || (*st.orgpat).headlen == 0 as ::core::ffi::c_int || p_tbs == 0);
+            (*st.orgpat).regmatch.rm_ic = (p_ic.get() != 0 || noic == 0)
+                && (findall != 0
+                    || (*st.orgpat).headlen == 0 as ::core::ffi::c_int
+                    || p_tbs.get() == 0);
             let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             while round <= 2 as ::core::ffi::c_int {
                 st.linear = (*st.orgpat).headlen == 0 as ::core::ffi::c_int
-                    || p_tbs == 0
+                    || p_tbs.get() == 0
                     || round == 2 as ::core::ffi::c_int;
                 first_file = true_0;
                 while get_tagfname(&raw mut tn, first_file, st.tag_fname) == OK {
@@ -6941,7 +6962,7 @@ pub unsafe extern "C" fn find_tags(
                 tagname_free(&raw mut tn);
                 if st.stop_searching as ::core::ffi::c_int != 0
                     || st.linear as ::core::ffi::c_int != 0
-                    || p_ic == 0 && noic != 0
+                    || p_ic.get() == 0 && noic != 0
                     || (*st.orgpat).regmatch.rm_ic as ::core::ffi::c_int != 0
                 {
                     break;
@@ -6964,9 +6985,9 @@ pub unsafe extern "C" fn find_tags(
         st.match_count = 0 as ::core::ffi::c_int;
     }
     *num_matches = findtags_copy_matches(&raw mut st, matchesp);
-    (*curbuf).b_help = help_save != 0;
+    (*curbuf.get()).b_help = help_save != 0;
     xfree(saved_pat as *mut ::core::ffi::c_void);
-    p_ic = save_p_ic;
+    p_ic.set(save_p_ic);
     return retval;
 }
 static tag_fnames: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
@@ -7005,7 +7026,7 @@ pub unsafe extern "C" fn get_tagfname(
             ::core::mem::size_of::<tagname_T>(),
         );
     }
-    if (*curbuf).b_help {
+    if (*curbuf.get()).b_help {
         if first != 0 {
             ga_clear_strings(tag_fnames.ptr());
             ga_init(
@@ -7030,13 +7051,15 @@ pub unsafe extern "C" fn get_tagfname(
             );
         }
         if (*tnp).tn_hf_idx >= (*tag_fnames.ptr()).ga_len {
-            if (*tnp).tn_hf_idx > (*tag_fnames.ptr()).ga_len || *p_hf as ::core::ffi::c_int == NUL {
+            if (*tnp).tn_hf_idx > (*tag_fnames.ptr()).ga_len
+                || *p_hf.get() as ::core::ffi::c_int == NUL
+            {
                 return FAIL;
             }
             (*tnp).tn_hf_idx += 1;
             xstrlcpy(
                 buf,
-                p_hf,
+                p_hf.get(),
                 (MAXPATHL as size_t).wrapping_sub(
                     ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
                 ),
@@ -7071,10 +7094,10 @@ pub unsafe extern "C" fn get_tagfname(
         return OK;
     }
     if first != 0 {
-        (*tnp).tn_tags = xstrdup(if *(*curbuf).b_p_tags as ::core::ffi::c_int != NUL {
-            (*curbuf).b_p_tags
+        (*tnp).tn_tags = xstrdup(if *(*curbuf.get()).b_p_tags as ::core::ffi::c_int != NUL {
+            (*curbuf.get()).b_p_tags
         } else {
-            p_tags
+            p_tags.get()
         });
         (*tnp).tn_np = (*tnp).tn_tags;
     }
@@ -7128,7 +7151,7 @@ pub unsafe extern "C" fn get_tagfname(
                 FINDFILE_FILE as ::core::ffi::c_int,
                 (*tnp).tn_search_ctx,
                 true_0,
-                (*curbuf).b_ffname,
+                (*curbuf.get()).b_ffname,
             );
             if !(*tnp).tn_search_ctx.is_null() {
                 (*tnp).tn_did_filefind_init = true_0;
@@ -7308,7 +7331,7 @@ unsafe extern "C" fn jumpto_tag(
 ) -> ::core::ffi::c_int {
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if postponed_split == 0 as ::core::ffi::c_int && !check_can_set_curbuf_forceit(forceit) {
+    if postponed_split.get() == 0 as ::core::ffi::c_int && !check_can_set_curbuf_forceit(forceit) {
         return FAIL;
     }
     let mut pbuf_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7332,8 +7355,8 @@ unsafe extern "C" fn jumpto_tag(
     let mut search_options: ::core::ffi::c_int = 0;
     let mut curwin_save: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut full_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let old_KeyTyped: bool = KeyTyped;
-    let l_g_do_tagpreview: ::core::ffi::c_int = g_do_tagpreview;
+    let old_KeyTyped: bool = KeyTyped.get();
+    let l_g_do_tagpreview: ::core::ffi::c_int = g_do_tagpreview.get();
     let len: size_t = matching_line_len(lbuf_arg).wrapping_add(1 as size_t);
     let mut lbuf: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
     memmove(
@@ -7379,18 +7402,18 @@ unsafe extern "C" fn jumpto_tag(
                 xfree(nofile_fname.get() as *mut ::core::ffi::c_void);
                 nofile_fname.set(xstrdup(fname));
             } else {
-                RedrawingDisabled += 1;
+                (*RedrawingDisabled.ptr()) += 1;
                 if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
-                    postponed_split = 0 as ::core::ffi::c_int;
-                    curwin_save = curwin;
-                    if (*curwin).w_onebuf_opt.wo_pvw == 0 {
+                    postponed_split.set(0 as ::core::ffi::c_int);
+                    curwin_save = curwin.get();
+                    if (*curwin.get()).w_onebuf_opt.wo_pvw == 0 {
                         full_fname = FullName_save(fname, false_0 != 0);
                         fname = full_fname;
                         prepare_tagpreview(true_0 != 0);
                     }
                 }
-                if postponed_split != 0
-                    && swb_flags
+                if postponed_split.get() != 0
+                    && swb_flags.get()
                         & (kOptSwbFlagUseopen as ::core::ffi::c_int
                             | kOptSwbFlagUsetab as ::core::ffi::c_int)
                             as ::core::ffi::c_uint
@@ -7404,40 +7427,44 @@ unsafe extern "C" fn jumpto_tag(
                     }
                 }
                 if getfile_result == GETFILE_UNUSED as ::core::ffi::c_int
-                    && (postponed_split != 0 || cmdmod.cmod_tab != 0 as ::core::ffi::c_int)
+                    && (postponed_split.get() != 0
+                        || (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int)
                 {
-                    if swb_flags & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint
+                    if swb_flags.get()
+                        & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
                     {
-                        cmdmod.cmod_split |= WSP_VERT as ::core::ffi::c_int;
+                        (*cmdmod.ptr()).cmod_split |= WSP_VERT as ::core::ffi::c_int;
                     }
-                    if swb_flags & kOptSwbFlagNewtab as ::core::ffi::c_int as ::core::ffi::c_uint
+                    if swb_flags.get()
+                        & kOptSwbFlagNewtab as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
-                        && cmdmod.cmod_tab == 0 as ::core::ffi::c_int
+                        && (*cmdmod.ptr()).cmod_tab == 0 as ::core::ffi::c_int
                     {
-                        cmdmod.cmod_tab = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
+                        (*cmdmod.ptr()).cmod_tab =
+                            tabpage_index(curtab.get()) + 1 as ::core::ffi::c_int;
                     }
                     if win_split(
-                        if postponed_split > 0 as ::core::ffi::c_int {
-                            postponed_split
+                        if postponed_split.get() > 0 as ::core::ffi::c_int {
+                            postponed_split.get()
                         } else {
                             0 as ::core::ffi::c_int
                         },
-                        postponed_split_flags,
+                        postponed_split_flags.get(),
                     ) == FAIL
                     {
-                        RedrawingDisabled -= 1;
+                        (*RedrawingDisabled.ptr()) -= 1;
                         break '_erret;
                     } else {
-                        (*curwin).w_onebuf_opt.wo_scb = false_0;
-                        (*curwin).w_onebuf_opt.wo_crb = false_0;
+                        (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+                        (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
                     }
                 }
                 if keep_help {
                     if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
-                        keep_help_flag = bt_help((*curwin_save).w_buffer);
+                        keep_help_flag.set(bt_help((*curwin_save).w_buffer));
                     } else {
-                        keep_help_flag = (*curbuf).b_help;
+                        keep_help_flag.set((*curbuf.get()).b_help);
                     }
                 }
                 if getfile_result == GETFILE_UNUSED as ::core::ffi::c_int {
@@ -7450,14 +7477,14 @@ unsafe extern "C" fn jumpto_tag(
                         forceit != 0,
                     );
                 }
-                keep_help_flag = false_0 != 0;
+                keep_help_flag.set(false_0 != 0);
                 if getfile_result <= 0 as ::core::ffi::c_int {
-                    (*curwin).w_set_curswant = true_0;
-                    postponed_split = 0 as ::core::ffi::c_int;
-                    let save_magic_overruled: optmagic_T = magic_overruled;
-                    magic_overruled = OPTION_MAGIC_OFF;
-                    let save_no_hlsearch: bool = no_hlsearch;
-                    if !vim_strchr(p_cpo, CPO_TAGPAT).is_null() {
+                    (*curwin.get()).w_set_curswant = true_0;
+                    postponed_split.set(0 as ::core::ffi::c_int);
+                    let save_magic_overruled: optmagic_T = magic_overruled.get();
+                    magic_overruled.set(OPTION_MAGIC_OFF);
+                    let save_no_hlsearch: bool = no_hlsearch.get();
+                    if !vim_strchr(p_cpo.get(), CPO_TAGPAT).is_null() {
                         search_options = 0 as ::core::ffi::c_int;
                     } else {
                         search_options = SEARCH_KEEP as ::core::ffi::c_int;
@@ -7477,14 +7504,14 @@ unsafe extern "C" fn jumpto_tag(
                     }
                     if str > pbuf_end.offset(-(1 as ::core::ffi::c_int as isize)) {
                         let mut pbuflen: size_t = pbuf_end.offset_from(pbuf) as size_t;
-                        let mut save_p_ws: bool = p_ws != 0;
-                        let mut save_p_ic: ::core::ffi::c_int = p_ic;
-                        let mut save_p_scs: ::core::ffi::c_int = p_scs;
-                        p_ws = true_0;
-                        p_ic = false_0;
-                        p_scs = false_0;
-                        let mut save_lnum: linenr_T = (*curwin).w_cursor.lnum;
-                        (*curwin).w_cursor.lnum = if tagp.tagline > 0 as linenr_T {
+                        let mut save_p_ws: bool = p_ws.get() != 0;
+                        let mut save_p_ic: ::core::ffi::c_int = p_ic.get();
+                        let mut save_p_scs: ::core::ffi::c_int = p_scs.get();
+                        p_ws.set(true_0);
+                        p_ic.set(false_0);
+                        p_scs.set(false_0);
+                        let mut save_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
+                        (*curwin.get()).w_cursor.lnum = if tagp.tagline > 0 as linenr_T {
                             tagp.tagline - 1 as linenr_T
                         } else {
                             0 as linenr_T
@@ -7503,7 +7530,7 @@ unsafe extern "C" fn jumpto_tag(
                             retval = OK;
                         } else {
                             let mut found: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                            p_ic = true_0;
+                            p_ic.set(true_0);
                             if do_search(
                                 ::core::ptr::null_mut::<oparg_T>(),
                                 *pbuf.offset(0 as ::core::ffi::c_int as isize)
@@ -7564,7 +7591,7 @@ unsafe extern "C" fn jumpto_tag(
                             if found == 0 as ::core::ffi::c_int {
                                 emsg(gettext(b"E434: Can't find tag pattern\0".as_ptr()
                                     as *const ::core::ffi::c_char));
-                                (*curwin).w_cursor.lnum = save_lnum;
+                                (*curwin.get()).w_cursor.lnum = save_lnum;
                             } else {
                                 if found == 2 as ::core::ffi::c_int || save_p_ic == 0 {
                                     msg(
@@ -7574,33 +7601,35 @@ unsafe extern "C" fn jumpto_tag(
                                         ),
                                         0 as ::core::ffi::c_int,
                                     );
-                                    if msg_scrolled == 0 && msg_silent == 0 as ::core::ffi::c_int {
+                                    if msg_scrolled.get() == 0
+                                        && msg_silent.get() == 0 as ::core::ffi::c_int
+                                    {
                                         msg_delay(1010 as uint64_t, true_0 != 0);
                                     }
                                 }
                                 retval = OK;
                             }
                         }
-                        p_ws = save_p_ws as ::core::ffi::c_int;
-                        p_ic = save_p_ic;
-                        p_scs = save_p_scs;
-                        check_cursor(curwin);
+                        p_ws.set(save_p_ws as ::core::ffi::c_int);
+                        p_ic.set(save_p_ic);
+                        p_scs.set(save_p_scs);
+                        check_cursor(curwin.get());
                     } else {
-                        let save_secure: ::core::ffi::c_int = secure;
-                        secure = 1 as ::core::ffi::c_int;
-                        sandbox += 1;
-                        (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
-                        (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                        (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+                        let save_secure: ::core::ffi::c_int = secure.get();
+                        secure.set(1 as ::core::ffi::c_int);
+                        (*sandbox.ptr()) += 1;
+                        (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
+                        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
                         do_cmdline_cmd(pbuf);
                         retval = OK;
-                        if secure == 2 as ::core::ffi::c_int {
+                        if secure.get() == 2 as ::core::ffi::c_int {
                             wait_return(true_0);
                         }
-                        secure = save_secure;
-                        sandbox -= 1;
+                        secure.set(save_secure);
+                        (*sandbox.ptr()) -= 1;
                     }
-                    magic_overruled = save_magic_overruled;
+                    magic_overruled.set(save_magic_overruled);
                     if search_options != 0 {
                         set_no_hlsearch(save_no_hlsearch);
                     }
@@ -7608,10 +7637,11 @@ unsafe extern "C" fn jumpto_tag(
                         retval = OK;
                     }
                     if retval == OK {
-                        if (*curbuf).b_help {
-                            set_topline(curwin, (*curwin).w_cursor.lnum);
+                        if (*curbuf.get()).b_help {
+                            set_topline(curwin.get(), (*curwin.get()).w_cursor.lnum);
                         }
-                        if fdo_flags & kOptFdoFlagTag as ::core::ffi::c_int as ::core::ffi::c_uint
+                        if fdo_flags.get()
+                            & kOptFdoFlagTag as ::core::ffi::c_int as ::core::ffi::c_uint
                             != 0
                             && old_KeyTyped as ::core::ffi::c_int != 0
                         {
@@ -7619,25 +7649,25 @@ unsafe extern "C" fn jumpto_tag(
                         }
                     }
                     if l_g_do_tagpreview != 0 as ::core::ffi::c_int
-                        && curwin != curwin_save
+                        && curwin.get() != curwin_save
                         && win_valid(curwin_save) as ::core::ffi::c_int != 0
                     {
-                        validate_cursor(curwin);
-                        redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
+                        validate_cursor(curwin.get());
+                        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
                         win_enter(curwin_save, true_0 != 0);
                     }
-                    RedrawingDisabled -= 1;
+                    (*RedrawingDisabled.ptr()) -= 1;
                 } else {
-                    RedrawingDisabled -= 1;
-                    if postponed_split != 0 {
-                        win_close(curwin, false_0 != 0, false_0 != 0);
-                        postponed_split = 0 as ::core::ffi::c_int;
+                    (*RedrawingDisabled.ptr()) -= 1;
+                    if postponed_split.get() != 0 {
+                        win_close(curwin.get(), false_0 != 0, false_0 != 0);
+                        postponed_split.set(0 as ::core::ffi::c_int);
                     }
                 }
             }
         }
     }
-    g_do_tagpreview = 0 as ::core::ffi::c_int;
+    g_do_tagpreview.set(0 as ::core::ffi::c_int);
     xfree(lbuf as *mut ::core::ffi::c_void);
     xfree(pbuf as *mut ::core::ffi::c_void);
     xfree(tofree_fname as *mut ::core::ffi::c_void);
@@ -7699,10 +7729,13 @@ unsafe extern "C" fn expand_tag_fname(
         }
     }
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (p_tr != 0 || (*curbuf).b_help as ::core::ffi::c_int != 0) && !vim_isAbsName(fname) && {
-        p = path_tail(tag_fname);
-        p != tag_fname
-    } {
+    if (p_tr.get() != 0 || (*curbuf.get()).b_help as ::core::ffi::c_int != 0)
+        && !vim_isAbsName(fname)
+        && {
+            p = path_tail(tag_fname);
+            p != tag_fname
+        }
+    {
         retval = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
         strcpy(retval, tag_fname);
         xstrlcpy(
@@ -7832,7 +7865,7 @@ pub unsafe extern "C" fn expand_tags(
                 | TAG_VERBOSE as ::core::ffi::c_int
                 | TAG_NO_TAGFUNC as ::core::ffi::c_int,
             TAG_MANY as ::core::ffi::c_int,
-            (*curbuf).b_ffname,
+            (*curbuf.get()).b_ffname,
         );
     } else {
         ret = find_tags(
@@ -7845,7 +7878,7 @@ pub unsafe extern "C" fn expand_tags(
                 | TAG_NO_TAGFUNC as ::core::ffi::c_int
                 | TAG_NOIC as ::core::ffi::c_int,
             TAG_MANY as ::core::ffi::c_int,
-            (*curbuf).b_ffname,
+            (*curbuf.get()).b_ffname,
         );
     }
     if ret == OK && !tagnames {
@@ -7919,7 +7952,7 @@ unsafe extern "C" fn add_tag_field(
     mut end: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if !tv_dict_find(dict, field_name, -1 as ptrdiff_t).is_null() {
-        if p_verbose > 0 as OptInt {
+        if p_verbose.get() > 0 as OptInt {
             verbose_enter();
             smsg(
                 0 as ::core::ffi::c_int,

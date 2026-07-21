@@ -46,7 +46,7 @@ extern "C" {
     static e_prev_dir: [::core::ffi::c_char; 0];
     static e_write: [::core::ffi::c_char; 0];
     fn var_flavour(varname: *mut ::core::ffi::c_char) -> var_flavour_T;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
@@ -68,18 +68,18 @@ extern "C" {
     fn vim_chdirfile(fname: *mut ::core::ffi::c_char, cause: CdCause) -> ::core::ffi::c_int;
     fn shorten_fnames(force: ::core::ffi::c_int);
     fn put_folds(fd: *mut FILE, wp: *mut win_T) -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut topframe: *mut frame_T;
-    static mut first_tabpage: *mut tabpage_T;
-    static mut curtab: *mut tabpage_T;
-    static mut firstbuf: *mut buf_T;
-    static mut curbuf: *mut buf_T;
-    static mut global_alist: alist_T;
-    static mut globaldir: *mut ::core::ffi::c_char;
-    static mut no_hlsearch: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static topframe: GlobalCell<*mut frame_T>;
+    static first_tabpage: GlobalCell<*mut tabpage_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static firstbuf: GlobalCell<*mut buf_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static global_alist: GlobalCell<alist_T>;
+    static globaldir: GlobalCell<*mut ::core::ffi::c_char>;
+    static no_hlsearch: GlobalCell<bool>;
     fn makemap(fd: *mut FILE, buf: *mut buf_T) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn makeset(
@@ -88,15 +88,15 @@ extern "C" {
         local_only: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn makefoldset(fd: *mut FILE) -> ::core::ffi::c_int;
-    static mut p_acd: ::core::ffi::c_int;
-    static mut p_hls: ::core::ffi::c_int;
-    static mut p_stal: OptInt;
-    static mut ssop_flags: ::core::ffi::c_uint;
-    static mut p_shm: *mut ::core::ffi::c_char;
-    static mut p_vdir: *mut ::core::ffi::c_char;
-    static mut vop_flags: ::core::ffi::c_uint;
-    static mut p_wh: OptInt;
-    static mut p_wiw: OptInt;
+    static p_acd: GlobalCell<::core::ffi::c_int>;
+    static p_hls: GlobalCell<::core::ffi::c_int>;
+    static p_stal: GlobalCell<OptInt>;
+    static ssop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_vdir: GlobalCell<*mut ::core::ffi::c_char>;
+    static vop_flags: GlobalCell<::core::ffi::c_uint>;
+    static p_wh: GlobalCell<OptInt>;
+    static p_wiw: GlobalCell<OptInt>;
     fn os_chdir(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
@@ -2748,7 +2748,7 @@ unsafe extern "C" fn ses_winsizes(
     mut tab_firstwin: *mut win_T,
 ) -> ::core::ffi::c_int {
     if restore_size as ::core::ffi::c_int != 0
-        && ssop_flags & kOptSsopFlagWinsize as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && ssop_flags.get() & kOptSsopFlagWinsize as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut wp: *mut win_T = tab_firstwin;
@@ -2756,28 +2756,28 @@ unsafe extern "C" fn ses_winsizes(
             if ses_do_win(wp) != 0 {
                 n += 1;
                 if (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height
-                    < (*topframe).fr_height
+                    < (*topframe.get()).fr_height
                     && fprintf(
                         fd,
                         b"exe '%dresize ' . ((&lines * %ld + %ld) / %ld)\n\0".as_ptr()
                             as *const ::core::ffi::c_char,
                         n,
                         (*wp).w_height as int64_t,
-                        Rows as int64_t / 2 as int64_t,
-                        Rows as int64_t,
+                        Rows.get() as int64_t / 2 as int64_t,
+                        Rows.get() as int64_t,
                     ) < 0 as ::core::ffi::c_int
                 {
                     return FAIL;
                 }
-                if (*wp).w_width < Columns
+                if (*wp).w_width < Columns.get()
                     && fprintf(
                         fd,
                         b"exe 'vert %dresize ' . ((&columns * %ld + %ld) / %ld)\n\0".as_ptr()
                             as *const ::core::ffi::c_char,
                         n,
                         (*wp).w_width as int64_t,
-                        Columns as int64_t / 2 as int64_t,
-                        Columns as int64_t,
+                        Columns.get() as int64_t / 2 as int64_t,
+                        Columns.get() as int64_t,
                     ) < 0 as ::core::ffi::c_int
                 {
                     return FAIL;
@@ -2884,15 +2884,16 @@ unsafe extern "C" fn ses_do_win(mut wp: *mut win_T) -> ::core::ffi::c_int {
         || (*(*wp).w_buffer).terminal.is_null()
             && bt_nofilename((*wp).w_buffer) as ::core::ffi::c_int != 0
     {
-        return (ssop_flags & kOptSsopFlagBlank as ::core::ffi::c_int as ::core::ffi::c_uint)
+        return (ssop_flags.get() & kOptSsopFlagBlank as ::core::ffi::c_int as ::core::ffi::c_uint)
             as ::core::ffi::c_int;
     }
     if bt_help((*wp).w_buffer) {
-        return (ssop_flags & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint)
+        return (ssop_flags.get() & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint)
             as ::core::ffi::c_int;
     }
     if bt_terminal((*wp).w_buffer) {
-        return (ssop_flags & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint)
+        return (ssop_flags.get()
+            & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint)
             as ::core::ffi::c_int;
     }
     return true_0;
@@ -2947,12 +2948,12 @@ unsafe extern "C" fn ses_get_fname(
     mut flagp: *const ::core::ffi::c_uint,
 ) -> *mut ::core::ffi::c_char {
     if !(*buf).b_sfname.is_null()
-        && flagp == &raw mut ssop_flags as *const ::core::ffi::c_uint
-        && ssop_flags
+        && flagp == ssop_flags.ptr() as *const ::core::ffi::c_uint
+        && ssop_flags.get()
             & (kOptSsopFlagCurdir as ::core::ffi::c_int | kOptSsopFlagSesdir as ::core::ffi::c_int)
                 as ::core::ffi::c_uint
             != 0
-        && p_acd == 0
+        && p_acd.get() == 0
         && did_lcd.get() == 0
     {
         return (*buf).b_sfname;
@@ -3016,9 +3017,9 @@ unsafe extern "C" fn put_view(
 ) -> ::core::ffi::c_int {
     let mut f: ::core::ffi::c_int = 0;
     let mut did_next: bool = false_0 != 0;
-    let mut do_cursor: bool = flagp == &raw mut ssop_flags
+    let mut do_cursor: bool = flagp == ssop_flags.ptr()
         || *flagp & kOptSsopFlagCursor as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
-    if (*wp).w_alist == &raw mut global_alist {
+    if (*wp).w_alist == global_alist.ptr() {
         if FAIL
             == put_line(
                 fd,
@@ -3031,7 +3032,7 @@ unsafe extern "C" fn put_view(
         fd,
         b"arglocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         &raw mut (*(*wp).w_alist).al_ga,
-        flagp == &raw mut vop_flags
+        flagp == vop_flags.ptr()
             || *flagp & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint == 0
             || !(*tp).tp_localdir.is_null()
             || !(*wp).w_localdir.is_null(),
@@ -3042,7 +3043,7 @@ unsafe extern "C" fn put_view(
     }
     if (*wp).w_arg_idx != current_arg_idx
         && (*wp).w_arg_idx < (*(*wp).w_alist).al_ga.ga_len
-        && flagp == &raw mut ssop_flags
+        && flagp == ssop_flags.ptr()
     {
         if fprintf(
             fd,
@@ -3123,13 +3124,14 @@ unsafe extern "C" fn put_view(
     }
     if (*wp).w_alt_fnum != 0 {
         let alt: *mut buf_T = buflist_findnr((*wp).w_alt_fnum);
-        if flagp == &raw mut ssop_flags
+        if flagp == ssop_flags.ptr()
             && !alt.is_null()
             && !(*alt).b_fname.is_null()
             && *(*alt).b_fname as ::core::ffi::c_int != NUL
             && (*alt).b_p_bl != 0
             && !(bt_terminal(alt) as ::core::ffi::c_int != 0
-                && ssop_flags & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
+                && ssop_flags.get()
+                    & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
                     == 0)
             && (fputs(b"balt \0".as_ptr() as *const ::core::ffi::c_char, fd)
                 < 0 as ::core::ffi::c_int
@@ -3146,9 +3148,9 @@ unsafe extern "C" fn put_view(
     {
         return FAIL;
     }
-    let mut save_curwin: *mut win_T = curwin;
-    curwin = wp;
-    curbuf = (*curwin).w_buffer;
+    let mut save_curwin: *mut win_T = curwin.get();
+    curwin.set(wp);
+    curbuf.set((*curwin.get()).w_buffer);
     if *flagp
         & (kOptSsopFlagOptions as ::core::ffi::c_int
             | kOptSsopFlagLocaloptions as ::core::ffi::c_int) as ::core::ffi::c_uint
@@ -3157,7 +3159,7 @@ unsafe extern "C" fn put_view(
         f = makeset(
             fd,
             OPT_LOCAL as ::core::ffi::c_int,
-            (flagp == &raw mut vop_flags
+            (flagp == vop_flags.ptr()
                 || *flagp & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint == 0)
                 as ::core::ffi::c_int,
         );
@@ -3166,8 +3168,8 @@ unsafe extern "C" fn put_view(
     } else {
         f = OK;
     }
-    curwin = save_curwin;
-    curbuf = (*curwin).w_buffer;
+    curwin.set(save_curwin);
+    curbuf.set((*curwin.get()).w_buffer);
     if f == FAIL {
         return FAIL;
     }
@@ -3259,7 +3261,7 @@ unsafe extern "C" fn put_view(
         }
     }
     if !(*wp).w_localdir.is_null()
-        && (flagp != &raw mut vop_flags
+        && (flagp != vop_flags.ptr()
             || *flagp & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
     {
         if fputs(b"lcd \0".as_ptr() as *const ::core::ffi::c_char, fd) < 0 as ::core::ffi::c_int
@@ -3278,7 +3280,9 @@ unsafe extern "C" fn store_session_globals(mut fd: *mut FILE) -> ::core::ffi::c_
     let mut this_varhi_todo_: size_t = (*this_varhi_ht_).ht_used;
     let mut this_varhi_: *mut hashitem_T = (*this_varhi_ht_).ht_array;
     while this_varhi_todo_ != 0 {
-        if !((*this_varhi_).hi_key.is_null() || (*this_varhi_).hi_key == &raw mut hash_removed) {
+        if !((*this_varhi_).hi_key.is_null()
+            || (*this_varhi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+        {
             this_varhi_todo_ = this_varhi_todo_.wrapping_sub(1);
             let this_var: *mut dictitem_T = (*this_varhi_)
                 .hi_key
@@ -3371,7 +3375,7 @@ unsafe extern "C" fn makeopens(
     let mut tab_topframe: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
     let mut cur_arg_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut next_arg_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if ssop_flags & kOptSsopFlagBuffers as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagBuffers as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         only_save_windows = false_0 != 0;
     }
     if FAIL
@@ -3392,7 +3396,7 @@ unsafe extern "C" fn makeopens(
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagGlobals as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagGlobals as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         if store_session_globals(fd) == FAIL {
             return FAIL;
         }
@@ -3405,7 +3409,7 @@ unsafe extern "C" fn makeopens(
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && put_line(
             fd,
             b"silent tabonly\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3413,7 +3417,7 @@ unsafe extern "C" fn makeopens(
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         if FAIL
             == put_line(
                 fd,
@@ -3423,16 +3427,18 @@ unsafe extern "C" fn makeopens(
         {
             return FAIL;
         }
-    } else if ssop_flags & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    } else if ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
+    {
         let mut sname: *mut ::core::ffi::c_char = home_replace_save(
             ::core::ptr::null_mut::<buf_T>(),
-            if !globaldir.is_null() {
-                globaldir
+            if !(*globaldir.ptr()).is_null() {
+                globaldir.get()
             } else {
                 dirnow
             },
         );
-        let mut fname_esc: *mut ::core::ffi::c_char = ses_escape_fname(sname, &raw mut ssop_flags);
+        let mut fname_esc: *mut ::core::ffi::c_char = ses_escape_fname(sname, ssop_flags.ptr());
         if fprintf(
             fd,
             b"cd %s\n\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3455,7 +3461,7 @@ unsafe extern "C" fn makeopens(
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint
+    if ssop_flags.get() & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint
         == 0 as ::core::ffi::c_uint
     {
         if FAIL
@@ -3477,14 +3483,16 @@ unsafe extern "C" fn makeopens(
     {
         return FAIL;
     }
-    let mut buf: *mut buf_T = firstbuf;
+    let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if !(only_save_windows as ::core::ffi::c_int != 0
             && (*buf).b_nwindows == 0 as ::core::ffi::c_int)
             && !((*buf).b_help as ::core::ffi::c_int != 0
-                && ssop_flags & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint == 0)
+                && ssop_flags.get() & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint
+                    == 0)
             && !(bt_terminal(buf) as ::core::ffi::c_int != 0
-                && ssop_flags & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
+                && ssop_flags.get()
+                    & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
                     == 0)
             && !(*buf).b_fname.is_null()
             && (*buf).b_p_bl != 0
@@ -3504,7 +3512,7 @@ unsafe extern "C" fn makeopens(
                     .lnum as int64_t
                 },
             ) < 0 as ::core::ffi::c_int
-                || ses_fname(fd, buf, &raw mut ssop_flags, true_0 != 0) == FAIL
+                || ses_fname(fd, buf, ssop_flags.ptr(), true_0 != 0) == FAIL
             {
                 return FAIL;
             }
@@ -3514,26 +3522,26 @@ unsafe extern "C" fn makeopens(
     if ses_arglist(
         fd,
         b"argglobal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        &raw mut global_alist.al_ga,
-        ssop_flags & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint == 0,
-        &raw mut ssop_flags,
+        &raw mut (*global_alist.ptr()).al_ga,
+        ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint == 0,
+        ssop_flags.ptr(),
     ) == FAIL
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagResize as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagResize as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         if fprintf(
             fd,
             b"set lines=%ld columns=%ld\n\0".as_ptr() as *const ::core::ffi::c_char,
-            Rows as int64_t,
-            Columns as int64_t,
+            Rows.get() as int64_t,
+            Columns.get() as int64_t,
         ) < 0 as ::core::ffi::c_int
         {
             return FAIL;
         }
     }
     let mut restore_stal: bool = false_0 != 0;
-    if p_stal == 1 as OptInt && !(*first_tabpage).tp_next.is_null() {
+    if p_stal.get() == 1 as OptInt && !(*first_tabpage.get()).tp_next.is_null() {
         if FAIL
             == put_line(
                 fd,
@@ -3544,8 +3552,8 @@ unsafe extern "C" fn makeopens(
         }
         restore_stal = true_0 != 0;
     }
-    if ssop_flags & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp.is_null() {
             if !(*tp).tp_next.is_null()
                 && put_line(
@@ -3558,7 +3566,7 @@ unsafe extern "C" fn makeopens(
             }
             tp = (*tp).tp_next as *mut tabpage_T;
         }
-        if !(*first_tabpage).tp_next.is_null()
+        if !(*first_tabpage.get()).tp_next.is_null()
             && put_line(
                 fd,
                 b"tabrewind\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3568,25 +3576,26 @@ unsafe extern "C" fn makeopens(
         }
     }
     let mut restore_height_width: bool = false_0 != 0;
-    let mut tp_0: *mut tabpage_T = first_tabpage as *mut tabpage_T;
+    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp_0.is_null() {
         let mut need_tabnext: bool = false_0 != 0;
         let mut cnr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        if ssop_flags & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-            if tp_0 == curtab {
-                tab_firstwin = firstwin;
-                tab_topframe = topframe;
+        if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        {
+            if tp_0 == curtab.get() {
+                tab_firstwin = firstwin.get();
+                tab_topframe = topframe.get();
             } else {
                 tab_firstwin = (*tp_0).tp_firstwin;
                 tab_topframe = (*tp_0).tp_topframe;
             }
-            if tp_0 != first_tabpage {
+            if tp_0 != first_tabpage.get() {
                 need_tabnext = true_0 != 0;
             }
         } else {
-            tp_0 = curtab as *mut tabpage_T;
-            tab_firstwin = firstwin;
-            tab_topframe = topframe;
+            tp_0 = curtab.get() as *mut tabpage_T;
+            tab_firstwin = firstwin.get();
+            tab_topframe = topframe.get();
         }
         let mut wp: *mut win_T = tab_firstwin;
         while !wp.is_null() {
@@ -3607,7 +3616,7 @@ unsafe extern "C" fn makeopens(
                 need_tabnext = false_0 != 0;
                 if fputs(b"edit \0".as_ptr() as *const ::core::ffi::c_char, fd)
                     < 0 as ::core::ffi::c_int
-                    || ses_fname(fd, (*wp).w_buffer, &raw mut ssop_flags, true_0 != 0) == FAIL
+                    || ses_fname(fd, (*wp).w_buffer, ssop_flags.ptr(), true_0 != 0) == FAIL
                 {
                     return FAIL;
                 }
@@ -3685,7 +3694,7 @@ unsafe extern "C" fn makeopens(
             } else if !(*wp_0).w_floating {
                 restore_size = false_0 != 0;
             }
-            if curwin == wp_0 {
+            if curwin.get() == wp_0 {
                 cnr = nr;
             }
             wp_0 = (*wp_0).w_next;
@@ -3735,11 +3744,11 @@ unsafe extern "C" fn makeopens(
         if nr > 1 as ::core::ffi::c_int && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
             return FAIL;
         }
-        if ssop_flags & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        if ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             && !(*tp_0).tp_localdir.is_null()
         {
             if fputs(b"tcd \0".as_ptr() as *const ::core::ffi::c_char, fd) < 0 as ::core::ffi::c_int
-                || ses_put_fname(fd, (*tp_0).tp_localdir, &raw mut ssop_flags) == FAIL
+                || ses_put_fname(fd, (*tp_0).tp_localdir, ssop_flags.ptr()) == FAIL
                 || put_eol(fd) == FAIL
             {
                 return FAIL;
@@ -3754,7 +3763,7 @@ unsafe extern "C" fn makeopens(
                     wp_1,
                     tp_0 as *mut tabpage_T,
                     wp_1 != edited_win,
-                    &raw mut ssop_flags,
+                    ssop_flags.ptr(),
                     cur_arg_idx,
                 ) == FAIL
                 {
@@ -3786,16 +3795,17 @@ unsafe extern "C" fn makeopens(
         if nr > 1 as ::core::ffi::c_int && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
             return FAIL;
         }
-        if ssop_flags & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
+        if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint == 0
+        {
             break;
         }
         tp_0 = (*tp_0).tp_next as *mut tabpage_T;
     }
-    if ssop_flags & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         if fprintf(
             fd,
             b"tabnext %d\n\0".as_ptr() as *const ::core::ffi::c_char,
-            tabpage_index(curtab),
+            tabpage_index(curtab.get()),
         ) < 0 as ::core::ffi::c_int
         {
             return FAIL;
@@ -3821,17 +3831,17 @@ unsafe extern "C" fn makeopens(
     if fprintf(
         fd,
         b"set winheight=%ld winwidth=%ld\n\0".as_ptr() as *const ::core::ffi::c_char,
-        p_wh,
-        p_wiw,
+        p_wh.get(),
+        p_wiw.get(),
     ) < 0 as ::core::ffi::c_int
     {
         return FAIL;
     }
-    if ssop_flags & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+    if ssop_flags.get() & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         if fprintf(
             fd,
             b"set shortmess=%s\n\0".as_ptr() as *const ::core::ffi::c_char,
-            p_shm,
+            p_shm.get(),
         ) < 0 as ::core::ffi::c_int
         {
             return FAIL;
@@ -3930,8 +3940,8 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
     } else {
         fname = EXRC_FILE.as_ptr() as *mut ::core::ffi::c_char;
     }
-    if using_vdir != 0 && !os_isdir(p_vdir) {
-        vim_mkdir_emsg(p_vdir, 0o755 as ::core::ffi::c_int);
+    if using_vdir != 0 && !os_isdir(p_vdir.get()) {
+        vim_mkdir_emsg(p_vdir.get(), 0o755 as ::core::ffi::c_int);
     }
     let mut fd: *mut FILE = open_exfile(
         fname,
@@ -3942,9 +3952,9 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
         let mut failed: bool = false_0 != 0;
         let mut flagp: *mut ::core::ffi::c_uint = ::core::ptr::null_mut::<::core::ffi::c_uint>();
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkview as ::core::ffi::c_int {
-            flagp = &raw mut vop_flags;
+            flagp = vop_flags.ptr();
         } else {
-            flagp = &raw mut ssop_flags;
+            flagp = ssop_flags.ptr();
         }
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkvimrc as ::core::ffi::c_int {
             put_line(
@@ -3996,18 +4006,20 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
                     *dirnow = NUL as ::core::ffi::c_char;
                 }
                 if *dirnow as ::core::ffi::c_int != NUL
-                    && ssop_flags & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
+                    && ssop_flags.get()
+                        & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
                 {
                     if vim_chdirfile(fname, kCdCauseOther) == OK {
                         shorten_fnames(true_0);
                     }
                 } else if *dirnow as ::core::ffi::c_int != NUL
-                    && ssop_flags & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
+                    && ssop_flags.get()
+                        & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
-                    && !globaldir.is_null()
+                    && !(*globaldir.ptr()).is_null()
                 {
-                    if os_chdir(globaldir) == 0 as ::core::ffi::c_int {
+                    if os_chdir(globaldir.get()) == 0 as ::core::ffi::c_int {
                         shorten_fnames(true_0);
                     }
                 }
@@ -4015,13 +4027,13 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
                     | (makeopens(fd, dirnow) == FAIL) as ::core::ffi::c_int
                     != 0;
                 if *dirnow as ::core::ffi::c_int != NUL
-                    && (ssop_flags
+                    && (ssop_flags.get()
                         & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
-                        || ssop_flags
+                        || ssop_flags.get()
                             & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
                             != 0
-                            && !globaldir.is_null())
+                            && !(*globaldir.ptr()).is_null())
                 {
                     if os_chdir(dirnow) != 0 as ::core::ffi::c_int {
                         emsg(gettext(&raw const e_prev_dir as *const ::core::ffi::c_char));
@@ -4033,8 +4045,8 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
                 failed = failed as ::core::ffi::c_int
                     | (put_view(
                         fd,
-                        curwin,
-                        curtab,
+                        curwin.get(),
+                        curtab.get(),
                         using_vdir == 0,
                         flagp,
                         -1 as ::core::ffi::c_int,
@@ -4050,7 +4062,7 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
             {
                 failed = true_0 != 0;
             }
-            if p_hls != 0
+            if p_hls.get() != 0
                 && fprintf(
                     fd,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4059,7 +4071,7 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
             {
                 failed = true_0 != 0;
             }
-            if no_hlsearch as ::core::ffi::c_int != 0
+            if no_hlsearch.get() as ::core::ffi::c_int != 0
                 && fprintf(
                     fd,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4112,16 +4124,16 @@ pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        curbuf,
+        curbuf.get(),
     );
 }
 unsafe extern "C" fn get_view_file(mut c: ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    if (*curbuf).b_ffname.is_null() {
+    if (*curbuf.get()).b_ffname.is_null() {
         emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut sname: *mut ::core::ffi::c_char =
-        home_replace_save(::core::ptr::null_mut::<buf_T>(), (*curbuf).b_ffname);
+        home_replace_save(::core::ptr::null_mut::<buf_T>(), (*curbuf.get()).b_ffname);
     let mut len: size_t = 0 as size_t;
     let mut p: *mut ::core::ffi::c_char = sname;
     while *p != 0 {
@@ -4135,10 +4147,10 @@ unsafe extern "C" fn get_view_file(mut c: ::core::ffi::c_char) -> *mut ::core::f
     let mut retval: *mut ::core::ffi::c_char = xmalloc(
         strlen(sname)
             .wrapping_add(len)
-            .wrapping_add(strlen(p_vdir))
+            .wrapping_add(strlen(p_vdir.get()))
             .wrapping_add(9 as size_t),
     ) as *mut ::core::ffi::c_char;
-    strcpy(retval, p_vdir);
+    strcpy(retval, p_vdir.get());
     add_pathsep(retval);
     let mut s: *mut ::core::ffi::c_char = retval.offset(strlen(retval) as isize);
     let mut p_0: *mut ::core::ffi::c_char = sname;

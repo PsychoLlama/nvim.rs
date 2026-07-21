@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     pub type terminal;
     pub type regprog;
@@ -34,17 +35,17 @@ extern "C" {
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn set_must_redraw(type_0: ::core::ffi::c_int);
     static e_cmdwin: [::core::ffi::c_char; 0];
-    static mut Rows: ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut mouse_grid: ::core::ffi::c_int;
-    static mut mouse_row: ::core::ffi::c_int;
-    static mut mouse_col: ::core::ffi::c_int;
-    static mut firstwin: *mut win_T;
-    static mut lastwin: *mut win_T;
-    static mut prevwin: *mut win_T;
-    static mut curwin: *mut win_T;
-    static mut curtab: *mut tabpage_T;
-    static mut cmdwin_win: *mut win_T;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static mouse_grid: GlobalCell<::core::ffi::c_int>;
+    static mouse_row: GlobalCell<::core::ffi::c_int>;
+    static mouse_col: GlobalCell<::core::ffi::c_int>;
+    static firstwin: GlobalCell<*mut win_T>;
+    static lastwin: GlobalCell<*mut win_T>;
+    static prevwin: GlobalCell<*mut win_T>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curtab: GlobalCell<*mut tabpage_T>;
+    static cmdwin_win: GlobalCell<*mut win_T>;
     fn grid_adjust(
         grid: *mut GridView,
         row_off: *mut ::core::ffi::c_int,
@@ -74,9 +75,9 @@ extern "C" {
         scope: OptScope,
         from: *mut ::core::ffi::c_void,
     );
-    static mut empty_string_option: [::core::ffi::c_char; 0];
-    static mut p_ch: OptInt;
-    static mut p_ls: OptInt;
+    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
+    static p_ch: GlobalCell<OptInt>;
+    static p_ls: GlobalCell<OptInt>;
     fn free_string_option(p: *mut ::core::ffi::c_char);
     fn concat_str(
         str1: *const ::core::ffi::c_char,
@@ -2177,7 +2178,7 @@ pub unsafe extern "C" fn win_new_float(
     if wp.is_null() {
         let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
         let mut tp_last: *mut win_T = if last as ::core::ffi::c_int != 0 {
-            lastwin
+            lastwin.get()
         } else {
             lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>())
         };
@@ -2202,26 +2203,25 @@ pub unsafe extern "C" fn win_new_float(
             if tp.is_null() {
                 return ::core::ptr::null_mut::<win_T>();
             }
-            tp_last = lastwin_nofloating(if tp == curtab {
+            tp_last = lastwin_nofloating(if tp == curtab.get() {
                 ::core::ptr::null_mut::<tabpage_T>()
             } else {
                 tp
             });
         }
         wp = win_alloc(tp_last, false_0 != 0);
-        win_init(wp, curwin, 0 as ::core::ffi::c_int);
+        win_init(wp, curwin.get(), 0 as ::core::ffi::c_int);
         if !(*wp).w_onebuf_opt.wo_wbr.is_null() && fconfig.height == 1 as ::core::ffi::c_int {
-            if (*wp).w_onebuf_opt.wo_wbr != &raw mut empty_string_option as *mut ::core::ffi::c_char
-            {
+            if (*wp).w_onebuf_opt.wo_wbr != empty_string_option.ptr() as *mut ::core::ffi::c_char {
                 free_string_option((*wp).w_onebuf_opt.wo_wbr);
             }
-            (*wp).w_onebuf_opt.wo_wbr = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*wp).w_onebuf_opt.wo_wbr = empty_string_option.ptr() as *mut ::core::ffi::c_char;
         }
         if !(*wp).w_onebuf_opt.wo_stl.is_null()
-            && (*wp).w_onebuf_opt.wo_stl != &raw mut empty_string_option as *mut ::core::ffi::c_char
+            && (*wp).w_onebuf_opt.wo_stl != empty_string_option.ptr() as *mut ::core::ffi::c_char
         {
             free_string_option((*wp).w_onebuf_opt.wo_stl);
-            (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+            (*wp).w_onebuf_opt.wo_stl = empty_string_option.ptr() as *mut ::core::ffi::c_char;
         }
     } else {
         '_c2rust_label_0: {
@@ -2261,10 +2261,12 @@ pub unsafe extern "C" fn win_new_float(
                 );
             }
         };
-        if win_tp == curtab
-            && firstwin == wp
+        if win_tp == curtab.get()
+            && firstwin.get() == wp
             && lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()) == wp
-            || win_tp != curtab && (*win_tp).tp_firstwin == wp && lastwin_nofloating(win_tp) == wp
+            || win_tp != curtab.get()
+                && (*win_tp).tp_firstwin == wp
+                && lastwin_nofloating(win_tp) == wp
         {
             api_set_error(
                 err,
@@ -2272,10 +2274,10 @@ pub unsafe extern "C" fn win_new_float(
                 b"Cannot change last window into float\0".as_ptr() as *const ::core::ffi::c_char,
             );
             return ::core::ptr::null_mut::<win_T>();
-        } else if !cmdwin_win.is_null() && !(*cmdwin_win).w_floating {
+        } else if !(*cmdwin_win.ptr()).is_null() && !(*cmdwin_win.get()).w_floating {
             let mut other_nonfloat: bool = false_0 != 0;
-            let mut wp2: *mut win_T = if win_tp == curtab {
-                firstwin
+            let mut wp2: *mut win_T = if win_tp == curtab.get() {
+                firstwin.get()
             } else {
                 (*win_tp).tp_firstwin
             };
@@ -2283,7 +2285,7 @@ pub unsafe extern "C" fn win_new_float(
                 if (*wp2).w_floating {
                     break;
                 }
-                if wp2 != wp && wp2 != cmdwin_win {
+                if wp2 != wp && wp2 != cmdwin_win.get() {
                     other_nonfloat = true_0 != 0;
                     break;
                 } else {
@@ -2300,7 +2302,7 @@ pub unsafe extern "C" fn win_new_float(
                 return ::core::ptr::null_mut::<win_T>();
             }
         }
-        let mut tp_0: *mut tabpage_T = if win_tp == curtab {
+        let mut tp_0: *mut tabpage_T = if win_tp == curtab.get() {
             ::core::ptr::null_mut::<tabpage_T>()
         } else {
             win_tp
@@ -2318,7 +2320,7 @@ pub unsafe extern "C" fn win_new_float(
         *ptr_ = NULL;
         *ptr_;
         win_remove(wp, tp_0);
-        if win_tp == curtab {
+        if win_tp == curtab.get() {
             last_status(false_0 != 0);
             win_comp_pos();
         }
@@ -2327,7 +2329,7 @@ pub unsafe extern "C" fn win_new_float(
     (*wp).w_floating = true_0 != 0;
     (*wp).w_status_height = if !(*wp).w_onebuf_opt.wo_stl.is_null()
         && *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
-        && (p_ls == 1 as OptInt || p_ls == 2 as OptInt)
+        && (p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt)
     {
         STATUS_HEIGHT as ::core::ffi::c_int
     } else {
@@ -2396,14 +2398,14 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
         && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_stc);
-        (*wp).w_onebuf_opt.wo_stc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+        (*wp).w_onebuf_opt.wo_stc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
     }
     if (*wp).w_floating as ::core::ffi::c_int != 0
         && !(*wp).w_onebuf_opt.wo_stl.is_null()
         && *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_stl);
-        (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option as *mut ::core::ffi::c_char;
+        (*wp).w_onebuf_opt.wo_stl = empty_string_option.ptr() as *mut ::core::ffi::c_char;
         if (*wp).w_status_height > 0 as ::core::ffi::c_int {
             win_config_float(wp, (*wp).w_config);
         }
@@ -2422,7 +2424,7 @@ pub unsafe extern "C" fn win_border_width(mut wp: *mut win_T) -> ::core::ffi::c_
 #[no_mangle]
 pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinConfig) {
     let mut show_stl: bool = *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
-        && (p_ls == 1 as OptInt || p_ls == 2 as OptInt);
+        && (p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt);
     if (*wp).w_status_height != 0 && !show_stl {
         win_remove_status_line(wp, false_0 != 0);
     } else if (*wp).w_status_height == 0 as ::core::ffi::c_int
@@ -2444,15 +2446,15 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
         == kFloatRelativeCursor as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         fconfig.relative = kFloatRelativeWindow;
-        fconfig.row += (*curwin).w_wrow as ::core::ffi::c_double;
-        fconfig.col += (*curwin).w_wcol as ::core::ffi::c_double;
-        fconfig.window = (*curwin).handle as Window;
+        fconfig.row += (*curwin.get()).w_wrow as ::core::ffi::c_double;
+        fconfig.col += (*curwin.get()).w_wcol as ::core::ffi::c_double;
+        fconfig.window = (*curwin.get()).handle as Window;
     } else if fconfig.relative as ::core::ffi::c_uint
         == kFloatRelativeMouse as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let mut row: ::core::ffi::c_int = mouse_row;
-        let mut col: ::core::ffi::c_int = mouse_col;
-        let mut grid: ::core::ffi::c_int = mouse_grid;
+        let mut row: ::core::ffi::c_int = mouse_row.get();
+        let mut col: ::core::ffi::c_int = mouse_col.get();
+        let mut grid: ::core::ffi::c_int = mouse_grid.get();
         let mut mouse_win: *mut win_T =
             mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
         if !mouse_win.is_null() {
@@ -2491,19 +2493,19 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
     if !ui_has(kUIMultigrid) {
         let mut above_ch: ::core::ffi::c_int =
             if (*wp).w_config.zindex < kZIndexMessages as ::core::ffi::c_int {
-                p_ch as ::core::ffi::c_int
+                p_ch.get() as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             };
-        (*wp).w_height = if (*wp).w_height < Rows - win_border_height(wp) - above_ch {
+        (*wp).w_height = if (*wp).w_height < Rows.get() - win_border_height(wp) - above_ch {
             (*wp).w_height
         } else {
-            Rows - win_border_height(wp) - above_ch
+            Rows.get() - win_border_height(wp) - above_ch
         };
-        (*wp).w_width = if (*wp).w_width < Columns - win_border_width(wp) {
+        (*wp).w_width = if (*wp).w_width < Columns.get() - win_border_width(wp) {
             (*wp).w_width
         } else {
-            Columns - win_border_width(wp)
+            Columns.get() - win_border_width(wp)
         };
     }
     win_set_inner_size(wp, true_0 != 0);
@@ -2586,7 +2588,7 @@ unsafe extern "C" fn float_zindex_cmp(
 #[no_mangle]
 pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi::c_int) {
     let mut float_win_arr: C2Rust_Unnamed_16 = KV_INITIAL_VALUE;
-    let mut wp: *mut win_T = lastwin;
+    let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         if float_win_arr.size == float_win_arr.capacity {
             float_win_arr.capacity = if float_win_arr.capacity != 0 {
@@ -2643,7 +2645,7 @@ pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_check_anchored_floats(mut win: *mut win_T) {
-    let mut wp: *mut win_T = lastwin;
+    let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         if (*wp).w_config.relative as ::core::ffi::c_uint
             == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2656,11 +2658,11 @@ pub unsafe extern "C" fn win_check_anchored_floats(mut win: *mut win_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_float_update_statusline() {
-    let mut wp: *mut win_T = lastwin;
+    let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         let mut has_status: bool = (*wp).w_status_height > 0 as ::core::ffi::c_int;
         let mut should_show: bool = *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
-            && (p_ls == 1 as OptInt || p_ls == 2 as OptInt);
+            && (p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt);
         if should_show as ::core::ffi::c_int != has_status as ::core::ffi::c_int {
             win_config_float(wp, (*wp).w_config);
         }
@@ -2669,10 +2671,10 @@ pub unsafe extern "C" fn win_float_update_statusline() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_float_anchor_laststatus() {
-    let mut win: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut win: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !win.is_null() {
         if (*win).w_config.relative as ::core::ffi::c_uint
@@ -2685,7 +2687,7 @@ pub unsafe extern "C" fn win_float_anchor_laststatus() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_reconfig_floats() {
-    let mut wp: *mut win_T = lastwin;
+    let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         win_config_float(wp, (*wp).w_config);
         wp = (*wp).w_prev;
@@ -2696,10 +2698,10 @@ pub unsafe extern "C" fn win_float_valid(mut win: *const win_T) -> bool {
     if win.is_null() {
         return false_0 != 0;
     }
-    let mut wp: *mut win_T = if curtab == curtab {
-        firstwin
+    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+        firstwin.get()
     } else {
-        (*curtab).tp_firstwin
+        (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
         if wp == win as *mut win_T {
@@ -2711,7 +2713,7 @@ pub unsafe extern "C" fn win_float_valid(mut win: *const win_T) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_float_find_preview() -> *mut win_T {
-    let mut wp: *mut win_T = lastwin;
+    let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         if (*wp).w_float_is_info {
             return wp;
@@ -2725,7 +2727,7 @@ pub unsafe extern "C" fn win_float_find_altwin(
     mut win: *const win_T,
     mut tp: *const tabpage_T,
 ) -> *mut win_T {
-    let mut wp: *mut win_T = prevwin;
+    let mut wp: *mut win_T = prevwin.get();
     if tp.is_null() {
         return if win_valid(wp) as ::core::ffi::c_int != 0
             && wp != win as *mut win_T
@@ -2734,11 +2736,11 @@ pub unsafe extern "C" fn win_float_find_altwin(
         {
             wp
         } else {
-            firstwin
+            firstwin.get()
         };
     }
     '_c2rust_label: {
-        if tp != curtab as *const tabpage_T {
+        if tp != curtab.get() as *const tabpage_T {
         } else {
             __assert_fail(
                 b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2825,8 +2827,8 @@ pub unsafe extern "C" fn win_float_create_preview(
         hide: false_0 != 0,
         _cmdline_offset: INT_MAX,
     };
-    config.col = (*curwin).w_wcol as ::core::ffi::c_double;
-    config.row = (*curwin).w_wrow as ::core::ffi::c_double;
+    config.col = (*curwin.get()).w_wcol as ::core::ffi::c_double;
+    config.row = (*curwin.get()).w_wrow as ::core::ffi::c_double;
     config.relative = kFloatRelativeEditor;
     config.focusable = false_0 != 0;
     config.mouse = true_0 != 0;

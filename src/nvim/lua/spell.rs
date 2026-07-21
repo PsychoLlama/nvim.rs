@@ -32,7 +32,7 @@ extern "C" {
     fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_no_spell: [::core::ffi::c_char; 0];
-    static mut curwin: *mut win_T;
+    static curwin: GlobalCell<*mut win_T>;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn spell_check(
         wp: *mut win_T,
@@ -1702,14 +1702,14 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
         1 as ::core::ffi::c_int,
         ::core::ptr::null_mut::<size_t>(),
     );
-    let wo_spell_save: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_spell;
-    if (*curwin).w_onebuf_opt.wo_spell == 0 {
-        parse_spelllang(curwin);
-        (*curwin).w_onebuf_opt.wo_spell = true_0;
+    let wo_spell_save: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_spell;
+    if (*curwin.get()).w_onebuf_opt.wo_spell == 0 {
+        parse_spelllang(curwin.get());
+        (*curwin.get()).w_onebuf_opt.wo_spell = true_0;
     }
-    if *(*(*curwin).w_s).b_p_spl as ::core::ffi::c_int == NUL {
+    if *(*(*curwin.get()).w_s).b_p_spl as ::core::ffi::c_int == NUL {
         emsg(gettext(&raw const e_no_spell as *const ::core::ffi::c_char));
-        (*curwin).w_onebuf_opt.wo_spell = wo_spell_save;
+        (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
         return 0 as ::core::ffi::c_int;
     }
     let mut attr: hlf_T = HLF_COUNT;
@@ -1721,7 +1721,7 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
     while *str as ::core::ffi::c_int != NUL {
         attr = HLF_COUNT;
         let mut len: size_t = spell_check(
-            curwin,
+            curwin.get(),
             str as *mut ::core::ffi::c_char,
             &raw mut attr,
             &raw mut capcol,
@@ -1783,7 +1783,7 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
         pos = pos.wrapping_add(len);
         capcol -= len as ::core::ffi::c_int;
     }
-    (*curwin).w_onebuf_opt.wo_spell = wo_spell_save;
+    (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
     return 1 as ::core::ffi::c_int;
 }
 static spell_functions: GlobalCell<[luaL_Reg; 2]> = GlobalCell::new([

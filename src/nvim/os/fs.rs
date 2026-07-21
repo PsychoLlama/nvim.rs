@@ -211,14 +211,14 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    static mut g_stats: nvim_stats_s;
-    static mut stdin_fd: ::core::ffi::c_int;
+    static g_stats: GlobalCell<nvim_stats_s>;
+    static stdin_fd: GlobalCell<::core::ffi::c_int>;
     fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn verbose_enter();
     fn verbose_leave();
-    static mut p_verbose: OptInt;
+    static p_verbose: GlobalCell<OptInt>;
     fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn get_past_head(path: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -806,7 +806,7 @@ static e_xattr_other: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(un
 static kLibuvSuccess: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub unsafe extern "C" fn os_chdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    if p_verbose >= 5 as OptInt {
+    if p_verbose.get() >= 5 as OptInt {
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
@@ -1410,8 +1410,8 @@ pub unsafe extern "C" fn os_dup(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn os_open_stdin_fd() -> ::core::ffi::c_int {
     let mut stdin_dup_fd: ::core::ffi::c_int = 0;
-    if stdin_fd > 0 as ::core::ffi::c_int {
-        stdin_dup_fd = stdin_fd;
+    if stdin_fd.get() > 0 as ::core::ffi::c_int {
+        stdin_dup_fd = stdin_fd.get();
     } else {
         stdin_dup_fd = os_dup(STDIN_FILENO);
     }
@@ -1773,7 +1773,7 @@ pub unsafe extern "C" fn os_fsync(mut fd: ::core::ffi::c_int) -> ::core::ffi::c_
         None,
     );
     uv_fs_req_cleanup(&raw mut req);
-    g_stats.fsync += 1;
+    (*g_stats.ptr()).fsync += 1;
     return r;
 }
 unsafe extern "C" fn os_stat(

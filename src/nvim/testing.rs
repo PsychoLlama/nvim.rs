@@ -37,7 +37,7 @@ extern "C" {
     fn garbage_collect(testing: bool) -> bool;
     fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
     fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    static mut hash_removed: ::core::ffi::c_char;
+    static hash_removed: ::core::ffi::c_char;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn msg_reset_scroll();
     fn tv_dict_alloc() -> *mut dict_T;
@@ -95,24 +95,24 @@ extern "C" {
     fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static mut Rows: ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut emsg_assert_fails_msg: *mut ::core::ffi::c_char;
-    static mut emsg_assert_fails_lnum: ::core::ffi::c_long;
-    static mut emsg_assert_fails_context: *mut ::core::ffi::c_char;
-    static mut did_emsg: ::core::ffi::c_int;
-    static mut called_vim_beep: bool;
-    static mut called_emsg: ::core::ffi::c_int;
-    static mut emsg_on_display: bool;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_wait_return: bool;
-    static mut lines_left: ::core::ffi::c_int;
-    static mut trylevel: ::core::ffi::c_int;
-    static mut suppress_errthrow: bool;
-    static mut emsg_silent: ::core::ffi::c_int;
-    static mut in_assert_fails: bool;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut got_int: bool;
+    static Rows: GlobalCell<::core::ffi::c_int>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char>;
+    static emsg_assert_fails_lnum: GlobalCell<::core::ffi::c_long>;
+    static emsg_assert_fails_context: GlobalCell<*mut ::core::ffi::c_char>;
+    static did_emsg: GlobalCell<::core::ffi::c_int>;
+    static called_vim_beep: GlobalCell<bool>;
+    static called_emsg: GlobalCell<::core::ffi::c_int>;
+    static emsg_on_display: GlobalCell<bool>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_wait_return: GlobalCell<bool>;
+    static lines_left: GlobalCell<::core::ffi::c_int>;
+    static trylevel: GlobalCell<::core::ffi::c_int>;
+    static suppress_errthrow: GlobalCell<bool>;
+    static emsg_silent: GlobalCell<::core::ffi::c_int>;
+    static in_assert_fails: GlobalCell<bool>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static got_int: GlobalCell<bool>;
     fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     static exestack: GlobalCell<garray_T>;
     fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
@@ -1179,7 +1179,9 @@ unsafe extern "C" fn fill_assert_error(
             let mut todo: ::core::ffi::c_int = (*exp_d).dv_hashtab.ht_used as ::core::ffi::c_int;
             let mut hi: *const hashitem_T = (*exp_d).dv_hashtab.ht_array;
             while todo > 0 as ::core::ffi::c_int {
-                if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                if !((*hi).hi_key.is_null()
+                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     let mut item2: *mut dictitem_T =
                         tv_dict_find(got_d, (*hi).hi_key, -1 as ptrdiff_t);
                     if item2.is_null()
@@ -1218,7 +1220,9 @@ unsafe extern "C" fn fill_assert_error(
             todo = (*got_d).dv_hashtab.ht_used as ::core::ffi::c_int;
             let mut hi_0: *const hashitem_T = (*got_d).dv_hashtab.ht_array;
             while todo > 0 as ::core::ffi::c_int {
-                if !((*hi_0).hi_key.is_null() || (*hi_0).hi_key == &raw mut hash_removed) {
+                if !((*hi_0).hi_key.is_null()
+                    || (*hi_0).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
+                {
                     let mut item2_0: *mut dictitem_T =
                         tv_dict_find(exp_d, (*hi_0).hi_key, -1 as ptrdiff_t);
                     if item2_0.is_null() {
@@ -1466,14 +1470,14 @@ unsafe extern "C" fn assert_beeps(
     let cmd: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut ret: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    called_vim_beep = false_0 != 0;
-    suppress_errthrow = true_0 != 0;
-    emsg_silent = false_0;
+    called_vim_beep.set(false_0 != 0);
+    suppress_errthrow.set(true_0 != 0);
+    emsg_silent.set(false_0);
     do_cmdline_cmd(cmd);
     if if no_beep as ::core::ffi::c_int != 0 {
-        called_vim_beep as ::core::ffi::c_int
+        called_vim_beep.get() as ::core::ffi::c_int
     } else {
-        !called_vim_beep as ::core::ffi::c_int
+        !called_vim_beep.get() as ::core::ffi::c_int
     } != 0
     {
         let mut ga: garray_T = garray_T {
@@ -1502,8 +1506,8 @@ unsafe extern "C" fn assert_beeps(
         ga_clear(&raw mut ga);
         ret = 1 as ::core::ffi::c_int;
     }
-    suppress_errthrow = false_0 != 0;
-    emsg_on_display = false_0 != 0;
+    suppress_errthrow.set(false_0 != 0);
+    emsg_on_display.set(false_0 != 0);
     return ret;
 }
 #[no_mangle]
@@ -1544,7 +1548,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
     if fname1.is_null() || fname2.is_null() {
         return 0 as ::core::ffi::c_int;
     }
-    IObuff[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+    (*IObuff.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     let mut IObufflen: size_t = 0 as size_t;
     let fd1: *mut FILE = os_fopen(fname1, READBIN.as_ptr());
     let mut line1: [::core::ffi::c_char; 200] = [0; 200];
@@ -1552,7 +1556,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
     let mut lineidx: ptrdiff_t = 0 as ptrdiff_t;
     if fd1.is_null() {
         IObufflen = vim_snprintf_safelen(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
             &raw const e_cant_read_file_str as *const ::core::ffi::c_char,
             fname1,
@@ -1562,7 +1566,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
         if fd2.is_null() {
             fclose(fd1);
             IObufflen = vim_snprintf_safelen(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
                 &raw const e_cant_read_file_str as *const ::core::ffi::c_char,
                 fname2,
@@ -1576,7 +1580,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                 if c1 == EOF {
                     if c2 != EOF {
                         IObufflen = xstrlcpy(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             b"first file is shorter\0".as_ptr() as *const ::core::ffi::c_char,
                             IOSIZE as size_t,
                         );
@@ -1584,7 +1588,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                     break;
                 } else if c2 == EOF {
                     IObufflen = xstrlcpy(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IObuff.ptr() as *mut ::core::ffi::c_char,
                         b"second file is shorter\0".as_ptr() as *const ::core::ffi::c_char,
                         IOSIZE as size_t,
                     );
@@ -1595,7 +1599,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                     lineidx += 1;
                     if c1 != c2 {
                         IObufflen = vim_snprintf_safelen(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                            IObuff.ptr() as *mut ::core::ffi::c_char,
                             IOSIZE as size_t,
                             b"difference at byte %ld, line %ld\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -1662,7 +1666,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
         }
         ga_concat_len(
             &raw mut ga,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             IObufflen,
         );
         if lineidx > 0 as ptrdiff_t {
@@ -1775,8 +1779,8 @@ pub unsafe extern "C" fn f_assert_fails(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    let save_trylevel: ::core::ffi::c_int = trylevel;
-    let called_emsg_before: ::core::ffi::c_int = called_emsg;
+    let save_trylevel: ::core::ffi::c_int = trylevel.get();
+    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     let mut wrong_arg_msg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if tv_check_for_string_or_number_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -1793,17 +1797,17 @@ pub unsafe extern "C" fn f_assert_fails(
     {
         return;
     }
-    trylevel = 0 as ::core::ffi::c_int;
-    suppress_errthrow = true_0 != 0;
-    in_assert_fails = true_0 != 0;
-    no_wait_return += 1;
+    trylevel.set(0 as ::core::ffi::c_int);
+    suppress_errthrow.set(true_0 != 0);
+    in_assert_fails.set(true_0 != 0);
+    (*no_wait_return.ptr()) += 1;
     let cmd: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     do_cmdline_cmd(cmd);
-    trylevel = save_trylevel;
-    suppress_errthrow = false_0 != 0;
+    trylevel.set(save_trylevel);
+    suppress_errthrow.set(false_0 != 0);
     '_theend: {
-        if called_emsg == called_emsg_before {
+        if called_emsg.get() == called_emsg_before {
             prepare_assert_error(&raw mut ga);
             ga_concat_len(
                 &raw mut ga,
@@ -1824,10 +1828,11 @@ pub unsafe extern "C" fn f_assert_fails(
                 ::core::ptr::null::<::core::ffi::c_char>();
             let mut error_found: bool = false_0 != 0;
             let mut error_found_index: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            let mut actual: *mut ::core::ffi::c_char = (if emsg_assert_fails_msg.is_null() {
+            let mut actual: *mut ::core::ffi::c_char = (if (*emsg_assert_fails_msg.ptr()).is_null()
+            {
                 b"[unknown]\0".as_ptr() as *const ::core::ffi::c_char
             } else {
-                emsg_assert_fails_msg as *const ::core::ffi::c_char
+                emsg_assert_fails_msg.get() as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
             if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -1906,7 +1911,7 @@ pub unsafe extern "C" fn f_assert_fails(
                         && (*argvars.offset(3 as ::core::ffi::c_int as isize))
                             .vval
                             .v_number
-                            != emsg_assert_fails_lnum as varnumber_T
+                            != emsg_assert_fails_lnum.get() as varnumber_T
                     {
                         error_found = true_0 != 0;
                         error_found_index = 3 as ::core::ffi::c_int;
@@ -1931,7 +1936,7 @@ pub unsafe extern "C" fn f_assert_fails(
                                 (*argvars.offset(4 as ::core::ffi::c_int as isize))
                                     .vval
                                     .v_string,
-                                emsg_assert_fails_context,
+                                emsg_assert_fails_context.get(),
                                 false_0 != 0,
                             ) == 0
                         {
@@ -1950,10 +1955,10 @@ pub unsafe extern "C" fn f_assert_fails(
                 prepare_assert_error(&raw mut ga);
                 if error_found_index == 3 as ::core::ffi::c_int {
                     actual_tv.v_type = VAR_NUMBER;
-                    actual_tv.vval.v_number = emsg_assert_fails_lnum as varnumber_T;
+                    actual_tv.vval.v_number = emsg_assert_fails_lnum.get() as varnumber_T;
                 } else if error_found_index == 4 as ::core::ffi::c_int {
                     actual_tv.v_type = VAR_STRING;
-                    actual_tv.vval.v_string = emsg_assert_fails_context;
+                    actual_tv.vval.v_string = emsg_assert_fails_context.get();
                 } else {
                     actual_tv.v_type = VAR_STRING;
                     actual_tv.vval.v_string = actual;
@@ -1978,19 +1983,19 @@ pub unsafe extern "C" fn f_assert_fails(
             }
         }
     }
-    trylevel = save_trylevel;
-    suppress_errthrow = false_0 != 0;
-    in_assert_fails = false_0 != 0;
-    did_emsg = false_0;
-    got_int = false_0 != 0;
-    msg_col = 0 as ::core::ffi::c_int;
-    no_wait_return -= 1;
-    need_wait_return = false_0 != 0;
-    emsg_on_display = false_0 != 0;
+    trylevel.set(save_trylevel);
+    suppress_errthrow.set(false_0 != 0);
+    in_assert_fails.set(false_0 != 0);
+    did_emsg.set(false_0);
+    got_int.set(false_0 != 0);
+    msg_col.set(0 as ::core::ffi::c_int);
+    (*no_wait_return.ptr()) -= 1;
+    need_wait_return.set(false_0 != 0);
+    emsg_on_display.set(false_0 != 0);
     msg_reset_scroll();
-    lines_left = Rows;
+    lines_left.set(Rows.get());
     let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut emsg_assert_fails_msg as *mut *mut ::core::ffi::c_void;
+        emsg_assert_fails_msg.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;

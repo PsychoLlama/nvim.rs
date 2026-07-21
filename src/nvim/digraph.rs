@@ -15,9 +15,9 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mut p_enc: *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_dg: ::core::ffi::c_int;
+    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_dg: GlobalCell<::core::ffi::c_int>;
     fn vim_snprintf(
         str: *mut ::core::ffi::c_char,
         str_m: size_t,
@@ -75,15 +75,15 @@ extern "C" {
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn plain_vgetc() -> ::core::ffi::c_int;
-    static mut Columns: ::core::ffi::c_int;
-    static mut cmdline_star: ::core::ffi::c_int;
-    static mut msg_col: ::core::ffi::c_int;
-    static mut emsg_skip: ::core::ffi::c_int;
-    static mut curwin: *mut win_T;
-    static mut curbuf: *mut buf_T;
-    static mut no_mapping: ::core::ffi::c_int;
-    static mut allow_keys: ::core::ffi::c_int;
-    static mut got_int: bool;
+    static Columns: GlobalCell<::core::ffi::c_int>;
+    static cmdline_star: GlobalCell<::core::ffi::c_int>;
+    static msg_col: GlobalCell<::core::ffi::c_int>;
+    static emsg_skip: GlobalCell<::core::ffi::c_int>;
+    static curwin: GlobalCell<*mut win_T>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static no_mapping: GlobalCell<::core::ffi::c_int>;
+    static allow_keys: GlobalCell<::core::ffi::c_int>;
+    static got_int: GlobalCell<bool>;
     fn do_map(
         maptype: ::core::ffi::c_int,
         arg: *mut ::core::ffi::c_char,
@@ -9424,7 +9424,7 @@ pub unsafe extern "C" fn do_digraph(mut c: ::core::ffi::c_int) -> ::core::ffi::c
     static lastchar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     if c == -1 as ::core::ffi::c_int {
         backspaced.set(-1 as ::core::ffi::c_int);
-    } else if p_dg != 0 {
+    } else if p_dg.get() != 0 {
         if backspaced.get() >= 0 as ::core::ffi::c_int {
             c = digraph_get(backspaced.get(), c, false_0 != 0);
         }
@@ -9472,11 +9472,11 @@ pub unsafe extern "C" fn get_digraph_for_char(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_digraph(mut cmdline: bool) -> ::core::ffi::c_int {
-    no_mapping += 1;
-    allow_keys += 1;
+    (*no_mapping.ptr()) += 1;
+    (*allow_keys.ptr()) += 1;
     let mut c: ::core::ffi::c_int = plain_vgetc();
-    no_mapping -= 1;
-    allow_keys -= 1;
+    (*no_mapping.ptr()) -= 1;
+    (*allow_keys.ptr()) -= 1;
     if c == ESC {
         return NUL;
     }
@@ -9486,18 +9486,18 @@ pub unsafe extern "C" fn get_digraph(mut cmdline: bool) -> ::core::ffi::c_int {
     if cmdline {
         if char2cells(c) == 1 as ::core::ffi::c_int
             && c < 128 as ::core::ffi::c_int
-            && cmdline_star == 0 as ::core::ffi::c_int
+            && cmdline_star.get() == 0 as ::core::ffi::c_int
         {
             putcmdline(c as ::core::ffi::c_char, true_0 != 0);
         }
     } else {
         add_to_showcmd(c);
     }
-    no_mapping += 1;
-    allow_keys += 1;
+    (*no_mapping.ptr()) += 1;
+    (*allow_keys.ptr()) += 1;
     let mut cc: ::core::ffi::c_int = plain_vgetc();
-    no_mapping -= 1;
-    allow_keys -= 1;
+    (*no_mapping.ptr()) -= 1;
+    (*allow_keys.ptr()) -= 1;
     if cc != ESC {
         return digraph_get(c, cc, true_0 != 0);
     }
@@ -9637,7 +9637,7 @@ pub unsafe extern "C" fn putdigraph(mut str: *mut ::core::ffi::c_char) {
     }
 }
 unsafe extern "C" fn digraph_header(mut msg: *const ::core::ffi::c_char) {
-    if msg_col > 0 as ::core::ffi::c_int {
+    if msg_col.get() > 0 as ::core::ffi::c_int {
         msg_putchar('\n' as ::core::ffi::c_int);
     }
     msg_outtrans(msg, HLF_CM as ::core::ffi::c_int, false_0 != 0);
@@ -9649,7 +9649,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_putchar('\n' as ::core::ffi::c_int);
     let mut dp: *const digr_T = digraphdefault.ptr() as *mut digr_T;
-    while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int {
+    while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int.get() {
         let mut tmp: digr_T = digr_T {
             char1: 0,
             char2: 0,
@@ -9677,7 +9677,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
     }
     dp = (*user_digraphs.ptr()).ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*user_digraphs.ptr()).ga_len && !got_int {
+    while i < (*user_digraphs.ptr()).ga_len && !got_int.get() {
         if previous >= 0 as ::core::ffi::c_int && use_headers as ::core::ffi::c_int != 0 {
             digraph_header(gettext(b"Custom\0".as_ptr() as *const ::core::ffi::c_char));
         }
@@ -9711,7 +9711,7 @@ pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *
     let mut dp: *const digr_T = ::core::ptr::null::<digr_T>();
     if list_all {
         dp = digraphdefault.ptr() as *mut digr_T;
-        while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int {
+        while (*dp).char1 as ::core::ffi::c_int != NUL && !got_int.get() {
             let mut tmp: digr_T = digr_T {
                 char1: 0,
                 char2: 0,
@@ -9734,7 +9734,7 @@ pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *
     }
     dp = (*user_digraphs.ptr()).ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*user_digraphs.ptr()).ga_len && !got_int {
+    while i < (*user_digraphs.ptr()).ga_len && !got_int.get() {
         digraph_getlist_appendpair(dp, (*rettv).vval.v_list);
         dp = dp.offset(1);
         i += 1;
@@ -9872,11 +9872,11 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
         }
         *previous = (*dp).result;
     }
-    if msg_col > Columns - list_width {
+    if msg_col.get() > Columns.get() - list_width {
         msg_putchar('\n' as ::core::ffi::c_int);
     }
-    if msg_col % list_width != 0 as ::core::ffi::c_int {
-        msg_advance((msg_col / list_width + 1 as ::core::ffi::c_int) * list_width);
+    if msg_col.get() % list_width != 0 as ::core::ffi::c_int {
+        msg_advance((msg_col.get() / list_width + 1 as ::core::ffi::c_int) * list_width);
     }
     let mut p: *mut ::core::ffi::c_char =
         (&raw mut buf as *mut ::core::ffi::c_char).offset(0 as ::core::ffi::c_int as isize);
@@ -10137,29 +10137,29 @@ pub unsafe extern "C" fn f_digraph_setlist(
 }
 #[no_mangle]
 pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
-    (*curbuf).b_kmap_state =
-        ((*curbuf).b_kmap_state as ::core::ffi::c_int & !KEYMAP_INIT) as int16_t;
-    if *(*curbuf).b_p_keymap as ::core::ffi::c_int == NUL {
+    (*curbuf.get()).b_kmap_state =
+        ((*curbuf.get()).b_kmap_state as ::core::ffi::c_int & !KEYMAP_INIT) as int16_t;
+    if *(*curbuf.get()).b_p_keymap as ::core::ffi::c_int == NUL {
         keymap_unload();
         do_cmdline_cmd(b"unlet! b:keymap_name\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
-        let mut buflen: size_t = strlen((*curbuf).b_p_keymap)
-            .wrapping_add(strlen(p_enc))
+        let mut buflen: size_t = strlen((*curbuf.get()).b_p_keymap)
+            .wrapping_add(strlen(p_enc.get()))
             .wrapping_add(14 as size_t);
         let mut buf: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
         vim_snprintf(
             buf,
             buflen,
             b"keymap/%s_%s.vim\0".as_ptr() as *const ::core::ffi::c_char,
-            (*curbuf).b_p_keymap,
-            p_enc,
+            (*curbuf.get()).b_p_keymap,
+            p_enc.get(),
         );
         if source_runtime(buf, 0 as ::core::ffi::c_int) == FAIL {
             vim_snprintf(
                 buf,
                 buflen,
                 b"keymap/%s.vim\0".as_ptr() as *const ::core::ffi::c_char,
-                (*curbuf).b_p_keymap,
+                (*curbuf.get()).b_p_keymap,
             );
             if source_runtime(buf, 0 as ::core::ffi::c_int) == FAIL {
                 xfree(buf as *mut ::core::ffi::c_void);
@@ -10174,7 +10174,7 @@ pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
 #[no_mangle]
 pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
     let mut buf: [::core::ffi::c_char; 211] = [0; 211];
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo;
+    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
     if !getline_equal(
         (*eap).ea_getline,
         (*eap).cookie,
@@ -10195,13 +10195,13 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
         return;
     }
     keymap_unload();
-    (*curbuf).b_kmap_state = 0 as int16_t;
+    (*curbuf.get()).b_kmap_state = 0 as int16_t;
     ga_init(
-        &raw mut (*curbuf).b_kmap_ga,
+        &raw mut (*curbuf.get()).b_kmap_ga,
         ::core::mem::size_of::<kmap_T>() as ::core::ffi::c_int,
         20 as ::core::ffi::c_int,
     );
-    p_cpo = b"C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    p_cpo.set(b"C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
     loop {
         let mut line: *mut ::core::ffi::c_char =
             (*eap).ea_getline.expect("non-null function pointer")(
@@ -10217,7 +10217,7 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
         if *p as ::core::ffi::c_int != '"' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
         {
             let mut kp: *mut kmap_T = ga_append_via_ptr(
-                &raw mut (*curbuf).b_kmap_ga,
+                &raw mut (*curbuf.get()).b_kmap_ga,
                 ::core::mem::size_of::<kmap_T>(),
             ) as *mut kmap_T;
             let mut s: *mut ::core::ffi::c_char = skiptowhite(p);
@@ -10238,19 +10238,19 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
                 }
                 xfree((*kp).from as *mut ::core::ffi::c_void);
                 xfree((*kp).to as *mut ::core::ffi::c_void);
-                (*curbuf).b_kmap_ga.ga_len -= 1;
+                (*curbuf.get()).b_kmap_ga.ga_len -= 1;
             }
         }
         xfree(line as *mut ::core::ffi::c_void);
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*curbuf).b_kmap_ga.ga_len {
+    while i < (*curbuf.get()).b_kmap_ga.ga_len {
         vim_snprintf(
             &raw mut buf as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 211]>(),
             b"<buffer> %s %s\0".as_ptr() as *const ::core::ffi::c_char,
-            (*((*curbuf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize)).from,
-            (*((*curbuf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize)).to,
+            (*((*curbuf.get()).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize)).from,
+            (*((*curbuf.get()).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize)).to,
         );
         do_map(
             MAPTYPE_MAP as ::core::ffi::c_int,
@@ -10260,9 +10260,9 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
         );
         i += 1;
     }
-    p_cpo = save_cpo;
-    (*curbuf).b_kmap_state =
-        ((*curbuf).b_kmap_state as ::core::ffi::c_int | KEYMAP_LOADED) as int16_t;
+    p_cpo.set(save_cpo);
+    (*curbuf.get()).b_kmap_state =
+        ((*curbuf.get()).b_kmap_state as ::core::ffi::c_int | KEYMAP_LOADED) as int16_t;
     status_redraw_curbuf();
 }
 pub const KMAP_LLEN: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
@@ -10278,14 +10278,14 @@ pub unsafe extern "C" fn keymap_ga_clear(mut kmap_ga: *mut garray_T) {
 }
 unsafe extern "C" fn keymap_unload() {
     let mut buf: [::core::ffi::c_char; 30] = [0; 30];
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo;
-    if (*curbuf).b_kmap_state as ::core::ffi::c_int & KEYMAP_LOADED == 0 {
+    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
+    if (*curbuf.get()).b_kmap_state as ::core::ffi::c_int & KEYMAP_LOADED == 0 {
         return;
     }
-    p_cpo = b"C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    let mut kp: *mut kmap_T = (*curbuf).b_kmap_ga.ga_data as *mut kmap_T;
+    p_cpo.set(b"C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
+    let mut kp: *mut kmap_T = (*curbuf.get()).b_kmap_ga.ga_data as *mut kmap_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*curbuf).b_kmap_ga.ga_len {
+    while i < (*curbuf.get()).b_kmap_ga.ga_len {
         vim_snprintf(
             &raw mut buf as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
@@ -10300,11 +10300,11 @@ unsafe extern "C" fn keymap_unload() {
         );
         i += 1;
     }
-    keymap_ga_clear(&raw mut (*curbuf).b_kmap_ga);
-    p_cpo = save_cpo;
-    ga_clear(&raw mut (*curbuf).b_kmap_ga);
-    (*curbuf).b_kmap_state =
-        ((*curbuf).b_kmap_state as ::core::ffi::c_int & !KEYMAP_LOADED) as int16_t;
+    keymap_ga_clear(&raw mut (*curbuf.get()).b_kmap_ga);
+    p_cpo.set(save_cpo);
+    ga_clear(&raw mut (*curbuf.get()).b_kmap_ga);
+    (*curbuf.get()).b_kmap_state =
+        ((*curbuf.get()).b_kmap_state as ::core::ffi::c_int & !KEYMAP_LOADED) as int16_t;
     status_redraw_curbuf();
 }
 #[no_mangle]
@@ -10318,22 +10318,22 @@ pub unsafe extern "C" fn get_keymap_str(
     if (*(*wp).w_buffer).b_p_iminsert != B_IMODE_LMAP as OptInt {
         return 0 as ::core::ffi::c_int;
     }
-    let mut old_curbuf: *mut buf_T = curbuf;
-    let mut old_curwin: *mut win_T = curwin;
+    let mut old_curbuf: *mut buf_T = curbuf.get();
+    let mut old_curwin: *mut win_T = curwin.get();
     let mut to_evaluate: [::core::ffi::c_char; 14] =
         ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"b:keymap_name\0");
-    curbuf = (*wp).w_buffer;
-    curwin = wp;
-    emsg_skip += 1;
+    curbuf.set((*wp).w_buffer);
+    curwin.set(wp);
+    (*emsg_skip.ptr()) += 1;
     p = eval_to_string(
         &raw mut to_evaluate as *mut ::core::ffi::c_char,
         false_0 != 0,
         false_0 != 0,
     );
     let mut s: *mut ::core::ffi::c_char = p;
-    emsg_skip -= 1;
-    curbuf = old_curbuf;
-    curwin = old_curwin;
+    (*emsg_skip.ptr()) -= 1;
+    curbuf.set(old_curbuf);
+    curwin.set(old_curwin);
     if p.is_null() || *p as ::core::ffi::c_int == NUL {
         if (*(*wp).w_buffer).b_kmap_state as ::core::ffi::c_int & KEYMAP_LOADED != 0 {
             p = (*(*wp).w_buffer).b_p_keymap;

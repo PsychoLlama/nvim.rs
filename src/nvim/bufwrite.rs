@@ -115,16 +115,16 @@ extern "C" {
         buf: *mut ::core::ffi::c_void,
         bufsize: size_t,
     ) -> ssize_t;
-    static mut msg_scroll: ::core::ffi::c_int;
-    static mut no_wait_return: ::core::ffi::c_int;
-    static mut need_maketitle: bool;
-    static mut curbuf: *mut buf_T;
-    static mut exiting: bool;
-    static mut ex_no_reprint: bool;
-    static mut cmdmod: cmdmod_T;
-    static mut msg_silent: ::core::ffi::c_int;
-    static mut IObuff: [::core::ffi::c_char; 1025];
-    static mut got_int: bool;
+    static msg_scroll: GlobalCell<::core::ffi::c_int>;
+    static no_wait_return: GlobalCell<::core::ffi::c_int>;
+    static need_maketitle: GlobalCell<bool>;
+    static curbuf: GlobalCell<*mut buf_T>;
+    static exiting: GlobalCell<bool>;
+    static ex_no_reprint: GlobalCell<bool>;
+    static cmdmod: GlobalCell<cmdmod_T>;
+    static msg_silent: GlobalCell<::core::ffi::c_int>;
+    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
+    static got_int: GlobalCell<bool>;
     fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len_len(
@@ -170,15 +170,15 @@ extern "C" {
         maxlen: size_t,
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
-    static mut p_bk: ::core::ffi::c_int;
-    static mut p_bdir: *mut ::core::ffi::c_char;
-    static mut p_bex: *mut ::core::ffi::c_char;
-    static mut p_bsk: *mut ::core::ffi::c_char;
-    static mut p_ccv: *mut ::core::ffi::c_char;
-    static mut p_cpo: *mut ::core::ffi::c_char;
-    static mut p_fs: ::core::ffi::c_int;
-    static mut p_pm: *mut ::core::ffi::c_char;
-    static mut p_wb: ::core::ffi::c_int;
+    static p_bk: GlobalCell<::core::ffi::c_int>;
+    static p_bdir: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bex: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_bsk: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_ccv: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_fs: GlobalCell<::core::ffi::c_int>;
+    static p_pm: GlobalCell<*mut ::core::ffi::c_char>;
+    static p_wb: GlobalCell<::core::ffi::c_int>;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_nodetype(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn os_open(
@@ -3266,8 +3266,8 @@ unsafe extern "C" fn check_mtime(
             as ::core::ffi::c_int
             != 0
     {
-        msg_scroll = true_0;
-        msg_silent = 0 as ::core::ffi::c_int;
+        msg_scroll.set(true_0);
+        msg_silent.set(0 as ::core::ffi::c_int);
         msg(
             gettext(
                 b"WARNING: The file has been changed since reading it!!!\0".as_ptr()
@@ -3281,7 +3281,7 @@ unsafe extern "C" fn check_mtime(
         {
             return FAIL;
         }
-        msg_scroll = false_0;
+        msg_scroll.set(false_0);
     }
     return OK;
 }
@@ -3321,7 +3321,7 @@ unsafe extern "C" fn buf_write_do_autocmds(
     orig_end: pos_T,
 ) -> ::core::ffi::c_int {
     let mut old_line_count: linenr_T = (*buf).b_ml.ml_line_count;
-    let mut msg_save: ::core::ffi::c_int = msg_scroll;
+    let mut msg_save: ::core::ffi::c_int = msg_scroll.get();
     let mut aco: aco_save_T = aco_save_T {
         use_aucmd_win_idx: 0,
         save_curwin_handle: 0,
@@ -3358,12 +3358,12 @@ unsafe extern "C" fn buf_write_do_autocmds(
             sfname,
             sfname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
             eap,
         );
         if !did_cmd {
             if overwriting as ::core::ffi::c_int != 0
-                && bt_nofilename(curbuf) as ::core::ffi::c_int != 0
+                && bt_nofilename(curbuf.get()) as ::core::ffi::c_int != 0
             {
                 nofile_err = true_0 != 0;
             } else {
@@ -3372,7 +3372,7 @@ unsafe extern "C" fn buf_write_do_autocmds(
                     sfname,
                     sfname,
                     false_0 != 0,
-                    curbuf,
+                    curbuf.get(),
                     eap,
                 );
             }
@@ -3383,24 +3383,37 @@ unsafe extern "C" fn buf_write_do_autocmds(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             sfname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
             eap,
         );
     } else if reset_changed as ::core::ffi::c_int != 0 && whole as ::core::ffi::c_int != 0 {
         let mut was_changed: bool = curbufIsChanged();
-        did_cmd =
-            apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false_0 != 0, curbuf, eap);
+        did_cmd = apply_autocmds_exarg(
+            EVENT_BUFWRITECMD,
+            sfname,
+            sfname,
+            false_0 != 0,
+            curbuf.get(),
+            eap,
+        );
         if did_cmd {
             if was_changed as ::core::ffi::c_int != 0 && !curbufIsChanged() {
-                u_unchanged(curbuf);
-                u_update_save_nr(curbuf);
+                u_unchanged(curbuf.get());
+                u_update_save_nr(curbuf.get());
             }
         } else if overwriting as ::core::ffi::c_int != 0
-            && bt_nofilename(curbuf) as ::core::ffi::c_int != 0
+            && bt_nofilename(curbuf.get()) as ::core::ffi::c_int != 0
         {
             nofile_err = true_0 != 0;
         } else {
-            apply_autocmds_exarg(EVENT_BUFWRITEPRE, sfname, sfname, false_0 != 0, curbuf, eap);
+            apply_autocmds_exarg(
+                EVENT_BUFWRITEPRE,
+                sfname,
+                sfname,
+                false_0 != 0,
+                curbuf.get(),
+                eap,
+            );
         }
     } else {
         did_cmd = apply_autocmds_exarg(
@@ -3408,12 +3421,12 @@ unsafe extern "C" fn buf_write_do_autocmds(
             sfname,
             sfname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
             eap,
         );
         if !did_cmd {
             if overwriting as ::core::ffi::c_int != 0
-                && bt_nofilename(curbuf) as ::core::ffi::c_int != 0
+                && bt_nofilename(curbuf.get()) as ::core::ffi::c_int != 0
             {
                 nofile_err = true_0 != 0;
             } else {
@@ -3422,7 +3435,7 @@ unsafe extern "C" fn buf_write_do_autocmds(
                     sfname,
                     sfname,
                     false_0 != 0,
-                    curbuf,
+                    curbuf.get(),
                     eap,
                 );
             }
@@ -3438,19 +3451,20 @@ unsafe extern "C" fn buf_write_do_autocmds(
         || nofile_err as ::core::ffi::c_int != 0
         || aborting() as ::core::ffi::c_int != 0
     {
-        if !buf.is_null() && cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+        if !buf.is_null() && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0
+        {
             (*buf).b_op_start = orig_start;
             (*buf).b_op_end = orig_end;
         }
-        no_wait_return -= 1;
-        msg_scroll = msg_save;
+        (*no_wait_return.ptr()) -= 1;
+        msg_scroll.set(msg_save);
         if nofile_err {
             semsg(
                 gettext(
                     (e_no_matching_autocommands_for_buftype_str_buffer.ptr() as *const _)
                         as *const ::core::ffi::c_char,
                 ),
-                (*curbuf).b_p_bt,
+                (*curbuf.get()).b_p_bt,
             );
         }
         if nofile_err as ::core::ffi::c_int != 0 || aborting() as ::core::ffi::c_int != 0 {
@@ -3472,7 +3486,7 @@ unsafe extern "C" fn buf_write_do_autocmds(
                 && (*buf).b_changed != 0
                 && !append
                 && (overwriting as ::core::ffi::c_int != 0
-                    || !vim_strchr(p_cpo, CPO_PLUS).is_null())
+                    || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
             {
                 return FAIL;
             }
@@ -3494,8 +3508,8 @@ unsafe extern "C" fn buf_write_do_autocmds(
         } else {
             *endp -= old_line_count - (*buf).b_ml.ml_line_count;
             if *endp < start {
-                no_wait_return -= 1;
-                msg_scroll = msg_save;
+                (*no_wait_return.ptr()) -= 1;
+                msg_scroll.set(msg_save);
                 emsg(gettext(
                     b"E204: Autocommand changed number of lines in unexpected way\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3542,7 +3556,7 @@ unsafe extern "C" fn buf_write_do_post_autocmds(
         save_VIsual_active: false,
         save_prompt_insert: 0,
     };
-    (*curbuf).b_no_eol_lnum = 0 as ::core::ffi::c_int as linenr_T;
+    (*curbuf.get()).b_no_eol_lnum = 0 as ::core::ffi::c_int as linenr_T;
     aucmd_prepbuf(&raw mut aco, buf);
     if append {
         apply_autocmds_exarg(
@@ -3550,7 +3564,7 @@ unsafe extern "C" fn buf_write_do_post_autocmds(
             fname,
             fname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
             eap,
         );
     } else if filtering {
@@ -3559,13 +3573,27 @@ unsafe extern "C" fn buf_write_do_post_autocmds(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             fname,
             false_0 != 0,
-            curbuf,
+            curbuf.get(),
             eap,
         );
     } else if reset_changed as ::core::ffi::c_int != 0 && whole as ::core::ffi::c_int != 0 {
-        apply_autocmds_exarg(EVENT_BUFWRITEPOST, fname, fname, false_0 != 0, curbuf, eap);
+        apply_autocmds_exarg(
+            EVENT_BUFWRITEPOST,
+            fname,
+            fname,
+            false_0 != 0,
+            curbuf.get(),
+            eap,
+        );
     } else {
-        apply_autocmds_exarg(EVENT_FILEWRITEPOST, fname, fname, false_0 != 0, curbuf, eap);
+        apply_autocmds_exarg(
+            EVENT_FILEWRITEPOST,
+            fname,
+            fname,
+            false_0 != 0,
+            curbuf.get(),
+            eap,
+        );
     }
     aucmd_restbuf(&raw mut aco);
 }
@@ -3608,7 +3636,7 @@ unsafe extern "C" fn emit_err(mut e: *mut Error_T) {
             semsg(
                 b"%s: %s%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 (*e).num,
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 (*e).msg,
                 uv_strerror((*e).arg),
             );
@@ -3616,7 +3644,7 @@ unsafe extern "C" fn emit_err(mut e: *mut Error_T) {
             semsg(
                 b"%s: %s%s\0".as_ptr() as *const ::core::ffi::c_char,
                 (*e).num,
-                &raw mut IObuff as *mut ::core::ffi::c_char,
+                IObuff.ptr() as *mut ::core::ffi::c_char,
                 (*e).msg,
             );
         }
@@ -3694,7 +3722,7 @@ unsafe extern "C" fn get_fileinfo(
     if !*device && !*newfile {
         *readonly = os_file_is_writable(fname) == 0;
         if !forceit && *readonly as ::core::ffi::c_int != 0 {
-            if !vim_strchr(p_cpo, CPO_FWRITE).is_null() {
+            if !vim_strchr(p_cpo.get(), CPO_FWRITE).is_null() {
                 *err = set_err_num(
                     b"E504\0".as_ptr() as *const ::core::ffi::c_char,
                     gettext(err_readonly.get()),
@@ -3727,19 +3755,18 @@ pub unsafe extern "C" fn buf_get_backup_name(
     let mut backup: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut dir_len: size_t = copy_option_part(
         dirp,
-        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     let mut p: *mut ::core::ffi::c_char =
-        (&raw mut IObuff as *mut ::core::ffi::c_char).offset(dir_len as isize);
-    if **dirp as ::core::ffi::c_int == NUL && !os_isdir(&raw mut IObuff as *mut ::core::ffi::c_char)
-    {
+        (IObuff.ptr() as *mut ::core::ffi::c_char).offset(dir_len as isize);
+    if **dirp as ::core::ffi::c_int == NUL && !os_isdir(IObuff.ptr() as *mut ::core::ffi::c_char) {
         let mut ret: ::core::ffi::c_int = 0;
         let mut failed_dir: *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<::core::ffi::c_char>();
         ret = os_mkdir_recurse(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             0o755 as int32_t,
             &raw mut failed_dir,
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
@@ -3757,11 +3784,11 @@ pub unsafe extern "C" fn buf_get_backup_name(
         }
     }
     if dir_len > 1 as size_t
-        && after_pathsep(&raw mut IObuff as *mut ::core::ffi::c_char, p) != 0
+        && after_pathsep(IObuff.ptr() as *mut ::core::ffi::c_char, p) != 0
         && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == *p.offset(-2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
     {
-        p = make_percent_swname(&raw mut IObuff as *mut ::core::ffi::c_char, p, fname);
+        p = make_percent_swname(IObuff.ptr() as *mut ::core::ffi::c_char, p, fname);
         if !p.is_null() {
             backup = modname(p, backup_ext, no_prepend_dot);
             xfree(p as *mut ::core::ffi::c_void);
@@ -3769,7 +3796,7 @@ pub unsafe extern "C" fn buf_get_backup_name(
     }
     if backup.is_null() {
         let mut rootname: *mut ::core::ffi::c_char =
-            get_file_in_dir(fname, &raw mut IObuff as *mut ::core::ffi::c_char);
+            get_file_in_dir(fname, IObuff.ptr() as *mut ::core::ffi::c_char);
         if !rootname.is_null() {
             backup = modname(rootname, backup_ext, no_prepend_dot);
             xfree(rootname as *mut ::core::ffi::c_void);
@@ -3914,14 +3941,14 @@ unsafe extern "C" fn buf_write_make_backup(
             *backup_copyp = false_0 != 0;
         }
     }
-    let mut backup_ext: *mut ::core::ffi::c_char = (if *p_bex as ::core::ffi::c_int == NUL {
+    let mut backup_ext: *mut ::core::ffi::c_char = (if *p_bex.get() as ::core::ffi::c_int == NUL {
         b".bak\0".as_ptr() as *const ::core::ffi::c_char
     } else {
-        p_bex as *const ::core::ffi::c_char
+        p_bex.get() as *const ::core::ffi::c_char
     }) as *mut ::core::ffi::c_char;
     if *backup_copyp {
         let mut some_error: bool = false_0 != 0;
-        let mut dirp: *mut ::core::ffi::c_char = p_bdir;
+        let mut dirp: *mut ::core::ffi::c_char = p_bdir.get();
         while *dirp != 0 {
             *backupp = buf_get_backup_name(fname, &raw mut dirp, no_prepend_dot, backup_ext);
             if (*backupp).is_null() {
@@ -3967,7 +3994,7 @@ unsafe extern "C" fn buf_write_make_backup(
                         xfree(*ptr_);
                         *ptr_ = NULL;
                         *ptr_;
-                    } else if p_bk == 0 {
+                    } else if p_bk.get() == 0 {
                         let mut wp: *mut ::core::ffi::c_char = (*backupp)
                             .offset(strlen(*backupp) as isize)
                             .offset(-(1 as ::core::ffi::c_int as isize))
@@ -4042,18 +4069,20 @@ unsafe extern "C" fn buf_write_make_backup(
         }
         *err = set_err(::core::ptr::null::<::core::ffi::c_char>());
     } else {
-        if file_readonly as ::core::ffi::c_int != 0 && !vim_strchr(p_cpo, CPO_FWRITE).is_null() {
+        if file_readonly as ::core::ffi::c_int != 0
+            && !vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
+        {
             *err = set_err_num(
                 b"E504\0".as_ptr() as *const ::core::ffi::c_char,
                 gettext(err_readonly.get()),
             );
             return FAIL;
         }
-        let mut dirp_0: *mut ::core::ffi::c_char = p_bdir;
+        let mut dirp_0: *mut ::core::ffi::c_char = p_bdir.get();
         while *dirp_0 != 0 {
             *backupp = buf_get_backup_name(fname, &raw mut dirp_0, no_prepend_dot, backup_ext);
             if !(*backupp).is_null() {
-                if p_bk == 0 && os_path_exists(*backupp) as ::core::ffi::c_int != 0 {
+                if p_bk.get() == 0 && os_path_exists(*backupp) as ::core::ffi::c_int != 0 {
                     let mut p: *mut ::core::ffi::c_char = (*backupp)
                         .offset(strlen(*backupp) as isize)
                         .offset(-(1 as ::core::ffi::c_int as isize))
@@ -4126,8 +4155,8 @@ pub unsafe extern "C" fn buf_write(
     let mut made_writable: bool = false;
     let mut wfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: ::core::ffi::c_int = OK;
-    let mut msg_save: ::core::ffi::c_int = msg_scroll;
-    let mut prev_got_int: bool = got_int;
+    let mut msg_save: ::core::ffi::c_int = msg_scroll.get();
+    let mut prev_got_int: bool = got_int.get();
     let mut whole: bool = start == 1 as linenr_T && end == (*buf).b_ml.ml_line_count;
     let mut write_undo_file: bool = false_0 != 0;
     let mut sha_ctx: context_sha256_T = context_sha256_T {
@@ -4171,20 +4200,20 @@ pub unsafe extern "C" fn buf_write(
     write_info.bw_iconv_fd = ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
         -1 as ::core::ffi::c_int as usize,
     );
-    ex_no_reprint = true_0 != 0;
+    ex_no_reprint.set(true_0 != 0);
     if (*buf).b_ffname.is_null()
         && reset_changed as ::core::ffi::c_int != 0
         && whole as ::core::ffi::c_int != 0
-        && buf == curbuf
+        && buf == curbuf.get()
         && !bt_nofilename(buf)
         && !filtering
-        && (!append || !vim_strchr(p_cpo, CPO_FNAMEAPP).is_null())
-        && !vim_strchr(p_cpo, CPO_FNAMEW).is_null()
+        && (!append || !vim_strchr(p_cpo.get(), CPO_FNAMEAPP).is_null())
+        && !vim_strchr(p_cpo.get(), CPO_FNAMEW).is_null()
     {
         if set_rw_fname(fname, sfname) == FAIL {
             return FAIL;
         }
-        buf = curbuf;
+        buf = curbuf.get();
     }
     if sfname.is_null() {
         sfname = fname;
@@ -4193,7 +4222,7 @@ pub unsafe extern "C" fn buf_write(
     fname = sfname;
     let mut overwriting: bool = !(*buf).b_ffname.is_null()
         && path_fnamecmp(ffname, (*buf).b_ffname) == 0 as ::core::ffi::c_int;
-    no_wait_return += 1;
+    (*no_wait_return.ptr()) += 1;
     let orig_start: pos_T = (*buf).b_op_start;
     let orig_end: pos_T = (*buf).b_op_end;
     (*buf).b_op_start.lnum = start;
@@ -4219,14 +4248,14 @@ pub unsafe extern "C" fn buf_write(
     if res != NOTDONE {
         return res;
     }
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
         (*buf).b_op_start = orig_start;
         (*buf).b_op_end = orig_end;
     }
-    if shortmess(SHM_OVER as ::core::ffi::c_int) as ::core::ffi::c_int != 0 && !exiting {
-        msg_scroll = false_0;
+    if shortmess(SHM_OVER as ::core::ffi::c_int) as ::core::ffi::c_int != 0 && !exiting.get() {
+        msg_scroll.set(false_0);
     } else {
-        msg_scroll = true_0;
+        msg_scroll.set(true_0);
     }
     if !filtering {
         filemess(
@@ -4235,7 +4264,7 @@ pub unsafe extern "C" fn buf_write(
             b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
     }
-    msg_scroll = false_0;
+    msg_scroll.set(false_0);
     let mut buffer: *mut ::core::ffi::c_char =
         verbose_try_malloc(WRITEBUFSIZE as ::core::ffi::c_int as size_t)
             as *mut ::core::ffi::c_char;
@@ -4310,18 +4339,19 @@ pub unsafe extern "C" fn buf_write(
                 if !newfile {
                     acl = os_get_acl(fname);
                 }
-                dobackup = p_wb != 0 || p_bk != 0 || *p_pm as ::core::ffi::c_int != NUL;
+                dobackup =
+                    p_wb.get() != 0 || p_bk.get() != 0 || *p_pm.get() as ::core::ffi::c_int != NUL;
                 if dobackup as ::core::ffi::c_int != 0
-                    && *p_bsk as ::core::ffi::c_int != NUL
-                    && match_file_list(p_bsk, sfname, ffname) as ::core::ffi::c_int != 0
+                    && *p_bsk.get() as ::core::ffi::c_int != NUL
+                    && match_file_list(p_bsk.get(), sfname, ffname) as ::core::ffi::c_int != 0
                 {
                     dobackup = false_0 != 0;
                 }
                 backup_copy = false_0 != 0;
-                prev_got_int = got_int;
-                got_int = false_0 != 0;
+                prev_got_int = got_int.get();
+                got_int.set(false_0 != 0);
                 (*buf).b_saving = true_0 != 0;
-                if !(append as ::core::ffi::c_int != 0 && *p_pm as ::core::ffi::c_int == NUL)
+                if !(append as ::core::ffi::c_int != 0 && *p_pm.get() as ::core::ffi::c_int == NUL)
                     && !filtering
                     && perm >= 0 as ::core::ffi::c_int
                     && dobackup as ::core::ffi::c_int != 0
@@ -4349,7 +4379,7 @@ pub unsafe extern "C" fn buf_write(
                     && perm >= 0 as ::core::ffi::c_int
                     && perm & 0o200 as ::core::ffi::c_int == 0
                     && file_info_old.stat.st_uid == getuid() as uint64_t
-                    && vim_strchr(p_cpo, CPO_FWRITE).is_null()
+                    && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
                 {
                     perm |= 0o200 as ::core::ffi::c_int;
                     os_setperm(fname, perm);
@@ -4357,10 +4387,10 @@ pub unsafe extern "C" fn buf_write(
                 }
                 if forceit as ::core::ffi::c_int != 0
                     && overwriting as ::core::ffi::c_int != 0
-                    && vim_strchr(p_cpo, CPO_KEEPRO).is_null()
+                    && vim_strchr(p_cpo.get(), CPO_KEEPRO).is_null()
                 {
                     (*buf).b_p_ro = false_0;
-                    need_maketitle = true_0 != 0;
+                    need_maketitle.set(true_0 != 0);
                     status_redraw_all();
                 }
                 end = if end < (*buf).b_ml.ml_line_count {
@@ -4376,7 +4406,7 @@ pub unsafe extern "C" fn buf_write(
                     if reset_changed as ::core::ffi::c_int != 0
                         && !newfile
                         && overwriting as ::core::ffi::c_int != 0
-                        && !(exiting as ::core::ffi::c_int != 0 && !backup.is_null())
+                        && !(exiting.get() as ::core::ffi::c_int != 0 && !backup.is_null())
                     {
                         ml_preserve(
                             buf,
@@ -4384,10 +4414,10 @@ pub unsafe extern "C" fn buf_write(
                             if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
                                 (*buf).b_p_fs
                             } else {
-                                p_fs
+                                p_fs.get()
                             } != 0,
                         );
-                        if got_int {
+                        if got_int.get() {
                             err =
                                 set_err(gettext(&raw const e_interr as *const ::core::ffi::c_char));
                             break '_restore_backup;
@@ -4451,7 +4481,7 @@ pub unsafe extern "C" fn buf_write(
                                 end = 0 as ::core::ffi::c_int as linenr_T;
                             }
                             write_info.bw_first = true_0;
-                        } else if *p_ccv as ::core::ffi::c_int != NUL {
+                        } else if *p_ccv.get() as ::core::ffi::c_int != NUL {
                             wfname = vim_tempname();
                             if wfname.is_null() {
                                 err = set_err(gettext(
@@ -4578,7 +4608,7 @@ pub unsafe extern "C" fn buf_write(
                                                 fd,
                                             );
                                             if !(forceit as ::core::ffi::c_int != 0
-                                                && vim_strchr(p_cpo, CPO_FWRITE).is_null()
+                                                && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
                                                 && perm >= 0 as ::core::ffi::c_int)
                                             {
                                                 break '_restore_backup;
@@ -4725,7 +4755,7 @@ pub unsafe extern "C" fn buf_write(
                                         nchars += bufsize - write_info.bw_len;
                                         s = buffer.offset(write_info.bw_len as isize);
                                         os_breakcheck();
-                                        if got_int {
+                                        if got_int.get() {
                                             end = 0 as ::core::ffi::c_int as linenr_T;
                                             break;
                                         }
@@ -4760,7 +4790,7 @@ pub unsafe extern "C" fn buf_write(
                                 if (if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
                                     (*buf).b_p_fs
                                 } else {
-                                    p_fs
+                                    p_fs.get()
                                 }) != 0
                                     && {
                                         error = os_fsync(fd);
@@ -4887,7 +4917,7 @@ pub unsafe extern "C" fn buf_write(
                                                 write_info.bw_conv_error_lnum,
                                             );
                                         }
-                                    } else if got_int {
+                                    } else if got_int.get() {
                                         err = set_err(gettext(
                                             &raw const e_interr as *const ::core::ffi::c_char,
                                         ));
@@ -4900,7 +4930,7 @@ pub unsafe extern "C" fn buf_write(
                                 }
                                 if !backup.is_null() {
                                     if backup_copy {
-                                        if got_int {
+                                        if got_int.get() {
                                             msg(
                                                 gettext(
                                                     &raw const e_interr
@@ -4922,10 +4952,10 @@ pub unsafe extern "C" fn buf_write(
                                 break '_fail;
                             } else {
                                 lnum -= start;
-                                no_wait_return -= 1;
+                                (*no_wait_return.ptr()) -= 1;
                                 if !filtering {
                                     add_quoted_fname(
-                                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                                        IObuff.ptr() as *mut ::core::ffi::c_char,
                                         IOSIZE as size_t,
                                         buf,
                                         fname,
@@ -4933,7 +4963,7 @@ pub unsafe extern "C" fn buf_write(
                                     let mut insert_space: bool = false_0 != 0;
                                     if write_info.bw_conv_error != 0 {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(b" CONVERSION ERROR\0".as_ptr()
                                                 as *const ::core::ffi::c_char),
                                             IOSIZE as size_t,
@@ -4941,7 +4971,7 @@ pub unsafe extern "C" fn buf_write(
                                         insert_space = true_0 != 0;
                                         if write_info.bw_conv_error_lnum != 0 as linenr_T {
                                             vim_snprintf_add(
-                                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                                 IOSIZE as size_t,
                                                 gettext(b" in line %ld;\0".as_ptr()
                                                     as *const ::core::ffi::c_char),
@@ -4950,7 +4980,7 @@ pub unsafe extern "C" fn buf_write(
                                         }
                                     } else if notconverted {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(b"[NOT converted]\0".as_ptr()
                                                 as *const ::core::ffi::c_char),
                                             IOSIZE as size_t,
@@ -4958,7 +4988,7 @@ pub unsafe extern "C" fn buf_write(
                                         insert_space = true_0 != 0;
                                     } else if converted {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(b"[converted]\0".as_ptr()
                                                 as *const ::core::ffi::c_char),
                                             IOSIZE as size_t,
@@ -4967,7 +4997,7 @@ pub unsafe extern "C" fn buf_write(
                                     }
                                     if device {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(b"[Device]\0".as_ptr()
                                                 as *const ::core::ffi::c_char),
                                             IOSIZE as size_t,
@@ -4975,7 +5005,7 @@ pub unsafe extern "C" fn buf_write(
                                         insert_space = true_0 != 0;
                                     } else if newfile {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(
                                                 b"[New]\0".as_ptr() as *const ::core::ffi::c_char
                                             ),
@@ -4985,7 +5015,7 @@ pub unsafe extern "C" fn buf_write(
                                     }
                                     if no_eol {
                                         xstrlcat(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             gettext(
                                                 b"[noeol]\0".as_ptr() as *const ::core::ffi::c_char
                                             ),
@@ -5004,7 +5034,7 @@ pub unsafe extern "C" fn buf_write(
                                     if !shortmess(SHM_WRITE as ::core::ffi::c_int) {
                                         if append {
                                             xstrlcat(
-                                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                                 if shortmess(SHM_WRI as ::core::ffi::c_int)
                                                     as ::core::ffi::c_int
                                                     != 0
@@ -5019,7 +5049,7 @@ pub unsafe extern "C" fn buf_write(
                                             );
                                         } else {
                                             xstrlcat(
-                                                &raw mut IObuff as *mut ::core::ffi::c_char,
+                                                IObuff.ptr() as *mut ::core::ffi::c_char,
                                                 if shortmess(SHM_WRI as ::core::ffi::c_int)
                                                     as ::core::ffi::c_int
                                                     != 0
@@ -5036,7 +5066,7 @@ pub unsafe extern "C" fn buf_write(
                                     }
                                     set_keep_msg(
                                         msg_progress(
-                                            &raw mut IObuff as *mut ::core::ffi::c_char,
+                                            IObuff.ptr() as *mut ::core::ffi::c_char,
                                             b"bufwrite\0".as_ptr() as *const ::core::ffi::c_char
                                                 as *mut ::core::ffi::c_char,
                                             b"success\0".as_ptr() as *const ::core::ffi::c_char
@@ -5053,7 +5083,7 @@ pub unsafe extern "C" fn buf_write(
                                     && !append
                                     && write_info.bw_conv_error == 0
                                     && (overwriting as ::core::ffi::c_int != 0
-                                        || !vim_strchr(p_cpo, CPO_PLUS).is_null())
+                                        || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
                                 {
                                     unchanged(buf, true_0 != 0, false_0 != 0);
                                     let changedtick: varnumber_T = buf_get_changedtick(buf);
@@ -5071,11 +5101,11 @@ pub unsafe extern "C" fn buf_write(
                                         (*buf).b_flags &= !BF_WRITE_MASK;
                                     }
                                 }
-                                if *p_pm as ::core::ffi::c_int != 0
+                                if *p_pm.get() as ::core::ffi::c_int != 0
                                     && dobackup as ::core::ffi::c_int != 0
                                 {
                                     let org: *mut ::core::ffi::c_char =
-                                        modname(fname, p_pm, false_0 != 0);
+                                        modname(fname, p_pm.get(), false_0 != 0);
                                     if !backup.is_null() {
                                         if org.is_null() {
                                             emsg(gettext(
@@ -5130,7 +5160,7 @@ pub unsafe extern "C" fn buf_write(
                                         xfree(org as *mut ::core::ffi::c_void);
                                     }
                                 }
-                                if p_bk == 0
+                                if p_bk.get() == 0
                                     && !backup.is_null()
                                     && write_info.bw_conv_error == 0
                                     && os_remove(backup) != 0 as ::core::ffi::c_int
@@ -5165,7 +5195,7 @@ pub unsafe extern "C" fn buf_write(
                 }
             }
         }
-        no_wait_return -= 1;
+        (*no_wait_return.ptr()) -= 1;
     }
     (*buf).b_saving = false_0 != 0;
     xfree(backup as *mut ::core::ffi::c_void);
@@ -5187,7 +5217,7 @@ pub unsafe extern "C" fn buf_write(
     os_free_acl(acl);
     if !err.msg.is_null() {
         add_quoted_fname(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IObuff.ptr() as *mut ::core::ffi::c_char,
             (IOSIZE - 100 as ::core::ffi::c_int) as size_t,
             buf,
             fname,
@@ -5219,7 +5249,7 @@ pub unsafe extern "C" fn buf_write(
             }
         }
     }
-    msg_scroll = msg_save;
+    msg_scroll.set(msg_save);
     if retval == OK && write_undo_file as ::core::ffi::c_int != 0 {
         let mut hash: [uint8_t; 32] = [0; 32];
         sha256_finish(&raw mut sha_ctx, &raw mut hash as *mut uint8_t);
@@ -5236,7 +5266,7 @@ pub unsafe extern "C" fn buf_write(
             retval = false_0;
         }
     }
-    got_int = got_int as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0;
+    got_int.set(got_int.get() as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0);
     return retval;
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
