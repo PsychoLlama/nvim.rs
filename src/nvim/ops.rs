@@ -291,7 +291,6 @@ extern "C" {
         spaces_removed: ::core::ffi::c_int,
     );
     fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
-    fn trim_to_int(x: int64_t) -> ::core::ffi::c_int;
     fn bomb_size() -> ::core::ffi::c_int;
     fn utf_char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
@@ -3351,8 +3350,8 @@ unsafe extern "C" fn get_new_sw_indent(
 ) -> int64_t {
     let mut count: int64_t = get_indent() as int64_t;
     if round {
-        let mut i: int64_t = trim_to_int(count / sw_val) as int64_t;
-        let mut j: int64_t = trim_to_int(count % sw_val) as int64_t;
+        let mut i: int64_t = crate::src::nvim::math::trim_to_int(count / sw_val) as int64_t;
+        let mut j: int64_t = crate::src::nvim::math::trim_to_int(count % sw_val) as int64_t;
         if j != 0 && left as ::core::ffi::c_int != 0 {
             amount -= 1;
         }
@@ -3441,13 +3440,13 @@ pub unsafe extern "C" fn shift_line(
     if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
         change_indent(
             INDENT_SET as ::core::ffi::c_int,
-            trim_to_int(count),
+            crate::src::nvim::math::trim_to_int(count),
             false_0,
             call_changed_bytes != 0,
         );
     } else {
         set_indent(
-            trim_to_int(count),
+            crate::src::nvim::math::trim_to_int(count),
             if call_changed_bytes != 0 {
                 SIN_CHANGED as ::core::ffi::c_int
             } else {

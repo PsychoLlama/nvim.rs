@@ -55,7 +55,6 @@ extern "C" {
     fn get_expr_indent() -> ::core::ffi::c_int;
     fn fixthisline(get_the_indent: IndentGetter);
     fn get_special_key_code(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn trim_to_int(x: int64_t) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_strnicmp(
         s1: *const ::core::ffi::c_char,
@@ -3610,7 +3609,7 @@ pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
         {
             n = -n;
         }
-        n = trim_to_int(n) as int64_t;
+        n = crate::src::nvim::math::trim_to_int(n) as int64_t;
         match *l as ::core::ffi::c_int {
             62 => {
                 (*buf).b_ind_level = n as ::core::ffi::c_int;

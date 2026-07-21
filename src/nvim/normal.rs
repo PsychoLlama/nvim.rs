@@ -441,10 +441,6 @@ extern "C" {
         begin_line: ::core::ffi::c_int,
     ) -> *mut fmark_T;
     fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
-    fn vim_append_digit_int(
-        value: *mut ::core::ffi::c_int,
-        digit: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn mb_get_class(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -7857,7 +7853,10 @@ unsafe extern "C" fn nv_z_get_count(
         {
             n /= 10 as ::core::ffi::c_int;
         } else if ascii_isdigit(nchar) {
-            if vim_append_digit_int(&raw mut n, nchar - '0' as ::core::ffi::c_int) != FAIL {
+            if crate::src::nvim::math::vim_append_digit_int(
+                &mut n,
+                nchar - '0' as ::core::ffi::c_int,
+            ) {
                 continue;
             }
             clearopbeep((*cap).oap);

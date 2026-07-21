@@ -1,6 +1,5 @@
 use ::c2rust_bitfields;
 extern "C" {
-    fn xctz(x: uint64_t) -> ::core::ffi::c_int;
     fn fill_utf8(
         codepoint: ::core::ffi::c_int,
         str: *mut ::core::ffi::c_char,
@@ -877,7 +876,8 @@ pub unsafe extern "C" fn vterm_mouse_move(
     {
         if (*state).mouse_buttons != 0 {
             let mut button: ::core::ffi::c_int =
-                xctz((*state).mouse_buttons as uint64_t) + 1 as ::core::ffi::c_int;
+                ((*state).mouse_buttons as uint64_t).trailing_zeros() as ::core::ffi::c_int
+                    + 1 as ::core::ffi::c_int;
             if button < 4 as ::core::ffi::c_int {
                 output_mouse(
                     state,

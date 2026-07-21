@@ -5066,7 +5066,6 @@
 {"symbol":"transstr_len","kind":"fn","file":"src/nvim/charset.rs","class":"internal","refs":[]}
 {"symbol":"trigger_cursorhold","kind":"fn","file":"src/nvim/autocmd.rs","class":"internal","refs":[]}
 {"symbol":"trigger_tabclosedpre","kind":"fn","file":"src/nvim/window.rs","class":"internal","refs":[]}
-{"symbol":"trim_to_int","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"trunc_string","kind":"fn","file":"src/nvim/message.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"truncate_line","kind":"fn","file":"src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"truncate_spaces","kind":"fn","file":"src/nvim/edit.rs","class":"internal","refs":[]}
@@ -5618,7 +5617,6 @@
 {"symbol":"vgetc_char","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"vgetc_mod_mask","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"vim_FullName","kind":"fn","file":"src/nvim/path.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"vim_append_digit_int","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"vim_beep","kind":"fn","file":"src/nvim/ui.rs","class":"internal","refs":[]}
 {"symbol":"vim_chdir","kind":"fn","file":"src/nvim/file_search.rs","class":"internal","refs":[]}
 {"symbol":"vim_chdirfile","kind":"fn","file":"src/nvim/file_search.rs","class":"internal","refs":[]}
@@ -5899,7 +5897,6 @@
 {"symbol":"wstream_set_write_cb","kind":"fn","file":"src/nvim/event/wstream.rs","class":"internal","refs":[]}
 {"symbol":"wstream_write","kind":"fn","file":"src/nvim/event/wstream.rs","class":"internal","refs":[]}
 {"symbol":"xcalloc","kind":"fn","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"xctz","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"xdl_blankline","kind":"fn","file":"src/xdiff/xutils.rs","class":"internal","refs":[]}
 {"symbol":"xdl_bogosqrt","kind":"fn","file":"src/xdiff/xutils.rs","class":"internal","refs":[]}
 {"symbol":"xdl_build_script","kind":"fn","file":"src/xdiff/xdiffi.rs","class":"internal","refs":[]}
@@ -5929,10 +5926,7 @@
 {"symbol":"xdl_prepare_env","kind":"fn","file":"src/xdiff/xprepare.rs","class":"internal","refs":[]}
 {"symbol":"xdl_recmatch","kind":"fn","file":"src/xdiff/xutils.rs","class":"internal","refs":[]}
 {"symbol":"xdl_recs_cmp","kind":"fn","file":"src/xdiff/xdiffi.rs","class":"internal","refs":[]}
-{"symbol":"xfpclassify","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"xfree","kind":"fn","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"xisinf","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
-{"symbol":"xisnan","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"xmalloc","kind":"fn","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"xmallocz","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"xmemcpyz","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
@@ -5940,7 +5934,6 @@
 {"symbol":"xmemdupz","kind":"fn","file":"src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"xmemrchr","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"xmemscan","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"xpopcount","kind":"fn","file":"src/nvim/math.rs","class":"internal","refs":[]}
 {"symbol":"xrealloc","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"xstpcpy","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"xstpncpy","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}

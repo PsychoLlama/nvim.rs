@@ -54,7 +54,6 @@ extern "C" {
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_printable(c: ::core::ffi::c_int) -> bool;
-    fn xfpclassify(d: ::core::ffi::c_double) -> ::core::ffi::c_int;
     fn mpack_check_buffer(packer: *mut PackerBuffer);
     fn mpack_uint64(ptr: *mut *mut ::core::ffi::c_char, i: uint64_t);
     fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
@@ -431,8 +430,6 @@ pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
 pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const FP_NAN: ::core::ffi::c_int = 0;
-pub const FP_INFINITE: ::core::ffi::c_int = 1;
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
@@ -2130,8 +2127,8 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
             }
             6 => {
                 let flt_: float_T = (*tv).vval.v_float;
-                match xfpclassify(flt_ as ::core::ffi::c_double) {
-                    FP_NAN => {
+                match flt_.classify() {
+                    ::core::num::FpCategory::Nan => {
                         ga_concat_len(
                             gap,
                             b"str2float('nan')\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2139,7 +2136,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                 .wrapping_sub(1 as size_t),
                         );
                     }
-                    FP_INFINITE => {
+                    ::core::num::FpCategory::Infinite => {
                         if flt_ < 0 as ::core::ffi::c_int as float_T {
                             ga_append(gap, '-' as uint8_t);
                         }
@@ -2839,8 +2836,8 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             let flt__0: float_T = (*val_di).di_tv.vval.v_float;
-                                            match xfpclassify(flt__0 as ::core::ffi::c_double) {
-                                                FP_NAN => {
+                                            match flt__0.classify() {
+                                                ::core::num::FpCategory::Nan => {
                                                     ga_concat_len(
                                                         gap,
                                                         b"str2float('nan')\0".as_ptr()
@@ -2852,7 +2849,7 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                                                         .wrapping_sub(1 as size_t),
                                                     );
                                                 }
-                                                FP_INFINITE => {
+                                                ::core::num::FpCategory::Infinite => {
                                                     if flt__0 < 0 as ::core::ffi::c_int as float_T {
                                                         ga_append(gap, '-' as uint8_t);
                                                     }
@@ -4276,8 +4273,8 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
             }
             6 => {
                 let flt_: float_T = (*tv).vval.v_float;
-                match xfpclassify(flt_ as ::core::ffi::c_double) {
-                    FP_NAN => {
+                match flt_.classify() {
+                    ::core::num::FpCategory::Nan => {
                         ga_concat_len(
                             gap,
                             b"str2float('nan')\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4285,7 +4282,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                 .wrapping_sub(1 as size_t),
                         );
                     }
-                    FP_INFINITE => {
+                    ::core::num::FpCategory::Infinite => {
                         if flt_ < 0 as ::core::ffi::c_int as float_T {
                             ga_append(gap, '-' as uint8_t);
                         }
@@ -4985,8 +4982,8 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             let flt__0: float_T = (*val_di).di_tv.vval.v_float;
-                                            match xfpclassify(flt__0 as ::core::ffi::c_double) {
-                                                FP_NAN => {
+                                            match flt__0.classify() {
+                                                ::core::num::FpCategory::Nan => {
                                                     ga_concat_len(
                                                         gap,
                                                         b"str2float('nan')\0".as_ptr()
@@ -4998,7 +4995,7 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                                                         .wrapping_sub(1 as size_t),
                                                     );
                                                 }
-                                                FP_INFINITE => {
+                                                ::core::num::FpCategory::Infinite => {
                                                     if flt__0 < 0 as ::core::ffi::c_int as float_T {
                                                         ga_append(gap, '-' as uint8_t);
                                                     }
@@ -6357,15 +6354,15 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
             }
             6 => {
                 let flt_: float_T = (*tv).vval.v_float;
-                match xfpclassify(flt_ as ::core::ffi::c_double) {
-                    FP_NAN => {
+                match flt_.classify() {
+                    ::core::num::FpCategory::Nan => {
                         emsg(gettext(
                             b"E474: Unable to represent NaN value in JSON\0".as_ptr()
                                 as *const ::core::ffi::c_char,
                         ));
                         return FAIL;
                     }
-                    FP_INFINITE => {
+                    ::core::num::FpCategory::Infinite => {
                         emsg(gettext(
                             b"E474: Unable to represent infinity in JSON\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -6865,8 +6862,8 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             let flt__0: float_T = (*val_di).di_tv.vval.v_float;
-                                            match xfpclassify(flt__0 as ::core::ffi::c_double) {
-                                                FP_NAN => {
+                                            match flt__0.classify() {
+                                                ::core::num::FpCategory::Nan => {
                                                     emsg(
                                                         gettext(
                                                             b"E474: Unable to represent NaN value in JSON\0".as_ptr()
@@ -6875,7 +6872,7 @@ unsafe extern "C" fn _typval_encode_json_convert_one_value(
                                                     );
                                                     return FAIL;
                                                 }
-                                                FP_INFINITE => {
+                                                ::core::num::FpCategory::Infinite => {
                                                     emsg(
                                                         gettext(
                                                             b"E474: Unable to represent infinity in JSON\0".as_ptr()

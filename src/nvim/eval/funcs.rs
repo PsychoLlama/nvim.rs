@@ -951,8 +951,6 @@ extern "C" {
     fn cleanup_jumplist(wp: *mut win_T, loadfiles: bool);
     fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T);
     fn get_global_marks(l: *mut list_T);
-    fn xisinf(d: ::core::ffi::c_double) -> ::core::ffi::c_int;
-    fn xisnan(d: ::core::ffi::c_double) -> ::core::ffi::c_int;
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -11002,11 +11000,10 @@ unsafe extern "C" fn f_isinf(
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-        && xisinf(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_float as ::core::ffi::c_double,
-        ) != 0
+        && ((*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_float as ::core::ffi::c_double)
+            .is_infinite()
     {
         (*rettv).vval.v_number = (if (*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
@@ -11027,11 +11024,10 @@ unsafe extern "C" fn f_isnan(
     (*rettv).vval.v_number = ((*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
         as ::core::ffi::c_uint
         == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-        && xisnan(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_float as ::core::ffi::c_double,
-        ) != 0) as ::core::ffi::c_int as varnumber_T;
+        && ((*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_float as ::core::ffi::c_double)
+            .is_nan()) as ::core::ffi::c_int as varnumber_T;
 }
 unsafe extern "C" fn f_id(
     mut argvars: *mut typval_T,

@@ -355,7 +355,6 @@ extern "C" {
     );
     fn keymap_array(mode: String_0, buf: *mut buf_T, arena: *mut Arena) -> Array;
     fn mark_get_global(resolve: bool, name: ::core::ffi::c_int) -> *mut xfmark_T;
-    fn xpopcount(x: uint64_t) -> ::core::ffi::c_uint;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
     fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -7597,7 +7596,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
     let mut count: ::core::ffi::c_uint = (!win.is_null() as ::core::ffi::c_int
         + !buf.is_null() as ::core::ffi::c_int)
         as ::core::ffi::c_uint;
-    if !(xpopcount((*opts).is_set__redraw_ as uint64_t) > count) {
+    if !(((*opts).is_set__redraw_ as uint64_t).count_ones() > count) {
         api_set_error(
             err,
             kErrorTypeValidation,

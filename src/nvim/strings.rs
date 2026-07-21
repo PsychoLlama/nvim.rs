@@ -178,8 +178,6 @@ extern "C" {
         p_in: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     fn mb_copy_char(fp: *mut *const ::core::ffi::c_char, tp: *mut *mut ::core::ffi::c_char);
-    fn xisinf(d: ::core::ffi::c_double) -> ::core::ffi::c_int;
-    fn xisnan(d: ::core::ffi::c_double) -> ::core::ffi::c_int;
     static utf8len_tab: [uint8_t; 256];
     fn csh_like_shell() -> ::core::ffi::c_int;
     fn fish_like_shell() -> bool;
@@ -2746,7 +2744,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             }
                             remove_trailing_zeroes = true_0 != 0;
                         }
-                        if xisinf(f_0) != 0
+                        if f_0.is_infinite()
                             || !strchr(
                                 b"fF\0".as_ptr() as *const ::core::ffi::c_char,
                                 fmt_spec as ::core::ffi::c_int,
@@ -2766,7 +2764,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             );
                             str_arg_l = strlen(&raw mut tmp as *mut ::core::ffi::c_char);
                             zero_padding = false_0 != 0;
-                        } else if xisnan(f_0) != 0 {
+                        } else if f_0.is_nan() {
                             memmove(
                                 &raw mut tmp as *mut ::core::ffi::c_char
                                     as *mut ::core::ffi::c_void,
