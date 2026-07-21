@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -47,12 +48,12 @@ unsafe extern "C" fn __bswap_64(mut __bsx: __uint64_t) -> __uint64_t {
             << 56 as ::core::ffi::c_int) as __uint64_t;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-static mut alphabet: [::core::ffi::c_char; 65] = unsafe {
+static alphabet: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\0",
     )
-};
-static mut char_to_index: [uint8_t; 256] = [
+});
+static char_to_index: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     0,
     0,
     0,
@@ -309,7 +310,7 @@ static mut char_to_index: [uint8_t; 256] = [
     0,
     0,
     0,
-];
+]);
 #[no_mangle]
 pub unsafe extern "C" fn base64_encode(
     mut src: *const ::core::ffi::c_char,
@@ -345,21 +346,21 @@ pub unsafe extern "C" fn base64_encode(
         );
         let bits_be: uint64_t = __bswap_64(bits_h as __uint64_t);
         *dest.offset(out_i.wrapping_add(0 as size_t) as isize) =
-            alphabet[(bits_be >> 58 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 58 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(1 as size_t) as isize) =
-            alphabet[(bits_be >> 52 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 52 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(2 as size_t) as isize) =
-            alphabet[(bits_be >> 46 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 46 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(3 as size_t) as isize) =
-            alphabet[(bits_be >> 40 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 40 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(4 as size_t) as isize) =
-            alphabet[(bits_be >> 34 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 34 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(5 as size_t) as isize) =
-            alphabet[(bits_be >> 28 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 28 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(6 as size_t) as isize) =
-            alphabet[(bits_be >> 22 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 22 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         *dest.offset(out_i.wrapping_add(7 as size_t) as isize) =
-            alphabet[(bits_be >> 16 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
+            (*alphabet.ptr())[(bits_be >> 16 as ::core::ffi::c_int & 0x3f as uint64_t) as usize];
         out_i = (out_i as ::core::ffi::c_ulong)
             .wrapping_add(::core::mem::size_of::<uint64_t>() as ::core::ffi::c_ulong)
             as size_t;
@@ -374,54 +375,60 @@ pub unsafe extern "C" fn base64_encode(
         );
         let bits_be_0: uint32_t = __bswap_32(bits_h_0 as __uint32_t);
         *dest.offset(out_i.wrapping_add(0 as size_t) as isize) =
-            alphabet[(bits_be_0 >> 26 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
+            (*alphabet.ptr())[(bits_be_0 >> 26 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
         *dest.offset(out_i.wrapping_add(1 as size_t) as isize) =
-            alphabet[(bits_be_0 >> 20 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
+            (*alphabet.ptr())[(bits_be_0 >> 20 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
         *dest.offset(out_i.wrapping_add(2 as size_t) as isize) =
-            alphabet[(bits_be_0 >> 14 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
+            (*alphabet.ptr())[(bits_be_0 >> 14 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
         *dest.offset(out_i.wrapping_add(3 as size_t) as isize) =
-            alphabet[(bits_be_0 >> 8 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
+            (*alphabet.ptr())[(bits_be_0 >> 8 as ::core::ffi::c_int & 0x3f as uint32_t) as usize];
         out_i = (out_i as ::core::ffi::c_ulong)
             .wrapping_add(::core::mem::size_of::<uint32_t>() as ::core::ffi::c_ulong)
             as size_t;
         src_i = src_i.wrapping_add(3 as size_t);
     }
     if src_i.wrapping_add(2 as size_t) < src_len {
-        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = alphabet
+        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = (*alphabet.ptr())
             [(*s.offset(src_i as isize) as ::core::ffi::c_int >> 2 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(1 as size_t) as isize) =
-            alphabet[((*s.offset(src_i as isize) as ::core::ffi::c_int & 0x3 as ::core::ffi::c_int)
+            (*alphabet.ptr())[((*s.offset(src_i as isize) as ::core::ffi::c_int
+                & 0x3 as ::core::ffi::c_int)
                 << 4 as ::core::ffi::c_int
                 | *s.offset(src_i.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
                     >> 4 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(2 as size_t) as isize) =
-            alphabet[((*s.offset(src_i.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+            (*alphabet.ptr())[((*s.offset(src_i.wrapping_add(1 as size_t) as isize)
+                as ::core::ffi::c_int
                 & 0xf as ::core::ffi::c_int)
                 << 2 as ::core::ffi::c_int
                 | *s.offset(src_i.wrapping_add(2 as size_t) as isize) as ::core::ffi::c_int
                     >> 6 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(3 as size_t) as isize) =
-            alphabet[(*s.offset(src_i.wrapping_add(2 as size_t) as isize) as ::core::ffi::c_int
+            (*alphabet.ptr())[(*s.offset(src_i.wrapping_add(2 as size_t) as isize)
+                as ::core::ffi::c_int
                 & 0x3f as ::core::ffi::c_int) as usize];
         out_i = out_i.wrapping_add(4 as size_t);
     } else if src_i.wrapping_add(1 as size_t) < src_len {
-        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = alphabet
+        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = (*alphabet.ptr())
             [(*s.offset(src_i as isize) as ::core::ffi::c_int >> 2 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(1 as size_t) as isize) =
-            alphabet[((*s.offset(src_i as isize) as ::core::ffi::c_int & 0x3 as ::core::ffi::c_int)
+            (*alphabet.ptr())[((*s.offset(src_i as isize) as ::core::ffi::c_int
+                & 0x3 as ::core::ffi::c_int)
                 << 4 as ::core::ffi::c_int
                 | *s.offset(src_i.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
                     >> 4 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(2 as size_t) as isize) =
-            alphabet[((*s.offset(src_i.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+            (*alphabet.ptr())[((*s.offset(src_i.wrapping_add(1 as size_t) as isize)
+                as ::core::ffi::c_int
                 & 0xf as ::core::ffi::c_int)
                 << 2 as ::core::ffi::c_int) as usize];
         out_i = out_i.wrapping_add(3 as size_t);
     } else if src_i < src_len {
-        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = alphabet
+        *dest.offset(out_i.wrapping_add(0 as size_t) as isize) = (*alphabet.ptr())
             [(*s.offset(src_i as isize) as ::core::ffi::c_int >> 2 as ::core::ffi::c_int) as usize];
         *dest.offset(out_i.wrapping_add(1 as size_t) as isize) =
-            alphabet[((*s.offset(src_i as isize) as ::core::ffi::c_int & 0x3 as ::core::ffi::c_int)
+            (*alphabet.ptr())[((*s.offset(src_i as isize) as ::core::ffi::c_int
+                & 0x3 as ::core::ffi::c_int)
                 << 4 as ::core::ffi::c_int) as usize];
         out_i = out_i.wrapping_add(2 as size_t);
     }
@@ -494,7 +501,7 @@ pub unsafe extern "C" fn base64_decode(
             leftover_i = -1 as ::core::ffi::c_int;
             while src_i < src_len {
                 let c: uint8_t = *s.offset(src_i as isize);
-                let d: uint8_t = char_to_index[c as usize];
+                let d: uint8_t = (*char_to_index.ptr())[c as usize];
                 if d as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                     if c as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
                         break '_invalid;

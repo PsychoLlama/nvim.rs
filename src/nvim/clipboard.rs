@@ -1,3 +1,4 @@
+use crate::src::nvim::global_cell::GlobalCell;
 extern "C" {
     fn __assert_fail(
         __assertion: *const ::core::ffi::c_char,
@@ -313,10 +314,11 @@ pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22;
-static mut batch_change_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut clipboard_delay_update: bool = false_0 != 0;
-static mut clipboard_needs_update: bool = false_0 != 0;
-static mut clipboard_didwarn: bool = false_0 != 0;
+static batch_change_count: GlobalCell<::core::ffi::c_int> =
+    GlobalCell::new(0 as ::core::ffi::c_int);
+static clipboard_delay_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static clipboard_needs_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static clipboard_didwarn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 #[no_mangle]
 pub unsafe extern "C" fn adjust_clipboard_name(
     mut name: *mut ::core::ffi::c_int,
@@ -336,12 +338,12 @@ pub unsafe extern "C" fn adjust_clipboard_name(
             b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
             false_0 != 0,
         ) {
-            if batch_change_count <= 1 as ::core::ffi::c_int
+            if batch_change_count.get() <= 1 as ::core::ffi::c_int
                 && !quiet
-                && (!clipboard_didwarn
+                && (!clipboard_didwarn.get()
                     || explicit_cb_reg as ::core::ffi::c_int != 0 && redirecting() == 0)
             {
-                clipboard_didwarn = true_0 != 0;
+                clipboard_didwarn.set(true_0 != 0);
                 msg(MSG_NO_CLIP.as_ptr(), 0 as ::core::ffi::c_int);
             }
         } else if explicit_cb_reg {
@@ -359,13 +361,13 @@ pub unsafe extern "C" fn adjust_clipboard_name(
                     }) as ::core::ffi::c_uint
                     != 0
             {
-                clipboard_needs_update = false_0 != 0;
+                clipboard_needs_update.set(false_0 != 0);
             }
         } else if writing as ::core::ffi::c_int != 0
-            && clipboard_delay_update as ::core::ffi::c_int != 0
+            && clipboard_delay_update.get() as ::core::ffi::c_int != 0
         {
-            clipboard_needs_update = true_0 != 0;
-        } else if !(!writing && clipboard_needs_update as ::core::ffi::c_int != 0) {
+            clipboard_needs_update.set(true_0 != 0);
+        } else if !(!writing && clipboard_needs_update.get() as ::core::ffi::c_int != 0) {
             if cb_flags & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
                 *name = if cb_flags & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint
                     != 0
@@ -609,31 +611,31 @@ pub unsafe extern "C" fn set_clipboard(mut name: ::core::ffi::c_int, mut reg: *m
 }
 #[no_mangle]
 pub unsafe extern "C" fn start_batch_changes() {
-    batch_change_count += 1;
-    if batch_change_count > 1 as ::core::ffi::c_int {
+    (*batch_change_count.ptr()) += 1;
+    if batch_change_count.get() > 1 as ::core::ffi::c_int {
         return;
     }
-    clipboard_delay_update = true_0 != 0;
+    clipboard_delay_update.set(true_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn end_batch_changes() {
-    batch_change_count -= 1;
-    if batch_change_count > 0 as ::core::ffi::c_int {
+    (*batch_change_count.ptr()) -= 1;
+    if batch_change_count.get() > 0 as ::core::ffi::c_int {
         return;
     }
-    clipboard_delay_update = false_0 != 0;
-    if clipboard_needs_update {
-        clipboard_needs_update = false_0 != 0;
+    clipboard_delay_update.set(false_0 != 0);
+    if clipboard_needs_update.get() {
+        clipboard_needs_update.set(false_0 != 0);
         set_clipboard(NUL, get_y_previous());
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn save_batch_count() -> ::core::ffi::c_int {
-    let mut save_count: ::core::ffi::c_int = batch_change_count;
-    batch_change_count = 0 as ::core::ffi::c_int;
-    clipboard_delay_update = false_0 != 0;
-    if clipboard_needs_update {
-        clipboard_needs_update = false_0 != 0;
+    let mut save_count: ::core::ffi::c_int = batch_change_count.get();
+    batch_change_count.set(0 as ::core::ffi::c_int);
+    clipboard_delay_update.set(false_0 != 0);
+    if clipboard_needs_update.get() {
+        clipboard_needs_update.set(false_0 != 0);
         set_clipboard(NUL, get_y_previous());
     }
     return save_count;
@@ -641,7 +643,7 @@ pub unsafe extern "C" fn save_batch_count() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn restore_batch_count(mut save_count: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if batch_change_count == 0 as ::core::ffi::c_int {
+        if batch_change_count.get() == 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
                 b"batch_change_count == 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -651,9 +653,9 @@ pub unsafe extern "C" fn restore_batch_count(mut save_count: ::core::ffi::c_int)
             );
         }
     };
-    batch_change_count = save_count;
-    if batch_change_count > 0 as ::core::ffi::c_int {
-        clipboard_delay_update = true_0 != 0;
+    batch_change_count.set(save_count);
+    if batch_change_count.get() > 0 as ::core::ffi::c_int {
+        clipboard_delay_update.set(true_0 != 0);
     }
 }
 #[inline]
