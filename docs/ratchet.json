@@ -1,5 +1,5 @@
 {
-  "internal_exports": 5597,
+  "internal_exports": 5595,
   "files": {
     "src/cjson/fpconv.rs": {"no_mangle": 3, "static_mut": 1, "unsafe": 8},
     "src/cjson/lua_cjson.rs": {"lines": 2747, "no_mangle": 3, "unsafe": 60},
@@ -30,7 +30,6 @@
     "src/nvim/arabic.rs": {"no_mangle": 3, "unsafe": 10},
     "src/nvim/arglist.rs": {"lines": 4022, "no_mangle": 29, "unsafe": 44},
     "src/nvim/autocmd.rs": {"lines": 9814, "no_mangle": 57, "unsafe": 102},
-    "src/nvim/base64.rs": {"no_mangle": 2, "unsafe": 5},
     "src/nvim/buffer.rs": {"lines": 8979, "no_mangle": 75, "unsafe": 109},
     "src/nvim/buffer_updates.rs": {"lines": 2522, "no_mangle": 11, "unsafe": 12},
     "src/nvim/bufwrite.rs": {"lines": 5286, "no_mangle": 2, "unsafe": 25},
@@ -102,7 +101,7 @@
     "src/nvim/linematch.rs": {"no_mangle": 2, "unsafe": 11},
     "src/nvim/log.rs": {"lines": 9312, "no_mangle": 8, "static_mut": 2, "unsafe": 19},
     "src/nvim/lua/api_wrappers.rs": {"lines": 18903, "no_mangle": 1, "unsafe": 409},
-    "src/nvim/lua/base64.rs": {"no_mangle": 1, "unsafe": 7},
+    "src/nvim/lua/base64.rs": {"no_mangle": 1, "unsafe": 6},
     "src/nvim/lua/converter.rs": {"lines": 4955, "no_mangle": 24, "unsafe": 48},
     "src/nvim/lua/executor.rs": {"lines": 225164, "no_mangle": 43, "static_mut": 1, "unsafe": 152},
     "src/nvim/lua/secure.rs": {"no_mangle": 2, "unsafe": 4},

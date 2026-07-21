@@ -234,8 +234,6 @@
 {"symbol":"backslash_halve_save","kind":"fn","file":"src/nvim/charset.rs","class":"internal","refs":[]}
 {"symbol":"backspace_until_column","kind":"fn","file":"src/nvim/edit.rs","class":"internal","refs":[]}
 {"symbol":"bangredo","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}
-{"symbol":"base64_decode","kind":"fn","file":"src/nvim/base64.rs","class":"internal","refs":[]}
-{"symbol":"base64_encode","kind":"fn","file":"src/nvim/base64.rs","class":"internal","refs":[]}
 {"symbol":"bck_word","kind":"fn","file":"src/nvim/textobject.rs","class":"internal","refs":[]}
 {"symbol":"bckend_word","kind":"fn","file":"src/nvim/textobject.rs","class":"internal","refs":[]}
 {"symbol":"beep_flush","kind":"fn","file":"src/nvim/getchar.rs","class":"internal","refs":[]}
