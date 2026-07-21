@@ -76,13 +76,13 @@ benchmark *args: build
 cargo-test *args:
   cargo test --lib {{ args }}
 
-# Regenerate the ABI ledger (docs/abi-ledger.jsonl): classifies every
+# Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.
 abi-ledger *args:
   @scripts/abi-ledger.py {{ args }}
 
-# Regenerate the ratchet baseline (docs/ratchet.json): per-file unsafe /
+# Regenerate the ratchet baseline (metrics/ratchet.json): per-file unsafe /
 # static mut / #[no_mangle] counts, file sizes (1k-line cap, current
 # offenders grandfathered), and the ledger's internal-export count may only
 # shrink. `--check` compares against the committed baseline instead.
@@ -118,7 +118,7 @@ refresh *args: fmt abi-ledger (ratchet args)
 # (see .gitconfig). Checking the ledger regenerates it, which reconstructs the
 # upstream C tree from tag v0.12.4 (scripts/prep-unit-headers.sh) — and CI
 # checks out with fetch-depth: 1 / fetch-tags: false, so the tag never resolves
-# there. The hook keeps docs/abi-ledger.jsonl current locally, which the ratchet
-# depends on: it snapshots the ledger's internal-export count and cannot tell a
-# stale ledger from a fresh one.
+# there. The hook keeps metrics/abi-ledger.jsonl current locally, which the
+# ratchet depends on: it snapshots the ledger's internal-export count and
+# cannot tell a stale ledger from a fresh one.
 minimal-ci: fmt-check (ratchet "--check") build cargo-test

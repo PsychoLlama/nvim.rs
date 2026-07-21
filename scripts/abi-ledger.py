@@ -5,7 +5,7 @@ The transpiled code exports ~6k symbols with C ABI, but only a fraction have
 consumers that resolve them *by name*. The rest keep `#[no_mangle]
 extern "C"` purely by inertia and are candidates for real Rust signatures in
 later migration phases. This script writes the ledger that tells the two
-apart (docs/abi-ledger.jsonl, one record per export, sorted by symbol —
+apart (metrics/abi-ledger.jsonl, one record per export, sorted by symbol —
 e.g. `jq -r 'select(.class == "internal") | .file'` to list de-export
 candidates per file), classifying every export as:
 
@@ -47,7 +47,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LEDGER = ROOT / "docs" / "abi-ledger.jsonl"
+LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
 FIXTURE_SO = ROOT / "target" / "bin" / "unit-fixtures.so"
 
 # Order matters: "static mut" must precede "static" or the name group would

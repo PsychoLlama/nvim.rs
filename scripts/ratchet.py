@@ -13,7 +13,7 @@ Rust source file (src/**/*.rs plus the crate roots):
               shrink or hold, never grow. New files start at the cap.
 
 plus one whole-tree metric: the number of internal-only exports in the
-committed ABI ledger (docs/abi-ledger.jsonl — `just abi-ledger --check`
+committed ABI ledger (metrics/abi-ledger.jsonl — `just abi-ledger --check`
 separately guarantees that file matches the tree).
 
 Counting is plain substring matching. That over-counts (a comment saying
@@ -21,7 +21,7 @@ Counting is plain substring matching. That over-counts (a comment saying
 baseline numbers were measured, and rustfmt (enforced by fmt-check) keeps the
 spelling canonical. The point is monotonic pressure, not precision.
 
-The baseline is committed at docs/ratchet.json (one file per line, so diffs
+The baseline is committed at metrics/ratchet.json (one file per line, so diffs
 review like the ledger's). A metric above its baseline is a violation; a
 metric below it means progress that must be locked in by regenerating the
 baseline and committing it alongside the change.
@@ -34,11 +34,11 @@ formatter is about to change.
 Usage: ratchet.py [--check] [--allow-growth]
   --check         compare the tree against the committed baseline instead of
                   writing: exit 1 if any metric grew, or if the baseline is
-                  stale (a metric shrank but docs/ratchet.json wasn't
+                  stale (a metric shrank but metrics/ratchet.json wasn't
                   regenerated).
   --allow-growth  write a baseline even though a metric grew. The override
                   for justified cases — the growth shows up in the
-                  docs/ratchet.json diff; explain it in the commit message.
+                  metrics/ratchet.json diff; explain it in the commit message.
 """
 
 import json
@@ -46,8 +46,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BASELINE = ROOT / "docs" / "ratchet.json"
-LEDGER = ROOT / "docs" / "abi-ledger.jsonl"
+BASELINE = ROOT / "metrics" / "ratchet.json"
+LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
 
 LINE_CAP = 1000
 COUNTED = {

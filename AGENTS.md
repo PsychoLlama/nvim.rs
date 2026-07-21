@@ -12,7 +12,7 @@
 # Ratchet
 
 - The ratchet (`just ratchet --check`) constrains `unsafe `/`static mut`/`#[no_mangle]` counts, file line counts, and internal exports to only shrink.
-- After reducing any of them, run `just refresh` and commit the refreshed `docs/*.{json,jsonl}`.
+- After reducing any of them, run `just refresh` and commit the refreshed `metrics/*.{json,jsonl}`.
 - Justified growth requires `just refresh --allow-growth`.
 
 # Testing
