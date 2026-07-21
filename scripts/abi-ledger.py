@@ -179,7 +179,7 @@ def main():
         if committed != content:
             sys.exit(
                 f"abi-ledger: {LEDGER.relative_to(ROOT)} is stale; "
-                "run `just abi-ledger` and commit the result"
+                "run `just refresh` and commit the result"
             )
         return
     LEDGER.parent.mkdir(exist_ok=True)

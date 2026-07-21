@@ -26,6 +26,11 @@ review like the ledger's). A metric above its baseline is a violation; a
 metric below it means progress that must be locked in by regenerating the
 baseline and committing it alongside the change.
 
+Regenerate through `just refresh`, not this script directly: the measurement
+is only valid on a formatted tree with a current ledger, and refresh sequences
+those. Calling ratchet.py first and formatting after bakes in line counts the
+formatter is about to change.
+
 Usage: ratchet.py [--check] [--allow-growth]
   --check         compare the tree against the committed baseline instead of
                   writing: exit 1 if any metric grew, or if the baseline is
@@ -65,9 +70,7 @@ def measure():
 
 def internal_exports():
     if not LEDGER.exists():
-        sys.exit(
-            f"ratchet: {LEDGER.relative_to(ROOT)} is missing; run `just abi-ledger`"
-        )
+        sys.exit(f"ratchet: {LEDGER.relative_to(ROOT)} is missing; run `just refresh`")
     return sum(
         json.loads(line)["class"] == "internal"
         for line in LEDGER.read_text().splitlines()
@@ -134,19 +137,19 @@ def main():
     if "--check" in args:
         if committed is None:
             sys.exit(
-                f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just ratchet`"
+                f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just refresh`"
             )
         if grew := violations(stats, internal, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: counts may only shrink. Reduce them, or if the "
-                "growth is justified run `just ratchet --allow-growth` and "
+                "growth is justified run `just refresh --allow-growth` and "
                 "explain it in the commit message."
             )
         if committed != content:
             sys.exit(
                 f"ratchet: {BASELINE.relative_to(ROOT)} is stale (progress "
-                "to lock in); run `just ratchet` and commit the result"
+                "to lock in); run `just refresh` and commit the result"
             )
         return
 

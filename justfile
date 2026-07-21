@@ -35,7 +35,14 @@ package version: build-release
   tar czf "$stage.tar.gz" -C target/dist "$name"
   echo "Wrote $stage.tar.gz"
 
-# Check formatting without writing changes; fails if anything is unformatted.
+# Format the tree in place.
+fmt:
+  @treefmt --quiet
+
+# Fail if anything was unformatted. NB: treefmt always writes; `--fail-on-change`
+# only adds the nonzero exit. So by the time this recipe fails it has already
+# rewritten the worktree, and any measurement taken before it (line counts, the
+# baselines) is stale — which is why `just refresh` formats first.
 # `--quiet` keeps success silent (pre-commit hooks only speak up on failure);
 # the offending paths are still reported on failure.
 fmt-check:
@@ -82,10 +89,29 @@ abi-ledger *args:
 ratchet *args:
   @scripts/ratchet.py {{ args }}
 
+# Regenerate every committed baseline, in the one order that is self-consistent:
+# format, then the ABI ledger, then the ratchet, then re-check formatting. This
+# is the entry point; running the pieces by hand invites a baseline that
+# describes a tree that no longer exists.
+#
+# Formatting leads because rustfmt rewrapping a line changes the line counts the
+# ratchet measures — and `fmt-check` (the pre-commit hook) rewrites the tree, so
+# a baseline taken before it silently stops matching mid-commit. The ledger
+# precedes the ratchet because the ratchet snapshots its internal-export count.
+# The closing pass is uncached on purpose: cached, it would skip the files `fmt`
+# just rewrote and prove nothing, where uncached it asserts formatting reached a
+# fixed point that the pre-commit hook can't move.
+#
+# Args are forwarded to the ratchet, e.g. `just refresh --allow-growth`.
+refresh *args: fmt abi-ledger (ratchet args)
+  @treefmt --no-cache --fail-on-change --quiet
+
 # This is the gate CI runs on every push. It deliberately skips the slow
 # suites, which are worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...); only the fast Rust-side tests run here.
 #
 # Check that the tree is formatted, the ratchet and ABI ledger hold, the
-# crate still compiles, and the safe-core tests pass.
-minimal-ci: fmt-check (ratchet "--check") (abi-ledger "--check") build cargo-test
+# crate still compiles, and the safe-core tests pass. Same order as the
+# pre-commit hooks in .gitconfig: fmt-check rewrites the tree, and the ratchet
+# reads the ledger.
+minimal-ci: fmt-check (abi-ledger "--check") (ratchet "--check") build cargo-test

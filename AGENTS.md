@@ -7,7 +7,7 @@
 # Developing
 
 - Tests and builds are verbose; redirect to a log file and grep if failed.
-- The ratchet (`just ratchet --check`, enforced by pre-commit and CI) allows `unsafe `/`static mut `/`#[no_mangle]` counts, file line counts, and internal exports to only shrink. After reducing any of them, run `just ratchet` and commit the refreshed `docs/ratchet.json`; justified growth requires `just ratchet --allow-growth` plus an explanation in the commit message.
+- The ratchet (`just ratchet --check`, enforced by pre-commit and CI) allows `unsafe `/`static mut `/`#[no_mangle]` counts, file line counts, and internal exports to only shrink. After reducing any of them, run `just refresh` and commit the refreshed `docs/ratchet.json` (and `docs/abi-ledger.jsonl`); justified growth requires `just refresh --allow-growth` plus an explanation in the commit message.
 
 # Testing
 
