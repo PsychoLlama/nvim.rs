@@ -17,16 +17,33 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v14
         with:
           use-flakehub: false
-      - uses: actions/cache@v6
+      # Two caches, because the halves have different lifetimes. The downloaded
+      # crates depend only on Cargo.lock and are identical across build
+      # profiles, so release.yml shares this exact key. Compiled artifacts are
+      # per-profile and also depend on the toolchain, which flake.lock pins.
+      - name: Cache cargo registry
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-registry-
+
+      # Keep this prefix disjoint from release.yml's `-target-release-`.
+      # restore-keys match by prefix and resolve to the *newest* hit, so a
+      # shared stem (the old `-cargo-` / `-cargo-release-` pair) let a release
+      # cache satisfy a dev miss: CI restored a release-profile target/, reused
+      # nothing from it, and recompiled cold every run.
+      - name: Cache build directory
+        uses: actions/cache@v6
+        with:
+          path: target/
+          key: ${{ runner.os }}-target-dev-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-dev-
       - run: just minimal-ci
         env:
           TREEFMT_CI: true

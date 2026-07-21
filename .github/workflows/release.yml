@@ -24,17 +24,30 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v14
         with:
           use-flakehub: false
-      - uses: actions/cache@v6
+      # Same key as ci.yml on purpose: the crate downloads are profile-agnostic,
+      # so a release dispatch inherits whatever the last push already fetched.
+      - name: Cache cargo registry
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-release-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-registry-
+
+      # Release-only, and deliberately with no fallback to the dev cache: the
+      # two share no compiled artifacts (target/debug vs target/release), so
+      # restoring one for the other only paid a multi-hundred-MB download to
+      # recompile from scratch anyway.
+      - name: Cache build directory
+        uses: actions/cache@v6
+        with:
+          path: target/
+          key: ${{ runner.os }}-target-release-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-target-release-
 
       # `2000.01.15-<short-sha>`. Date is UTC build date; the sha pins the exact
       # source. Both the tag and the tarball name derive from this.
