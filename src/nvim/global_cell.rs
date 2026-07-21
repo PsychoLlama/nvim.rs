@@ -1,7 +1,7 @@
 //! `GlobalCell<T>`: the checked cell that replaces `static mut` globals.
 //!
 //! The transpiled editor state is a web of C globals that c2rust rendered as
-//! `static mut`. Any two overlapping references into one of those — an
+//! mutable statics. Any two overlapping references into one of those — an
 //! autocmd firing mid-operation and touching the same global, say — is
 //! undefined behavior even single-threaded. `GlobalCell` funnels every
 //! access through a single `UnsafeCell` so the compiler stops assuming
@@ -26,9 +26,17 @@
 //! GlobalCell<T>` exports the same symbol with the same object layout as
 //! the mutable static it replaces — the C deps and the LuaJIT-FFI unit
 //! suite keep resolving and poking the same bytes.
+//!
+//! The debug checks are deliberately austere — a bare `#[thread_local]`
+//! flag load on the main-thread fast path plus one relaxed atomic for the
+//! borrow-table shortcut — because the transpiled code hits globals on
+//! practically every line and unoptimized builds inline very little; the
+//! std `thread_local!`/`RefCell` machinery was measured to slow the
+//! functional suite several-fold, and even a `pthread_self()` call per
+//! access blew the search-stat timing test in the old suite.
 
 use core::cell::UnsafeCell;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
 #[repr(transparent)]
@@ -48,10 +56,11 @@ impl<T> GlobalCell<T> {
     ///
     /// This is what the mechanical `static mut` conversion emits for place
     /// expressions (field projections, `&raw mut`, index, ...). Accesses
-    /// through it carry exactly the obligations the old `static mut` access
-    /// did, minus the reference-uniqueness landmine.
+    /// through it carry exactly the obligations the old mutable-static
+    /// access did, minus the reference-uniqueness landmine.
+    #[inline(always)]
     pub fn ptr(&self) -> *mut T {
-        check_main_thread(self.0.get() as usize);
+        check_main_thread();
         self.0.get()
     }
 
@@ -62,19 +71,21 @@ impl<T> GlobalCell<T> {
     }
 
     /// Copy the value out.
+    #[inline(always)]
     pub fn get(&self) -> T
     where
         T: Copy,
     {
-        check_main_thread(self.0.get() as usize);
+        check_main_thread();
         check_no_exclusive_borrow(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
         unsafe { *self.0.get() }
     }
 
     /// Overwrite the value.
+    #[inline(always)]
     pub fn set(&self, value: T) {
-        check_main_thread(self.0.get() as usize);
+        check_main_thread();
         check_no_borrow(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding borrow.
         unsafe { *self.0.get() = value }
@@ -92,7 +103,7 @@ impl<T> GlobalCell<T> {
 
     /// Run `f` with a shared reference to the contents.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-        check_main_thread(self.0.get() as usize);
+        check_main_thread();
         let _guard = BorrowGuard::shared(self.0.get() as usize);
         // SAFETY: main-thread invariant + borrow tracking (debug).
         f(unsafe { &*self.0.get() })
@@ -104,62 +115,125 @@ impl<T> GlobalCell<T> {
     /// probe that turns vim's historic autocmd-reentrancy corruption into a
     /// loud failure instead of silent UB.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        check_main_thread(self.0.get() as usize);
+        check_main_thread();
         let _guard = BorrowGuard::exclusive(self.0.get() as usize);
         // SAFETY: main-thread invariant + borrow tracking (debug).
         f(unsafe { &mut *self.0.get() })
     }
 }
 
-/// Set once the binary's `main` has recorded its thread. Before that (unit
-/// tests FFI-loading the symbols, `.init_array` constructors, `cargo test`)
-/// the main-thread check is inert.
-static STARTED: AtomicBool = AtomicBool::new(false);
+/// The rare global that worker threads touch by upstream design — the
+/// thread-local Lua states (`nlua_init_state` reads `in_script` /
+/// `main_thread`) and the helpers exposed to `vim.uv.new_thread` threads
+/// (mpack/json/base64). Same raw-cell semantics as [`GlobalCell`] minus the
+/// debug main-thread assertion; cross-thread coordination remains the
+/// accessors' responsibility, exactly as it was in C. Every exemption is a
+/// deliberate, hand-reviewed downgrade — the mechanical conversion never
+/// emits this type.
+#[repr(transparent)]
+pub struct SharedCell<T>(UnsafeCell<T>);
 
-#[cfg(debug_assertions)]
-thread_local! {
-    static IS_MAIN: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+// SAFETY: same (weak) claim the transpiled C made: concurrent access is
+// coordinated by usage (init-once before threads exist, or thread-owned
+// state indexed per thread).
+unsafe impl<T> Sync for SharedCell<T> {}
+
+impl<T> SharedCell<T> {
+    pub const fn new(value: T) -> Self {
+        SharedCell(UnsafeCell::new(value))
+    }
+
+    #[inline(always)]
+    pub fn ptr(&self) -> *mut T {
+        self.0.get()
+    }
+
+    pub const fn as_raw(&self) -> *mut T {
+        self.0.get()
+    }
+
+    #[inline(always)]
+    pub fn get(&self) -> T
+    where
+        T: Copy,
+    {
+        // SAFETY: see the Sync impl; usage-coordinated like the C original.
+        unsafe { *self.0.get() }
+    }
+
+    #[inline(always)]
+    pub fn set(&self, value: T) {
+        // SAFETY: see the Sync impl; usage-coordinated like the C original.
+        unsafe { *self.0.get() = value }
+    }
 }
+
+/// Armed once [`init_main_thread`] runs; false in processes that never call
+/// it (unit tests FFI-loading the symbols, `.init_array` constructors,
+/// `cargo test`), which keeps the check inert there.
+static ARMED: AtomicBool = AtomicBool::new(false);
+
+/// True only on the thread that called [`init_main_thread`]. A bare
+/// `#[thread_local]` (not the std macro) so the debug fast path is a single
+/// TLS load — this check sits on every global access in a build that
+/// doesn't optimize.
+#[cfg(debug_assertions)]
+#[thread_local]
+static IS_MAIN_THREAD: core::cell::Cell<bool> = core::cell::Cell::new(false);
 
 /// Record the calling thread as the main thread and arm the debug
 /// main-thread assertion. Called from the binary entry point before any
-/// editor code runs. Idempotent; re-marking from another thread is a bug.
+/// editor code runs.
 pub fn init_main_thread() {
     #[cfg(debug_assertions)]
-    IS_MAIN.with(|is_main| is_main.set(true));
-    STARTED.store(true, Ordering::Release);
+    IS_MAIN_THREAD.set(true);
+    ARMED.store(true, Ordering::Relaxed);
 }
 
 #[cfg(debug_assertions)]
-fn check_main_thread(addr: usize) {
-    if STARTED.load(Ordering::Acquire) && !IS_MAIN.with(|is_main| is_main.get()) {
+#[inline(always)]
+fn check_main_thread() {
+    if !IS_MAIN_THREAD.get() {
+        check_main_thread_cold();
+    }
+}
+
+#[cfg(debug_assertions)]
+#[cold]
+fn check_main_thread_cold() {
+    if ARMED.load(Ordering::Relaxed) {
         panic!(
-            "GlobalCell accessed off the main thread (cell @ {addr:#x}, thread {:?})",
+            "GlobalCell accessed off the main thread (thread {:?})",
             std::thread::current().id()
         );
     }
 }
 
 #[cfg(not(debug_assertions))]
-fn check_main_thread(_addr: usize) {}
+#[inline(always)]
+fn check_main_thread() {}
 
 // Borrow tracking. Only `with`/`with_mut` create tracked borrows, so the
-// common get/set path just checks a counter and bails while the table is
-// empty. Keyed by cell address; positive = shared count, -1 = exclusive.
+// hot get/set path checks one counter and bails while the table is empty.
+// All state is main-thread-only (guarded by check_main_thread), so plain
+// relaxed atomics act as ordinary variables here; keyed by cell address,
+// positive = shared count, -1 = exclusive.
+static ACTIVE_BORROWS: AtomicUsize = AtomicUsize::new(0);
+
 #[cfg(debug_assertions)]
 mod borrows {
-    use core::cell::{Cell, RefCell};
+    use std::cell::RefCell;
     use std::collections::HashMap;
 
     thread_local! {
-        pub static ACTIVE: Cell<usize> = const { Cell::new(0) };
         pub static TABLE: RefCell<HashMap<usize, isize>> = RefCell::new(HashMap::new());
     }
 }
 
 #[cfg(debug_assertions)]
+#[inline(always)]
 fn check_no_exclusive_borrow(addr: usize) {
-    if borrows::ACTIVE.with(|active| active.get()) == 0 {
+    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
         return;
     }
     borrows::TABLE.with(|table| {
@@ -172,11 +246,13 @@ fn check_no_exclusive_borrow(addr: usize) {
 }
 
 #[cfg(not(debug_assertions))]
+#[inline(always)]
 fn check_no_exclusive_borrow(_addr: usize) {}
 
 #[cfg(debug_assertions)]
+#[inline(always)]
 fn check_no_borrow(addr: usize) {
-    if borrows::ACTIVE.with(|active| active.get()) == 0 {
+    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
         return;
     }
     borrows::TABLE.with(|table| {
@@ -187,6 +263,7 @@ fn check_no_borrow(addr: usize) {
 }
 
 #[cfg(not(debug_assertions))]
+#[inline(always)]
 fn check_no_borrow(_addr: usize) {}
 
 struct BorrowGuard {
@@ -211,7 +288,7 @@ impl BorrowGuard {
                 }
                 *state += 1;
             });
-            borrows::ACTIVE.with(|active| active.set(active.get() + 1));
+            ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
                 exclusive: false,
@@ -238,7 +315,7 @@ impl BorrowGuard {
                 }
                 *state = -1;
             });
-            borrows::ACTIVE.with(|active| active.set(active.get() + 1));
+            ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
                 exclusive: true,
@@ -269,7 +346,7 @@ impl Drop for BorrowGuard {
                 table.remove(&self.addr);
             }
         });
-        borrows::ACTIVE.with(|active| active.set(active.get() - 1));
+        ACTIVE_BORROWS.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
