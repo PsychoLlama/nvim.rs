@@ -7,6 +7,7 @@
 # Developing
 
 - Tests and builds are verbose; redirect to a log file and grep if failed.
+- `just abi-ledger --check` is a pre-commit hook only, not part of CI: it rebuilds the upstream C tree from tag `v0.12.4`, which CI's shallow, tagless checkout cannot resolve. Keep it passing locally — the ratchet snapshots the ledger's internal-export count and cannot detect a stale ledger.
 - The ratchet (`just ratchet --check`, enforced by pre-commit and CI) allows `unsafe `/`static mut `/`#[no_mangle]` counts, file line counts, and internal exports to only shrink. After reducing any of them, run `just refresh` and commit the refreshed `docs/ratchet.json` (and `docs/abi-ledger.jsonl`); justified growth requires `just refresh --allow-growth` plus an explanation in the commit message.
 
 # Testing

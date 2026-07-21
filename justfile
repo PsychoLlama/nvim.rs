@@ -110,8 +110,15 @@ refresh *args: fmt abi-ledger (ratchet args)
 # suites, which are worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...); only the fast Rust-side tests run here.
 #
-# Check that the tree is formatted, the ratchet and ABI ledger hold, the
-# crate still compiles, and the safe-core tests pass. Same order as the
-# pre-commit hooks in .gitconfig: fmt-check rewrites the tree, and the ratchet
-# reads the ledger.
-minimal-ci: fmt-check (abi-ledger "--check") (ratchet "--check") build cargo-test
+# Check that the tree is formatted and the ratchet holds, the crate still
+# compiles, and the safe-core tests pass. fmt-check leads because it rewrites
+# the tree.
+#
+# `abi-ledger --check` is deliberately absent, and stays a pre-commit hook only
+# (see .gitconfig). Checking the ledger regenerates it, which reconstructs the
+# upstream C tree from tag v0.12.4 (scripts/prep-unit-headers.sh) — and CI
+# checks out with fetch-depth: 1 / fetch-tags: false, so the tag never resolves
+# there. The hook keeps docs/abi-ledger.jsonl current locally, which the ratchet
+# depends on: it snapshots the ledger's internal-export count and cannot tell a
+# stale ledger from a fresh one.
+minimal-ci: fmt-check (ratchet "--check") build cargo-test
