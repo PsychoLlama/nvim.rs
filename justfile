@@ -53,11 +53,16 @@ fmt-check:
 functionaltest *args: build
   scripts/run-tests.sh functional {{ args }}
 
-# Run old (Vim) tests. Args: test names, e.g. `just oldtest test_arglist`.
-# Full runs are incremental (make): `just oldtest clean` forces a fresh pass.
-oldtest *args: build
-  scripts/prep-test-tree.sh
-  make -C test/old/testdir NVIM_PRG={{ justfile_directory() }}/target/debug/nvim {{ args }}
+# Run old (Vim) tests. The mode is required:
+#
+#   just oldtest all                  # the whole suite, always from scratch
+#   just oldtest test_arglist [more]  # only the named tests
+#   just oldtest clean                # delete test artifacts, run nothing
+#
+# There is no incremental full run: `all` always starts from scratch, because
+# a resumed one reports only the tests it re-ran. See scripts/run-oldtest.sh.
+oldtest +args: build
+  scripts/run-oldtest.sh {{ args }}
 
 # Run unit tests. Args: same shape as functionaltest. The upstream v0.12.4 C
 # headers (reconstructed under target/upstream on first run) are preprocessed

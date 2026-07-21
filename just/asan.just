@@ -54,13 +54,14 @@ functionaltest *args: build
 
 # Reports land in target/asan/asan.log.<pid>.
 #
-# Run old (Vim) tests against the ASan build. Args as for `oldtest`.
-oldtest *args: build
+# Run old (Vim) tests against the ASan build. Args as for `oldtest`, whose
+# mode (`all`, test names, or `clean`) is likewise required.
+oldtest +args: build
   #!/usr/bin/env bash
   set -euo pipefail
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
   export NVIM_TEST_ASAN=1
   ulimit -s 65536
   export NVIM_BIN={{ bin }}
-  scripts/prep-test-tree.sh
-  exec setarch "$(uname -m)" -R make -C test/old/testdir NVIM_PRG={{ justfile_directory() }}/target/bin/nvim {{ args }}
+  export NVIM_PRG={{ justfile_directory() }}/target/bin/nvim
+  exec setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }}
