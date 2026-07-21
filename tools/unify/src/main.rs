@@ -216,6 +216,67 @@ impl<'a> Ser<'a> {
 
 /// Layout-relevant attributes (everything except derives and docs), as a
 /// deterministic string. Derives are compared separately.
+/// Iterate a `#[bitfield(...)]` attribute's tokens, calling `f` with each
+/// string literal that is the value of `ty = "..."`. c2rust names the
+/// bitfield's logical type there — as a *string* — so it references types
+/// outside the syntactic type graph.
+fn visit_bitfield_ty_lits(attr: &syn::Attribute, mut f: impl FnMut(&proc_macro2::Literal)) {
+    if !attr.path().is_ident("bitfield") {
+        return;
+    }
+    let syn::Meta::List(ml) = &attr.meta else { return };
+    let mut state = 0u8; // 1 = saw `ty`, 2 = saw `ty =`
+    for tt in ml.tokens.clone() {
+        state = match (&tt, state) {
+            (proc_macro2::TokenTree::Ident(id), _) if id == "ty" => 1,
+            (proc_macro2::TokenTree::Punct(p), 1) if p.as_char() == '=' => 2,
+            (proc_macro2::TokenTree::Literal(lit), 2) => {
+                f(lit);
+                0
+            }
+            _ => 0,
+        };
+    }
+}
+
+impl<'a> Ser<'a> {
+    /// Field-attribute skeleton: like `attr_skeleton`, but a bitfield `ty`
+    /// string naming a module-local type becomes an edge placeholder so the
+    /// reference participates in equality, closure, and renaming.
+    fn field_attrs(&mut self, attrs: &[syn::Attribute]) -> String {
+        let mut skel = String::new();
+        for attr in attrs {
+            if attr.path().is_ident("doc") {
+                continue;
+            }
+            if attr.path().is_ident("bitfield") {
+                let mut tokens = attr.to_token_stream().to_string();
+                let mut hits: Vec<String> = Vec::new();
+                visit_bitfield_ty_lits(attr, |lit| {
+                    let s = lit.to_string();
+                    let inner = s.trim_matches('"');
+                    if self.env.contains_key(inner) {
+                        hits.push(s.clone());
+                    }
+                });
+                for s in hits {
+                    let inner = s.trim_matches('"');
+                    let target = self.env[inner];
+                    self.edges.push(target);
+                    self.edge_labels.push(self.label.clone());
+                    tokens = tokens.replacen(&s, "\"\u{0}\"", 1);
+                }
+                skel.push_str(&tokens);
+                skel.push(';');
+                continue;
+            }
+            skel.push_str(&attr.to_token_stream().to_string());
+            skel.push(';');
+        }
+        skel
+    }
+}
+
 fn attr_skeleton(attrs: &[syn::Attribute]) -> (String, BTreeSet<String>) {
     let mut skel = String::new();
     let mut derives = BTreeSet::new();
@@ -273,7 +334,15 @@ fn modpath_of(rel: &str) -> String {
     if stem == "src/nvim/eval" {
         *parts.last_mut().unwrap() = "eval_1";
     }
-    parts.join("::")
+    parts
+        .iter()
+        .map(|p| match *p {
+            // keyword module names are declared `pub mod r#move;` etc.
+            "move" | "match" | "loop" => format!("r#{p}"),
+            other => other.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
 fn collect_defs(files: &[FileData]) -> Vec<Def> {
@@ -364,12 +433,9 @@ fn collect_defs(files: &[FileData]) -> Vec<Def> {
                         ser.dirty = Some("tuple struct".into());
                         continue;
                     };
-                    let (fa, fd) = attr_skeleton(&f.attrs);
-                    if !fd.is_empty() {
-                        ser.dirty = Some("derive on field".into());
-                    }
-                    let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.label = id.to_string();
+                    let fa = ser.field_attrs(&f.attrs);
+                    let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.ty(&f.ty);
                     ser.out.push(';');
                     def.fields.push(id.to_string());
@@ -393,9 +459,9 @@ fn collect_defs(files: &[FileData]) -> Vec<Def> {
                 let _ = write!(ser.out, "union;{};{};", u.vis.to_token_stream(), askel);
                 for f in &u.fields.named {
                     let id = f.ident.as_ref().unwrap();
-                    let (fa, _) = attr_skeleton(&f.attrs);
-                    let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.label = id.to_string();
+                    let fa = ser.field_attrs(&f.attrs);
+                    let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.ty(&f.ty);
                     ser.out.push(';');
                     def.fields.push(id.to_string());
@@ -577,6 +643,18 @@ impl<'a, 'ast> syn::visit::Visit<'ast> for RenameVisitor<'a> {
             }
         }
         syn::visit::visit_path(self, path);
+    }
+
+    fn visit_attribute(&mut self, attr: &'ast syn::Attribute) {
+        // bitfield `ty = "..."` strings name types too.
+        visit_bitfield_ty_lits(attr, |lit| {
+            let s = lit.to_string();
+            if let Some(new) = self.map.get(s.trim_matches('"')) {
+                self.edits
+                    .push((lit.span().byte_range(), format!("\"{new}\"")));
+            }
+        });
+        syn::visit::visit_attribute(self, attr);
     }
 }
 
@@ -1138,6 +1216,42 @@ fn main() {
             groups[gi].domain = domain_of(gi, &groups, &defs, &key_to_gi, &domain_map, 0);
         }
     }
+    // Domain names become module names under types/. They must be valid,
+    // non-keyword identifiers (upstream headers like termkey-internal.h
+    // contain hyphens), and must not collide with any canonical type name:
+    // `pub mod object;` would shadow the canonical `struct object` in every
+    // `pub use crate::src::nvim::types::object` re-export (explicit mod beats
+    // glob re-export in the type namespace).
+    {
+        let canonical_names: HashSet<String> = groups
+            .iter()
+            .filter(|g| g.merged)
+            .map(|g| g.canonical_name.clone())
+            .collect();
+        const KEYWORDS: &[&str] = &[
+            "as", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false",
+            "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+            "ref", "return", "self", "static", "struct", "super", "trait", "true", "type",
+            "unsafe", "use", "where", "while", "async", "await", "try", "macro", "union",
+        ];
+        for g in &mut groups {
+            if !g.merged {
+                continue;
+            }
+            let mut dom: String = g
+                .domain
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            if dom.chars().next().is_none_or(|c| c.is_ascii_digit()) {
+                dom.insert(0, 'd');
+            }
+            while canonical_names.contains(&dom) || KEYWORDS.contains(&dom.as_str()) {
+                dom.push_str("_defs");
+            }
+            g.domain = dom;
+        }
+    }
 
     // ---- summary ----
     let merged: Vec<usize> = groups
@@ -1194,16 +1308,19 @@ fn main() {
                  }};\n\
              }\n\n",
         );
-        // unsized detection for aliases (direct chain to an opaque type)
-        fn unsized_def(di: usize, defs: &[Def], depth: usize) -> bool {
+        // Unsized detection for aliases in the PRE-merge tree (via pristine,
+        // un-redirected edges): an alias to a module-local opaque fwd-decl is
+        // unsized today even when the fold makes it sized post-merge, so it
+        // cannot be measured before the merge.
+        fn unsized_def(di: usize, defs: &[Def], pristine: &[Vec<usize>], depth: usize) -> bool {
             let d = &defs[di];
             match d.kind {
                 Kind::Opaque => true,
                 Kind::Alias if depth < 16 => {
                     // unsized only if the alias RHS is exactly one bare edge
                     d.skeleton.ends_with('\x00')
-                        && d.edges.len() == 1
-                        && unsized_def(d.edges[0], defs, depth + 1)
+                        && pristine[di].len() == 1
+                        && unsized_def(pristine[di][0], defs, pristine, depth + 1)
                 }
                 _ => false,
             }
@@ -1216,21 +1333,26 @@ fn main() {
             match d0.kind {
                 Kind::Opaque => continue,
                 Kind::Alias => {
-                    if unsized_def(g.canonical_member, &defs, 0) {
-                        continue;
-                    }
+                    let measurable: Vec<usize> = g
+                        .members
+                        .iter()
+                        .copied()
+                        .filter(|&m| {
+                            defs[m].kind != Kind::Opaque
+                                && !unsized_def(m, &defs, &pristine_edges, 0)
+                        })
+                        .collect();
+                    let Some(&c) = measurable.first() else { continue };
+                    let dc = &defs[c];
                     let _ = write!(out, "#[test]\nfn parity_{tname}() {{\n");
                     let canon_path =
-                        format!("::c2rust_neovim::{}::{}", files[d0.file].modpath, d0.name);
+                        format!("::c2rust_neovim::{}::{}", files[dc.file].modpath, dc.name);
                     let _ = write!(
                         out,
                         "    let canon = (size_of::<{canon_path}>(), align_of::<{canon_path}>());\n"
                     );
-                    for &m in &g.members {
+                    for &m in &measurable {
                         let d = &defs[m];
-                        if d.kind == Kind::Opaque {
-                            continue; // folded fwd-decl: nothing to measure
-                        }
                         let p = format!("::c2rust_neovim::{}::{}", files[d.file].modpath, d.name);
                         let _ = write!(
                             out,
@@ -1434,8 +1556,16 @@ fn main() {
         reexports.sort();
         let mut edits: Vec<(Range<usize>, String)> =
             deletions.into_iter().map(|r| (r, String::new())).collect();
+        // Insert before the first top-level item, after any `//!` module docs
+        // and inner attributes (which must precede all items).
+        let insert_at = file
+            .ast
+            .items
+            .first()
+            .map(|item| line_expand(&file.src, &span_range(item)).start)
+            .unwrap_or(file.src.len());
         edits.push((
-            0..0,
+            insert_at..insert_at,
             format!(
                 "pub use crate::src::nvim::types::{{{}}};\n",
                 reexports.join(", ")
