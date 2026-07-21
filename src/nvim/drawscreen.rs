@@ -4086,23 +4086,21 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
                 as *mut ::core::ffi::c_char,
             hl_id: -1 as ::core::ffi::c_int,
         });
-        static virt_text: GlobalCell<DecorVirtText> = GlobalCell::new(unsafe {
-            DecorVirtText {
-                flags: 0,
-                hl_mode: 0,
-                priority: DECOR_PRIORITY_BASE as DecorPriority,
-                width: 0,
-                col: 0,
-                pos: kVPosWinCol,
-                data: C2Rust_Unnamed_2 {
-                    virt_text: VirtText {
-                        size: 1 as size_t,
-                        capacity: 0,
-                        items: (chunk.as_raw() as *const _) as *mut VirtTextChunk,
-                    },
+        static virt_text: GlobalCell<DecorVirtText> = GlobalCell::new(DecorVirtText {
+            flags: 0,
+            hl_mode: 0,
+            priority: DECOR_PRIORITY_BASE as DecorPriority,
+            width: 0,
+            col: 0,
+            pos: kVPosWinCol,
+            data: C2Rust_Unnamed_2 {
+                virt_text: VirtText {
+                    size: 1 as size_t,
+                    capacity: 0,
+                    items: (chunk.as_raw() as *const _) as *mut VirtTextChunk,
                 },
-                next: ::core::ptr::null_mut::<DecorVirtText>(),
-            }
+            },
+            next: ::core::ptr::null_mut::<DecorVirtText>(),
         });
         decor_range_add_virt(
             decor_state.ptr(),

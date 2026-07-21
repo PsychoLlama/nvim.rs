@@ -1,4 +1,4 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::global_cell::SharedCell;
 extern "C" {
     pub type multiqueue;
     fn __assert_fail(

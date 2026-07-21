@@ -439,30 +439,28 @@ static encoding_DECdrawing: GlobalCell<StaticTableEncoding> =
             0,
         ],
     });
-static encodings: GlobalCell<[C2Rust_Unnamed; 4]> = GlobalCell::new(unsafe {
-    [
-        C2Rust_Unnamed {
-            type_0: ENC_UTF8,
-            designation: 'u' as ::core::ffi::c_char,
-            enc: (encoding_utf8.as_raw() as *const _) as *mut VTermEncoding,
-        },
-        C2Rust_Unnamed {
-            type_0: ENC_SINGLE_94,
-            designation: '0' as ::core::ffi::c_char,
-            enc: (encoding_DECdrawing.as_raw() as *const _) as *mut VTermEncoding,
-        },
-        C2Rust_Unnamed {
-            type_0: ENC_SINGLE_94,
-            designation: 'B' as ::core::ffi::c_char,
-            enc: (encoding_usascii.as_raw() as *const _) as *mut VTermEncoding,
-        },
-        C2Rust_Unnamed {
-            type_0: ENC_UTF8,
-            designation: 0,
-            enc: ::core::ptr::null_mut::<VTermEncoding>(),
-        },
-    ]
-});
+static encodings: GlobalCell<[C2Rust_Unnamed; 4]> = GlobalCell::new([
+    C2Rust_Unnamed {
+        type_0: ENC_UTF8,
+        designation: 'u' as ::core::ffi::c_char,
+        enc: (encoding_utf8.as_raw() as *const _) as *mut VTermEncoding,
+    },
+    C2Rust_Unnamed {
+        type_0: ENC_SINGLE_94,
+        designation: '0' as ::core::ffi::c_char,
+        enc: (encoding_DECdrawing.as_raw() as *const _) as *mut VTermEncoding,
+    },
+    C2Rust_Unnamed {
+        type_0: ENC_SINGLE_94,
+        designation: 'B' as ::core::ffi::c_char,
+        enc: (encoding_usascii.as_raw() as *const _) as *mut VTermEncoding,
+    },
+    C2Rust_Unnamed {
+        type_0: ENC_UTF8,
+        designation: 0,
+        enc: ::core::ptr::null_mut::<VTermEncoding>(),
+    },
+]);
 #[no_mangle]
 pub unsafe extern "C" fn vterm_lookup_encoding(
     mut type_0: VTermEncodingType,

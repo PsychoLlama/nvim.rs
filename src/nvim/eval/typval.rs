@@ -6458,21 +6458,19 @@ pub unsafe extern "C" fn tv_check_num(tv: *const typval_T) -> bool {
     }
     abort();
 }
-static str_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new(unsafe {
-    [
-        (e_using_invalid_value_as_string.as_raw() as *const _) as *const ::core::ffi::c_char,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
-        b"E730: Using a List as a String\0".as_ptr() as *const ::core::ffi::c_char,
-        b"E731: Using a Dictionary as a String\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
-        b"E976: Using a Blob as a String\0".as_ptr() as *const ::core::ffi::c_char,
-    ]
-});
+static str_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
+    (e_using_invalid_value_as_string.as_raw() as *const _) as *const ::core::ffi::c_char,
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    b"E730: Using a List as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    b"E731: Using a Dictionary as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    b"E976: Using a Blob as a String\0".as_ptr() as *const ::core::ffi::c_char,
+]);
 #[no_mangle]
 pub unsafe extern "C" fn tv_check_str(tv: *const typval_T) -> bool {
     match (*tv).v_type as ::core::ffi::c_uint {

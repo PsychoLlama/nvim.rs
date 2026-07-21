@@ -7,12 +7,10 @@
 #![allow(unused_mut)]
 #![feature(c_variadic)]
 #![feature(extern_types)]
-#![feature(label_break_value)]
 #![feature(raw_ref_op)]
 #![feature(strict_provenance)]
 #![feature(thread_local)]
 
-#[macro_use]
 extern crate c2rust_bitfields;
 extern crate libc;
 

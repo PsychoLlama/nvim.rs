@@ -7348,12 +7348,10 @@ pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     pending_comp_index_update: true,
 });
 #[no_mangle]
-pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(unsafe {
-    GridView {
-        target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
-        row_offset: 0,
-        col_offset: 0,
-    }
+pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(GridView {
+    target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
+    row_offset: 0,
+    col_offset: 0,
 });
 #[no_mangle]
 pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
@@ -8830,7 +8828,7 @@ pub static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 pub static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
 #[no_mangle]
 pub static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(unsafe { (highlight_attr.as_raw() as *const _) as *mut ::core::ffi::c_int });
+    GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut ::core::ffi::c_int);
 #[no_mangle]
 pub static curbuf_splice_pending: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);

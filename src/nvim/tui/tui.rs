@@ -4754,7 +4754,7 @@ unsafe extern "C" fn patch_terminfo_bugs(
                 b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else {
-            st;
+            let _ = st;
         }
     }
     if (*tui).ti.max_colors < 256 as ::core::ffi::c_int {

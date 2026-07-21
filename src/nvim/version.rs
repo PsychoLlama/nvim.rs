@@ -3111,15 +3111,13 @@ static c2rust_lvalue_3: GlobalCell<[::core::ffi::c_int; 121]> = GlobalCell::new(
     70, 67, 66, 65, 64, 63, 62, 61, 59, 58, 57, 56, 55, 54, 52, 47, 46, 44, 41, 40, 38, 36, 33, 32,
     31, 30, 28, 27, 25, 24, 23, 22, 20, 18, 13, 12, 10, 9, 8, 7, 4, 1,
 ]);
-static included_patchsets: GlobalCell<[*const ::core::ffi::c_int; 5]> = GlobalCell::new(unsafe {
-    [
-        (c2rust_lvalue.as_raw() as *const _) as *const ::core::ffi::c_int,
-        (c2rust_lvalue_0.as_raw() as *const _) as *const ::core::ffi::c_int,
-        (c2rust_lvalue_1.as_raw() as *const _) as *const ::core::ffi::c_int,
-        (c2rust_lvalue_2.as_raw() as *const _) as *const ::core::ffi::c_int,
-        (c2rust_lvalue_3.as_raw() as *const _) as *const ::core::ffi::c_int,
-    ]
-});
+static included_patchsets: GlobalCell<[*const ::core::ffi::c_int; 5]> = GlobalCell::new([
+    (c2rust_lvalue.as_raw() as *const _) as *const ::core::ffi::c_int,
+    (c2rust_lvalue_0.as_raw() as *const _) as *const ::core::ffi::c_int,
+    (c2rust_lvalue_1.as_raw() as *const _) as *const ::core::ffi::c_int,
+    (c2rust_lvalue_2.as_raw() as *const _) as *const ::core::ffi::c_int,
+    (c2rust_lvalue_3.as_raw() as *const _) as *const ::core::ffi::c_int,
+]);
 #[no_mangle]
 pub unsafe extern "C" fn has_nvim_version(version_str: *const ::core::ffi::c_char) -> bool {
     let mut p: *const ::core::ffi::c_char = version_str;

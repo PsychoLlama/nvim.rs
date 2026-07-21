@@ -4500,7 +4500,7 @@ pub unsafe extern "C" fn vterm_obtain_state(mut vt: *mut VTerm) -> *mut VTermSta
     (*vt).state = state;
     vterm_parser_set_callbacks(
         vt,
-        (parser_callbacks.ptr() as *const _),
+        parser_callbacks.ptr() as *const _,
         state as *mut ::core::ffi::c_void,
     );
     return state;

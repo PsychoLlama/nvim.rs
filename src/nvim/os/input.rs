@@ -2561,9 +2561,9 @@ static read_stream: GlobalCell<RStream> = GlobalCell::new(rstream {
 });
 static input_buffer: GlobalCell<[::core::ffi::c_char; 16386]> = GlobalCell::new([0; 16386]);
 static input_read_pos: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(unsafe { (input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char });
+    GlobalCell::new((input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char);
 static input_write_pos: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(unsafe { (input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char });
+    GlobalCell::new((input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char);
 static input_eof: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static blocking: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static cursorhold_time: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);

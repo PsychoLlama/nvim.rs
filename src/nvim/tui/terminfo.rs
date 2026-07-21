@@ -708,28 +708,28 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"ghostty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (ghostty_terminfo.ptr() as *const _);
+        return ghostty_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"xterm\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"xterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (xterm_256colour_terminfo.ptr() as *const _);
+        return xterm_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"screen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (screen_256colour_terminfo.ptr() as *const _);
+        return screen_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"tmux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (tmux_256colour_terminfo.ptr() as *const _);
+        return tmux_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"rxvt\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"rxvt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (rxvt_256colour_terminfo.ptr() as *const _);
+        return rxvt_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"putty\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"putty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (putty_256colour_terminfo.ptr() as *const _);
+        return putty_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"linux\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"linux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (linux_16colour_terminfo.ptr() as *const _);
+        return linux_16colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"interix\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"interix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (interix_8colour_terminfo.ptr() as *const _);
+        return interix_8colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"iterm\0".as_ptr() as *const ::core::ffi::c_char)
         as ::core::ffi::c_int
         != 0
@@ -744,10 +744,10 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"iterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (iterm_256colour_terminfo.ptr() as *const _);
+        return iterm_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"st\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"st\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (st_256colour_terminfo.ptr() as *const _);
+        return st_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"gnome\0".as_ptr() as *const ::core::ffi::c_char)
         as ::core::ffi::c_int
         != 0
@@ -756,23 +756,23 @@ pub unsafe extern "C" fn terminfo_from_builtin(
             != 0
     {
         *termname = b"vte\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (vte_256colour_terminfo.ptr() as *const _);
+        return vte_256colour_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"cygwin\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"cygwin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (cygwin_terminfo.ptr() as *const _);
+        return cygwin_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"win32con\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname =
             b"win32con\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (win32con_terminfo.ptr() as *const _);
+        return win32con_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"conemu\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"conemu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (conemu_terminfo.ptr() as *const _);
+        return conemu_terminfo.ptr() as *const _;
     } else if terminfo_is_term_family(term, b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char) {
         *termname = b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (vtpcon_terminfo.ptr() as *const _);
+        return vtpcon_terminfo.ptr() as *const _;
     } else {
         *termname = b"ansi\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        return (ansi_terminfo.ptr() as *const _);
+        return ansi_terminfo.ptr() as *const _;
     };
 }
 #[no_mangle]

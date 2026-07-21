@@ -400,13 +400,11 @@ pub static termkey_driver_csi: GlobalCell<TermKeyDriver> = GlobalCell::new(TermK
             ) -> TermKeyResult,
     ),
 });
-static drivers: GlobalCell<[*mut TermKeyDriver; 3]> = GlobalCell::new(unsafe {
-    [
-        (termkey_driver_ti.as_raw() as *const _) as *mut TermKeyDriver,
-        (termkey_driver_csi.as_raw() as *const _) as *mut TermKeyDriver,
-        ::core::ptr::null_mut::<TermKeyDriver>(),
-    ]
-});
+static drivers: GlobalCell<[*mut TermKeyDriver; 3]> = GlobalCell::new([
+    (termkey_driver_ti.as_raw() as *const _) as *mut TermKeyDriver,
+    (termkey_driver_csi.as_raw() as *const _) as *mut TermKeyDriver,
+    ::core::ptr::null_mut::<TermKeyDriver>(),
+]);
 static keynames: GlobalCell<[C2Rust_Unnamed_6; 61]> = GlobalCell::new([
     C2Rust_Unnamed_6 {
         sym: TERMKEY_SYM_NONE,
