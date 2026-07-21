@@ -4614,7 +4614,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                             as *mut *mut ::core::ffi::c_void;
                                                         xfree(*ptr_);
                                                         *ptr_ = NULL;
-                                                        *ptr_;
+                                                        let _ = *ptr_;
                                                         itemisflag = false_0 != 0;
                                                     }
                                                 }
@@ -4686,7 +4686,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                             as *mut *mut ::core::ffi::c_void;
                                                     xfree(*ptr__0);
                                                     *ptr__0 = NULL;
-                                                    *ptr__0;
+                                                    let _ = *ptr__0;
                                                     usefmt = new_fmt;
                                                     fmt_p = usefmt.offset(parsed_usefmt as isize);
                                                     evaldepth += 1;
@@ -5413,7 +5413,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                 &raw mut str as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__1);
                             *ptr__1 = NULL;
-                            *ptr__1;
+                            let _ = *ptr__1;
                         }
                         (*curitem.ptr()) += 1;
                         if left_align_num {
@@ -5488,7 +5488,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__2);
                             *ptr__2 = NULL;
-                            *ptr__2;
+                            let _ = *ptr__2;
                         }
                         j += 1;
                     }

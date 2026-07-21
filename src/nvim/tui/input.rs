@@ -1593,7 +1593,7 @@ pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
         &raw mut (*kitty_key_map.ptr()).values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     uv_close(&raw mut (*input).timer_handle as *mut uv_handle_t, None);
     uv_close(&raw mut (*input).bg_query_timer as *mut uv_handle_t, None);
     rstream_may_close(&raw mut (*input).read_stream);

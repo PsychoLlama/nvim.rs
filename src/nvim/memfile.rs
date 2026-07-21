@@ -2431,7 +2431,7 @@ pub unsafe extern "C" fn mf_close(mut mfp: *mut memfile_T, mut del_file: bool) {
         &raw mut (*mfp).mf_hash.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree((*mfp).mf_trans.set.keys as *mut ::core::ffi::c_void);
     xfree((*mfp).mf_trans.set.h.hash as *mut ::core::ffi::c_void);
     (*mfp).mf_trans.set = SET_INIT;
@@ -2439,7 +2439,7 @@ pub unsafe extern "C" fn mf_close(mut mfp: *mut memfile_T, mut del_file: bool) {
         &raw mut (*mfp).mf_trans.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     mf_free_fnames(mfp);
     xfree(mfp as *mut ::core::ffi::c_void);
 }
@@ -2917,12 +2917,12 @@ pub unsafe extern "C" fn mf_free_fnames(mut mfp: *mut memfile_T) {
         &raw mut (*mfp).mf_fname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*mfp).mf_ffname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn mf_set_fnames(

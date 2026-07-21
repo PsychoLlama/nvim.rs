@@ -3993,7 +3993,7 @@ unsafe extern "C" fn buf_write_make_backup(
                             backupp as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
-                        *ptr_;
+                        let _ = *ptr_;
                     } else if p_bk.get() == 0 {
                         let mut wp: *mut ::core::ffi::c_char = (*backupp)
                             .offset(strlen(*backupp) as isize)
@@ -4012,7 +4012,7 @@ unsafe extern "C" fn buf_write_make_backup(
                                 backupp as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__0);
                             *ptr__0 = NULL;
-                            *ptr__0;
+                            let _ = *ptr__0;
                         }
                     }
                 }
@@ -4029,7 +4029,7 @@ unsafe extern "C" fn buf_write_make_backup(
                         backupp as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__1);
                     *ptr__1 = NULL;
-                    *ptr__1;
+                    let _ = *ptr__1;
                     *backupp = ::core::ptr::null_mut::<::core::ffi::c_char>();
                 } else {
                     os_setperm(*backupp, perm & 0o777 as ::core::ffi::c_int);
@@ -4099,7 +4099,7 @@ unsafe extern "C" fn buf_write_make_backup(
                             backupp as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr__2);
                         *ptr__2 = NULL;
-                        *ptr__2;
+                        let _ = *ptr__2;
                     }
                 }
             }
@@ -4113,7 +4113,7 @@ unsafe extern "C" fn buf_write_make_backup(
                 backupp as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__3);
             *ptr__3 = NULL;
-            *ptr__3;
+            let _ = *ptr__3;
         }
         if (*backupp).is_null() && !forceit {
             *err = set_err(gettext(
@@ -5119,7 +5119,7 @@ pub unsafe extern "C" fn buf_write(
                                                 &raw mut backup as *mut *mut ::core::ffi::c_void;
                                             xfree(*ptr_);
                                             *ptr_ = NULL;
-                                            *ptr_;
+                                            let _ = *ptr_;
                                             os_file_settime(
                                                 org,
                                                 file_info_old.stat.st_atim.tv_sec

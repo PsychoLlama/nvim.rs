@@ -3314,7 +3314,7 @@ unsafe extern "C" fn hmll_dealloc(hmll: *mut HMLList) {
         &raw mut (*hmll).contained_entries.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree((*hmll).entries as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn sd_reader_skip(
@@ -4065,7 +4065,7 @@ unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::f
                                         as *mut *mut ::core::ffi::c_void;
                                 xfree(*ptr_);
                                 *ptr_ = NULL_0;
-                                *ptr_;
+                                let _ = *ptr_;
                             }
                             let mut fm: xfmark_T = xfmark_T {
                                 fmark: fmark_T {
@@ -4383,7 +4383,7 @@ unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::f
         &raw mut fname_bufs.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     xfree(oldfiles_set.keys as *mut ::core::ffi::c_void);
     xfree(oldfiles_set.h.hash as *mut ::core::ffi::c_void);
     oldfiles_set = Set_cstr_t {
@@ -6917,7 +6917,7 @@ unsafe extern "C" fn shada_write(
         &raw mut (*wms).file_marks.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree(removable_bufs.keys as *mut ::core::ffi::c_void);
     xfree(removable_bufs.h.hash as *mut ::core::ffi::c_void);
     removable_bufs = Set_ptr_t {
@@ -7373,7 +7373,7 @@ unsafe extern "C" fn shada_free_shada_entry(entry: *mut ShadaEntry) {
         &raw mut (*entry).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
 }
 unsafe extern "C" fn fread_len(
     sd_reader: *mut FileDescriptor,

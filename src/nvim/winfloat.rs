@@ -2318,7 +2318,7 @@ pub unsafe extern "C" fn win_new_float(
             &raw mut (*wp).w_frame as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         win_remove(wp, tp_0);
         if win_tp == curtab.get() {
             last_status(false_0 != 0);

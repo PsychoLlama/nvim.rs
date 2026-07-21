@@ -6593,7 +6593,7 @@ pub unsafe extern "C" fn do_cmdline(
                 &raw mut cmdline_copy as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_1;
-            *ptr_;
+            let _ = *ptr_;
             if getline_is_func {
                 if do_profiling.get() == PROF_YES {
                     func_line_end(real_cookie);
@@ -6878,7 +6878,7 @@ pub unsafe extern "C" fn do_cmdline(
                 &raw mut cmdline_copy as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL_1;
-            *ptr__0;
+            let _ = *ptr__0;
             if getline_equal(
                 fgetline,
                 cookie,
@@ -14181,13 +14181,13 @@ unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool
         &raw mut (*curwin.get()).w_localdir as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_1;
-    *ptr_;
+    let _ = *ptr_;
     if scope as ::core::ffi::c_int >= kCdScopeTabpage as ::core::ffi::c_int {
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
             &raw mut (*curtab.get()).tp_localdir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_1;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     if (scope as ::core::ffi::c_int) < kCdScopeGlobal as ::core::ffi::c_int {
         let mut pdir: *mut ::core::ffi::c_char = get_prevdir(scope);
@@ -14205,7 +14205,7 @@ unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool
                 globaldir.ptr() as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__1);
             *ptr__1 = NULL_1;
-            *ptr__1;
+            let _ = *ptr__1;
         }
         1 => {
             (*curtab.get()).tp_localdir = xstrdup(&raw mut cwd as *mut ::core::ffi::c_char);

@@ -3123,12 +3123,12 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
                 &raw mut (*buf).b_ffname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
             let mut ptr__0: *mut *mut ::core::ffi::c_void =
                 &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL;
-            *ptr__0;
+            let _ = *ptr__0;
         }
     } else if ret == VIM_NO as ::core::ffi::c_int {
         unchanged(buf, true_0 != 0, false_0 != 0);

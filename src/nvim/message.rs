@@ -4235,7 +4235,7 @@ pub unsafe extern "C" fn msg_grid_validate() {
             &raw mut (*msg_grid.ptr()).dirty_col as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         ui_call_grid_destroy((*msg_grid.ptr()).handle as Integer);
         (*msg_grid.ptr()).throttled = false_0 != 0;
         (*msg_grid_adj.ptr()).row_offset = 0 as ::core::ffi::c_int;
@@ -4829,7 +4829,7 @@ pub unsafe extern "C" fn reset_last_sourcing() {
         last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     last_sourcing_lnum.set(0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn other_sourcing_name() -> bool {
@@ -4945,7 +4945,7 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
             last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         if !(*((*exestack.ptr()).ga_data as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_name
@@ -6336,7 +6336,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
             keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     if tmpState == MODE_SETWSIZE as ::core::ffi::c_int {
         ui_refresh();
@@ -6481,7 +6481,7 @@ pub unsafe extern "C" fn msg_start() {
             keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         need_fileinfo.set(false_0 != 0);
     }
     if need_highlight_changed.get() {
@@ -8840,7 +8840,7 @@ pub unsafe extern "C" fn give_warning(
     let mut ptr_: *mut *mut ::core::ffi::c_void = keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     if hl {
         keep_msg_hl_id.set(HLF_W as ::core::ffi::c_int);
     } else {

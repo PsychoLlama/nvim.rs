@@ -6201,7 +6201,7 @@ unsafe extern "C" fn iconv_string(
                     &raw mut result as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
                 break;
             }
             done = to.offset_from(result) as size_t;

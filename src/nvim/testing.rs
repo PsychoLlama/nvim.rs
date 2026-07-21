@@ -1998,7 +1998,7 @@ pub unsafe extern "C" fn f_assert_fails(
         emsg_assert_fails_msg.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     xfree(tofree as *mut ::core::ffi::c_void);
     set_vim_var_string(
         VV_ERRMSG,

@@ -4216,7 +4216,7 @@ pub unsafe extern "C" fn do_execreg(
             new_last_cmdline.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         let mut p: *mut ::core::ffi::c_char = vim_strsave_escaped_ext(
             last_cmdline.get(),
             b"\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0B\x0C\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\0"
@@ -4580,7 +4580,7 @@ pub unsafe extern "C" fn free_register(mut reg: *mut yankreg_T) {
         &raw mut (*reg).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     if (*reg).y_array.is_null() {
         return;
     }
@@ -4595,14 +4595,14 @@ pub unsafe extern "C" fn free_register(mut reg: *mut yankreg_T) {
             &raw mut (*(*reg).y_array.offset(i as isize)).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
         (*(*reg).y_array.offset(i as isize)).size = 0 as size_t;
     }
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         &raw mut (*reg).y_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
-    *ptr__1;
+    let _ = *ptr__1;
 }
 unsafe extern "C" fn yank_copy_line(
     mut reg: *mut yankreg_T,
@@ -4819,7 +4819,7 @@ pub unsafe extern "C" fn op_yank_reg(
                     as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
             (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size = 0 as size_t;
             y_idx = 1 as size_t;
         } else {
@@ -6592,7 +6592,7 @@ unsafe extern "C" fn str_to_reg(
             &raw mut (*y_ptr).y_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         return;
     }
     let mut pp: *mut String_0 = xrealloc(
@@ -6709,7 +6709,7 @@ unsafe extern "C" fn str_to_reg(
         &raw mut (*y_ptr).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     (*y_ptr).timestamp = os_time();
     if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
         (*y_ptr).y_width = (if blocklen == -1 as ::core::ffi::c_int {

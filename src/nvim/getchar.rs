@@ -3101,7 +3101,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
@@ -4651,7 +4651,7 @@ unsafe extern "C" fn free_typebuf() {
             &raw mut (*typebuf.ptr()).tb_buf as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     if (*typebuf.ptr()).tb_noremap == noremapbuf_init.ptr() as *mut uint8_t {
         internal_error(b"Free typebuf 2\0".as_ptr() as *const ::core::ffi::c_char);
@@ -4660,7 +4660,7 @@ unsafe extern "C" fn free_typebuf() {
             &raw mut (*typebuf.ptr()).tb_noremap as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     };
 }
 static saved_typebuf: GlobalCell<[typebuf_T; 15]> = GlobalCell::new(
@@ -5281,7 +5281,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
             &raw mut (*on_key_buf.ptr()).items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     (*on_key_buf.ptr()).capacity = ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
         .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())

@@ -18,7 +18,7 @@
     "src/nvim/api/extmark.rs": {"lines": 4477, "no_mangle": 16, "unsafe": 32},
     "src/nvim/api/options.rs": {"lines": 2870, "no_mangle": 4, "unsafe": 7},
     "src/nvim/api/private/converter.rs": {"lines": 4832, "no_mangle": 4, "unsafe": 25},
-    "src/nvim/api/private/dispatch.rs": {"lines": 28499, "no_mangle": 342, "unsafe": 624},
+    "src/nvim/api/private/dispatch.rs": {"lines": 28532, "no_mangle": 342, "unsafe": 624},
     "src/nvim/api/private/helpers.rs": {"lines": 35743, "no_mangle": 48, "unsafe": 53},
     "src/nvim/api/private/validate.rs": {"no_mangle": 5, "unsafe": 5},
     "src/nvim/api/tabpage.rs": {"lines": 2039, "no_mangle": 9, "unsafe": 9},

@@ -572,7 +572,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -1852,7 +1852,7 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                         b"::%zu\0".as_ptr() as *const ::core::ffi::c_char,
                         token.len,
                     ) as isize);
-                p >= e as *mut ::core::ffi::c_char;
+                let _ = p >= e as *mut ::core::ffi::c_char;
             } else {
                 let c2rust_fresh0 = p;
                 p = p.offset(1);
@@ -2320,7 +2320,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
             &raw mut ast_stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 #[inline]
@@ -3742,7 +3742,7 @@ unsafe extern "C" fn parse_quoted_string(
             &raw mut shifts.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 static want_node_to_lexer_flags: GlobalCell<[::core::ffi::c_int; 2]> = GlobalCell::new([
@@ -11981,7 +11981,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             &raw mut ast_stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     return ast;
 }

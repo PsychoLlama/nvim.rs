@@ -5388,7 +5388,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
         &raw mut pack_used.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree(rtp_used.keys as *mut ::core::ffi::c_void);
     xfree(rtp_used.h.hash as *mut ::core::ffi::c_void);
     rtp_used = SET_INIT;

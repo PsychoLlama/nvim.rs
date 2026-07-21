@@ -606,7 +606,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const API_INTEGER_MAX: ::core::ffi::c_long = INT64_MAX;
@@ -1726,7 +1726,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
             &raw mut stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     if !ret {
         tv_clear(ret_tv);
@@ -2970,7 +2970,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
             &raw mut stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         if arena.is_null() {
@@ -4937,7 +4937,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -4947,7 +4947,7 @@ unsafe extern "C" fn encode_vim_to_lua(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }

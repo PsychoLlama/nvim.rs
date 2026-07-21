@@ -6475,7 +6475,7 @@ pub unsafe extern "C" fn handle_nvim_del_autocmd(
             .data
             .integer;
         nvim_del_autocmd(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -6581,7 +6581,7 @@ pub unsafe extern "C" fn handle_nvim_clear_autocmds(
                 break '_cleanup;
             }
             nvim_clear_autocmds(&raw mut arg_1, arena, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -6732,7 +6732,7 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
             .data
             .integer;
         nvim_del_augroup_by_id(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -6782,7 +6782,7 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
             .data
             .string;
         nvim_del_augroup_by_name(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -6894,7 +6894,7 @@ pub unsafe extern "C" fn handle_nvim_exec_autocmds(
                 break '_cleanup;
             }
             nvim_exec_autocmds(arg_1, &raw mut arg_2, arena, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -7480,7 +7480,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_lines(
                             nvim_buf_set_lines(
                                 channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena, error,
                             );
-                            (*error).type_0 as ::core::ffi::c_int
+                            let _ = (*error).type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int;
                         }
                     } else {
@@ -7629,7 +7629,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_text(
                                         channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6,
                                         arena, error,
                                     );
-                                    (*error).type_0 as ::core::ffi::c_int
+                                    let _ = (*error).type_0 as ::core::ffi::c_int
                                         != kErrorTypeNone as ::core::ffi::c_int;
                                 }
                             } else {
@@ -8392,7 +8392,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_keymap(
                             &raw mut arg_5,
                             error,
                         );
-                        (*error).type_0 as ::core::ffi::c_int
+                        let _ = (*error).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int;
                     } else {
                         api_set_error(
@@ -8505,7 +8505,8 @@ pub unsafe extern "C" fn handle_nvim_buf_del_keymap(
                         .data
                         .string;
                     nvim_buf_del_keymap(channel_id, arg_1, arg_2, arg_3, error);
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                    let _ = (*error).type_0 as ::core::ffi::c_int
+                        != kErrorTypeNone as ::core::ffi::c_int;
                 } else {
                     api_set_error(
                         error,
@@ -8603,7 +8604,8 @@ pub unsafe extern "C" fn handle_nvim_buf_set_var(
                     .string;
                 arg_3 = *args.items.offset(2 as ::core::ffi::c_int as isize);
                 nvim_buf_set_var(arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -8688,7 +8690,8 @@ pub unsafe extern "C" fn handle_nvim_buf_del_var(
                     .data
                     .string;
                 nvim_buf_del_var(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -8849,7 +8852,8 @@ pub unsafe extern "C" fn handle_nvim_buf_set_name(
                     .data
                     .string;
                 nvim_buf_set_name(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -9055,7 +9059,8 @@ pub unsafe extern "C" fn handle_nvim_buf_delete(
                 );
             } else {
                 nvim_buf_delete(arg_1, &raw mut arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -10050,7 +10055,7 @@ pub unsafe extern "C" fn handle_nvim_create_user_command(
                 break '_cleanup;
             }
             nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -10101,7 +10106,7 @@ pub unsafe extern "C" fn handle_nvim_del_user_command(
             .data
             .string;
         nvim_del_user_command(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -10282,7 +10287,8 @@ pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
                     &raw mut arg_4,
                     error,
                 );
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -10367,7 +10373,8 @@ pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
                     .data
                     .string;
                 nvim_buf_del_user_command(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -10981,7 +10988,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
                             .data
                             .integer;
                         nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4, error);
-                        (*error).type_0 as ::core::ffi::c_int
+                        let _ = (*error).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int;
                     } else {
                         api_set_error(
@@ -11613,7 +11620,8 @@ pub unsafe extern "C" fn handle_buffer_insert(
                         .data
                         .array;
                     buffer_insert(arg_1, arg_2, arg_3, arena, error);
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                    let _ = (*error).type_0 as ::core::ffi::c_int
+                        != kErrorTypeNone as ::core::ffi::c_int;
                 } else {
                     api_set_error(
                         error,
@@ -11805,7 +11813,8 @@ pub unsafe extern "C" fn handle_buffer_set_line(
                         .data
                         .string;
                     buffer_set_line(arg_1, arg_2, arg_3, arena, error);
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                    let _ = (*error).type_0 as ::core::ffi::c_int
+                        != kErrorTypeNone as ::core::ffi::c_int;
                 } else {
                     api_set_error(
                         error,
@@ -11895,7 +11904,8 @@ pub unsafe extern "C" fn handle_buffer_del_line(
                     .data
                     .integer;
                 buffer_del_line(arg_1, arg_2, arena, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -12224,7 +12234,7 @@ pub unsafe extern "C" fn handle_buffer_set_line_slice(
                         buffer_set_line_slice(
                             arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena, error,
                         );
-                        (*error).type_0 as ::core::ffi::c_int
+                        let _ = (*error).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int;
                     } else {
                         api_set_error(
@@ -13036,7 +13046,7 @@ pub unsafe extern "C" fn handle_nvim_set_option(
             .string;
         arg_2 = *args.items.offset(1 as ::core::ffi::c_int as isize);
         nvim_set_option(channel_id, arg_1, arg_2, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -13271,7 +13281,8 @@ pub unsafe extern "C" fn handle_nvim_buf_set_option(
                     .string;
                 arg_3 = *args.items.offset(2 as ::core::ffi::c_int as isize);
                 nvim_buf_set_option(channel_id, arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -13452,7 +13463,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_option(
                     .string;
                 arg_3 = *args.items.offset(2 as ::core::ffi::c_int as isize);
                 nvim_win_set_option(channel_id, arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -13984,7 +13996,7 @@ pub unsafe extern "C" fn handle_nvim_ui_term_event(
             .string;
         arg_2 = *args.items.offset(1 as ::core::ffi::c_int as isize);
         nvim_ui_term_event(channel_id, arg_1, arg_2, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -14856,7 +14868,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
                             .data
                             .integer;
                         nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4, error);
-                        (*error).type_0 as ::core::ffi::c_int
+                        let _ = (*error).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int;
                     } else {
                         api_set_error(
@@ -15111,7 +15123,7 @@ pub unsafe extern "C" fn handle_nvim__ns_set(
                 break '_cleanup;
             }
             nvim__ns_set(arg_1, &raw mut arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -15422,7 +15434,7 @@ pub unsafe extern "C" fn handle_nvim_set_option_value(
                 break '_cleanup;
             }
             nvim_set_option_value(channel_id, arg_1, arg_2, &raw mut arg_3, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -15846,7 +15858,8 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
                     .string;
                 arg_3 = *args.items.offset(2 as ::core::ffi::c_int as isize);
                 nvim_tabpage_set_var(arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -15931,7 +15944,8 @@ pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
                     .data
                     .string;
                 nvim_tabpage_del_var(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -16112,7 +16126,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
                 break '_cleanup;
             }
             nvim_tabpage_set_win(arg_1, arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -16502,7 +16516,8 @@ pub unsafe extern "C" fn handle_nvim_ui_attach(
                     break '_cleanup;
                 }
                 nvim_ui_attach(channel_id, arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -16596,7 +16611,8 @@ pub unsafe extern "C" fn handle_ui_attach(
                     break '_cleanup;
                 }
                 ui_attach(channel_id, arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -16675,7 +16691,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_focus(
                 break '_cleanup;
             }
             nvim_ui_set_focus(channel_id, arg_1, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -16710,7 +16726,7 @@ pub unsafe extern "C" fn handle_nvim_ui_detach(
         );
     } else {
         nvim_ui_detach(channel_id, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     }
     return ret;
 }
@@ -16757,7 +16773,7 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize(
                 .data
                 .integer;
             nvim_ui_try_resize(channel_id, arg_1, arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -16820,7 +16836,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_option(
             .string;
         arg_2 = *args.items.offset(1 as ::core::ffi::c_int as isize);
         nvim_ui_set_option(channel_id, arg_1, arg_2, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -16881,7 +16897,8 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
                     .data
                     .integer;
                 nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -16944,7 +16961,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
             .data
             .integer;
         nvim_ui_pum_set_height(channel_id, arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -17078,7 +17095,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
                 break '_cleanup;
             }
             nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -17122,7 +17139,7 @@ pub unsafe extern "C" fn handle_nvim_ui_send(
             .data
             .string;
         nvim_ui_send(channel_id, arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -17470,7 +17487,8 @@ pub unsafe extern "C" fn handle_nvim_set_hl(
                     break '_cleanup;
                 }
                 nvim_set_hl(channel_id, arg_1, arg_2, &raw mut arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -17619,7 +17637,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns(
             .data
             .integer;
         nvim_set_hl_ns(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -17666,7 +17684,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
             .data
             .integer;
         nvim_set_hl_ns_fast(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -17913,7 +17931,7 @@ pub unsafe extern "C" fn handle_nvim_input_mouse(
                                 .data
                                 .integer;
                             nvim_input_mouse(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, error);
-                            (*error).type_0 as ::core::ffi::c_int
+                            let _ = (*error).type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int;
                         } else {
                             api_set_error(
@@ -18715,7 +18733,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_dir(
             .data
             .string;
         nvim_set_current_dir(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -18817,7 +18835,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_line(
             );
         } else {
             nvim_set_current_line(arg_1, arena, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     } else {
         api_set_error(
@@ -18868,7 +18886,7 @@ pub unsafe extern "C" fn handle_nvim_del_current_line(
         );
     } else {
         nvim_del_current_line(arena, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     }
     return ret;
 }
@@ -18972,7 +18990,7 @@ pub unsafe extern "C" fn handle_nvim_set_var(
             .string;
         arg_2 = *args.items.offset(1 as ::core::ffi::c_int as isize);
         nvim_set_var(arg_1, arg_2, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -19022,7 +19040,7 @@ pub unsafe extern "C" fn handle_nvim_del_var(
             .data
             .string;
         nvim_del_var(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -19133,7 +19151,7 @@ pub unsafe extern "C" fn handle_nvim_set_vvar(
             .string;
         arg_2 = *args.items.offset(1 as ::core::ffi::c_int as isize);
         nvim_set_vvar(arg_1, arg_2, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -19463,7 +19481,8 @@ pub unsafe extern "C" fn handle_nvim_set_current_buf(
                 );
             } else {
                 nvim_set_current_buf(arg_1, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -19621,7 +19640,8 @@ pub unsafe extern "C" fn handle_nvim_set_current_win(
                 );
             } else {
                 nvim_set_current_win(arg_1, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -19909,7 +19929,7 @@ pub unsafe extern "C" fn handle_nvim_chan_send(
                 .data
                 .string;
             nvim_chan_send(arg_1, arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -20080,7 +20100,8 @@ pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
                 );
             } else {
                 nvim_set_current_tabpage(arg_1, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -20320,7 +20341,8 @@ pub unsafe extern "C" fn handle_nvim_put(
                     );
                 } else {
                     nvim_put(arg_1, arg_2, arg_3, arg_4, arena, error);
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                    let _ = (*error).type_0 as ::core::ffi::c_int
+                        != kErrorTypeNone as ::core::ffi::c_int;
                 }
             } else {
                 api_set_error(
@@ -20836,7 +20858,8 @@ pub unsafe extern "C" fn handle_nvim_set_keymap(
                         break '_cleanup;
                     }
                     nvim_set_keymap(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4, error);
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                    let _ = (*error).type_0 as ::core::ffi::c_int
+                        != kErrorTypeNone as ::core::ffi::c_int;
                 } else {
                     api_set_error(
                         error,
@@ -20913,7 +20936,7 @@ pub unsafe extern "C" fn handle_nvim_del_keymap(
                 .data
                 .string;
             nvim_del_keymap(channel_id, arg_1, arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -21117,7 +21140,8 @@ pub unsafe extern "C" fn handle_nvim_set_client_info(
                     break '_cleanup;
                 }
                 nvim_set_client_info(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -21196,7 +21220,7 @@ pub unsafe extern "C" fn handle_nvim__chan_set_detach(
                 break '_cleanup;
             }
             nvim__chan_set_detach(channel_id, arg_1, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -21875,7 +21899,7 @@ pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
                 break '_cleanup;
             }
             nvim_select_popupmenu_item(arg_1, arg_2, arg_3, &raw mut arg_4, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         } else {
             api_set_error(
                 error,
@@ -22612,7 +22636,7 @@ pub unsafe extern "C" fn handle_nvim__redraw(
                 break '_cleanup;
             }
             nvim__redraw(&raw mut arg_1, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -22767,7 +22791,7 @@ pub unsafe extern "C" fn handle_nvim_command(
             .data
             .string;
         nvim_command(arg_1, error);
-        (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+        let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
     } else {
         api_set_error(
             error,
@@ -23487,7 +23511,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_config(
                 break '_cleanup;
             }
             nvim_win_set_config(arg_1, &raw mut arg_2, error);
-            (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
         }
     }
     return ret;
@@ -23815,7 +23839,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_buf(
                 );
             } else {
                 nvim_win_set_buf(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -23971,7 +23996,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_cursor(
                     .data
                     .array;
                 nvim_win_set_cursor(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -24126,7 +24152,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_height(
                     .data
                     .integer;
                 nvim_win_set_height(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -24281,7 +24308,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_width(
                     .data
                     .integer;
                 nvim_win_set_width(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -24462,7 +24490,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_var(
                     .string;
                 arg_3 = *args.items.offset(2 as ::core::ffi::c_int as isize);
                 nvim_win_set_var(arg_1, arg_2, arg_3, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -24547,7 +24576,8 @@ pub unsafe extern "C" fn handle_nvim_win_del_var(
                     .data
                     .string;
                 nvim_win_del_var(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,
@@ -24928,7 +24958,8 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
                 );
             } else {
                 nvim_win_hide(arg_1, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -25034,7 +25065,8 @@ pub unsafe extern "C" fn handle_nvim_win_close(
                 );
             } else {
                 nvim_win_close(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             }
         }
     }
@@ -25109,7 +25141,8 @@ pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
                     .data
                     .integer;
                 nvim_win_set_hl_ns(arg_1, arg_2, error);
-                (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
+                let _ =
+                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
             } else {
                 api_set_error(
                     error,

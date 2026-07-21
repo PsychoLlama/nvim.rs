@@ -137,7 +137,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
@@ -732,7 +732,7 @@ pub unsafe extern "C" fn mpack_object_inner(
             &raw mut stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 #[no_mangle]

@@ -8410,7 +8410,7 @@ unsafe extern "C" fn do_sub(
                         &raw mut sub_firstline as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL_0;
-                    *ptr_;
+                    let _ = *ptr_;
                 }
                 current_match.start.lnum = sub_firstlnum;
                 if lnum > (*curbuf.get()).b_ml.ml_line_count {
@@ -9188,7 +9188,7 @@ unsafe extern "C" fn do_sub(
                 &raw mut sub_firstline as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL_0;
-            *ptr__0;
+            let _ = *ptr__0;
             xfree(line_matches.items as *mut ::core::ffi::c_void);
             line_matches.capacity = 0 as size_t;
             line_matches.size = line_matches.capacity;

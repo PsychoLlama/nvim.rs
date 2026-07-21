@@ -4660,7 +4660,7 @@ pub unsafe extern "C" fn do_tag(
                                 as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL_0;
-                        *ptr_;
+                        let _ = *ptr_;
                         (*tagstack.offset(tagstackidx as isize)).user_data = xmemdupz(
                             tagp2_0.user_data as *const ::core::ffi::c_void,
                             tagp2_0.user_data_end.offset_from(tagp2_0.user_data) as size_t,
@@ -4904,7 +4904,7 @@ unsafe extern "C" fn print_tag_list(
                 &raw mut p as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
         }
         if msg_col.get() > 0 as ::core::ffi::c_int {
             msg_putchar('\n' as ::core::ffi::c_int);
@@ -5106,7 +5106,7 @@ unsafe extern "C" fn add_llist_tags(
                 &raw mut p as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
             let mut lnum: linenr_T = 0 as linenr_T;
             if *(*__ctype_b_loc()).offset(*tagp.command as uint8_t as ::core::ffi::c_int as isize)
                 as ::core::ffi::c_int
@@ -5224,11 +5224,11 @@ unsafe extern "C" fn add_llist_tags(
     let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut fname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut cmd as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
-    *ptr__1;
+    let _ = *ptr__1;
     return OK;
 }
 #[no_mangle]
@@ -5237,7 +5237,7 @@ pub unsafe extern "C" fn tag_freematch() {
         tagmatchname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
 }
 unsafe extern "C" fn taglen_advance(mut l: ::core::ffi::c_int) {
     if l == MAXCOL as ::core::ffi::c_int {
@@ -7831,12 +7831,12 @@ pub unsafe extern "C" fn tagstack_clear_entry(mut item: *mut taggy_T) {
         &raw mut (*item).tagname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*item).user_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn expand_tags(

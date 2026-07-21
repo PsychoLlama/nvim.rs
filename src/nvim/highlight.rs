@@ -3067,7 +3067,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
             &raw mut (*combine_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         xfree((*blend_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
         xfree((*blend_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
         (*blend_attr_entries.ptr()).set = Set_uint64_t {
@@ -3078,7 +3078,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
             &raw mut (*blend_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
         xfree((*blendthrough_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
         xfree((*blendthrough_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
         (*blendthrough_attr_entries.ptr()).set = Set_uint64_t {
@@ -3089,7 +3089,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
             &raw mut (*blendthrough_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__1);
         *ptr__1 = NULL_0;
-        *ptr__1;
+        let _ = *ptr__1;
         xfree((*ns_hls.ptr()).set.keys as *mut ::core::ffi::c_void);
         xfree((*ns_hls.ptr()).set.h.hash as *mut ::core::ffi::c_void);
         (*ns_hls.ptr()).set = Set_ColorKey {
@@ -3100,7 +3100,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
             &raw mut (*ns_hls.ptr()).values as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__2);
         *ptr__2 = NULL_0;
-        *ptr__2;
+        let _ = *ptr__2;
         xfree((*urls.ptr()).keys as *mut ::core::ffi::c_void);
         xfree((*urls.ptr()).h.hash as *mut ::core::ffi::c_void);
         urls.set(Set_cstr_t {

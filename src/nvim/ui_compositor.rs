@@ -1899,12 +1899,12 @@ pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
             linebuf.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
             attrbuf.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
         bufsize.set(0 as size_t);
     }
     (*ui).composed = false_0 != 0;

@@ -474,7 +474,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -4649,7 +4649,7 @@ unsafe extern "C" fn encode_vim_to_object(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -4659,7 +4659,7 @@ unsafe extern "C" fn encode_vim_to_object(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }
@@ -4728,7 +4728,7 @@ pub unsafe extern "C" fn vim_to_object(
             &raw mut edata.stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     return ret;
 }

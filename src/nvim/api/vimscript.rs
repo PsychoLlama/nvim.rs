@@ -2757,7 +2757,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
@@ -3431,7 +3431,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
             &raw mut colors.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     let mut ast_conv_stack: ExprASTConvStack = ExprASTConvStack {
         size: 0,
@@ -4109,7 +4109,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
             &raw mut ast_conv_stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     let c2rust_fresh35 = ret.size;
     ret.size = ret.size.wrapping_add(1);

@@ -2824,12 +2824,12 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     repl_from.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
                 let mut ptr__0: *mut *mut ::core::ffi::c_void =
                     repl_to.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL;
-                *ptr__0;
+                let _ = *ptr__0;
                 let mut stp_0: *mut suggest_T = (sug.su_ga.ga_data as *mut suggest_T)
                     .offset((selected - 1 as ::core::ffi::c_int) as isize);
                 if sug.su_badlen > (*stp_0).st_orglen {

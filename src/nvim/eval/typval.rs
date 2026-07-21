@@ -2078,7 +2078,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 #[inline(always)]
@@ -7401,7 +7401,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             },
                         },
                     };
-                    _nothing_conv_real_list_after_start(
+                    let _ = _nothing_conv_real_list_after_start(
                         tv,
                         (*mpstack).items.offset(
                             (*mpstack)
@@ -7592,7 +7592,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                     << 31 as ::core::ffi::c_int
                                                                 | low_bits as uint64_t;
                                                             if sign <= 0 as varnumber_T {
-                                                                number.wrapping_neg();
+                                                                let _ = number.wrapping_neg();
                                                                 (*tv).vval.v_number =
                                                                     0 as varnumber_T;
                                                                 (*tv).v_lock = VAR_UNLOCKED;
@@ -8213,7 +8213,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                             },
                         },
                     };
-                    _nothing_conv_real_dict_after_start(
+                    let _ = _nothing_conv_real_dict_after_start(
                         tv,
                         &raw mut (*tv).vval.v_dict,
                         (_typval_encode_nothing_nodict_var.ptr() as *const _)
@@ -8301,7 +8301,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             );
                             continue;
                         } else {
-                            (*cur_mpsv).data.d.todo
+                            let _ = (*cur_mpsv).data.d.todo
                                 != (*(*cur_mpsv).data.d.dict).dv_hashtab.ht_used;
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
                                 || (*(*cur_mpsv).data.d.hi).hi_key
@@ -8325,7 +8325,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             _nothing_conv_list_end((*cur_mpsv).tv);
                             continue;
                         } else {
-                            (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
+                            let _ = (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
                             tv = &raw mut (*(*cur_mpsv).data.l.li).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
@@ -8343,7 +8343,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             );
                             continue;
                         } else {
-                            (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
+                            let _ = (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
                             let kv_pair: *const list_T = (*(*cur_mpsv).data.l.li).li_tv.vval.v_list;
                             if _typval_encode_nothing_convert_one_value(
                                 ignored,
@@ -8723,7 +8723,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                             _nothing_conv_list_end(::core::ptr::null_mut::<typval_T>());
                             continue;
                         } else {
-                            (*cur_mpsv).data.a.argv != (*cur_mpsv).data.a.arg;
+                            let _ = (*cur_mpsv).data.a.argv != (*cur_mpsv).data.a.arg;
                             let c2rust_fresh2 = (*cur_mpsv).data.a.arg;
                             (*cur_mpsv).data.a.arg = (*cur_mpsv).data.a.arg.offset(1);
                             tv = c2rust_fresh2;
@@ -8762,7 +8762,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -8772,7 +8772,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }

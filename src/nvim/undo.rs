@@ -2936,7 +2936,7 @@ unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
             &raw mut (*fmarks.offset(i as isize)).additional_data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         i = i.wrapping_add(1);
     }
 }
@@ -3307,7 +3307,7 @@ pub unsafe extern "C" fn u_get_undo_file_name(
             &raw mut undo_file_name as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     xfree(munged_name as *mut ::core::ffi::c_void);
     return undo_file_name;
@@ -6045,7 +6045,7 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
         &raw mut (*buf).b_u_line_ptr as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*buf).b_u_line_lnum = 0 as ::core::ffi::c_int as linenr_T;
 }
 #[no_mangle]

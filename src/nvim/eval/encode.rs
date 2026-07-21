@@ -440,7 +440,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -1549,7 +1549,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             (*(*cur_mpsv).data.d.dict).dv_copyID = (*cur_mpsv).saved_copyID;
                             continue;
                         } else {
-                            (*cur_mpsv).data.d.todo
+                            let _ = (*cur_mpsv).data.d.todo
                                 != (*(*cur_mpsv).data.d.dict).dv_hashtab.ht_used;
                             while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
                                 || (*(*cur_mpsv).data.d.hi).hi_key
@@ -1583,7 +1583,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             tv_list_set_copyid((*cur_mpsv).data.l.list, (*cur_mpsv).saved_copyID);
                             continue;
                         } else {
-                            (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
+                            let _ = (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
                             tv = &raw mut (*(*cur_mpsv).data.l.li).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
@@ -1594,7 +1594,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             tv_list_set_copyid((*cur_mpsv).data.l.list, (*cur_mpsv).saved_copyID);
                             continue;
                         } else {
-                            (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
+                            let _ = (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list);
                             let kv_pair: *const list_T = (*(*cur_mpsv).data.l.li).li_tv.vval.v_list;
                             if _typval_encode_msgpack_convert_one_value(
                                 packer,
@@ -1940,7 +1940,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             mpstack.size = mpstack.size.wrapping_sub(1);
                             continue;
                         } else {
-                            (*cur_mpsv).data.a.argv != (*cur_mpsv).data.a.arg;
+                            let _ = (*cur_mpsv).data.a.argv != (*cur_mpsv).data.a.arg;
                             let c2rust_fresh2 = (*cur_mpsv).data.a.arg;
                             (*cur_mpsv).data.a.arg = (*cur_mpsv).data.a.arg.offset(1);
                             tv = c2rust_fresh2;
@@ -1979,7 +1979,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -1989,7 +1989,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }
@@ -4135,7 +4135,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -4145,7 +4145,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }
@@ -6281,7 +6281,7 @@ unsafe extern "C" fn encode_vim_to_string(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -6291,7 +6291,7 @@ unsafe extern "C" fn encode_vim_to_string(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }
@@ -8105,7 +8105,7 @@ unsafe extern "C" fn encode_vim_to_json(
                     &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
             return OK;
         }
@@ -8115,7 +8115,7 @@ unsafe extern "C" fn encode_vim_to_json(
             &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     return FAIL;
 }

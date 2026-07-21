@@ -2736,7 +2736,7 @@ pub unsafe extern "C" fn f_chdir(
             &raw mut (*rettv).vval.v_string as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 #[no_mangle]
@@ -4544,7 +4544,7 @@ pub unsafe extern "C" fn f_resolve(
                 &raw mut remain as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
     }
     if !vim_ispathsep(*p as ::core::ffi::c_int) {

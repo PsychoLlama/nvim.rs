@@ -7193,7 +7193,7 @@ pub unsafe extern "C" fn do_pending_operator(
                         repeat_cmdline.ptr() as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL;
-                    *ptr_;
+                    let _ = *ptr_;
                 }
             } else if (*cap).cmdchar
                 == -(253 as ::core::ffi::c_int

@@ -3575,7 +3575,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
                     &raw mut mesg as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
             }
             i += 1;
         }

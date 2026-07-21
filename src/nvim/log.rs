@@ -4702,7 +4702,7 @@ unsafe extern "C" fn log_path_init() {
             &raw mut loghome as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         let mut defaultpath: *mut ::core::ffi::c_char = stdpaths_user_state_subpath(
             b"nvim.log\0".as_ptr() as *const ::core::ffi::c_char,
             0 as size_t,
@@ -4754,7 +4754,7 @@ unsafe extern "C" fn log_path_init() {
             &raw mut failed_dir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
     }
 }
 #[no_mangle]

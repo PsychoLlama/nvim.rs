@@ -5951,12 +5951,12 @@ unsafe extern "C" fn build_cmdline_str(
             &raw mut (*eap).args as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
             &raw mut (*eap).arglens as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
         (*eap).argc = 0 as size_t;
     }
 }

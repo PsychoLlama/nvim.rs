@@ -8020,7 +8020,7 @@ unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::f
                 &raw mut (*buf_0).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
             buf_0 = (*buf_0).b_next;
         }
         p_sm.set(0 as ::core::ffi::c_int);

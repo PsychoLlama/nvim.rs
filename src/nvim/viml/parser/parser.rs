@@ -132,7 +132,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 #[no_mangle]
@@ -295,14 +295,14 @@ pub unsafe extern "C" fn viml_parser_destroy(pstate: *mut ParserState) {
             &raw mut (*pstate).reader.lines.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     if (*pstate).stack.items != &raw mut (*pstate).stack.init_array as *mut ParserStateItem {
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
             &raw mut (*pstate).stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     }
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

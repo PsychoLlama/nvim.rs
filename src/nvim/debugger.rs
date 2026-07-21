@@ -2989,7 +2989,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             debug_oldval.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     if !(*debug_newval.ptr()).is_null() {
         smsg(
@@ -3001,7 +3001,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             debug_newval.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     let mut sname: *mut ::core::ffi::c_char = estack_sfile(ESTACK_NONE);
     if !sname.is_null() {

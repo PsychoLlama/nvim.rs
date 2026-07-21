@@ -3689,7 +3689,7 @@ unsafe extern "C" fn syn_stack_free_block(mut block: *mut synblock_T) {
         &raw mut (*block).b_sst_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*block).b_sst_first = ::core::ptr::null_mut::<synstate_T>();
     (*block).b_sst_len = 0 as ::core::ffi::c_int;
 }
@@ -5923,7 +5923,7 @@ pub unsafe extern "C" fn syntax_clear(mut block: *mut synblock_T) {
         &raw mut (*block).b_syn_linecont_pat as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*block).b_syn_folditems = 0 as ::core::ffi::c_int;
     clear_string_option(&raw mut (*block).b_syn_isk);
     syn_stack_free_all(block);
@@ -5961,7 +5961,7 @@ unsafe extern "C" fn syntax_sync_clear() {
         &raw mut (*(*curwin.get()).w_s).b_syn_linecont_pat as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     clear_string_option(&raw mut (*(*curwin.get()).w_s).b_syn_isk);
     syn_stack_free_all((*curwin.get()).w_s);
 }
@@ -6075,7 +6075,7 @@ unsafe extern "C" fn syn_cmd_clear(mut eap: *mut exarg_T, mut syncing: ::core::f
                         .scl_list as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL;
-                    *ptr_;
+                    let _ = *ptr_;
                 }
             } else {
                 id = syn_name2id_len(arg, arg_end.offset_from(arg) as size_t);
@@ -8553,7 +8553,7 @@ unsafe extern "C" fn syn_cmd_sync(mut eap: *mut exarg_T, mut _syncing: ::core::f
                                     as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL;
-                            *ptr_;
+                            let _ = *ptr_;
                             finished = true_0 != 0;
                             break;
                         }

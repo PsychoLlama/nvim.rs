@@ -4572,7 +4572,7 @@ pub unsafe extern "C" fn close_buffer(
                 &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
         } else {
             (*buf).b_sfname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
@@ -4580,7 +4580,7 @@ pub unsafe extern "C" fn close_buffer(
             &raw mut (*buf).b_ffname as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
         if (*buf).b_prev.is_null() {
             firstbuf.set((*buf).b_next);
         } else {
@@ -4866,7 +4866,7 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
         &raw mut (*buf).b_start_fenc as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     buf_free_callbacks(buf);
 }
 #[no_mangle]
@@ -6245,18 +6245,18 @@ pub unsafe extern "C" fn free_buf_options(mut buf: *mut buf_T, mut free_p_ff: bo
         &raw mut (*buf).b_p_vsts_nopaste as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*buf).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     clear_string_option(&raw mut (*buf).b_p_vts);
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         &raw mut (*buf).b_p_vts_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
-    *ptr__1;
+    let _ = *ptr__1;
     clear_string_option(&raw mut (*buf).b_p_keymap);
     keymap_ga_clear(&raw mut (*buf).b_kmap_ga);
     ga_clear(&raw mut (*buf).b_kmap_ga);
@@ -7322,7 +7322,7 @@ pub unsafe extern "C" fn setfname(
                 &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
         } else {
             (*buf).b_sfname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
@@ -7330,7 +7330,7 @@ pub unsafe extern "C" fn setfname(
             &raw mut (*buf).b_ffname as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     } else {
         fname_expand(buf, &raw mut ffname, &raw mut sfname);
         if ffname.is_null() {

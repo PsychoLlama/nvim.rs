@@ -9375,7 +9375,7 @@ pub unsafe extern "C" fn get_user_var_name(
     let mut ptr_: *mut *mut ::core::ffi::c_void = varnamebuf.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     varnamebuflen.set(0 as size_t);
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -10101,7 +10101,7 @@ pub unsafe extern "C" fn before_set_vvar(
             &raw mut (*di).di_tv.vval.v_string as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         if copy as ::core::ffi::c_int != 0
             || (*tv).v_type as ::core::ffi::c_uint
                 != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -11048,18 +11048,18 @@ pub unsafe extern "C" fn var_redir_stop() {
         let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*redir_ga.ptr()).ga_data;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         let mut ptr__0: *mut *mut ::core::ffi::c_void =
             redir_lval.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
     }
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         redir_varname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
-    *ptr__1;
+    let _ = *ptr__1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_gettabvar(

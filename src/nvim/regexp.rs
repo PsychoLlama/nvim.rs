@@ -4344,7 +4344,7 @@ pub unsafe extern "C" fn regtilde(
                 reg_prev_sub.ptr() as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
         } else {
             xfree(reg_prev_sub.get() as *mut ::core::ffi::c_void);
             reg_prev_sub.set(xstrnsave(newsub, newsublen));
@@ -4570,7 +4570,7 @@ unsafe extern "C" fn vim_regsub_both(
                                 as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL_0;
-                            *ptr_;
+                            let _ = *ptr_;
                         }
                     }
                 } else {
@@ -4588,7 +4588,7 @@ unsafe extern "C" fn vim_regsub_both(
                         as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL_0;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     if can_f_submatch.get() {
                         rsm_save = rsm.get();
                     }
@@ -10829,7 +10829,7 @@ unsafe extern "C" fn bt_regexec_both(
             reg_tofree.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     if (*regstack.ptr()).ga_maxlen > REGSTACK_INITIAL {
         ga_clear(regstack.ptr());
@@ -25457,7 +25457,7 @@ unsafe extern "C" fn nfa_regcomp(
             &raw mut prog as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     xfree(post_start.get() as *mut ::core::ffi::c_void);
     post_end.set(::core::ptr::null_mut::<::core::ffi::c_int>());

@@ -6528,32 +6528,32 @@ pub unsafe extern "C" fn slang_clear(mut lp: *mut slang_T) {
         &raw mut (*lp).sl_fbyts as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_kbyts as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_pbyts as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
-    *ptr__1;
+    let _ = *ptr__1;
     let mut ptr__2: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_fidxs as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__2);
     *ptr__2 = NULL;
-    *ptr__2;
+    let _ = *ptr__2;
     let mut ptr__3: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_kidxs as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__3);
     *ptr__3 = NULL;
-    *ptr__3;
+    let _ = *ptr__3;
     let mut ptr__4: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_pidxs as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__4);
     *ptr__4 = NULL;
-    *ptr__4;
+    let _ = *ptr__4;
     let mut _gap: *mut garray_T = &raw mut (*lp).sl_rep;
     if !(*_gap).ga_data.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6611,39 +6611,39 @@ pub unsafe extern "C" fn slang_clear(mut lp: *mut slang_T) {
         &raw mut (*lp).sl_prefprog as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__5);
     *ptr__5 = NULL;
-    *ptr__5;
+    let _ = *ptr__5;
     let mut ptr__6: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_info as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__6);
     *ptr__6 = NULL;
-    *ptr__6;
+    let _ = *ptr__6;
     let mut ptr__7: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_midword as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__7);
     *ptr__7 = NULL;
-    *ptr__7;
+    let _ = *ptr__7;
     vim_regfree((*lp).sl_compprog);
     (*lp).sl_compprog = ::core::ptr::null_mut::<regprog_T>();
     let mut ptr__8: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_comprules as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__8);
     *ptr__8 = NULL;
-    *ptr__8;
+    let _ = *ptr__8;
     let mut ptr__9: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_compstartflags as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__9);
     *ptr__9 = NULL;
-    *ptr__9;
+    let _ = *ptr__9;
     let mut ptr__10: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_compallflags as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__10);
     *ptr__10 = NULL;
-    *ptr__10;
+    let _ = *ptr__10;
     let mut ptr__11: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_syllable as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__11);
     *ptr__11 = NULL;
-    *ptr__11;
+    let _ = *ptr__11;
     ga_clear(&raw mut (*lp).sl_syl_items);
     ga_clear_strings(&raw mut (*lp).sl_comppat);
     hash_clear_all(
@@ -6664,12 +6664,12 @@ pub unsafe extern "C" fn slang_clear_sug(mut lp: *mut slang_T) {
         &raw mut (*lp).sl_sbyts as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_sidxs as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     close_spellbuf((*lp).sl_sugbuf);
     (*lp).sl_sugbuf = ::core::ptr::null_mut::<buf_T>();
     (*lp).sl_sugloaded = false_0 != 0;
@@ -7282,7 +7282,7 @@ unsafe extern "C" fn clear_midword(mut wp: *mut win_T) {
         &raw mut (*(*wp).w_s).b_spell_ismw_mb as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 unsafe extern "C" fn use_midword(mut lp: *mut slang_T, mut wp: *mut win_T) {
     if (*lp).sl_midword.is_null() {
@@ -11505,7 +11505,7 @@ pub unsafe extern "C" fn spell_delete_wordlist() {
         int_wordlist.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn spell_free_all() {
@@ -11523,12 +11523,12 @@ pub unsafe extern "C" fn spell_free_all() {
     let mut ptr_: *mut *mut ::core::ffi::c_void = repl_to.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         repl_from.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn spell_reload() {

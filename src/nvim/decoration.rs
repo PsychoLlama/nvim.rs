@@ -2486,7 +2486,7 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
                 &raw mut (*sh).sign_name as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
         (*sh).flags = 0 as uint16_t;
         if !(*sh).url.is_null() {
@@ -2494,7 +2494,7 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
                 &raw mut (*sh).url as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL;
-            *ptr__0;
+            let _ = *ptr__0;
         }
         if (*sh).next == DECOR_ID_INVALID as uint32_t {
             (*sh).next = decor_freelist.get();

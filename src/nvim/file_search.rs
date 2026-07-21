@@ -3996,13 +3996,13 @@ unsafe extern "C" fn ff_free_stack_element(stack_ptr: *mut ff_stack_T) {
         &raw mut (*stack_ptr).ffs_fix_path.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*stack_ptr).ffs_fix_path.size = 0 as size_t;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*stack_ptr).ffs_wc_path.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     (*stack_ptr).ffs_wc_path.size = 0 as size_t;
     if !(*stack_ptr).ffs_filearray.is_null() {
         FreeWild((*stack_ptr).ffs_filearray_size, (*stack_ptr).ffs_filearray);
@@ -4034,31 +4034,31 @@ unsafe extern "C" fn ff_clear(mut search_ctx: *mut ff_search_ctx_T) {
             &raw mut (*search_ctx).ffsc_stopdirs_v as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*search_ctx).ffsc_file_to_search.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     (*search_ctx).ffsc_file_to_search.size = 0 as size_t;
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         &raw mut (*search_ctx).ffsc_start_dir.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
-    *ptr__1;
+    let _ = *ptr__1;
     (*search_ctx).ffsc_start_dir.size = 0 as size_t;
     let mut ptr__2: *mut *mut ::core::ffi::c_void =
         &raw mut (*search_ctx).ffsc_fix_path.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__2);
     *ptr__2 = NULL;
-    *ptr__2;
+    let _ = *ptr__2;
     (*search_ctx).ffsc_fix_path.size = 0 as size_t;
     let mut ptr__3: *mut *mut ::core::ffi::c_void =
         &raw mut (*search_ctx).ffsc_wc_path.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__3);
     *ptr__3 = NULL;
-    *ptr__3;
+    let _ = *ptr__3;
     (*search_ctx).ffsc_wc_path.size = 0 as size_t;
     (*search_ctx).ffsc_level = 0 as ::core::ffi::c_int;
 }

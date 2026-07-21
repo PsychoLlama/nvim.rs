@@ -4732,7 +4732,7 @@ unsafe extern "C" fn ins_compl_del_pum() {
         compl_match_array.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn pum_wanted() -> bool {
@@ -4950,7 +4950,7 @@ unsafe extern "C" fn get_leader_for_startcol(
             &raw mut (*adjusted_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         (*adjusted_leader.ptr()).size = 0 as size_t;
         return ::core::ptr::null_mut::<String_0>();
     }
@@ -4980,7 +4980,7 @@ unsafe extern "C" fn get_leader_for_startcol(
                         &raw mut (*adjusted_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     (*adjusted_leader.ptr()).size = 0 as size_t;
                     prepend_startcol_text(adjusted_leader.ptr(), compl_leader.ptr(), startcol);
                     return adjusted_leader.ptr();
@@ -5099,7 +5099,7 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
             compl_leader.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     let mut compl_no_select: bool = get_cot_flags()
         & kOptCotFlagNoselect as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5710,7 +5710,7 @@ unsafe extern "C" fn ins_compl_item_free(mut match_0: *mut compl_T) {
         &raw mut (*match_0).cp_str.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*match_0).cp_str.size = 0 as size_t;
     if (*match_0).cp_flags & CP_FREE_FNAME as ::core::ffi::c_int != 0 {
         xfree((*match_0).cp_fname as *mut ::core::ffi::c_void);
@@ -5724,13 +5724,13 @@ unsafe extern "C" fn ins_compl_free() {
         &raw mut (*compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*compl_pattern.ptr()).size = 0 as size_t;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*compl_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     (*compl_leader.ptr()).size = 0 as size_t;
     if (*compl_first_match.ptr()).is_null() {
         return;
@@ -5764,13 +5764,13 @@ pub unsafe extern "C" fn ins_compl_clear() {
         &raw mut (*compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*compl_pattern.ptr()).size = 0 as size_t;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*compl_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     (*compl_leader.ptr()).size = 0 as size_t;
     edit_submode_extra.set(::core::ptr::null_mut::<::core::ffi::c_char>());
     xfree((*compl_orig_extmarks.ptr()).items as *mut ::core::ffi::c_void);
@@ -5781,7 +5781,7 @@ pub unsafe extern "C" fn ins_compl_clear() {
         &raw mut (*compl_orig_text.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
-    *ptr__1;
+    let _ = *ptr__1;
     (*compl_orig_text.ptr()).size = 0 as size_t;
     compl_enter_selects.set(false_0 != 0);
     cpt_sources_clear();
@@ -5886,7 +5886,7 @@ pub unsafe extern "C" fn ins_compl_bs() -> ::core::ffi::c_int {
         &raw mut (*compl_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*compl_leader.ptr()).size = 0 as size_t;
     compl_leader.set(cbuf_to_string(
         line.offset(compl_col.get() as isize),
@@ -6045,7 +6045,7 @@ pub unsafe extern "C" fn ins_compl_addleader(mut c: ::core::ffi::c_int) {
         &raw mut (*compl_leader.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*compl_leader.ptr()).size = 0 as size_t;
     compl_leader.set(cbuf_to_string(
         get_cursor_line_ptr().offset(compl_col.get() as isize),
@@ -6074,7 +6074,7 @@ unsafe extern "C" fn ins_compl_set_original_text(
             &raw mut (*compl_first_match.get()).cp_str.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         (*compl_first_match.get()).cp_str.size = 0 as size_t;
         (*compl_first_match.get()).cp_str = cbuf_to_string(str, len);
     } else if !(*compl_first_match.get()).cp_prev.is_null()
@@ -6085,7 +6085,7 @@ unsafe extern "C" fn ins_compl_set_original_text(
                 as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
         (*(*compl_first_match.get()).cp_prev).cp_str.size = 0 as size_t;
         (*(*compl_first_match.get()).cp_prev).cp_str = cbuf_to_string(str, len);
     }
@@ -6659,7 +6659,7 @@ pub unsafe extern "C" fn clear_cpt_callbacks(
     let mut ptr_: *mut *mut ::core::ffi::c_void = callbacks as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 unsafe extern "C" fn copy_cpt_callbacks(
     mut dest: *mut *mut Callback,
@@ -8031,7 +8031,7 @@ unsafe extern "C" fn get_next_filename_completion() {
                 &raw mut (*compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
             (*compl_pattern.ptr()).size = 0 as size_t;
             compl_pattern.set(cbuf_to_string(
                 b"*\0".as_ptr() as *const ::core::ffi::c_char,
@@ -8056,7 +8056,7 @@ unsafe extern "C" fn get_next_filename_completion() {
                 &raw mut (*compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL;
-            *ptr__0;
+            let _ = *ptr__0;
             (*compl_pattern.ptr()).size = 0 as size_t;
             (*compl_pattern.ptr()).data = path_with_wildcard;
             (*compl_pattern.ptr()).size = path_len.wrapping_add(1 as size_t);
@@ -10054,7 +10054,7 @@ unsafe extern "C" fn set_compl_globals(
             &raw mut (*cpt_compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         (*cpt_compl_pattern.ptr()).size = 0 as size_t;
         if startcol < compl_col.get() {
             prepend_startcol_text(cpt_compl_pattern.ptr(), compl_orig_text.ptr(), startcol);
@@ -10356,7 +10356,7 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
         &raw mut (*compl_orig_text.ptr()).data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*compl_orig_text.ptr()).size = 0 as size_t;
     xfree((*compl_orig_extmarks.ptr()).items as *mut ::core::ffi::c_void);
     (*compl_orig_extmarks.ptr()).capacity = 0 as size_t;
@@ -10389,13 +10389,13 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             &raw mut (*compl_pattern.ptr()).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
-        *ptr__0;
+        let _ = *ptr__0;
         (*compl_pattern.ptr()).size = 0 as size_t;
         let mut ptr__1: *mut *mut ::core::ffi::c_void =
             &raw mut (*compl_orig_text.ptr()).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__1);
         *ptr__1 = NULL;
-        *ptr__1;
+        let _ = *ptr__1;
         (*compl_orig_text.ptr()).size = 0 as size_t;
         xfree((*compl_orig_extmarks.ptr()).items as *mut ::core::ffi::c_void);
         (*compl_orig_extmarks.ptr()).capacity = 0 as size_t;
@@ -10721,7 +10721,7 @@ unsafe extern "C" fn cpt_sources_clear() {
         cpt_sources_array.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     cpt_sources_index.set(-1 as ::core::ffi::c_int);
     cpt_sources_count.set(0 as ::core::ffi::c_int);
 }

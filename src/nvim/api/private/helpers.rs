@@ -2007,7 +2007,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 pub const STRING_INIT: String_0 = String_0 {
@@ -2824,7 +2824,7 @@ pub unsafe extern "C" fn arena_take_arraybuilder(
             &raw mut (*arr).items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     return ret;
 }

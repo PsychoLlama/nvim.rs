@@ -4326,12 +4326,12 @@ pub unsafe extern "C" fn uc_add_command(
                         &raw mut (*cmd).uc_rep as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL;
-                    *ptr_;
+                    let _ = *ptr_;
                     let mut ptr__0: *mut *mut ::core::ffi::c_void =
                         &raw mut (*cmd).uc_compl_arg as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     if (*cmd).uc_luaref != LUA_NOREF {
                         api_free_luaref((*cmd).uc_luaref);
                         (*cmd).uc_luaref = LUA_NOREF as LuaRef;

@@ -3483,7 +3483,7 @@ pub unsafe extern "C" fn tabstop_set(
             let mut ptr_: *mut *mut ::core::ffi::c_void = array as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
             return false_0 != 0;
         }
         let c2rust_fresh0 = t;

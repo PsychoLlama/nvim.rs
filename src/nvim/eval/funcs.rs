@@ -8142,7 +8142,7 @@ unsafe extern "C" fn f_expand(
                 &raw mut result as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
         } else {
             (*rettv).vval.v_string = result;
         }

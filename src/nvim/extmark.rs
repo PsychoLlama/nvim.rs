@@ -2385,7 +2385,7 @@ pub unsafe extern "C" fn extmark_clear(
                     as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
             *(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t) = MAP_INIT;
         } else {
             map_del_uint32_t_uint32_t(
@@ -2627,7 +2627,7 @@ pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
         .values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     *(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t) = MAP_INIT;
 }
 #[no_mangle]

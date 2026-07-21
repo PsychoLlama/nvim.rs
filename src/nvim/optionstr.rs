@@ -3222,7 +3222,7 @@ unsafe extern "C" fn expand_set_opt_string(
         let mut ptr_: *mut *mut ::core::ffi::c_void = matches as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         return FAIL;
     }
     *numMatches = count;
@@ -3334,7 +3334,7 @@ unsafe extern "C" fn expand_set_opt_listflag(
         let mut ptr_: *mut *mut ::core::ffi::c_void = matches as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         return FAIL;
     }
     *numMatches = count;
@@ -5109,7 +5109,7 @@ pub unsafe extern "C" fn did_set_varsofttabstop(
             &raw mut (*buf).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut cp: *mut ::core::ffi::c_char = *varp;
@@ -5147,7 +5147,7 @@ pub unsafe extern "C" fn did_set_vartabstop(mut args: *mut optset_T) -> *const :
             &raw mut (*buf).b_p_vts_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut cp: *mut ::core::ffi::c_char = *varp;

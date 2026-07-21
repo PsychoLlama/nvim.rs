@@ -6349,7 +6349,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                 &raw mut new_fname as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL_0;
-                            *ptr_;
+                            let _ = *ptr_;
                             already_searched = true_0 != 0;
                             break;
                         } else {

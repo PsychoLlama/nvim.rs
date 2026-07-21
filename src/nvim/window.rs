@@ -9815,7 +9815,7 @@ pub unsafe extern "C" fn win_fix_current_dir() {
             globaldir.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         last_chdir_reason.set(::core::ptr::null_mut::<::core::ffi::c_char>());
         shorten_fnames(true_0);
     }

@@ -2332,7 +2332,7 @@ pub unsafe extern "C" fn api_extmark_free_all_mem() {
         &raw mut (*namespace_ids.ptr()).values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree((*namespace_localscope.ptr()).keys as *mut ::core::ffi::c_void);
     xfree((*namespace_localscope.ptr()).h.hash as *mut ::core::ffi::c_void);
     namespace_localscope.set(Set_uint32_t {

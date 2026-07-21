@@ -3882,7 +3882,7 @@ pub unsafe extern "C" fn spell_load_file(
                                                         as *mut *mut ::core::ffi::c_void;
                                                 xfree(*ptr_);
                                                 *ptr_ = NULL;
-                                                *ptr_;
+                                                let _ = *ptr_;
                                                 (*lp).sl_info = read_string(fd, len as size_t);
                                                 if (*lp).sl_info.is_null() {
                                                     break '_endFAIL;
@@ -4779,7 +4779,7 @@ unsafe extern "C" fn read_compound(
                     &raw mut (*slang).sl_comprules as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
                 crp = ::core::ptr::null_mut::<uint8_t>();
             } else {
                 let c2rust_fresh9 = crp;

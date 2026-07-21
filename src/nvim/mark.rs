@@ -3849,7 +3849,7 @@ unsafe extern "C" fn fmarks_check_one(
             &raw mut (*fm).fname as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 #[no_mangle]
@@ -4294,7 +4294,7 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                                 as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
-                        *ptr_;
+                        let _ = *ptr_;
                     }
                     i_0 += 1;
                 }

@@ -4503,7 +4503,7 @@ pub unsafe extern "C" fn pum_redraw() {
                                 &raw mut attrs as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL;
-                            *ptr_;
+                            let _ = *ptr_;
                         }
                         if *p as ::core::ffi::c_int != TAB {
                             break;

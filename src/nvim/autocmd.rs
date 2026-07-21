@@ -4572,7 +4572,7 @@ unsafe extern "C" fn au_show_for_event(
                             &raw mut msg as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL_0;
-                        *ptr_;
+                        let _ = *ptr_;
                     } else if !(*ac).handler_cmd.is_null() {
                         msg_outtrans(handler_str, 0 as ::core::ffi::c_int, false_0 != 0);
                     } else {
@@ -4582,7 +4582,7 @@ unsafe extern "C" fn au_show_for_event(
                         &raw mut handler_str as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL_0;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     if p_verbose.get() > 0 as OptInt {
                         last_set_msg((*ac).script_ctx);
                     }
@@ -4608,7 +4608,7 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
             &raw mut (*(*ac).pat).pat as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         vim_regfree((*(*ac).pat).reg_prog);
         xfree((*ac).pat as *mut ::core::ffi::c_void);
     }
@@ -4618,7 +4618,7 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
             &raw mut (*ac).handler_cmd as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
-        *ptr__0;
+        let _ = *ptr__0;
     } else {
         callback_free(&raw mut (*ac).handler_fn);
     }
@@ -4626,7 +4626,7 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
         &raw mut (*ac).desc as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
-    *ptr__1;
+    let _ = *ptr__1;
     au_need_clean.set(true_0 != 0);
 }
 #[no_mangle]
@@ -5836,7 +5836,7 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
             &raw mut (*auc_win).w_localdir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         (*aco).tp_localdir = (*curtab.get()).tp_localdir;
         (*curtab.get()).tp_localdir = ::core::ptr::null_mut::<::core::ffi::c_char>();
         (*aco).globaldir = globaldir.get();
@@ -6892,7 +6892,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
                             &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL_0;
-                        *ptr_;
+                        let _ = *ptr_;
                         (*entry).es_name = namep;
                         (*entry).es_info.aucmd = apc;
                     }
@@ -6909,7 +6909,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
         &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
-    *ptr__0;
+    let _ = *ptr__0;
     (*entry).es_info.aucmd = ::core::ptr::null_mut::<AutoPatCmd>();
     (*apc).lastpat = ::core::ptr::null_mut::<AutoPat>();
     (*apc).auidx = SIZE_MAX as size_t;
@@ -7118,7 +7118,7 @@ pub unsafe extern "C" fn getnextac(
             &raw mut handler_str as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         verbose_leave_scroll();
     }
     autocmd_nested.set((*ac).nested);

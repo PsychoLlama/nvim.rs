@@ -3303,7 +3303,7 @@ pub unsafe extern "C" fn os_expand_wildcards(
                         file as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL;
-                    *ptr_;
+                    let _ = *ptr_;
                 } else {
                     return OK;
                 }
@@ -3576,7 +3576,7 @@ pub unsafe extern "C" fn get_cmd_output(
                 &raw mut buffer as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         } else if ret_len.is_null() {
             i = 0 as size_t;
             while i < len {

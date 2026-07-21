@@ -2114,7 +2114,7 @@ pub unsafe extern "C" fn os_getenv(
                 &raw mut e as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
     } else if r != 0 as ::core::ffi::c_int
         || size == 0 as size_t
@@ -2344,7 +2344,7 @@ pub unsafe extern "C" fn os_free_fullenv(mut env: *mut *mut ::core::ffi::c_char)
         let mut ptr_: *mut *mut ::core::ffi::c_void = it as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         it = it.offset(1);
     }
     xfree(env as *mut ::core::ffi::c_void);

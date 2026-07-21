@@ -6171,7 +6171,7 @@ unsafe extern "C" fn command_line_check(mut state: *mut VimState) -> ::core::ffi
         &raw mut (*s).prev_cmdbuff as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     redir_off.set(true_0 != 0);
     quit_more.set(false_0 != 0);
     did_emsg.set(false_0);
@@ -6650,7 +6650,7 @@ unsafe extern "C" fn command_line_execute(
             &raw mut (*s).lookfor as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         (*s).lookforlen = 0 as ::core::ffi::c_int;
     }
     if (*s).c as OptInt != p_wc.get()
@@ -8921,7 +8921,7 @@ unsafe extern "C" fn dealloc_cmdbuff() {
         &raw mut (*ccline.ptr()).cmdbuff as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     (*ccline.ptr()).cmdbufflen = 0 as ::core::ffi::c_int;
     (*ccline.ptr()).cmdlen = (*ccline.ptr()).cmdbufflen;
 }
@@ -9165,7 +9165,7 @@ unsafe extern "C" fn color_expr_cmdline(
             &raw mut colors.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool {
@@ -9189,7 +9189,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
             &raw mut (*ccline_colors).cmdbuff as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
         return ret;
     }
     let mut arg_allocated: bool = false_0 != 0;

@@ -5905,7 +5905,7 @@ pub unsafe extern "C" fn eval_expr_ext(
         let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut tv as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
     clear_evalarg(&raw mut evalarg, eap);
     return tv;
@@ -9208,7 +9208,7 @@ unsafe extern "C" fn eval_number(
                         &raw mut blob as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL_0;
-                    *ptr_;
+                    let _ = *ptr_;
                 }
                 return FAIL;
             }
@@ -10606,7 +10606,7 @@ unsafe extern "C" fn eval_env_var(
                     &raw mut string as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL_0;
-                *ptr_;
+                let _ = *ptr_;
             }
         }
         *name.offset(len as isize) = cc as ::core::ffi::c_char;

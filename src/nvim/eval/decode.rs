@@ -2266,7 +2266,7 @@ pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_
                 .p;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
             }
             _ => {}
         }
@@ -2318,7 +2318,7 @@ unsafe extern "C" fn typval_parse_exit(
                 .p;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
             }
             8 => {
                 let mut items: *mut [typval_T; 2] =
@@ -2410,7 +2410,7 @@ unsafe extern "C" fn typval_parse_exit(
                         .p;
                     xfree(*ptr__0);
                     *ptr__0 = NULL;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     break 's_308;
                 }
                 let list_0: *mut list_T =
@@ -2435,7 +2435,7 @@ unsafe extern "C" fn typval_parse_exit(
                 .p;
                 xfree(*ptr__1);
                 *ptr__1 = NULL;
-                *ptr__1;
+                let _ = *ptr__1;
             }
             _ => {}
         }

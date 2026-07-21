@@ -177,6 +177,6 @@ unsafe extern "C" fn destroy_cells(mut grid: *mut UGrid) {
             &raw mut (*grid).cells as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
 }

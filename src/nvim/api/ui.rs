@@ -1422,7 +1422,7 @@ unsafe extern "C" fn remote_ui_destroy(mut ui: *mut RemoteUI) {
         &raw mut (*ui).term_name as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     xfree(ui as *mut ::core::ffi::c_void);
 }
 #[no_mangle]

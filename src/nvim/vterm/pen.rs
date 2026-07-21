@@ -1589,7 +1589,7 @@ pub unsafe extern "C" fn vterm_state_setpen(
                 (*state).pen.baseline() as ::core::ffi::c_int,
             );
         }
-        done == 0;
+        let _ = done == 0;
         loop {
             let c2rust_fresh0 = argi;
             argi = argi + 1;

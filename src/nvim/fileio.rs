@@ -4914,7 +4914,7 @@ pub unsafe extern "C" fn readfile(
                                 &raw mut tmpname as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL;
-                            *ptr_;
+                            let _ = *ptr_;
                         }
                     }
                     fio_flags = 0 as ::core::ffi::c_int;
@@ -6214,7 +6214,7 @@ pub unsafe extern "C" fn readfile(
                                 keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__0);
                             *ptr__0 = NULL;
-                            *ptr__0;
+                            let _ = *ptr__0;
                             p = ::core::ptr::null_mut::<uint8_t>();
                             msg_scrolled_ign.set(true_0 != 0);
                             if !read_stdin && !read_buffer {
@@ -6498,7 +6498,7 @@ unsafe extern "C" fn readfile_charconvert(
                 &raw mut tmpname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
     }
     if *fdp < 0 as ::core::ffi::c_int {
@@ -6813,7 +6813,7 @@ pub unsafe extern "C" fn shorten_buf_fname(
                 &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
         let mut p: *mut ::core::ffi::c_char = path_shorten_fname((*buf).b_ffname, dirname);
         if !p.is_null() {
@@ -8433,7 +8433,7 @@ pub unsafe extern "C" fn vim_deltempdir() {
         vim_tempdir.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_gettempdir() -> *mut ::core::ffi::c_char {
@@ -8464,7 +8464,7 @@ pub unsafe extern "C" fn vim_gettempdir() -> *mut ::core::ffi::c_char {
                 vim_tempdir.ptr() as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
         vim_mktempdir();
     }
@@ -8803,7 +8803,7 @@ pub unsafe extern "C" fn file_pat_to_reg_pat(
             &raw mut reg_pat as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     return reg_pat;
 }

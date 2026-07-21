@@ -4616,17 +4616,17 @@ unsafe extern "C" fn func_clear_items(mut fp: *mut ufunc_T) {
         &raw mut (*fp).uf_tml_count as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     let mut ptr__0: *mut *mut ::core::ffi::c_void =
         &raw mut (*fp).uf_tml_total as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
-    *ptr__0;
+    let _ = *ptr__0;
     let mut ptr__1: *mut *mut ::core::ffi::c_void =
         &raw mut (*fp).uf_tml_self as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
-    *ptr__1;
+    let _ = *ptr__1;
 }
 unsafe extern "C" fn func_clear(mut fp: *mut ufunc_T, mut force: bool) {
     if (*fp).uf_cleared {
@@ -4644,7 +4644,7 @@ unsafe extern "C" fn func_free(mut fp: *mut ufunc_T) {
         &raw mut (*fp).uf_name_exp as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     xfree(fp as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn func_clear_free(mut fp: *mut ufunc_T, mut force: bool) {
@@ -5579,7 +5579,7 @@ pub unsafe extern "C" fn call_func(
                         &raw mut name as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr_);
                     *ptr_ = NULL;
-                    *ptr_;
+                    let _ = *ptr_;
                     funcname = b"v:lua\0".as_ptr() as *const ::core::ffi::c_char;
                 }
             } else if !fp.is_null() || !builtin_function(rfname, -1 as ::core::ffi::c_int) {
@@ -6508,12 +6508,12 @@ unsafe extern "C" fn get_function_body(
                                 &raw mut skip_until as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr_);
                             *ptr_ = NULL;
-                            *ptr_;
+                            let _ = *ptr_;
                             let mut ptr__0: *mut *mut ::core::ffi::c_void =
                                 &raw mut heredoc_trimmed as *mut *mut ::core::ffi::c_void;
                             xfree(*ptr__0);
                             *ptr__0 = NULL;
-                            *ptr__0;
+                            let _ = *ptr__0;
                             heredoc_trimmedlen = 0 as size_t;
                             do_concat = true_0 != 0;
                             is_heredoc = false_0 != 0;
@@ -6950,7 +6950,7 @@ unsafe extern "C" fn get_function_body(
                                         &raw mut skip_until as *mut *mut ::core::ffi::c_void;
                                     xfree(*ptr__1);
                                     *ptr__1 = NULL;
-                                    *ptr__1;
+                                    let _ = *ptr__1;
                                     skip_until = xmemdupz(
                                         p as *const ::core::ffi::c_void,
                                         skiptowhite(p).offset_from(p) as size_t,
@@ -7310,7 +7310,7 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                                                 &raw mut name as *mut *mut ::core::ffi::c_void;
                                             xfree(*ptr_);
                                             *ptr_ = NULL;
-                                            *ptr_;
+                                            let _ = *ptr_;
                                             (*fp).uf_name_exp =
                                                 ::core::ptr::null_mut::<::core::ffi::c_char>();
                                             func_clear_items(fp);
@@ -7425,7 +7425,7 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                                                 &raw mut fp as *mut *mut ::core::ffi::c_void;
                                             xfree(*ptr__0);
                                             *ptr__0 = NULL;
-                                            *ptr__0;
+                                            let _ = *ptr__0;
                                             break '_erret;
                                         }
                                     } else {
@@ -7495,14 +7495,14 @@ pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
                         &raw mut (*fp).uf_name_exp as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__1);
                     *ptr__1 = NULL;
-                    *ptr__1;
+                    let _ = *ptr__1;
                 }
                 if free_fp {
                     let mut ptr__2: *mut *mut ::core::ffi::c_void =
                         &raw mut fp as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__2);
                     *ptr__2 = NULL;
-                    *ptr__2;
+                    let _ = *ptr__2;
                 }
             }
             ga_clear_strings(&raw mut newargs);

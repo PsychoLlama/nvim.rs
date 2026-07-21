@@ -3685,7 +3685,7 @@ pub unsafe extern "C" fn nextwild(
                     &raw mut p as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
             }
         }
     }
@@ -3828,7 +3828,7 @@ pub unsafe extern "C" fn cmdline_pum_remove(mut defer_redraw: bool) {
         compl_match_array.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     compl_match_arraysize.set(0 as ::core::ffi::c_int);
 }
 #[no_mangle]
@@ -4399,7 +4399,7 @@ pub unsafe extern "C" fn ExpandOne(
             &raw mut (*xp).xp_orig as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         if !(*compl_match_array.ptr()).is_null() {
             cmdline_pum_remove(false_0 != 0);
         }
@@ -4517,7 +4517,7 @@ pub unsafe extern "C" fn ExpandCleanup(mut xp: *mut expand_T) {
         &raw mut (*xp).xp_orig as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn clear_cmdline_orig() {
@@ -4525,7 +4525,7 @@ pub unsafe extern "C" fn clear_cmdline_orig() {
         cmdline_orig.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 unsafe extern "C" fn showmatches_oneline(
     mut xp: *mut expand_T,
@@ -8854,7 +8854,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
                             &raw mut match_0 as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
-                        *ptr_;
+                        let _ = *ptr_;
                         break;
                     } else {
                         i += 1;

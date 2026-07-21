@@ -1753,7 +1753,7 @@ pub unsafe extern "C" fn profile_reset() {
         profile_fname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_profile(mut eap: *mut exarg_T) {
@@ -2629,7 +2629,7 @@ pub unsafe extern "C" fn time_init(
             startuptime_buf.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         fclose(time_fd.get());
         time_fd.set(::core::ptr::null_mut::<FILE>());
         fprintf(
@@ -2674,7 +2674,7 @@ pub unsafe extern "C" fn time_finish() {
         startuptime_buf.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -4161,7 +4161,7 @@ unsafe extern "C" fn clear_diffin(mut din: *mut diffin_T) {
             &raw mut (*din).din_mmfile.ptr as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     } else {
         os_remove((*din).din_fname);
     };
@@ -5867,7 +5867,7 @@ unsafe extern "C" fn run_linematch_algorithm(mut dp: *mut diff_T) {
                 as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         i_0 = i_0.wrapping_add(1);
     }
     apply_linematch_results(dp, decisions_length, decisions);

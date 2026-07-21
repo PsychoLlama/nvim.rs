@@ -3995,7 +3995,7 @@ pub unsafe extern "C" fn ml_close(mut buf: *mut buf_T, mut del_file: ::core::ffi
         &raw mut (*buf).b_ml.ml_chunksize as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     (*buf).b_ml.ml_mfp = ::core::ptr::null_mut::<memfile_T>();
     (*buf).b_flags &= !BF_RECOVERED;
 }
@@ -8183,7 +8183,7 @@ unsafe extern "C" fn findswapname(
                 &raw mut fname as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
-            *ptr_;
+            let _ = *ptr_;
             break;
         } else {
             let mut file_info: FileInfo = FileInfo {
@@ -8471,7 +8471,7 @@ unsafe extern "C" fn findswapname(
                         &raw mut fname as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL_0;
-                    *ptr__0;
+                    let _ = *ptr__0;
                     break;
                 } else {
                     *fname.offset(n.wrapping_sub(2 as size_t) as isize) -= 1;

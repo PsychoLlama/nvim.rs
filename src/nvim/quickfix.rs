@@ -5253,7 +5253,7 @@ unsafe extern "C" fn qf_init_ext(
         qf_last_bufname.ptr() as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     qf_alloc_fields(&raw mut fields);
     '_qf_init_end: {
         if qf_setup_state(&raw mut state, enc, efile, tv, buf, lnumfirst, lnumlast) != FAIL {
@@ -5285,7 +5285,7 @@ unsafe extern "C" fn qf_init_ext(
                     last_efm.ptr() as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL_0;
-                *ptr__0;
+                let _ = *ptr__0;
                 free_efm_list(fmt_first.ptr());
                 fmt_first.set(parse_efm_option(efm));
                 if !(*fmt_first.ptr()).is_null() {
@@ -5352,7 +5352,7 @@ unsafe extern "C" fn qf_store_title(
         &raw mut (*qfl).qf_title as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     if title.is_null() {
         return;
     }
@@ -7949,7 +7949,7 @@ unsafe extern "C" fn qf_free(mut qfl: *mut qf_list_T) {
         &raw mut (*qfl).qf_title as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
-    *ptr_;
+    let _ = *ptr_;
     tv_free((*qfl).qf_ctx);
     (*qfl).qf_ctx = ::core::ptr::null_mut::<typval_T>();
     callback_free(&raw mut (*qfl).qf_qftf_cb);

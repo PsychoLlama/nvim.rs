@@ -4736,7 +4736,7 @@ pub unsafe extern "C" fn expand_wildcards(
         let mut ptr_: *mut *mut ::core::ffi::c_void = files as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
         return FAIL;
     }
     return retval;

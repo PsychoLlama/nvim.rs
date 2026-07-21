@@ -332,7 +332,7 @@ unsafe extern "C" fn _memcpy_free(
     let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return dest;
 }
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
@@ -2093,7 +2093,7 @@ unsafe extern "C" fn intersect_mov(
                         }) as *mut uint64_t;
                     } else {
                     };
-                    *w;
+                    let _ = *w;
                     (*w).size = (*w).size.wrapping_add(1);
                     if n > 0 as size_t {
                         memmove(
@@ -2477,7 +2477,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                 }) as *mut uint64_t;
             } else {
             };
-            *x;
+            let _ = *x;
             (*x).size = (*x).size.wrapping_add(1);
             memmove(
                 (*x).items.offset(xi.wrapping_add(1 as size_t) as isize)
@@ -2642,7 +2642,7 @@ unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
             &raw mut xi.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 unsafe extern "C" fn merge_node(
@@ -2806,7 +2806,7 @@ unsafe extern "C" fn merge_node(
             &raw mut (*x).intersect.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     kvi_move(&raw mut (*x).intersect, &raw mut mi);
     return x;
@@ -2988,7 +2988,7 @@ unsafe extern "C" fn pivot_right(
                 &raw mut d.items as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
         bubble_up(x);
     } else {
@@ -3169,7 +3169,7 @@ unsafe extern "C" fn pivot_left(
                 &raw mut d.items as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
-            *ptr_;
+            let _ = *ptr_;
         }
         bubble_up(y);
     } else {
@@ -3217,7 +3217,7 @@ pub unsafe extern "C" fn marktree_clear(mut b: *mut MarkTree) {
         .values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     (*b).n_keys = 0 as size_t;
     memset(
         &raw mut (*b).meta_root as *mut uint32_t as *mut ::core::ffi::c_void,
@@ -3257,7 +3257,7 @@ unsafe extern "C" fn marktree_free_node(mut b: *mut MarkTree, mut x: *mut MTNode
             &raw mut (*x).intersect.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
-        *ptr_;
+        let _ = *ptr_;
     }
     xfree(x as *mut ::core::ffi::c_void);
     (*b).n_nodes = (*b).n_nodes.wrapping_sub(1);
@@ -4673,7 +4673,7 @@ pub unsafe extern "C" fn marktree_splice(
         &raw mut damage.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return moved;
 }
 #[no_mangle]
@@ -5450,7 +5450,7 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
         &raw mut checked.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
-    *ptr_;
+    let _ = *ptr_;
     return status;
 }
 #[no_mangle]

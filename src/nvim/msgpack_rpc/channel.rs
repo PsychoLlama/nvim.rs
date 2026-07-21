@@ -2422,7 +2422,7 @@ unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut a
             &raw mut chans.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
-        *ptr_;
+        let _ = *ptr_;
     }
 }
 #[no_mangle]

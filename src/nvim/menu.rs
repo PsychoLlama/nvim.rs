@@ -3363,7 +3363,7 @@ unsafe extern "C" fn add_menu_path(
                     &raw mut dname as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
-                *ptr_;
+                let _ = *ptr_;
                 if *pri_tab.offset((pri_idx + 1 as ::core::ffi::c_int) as isize)
                     != -1 as ::core::ffi::c_int
                 {
