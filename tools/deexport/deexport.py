@@ -137,30 +137,39 @@ def word_re(name):
     return r
 
 
+CLOSER_RE = re.compile(r"^[}\])]")
+
+
 def item_span(lines, def_line, kind):
     """(start, end) inclusive 0-based line span of the item at `def_line`:
-    contiguous attribute lines above, through the closing `}` (fn / braced
-    static) or the terminating `;`. Formatted-tree assumptions: top-level
-    items close at column 0."""
+    contiguous attribute lines above, through the closing line, or None when
+    the end can't be established. Formatted-tree assumptions: a top-level
+    item's interior is indented and its closer sits at column 0 (`}` for
+    fns; `};` / `});` / `]);` … for statics). The first column-0 line that
+    is *not* a closer means the parse missed (e.g. a multi-line string
+    literal) — give up and keep the item rather than guess."""
     start = def_line
     while start > 0 and ATTR_RE.match(lines[start - 1]):
         start -= 1
-    line = lines[def_line]
-    if line.rstrip().endswith(";"):
+    if lines[def_line].rstrip().endswith(";"):
         return start, def_line
     end = def_line
-    if kind == "static" and "{" not in line:
-        # Multi-line brace-less static (wrapped array/expr): ends at `;`.
-        while end < len(lines) - 1 and not lines[end].rstrip().endswith(";"):
-            end += 1
-        return start, end
-    # Braced body: first column-0 closer after the def line.
     while end < len(lines) - 1:
         end += 1
-        r = lines[end].rstrip()
-        if r in ("}", "};", "];") and not lines[end].startswith(" "):
+        line = lines[end]
+        if not line or line[0] in " \t":
+            continue
+        r = line.rstrip()
+        if not CLOSER_RE.match(r):
+            return None  # next top-level item before any closer: parse miss
+        if kind == "fn":
+            if r == "}":
+                return start, end
+        elif r.endswith(";"):
             return start, end
-    return start, end
+        # A column-0 closer that isn't the terminator (`})` continuation of
+        # a wrapped expression): keep scanning.
+    return None
 
 
 def find_def(lines, name):
@@ -177,35 +186,84 @@ def find_def(lines, name):
     return None, None
 
 
-def drop_from_use_lines(text, dead):
-    """Remove `dead` names from use lines; drop lines left empty."""
-    out = []
-    for line in text.split("\n"):
-        if not USE_LINE_RE.match(line) or not any(
-            word_re(n).search(line) for n in dead
-        ):
-            out.append(line)
+def use_statements(lines):
+    """[(start, end)] inclusive line spans of every `use …;` statement,
+    including rustfmt-wrapped multi-line ones."""
+    spans = []
+    i = 0
+    while i < len(lines):
+        if USE_LINE_RE.match(lines[i]):
+            j = i
+            while j < len(lines) - 1 and not lines[j].rstrip().endswith(";"):
+                j += 1
+            spans.append((i, j))
+            i = j + 1
+        else:
+            i += 1
+    return spans
+
+
+def use_mask(lines):
+    mask = [False] * len(lines)
+    for s, e in use_statements(lines):
+        for i in range(s, e + 1):
+            mask[i] = True
+    return mask
+
+
+IDENT_RE = re.compile(r"^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$")
+FLAT_USE_RE = re.compile(r"^((?:pub\s+)?use\s+[\w:#]+::)\{(.*)\};$")
+SINGLE_USE_RE = re.compile(r"^(?:pub\s+)?use\s+[\w:#]+::((?:r#)?[A-Za-z0-9_]+);$")
+
+
+def scrub_use_statements(text, dead, dry):
+    """Remove `dead` names from every `use` statement. Returns (new_text,
+    blocked): names sitting in a statement the surgery can't parse (nested
+    groups, `as` aliases) come back in `blocked` and must not be deleted —
+    leaving their import behind would break the build."""
+    lines = text.split("\n")
+    blocked = set()
+    drop = set()
+    replace = {}  # line -> replacement text (joined statement, single line)
+    for s, e in use_statements(lines):
+        stmt = " ".join(l.strip() for l in lines[s : e + 1])
+        hit = {n for n in dead if word_re(n).search(stmt)}
+        if not hit:
             continue
-        m = re.match(r"^(\s*(?:pub\s+)?use\s+.*::)\{(.*)\};\s*$", line)
+        m = FLAT_USE_RE.match(stmt)
         if m:
             names = [n.strip() for n in m.group(2).split(",") if n.strip()]
-            names = [n for n in names if n.removeprefix("r#") not in dead]
-            if not names:
+            if all(IDENT_RE.match(n) for n in names):
+                kept = [n for n in names if n.removeprefix("r#") not in dead]
+                drop.update(range(s, e + 1))
+                if kept:
+                    replace[s] = f"{m.group(1)}{{{', '.join(kept)}}};"
                 continue
-            if len(names) == 1:
-                out.append(f"{m.group(1)}{names[0]};")
-            else:
-                out.append(f"{m.group(1)}{{{', '.join(names)}}};")
-        # `use path::name;` — the whole line goes.
-    return "\n".join(out)
+        m = SINGLE_USE_RE.match(stmt)
+        if m:
+            drop.update(range(s, e + 1))
+            continue
+        blocked.update(hit)
+    if dry:
+        return text, blocked
+    out = []
+    for i, line in enumerate(lines):
+        if i in replace:
+            out.append(replace[i])
+        if i in drop:
+            continue
+        out.append(line)
+    return "\n".join(out), blocked
 
 
 def reference_index(texts):
-    """token -> [(file, line)] over every non-`use` line."""
+    """token -> [(file, line)] over every line outside a `use` statement."""
     idx = defaultdict(list)
     for rel, text in texts.items():
-        for i, line in enumerate(text.split("\n")):
-            if USE_LINE_RE.match(line):
+        lines = text.split("\n")
+        mask = use_mask(lines)
+        for i, line in enumerate(lines):
+            if mask[i]:
                 continue
             for tok in set(TOKEN_RE.findall(line)):
                 idx[tok].append((rel, i))
@@ -229,7 +287,11 @@ def prune(texts, candidates, write):
             if di is None:
                 del alive[name]  # unparsed shape; keep the item
                 continue
-            s, e = item_span(lines, di, kind)
+            span = item_span(lines, di, kind)
+            if span is None:
+                del alive[name]  # end not provable; keep the item
+                continue
+            s, e = span
             if any(l.strip() == "#[no_mangle]" for l in lines[s:di]):
                 del alive[name]  # still exported; not ours to delete
                 continue
@@ -240,6 +302,17 @@ def prune(texts, candidates, write):
         for name, (srel, s, e) in spans.items():
             if all(rel == srel and s <= i <= e for rel, i in idx.get(name, [])):
                 dead.add(name)
+
+        # Names imported by a statement the scrubber can't rewrite (nested
+        # groups, aliases) must survive: deleting the item would leave a
+        # dangling import.
+        blocked = set()
+        for rel, text in texts.items():
+            _, b = scrub_use_statements(text, dead, dry=True)
+            blocked |= b
+        dead -= blocked
+        for n in blocked:
+            del alive[n]
         if not dead:
             break
 
@@ -252,7 +325,7 @@ def prune(texts, candidates, write):
             texts[rel] = "\n".join(l for i, l in enumerate(lines) if i not in drop)
         for rel in texts:
             if any(word_re(n).search(texts[rel]) for n in dead):
-                texts[rel] = drop_from_use_lines(texts[rel], dead)
+                texts[rel], _ = scrub_use_statements(texts[rel], dead, dry=False)
         for n in dead:
             deleted.add(n)
             del alive[n]
