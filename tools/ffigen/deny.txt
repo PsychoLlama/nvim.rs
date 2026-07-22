@@ -1,0 +1,10 @@
+# Type tags the unit harness's system preamble (test/unit/testutil.lua's
+# always-loaded cimports: fixtures/posix.h, the fcntl/sys-stat wrappers,
+# string.h, stdlib.h, unistd.h) already defines. LuaJIT rejects a second
+# definition of a struct/union tag, so ffigen references these instead of
+# defining them. Extend this list if a future spec's system import collides
+# with the generated chunk ("attempt to redefine 'X'" from ffi.cdef).
+iovec
+__pthread_internal_list
+__pthread_mutex_s
+__pthread_rwlock_arch_t

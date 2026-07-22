@@ -90,6 +90,7 @@ tags
 
 CMakeUserPresets.json
 
-# Phase-3a rewriter build artifacts
+# Rewriter/generator build artifacts
 /tools/globalize/target/
 /tools/unify/target/
+/tools/ffigen/target/
