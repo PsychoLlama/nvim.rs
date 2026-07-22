@@ -3956,9 +3956,6 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
 }
-pub unsafe extern "C" fn get_raw_global_mark(mut name: ::core::ffi::c_char) -> xfmark_T {
-    return (*namedfm.ptr())[mark_global_index(name) as usize];
-}
 pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
     let mut mname: [::core::ffi::c_char; 3] =
         ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"' \0");

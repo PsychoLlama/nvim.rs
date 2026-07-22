@@ -14,7 +14,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{
     xfree, xmalloc, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcat, xstrlcpy,
 };
-use crate::src::nvim::message::{emsg, internal_error};
+use crate::src::nvim::message::internal_error;
 use crate::src::nvim::os::fs::{os_dirname, os_isdir, os_realpath};
 use crate::src::nvim::os::libc::{
     __assert_fail, environ, getpid, memcpy, strcasecmp, strchr, strcmp, strcpy, strlen, strncmp,
@@ -799,13 +799,6 @@ pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char,
 }
 static homedir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
-    if (*homedir.ptr()).is_null() {
-        emsg(b"os_homedir failed: homedir not initialized\0".as_ptr() as *const ::core::ffi::c_char);
-        return ::core::ptr::null::<::core::ffi::c_char>();
-    }
-    return homedir.get();
-}
 pub unsafe extern "C" fn init_homedir() {
     xfree(homedir.get() as *mut ::core::ffi::c_void);
     homedir.set(::core::ptr::null_mut::<::core::ffi::c_char>());

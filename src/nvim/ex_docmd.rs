@@ -9627,9 +9627,6 @@ pub unsafe extern "C" fn did_set_findfunc(mut args: *mut optset_T) -> *const ::c
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-pub unsafe extern "C" fn free_findfunc_option() {
-    callback_free(ffu_cb.ptr());
-}
 pub unsafe extern "C" fn set_ref_in_findfunc(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort_0: bool = false_0 != 0;
     abort_0 = set_ref_in_callback(

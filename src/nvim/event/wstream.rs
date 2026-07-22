@@ -200,19 +200,6 @@ pub unsafe extern "C" fn wstream_init_fd(
     stream_init(loop_0, stream, fd, ::core::ptr::null_mut::<uv_stream_t>());
     wstream_init(stream, maxmem);
 }
-pub unsafe extern "C" fn wstream_init_stream(
-    mut stream: *mut Stream,
-    mut uvstream: *mut uv_stream_t,
-    mut maxmem: size_t,
-) {
-    stream_init(
-        ::core::ptr::null_mut::<Loop>(),
-        stream,
-        -1 as ::core::ffi::c_int,
-        uvstream,
-    );
-    wstream_init(stream, maxmem);
-}
 pub unsafe extern "C" fn wstream_init(mut stream: *mut Stream, mut maxmem: size_t) {
     (*stream).maxmem = if maxmem != 0 {
         maxmem

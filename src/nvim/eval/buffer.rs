@@ -1,7 +1,7 @@
-use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf, block_autocmds, unblock_autocmds};
+use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::buffer::{
     bt_nofilename, bt_prompt, buf_ensure_loaded, buflist_add, buflist_findlnum,
-    buflist_findname_exp, buflist_findnr, buflist_new, bufref_valid, set_bufref,
+    buflist_findname_exp, buflist_findnr, buflist_new,
 };
 use crate::src::nvim::change::{
     appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes,
@@ -1093,23 +1093,6 @@ pub unsafe extern "C" fn f_setline(
             argvars.offset(1 as ::core::ffi::c_int as isize),
             rettv,
         );
-    }
-}
-pub unsafe extern "C" fn switch_buffer(mut save_curbuf: *mut bufref_T, mut buf: *mut buf_T) {
-    block_autocmds();
-    set_bufref(save_curbuf, curbuf.get());
-    (*curbuf.get()).b_nwindows -= 1;
-    curbuf.set(buf);
-    (*curwin.get()).w_buffer = buf;
-    (*curbuf.get()).b_nwindows += 1;
-}
-pub unsafe extern "C" fn restore_buffer(mut save_curbuf: *mut bufref_T) {
-    unblock_autocmds();
-    if bufref_valid(save_curbuf) {
-        (*curbuf.get()).b_nwindows -= 1;
-        (*curwin.get()).w_buffer = (*save_curbuf).br_buf;
-        curbuf.set((*save_curbuf).br_buf);
-        (*curbuf.get()).b_nwindows += 1;
     }
 }
 pub unsafe extern "C" fn f_prompt_setcallback(

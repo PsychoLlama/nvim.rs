@@ -698,17 +698,8 @@ pub unsafe extern "C" fn get_hislen() -> ::core::ffi::c_int {
 pub unsafe extern "C" fn get_histentry(mut hist_type: ::core::ffi::c_int) -> *mut histentry_T {
     return (*history.ptr())[hist_type as usize] as *mut histentry_T;
 }
-pub unsafe extern "C" fn set_histentry(
-    mut hist_type: ::core::ffi::c_int,
-    mut entry: *mut histentry_T,
-) {
-    (*history.ptr())[hist_type as usize] = entry as *mut histentry_T;
-}
 pub unsafe extern "C" fn get_hisidx(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
     return (hisidx.ptr() as *mut ::core::ffi::c_int).offset(hist_type as isize);
-}
-pub unsafe extern "C" fn get_hisnum(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
-    return (hisnum.ptr() as *mut ::core::ffi::c_int).offset(hist_type as isize);
 }
 pub unsafe extern "C" fn hist_char2type(c: ::core::ffi::c_int) -> HistoryType {
     match c {

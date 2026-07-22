@@ -83,22 +83,6 @@ pub unsafe extern "C" fn strbuf_free(mut s: *mut strbuf_t) {
         free(s as *mut ::core::ffi::c_void);
     }
 }
-pub unsafe extern "C" fn strbuf_free_to_string(
-    mut s: *mut strbuf_t,
-    mut len: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    debug_stats(s);
-    strbuf_ensure_null(s);
-    buf = (*s).buf;
-    if !len.is_null() {
-        *len = (*s).length;
-    }
-    if (*s).dynamic != 0 {
-        free(s as *mut ::core::ffi::c_void);
-    }
-    return buf;
-}
 unsafe extern "C" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -> size_t {
     let mut reqsize: size_t = 0;
     let mut newsize: size_t = 0;

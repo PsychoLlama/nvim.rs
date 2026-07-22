@@ -5810,9 +5810,6 @@ pub unsafe extern "C" fn get_scriptname(
         }
     };
 }
-pub unsafe extern "C" fn free_autoload_scriptnames() {
-    ga_clear_strings(ga_loaded.ptr());
-}
 pub unsafe extern "C" fn get_sourced_lnum(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,

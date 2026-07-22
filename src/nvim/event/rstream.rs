@@ -195,18 +195,6 @@ pub unsafe extern "C" fn rstream_init_fd(
     );
     rstream_init(stream);
 }
-pub unsafe extern "C" fn rstream_init_stream(
-    mut stream: *mut RStream,
-    mut uvstream: *mut uv_stream_t,
-) {
-    stream_init(
-        ::core::ptr::null_mut::<Loop>(),
-        &raw mut (*stream).s,
-        -1 as ::core::ffi::c_int,
-        uvstream,
-    );
-    rstream_init(stream);
-}
 pub unsafe extern "C" fn rstream_init(mut stream: *mut RStream) {
     (*stream).read_cb = None;
     (*stream).num_bytes = 0 as size_t;

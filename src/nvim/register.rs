@@ -1657,17 +1657,6 @@ pub unsafe extern "C" fn op_global_reg_iter(
 ) -> *const ::core::ffi::c_void {
     return op_reg_iter(iter, y_regs.ptr() as *mut yankreg_T, name, reg, is_unnamed);
 }
-pub unsafe extern "C" fn op_reg_amount() -> size_t {
-    let mut ret: size_t = 0 as size_t;
-    let mut i: size_t = 0 as size_t;
-    while i < NUM_SAVED_REGISTERS as ::core::ffi::c_int as size_t {
-        if !reg_empty((y_regs.ptr() as *mut yankreg_T).offset(i as isize)) {
-            ret = ret.wrapping_add(1);
-        }
-        i = i.wrapping_add(1);
-    }
-    return ret;
-}
 #[no_mangle]
 pub unsafe extern "C" fn op_reg_set(
     name: ::core::ffi::c_char,

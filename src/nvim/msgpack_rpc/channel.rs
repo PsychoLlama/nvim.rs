@@ -2,8 +2,7 @@ use crate::src::nvim::api::private::dispatch::{
     handle_nvim_get_mode, handle_nvim_paste, handle_nvim_ui_try_resize,
 };
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_free_dict, api_free_object, api_set_error, arena_string, copy_dict,
-    cstr_as_string,
+    api_clear_error, api_free_dict, api_free_object, api_set_error, arena_string, cstr_as_string,
 };
 use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
 use crate::src::nvim::channel::channel_close;
@@ -1617,9 +1616,6 @@ pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
         (*chan).rpc.client_type = kClientTypeUnknown;
     }
     channel_info_changed(chan, false_0 != 0);
-}
-pub unsafe extern "C" fn rpc_client_info(mut chan: *mut Channel) -> Dict {
-    return copy_dict((*chan).rpc.info, ::core::ptr::null_mut::<Arena>());
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_client_info(

@@ -5,9 +5,9 @@ use crate::src::nvim::lua::ffi::{
     lua_settop, lua_toboolean, lua_tolstring,
 };
 use crate::src::nvim::main::{e_invarg2, e_trustfile};
-use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz};
+use crate::src::nvim::memory::{xfree, xmemdupz};
 use crate::src::nvim::message::{semsg, smsg};
-use crate::src::nvim::os::libc::{gettext, memcpy, strcmp};
+use crate::src::nvim::os::libc::{gettext, strcmp};
 pub use crate::src::nvim::types::{
     cmd_addr_T, cmdidx_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem,
     exarg, exarg_T, int32_t, linenr_T, lua_Number, lua_State, size_t, uint32_t, CMD_index,
@@ -588,53 +588,6 @@ pub const ADDR_LINES: cmd_addr_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub unsafe extern "C" fn nlua_read_secure(
-    mut path: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let lstate: *mut lua_State = get_global_lstate();
-    let top: ::core::ffi::c_int = lua_gettop(lstate);
-    lua_getfield(
-        lstate,
-        LUA_GLOBALSINDEX,
-        b"vim\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    lua_getfield(
-        lstate,
-        -1 as ::core::ffi::c_int,
-        b"secure\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    lua_getfield(
-        lstate,
-        -1 as ::core::ffi::c_int,
-        b"read\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    lua_pushstring(lstate, path);
-    if nlua_pcall(lstate, 1 as ::core::ffi::c_int, 1 as ::core::ffi::c_int) != 0 {
-        nlua_error(
-            lstate,
-            gettext(b"vim.secure.read: %.*s\0".as_ptr() as *const ::core::ffi::c_char),
-        );
-        lua_settop(lstate, top);
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-    let mut len: size_t = 0 as size_t;
-    let mut contents: *const ::core::ffi::c_char =
-        lua_tolstring(lstate, -1 as ::core::ffi::c_int, &raw mut len);
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if !contents.is_null() {
-        buf = xcalloc(
-            len.wrapping_add(1 as size_t),
-            ::core::mem::size_of::<::core::ffi::c_char>(),
-        ) as *mut ::core::ffi::c_char;
-        memcpy(
-            buf as *mut ::core::ffi::c_void,
-            contents as *const ::core::ffi::c_void,
-            len.wrapping_add(1 as size_t),
-        );
-    }
-    lua_settop(lstate, top);
-    return buf;
-}
 unsafe extern "C" fn nlua_trust(
     mut action: *const ::core::ffi::c_char,
     mut path: *const ::core::ffi::c_char,

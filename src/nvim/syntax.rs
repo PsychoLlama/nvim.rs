@@ -7492,26 +7492,6 @@ pub unsafe extern "C" fn get_syntax_info(
     *seqnrp = current_seqnr.get();
     return current_flags.get();
 }
-pub unsafe extern "C" fn syn_get_concealed_id(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut col: colnr_T,
-) -> ::core::ffi::c_int {
-    let mut seqnr: ::core::ffi::c_int = 0;
-    syn_get_id(
-        wp,
-        lnum,
-        col,
-        false_0,
-        ::core::ptr::null_mut::<bool>(),
-        false_0,
-    );
-    let mut syntax_flags: ::core::ffi::c_int = get_syntax_info(&raw mut seqnr);
-    if syntax_flags & HL_CONCEAL as ::core::ffi::c_int != 0 {
-        return seqnr;
-    }
-    return 0 as ::core::ffi::c_int;
-}
 pub unsafe extern "C" fn syn_get_sub_char() -> ::core::ffi::c_int {
     return current_sub_char.get();
 }

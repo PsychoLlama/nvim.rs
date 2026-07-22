@@ -1438,9 +1438,6 @@ pub unsafe extern "C" fn vterm_screen_enable_reflow(
 ) {
     (*screen).set_reflow(reflow as ::core::ffi::c_uint as ::core::ffi::c_uint);
 }
-pub unsafe extern "C" fn vterm_screen_set_reflow(mut screen: *mut VTermScreen, mut reflow: bool) {
-    vterm_screen_enable_reflow(screen, reflow);
-}
 #[no_mangle]
 pub unsafe extern "C" fn vterm_screen_enable_altscreen(
     mut screen: *mut VTermScreen,

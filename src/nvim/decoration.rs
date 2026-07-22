@@ -1902,9 +1902,6 @@ pub unsafe extern "C" fn buf_signcols_count_range(
     }
     xfree(count as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn decor_redraw_end(mut state: *mut DecorState) {
-    (*state).win = ::core::ptr::null_mut::<win_T>();
-}
 pub unsafe extern "C" fn decor_redraw_eol(
     mut wp: *mut win_T,
     mut state: *mut DecorState,

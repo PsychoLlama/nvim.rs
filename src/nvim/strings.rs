@@ -21,7 +21,7 @@ use crate::src::nvim::message::{emsg, semsg, siemsg};
 use crate::src::nvim::option::{csh_like_shell, fish_like_shell};
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, log10, memcpy, memmove, memset, qsort, snprintf, strcasecmp, strchr,
-    strcmp, strcpy, strlen, strncasecmp, strncmp, strstr, vsnprintf,
+    strcmp, strcpy, strlen, strncmp, strstr, vsnprintf,
 };
 use crate::src::nvim::plines::linetabsize_col;
 pub use crate::src::nvim::types::{
@@ -613,10 +613,6 @@ pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
 
 pub unsafe extern "C" fn has_non_ascii(s: *const c_char) -> bool {
     !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes())
-}
-
-pub unsafe extern "C" fn has_non_ascii_len(s: *const c_char, len: size_t) -> bool {
-    !s.is_null() && len != 0 && any_non_ascii(slice::from_raw_parts(s as *const u8, len))
 }
 
 /// Freshly allocated `str1 ++ str2`, NUL-terminated.
@@ -3967,14 +3963,6 @@ pub unsafe extern "C" fn f_trim(
     }
     (*rettv).vval.v_string = xstrnsave(head, tail.offset_from(head) as size_t);
 }
-pub unsafe extern "C" fn cmp_keyvalue_value(
-    mut a: *const ::core::ffi::c_void,
-    mut b: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut kv1: *mut keyvalue_T = a as *mut keyvalue_T;
-    let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
-    return strcmp((*kv1).value, (*kv2).value);
-}
 pub unsafe extern "C" fn cmp_keyvalue_value_n(
     mut a: *const ::core::ffi::c_void,
     mut b: *const ::core::ffi::c_void,
@@ -3982,30 +3970,6 @@ pub unsafe extern "C" fn cmp_keyvalue_value_n(
     let mut kv1: *mut keyvalue_T = a as *mut keyvalue_T;
     let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
     return strncmp(
-        (*kv1).value,
-        (*kv2).value,
-        if (*kv1).length > (*kv2).length {
-            (*kv1).length
-        } else {
-            (*kv2).length
-        },
-    );
-}
-pub unsafe extern "C" fn cmp_keyvalue_value_i(
-    mut a: *const ::core::ffi::c_void,
-    mut b: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut kv1: *mut keyvalue_T = a as *mut keyvalue_T;
-    let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
-    return strcasecmp((*kv1).value, (*kv2).value);
-}
-pub unsafe extern "C" fn cmp_keyvalue_value_ni(
-    mut a: *const ::core::ffi::c_void,
-    mut b: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut kv1: *mut keyvalue_T = a as *mut keyvalue_T;
-    let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
-    return strncasecmp(
         (*kv1).value,
         (*kv2).value,
         if (*kv1).length > (*kv2).length {

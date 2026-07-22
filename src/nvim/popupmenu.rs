@@ -84,9 +84,7 @@ use crate::src::nvim::ui::{
     ui_call_popupmenu_select, ui_call_popupmenu_show, ui_call_win_close, ui_call_win_float_pos,
     ui_has, ui_pum_get_height, ui_pum_get_pos,
 };
-use crate::src::nvim::ui_compositor::{
-    ui_comp_compose_grid, ui_comp_put_grid, ui_comp_remove_grid,
-};
+use crate::src::nvim::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 use crate::src::nvim::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
@@ -3192,9 +3190,6 @@ pub unsafe extern "C" fn pum_drawn() -> bool {
 }
 pub unsafe extern "C" fn pum_invalidate() {
     pum_invalid.set(true_0 != 0);
-}
-pub unsafe extern "C" fn pum_recompose() {
-    ui_comp_compose_grid(pum_grid.ptr());
 }
 pub unsafe extern "C" fn pum_ext_select_item(
     mut item: ::core::ffi::c_int,

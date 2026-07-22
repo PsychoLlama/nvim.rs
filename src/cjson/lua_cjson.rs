@@ -2503,14 +2503,6 @@ unsafe extern "C" fn lua_cjson_safe_new(mut l: *mut lua_State) -> ::core::ffi::c
     }
     return 1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn luaopen_cjson(mut l: *mut lua_State) -> ::core::ffi::c_int {
-    lua_cjson_new(l);
-    return 1 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn luaopen_cjson_safe(mut l: *mut lua_State) -> ::core::ffi::c_int {
-    lua_cjson_safe_new(l);
-    return 1 as ::core::ffi::c_int;
-}
 #[inline]
 unsafe extern "C" fn strbuf_reset(mut s: *mut strbuf_t) {
     (*s).length = 0 as size_t;

@@ -1063,23 +1063,6 @@ pub unsafe extern "C" fn win_reconfig_floats() {
         wp = (*wp).w_prev;
     }
 }
-pub unsafe extern "C" fn win_float_valid(mut win: *const win_T) -> bool {
-    if win.is_null() {
-        return false_0 != 0;
-    }
-    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !wp.is_null() {
-        if wp == win as *mut win_T {
-            return (*wp).w_floating;
-        }
-        wp = (*wp).w_next;
-    }
-    return false_0 != 0;
-}
 pub unsafe extern "C" fn win_float_find_preview() -> *mut win_T {
     let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {

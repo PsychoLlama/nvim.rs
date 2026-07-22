@@ -7769,14 +7769,6 @@ pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> = 
 ]);
 pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
     GlobalCell::new([b"v:null\0".as_ptr() as *const ::core::ffi::c_char]);
-pub unsafe extern "C" fn encode_blob_write(
-    data: *mut ::core::ffi::c_void,
-    buf: *const ::core::ffi::c_char,
-    len: size_t,
-) -> ::core::ffi::c_int {
-    ga_concat_len(&raw mut (*(data as *mut blob_T)).bv_ga, buf, len);
-    return len as ::core::ffi::c_int;
-}
 #[no_mangle]
 pub unsafe extern "C" fn encode_list_write(
     data: *mut ::core::ffi::c_void,

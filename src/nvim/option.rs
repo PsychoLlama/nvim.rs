@@ -6289,13 +6289,6 @@ unsafe extern "C" fn option_is_window_local(mut opt_idx: OptIndex) -> bool {
 pub unsafe extern "C" fn option_scope_idx(mut opt_idx: OptIndex, mut scope: OptScope) -> ssize_t {
     return (*options.ptr())[opt_idx as usize].scope_idx[scope as usize];
 }
-pub unsafe extern "C" fn get_option_flags(mut opt_idx: OptIndex) -> uint32_t {
-    return if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
-        0 as uint32_t
-    } else {
-        (*options.ptr())[opt_idx as usize].flags
-    };
-}
 pub unsafe extern "C" fn get_option_value(
     mut opt_idx: OptIndex,
     mut opt_flags: ::core::ffi::c_int,

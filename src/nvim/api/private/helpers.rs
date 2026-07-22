@@ -606,20 +606,6 @@ pub unsafe extern "C" fn find_tab_by_handle(
     }
     return rv;
 }
-pub unsafe extern "C" fn cchar_to_string(mut c: ::core::ffi::c_char) -> String_0 {
-    let mut buf: [::core::ffi::c_char; 2] = [c, NUL as ::core::ffi::c_char];
-    return String_0 {
-        data: xmemdupz(
-            &raw mut buf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-            1 as size_t,
-        ) as *mut ::core::ffi::c_char,
-        size: (if c as ::core::ffi::c_int != NUL {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as size_t,
-    };
-}
 pub unsafe extern "C" fn cstr_to_string(mut str: *const ::core::ffi::c_char) -> String_0 {
     if str.is_null() {
         return STRING_INIT;
@@ -641,12 +627,6 @@ pub unsafe extern "C" fn cbuf_to_string(
         data: xmemdupz(buf as *const ::core::ffi::c_void, size) as *mut ::core::ffi::c_char,
         size: size,
     };
-}
-pub unsafe extern "C" fn cstrn_to_string(
-    mut str: *const ::core::ffi::c_char,
-    mut maxsize: size_t,
-) -> String_0 {
-    return cbuf_to_string(str, strnlen(str, maxsize));
 }
 pub unsafe extern "C" fn cstrn_as_string(
     mut str: *mut ::core::ffi::c_char,

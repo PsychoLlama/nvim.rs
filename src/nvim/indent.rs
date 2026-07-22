@@ -1706,24 +1706,6 @@ unsafe extern "C" fn tabstop_eq(mut ts1: *const colnr_T, mut ts2: *const colnr_T
     }
     return true_0 != 0;
 }
-pub unsafe extern "C" fn tabstop_copy(
-    mut oldts: *const ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_int {
-    if oldts.is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_int>();
-    }
-    let mut newts: *mut ::core::ffi::c_int = xmalloc(
-        ((*oldts.offset(0 as ::core::ffi::c_int as isize) + 1 as ::core::ffi::c_int)
-            as ::core::ffi::c_uint as size_t)
-            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-    ) as *mut ::core::ffi::c_int;
-    let mut t: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while t <= *oldts.offset(0 as ::core::ffi::c_int as isize) {
-        *newts.offset(t as isize) = *oldts.offset(t as isize);
-        t += 1;
-    }
-    return newts;
-}
 pub unsafe extern "C" fn tabstop_count(mut ts: *mut colnr_T) -> ::core::ffi::c_int {
     return if !ts.is_null() {
         *ts.offset(0 as ::core::ffi::c_int as isize)

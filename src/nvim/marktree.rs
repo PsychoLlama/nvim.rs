@@ -3250,49 +3250,6 @@ pub unsafe extern "C" fn marktree_itr_first(
     }
     return true_0 != 0;
 }
-pub unsafe extern "C" fn marktree_itr_last(
-    mut b: *mut MarkTree,
-    mut itr: *mut MarkTreeIter,
-) -> ::core::ffi::c_int {
-    if (*b).n_keys == 0 as size_t {
-        (*itr).x = ::core::ptr::null_mut::<MTNode>();
-        return false_0;
-    }
-    (*itr).pos = MTPos {
-        row: 0 as int32_t,
-        col: 0 as int32_t,
-    };
-    (*itr).x = (*b).root;
-    (*itr).lvl = 0 as ::core::ffi::c_int;
-    loop {
-        (*itr).i = (*(*itr).x).n as ::core::ffi::c_int;
-        if (*(*itr).x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-            break;
-        }
-        (*itr).s[(*itr).lvl as usize].i = (*itr).i;
-        (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col as ::core::ffi::c_int;
-        '_c2rust_label: {
-            if (*itr).i > 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"itr->i > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/marktree.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1490 as ::core::ffi::c_uint,
-                    b"int marktree_itr_last(MarkTree *, MarkTreeIter *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        compose(
-            &raw mut (*itr).pos,
-            (*(*itr).x).key[((*itr).i - 1 as ::core::ffi::c_int) as usize].pos,
-        );
-        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
-        (*itr).lvl += 1;
-    }
-    (*itr).i -= 1;
-    return true_0;
-}
 #[no_mangle]
 pub unsafe extern "C" fn marktree_itr_next(
     mut b: *mut MarkTree,
@@ -3590,9 +3547,6 @@ pub unsafe extern "C" fn marktree_itr_prev(
         (*itr).i -= 1;
     }
     return true_0 != 0;
-}
-pub unsafe extern "C" fn marktree_itr_node_done(mut itr: *mut MarkTreeIter) -> bool {
-    return (*itr).x.is_null() || (*itr).i as int32_t == (*(*itr).x).n - 1 as int32_t;
 }
 pub unsafe extern "C" fn marktree_itr_pos(mut itr: *mut MarkTreeIter) -> MTPos {
     let mut pos: MTPos = (*(*itr).x).key[(*itr).i as usize].pos;

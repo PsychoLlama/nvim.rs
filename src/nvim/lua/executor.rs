@@ -41,7 +41,7 @@ use crate::src::nvim::lua::ffi::{
     lua_tointeger, lua_tolstring, lua_touserdata, lua_type, luaopen_luv, luv_set_loop,
 };
 use crate::src::nvim::lua::stdlib::nlua_state_add_stdlib;
-use crate::src::nvim::lua::treesitter::{nlua_treesitter_free, nlua_treesitter_init};
+use crate::src::nvim::lua::treesitter::nlua_treesitter_init;
 use crate::src::nvim::main::{
     cmdmod, curbuf, current_sctx, curwin, did_emsg, did_throw, e_argreq, e_fast_api_disabled,
     e_outofmem, expr_map_lock, force_abort, got_int, main_loop, mod_mask, nlua_disable_preload,
@@ -2258,15 +2258,6 @@ unsafe extern "C" fn nlua_init_state(mut thread: bool) -> *mut lua_State {
     );
     lua_settop(lstate, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return lstate;
-}
-pub unsafe extern "C" fn nlua_free_all_mem() {
-    if (*global_lstate.ptr()).is_null() {
-        return;
-    }
-    let mut lstate: *mut lua_State = global_lstate.get();
-    nlua_unref_global(lstate, require_ref.get());
-    nlua_common_free_all_mem(lstate);
-    nlua_treesitter_free();
 }
 unsafe extern "C" fn nlua_common_free_all_mem(mut lstate: *mut lua_State) {
     let mut ref_state: *mut nlua_ref_state_t = nlua_get_ref_state(lstate);

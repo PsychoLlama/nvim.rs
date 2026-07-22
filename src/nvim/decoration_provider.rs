@@ -8,7 +8,7 @@ use crate::src::nvim::highlight::hl_check_ns;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
-use crate::src::nvim::memory::{xfree, xrealloc};
+use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::message::msg_schedule_semsg_multiline;
 use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::r#move::validate_botline_win;
@@ -898,17 +898,6 @@ pub unsafe extern "C" fn decor_provider_clear(mut p: *mut DecorProvider) {
         (*p).conceal_line = LUA_NOREF as LuaRef;
     }
     (*p).state = kDecorProviderDisabled;
-}
-pub unsafe extern "C" fn decor_free_all_mem() {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        decor_provider_clear((*decor_providers.ptr()).items.offset(i as isize));
-        i = i.wrapping_add(1);
-    }
-    xfree((*decor_providers.ptr()).items as *mut ::core::ffi::c_void);
-    (*decor_providers.ptr()).capacity = 0 as size_t;
-    (*decor_providers.ptr()).size = (*decor_providers.ptr()).capacity;
-    (*decor_providers.ptr()).items = ::core::ptr::null_mut::<DecorProvider>();
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -56,17 +56,6 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
     }
     return site;
 }
-pub unsafe extern "C" fn mh_get_glyph(mut set: *mut Set_glyph, mut key: String_0) -> uint32_t {
-    if (*set).h.n_buckets == 0 as uint32_t {
-        return MH_TOMBSTONE as uint32_t;
-    }
-    let mut idx: uint32_t = mh_find_bucket_glyph(set, key, false_0 != 0);
-    return if idx != MH_TOMBSTONE as uint32_t {
-        (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t)
-    } else {
-        MH_TOMBSTONE as uint32_t
-    };
-}
 pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {

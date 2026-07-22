@@ -183,15 +183,6 @@ pub unsafe extern "C" fn mh_clear(mut h: *mut MapHash) {
         (*h).n_keys = 0 as uint32_t;
     }
 }
-pub unsafe extern "C" fn pmap_del2(
-    mut map: *mut Map_cstr_t_ptr_t,
-    mut key: *const ::core::ffi::c_char,
-) {
-    let mut key_alloc: cstr_t = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut val: ptr_t = map_del_cstr_t_ptr_t(map, key as cstr_t, &raw mut key_alloc);
-    xfree(key_alloc as *mut ::core::ffi::c_void);
-    xfree(val as *mut ::core::ffi::c_void);
-}
 pub unsafe extern "C" fn mh_find_bucket_int(
     mut set: *mut Set_int,
     mut key: ::core::ffi::c_int,
@@ -1290,17 +1281,6 @@ pub unsafe extern "C" fn mh_find_bucket_HlEntry(
     }
     return site;
 }
-pub unsafe extern "C" fn mh_get_HlEntry(mut set: *mut Set_HlEntry, mut key: HlEntry) -> uint32_t {
-    if (*set).h.n_buckets == 0 as uint32_t {
-        return MH_TOMBSTONE as uint32_t;
-    }
-    let mut idx: uint32_t = mh_find_bucket_HlEntry(set, key, false_0 != 0);
-    return if idx != MH_TOMBSTONE as uint32_t {
-        (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t)
-    } else {
-        MH_TOMBSTONE as uint32_t
-    };
-}
 pub unsafe extern "C" fn mh_rehash_HlEntry(mut set: *mut Set_HlEntry) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -1370,34 +1350,6 @@ pub unsafe extern "C" fn mh_put_HlEntry(
         }
         return pos_0;
     };
-}
-pub unsafe extern "C" fn mh_delete_HlEntry(
-    mut set: *mut Set_HlEntry,
-    mut key: *mut HlEntry,
-) -> uint32_t {
-    if (*set).h.size == 0 as uint32_t {
-        return MH_TOMBSTONE as uint32_t;
-    }
-    let mut idx: uint32_t = mh_find_bucket_HlEntry(set, *key, false_0 != 0);
-    if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
-        *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
-        (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
-        let mut last: uint32_t = (*set).h.n_keys;
-        *key = *(*set).keys.offset(k as isize);
-        (*set).h.size = (*set).h.size.wrapping_sub(1);
-        if last != k {
-            let mut idx2: uint32_t =
-                mh_find_bucket_HlEntry(set, *(*set).keys.offset(last as isize), false_0 != 0);
-            if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
-                abort();
-            }
-            *(*set).h.hash.offset(idx2 as isize) = k.wrapping_add(1 as uint32_t);
-            *(*set).keys.offset(k as isize) = *(*set).keys.offset(last as isize);
-        }
-        return k;
-    }
-    return MH_TOMBSTONE as uint32_t;
 }
 pub unsafe extern "C" fn mh_find_bucket_ColorKey(
     mut set: *mut Set_ColorKey,
@@ -1523,112 +1475,8 @@ pub unsafe extern "C" fn mh_put_ColorKey(
         return pos_0;
     };
 }
-pub unsafe extern "C" fn mh_delete_ColorKey(
-    mut set: *mut Set_ColorKey,
-    mut key: *mut ColorKey,
-) -> uint32_t {
-    if (*set).h.size == 0 as uint32_t {
-        return MH_TOMBSTONE as uint32_t;
-    }
-    let mut idx: uint32_t = mh_find_bucket_ColorKey(set, *key, false_0 != 0);
-    if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
-        *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
-        (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
-        let mut last: uint32_t = (*set).h.n_keys;
-        *key = *(*set).keys.offset(k as isize);
-        (*set).h.size = (*set).h.size.wrapping_sub(1);
-        if last != k {
-            let mut idx2: uint32_t =
-                mh_find_bucket_ColorKey(set, *(*set).keys.offset(last as isize), false_0 != 0);
-            if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
-                abort();
-            }
-            *(*set).h.hash.offset(idx2 as isize) = k.wrapping_add(1 as uint32_t);
-            *(*set).keys.offset(k as isize) = *(*set).keys.offset(last as isize);
-        }
-        return k;
-    }
-    return MH_TOMBSTONE as uint32_t;
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub unsafe extern "C" fn map_ref_int_int(
-    mut map: *mut Map_int_int,
-    mut key: ::core::ffi::c_int,
-    mut key_alloc: *mut *mut ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_int {
-    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<::core::ffi::c_int>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_put_ref_int_int(
-    mut map: *mut Map_int_int,
-    mut key: ::core::ffi::c_int,
-    mut key_alloc: *mut *mut ::core::ffi::c_int,
-    mut new_item: *mut bool,
-) -> *mut ::core::ffi::c_int {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_int(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        if status as ::core::ffi::c_uint
-            == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*map).values = xrealloc(
-                (*map).values as *mut ::core::ffi::c_void,
-                ((*map).set.h.keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-            ) as *mut ::core::ffi::c_int;
-        }
-        *(*map).values.offset(k as isize) = value_init_int.get();
-    }
-    if !new_item.is_null() {
-        *new_item = status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_int_int(
-    mut map: *mut Map_int_int,
-    mut key: ::core::ffi::c_int,
-    mut key_alloc: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut rv: ::core::ffi::c_int = value_init_int.get();
-    let mut k: uint32_t = mh_delete_int(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-    mut key_alloc: *mut *mut ::core::ffi::c_int,
-) -> *mut ptr_t {
-    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ptr_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
@@ -1739,20 +1587,6 @@ pub unsafe extern "C" fn map_del_cstr_t_ptr_t(
     }
     return rv;
 }
-pub unsafe extern "C" fn map_ref_cstr_t_int(
-    mut map: *mut Map_cstr_t_int,
-    mut key: cstr_t,
-    mut key_alloc: *mut *mut cstr_t,
-) -> *mut ::core::ffi::c_int {
-    let mut k: uint32_t = mh_get_cstr_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<::core::ffi::c_int>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_cstr_t_int(
     mut map: *mut Map_cstr_t_int,
     mut key: cstr_t,
@@ -1782,39 +1616,6 @@ pub unsafe extern "C" fn map_put_ref_cstr_t_int(
     }
     return (*map).values.offset(k as isize);
 }
-pub unsafe extern "C" fn map_del_cstr_t_int(
-    mut map: *mut Map_cstr_t_int,
-    mut key: cstr_t,
-    mut key_alloc: *mut cstr_t,
-) -> ::core::ffi::c_int {
-    let mut rv: ::core::ffi::c_int = value_init_int.get();
-    let mut k: uint32_t = mh_delete_cstr_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_ptr_t_ptr_t(
-    mut map: *mut Map_ptr_t_ptr_t,
-    mut key: ptr_t,
-    mut key_alloc: *mut *mut ptr_t,
-) -> *mut ptr_t {
-    let mut k: uint32_t = mh_get_ptr_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ptr_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_ptr_t_ptr_t(
     mut map: *mut Map_ptr_t_ptr_t,
     mut key: ptr_t,
@@ -1838,39 +1639,6 @@ pub unsafe extern "C" fn map_put_ref_ptr_t_ptr_t(
     if !new_item.is_null() {
         *new_item = status as ::core::ffi::c_uint
             != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_ptr_t_ptr_t(
-    mut map: *mut Map_ptr_t_ptr_t,
-    mut key: ptr_t,
-    mut key_alloc: *mut ptr_t,
-) -> ptr_t {
-    let mut rv: ptr_t = value_init_ptr_t.get();
-    let mut k: uint32_t = mh_delete_ptr_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_uint32_t_ptr_t(
-    mut map: *mut Map_uint32_t_ptr_t,
-    mut key: uint32_t,
-    mut key_alloc: *mut *mut uint32_t,
-) -> *mut ptr_t {
-    let mut k: uint32_t = mh_get_uint32_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ptr_t>();
     }
     if !key_alloc.is_null() {
         *key_alloc = (*map).set.keys.offset(k as isize);
@@ -1925,20 +1693,6 @@ pub unsafe extern "C" fn map_del_uint32_t_ptr_t(
     }
     return rv;
 }
-pub unsafe extern "C" fn map_ref_uint64_t_ptr_t(
-    mut map: *mut Map_uint64_t_ptr_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-) -> *mut ptr_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ptr_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_uint64_t_ptr_t(
     mut map: *mut Map_uint64_t_ptr_t,
     mut key: uint64_t,
@@ -1987,144 +1741,6 @@ pub unsafe extern "C" fn map_del_uint64_t_ptr_t(
     }
     return rv;
 }
-pub unsafe extern "C" fn map_ref_uint64_t_ssize_t(
-    mut map: *mut Map_uint64_t_ssize_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-) -> *mut ssize_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ssize_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_put_ref_uint64_t_ssize_t(
-    mut map: *mut Map_uint64_t_ssize_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-    mut new_item: *mut bool,
-) -> *mut ssize_t {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        if status as ::core::ffi::c_uint
-            == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*map).values = xrealloc(
-                (*map).values as *mut ::core::ffi::c_void,
-                ((*map).set.h.keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<ssize_t>()),
-            ) as *mut ssize_t;
-        }
-        *(*map).values.offset(k as isize) = value_init_ssize_t.get();
-    }
-    if !new_item.is_null() {
-        *new_item = status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_uint64_t_ssize_t(
-    mut map: *mut Map_uint64_t_ssize_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut uint64_t,
-) -> ssize_t {
-    let mut rv: ssize_t = value_init_ssize_t.get();
-    let mut k: uint32_t = mh_delete_uint64_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_uint64_t_uint64_t(
-    mut map: *mut Map_uint64_t_uint64_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-) -> *mut uint64_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<uint64_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_put_ref_uint64_t_uint64_t(
-    mut map: *mut Map_uint64_t_uint64_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-    mut new_item: *mut bool,
-) -> *mut uint64_t {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        if status as ::core::ffi::c_uint
-            == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*map).values = xrealloc(
-                (*map).values as *mut ::core::ffi::c_void,
-                ((*map).set.h.keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-            ) as *mut uint64_t;
-        }
-        *(*map).values.offset(k as isize) = value_init_uint64_t.get();
-    }
-    if !new_item.is_null() {
-        *new_item = status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_uint64_t_uint64_t(
-    mut map: *mut Map_uint64_t_uint64_t,
-    mut key: uint64_t,
-    mut key_alloc: *mut uint64_t,
-) -> uint64_t {
-    let mut rv: uint64_t = value_init_uint64_t.get();
-    let mut k: uint32_t = mh_delete_uint64_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_uint64_t_int(
-    mut map: *mut Map_uint64_t_int,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-) -> *mut ::core::ffi::c_int {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<::core::ffi::c_int>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_uint64_t_int(
     mut map: *mut Map_uint64_t_int,
     mut key: uint64_t,
@@ -2153,25 +1769,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_int(
         *key_alloc = (*map).set.keys.offset(k as isize);
     }
     return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_uint64_t_int(
-    mut map: *mut Map_uint64_t_int,
-    mut key: uint64_t,
-    mut key_alloc: *mut uint64_t,
-) -> ::core::ffi::c_int {
-    let mut rv: ::core::ffi::c_int = value_init_int.get();
-    let mut k: uint32_t = mh_delete_uint64_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
 }
 pub unsafe extern "C" fn map_ref_int64_t_int64_t(
     mut map: *mut Map_int64_t_int64_t,
@@ -2234,20 +1831,6 @@ pub unsafe extern "C" fn map_del_int64_t_int64_t(
         *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
-}
-pub unsafe extern "C" fn map_ref_int64_t_ptr_t(
-    mut map: *mut Map_int64_t_ptr_t,
-    mut key: int64_t,
-    mut key_alloc: *mut *mut int64_t,
-) -> *mut ptr_t {
-    let mut k: uint32_t = mh_get_int64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ptr_t>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
 }
 pub unsafe extern "C" fn map_put_ref_int64_t_ptr_t(
     mut map: *mut Map_int64_t_ptr_t,
@@ -2421,20 +2004,6 @@ pub unsafe extern "C" fn map_del_String_int(
     }
     return rv;
 }
-pub unsafe extern "C" fn map_ref_int_String(
-    mut map: *mut Map_int_String,
-    mut key: ::core::ffi::c_int,
-    mut key_alloc: *mut *mut ::core::ffi::c_int,
-) -> *mut String_0 {
-    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<String_0>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
@@ -2483,20 +2052,6 @@ pub unsafe extern "C" fn map_del_int_String(
     }
     return rv;
 }
-pub unsafe extern "C" fn map_ref_ColorKey_ColorItem(
-    mut map: *mut Map_ColorKey_ColorItem,
-    mut key: ColorKey,
-    mut key_alloc: *mut *mut ColorKey,
-) -> *mut ColorItem {
-    let mut k: uint32_t = mh_get_ColorKey(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<ColorItem>();
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
 pub unsafe extern "C" fn map_put_ref_ColorKey_ColorItem(
     mut map: *mut Map_ColorKey_ColorItem,
     mut key: ColorKey,
@@ -2520,39 +2075,6 @@ pub unsafe extern "C" fn map_put_ref_ColorKey_ColorItem(
     if !new_item.is_null() {
         *new_item = status as ::core::ffi::c_uint
             != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = (*map).set.keys.offset(k as isize);
-    }
-    return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_ColorKey_ColorItem(
-    mut map: *mut Map_ColorKey_ColorItem,
-    mut key: ColorKey,
-    mut key_alloc: *mut ColorKey,
-) -> ColorItem {
-    let mut rv: ColorItem = value_init_ColorItem.get();
-    let mut k: uint32_t = mh_delete_ColorKey(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn map_ref_uint64_t_MTDamagePair(
-    mut map: *mut Map_uint64_t_MTDamagePair,
-    mut key: uint64_t,
-    mut key_alloc: *mut *mut uint64_t,
-) -> *mut MTDamagePair {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return ::core::ptr::null_mut::<MTDamagePair>();
     }
     if !key_alloc.is_null() {
         *key_alloc = (*map).set.keys.offset(k as isize);
@@ -2587,23 +2109,4 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_MTDamagePair(
         *key_alloc = (*map).set.keys.offset(k as isize);
     }
     return (*map).values.offset(k as isize);
-}
-pub unsafe extern "C" fn map_del_uint64_t_MTDamagePair(
-    mut map: *mut Map_uint64_t_MTDamagePair,
-    mut key: uint64_t,
-    mut key_alloc: *mut uint64_t,
-) -> MTDamagePair {
-    let mut rv: MTDamagePair = value_init_MTDamagePair.get();
-    let mut k: uint32_t = mh_delete_uint64_t(&raw mut (*map).set, &raw mut key);
-    if k == MH_TOMBSTONE as uint32_t {
-        return rv;
-    }
-    if !key_alloc.is_null() {
-        *key_alloc = key;
-    }
-    rv = *(*map).values.offset(k as isize);
-    if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
-    }
-    return rv;
 }

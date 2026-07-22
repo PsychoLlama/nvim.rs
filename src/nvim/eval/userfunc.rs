@@ -2472,11 +2472,6 @@ pub unsafe extern "C" fn create_funccal(
     (*fc).fc_rettv = rettv;
     return fc;
 }
-pub unsafe extern "C" fn remove_funccal() {
-    let mut fc: *mut funccall_T = current_funccal.get();
-    current_funccal.set((*fc).fc_caller);
-    free_funccal(fc);
-}
 pub unsafe extern "C" fn call_user_func(
     mut fp: *mut ufunc_T,
     mut argcount: ::core::ffi::c_int,

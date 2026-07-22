@@ -241,14 +241,6 @@ pub unsafe extern "C" fn os_ctime_r(
     }
     return result;
 }
-pub unsafe extern "C" fn os_ctime(
-    mut result: *mut ::core::ffi::c_char,
-    mut result_len: size_t,
-    mut add_newline: bool,
-) -> *mut ::core::ffi::c_char {
-    let mut rawtime: time_t = time(::core::ptr::null_mut::<time_t>());
-    return os_ctime_r(&raw mut rawtime, result, result_len, add_newline);
-}
 pub unsafe extern "C" fn os_strptime(
     mut str: *const ::core::ffi::c_char,
     mut format: *const ::core::ffi::c_char,

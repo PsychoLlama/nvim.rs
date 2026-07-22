@@ -234,20 +234,10 @@ pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_ch
     }
     return dir;
 }
-pub unsafe extern "C" fn stdpaths_user_cache_subpath(
-    mut fname: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    return concat_fnames_realloc(get_xdg_home(kXDGCacheHome), fname, true_0 != 0);
-}
 pub unsafe extern "C" fn stdpaths_user_conf_subpath(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true_0 != 0);
-}
-pub unsafe extern "C" fn stdpaths_user_data_subpath(
-    mut fname: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    return concat_fnames_realloc(get_xdg_home(kXDGDataHome), fname, true_0 != 0);
 }
 pub unsafe extern "C" fn stdpaths_user_state_subpath(
     mut fname: *const ::core::ffi::c_char,

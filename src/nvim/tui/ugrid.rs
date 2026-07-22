@@ -10,9 +10,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub unsafe extern "C" fn ugrid_init(mut grid: *mut UGrid) {
     (*grid).cells = ::core::ptr::null_mut::<*mut UCell>();
 }
-pub unsafe extern "C" fn ugrid_free(mut grid: *mut UGrid) {
-    destroy_cells(grid);
-}
 pub unsafe extern "C" fn ugrid_resize(
     mut grid: *mut UGrid,
     mut width: ::core::ffi::c_int,

@@ -4211,28 +4211,6 @@ pub unsafe extern "C" fn str2special(
     (*buf.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     return buf.ptr() as *mut ::core::ffi::c_char;
 }
-pub unsafe extern "C" fn str2specialbuf(
-    mut sp: *const ::core::ffi::c_char,
-    mut buf: *mut ::core::ffi::c_char,
-    mut len: size_t,
-) {
-    while *sp != 0 {
-        let mut s: *const ::core::ffi::c_char =
-            str2special(&raw mut sp, false_0 != 0, false_0 != 0);
-        let s_len: size_t = strlen(s);
-        if len <= s_len {
-            break;
-        }
-        memcpy(
-            buf as *mut ::core::ffi::c_void,
-            s as *const ::core::ffi::c_void,
-            s_len,
-        );
-        buf = buf.offset(s_len as isize);
-        len = len.wrapping_sub(s_len);
-    }
-    *buf = NUL as ::core::ffi::c_char;
-}
 pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut list: bool) {
     let mut sc: schar_T = 0;
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

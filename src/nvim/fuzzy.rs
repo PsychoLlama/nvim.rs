@@ -996,20 +996,6 @@ pub unsafe extern "C" fn search_for_fuzzy_match(
     }
     return found_new_match;
 }
-pub unsafe extern "C" fn fuzmatch_str_free(
-    fuzmatch: *mut fuzmatch_str_T,
-    mut count: ::core::ffi::c_int,
-) {
-    if fuzmatch.is_null() {
-        return;
-    }
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < count {
-        xfree((*fuzmatch.offset(count as isize)).str as *mut ::core::ffi::c_void);
-        i += 1;
-    }
-    xfree(fuzmatch as *mut ::core::ffi::c_void);
-}
 pub unsafe extern "C" fn fuzzymatches_to_strmatches(
     fuzmatch: *mut fuzmatch_str_T,
     matches: *mut *mut *mut ::core::ffi::c_char,

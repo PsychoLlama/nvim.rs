@@ -325,36 +325,6 @@ unsafe extern "C" fn map_get_String_int(
         *(*map).values.offset(k as isize)
     };
 }
-pub unsafe extern "C" fn api_extmark_free_all_mem() {
-    let mut name: String_0 = String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < (*namespace_ids.ptr()).set.h.n_keys {
-        name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
-        xfree(name.data as *mut ::core::ffi::c_void);
-        __i = __i.wrapping_add(1);
-    }
-    xfree((*namespace_ids.ptr()).set.keys as *mut ::core::ffi::c_void);
-    xfree((*namespace_ids.ptr()).set.h.hash as *mut ::core::ffi::c_void);
-    (*namespace_ids.ptr()).set = Set_String {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<String_0>(),
-    };
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut (*namespace_ids.ptr()).values as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL_0;
-    let _ = *ptr_;
-    xfree((*namespace_localscope.ptr()).keys as *mut ::core::ffi::c_void);
-    xfree((*namespace_localscope.ptr()).h.hash as *mut ::core::ffi::c_void);
-    namespace_localscope.set(Set_uint32_t {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<uint32_t>(),
-    });
-}
 pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
     let mut id: handle_T = map_get_String_int(namespace_ids.ptr(), name);
     if id > 0 as ::core::ffi::c_int {

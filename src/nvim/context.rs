@@ -492,17 +492,6 @@ static ctx_stack: GlobalCell<ContextVec> = GlobalCell::new(ContextVec {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Context>(),
 });
-pub unsafe extern "C" fn ctx_free_all() {
-    let mut i: size_t = 0 as size_t;
-    while i < (*ctx_stack.ptr()).size {
-        ctx_free((*ctx_stack.ptr()).items.offset(i as isize));
-        i = i.wrapping_add(1);
-    }
-    xfree((*ctx_stack.ptr()).items as *mut ::core::ffi::c_void);
-    (*ctx_stack.ptr()).capacity = 0 as size_t;
-    (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).capacity;
-    (*ctx_stack.ptr()).items = ::core::ptr::null_mut::<Context>();
-}
 pub unsafe extern "C" fn ctx_size() -> size_t {
     return (*ctx_stack.ptr()).size;
 }

@@ -3,9 +3,9 @@ use crate::src::nvim::charset::getdigits_int;
 use crate::src::nvim::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
-use crate::src::nvim::log::logmsg;
+
 use crate::src::nvim::main::{finish_op, p_guicursor, p_sel, State, VIsual_active};
-use crate::src::nvim::os::libc::{strcmp, strlen, strncasecmp};
+use crate::src::nvim::os::libc::{strlen, strncasecmp};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     cursorentry_T, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
@@ -762,29 +762,6 @@ pub unsafe extern "C" fn cursor_is_block_during_visual(mut exclusive: bool) -> b
     return SHAPE_BLOCK as ::core::ffi::c_int as ::core::ffi::c_uint
         == (*shape_table.ptr())[mode_idx as usize].shape as ::core::ffi::c_uint
         && 0 as ::core::ffi::c_int == (*shape_table.ptr())[mode_idx as usize].blinkon;
-}
-pub unsafe extern "C" fn cursor_mode_str2int(
-    mut mode: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut mode_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while mode_idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
-        if strcmp((*shape_table.ptr())[mode_idx as usize].full_name, mode)
-            == 0 as ::core::ffi::c_int
-        {
-            return mode_idx;
-        }
-        mode_idx += 1;
-    }
-    logmsg(
-        LOGLVL_WRN,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"cursor_mode_str2int\0".as_ptr() as *const ::core::ffi::c_char,
-        297 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"Unknown mode %s\0".as_ptr() as *const ::core::ffi::c_char,
-        mode,
-    );
-    return -1 as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int) -> bool {
     if *p_guicursor.get() as ::core::ffi::c_int == NUL {

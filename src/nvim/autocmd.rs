@@ -4809,21 +4809,6 @@ pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
         buflocal_nr,
     );
 }
-pub unsafe extern "C" fn autocmd_delete_event(
-    mut group: ::core::ffi::c_int,
-    mut event: event_T,
-    mut pat: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    return do_autocmd_event(
-        event,
-        pat,
-        false_0 != 0,
-        false_0,
-        b"\0".as_ptr() as *const ::core::ffi::c_char,
-        true_0 != 0,
-        group,
-    );
-}
 pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     '_c2rust_label: {
         if id > 0 as int64_t {
