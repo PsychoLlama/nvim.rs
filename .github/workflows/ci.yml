@@ -40,7 +40,11 @@ jobs:
       - name: Cache build directory
         uses: actions/cache@v6
         with:
-          path: target/
+          # tools/ffigen builds too: `abi-ledger --check` compiles
+          # unit-fixtures.so against the ffigen-generated cdefs chunk.
+          path: |
+            target/
+            tools/ffigen/target/
           key: ${{ runner.os }}-target-dev-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
           restore-keys: |
             ${{ runner.os }}-target-dev-

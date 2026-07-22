@@ -16,24 +16,14 @@ end
 local root = repo_root()
 
 -- C header include paths for the unit tests' FFI preprocessor. Only system
--- headers still go through it (the crate's own declarations are generated
--- by tools/ffigen); the target/upstream entries below serve the remaining
--- consumers of the reconstructed v0.12.4 tree (unit-fixtures.so and
--- scripts/check-unit-cdefs.py).
+-- headers still go through it: the crate's own declarations are generated
+-- by tools/ffigen, so './src/...' imports never reach the preprocessor.
 local deps_prefix = os.getenv('NVIM_DEPS_PREFIX')
-local upstream = root .. '/target/upstream'
 M.include_paths = {} --- @type string[]
 if deps_prefix then
   table.insert(M.include_paths, deps_prefix .. '/include/luajit-2.1')
   table.insert(M.include_paths, deps_prefix .. '/include')
 end
-table.insert(M.include_paths, upstream .. '/build/src/nvim/auto')
-table.insert(M.include_paths, upstream .. '/build/include')
-table.insert(M.include_paths, upstream .. '/build/cmake.config')
-table.insert(M.include_paths, upstream .. '/src/src')
--- Specs cimport paths like "./src/nvim/foo.h"; relative to the extracted
--- upstream root, since the port's own src/ holds the transpiled Rust.
-table.insert(M.include_paths, upstream .. '/src')
 M.apple_sysroot = ''
 
 M.translations_enabled = false

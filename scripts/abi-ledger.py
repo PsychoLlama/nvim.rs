@@ -45,8 +45,7 @@ Usage: abi-ledger.py [--check]
             drift instead of writing.
 
 Needs the flake dev shell ($NVIM_DEPS_PREFIX, cc, nm) and builds
-unit-fixtures.so (first run reconstructs the upstream headers, see
-prep-unit-headers.sh).
+unit-fixtures.so (see build-unit-fixtures.sh).
 """
 
 import json

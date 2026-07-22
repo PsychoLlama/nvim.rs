@@ -67,10 +67,8 @@ oldtest +args: build
 # Run unit tests. Args: same shape as functionaltest. The LuaJIT FFI
 # declarations are generated from the Rust crate itself (tools/ffigen via
 # scripts/gen-unit-cdefs.sh), and the tests call the exported symbols of the
-# nvim binary. The upstream v0.12.4 tree (target/upstream) is still
-# reconstructed, but only to compile test/unit/fixtures into
-# unit-fixtures.so; `scripts/check-unit-cdefs.py` diffs the generated
-# declarations against those headers on demand.
+# nvim binary. The C fixture helpers (unit-fixtures.so) compile against that
+# same generated chunk (test/unit/fixtures/shim.h).
 unittest *args: build
   scripts/run-tests.sh unit {{ args }}
 
@@ -84,14 +82,6 @@ benchmark *args: build
 # LuaJIT FFI harness did, minus the child process).
 cargo-test *args:
   cargo test --lib --tests {{ args }}
-
-# Validate the generated unit-test cdefs against the upstream v0.12.4
-# headers: compiles probe programs over both and diffs every type's
-# size/alignment/field offsets, every constant value, and every exported
-# prototype. See scripts/check-unit-cdefs.py.
-check-unit-cdefs:
-  scripts/gen-unit-cdefs.sh
-  scripts/check-unit-cdefs.py
 
 # Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
@@ -127,15 +117,10 @@ refresh *args: fmt abi-ledger (ratchet args)
 # suites, which are worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...); only the fast Rust-side tests run here.
 #
-# Check that the tree is formatted and the ratchet holds, the crate still
-# compiles, and the safe-core tests pass. fmt-check leads because it rewrites
-# the tree.
-#
-# `abi-ledger --check` is deliberately absent, and stays a pre-commit hook only
-# (see .gitconfig). Checking the ledger regenerates it, which reconstructs the
-# upstream C tree from tag v0.12.4 (scripts/prep-unit-headers.sh) — and CI
-# checks out with fetch-depth: 1 / fetch-tags: false, so the tag never resolves
-# there. The hook keeps metrics/abi-ledger.jsonl current locally, which the
-# ratchet depends on: it snapshots the ledger's internal-export count and
-# cannot tell a stale ledger from a fresh one.
-minimal-ci: fmt-check (ratchet "--check") build cargo-test
+# Check that the tree is formatted, the ABI ledger is current and the ratchet
+# holds, the crate still compiles, and the safe-core tests pass. fmt-check
+# leads because it rewrites the tree. The ledger check precedes the ratchet
+# check because the ratchet snapshots the ledger's internal-export count and
+# cannot tell a stale ledger from a fresh one (both also run as pre-commit
+# hooks, see .gitconfig).
+minimal-ci: fmt-check (abi-ledger "--check") (ratchet "--check") build cargo-test
