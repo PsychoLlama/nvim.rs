@@ -64,10 +64,13 @@ functionaltest *args: build
 oldtest +args: build
   scripts/run-oldtest.sh {{ args }}
 
-# Run unit tests. Args: same shape as functionaltest. The upstream v0.12.4 C
-# headers (reconstructed under target/upstream on first run) are preprocessed
-# into LuaJIT FFI declarations, and the tests call the transpiled symbols
-# exported by the nvim binary itself.
+# Run unit tests. Args: same shape as functionaltest. The LuaJIT FFI
+# declarations are generated from the Rust crate itself (tools/ffigen via
+# scripts/gen-unit-cdefs.sh), and the tests call the exported symbols of the
+# nvim binary. The upstream v0.12.4 tree (target/upstream) is still
+# reconstructed, but only to compile test/unit/fixtures into
+# unit-fixtures.so; `scripts/check-unit-cdefs.py` diffs the generated
+# declarations against those headers on demand.
 unittest *args: build
   scripts/run-tests.sh unit {{ args }}
 
@@ -80,6 +83,14 @@ benchmark *args: build
 # shims, but the suite is general and will grow beyond that.
 cargo-test *args:
   cargo test --lib {{ args }}
+
+# Validate the generated unit-test cdefs against the upstream v0.12.4
+# headers: compiles probe programs over both and diffs every type's
+# size/alignment/field offsets, every constant value, and every exported
+# prototype. See scripts/check-unit-cdefs.py.
+check-unit-cdefs:
+  scripts/gen-unit-cdefs.sh
+  scripts/check-unit-cdefs.py
 
 # Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the

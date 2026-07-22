@@ -15,11 +15,11 @@ end
 
 local root = repo_root()
 
--- C header include paths for the unit tests' FFI preprocessor. The port has
--- no C headers of its own; the upstream v0.12.4 tree (headers + generated
--- declaration headers) is reconstructed under target/upstream by
--- scripts/prep-unit-headers.sh. The unit tests then call the matching
--- transpiled symbols exported by the running nvim binary (ffi.C).
+-- C header include paths for the unit tests' FFI preprocessor. Only system
+-- headers still go through it (the crate's own declarations are generated
+-- by tools/ffigen); the target/upstream entries below serve the remaining
+-- consumers of the reconstructed v0.12.4 tree (unit-fixtures.so and
+-- scripts/check-unit-cdefs.py).
 local deps_prefix = os.getenv('NVIM_DEPS_PREFIX')
 local upstream = root .. '/target/upstream'
 M.include_paths = {} --- @type string[]

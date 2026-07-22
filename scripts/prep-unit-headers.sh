@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Reconstruct the upstream C tree that the unit tests (test/unit) need.
+# Reconstruct the upstream C tree under target/upstream.
 #
-# Unit tests work by preprocessing the original C headers with `cc -E`,
-# feeding the declarations to LuaJIT's ffi.cdef, and calling the symbols of
-# the *running nvim process* (ffi.C; the binary links with --export-dynamic).
-# The port keeps C ABI and struct layouts, so the v0.12.4 headers still
-# describe the transpiled Rust faithfully.
+# The unit specs' ffi.cdef surface is generated from the Rust crate these
+# days (tools/ffigen); this tree remains for the consumers that still need
+# real C headers: compiling test/unit/fixtures into unit-fixtures.so, and
+# scripts/check-unit-cdefs.py, which diffs the generated declarations
+# against these headers.
 #
 # The headers include CMake-generated files (*.h.generated.h declarations,
 # auto/config.h, ...), so this extracts the tag into target/upstream/src,

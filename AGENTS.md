@@ -21,7 +21,7 @@ Tests only run local, not in CI. Any failure, even out of scope, is your respons
 
 - `just functionaltest [paths...] [--filter=pat]` — RPC-driven tests from `test/functional`. Pass spec files/dirs to run a subset.
 - `just oldtest <all|test_name...|clean>` — legacy Vim tests from `test/old/testdir`. The mode is required; `all` runs the whole suite from scratch, names run a subset, e.g. `just oldtest test_arglist`.
-- `just unittest [paths...]` — unit tests from `test/unit`. They preprocess the upstream v0.12.4 C headers (reconstructed under `target/upstream` on first run) and FFI into the transpiled symbols the nvim binary exports.
+- `just unittest [paths...]` — unit tests from `test/unit`. Their FFI declarations are generated from the Rust crate (`tools/ffigen`, wired in by `scripts/gen-unit-cdefs.sh`); the specs call the exported symbols of the nvim binary. The upstream v0.12.4 tree (`target/upstream`) is still reconstructed, but only to compile the C fixtures (`unit-fixtures.so`).
 - Run one suite at a time: the harnesses share `target/` scaffolding and interfere when run concurrently.
 - `just asan <recipe>` — AddressSanitizer equivalents (`build`, `functionaltest`, `oldtest`), defined in `just/asan.just`. Reports land in `target/asan/asan.log.<pid>`.
 - Broken: `just benchmark [paths...]` — benchmarks from `test/benchmark`. We haven't gotten it working since the rewrite.
