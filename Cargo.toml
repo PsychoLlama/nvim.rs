@@ -28,6 +28,9 @@ crate-type = ["staticlib", "rlib"]
 [[bin]]
 name = "nvim"
 path = "src/bin/nvim.rs"
+# No #[test]s live in the bin; keep `cargo test --tests` from linking a
+# second full nvim just to run zero tests.
+test = false
 
 [dependencies]
 c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }

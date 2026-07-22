@@ -78,11 +78,12 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
-# Run the crate's Rust tests (`cargo test --lib`, i.e. #[cfg(test)]
-# modules). Today these cover the safe cores' pure logic below the C-ABI
-# shims, but the suite is general and will grow beyond that.
+# Run the crate's Rust tests: the #[cfg(test)] modules (safe cores' pure
+# logic below the C-ABI shims) plus the integration tests under tests/
+# (ports of former test/unit specs; they call the same exported surface the
+# LuaJIT FFI harness did, minus the child process).
 cargo-test *args:
-  cargo test --lib {{ args }}
+  cargo test --lib --tests {{ args }}
 
 # Validate the generated unit-test cdefs against the upstream v0.12.4
 # headers: compiles probe programs over both and diffs every type's
