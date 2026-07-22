@@ -170,7 +170,7 @@
     "src/nvim/textformat.rs": {"lines": 1883, "unsafe": 15},
     "src/nvim/textobject.rs": {"lines": 2001, "unsafe": 32},
     "src/nvim/tui/input.rs": {"lines": 2197, "no_mangle": 4, "unsafe": 38},
-    "src/nvim/tui/terminfo.rs": {"lines": 5004, "no_mangle": 1, "unsafe": 11},
+    "src/nvim/tui/terminfo.rs": {"lines": 4547, "no_mangle": 1, "unsafe": 11},
     "src/nvim/tui/termkey/driver_csi.rs": {"lines": 1669, "no_mangle": 4, "unsafe": 35},
     "src/nvim/tui/termkey/driver_ti.rs": {"unsafe": 14},
     "src/nvim/tui/termkey/termkey.rs": {"lines": 1799, "no_mangle": 18, "unsafe": 49},

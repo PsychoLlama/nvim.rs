@@ -1,262 +1,27 @@
 use crate::src::nvim::charset::kv_transstr;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{strequal, xrealloc};
-use crate::src::nvim::os::libc::{__ctype_b_loc, memcmp, memset, snprintf, strcmp, strlen};
+use crate::src::nvim::os::libc::{__ctype_b_loc, memcmp, memset, snprintf, strlen};
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::unibi;
 pub use crate::src::nvim::types::{
     size_t, ssize_t, Arena, StringBuilder, String_0, TerminfoEntry, TPVAR,
 };
 extern "C" {
-    pub type unibi_term;
-    fn unibi_destroy(_: *mut unibi_term);
-    fn unibi_get_bool(_: *const unibi_term, _: unibi_boolean) -> ::core::ffi::c_int;
-    fn unibi_get_num(_: *const unibi_term, _: unibi_numeric) -> ::core::ffi::c_int;
-    fn unibi_get_str(_: *const unibi_term, _: unibi_string) -> *const ::core::ffi::c_char;
-    fn unibi_from_term(_: *const ::core::ffi::c_char) -> *mut unibi_term;
-    fn unibi_count_ext_bool(_: *const unibi_term) -> size_t;
-    fn unibi_count_ext_str(_: *const unibi_term) -> size_t;
-    fn unibi_get_ext_str(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
-    fn unibi_get_ext_bool_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
-    fn unibi_get_ext_str_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
     fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
         -> *mut ::core::ffi::c_char;
 }
 pub type unibi_boolean = ::core::ffi::c_uint;
-pub const unibi_boolean_end_: unibi_boolean = 45;
-pub const unibi_return_does_clr_eol: unibi_boolean = 44;
-pub const unibi_has_hardware_tabs: unibi_boolean = 43;
-pub const unibi_linefeed_is_newline: unibi_boolean = 42;
-pub const unibi_gnu_has_meta_key: unibi_boolean = 41;
-pub const unibi_no_correctly_working_cr: unibi_boolean = 40;
-pub const unibi_crt_no_scrolling: unibi_boolean = 39;
-pub const unibi_backspaces_with_bs: unibi_boolean = 38;
-pub const unibi_lpi_changes_res: unibi_boolean = 37;
-pub const unibi_cpi_changes_res: unibi_boolean = 36;
-pub const unibi_semi_auto_right_margin: unibi_boolean = 35;
-pub const unibi_row_addr_glitch: unibi_boolean = 34;
-pub const unibi_has_print_wheel: unibi_boolean = 33;
-pub const unibi_cr_cancels_micro_mode: unibi_boolean = 32;
-pub const unibi_col_addr_glitch: unibi_boolean = 31;
-pub const unibi_hue_lightness_saturation: unibi_boolean = 30;
 pub const unibi_back_color_erase: unibi_boolean = 29;
-pub const unibi_can_change: unibi_boolean = 28;
-pub const unibi_non_dest_scroll_region: unibi_boolean = 27;
-pub const unibi_no_pad_char: unibi_boolean = 26;
-pub const unibi_non_rev_rmcup: unibi_boolean = 25;
-pub const unibi_hard_cursor: unibi_boolean = 24;
-pub const unibi_prtr_silent: unibi_boolean = 23;
-pub const unibi_needs_xon_xoff: unibi_boolean = 22;
-pub const unibi_xon_xoff: unibi_boolean = 21;
-pub const unibi_transparent_underline: unibi_boolean = 20;
-pub const unibi_tilde_glitch: unibi_boolean = 19;
-pub const unibi_dest_tabs_magic_smso: unibi_boolean = 18;
-pub const unibi_status_line_esc_ok: unibi_boolean = 17;
-pub const unibi_over_strike: unibi_boolean = 16;
-pub const unibi_move_standout_mode: unibi_boolean = 15;
-pub const unibi_move_insert_mode: unibi_boolean = 14;
-pub const unibi_memory_below: unibi_boolean = 13;
-pub const unibi_memory_above: unibi_boolean = 12;
-pub const unibi_insert_null_glitch: unibi_boolean = 11;
-pub const unibi_has_status_line: unibi_boolean = 10;
-pub const unibi_has_meta_key: unibi_boolean = 9;
-pub const unibi_hard_copy: unibi_boolean = 8;
-pub const unibi_generic_type: unibi_boolean = 7;
-pub const unibi_erase_overstrike: unibi_boolean = 6;
-pub const unibi_eat_newline_glitch: unibi_boolean = 5;
-pub const unibi_ceol_standout_glitch: unibi_boolean = 4;
-pub const unibi_no_esc_ctlc: unibi_boolean = 3;
-pub const unibi_auto_right_margin: unibi_boolean = 2;
-pub const unibi_auto_left_margin: unibi_boolean = 1;
-pub const unibi_boolean_begin_: unibi_boolean = 0;
 pub type unibi_numeric = ::core::ffi::c_uint;
-pub const unibi_numeric_end_: unibi_numeric = 85;
-pub const unibi_number_of_function_keys: unibi_numeric = 84;
-pub const unibi_horizontal_tab_delay: unibi_numeric = 83;
-pub const unibi_backspace_delay: unibi_numeric = 82;
-pub const unibi_new_line_delay: unibi_numeric = 81;
-pub const unibi_carriage_return_delay: unibi_numeric = 80;
-pub const unibi_magic_cookie_glitch_ul: unibi_numeric = 79;
-pub const unibi_bit_image_type: unibi_numeric = 78;
-pub const unibi_bit_image_entwining: unibi_numeric = 77;
-pub const unibi_buttons: unibi_numeric = 76;
-pub const unibi_wide_char_size: unibi_numeric = 75;
-pub const unibi_print_rate: unibi_numeric = 74;
-pub const unibi_output_res_vert_inch: unibi_numeric = 73;
-pub const unibi_output_res_horz_inch: unibi_numeric = 72;
-pub const unibi_output_res_line: unibi_numeric = 71;
-pub const unibi_output_res_char: unibi_numeric = 70;
-pub const unibi_number_of_pins: unibi_numeric = 69;
-pub const unibi_micro_line_size: unibi_numeric = 68;
-pub const unibi_micro_col_size: unibi_numeric = 67;
-pub const unibi_max_micro_jump: unibi_numeric = 66;
-pub const unibi_max_micro_address: unibi_numeric = 65;
-pub const unibi_dot_horz_spacing: unibi_numeric = 64;
-pub const unibi_dot_vert_spacing: unibi_numeric = 63;
-pub const unibi_buffer_capacity: unibi_numeric = 62;
-pub const unibi_no_color_video: unibi_numeric = 61;
-pub const unibi_max_pairs: unibi_numeric = 60;
 pub const unibi_max_colors: unibi_numeric = 59;
-pub const unibi_maximum_windows: unibi_numeric = 58;
-pub const unibi_max_attributes: unibi_numeric = 57;
-pub const unibi_label_width: unibi_numeric = 56;
-pub const unibi_label_height: unibi_numeric = 55;
-pub const unibi_num_labels: unibi_numeric = 54;
-pub const unibi_width_status_line: unibi_numeric = 53;
-pub const unibi_virtual_terminal: unibi_numeric = 52;
-pub const unibi_padding_baud_rate: unibi_numeric = 51;
-pub const unibi_magic_cookie_glitch: unibi_numeric = 50;
-pub const unibi_lines_of_memory: unibi_numeric = 49;
 pub const unibi_lines: unibi_numeric = 48;
-pub const unibi_init_tabs: unibi_numeric = 47;
 pub const unibi_columns: unibi_numeric = 46;
-pub const unibi_numeric_begin_: unibi_numeric = 45;
 pub type unibi_string = ::core::ffi::c_uint;
-pub const unibi_string_end_: unibi_string = 500;
-pub const unibi_box_chars_1: unibi_string = 499;
-pub const unibi_memory_unlock: unibi_string = 498;
-pub const unibi_memory_lock: unibi_string = 497;
-pub const unibi_acs_plus: unibi_string = 496;
-pub const unibi_acs_vline: unibi_string = 495;
-pub const unibi_acs_hline: unibi_string = 494;
-pub const unibi_acs_ttee: unibi_string = 493;
-pub const unibi_acs_btee: unibi_string = 492;
-pub const unibi_acs_rtee: unibi_string = 491;
-pub const unibi_acs_ltee: unibi_string = 490;
-pub const unibi_acs_lrcorner: unibi_string = 489;
-pub const unibi_acs_urcorner: unibi_string = 488;
-pub const unibi_acs_llcorner: unibi_string = 487;
-pub const unibi_acs_ulcorner: unibi_string = 486;
-pub const unibi_arrow_key_map: unibi_string = 485;
-pub const unibi_other_non_function_keys: unibi_string = 484;
-pub const unibi_backspace_if_not_bs: unibi_string = 483;
-pub const unibi_linefeed_if_not_lf: unibi_string = 482;
-pub const unibi_termcap_reset: unibi_string = 481;
-pub const unibi_termcap_init2: unibi_string = 480;
-pub const unibi_set_pglen_inch: unibi_string = 479;
-pub const unibi_set_a_attributes: unibi_string = 478;
-pub const unibi_enter_vertical_hl_mode: unibi_string = 477;
-pub const unibi_enter_top_hl_mode: unibi_string = 476;
-pub const unibi_enter_right_hl_mode: unibi_string = 475;
-pub const unibi_enter_low_hl_mode: unibi_string = 474;
-pub const unibi_enter_left_hl_mode: unibi_string = 473;
-pub const unibi_enter_horizontal_hl_mode: unibi_string = 472;
-pub const unibi_alt_scancode_esc: unibi_string = 471;
-pub const unibi_scancode_escape: unibi_string = 470;
-pub const unibi_pc_term_options: unibi_string = 469;
-pub const unibi_exit_scancode_mode: unibi_string = 468;
-pub const unibi_enter_scancode_mode: unibi_string = 467;
-pub const unibi_exit_pc_charset_mode: unibi_string = 466;
-pub const unibi_enter_pc_charset_mode: unibi_string = 465;
-pub const unibi_display_pc_char: unibi_string = 464;
-pub const unibi_set_page_length: unibi_string = 463;
-pub const unibi_set_color_band: unibi_string = 462;
-pub const unibi_end_bit_image_region: unibi_string = 461;
-pub const unibi_define_bit_image_region: unibi_string = 460;
-pub const unibi_color_names: unibi_string = 459;
-pub const unibi_bit_image_carriage_return: unibi_string = 458;
-pub const unibi_bit_image_newline: unibi_string = 457;
-pub const unibi_bit_image_repeat: unibi_string = 456;
-pub const unibi_set_tb_margin: unibi_string = 455;
 pub const unibi_set_lr_margin: unibi_string = 454;
-pub const unibi_set3_des_seq: unibi_string = 453;
-pub const unibi_set2_des_seq: unibi_string = 452;
-pub const unibi_set1_des_seq: unibi_string = 451;
-pub const unibi_set0_des_seq: unibi_string = 450;
-pub const unibi_code_set_init: unibi_string = 449;
-pub const unibi_device_type: unibi_string = 448;
-pub const unibi_pkey_plab: unibi_string = 447;
 pub const unibi_set_a_background: unibi_string = 446;
 pub const unibi_set_a_foreground: unibi_string = 445;
-pub const unibi_get_mouse: unibi_string = 444;
-pub const unibi_req_mouse_pos: unibi_string = 443;
-pub const unibi_mouse_info: unibi_string = 442;
-pub const unibi_key_mouse: unibi_string = 441;
-pub const unibi_char_set_names: unibi_string = 440;
-pub const unibi_zero_motion: unibi_string = 439;
-pub const unibi_these_cause_cr: unibi_string = 438;
-pub const unibi_superscript_characters: unibi_string = 437;
-pub const unibi_subscript_characters: unibi_string = 436;
-pub const unibi_stop_char_set_def: unibi_string = 435;
-pub const unibi_stop_bit_image: unibi_string = 434;
-pub const unibi_start_char_set_def: unibi_string = 433;
-pub const unibi_start_bit_image: unibi_string = 432;
-pub const unibi_set_top_margin_parm: unibi_string = 431;
-pub const unibi_set_top_margin: unibi_string = 430;
-pub const unibi_set_right_margin_parm: unibi_string = 429;
-pub const unibi_set_left_margin_parm: unibi_string = 428;
-pub const unibi_set_bottom_margin_parm: unibi_string = 427;
-pub const unibi_set_bottom_margin: unibi_string = 426;
-pub const unibi_select_char_set: unibi_string = 425;
-pub const unibi_parm_up_micro: unibi_string = 424;
-pub const unibi_parm_right_micro: unibi_string = 423;
-pub const unibi_parm_left_micro: unibi_string = 422;
-pub const unibi_parm_down_micro: unibi_string = 421;
-pub const unibi_order_of_pins: unibi_string = 420;
-pub const unibi_micro_up: unibi_string = 419;
-pub const unibi_micro_row_address: unibi_string = 418;
-pub const unibi_micro_right: unibi_string = 417;
-pub const unibi_micro_left: unibi_string = 416;
-pub const unibi_micro_down: unibi_string = 415;
-pub const unibi_micro_column_address: unibi_string = 414;
-pub const unibi_exit_upward_mode: unibi_string = 413;
-pub const unibi_exit_superscript_mode: unibi_string = 412;
-pub const unibi_exit_subscript_mode: unibi_string = 411;
-pub const unibi_exit_shadow_mode: unibi_string = 410;
-pub const unibi_exit_micro_mode: unibi_string = 409;
-pub const unibi_exit_leftward_mode: unibi_string = 408;
-pub const unibi_exit_italics_mode: unibi_string = 407;
-pub const unibi_exit_doublewide_mode: unibi_string = 406;
-pub const unibi_enter_upward_mode: unibi_string = 405;
-pub const unibi_enter_superscript_mode: unibi_string = 404;
-pub const unibi_enter_subscript_mode: unibi_string = 403;
-pub const unibi_enter_shadow_mode: unibi_string = 402;
-pub const unibi_enter_normal_quality: unibi_string = 401;
-pub const unibi_enter_near_letter_quality: unibi_string = 400;
-pub const unibi_enter_micro_mode: unibi_string = 399;
-pub const unibi_enter_leftward_mode: unibi_string = 398;
 pub const unibi_enter_italics_mode: unibi_string = 397;
-pub const unibi_enter_draft_quality: unibi_string = 396;
-pub const unibi_enter_doublewide_mode: unibi_string = 395;
-pub const unibi_define_char: unibi_string = 394;
-pub const unibi_change_res_vert: unibi_string = 393;
-pub const unibi_change_res_horz: unibi_string = 392;
-pub const unibi_change_line_pitch: unibi_string = 391;
-pub const unibi_change_char_pitch: unibi_string = 390;
-pub const unibi_set_background: unibi_string = 389;
-pub const unibi_set_foreground: unibi_string = 388;
-pub const unibi_set_color_pair: unibi_string = 387;
-pub const unibi_initialize_pair: unibi_string = 386;
-pub const unibi_initialize_color: unibi_string = 385;
-pub const unibi_orig_colors: unibi_string = 384;
-pub const unibi_orig_pair: unibi_string = 383;
-pub const unibi_user9: unibi_string = 382;
-pub const unibi_user8: unibi_string = 381;
-pub const unibi_user7: unibi_string = 380;
-pub const unibi_user6: unibi_string = 379;
-pub const unibi_user5: unibi_string = 378;
-pub const unibi_user4: unibi_string = 377;
-pub const unibi_user3: unibi_string = 376;
-pub const unibi_user2: unibi_string = 375;
-pub const unibi_user1: unibi_string = 374;
-pub const unibi_user0: unibi_string = 373;
-pub const unibi_wait_tone: unibi_string = 372;
-pub const unibi_fixed_pause: unibi_string = 371;
-pub const unibi_flash_hook: unibi_string = 370;
-pub const unibi_pulse: unibi_string = 369;
-pub const unibi_tone: unibi_string = 368;
-pub const unibi_quick_dial: unibi_string = 367;
-pub const unibi_dial_phone: unibi_string = 366;
-pub const unibi_hangup: unibi_string = 365;
-pub const unibi_goto_window: unibi_string = 364;
-pub const unibi_create_window: unibi_string = 363;
-pub const unibi_remove_clock: unibi_string = 362;
-pub const unibi_display_clock: unibi_string = 361;
-pub const unibi_set_clock: unibi_string = 360;
-pub const unibi_label_format: unibi_string = 359;
-pub const unibi_set_right_margin: unibi_string = 358;
-pub const unibi_set_left_margin: unibi_string = 357;
-pub const unibi_clear_margins: unibi_string = 356;
-pub const unibi_clr_bol: unibi_string = 355;
 pub const unibi_key_f63: unibi_string = 354;
 pub const unibi_key_f62: unibi_string = 353;
 pub const unibi_key_f61: unibi_string = 352;
@@ -310,144 +75,37 @@ pub const unibi_key_f14: unibi_string = 305;
 pub const unibi_key_f13: unibi_string = 304;
 pub const unibi_key_f12: unibi_string = 303;
 pub const unibi_key_f11: unibi_string = 302;
-pub const unibi_req_for_input: unibi_string = 301;
 pub const unibi_key_sundo: unibi_string = 300;
 pub const unibi_key_ssuspend: unibi_string = 299;
-pub const unibi_key_ssave: unibi_string = 298;
-pub const unibi_key_srsume: unibi_string = 297;
 pub const unibi_key_sright: unibi_string = 296;
-pub const unibi_key_sreplace: unibi_string = 295;
-pub const unibi_key_sredo: unibi_string = 294;
-pub const unibi_key_sprint: unibi_string = 293;
-pub const unibi_key_sprevious: unibi_string = 292;
-pub const unibi_key_soptions: unibi_string = 291;
-pub const unibi_key_snext: unibi_string = 290;
-pub const unibi_key_smove: unibi_string = 289;
-pub const unibi_key_smessage: unibi_string = 288;
 pub const unibi_key_sleft: unibi_string = 287;
 pub const unibi_key_sic: unibi_string = 286;
 pub const unibi_key_shome: unibi_string = 285;
-pub const unibi_key_shelp: unibi_string = 284;
 pub const unibi_key_sfind: unibi_string = 283;
-pub const unibi_key_sexit: unibi_string = 282;
-pub const unibi_key_seol: unibi_string = 281;
 pub const unibi_key_send: unibi_string = 280;
 pub const unibi_key_select: unibi_string = 279;
-pub const unibi_key_sdl: unibi_string = 278;
 pub const unibi_key_sdc: unibi_string = 277;
-pub const unibi_key_screate: unibi_string = 276;
-pub const unibi_key_scopy: unibi_string = 275;
-pub const unibi_key_scommand: unibi_string = 274;
-pub const unibi_key_scancel: unibi_string = 273;
 pub const unibi_key_sbeg: unibi_string = 272;
 pub const unibi_key_undo: unibi_string = 271;
 pub const unibi_key_suspend: unibi_string = 270;
-pub const unibi_key_save: unibi_string = 269;
-pub const unibi_key_resume: unibi_string = 268;
-pub const unibi_key_restart: unibi_string = 267;
-pub const unibi_key_replace: unibi_string = 266;
-pub const unibi_key_refresh: unibi_string = 265;
-pub const unibi_key_reference: unibi_string = 264;
-pub const unibi_key_redo: unibi_string = 263;
-pub const unibi_key_print: unibi_string = 262;
-pub const unibi_key_previous: unibi_string = 261;
-pub const unibi_key_options: unibi_string = 260;
-pub const unibi_key_open: unibi_string = 259;
-pub const unibi_key_next: unibi_string = 258;
-pub const unibi_key_move: unibi_string = 257;
-pub const unibi_key_message: unibi_string = 256;
-pub const unibi_key_mark: unibi_string = 255;
-pub const unibi_key_help: unibi_string = 254;
 pub const unibi_key_find: unibi_string = 253;
-pub const unibi_key_exit: unibi_string = 252;
-pub const unibi_key_enter: unibi_string = 251;
 pub const unibi_key_end: unibi_string = 250;
-pub const unibi_key_create: unibi_string = 249;
-pub const unibi_key_copy: unibi_string = 248;
-pub const unibi_key_command: unibi_string = 247;
-pub const unibi_key_close: unibi_string = 246;
-pub const unibi_key_cancel: unibi_string = 245;
 pub const unibi_key_beg: unibi_string = 244;
-pub const unibi_label_off: unibi_string = 243;
-pub const unibi_label_on: unibi_string = 242;
-pub const unibi_ena_acs: unibi_string = 241;
-pub const unibi_xoff_character: unibi_string = 240;
-pub const unibi_xon_character: unibi_string = 239;
-pub const unibi_exit_am_mode: unibi_string = 238;
-pub const unibi_enter_am_mode: unibi_string = 237;
-pub const unibi_exit_xon_mode: unibi_string = 236;
-pub const unibi_enter_xon_mode: unibi_string = 235;
 pub const unibi_key_btab: unibi_string = 234;
-pub const unibi_plab_norm: unibi_string = 233;
-pub const unibi_acs_chars: unibi_string = 232;
-pub const unibi_char_padding: unibi_string = 231;
-pub const unibi_prtr_non: unibi_string = 230;
-pub const unibi_key_c3: unibi_string = 229;
-pub const unibi_key_c1: unibi_string = 228;
-pub const unibi_key_b2: unibi_string = 227;
-pub const unibi_key_a3: unibi_string = 226;
-pub const unibi_key_a1: unibi_string = 225;
-pub const unibi_init_prog: unibi_string = 224;
-pub const unibi_up_half_line: unibi_string = 223;
-pub const unibi_underline_char: unibi_string = 222;
 pub const unibi_to_status_line: unibi_string = 221;
-pub const unibi_tab: unibi_string = 220;
-pub const unibi_set_window: unibi_string = 219;
-pub const unibi_set_tab: unibi_string = 218;
 pub const unibi_set_attributes: unibi_string = 217;
-pub const unibi_scroll_reverse: unibi_string = 216;
-pub const unibi_scroll_forward: unibi_string = 215;
-pub const unibi_save_cursor: unibi_string = 214;
-pub const unibi_row_address: unibi_string = 213;
-pub const unibi_restore_cursor: unibi_string = 212;
-pub const unibi_reset_file: unibi_string = 211;
-pub const unibi_reset_3string: unibi_string = 210;
-pub const unibi_reset_2string: unibi_string = 209;
-pub const unibi_reset_1string: unibi_string = 208;
-pub const unibi_repeat_char: unibi_string = 207;
-pub const unibi_prtr_on: unibi_string = 206;
-pub const unibi_prtr_off: unibi_string = 205;
-pub const unibi_print_screen: unibi_string = 204;
-pub const unibi_pkey_xmit: unibi_string = 203;
-pub const unibi_pkey_local: unibi_string = 202;
-pub const unibi_pkey_key: unibi_string = 201;
 pub const unibi_parm_up_cursor: unibi_string = 200;
-pub const unibi_parm_rindex: unibi_string = 199;
 pub const unibi_parm_right_cursor: unibi_string = 198;
 pub const unibi_parm_left_cursor: unibi_string = 197;
 pub const unibi_parm_insert_line: unibi_string = 196;
-pub const unibi_parm_index: unibi_string = 195;
-pub const unibi_parm_ich: unibi_string = 194;
 pub const unibi_parm_down_cursor: unibi_string = 193;
 pub const unibi_parm_delete_line: unibi_string = 192;
-pub const unibi_parm_dch: unibi_string = 191;
-pub const unibi_pad_char: unibi_string = 190;
-pub const unibi_newline: unibi_string = 189;
-pub const unibi_meta_on: unibi_string = 188;
-pub const unibi_meta_off: unibi_string = 187;
-pub const unibi_lab_f9: unibi_string = 186;
-pub const unibi_lab_f8: unibi_string = 185;
-pub const unibi_lab_f7: unibi_string = 184;
-pub const unibi_lab_f6: unibi_string = 183;
-pub const unibi_lab_f5: unibi_string = 182;
-pub const unibi_lab_f4: unibi_string = 181;
-pub const unibi_lab_f3: unibi_string = 180;
-pub const unibi_lab_f2: unibi_string = 179;
-pub const unibi_lab_f10: unibi_string = 178;
-pub const unibi_lab_f1: unibi_string = 177;
-pub const unibi_lab_f0: unibi_string = 176;
 pub const unibi_keypad_xmit: unibi_string = 175;
 pub const unibi_keypad_local: unibi_string = 174;
-pub const unibi_key_up: unibi_string = 173;
-pub const unibi_key_stab: unibi_string = 172;
-pub const unibi_key_sr: unibi_string = 171;
-pub const unibi_key_sf: unibi_string = 170;
 pub const unibi_key_right: unibi_string = 169;
 pub const unibi_key_ppage: unibi_string = 168;
 pub const unibi_key_npage: unibi_string = 167;
-pub const unibi_key_ll: unibi_string = 166;
 pub const unibi_key_left: unibi_string = 165;
-pub const unibi_key_il: unibi_string = 164;
 pub const unibi_key_ic: unibi_string = 163;
 pub const unibi_key_home: unibi_string = 162;
 pub const unibi_key_f9: unibi_string = 161;
@@ -460,72 +118,36 @@ pub const unibi_key_f3: unibi_string = 155;
 pub const unibi_key_f2: unibi_string = 154;
 pub const unibi_key_f10: unibi_string = 153;
 pub const unibi_key_f1: unibi_string = 152;
-pub const unibi_key_f0: unibi_string = 151;
-pub const unibi_key_eos: unibi_string = 150;
-pub const unibi_key_eol: unibi_string = 149;
-pub const unibi_key_eic: unibi_string = 148;
-pub const unibi_key_down: unibi_string = 147;
-pub const unibi_key_dl: unibi_string = 146;
 pub const unibi_key_dc: unibi_string = 145;
-pub const unibi_key_ctab: unibi_string = 144;
 pub const unibi_key_clear: unibi_string = 143;
-pub const unibi_key_catab: unibi_string = 142;
 pub const unibi_key_backspace: unibi_string = 141;
-pub const unibi_insert_padding: unibi_string = 140;
 pub const unibi_insert_line: unibi_string = 139;
-pub const unibi_insert_character: unibi_string = 138;
-pub const unibi_init_file: unibi_string = 137;
-pub const unibi_init_3string: unibi_string = 136;
-pub const unibi_init_2string: unibi_string = 135;
-pub const unibi_init_1string: unibi_string = 134;
 pub const unibi_from_status_line: unibi_string = 133;
-pub const unibi_form_feed: unibi_string = 132;
-pub const unibi_flash_screen: unibi_string = 131;
-pub const unibi_exit_underline_mode: unibi_string = 130;
-pub const unibi_exit_standout_mode: unibi_string = 129;
-pub const unibi_exit_insert_mode: unibi_string = 128;
-pub const unibi_exit_delete_mode: unibi_string = 127;
 pub const unibi_exit_ca_mode: unibi_string = 126;
 pub const unibi_exit_attribute_mode: unibi_string = 125;
-pub const unibi_exit_alt_charset_mode: unibi_string = 124;
 pub const unibi_erase_chars: unibi_string = 123;
 pub const unibi_enter_underline_mode: unibi_string = 122;
 pub const unibi_enter_standout_mode: unibi_string = 121;
 pub const unibi_enter_reverse_mode: unibi_string = 120;
-pub const unibi_enter_protected_mode: unibi_string = 119;
 pub const unibi_enter_secure_mode: unibi_string = 118;
-pub const unibi_enter_insert_mode: unibi_string = 117;
 pub const unibi_enter_dim_mode: unibi_string = 116;
-pub const unibi_enter_delete_mode: unibi_string = 115;
 pub const unibi_enter_ca_mode: unibi_string = 114;
 pub const unibi_enter_bold_mode: unibi_string = 113;
 pub const unibi_enter_blink_mode: unibi_string = 112;
-pub const unibi_enter_alt_charset_mode: unibi_string = 111;
-pub const unibi_down_half_line: unibi_string = 110;
-pub const unibi_dis_status_line: unibi_string = 109;
 pub const unibi_delete_line: unibi_string = 108;
-pub const unibi_delete_character: unibi_string = 107;
-pub const unibi_cursor_visible: unibi_string = 106;
 pub const unibi_cursor_up: unibi_string = 105;
-pub const unibi_cursor_to_ll: unibi_string = 104;
 pub const unibi_cursor_right: unibi_string = 103;
 pub const unibi_cursor_normal: unibi_string = 102;
-pub const unibi_cursor_mem_address: unibi_string = 101;
 pub const unibi_cursor_left: unibi_string = 100;
 pub const unibi_cursor_invisible: unibi_string = 99;
 pub const unibi_cursor_home: unibi_string = 98;
 pub const unibi_cursor_down: unibi_string = 97;
 pub const unibi_cursor_address: unibi_string = 96;
-pub const unibi_command_character: unibi_string = 95;
-pub const unibi_column_address: unibi_string = 94;
 pub const unibi_clr_eos: unibi_string = 93;
 pub const unibi_clr_eol: unibi_string = 92;
 pub const unibi_clear_screen: unibi_string = 91;
-pub const unibi_clear_all_tabs: unibi_string = 90;
 pub const unibi_change_scroll_region: unibi_string = 89;
 pub const unibi_carriage_return: unibi_string = 88;
-pub const unibi_bell: unibi_string = 87;
-pub const unibi_back_tab: unibi_string = 86;
 pub const unibi_string_begin_: unibi_string = 85;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
@@ -709,34 +331,35 @@ pub unsafe extern "C" fn terminfo_from_builtin(
     };
 }
 pub unsafe extern "C" fn terminfo_from_database(
-    mut ti: *mut TerminfoEntry,
-    mut termname: *mut ::core::ffi::c_char,
-    mut arena: *mut Arena,
+    ti: *mut TerminfoEntry,
+    termname: *mut ::core::ffi::c_char,
+    arena: *mut Arena,
 ) -> bool {
-    let mut ut: *mut unibi_term = unibi_from_term(termname);
-    if ut.is_null() {
-        return false_0 != 0;
-    }
-    (*ti).bce = unibi_get_bool(ut, unibi_back_color_erase) != 0;
-    (*ti).max_colors = unibi_get_num(ut, unibi_max_colors);
-    (*ti).lines = unibi_get_num(ut, unibi_lines);
-    (*ti).columns = unibi_get_num(ut, unibi_columns);
-    (*ti).has_Tc_or_RGB = false_0 != 0;
-    (*ti).Su = false_0 != 0;
-    let mut i: size_t = 0 as size_t;
-    while i < unibi_count_ext_bool(ut) {
-        let mut n: *const ::core::ffi::c_char = unibi_get_ext_bool_name(ut, i);
-        if !n.is_null()
-            && (strcmp(n, b"Tc\0".as_ptr() as *const ::core::ffi::c_char) == 0
-                || strcmp(n, b"RGB\0".as_ptr() as *const ::core::ffi::c_char) == 0)
-        {
-            (*ti).has_Tc_or_RGB = true_0 != 0;
-        } else if !n.is_null() && strcmp(n, b"Su\0".as_ptr() as *const ::core::ffi::c_char) == 0 {
-            (*ti).Su = true_0 != 0;
+    let Some(term) = unibi::from_term(::std::ffi::CStr::from_ptr(termname)) else {
+        return false;
+    };
+    let dup = |val: Option<&::std::ffi::CStr>| match val {
+        Some(s) => arena_strdup(arena, s.as_ptr()),
+        None => ::core::ptr::null_mut(),
+    };
+
+    (*ti).bce = term.get_bool(unibi_back_color_erase);
+    (*ti).max_colors = term.get_num(unibi_max_colors);
+    (*ti).lines = term.get_num(unibi_lines);
+    (*ti).columns = term.get_num(unibi_columns);
+    (*ti).has_Tc_or_RGB = false;
+    (*ti).Su = false;
+    for name in term.ext_bool_names() {
+        match name.to_bytes() {
+            b"Tc" | b"RGB" => (*ti).has_Tc_or_RGB = true,
+            b"Su" => (*ti).Su = true,
+            _ => {}
         }
-        i = i.wrapping_add(1);
     }
-    static uni_ids: GlobalCell<[unibi_string; 41]> = GlobalCell::new([
+
+    // The TerminfoEntry.defs slots in order: kTerm_carriage_return ..
+    // kTerm_to_status_line.
+    const UNI_IDS: [unibi_string; 41] = [
         unibi_carriage_return,
         unibi_change_scroll_region,
         unibi_clear_screen,
@@ -778,66 +401,27 @@ pub unsafe extern "C" fn terminfo_from_database(
         unibi_set_attributes,
         unibi_set_lr_margin,
         unibi_to_status_line,
-    ]);
-    let mut i_0: size_t = 0 as size_t;
-    while i_0
-        < ::core::mem::size_of::<[unibi_string; 41]>()
-            .wrapping_div(::core::mem::size_of::<unibi_string>())
-            .wrapping_div(
-                (::core::mem::size_of::<[unibi_string; 41]>()
-                    .wrapping_rem(::core::mem::size_of::<unibi_string>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-    {
-        let mut val: *const ::core::ffi::c_char = unibi_get_str(ut, (*uni_ids.ptr())[i_0 as usize]);
-        (*ti).defs[i_0 as usize] = if !val.is_null() {
-            arena_strdup(arena, val)
-        } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
-        };
-        i_0 = i_0.wrapping_add(1);
+    ];
+    for (i, &cap) in UNI_IDS.iter().enumerate() {
+        (*ti).defs[i] = dup(term.get_str(cap));
     }
-    static uni_ext: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
-        b"Se\0".as_ptr() as *const ::core::ffi::c_char,
-        b"Ss\0".as_ptr() as *const ::core::ffi::c_char,
-        b"smxx\0".as_ptr() as *const ::core::ffi::c_char,
-        b"setrgbf\0".as_ptr() as *const ::core::ffi::c_char,
-        b"setrgbb\0".as_ptr() as *const ::core::ffi::c_char,
-        b"Cs\0".as_ptr() as *const ::core::ffi::c_char,
-        b"Cr\0".as_ptr() as *const ::core::ffi::c_char,
-        b"Smulx\0".as_ptr() as *const ::core::ffi::c_char,
-    ]);
-    let mut max: size_t = unibi_count_ext_str(ut);
-    let mut i_1: size_t = 0 as size_t;
-    while i_1
-        < ::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-            .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-                    .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-    {
-        let mut name: *const ::core::ffi::c_char = (*uni_ext.ptr())[i_1 as usize];
-        let mut val_0: size_t = 0 as size_t;
-        while val_0 < max {
-            let mut n_0: *const ::core::ffi::c_char = unibi_get_ext_str_name(ut, val_0);
-            if !n_0.is_null() && strequal(n_0, name) as ::core::ffi::c_int != 0 {
-                let mut data: *const ::core::ffi::c_char = unibi_get_ext_str(ut, val_0);
-                (*ti).defs[(kTerm_reset_cursor_style as ::core::ffi::c_int as size_t)
-                    .wrapping_add(i_1) as usize] = if !data.is_null() {
-                    arena_strdup(arena, data)
-                } else {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
-                };
-                break;
-            } else {
-                val_0 = val_0.wrapping_add(1);
-            }
+
+    // Extended string capabilities fill the defs slots from
+    // kTerm_reset_cursor_style on. A name the description doesn't define
+    // leaves its slot untouched.
+    const UNI_EXT: [&[u8]; 8] = [
+        b"Se", b"Ss", b"smxx", b"setrgbf", b"setrgbb", b"Cs", b"Cr", b"Smulx",
+    ];
+    for (i, want) in UNI_EXT.iter().enumerate() {
+        if let Some((_, val)) = term.ext_strs().find(|(name, _)| name.to_bytes() == *want) {
+            (*ti).defs[kTerm_reset_cursor_style as usize + i] = dup(val);
         }
-        i_1 = i_1.wrapping_add(1);
     }
-    static uni_keys: GlobalCell<[[unibi_string; 2]; 16]> = GlobalCell::new([
+
+    // Special keys paired with their shifted variant where terminfo defines
+    // one (unibi_string_begin_ marks "no shifted form"). The shifted slot is
+    // only looked up when the unshifted key exists.
+    const UNI_KEYS: [[unibi_string; 2]; 16] = [
         [unibi_key_backspace, unibi_string_begin_],
         [unibi_key_beg, unibi_key_sbeg],
         [unibi_key_btab, unibi_string_begin_],
@@ -854,41 +438,17 @@ pub unsafe extern "C" fn terminfo_from_database(
         [unibi_key_undo, unibi_key_sundo],
         [unibi_key_left, unibi_key_sleft],
         [unibi_key_right, unibi_key_sright],
-    ]);
-    let mut i_2: size_t = 0 as size_t;
-    while i_2
-        < ::core::mem::size_of::<[[unibi_string; 2]; 16]>()
-            .wrapping_div(::core::mem::size_of::<[unibi_string; 2]>())
-            .wrapping_div(
-                (::core::mem::size_of::<[[unibi_string; 2]; 16]>()
-                    .wrapping_rem(::core::mem::size_of::<[unibi_string; 2]>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-    {
-        let mut val_1: *const ::core::ffi::c_char = unibi_get_str(
-            ut,
-            (*uni_keys.ptr())[i_2 as usize][0 as ::core::ffi::c_int as usize],
-        );
-        if !val_1.is_null() {
-            (*ti).keys[i_2 as usize][0 as ::core::ffi::c_int as usize] = arena_strdup(arena, val_1);
-            if (*uni_keys.ptr())[i_2 as usize][1 as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_uint
-                != unibi_string_begin_ as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut sval: *const ::core::ffi::c_char = unibi_get_str(
-                    ut,
-                    (*uni_keys.ptr())[i_2 as usize][1 as ::core::ffi::c_int as usize],
-                );
-                (*ti).keys[i_2 as usize][1 as ::core::ffi::c_int as usize] = if !sval.is_null() {
-                    arena_strdup(arena, sval)
-                } else {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
-                };
+    ];
+    for (i, &[key, skey]) in UNI_KEYS.iter().enumerate() {
+        if let Some(val) = term.get_str(key) {
+            (*ti).keys[i][0] = arena_strdup(arena, val.as_ptr());
+            if skey != unibi_string_begin_ {
+                (*ti).keys[i][1] = dup(term.get_str(skey));
             }
         }
-        i_2 = i_2.wrapping_add(1);
     }
-    static uni_fkeys: GlobalCell<[unibi_string; 63]> = GlobalCell::new([
+
+    const UNI_FKEYS: [unibi_string; 63] = [
         unibi_key_f1,
         unibi_key_f2,
         unibi_key_f3,
@@ -952,28 +512,11 @@ pub unsafe extern "C" fn terminfo_from_database(
         unibi_key_f61,
         unibi_key_f62,
         unibi_key_f63,
-    ]);
-    let mut i_3: size_t = 0 as size_t;
-    while i_3
-        < ::core::mem::size_of::<[unibi_string; 63]>()
-            .wrapping_div(::core::mem::size_of::<unibi_string>())
-            .wrapping_div(
-                (::core::mem::size_of::<[unibi_string; 63]>()
-                    .wrapping_rem(::core::mem::size_of::<unibi_string>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-    {
-        let mut val_2: *const ::core::ffi::c_char =
-            unibi_get_str(ut, (*uni_fkeys.ptr())[i_3 as usize]);
-        (*ti).f_keys[i_3 as usize] = if !val_2.is_null() {
-            arena_strdup(arena, val_2)
-        } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
-        };
-        i_3 = i_3.wrapping_add(1);
+    ];
+    for (i, &cap) in UNI_FKEYS.iter().enumerate() {
+        (*ti).f_keys[i] = dup(term.get_str(cap));
     }
-    unibi_destroy(ut);
-    return true_0 != 0;
+    true
 }
 unsafe extern "C" fn fmt(mut val: bool) -> *const ::core::ffi::c_char {
     return if val as ::core::ffi::c_int != 0 {
