@@ -1,5 +1,5 @@
 # Neovim's bundled C dependencies (LuaJIT, libuv, luv, lpeg, tree-sitter and
-# its parsers, unibilium, utf8proc), built once into a self-contained prefix.
+# its parsers, utf8proc), built once into a self-contained prefix.
 #
 # `cmake.deps` normally *downloads* these tarballs at build time, which a
 # sandboxed Nix build can't do. Instead Nix fetches every source from

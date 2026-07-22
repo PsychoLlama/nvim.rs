@@ -205,7 +205,7 @@ The externally maintained libraries used by Neovim are:
   - lua-lpeg: MIT license
   - tree-sitter: MIT license
   - xdiff: LGPL v2
-  - (Deprecated) unibilium: LGPL v3
+  - unibilium (ported to Rust as src/nvim/tui/unibi.rs): LGPL v3
 
 ====
 

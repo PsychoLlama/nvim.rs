@@ -2,8 +2,8 @@
 //! compile the builtin `vim.*` Lua modules to embeddable LuaJIT bytecode.
 //!
 //! The transpiled Rust supplies every symbol that used to come from neovim's
-//! `.c` sources; everything else (LuaJIT, libuv, tree-sitter, unibilium,
-//! utf8proc, lpeg, luv) lives in the static archives neovim's `cmake.deps`
+//! `.c` sources; everything else (LuaJIT, libuv, tree-sitter, utf8proc,
+//! lpeg, luv) lives in the static archives neovim's `cmake.deps`
 //! build produces. Those are built out-of-band by Nix (`nix/deps.nix`), which
 //! hands us their install prefix via `$NVIM_DEPS_PREFIX`. We reproduce
 //! neovim's link line against it: the same libraries, in the same order, with
@@ -111,14 +111,7 @@ fn main() {
     // Static archives from the deps prefix, in neovim's link order. `luv`
     // depends on `uv`, `luajit` on `m`, so ordering matters for the static
     // linker.
-    for lib in [
-        "luv",
-        "lpeg",
-        "tree-sitter",
-        "utf8proc",
-        "unibilium",
-        "luajit-5.1",
-    ] {
+    for lib in ["luv", "lpeg", "tree-sitter", "utf8proc", "luajit-5.1"] {
         println!("cargo:rustc-link-lib=static={lib}");
     }
 
