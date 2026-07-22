@@ -3148,6 +3148,7 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
 pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 pub static disable_fold_update: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
+#[no_mangle]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {

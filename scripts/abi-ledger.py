@@ -27,10 +27,11 @@ symbol is only ever misclassified toward "keep exported", never toward
 "safe to change". Dynamically constructed names ('mem_' .. name) are
 invisible to the scan and must be listed in DYNAMIC_SPEC_REFS by hand.
 
-A few *functional* specs also resolve symbols by name — ffi_spec, tui_spec,
-job_spec and preload.lua `ffi.cdef` a handful of declarations and call them
-through ffi.C against the running binary (the phase-5c de-export surfaced
-this as runtime "undefined symbol" failures). LuaJIT requires a cdef before
+A few *functional* specs and the oldtest harness also resolve symbols by
+name — ffi_spec, tui_spec, job_spec, preload.lua and runtest.vim's
+Ntest_override `ffi.cdef` a handful of declarations and access them through
+ffi.C against the running binary (the phase-5c de-export surfaced this as
+runtime "undefined symbol" failures). LuaJIT requires a cdef before
 any ffi.C access, so the cdef chunks are a complete oracle for that surface:
 tokens are taken from cdef arguments only (long-bracket or quoted string),
 not whole files — a whole-file scan would pin every nvim_* name mentioned in
@@ -156,7 +157,13 @@ def spec_tokens():
 
 def functional_cdef_tokens():
     tokens = set()
-    for spec in ROOT.glob("test/functional/**/*.lua"):
+    specs = [
+        *ROOT.glob("test/functional/**/*.lua"),
+        # runtest.vim's Ntest_override cdefs `starting` and
+        # `test_disable_char_avail` inside a `lua << EOF` heredoc.
+        *ROOT.glob("test/old/testdir/*.vim"),
+    ]
+    for spec in specs:
         for m in CDEF_RE.finditer(spec.read_text(errors="replace")):
             chunk = m.group("long") or m.group("sq") or m.group("dq") or ""
             tokens.update(TOKEN_RE.findall(chunk))

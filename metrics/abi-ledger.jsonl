@@ -276,7 +276,7 @@
 {"symbol":"shell_argv_to_str","kind":"fn","file":"src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shell_build_argv","kind":"fn","file":"src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shorten_buf_fname","kind":"fn","file":"src/nvim/fileio.rs","class":"internal","refs":[]}
-{"symbol":"starting","kind":"static","file":"src/nvim/main.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"starting","kind":"static","file":"src/nvim/main.rs","class":"test","refs":["unit-specs","functional-specs"]}
 {"symbol":"status_redraw_buf","kind":"fn","file":"src/nvim/drawscreen.rs","class":"internal","refs":[]}
 {"symbol":"strcase_save","kind":"fn","file":"src/nvim/strings.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"terminal_alloc","kind":"fn","file":"src/nvim/terminal.rs","class":"internal","refs":[]}
@@ -315,6 +315,7 @@
 {"symbol":"termkey_start","kind":"fn","file":"src/nvim/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_stop","kind":"fn","file":"src/nvim/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_strfkey","kind":"fn","file":"src/nvim/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"test_disable_char_avail","kind":"static","file":"src/nvim/main.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"tinput_destroy","kind":"fn","file":"src/nvim/tui/input.rs","class":"internal","refs":[]}
 {"symbol":"tinput_init","kind":"fn","file":"src/nvim/tui/input.rs","class":"internal","refs":[]}
 {"symbol":"tinput_start","kind":"fn","file":"src/nvim/tui/input.rs","class":"internal","refs":[]}

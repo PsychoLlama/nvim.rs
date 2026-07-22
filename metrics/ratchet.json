@@ -108,7 +108,7 @@
     "src/nvim/lua/stdlib.rs": {"lines": 1291, "unsafe": 42},
     "src/nvim/lua/treesitter.rs": {"lines": 3028, "unsafe": 191},
     "src/nvim/lua/xdiff.rs": {"unsafe": 13},
-    "src/nvim/main.rs": {"lines": 13081, "no_mangle": 29, "unsafe": 240},
+    "src/nvim/main.rs": {"lines": 13082, "no_mangle": 30, "unsafe": 240},
     "src/nvim/map.rs": {"lines": 2112, "unsafe": 78},
     "src/nvim/map_glyph_cache.rs": {"unsafe": 6},
     "src/nvim/mapping.rs": {"lines": 6082, "unsafe": 54},
