@@ -203,6 +203,47 @@ local function is_child_cdefs()
   return os.getenv('NVIM_TEST_MAIN_CDEFS') ~= '1'
 end
 
+-- The crate's own declaration surface (types, exported fns/statics, enum
+-- constants) is generated from the Rust source by tools/ffigen into one
+-- chunk (scripts/gen-unit-cdefs.sh); importing any './src/...' header just
+-- loads that chunk. uv.h is served by it too: specs only use uv enum
+-- constants, which the chunk carries, and cdef-ing the real uv.h on top
+-- would redefine the chunk's uv struct tags. Only system headers (and the
+-- posix fixture) still go through the C preprocessor.
+local generated_key = '@ffigen:unit-cdefs'
+
+--- @param path string normalized cimport path
+--- @return boolean
+local function is_generated(path)
+  return path:find('^%./src/') ~= nil or path == './uv.h'
+end
+
+-- Fixture headers declare the unit-fixtures.so helpers. Their nvim type
+-- dependencies come from the generated chunk, so the '#include' lines are
+-- dropped and the upstream EXTERN/INIT markers reduce like the old
+-- preprocessor defines did.
+--- @param path string
+--- @return boolean
+local function is_fixture_header(path)
+  return path:find('^%./test/unit/fixtures/') ~= nil and path ~= './test/unit/fixtures/posix.h'
+end
+
+--- @param path string
+--- @return string
+local function fixture_header_body(path)
+  local f = assert(io.open(path, 'r'))
+  local body = f:read('*a')
+  f:close()
+  local out = {} --- @type string[]
+  for line in body:gmatch('[^\r\n]+') do
+    if not line:match('^%s*#') then
+      line = line:gsub('INIT%s*%b()', ''):gsub('^EXTERN ', 'extern ')
+      out[#out + 1] = line
+    end
+  end
+  return table.concat(out, '\n')
+end
+
 --- use this helper to import C files, you can pass multiple paths at once,
 --- this helper will return the C namespace of the nvim library.
 ---
@@ -224,7 +265,22 @@ local function cimport(...)
     if not (path:sub(1, 1) == '/' or path:sub(1, 1) == '.' or path:sub(2, 2) == ':') then
       path = './' .. path
     end
-    if not preprocess_cache[path] then
+    if is_generated(path) then
+      path = generated_key
+      if not preprocess_cache[path] then
+        local chunk_path = paths.test_build_dir .. '/ffi/unit-cdefs.h'
+        local f = assert(
+          io.open(chunk_path, 'r'),
+          'missing ' .. chunk_path .. ' (scripts/gen-unit-cdefs.sh)'
+        )
+        preprocess_cache[path] = f:read('*a')
+        f:close()
+      end
+    elseif is_fixture_header(path) then
+      if not preprocess_cache[path] then
+        preprocess_cache[path] = fixture_header_body(path)
+      end
+    elseif not preprocess_cache[path] then
       local body --- @type string
       body, previous_defines = Preprocess.preprocess(previous_defines, path)
       -- format it (so that the lines are "unique" statements), also filter out
@@ -427,6 +483,21 @@ local function to_cstr(string)
 end
 
 cimport_immediate('./test/unit/fixtures/posix.h')
+
+-- System preamble: every system header any spec imports, loaded up front in
+-- a fixed order. The generated chunk references (but must not define, see
+-- tools/ffigen/deny.txt) type tags these headers own, so they are cdef'd
+-- first, then the chunk itself -- all in the parent process, pre-fork, so
+-- every itp child inherits the full namespace.
+cimport_immediate(
+  paths.test_source_path .. '/test/includes/pre/fcntl.h',
+  paths.test_source_path .. '/test/includes/pre/sys/stat.h',
+  'stdio.h',
+  'string.h',
+  'stdlib.h',
+  'unistd.h'
+)
+cimport_immediate('./src/nvim/types_defs.h')
 
 local sc = {}
 

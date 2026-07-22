@@ -691,8 +691,10 @@ static int attrs_differ(VTermAttrMask attrs, ScreenCell *a, ScreenCell *b)
   return 0;
 }
 
+// `attrs` is really VTermAttrMask (same ABI as int); the crate no longer
+// carries that enum, so the ffi-visible signature uses int.
 int vterm_screen_get_attrs_extent(const VTermScreen *screen, VTermRect *extent, VTermPos pos,
-                                  VTermAttrMask attrs)
+                                  int attrs)
 {
   ScreenCell *target = getcell(screen, pos.row, pos.col);
 

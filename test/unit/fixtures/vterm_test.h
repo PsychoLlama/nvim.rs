@@ -37,7 +37,7 @@ int screen_sb_popline(int cols, VTermScreenCell *cells, void *user);
 int screen_sb_clear(void *user);
 void term_output(const char *s, size_t len, void *user);
 int vterm_state_get_penattr(const VTermState *state, VTermAttr attr, VTermValue *val);
-int vterm_screen_get_attrs_extent(const VTermScreen *screen, VTermRect *extent, VTermPos pos, VTermAttrMask attrs);
+int vterm_screen_get_attrs_extent(const VTermScreen *screen, VTermRect *extent, VTermPos pos, int attrs);
 size_t vterm_screen_get_text(const VTermScreen *screen, char *buffer, size_t len,  VTermRect rect);
 int vterm_screen_is_eol(const VTermScreen *screen, VTermPos pos);
 void vterm_state_get_cursorpos(const VTermState *state, VTermPos *cursorpos);

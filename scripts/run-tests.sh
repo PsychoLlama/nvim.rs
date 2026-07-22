@@ -60,6 +60,9 @@ else
   # The unit-test helper library; see build-unit-fixtures.sh (shared with the
   # ABI ledger, which reads its undefined-symbol list).
   "$root/scripts/build-unit-fixtures.sh" "$bin_dir/unit-fixtures.so"
+  # The ffi.cdef surface, generated from the Rust crate (tools/ffigen);
+  # test/unit/testutil.lua loads it in place of preprocessed C headers.
+  "$root/scripts/gen-unit-cdefs.sh"
 fi
 
 # Scratch area (upstream's $BUILD_DIR): XDG sandbox, TMPDIR, logs. Start each
