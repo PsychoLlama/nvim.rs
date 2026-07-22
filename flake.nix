@@ -103,6 +103,13 @@
             # requires this to be set.
             NVIM_DEPS_PREFIX = "${self.packages.${system}.nvim-deps}";
 
+            # Phase 5 drove the warning count to zero; fail fast on any
+            # regression. CI inherits this through `nix develop`, so this is
+            # the single source of truth. Opt out for a mid-refactor build
+            # with `RUSTFLAGS= cargo build`; `just asan` overrides it with
+            # the sanitizer flags (uninstrumented lint parity is fine there).
+            RUSTFLAGS = "-D warnings";
+
             # `runtime/doc/tags` is a generated artifact (gitignored): upstream's
             # CMake build produced it, and the package regenerates it in
             # postInstall. A dev binary bakes the in-tree `runtime/` as its

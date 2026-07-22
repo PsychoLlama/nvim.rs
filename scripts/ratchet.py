@@ -20,8 +20,8 @@ plus one whole-tree metric:
                     tree).
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
-zero and CI now builds with `RUSTFLAGS="-D warnings"` instead (ci.yml), so
-the counter is retired.
+zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
+every local and CI build instead, so the counter is retired.
 
 Counting is plain substring matching. That over-counts (a comment saying
 "unsafe " counts), but it is deterministic, matches how the migration plan's
