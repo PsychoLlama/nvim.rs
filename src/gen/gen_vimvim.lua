@@ -1,10 +1,10 @@
 ---@diagnostic disable: no-unknown
 
 -- Vendored from upstream's src/gen/gen_vimvim.lua (v0.12.4), with one
--- change: it runs under the built nvim (`nvim -l`, see
--- scripts/gen-vimvim.sh) instead of the upstream build's luajit+libnlua0
--- pair, so the builtin-function keywords come straight from the binary
--- (getcompletion) rather than from the funcs_data.mpack build product.
+-- change: it runs under the built nvim (`nvim -l`, see scripts/gen.sh)
+-- instead of the upstream build's luajit+libnlua0 pair, so the
+-- builtin-function keywords come straight from the binary (getcompletion)
+-- rather than from the funcs_data.mpack build product.
 
 local syntax_file = arg[1]
 local options_file = arg[2]

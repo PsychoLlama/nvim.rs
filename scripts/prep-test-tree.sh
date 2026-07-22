@@ -33,7 +33,7 @@ if [[ -e $nvim_bin ]]; then
   ln -f "$nvim_bin" "$root/target/bin/nvim"
 fi
 
-# Upstream's build runtime also carried the generated vimscript syntax
-# tables; only specs that opt in via add_builddir_to_rtp() see them. Runs
-# after the bin/ link: the generator is the built nvim itself.
-"$root/scripts/gen-vimvim.sh"
+# Upstream's build runtime also carried generated files (the vimscript
+# syntax tables); only specs that opt in via add_builddir_to_rtp() see them.
+# Runs after the bin/ link: the generators run under the built nvim itself.
+"$root/scripts/gen.sh"
