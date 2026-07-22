@@ -14,7 +14,7 @@
 -- serialize in, so rebuilding produces different (semantically identical)
 -- bytes. Upstream's build has the same property.
 --
--- Usage: luajit compile-lua-modules.lua <outdir> <source> <modname> ...
+-- Usage: luajit compile_lua_modules.lua <outdir> <source> <modname> ...
 -- Writes <outdir>/<modname with '.' -> '_dot_'>_module.bin per module.
 
 local outdir = table.remove(arg, 1) or error('Need an output directory')

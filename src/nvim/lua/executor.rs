@@ -4702,7 +4702,7 @@ pub unsafe extern "C" fn nlua_func_exists(mut lua_funcname: *const ::core::ffi::
         && result.data.boolean as ::core::ffi::c_int == true_0;
 }
 // LuaJIT bytecode for the builtin `vim.*` modules, compiled by build.rs
-// (scripts/compile-lua-modules.lua) from `runtime/lua/vim/`. c2rust
+// (src/gen/compile_lua_modules.lua) from `runtime/lua/vim/`. c2rust
 // originally transpiled these as ~215k lines of array literals frozen from
 // upstream's generated char blobs; now the sources next to the binary are
 // the sources inside it. Each blob carries gen_char_blob.lua's trailing 0

@@ -46,7 +46,7 @@ const EMBEDDED_LUA_MODULES: &[&str] = &[
 /// `gen_char_blob.lua` step whose output c2rust transpiled as array
 /// literals: `runtime/lua` is the single source of truth again.
 fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
-    let script = manifest.join("scripts/compile-lua-modules.lua");
+    let script = manifest.join("src/gen/compile_lua_modules.lua");
     let outdir = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua_modules");
     std::fs::create_dir_all(&outdir).unwrap();
 
@@ -82,7 +82,7 @@ fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
     println!("cargo:rerun-if-changed={}", script.display());
 
     let status = cmd.status().expect("failed to run the deps-prefix luajit");
-    assert!(status.success(), "compile-lua-modules.lua failed: {status}");
+    assert!(status.success(), "compile_lua_modules.lua failed: {status}");
 }
 
 fn main() {
