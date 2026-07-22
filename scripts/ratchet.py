@@ -12,20 +12,16 @@ Rust source file (src/**/*.rs plus the crate roots):
               the cap are grandfathered at their committed size and may
               shrink or hold, never grow. New files start at the cap.
 
-plus two whole-tree metrics:
+plus one whole-tree metric:
 
   internal_exports  the number of internal-only exports in the committed ABI
                     ledger (metrics/abi-ledger.jsonl — `just abi-ledger
                     --check` separately guarantees that file matches the
                     tree).
-  warnings          the number of `cargo build` warnings, from the
-                    machine-readable diagnostic stream
-                    (--message-format=json). Cargo replays cached
-                    diagnostics for up-to-date crates, so on a built tree
-                    this costs well under a second; on a stale tree it pays
-                    for the build the commit was going to need anyway. When
-                    phase 5 drives this to zero, flip CI to `-D warnings`
-                    and retire the metric.
+
+A `warnings` metric used to sit alongside it; phase 5 drove the count to
+zero and CI now builds with `RUSTFLAGS="-D warnings"` instead (ci.yml), so
+the counter is retired.
 
 Counting is plain substring matching. That over-counts (a comment saying
 "unsafe " counts), but it is deterministic, matches how the migration plan's
@@ -53,7 +49,6 @@ Usage: ratchet.py [--check] [--allow-growth]
 """
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -89,33 +84,7 @@ def internal_exports():
     )
 
 
-def build_warnings():
-    """Count `cargo build` warnings via the JSON diagnostic stream."""
-    proc = subprocess.run(
-        ["cargo", "build", "--quiet", "--message-format=json"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stderr)
-        sys.exit(
-            "ratchet: `cargo build` failed; the warning count needs a building tree"
-        )
-    count = 0
-    for line in proc.stdout.splitlines():
-        message = json.loads(line)
-        if message.get("reason") != "compiler-message":
-            continue
-        diag = message["message"]
-        # `code` is null on rustc's closing "N warnings emitted" tally;
-        # every real lint carries its lint name there.
-        if diag["level"] == "warning" and diag.get("code"):
-            count += 1
-    return count
-
-
-def render(stats, internal, warnings):
+def render(stats, internal):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -131,23 +100,15 @@ def render(stats, internal, warnings):
                 f"    {json.dumps(file)}: {json.dumps(kept, sort_keys=True)}"
             )
     body = ",\n".join(entries)
-    return (
-        f'{{\n  "internal_exports": {internal},\n  "warnings": {warnings},\n'
-        f'  "files": {{\n{body}\n  }}\n}}\n'
-    )
+    return f'{{\n  "internal_exports": {internal},\n  "files": {{\n{body}\n  }}\n}}\n'
 
 
-def violations(stats, internal, warnings, baseline):
+def violations(stats, internal, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
     base_internal = baseline["internal_exports"]
     if internal > base_internal:
         found.append(f"abi-ledger internal exports: {base_internal} -> {internal}")
-    # .get: baselines predating the metric ratify whatever the tree emits
-    # (the staleness check still forces a refresh to record it).
-    base_warnings = baseline.get("warnings", warnings)
-    if warnings > base_warnings:
-        found.append(f"cargo build warnings: {base_warnings} -> {warnings}")
     base_files = baseline["files"]
     for file in sorted(stats.keys() | base_files.keys()):
         cur = stats.get(file, {**dict.fromkeys(COUNTED, 0), "lines": 0})
@@ -162,14 +123,13 @@ def violations(stats, internal, warnings, baseline):
     return found
 
 
-def summary(stats, internal, warnings):
+def summary(stats, internal):
     totals = {name: sum(c[name] for c in stats.values()) for name in COUNTED}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
     parts += [
         f"{over} files over {LINE_CAP} lines",
         f"{internal} internal exports",
-        f"{warnings} build warnings",
     ]
     return ", ".join(parts)
 
@@ -181,8 +141,7 @@ def main():
 
     stats = measure()
     internal = internal_exports()
-    warnings = build_warnings()
-    content = render(stats, internal, warnings)
+    content = render(stats, internal)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -190,7 +149,7 @@ def main():
             sys.exit(
                 f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just refresh`"
             )
-        if grew := violations(stats, internal, warnings, json.loads(committed)):
+        if grew := violations(stats, internal, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: counts may only shrink. Reduce them, or if the "
@@ -205,14 +164,14 @@ def main():
         return
 
     if committed is not None and "--allow-growth" not in args:
-        if grew := violations(stats, internal, warnings, json.loads(committed)):
+        if grew := violations(stats, internal, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: refusing to raise the baseline. If the growth is "
                 "justified, rerun with --allow-growth."
             )
     BASELINE.write_text(content)
-    print(f"wrote {BASELINE.relative_to(ROOT)}: {summary(stats, internal, warnings)}")
+    print(f"wrote {BASELINE.relative_to(ROOT)}: {summary(stats, internal)}")
 
 
 if __name__ == "__main__":
