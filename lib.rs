@@ -219,6 +219,7 @@ pub mod src {
             } // mod termkey
             pub mod tui;
             pub mod ugrid;
+            pub mod unibi;
         } // mod tui
         pub mod types;
         pub mod ui;
