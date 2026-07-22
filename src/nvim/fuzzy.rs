@@ -7,6 +7,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval_1::callback_call;
 
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::insexpand::{
     ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start,
 };
@@ -49,11 +50,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

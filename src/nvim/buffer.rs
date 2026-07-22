@@ -33,6 +33,7 @@ use crate::src::nvim::fileio::{
 };
 use crate::src::nvim::fold::{clearFolding, cloneFoldGrowArray, deleteFoldRecurse, foldUpdateAll};
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::get_local_additions;
@@ -152,9 +153,6 @@ extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

@@ -4,6 +4,7 @@ use crate::src::nvim::eval::userfunc::{func_tbl_get, get_current_funccal};
 use crate::src::nvim::eval::vars::set_vim_var_nr;
 use crate::src::nvim::event::libuv::uv_err_name;
 use crate::src::nvim::fileio::vim_fgets;
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{current_sctx, do_profiling, e_notopen, time_fd, IObuff};
@@ -32,11 +33,6 @@ pub use crate::src::nvim::types::{
     scriptvar_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint32_t, uint64_t,
     uint8_t, varnumber_T, vim_exception, xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

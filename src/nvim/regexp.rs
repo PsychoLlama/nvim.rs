@@ -4,6 +4,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{eval_to_string, partial_name};
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     called_emsg, e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
@@ -63,11 +64,6 @@ pub use crate::src::nvim::types::{
 extern "C" {
     fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool;
     fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     static curwin: GlobalCell<*mut win_T>;
     static curbuf: GlobalCell<*mut buf_T>;
     fn mark_get(

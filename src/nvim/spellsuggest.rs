@@ -4,6 +4,7 @@ use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::src::nvim::eval::typval::tv_list_unref;
 use crate::src::nvim::eval::vars::{eval_spell_expr, get_spellword};
 use crate::src::nvim::fileio::vim_fgets;
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::{
     beep_flush, vgetc, AppendCharToRedobuff, AppendToRedobuff, AppendToRedobuffLit, ResetRedobuff,
 };
@@ -91,10 +92,6 @@ extern "C" {
         hash: hash_T,
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;

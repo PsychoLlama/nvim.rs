@@ -34,6 +34,7 @@ use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, filetype_maybe_enable, filetype_plugin_enable};
 use crate::src::nvim::ex_getln::cmdline_init;
 use crate::src::nvim::fileio::{readfile, shorten_fnames};
+use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff, vgetc};
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use crate::src::nvim::hashtab::hash_debug_results;
@@ -162,7 +163,6 @@ use crate::src::nvim::window::{
     win_count, win_enter, win_equal, win_init_size, win_new_screensize,
 };
 extern "C" {
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn qf_init(
         wp: *mut win_T,
         efile: *const ::core::ffi::c_char,

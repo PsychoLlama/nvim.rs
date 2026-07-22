@@ -25,6 +25,7 @@ use crate::src::nvim::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::src::nvim::extmark::{extmark_splice, extmark_splice_cols};
 use crate::src::nvim::file_search::file_name_at_cursor;
 use crate::src::nvim::fold::hasFolding;
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_init, ga_set_growsize};
 use crate::src::nvim::getchar::{
     beep_flush, get_recorded, ins_typebuf, stuffReadbuff, stuffcharReadbuff, stuffescaped,
     AppendCharToRedobuff,
@@ -104,13 +105,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

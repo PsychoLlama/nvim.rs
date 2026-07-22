@@ -8,6 +8,7 @@ use crate::src::nvim::eval::typval::{tv_clear, tv_dict_find};
 use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{clear_evalarg, eval0};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col, msg_silent,
@@ -70,10 +71,6 @@ use crate::src::nvim::viml::parser::expressions::{
     viml_pexpr_parse,
 };
 use crate::src::nvim::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy};
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

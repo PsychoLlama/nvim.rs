@@ -130,6 +130,7 @@ use crate::src::nvim::fold::{
     f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult,
 };
 use crate::src::nvim::fuzzy::{f_matchfuzzy, f_matchfuzzypos};
+use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::{
     f_getchar, f_getcharmod, f_getcharstr, restore_typeahead, save_typeahead, stuff_empty,
     using_script, vgetc,
@@ -355,11 +356,6 @@ extern "C" {
         cb: uv_random_cb,
     ) -> ::core::ffi::c_int;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn get_client_info(
         chan: *mut Channel,
         key: *const ::core::ffi::c_char,

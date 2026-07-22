@@ -37,6 +37,7 @@ use crate::src::nvim::fileio::shorten_fnames;
 use crate::src::nvim::fold::{
     clearFolding, copyFoldingState, deleteFoldRecurse, foldInitWin, getDeepestNesting, hasFolding,
 };
+use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::getchar::{beep_flush, plain_vgetc, typebuf_maplen};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
@@ -148,8 +149,6 @@ use crate::src::nvim::winfloat::{
 extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_20>;
     fn hash_init(ht: *mut hashtab_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn qf_free_all(wp: *mut win_T);
     fn copy_loclist_stack(from: *mut win_T, to: *mut win_T);
     fn terminal_check_size(term: *mut Terminal);

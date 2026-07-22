@@ -5,6 +5,7 @@ use crate::src::nvim::eval_1::{eval_expr, typval_compare, typval_tostring};
 use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_getln::{getcmdline_prompt, getexline};
 use crate::src::nvim::fileio::file_pat_to_reg_pat;
+use crate::src::nvim::garray::{ga_clear, ga_grow};
 use crate::src::nvim::getchar::{restore_typeahead, save_typeahead};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
@@ -55,8 +56,6 @@ pub use crate::src::nvim::types::{
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

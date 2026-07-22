@@ -7,6 +7,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::src::nvim::ex_docmd::find_cmdline_var;
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
 use crate::src::nvim::mbyte::{
@@ -41,10 +42,6 @@ use core::slice;
 extern "C" {
     fn arena_alloc_block(arena: *mut Arena);
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
 }
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
@@ -297,7 +294,6 @@ pub unsafe extern "C" fn xstrnsave(string: *const c_char, len: size_t) -> *mut c
     ret
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_escaped(
     string: *const c_char,
     esc_chars: *const c_char,
@@ -356,7 +352,6 @@ pub unsafe extern "C" fn vim_strsave_escaped_ext(
 
 /// Copy `length` bytes of `string` with shell-style double-quoting
 /// resolved (see `unquote`), NUL-terminated.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strnsave_unquoted(
     string: *const c_char,
     length: size_t,
@@ -520,7 +515,6 @@ pub unsafe extern "C" fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: 
 
 /// Case-fold `orig` per character (multibyte-aware), growing the result
 /// when a folded character encodes longer than its original.
-#[no_mangle]
 pub unsafe extern "C" fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
     let mut orig_len = strlen(orig);
     let mut res = xmalloc(orig_len.wrapping_add(1)) as *mut c_char;
@@ -575,7 +569,6 @@ pub unsafe extern "C" fn vim_strnicmp_asc(
 }
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     if c <= 0 {
         ptr::null_mut()
@@ -734,7 +727,6 @@ pub unsafe extern "C" fn vim_snprintf_add(
         vim_vsnprintf(str.offset(len as isize), space, fmt, ap.as_va_list());
     return str_l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_snprintf(
     mut str: *mut ::core::ffi::c_char,
     mut str_m: size_t,

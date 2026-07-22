@@ -7,6 +7,7 @@ use crate::src::nvim::drawscreen::redraw_all_later;
 use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
 use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::ends_excmd;
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
     hl_get_syn_attr, hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
@@ -78,9 +79,6 @@ extern "C" {
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

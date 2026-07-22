@@ -9,6 +9,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_list, tv_list_append_number, tv_list_append_string,
 };
 use crate::src::nvim::ex_getln::text_or_buf_locked;
+use crate::src::nvim::garray::{ga_append, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_auabort, e_invalwindow, e_invexpr2,
@@ -60,11 +61,6 @@ use crate::src::nvim::window::{
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
     win_valid, win_vert_neighbor,
 };
-extern "C" {
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

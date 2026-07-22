@@ -7,6 +7,9 @@ use crate::src::nvim::fileio::{
     buf_reload, get2c, get3c, get4c, get8ctime, put_bytes, put_time, read_string, vim_fgets,
     vim_tempname,
 };
+use crate::src::nvim::garray::{
+    ga_append, ga_append_via_ptr, ga_clear, ga_concat, ga_grow, ga_init,
+};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{
@@ -88,12 +91,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::bufIsChanged;
 extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);

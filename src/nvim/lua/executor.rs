@@ -21,6 +21,9 @@ use crate::src::nvim::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, get_user_input, script_get,
     ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
 };
+use crate::src::nvim::garray::{
+    ga_append, ga_clear, ga_concat_len, ga_concat_strings, ga_grow, ga_init,
+};
 use crate::src::nvim::getchar::vgetc;
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use crate::src::nvim::keycodes::{special_to_buf, vim_unescape_ks};
@@ -145,15 +148,6 @@ extern "C" {
     fn luv_set_thread(L: *mut lua_State, pcall: luv_CFpcall);
     fn luv_set_cthread(L: *mut lua_State, cpcall: luv_CFcpcall);
     fn luv_set_thread_cb(acquire: luv_acquire_vm, release: luv_release_vm);
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_strings(
-        gap: *const garray_T,
-        sep: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

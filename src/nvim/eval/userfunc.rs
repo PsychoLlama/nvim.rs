@@ -28,6 +28,7 @@ use crate::src::nvim::ex_eval::{
 use crate::src::nvim::ex_getln::{
     getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
 };
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
@@ -119,11 +120,6 @@ extern "C" {
     ) -> *mut hashitem_T;
     fn hash_add(ht: *mut hashtab_T, key: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

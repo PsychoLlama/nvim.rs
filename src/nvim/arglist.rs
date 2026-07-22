@@ -12,6 +12,7 @@ use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_cmds2::{autowrite, check_changed};
 use crate::src::nvim::ex_getln::gotocmdline;
 use crate::src::nvim::fileio::file_pat_to_reg_pat;
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     arg_had_last, autocmd_no_enter, autocmd_no_leave, cmdmod, cmdwin_type, curbuf, curtab, curwin,
@@ -70,9 +71,6 @@ use crate::src::nvim::window::{
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
 extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

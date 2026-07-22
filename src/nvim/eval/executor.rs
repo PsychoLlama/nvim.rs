@@ -2,6 +2,7 @@ use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
 };
 use crate::src::nvim::eval_1::{grow_string_tv, num_divide, num_modulus};
+use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::main::e_letwrong;
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{abort, memmove};
@@ -14,9 +15,6 @@ pub use crate::src::nvim::types::{
     typval_vval_union, ufunc_S, ufunc_T, uint64_t, uint8_t, varnumber_T, BoolVarValue, LuaRef,
     ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;

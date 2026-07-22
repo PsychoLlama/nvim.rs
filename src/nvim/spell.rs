@@ -12,6 +12,7 @@ use crate::src::nvim::decoration_provider::decor_providers_invoke_spell;
 use crate::src::nvim::drawscreen::redraw_later;
 use crate::src::nvim::ex_cmds::do_sub_msg;
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::insexpand::{
@@ -92,10 +93,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::undo::u_save_cursor;
 use crate::src::nvim::window::win_valid_any_tab;
 extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;

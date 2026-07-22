@@ -16,6 +16,7 @@ use crate::src::nvim::eval::vars::{
 use crate::src::nvim::eval_1::{eval_foldexpr, eval_foldtext};
 use crate::src::nvim::ex_session::{put_eol, put_line};
 use crate::src::nvim::extmark::extmark_splice_cols;
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::{get_indent_buf, get_sw_value};
 use crate::src::nvim::main::{
@@ -74,11 +75,6 @@ pub use crate::src::nvim::types::{
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
 };
 use crate::src::nvim::undo::u_save;
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

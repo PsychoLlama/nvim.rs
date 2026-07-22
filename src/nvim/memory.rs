@@ -282,7 +282,6 @@ fn lcat_copy(dlen: usize, slen: usize, dsize: usize) -> (usize, Option<usize>) {
 
 /// BSD `strlcat`. The unit suite calls this with `src` pointing into `dst`,
 /// so the copy stays a raw memmove.
-#[no_mangle]
 pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     assert!(dsize > 0, "dsize > 0");
     let dlen = CStr::from_ptr(dst).to_bytes().len();

@@ -10,6 +10,7 @@ use crate::src::nvim::eval::vars::{
 };
 use crate::src::nvim::eval_1::{garbage_collect, pattern_match};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{
@@ -39,13 +40,6 @@ pub use crate::src::nvim::types::{
     queue, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
     ufunc_T, uint64_t, uint8_t, varnumber_T, vim_exception, FILE, QUEUE, _IO_FILE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

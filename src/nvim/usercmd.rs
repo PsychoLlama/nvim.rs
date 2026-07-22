@@ -2,6 +2,7 @@ use crate::src::nvim::api::private::helpers::{arena_dict, arena_string, cstr_as_
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::replace_termcodes;
 use crate::src::nvim::lua::executor::{
@@ -62,11 +63,6 @@ pub use crate::src::nvim::types::{
     QUEUE,
 };
 use crate::src::nvim::window::{prevwin_curwin, tabpage_index};
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;

@@ -35,6 +35,7 @@ use crate::src::nvim::fold::{
     foldUpdateAll, foldmethodIsDiff, foldmethodIsIndent, foldmethodIsSyntax, newFoldLevel,
 };
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{hl_invalidate_blends, ns_hl_def};
 use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group};
@@ -214,8 +215,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
 extern "C" {
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn on_scrollback_option_changed(term: *mut Terminal);
     fn ll_resize_stack(wp: *mut win_T, n: ::core::ffi::c_int);

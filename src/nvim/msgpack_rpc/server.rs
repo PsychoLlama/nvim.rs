@@ -4,6 +4,7 @@ use crate::src::nvim::event::libuv::{uv_freeaddrinfo, uv_strerror};
 use crate::src::nvim::event::socket::{
     socket_watcher_close, socket_watcher_init, socket_watcher_start,
 };
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{main_loop, IObuff, NameBuff};
@@ -35,11 +36,6 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

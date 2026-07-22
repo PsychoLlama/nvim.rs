@@ -35,6 +35,7 @@ use crate::src::nvim::ex_getln::tilde_replace;
 use crate::src::nvim::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzy_match_str_in_line, search_for_fuzzy_match};
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::{
     char_avail, safe_vgetc, using_script, vgetc, vpeekc, vpeekc_any, vungetc, AppendCharToRedobuff,
     AppendToRedobuffLit,
@@ -137,9 +138,6 @@ extern "C" {
         set_prev: MergeSortSetFunc,
         compare: MergeSortCompareFunc,
     ) -> *mut ::core::ffi::c_void;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     static pum_want: GlobalCell<C2Rust_Unnamed_25>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,

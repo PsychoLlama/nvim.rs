@@ -3,6 +3,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::eval_1::{get_copyID, partial_name};
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::IObuff;
@@ -27,14 +28,6 @@ pub use crate::src::nvim::types::{
     MessagePackType, PackerBuffer, PackerBufferFlush, ScopeDictDictItem, ScopeType,
     SpecialVarValue, String_0, VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-}
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

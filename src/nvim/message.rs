@@ -16,6 +16,7 @@ use crate::src::nvim::event::r#loop::loop_schedule_deferred;
 use crate::src::nvim::ex_docmd::do_sleep;
 use crate::src::nvim::ex_eval::cause_errthrow;
 use crate::src::nvim::fileio::check_timestamps;
+use crate::src::nvim::garray::{ga_append, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::getchar::{
     beep_flush, char_avail, flush_buffers, ins_char_typebuf, safe_vgetc, stuff_empty,
     typeahead_noflush,
@@ -134,10 +135,6 @@ use crate::src::nvim::ui::{
 use crate::src::nvim::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 extern "C" {
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;

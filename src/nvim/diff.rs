@@ -21,6 +21,7 @@ use crate::src::nvim::fileio::{
 use crate::src::nvim::fold::{
     foldUpdate, foldUpdateAll, foldmethodIsDiff, foldmethodIsManual, hasFolding, newFoldLevel,
 };
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::linematch::linematch_nbuffers;
 use crate::src::nvim::main::{
@@ -100,13 +101,6 @@ use crate::src::nvim::window::{
     frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;

@@ -11,6 +11,7 @@ use crate::src::nvim::drawscreen::{redraw_later, setcursor_mayforce, update_scre
 use crate::src::nvim::eval::typval::{tv_dict_add_bool, tv_dict_add_float, tv_dict_add_nr};
 use crate::src::nvim::ex_cmds::{do_ecmd, prepare_tagpreview};
 use crate::src::nvim::fuzzy::fuzzy_match_str_with_pos;
+use crate::src::nvim::garray::ga_clear;
 use crate::src::nvim::getchar::{vgetc, vungetc};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
@@ -93,7 +94,6 @@ use crate::src::nvim::winfloat::{
 };
 extern "C" {
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn ga_clear(gap: *mut garray_T);
     static pum_want: GlobalCell<C2Rust_Unnamed_24>;
 }
 pub const kTrue: TriState = 1;

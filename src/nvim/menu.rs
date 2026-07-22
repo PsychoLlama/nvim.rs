@@ -10,6 +10,7 @@ use crate::src::nvim::eval::vars::del_menutrans_vars;
 use crate::src::nvim::ex_docmd::{
     ends_excmd, exec_normal_cmd, restore_current_state, save_current_state,
 };
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::ins_typebuf;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::replace_termcodes;
@@ -65,11 +66,6 @@ pub use crate::src::nvim::types::{
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-}
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

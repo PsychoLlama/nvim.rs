@@ -16,15 +16,7 @@ use crate::src::nvim::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::strings::sort_strings;
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct garray_T {
-    pub ga_len: c_int,
-    pub ga_maxlen: c_int,
-    pub ga_itemsize: c_int,
-    pub ga_growsize: c_int,
-    pub ga_data: *mut c_void,
-}
+pub use crate::src::nvim::types::garray::garray_T;
 
 const LOGLVL_WRN: c_int = 3;
 
@@ -82,7 +74,6 @@ pub unsafe extern "C" fn ga_clear(gap: *mut garray_T) {
     (*gap).ga_len = 0;
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_clear_strings(gap: *mut garray_T) {
     if !(*gap).ga_data.is_null() {
         let items =
@@ -103,7 +94,6 @@ pub unsafe extern "C" fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: 
     ga_set_growsize(gap, growsize);
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
     if growsize < 1 {
         logmsg(
@@ -121,7 +111,6 @@ pub unsafe extern "C" fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_grow(gap: *mut garray_T, n: c_int) {
     let Some(plan) = grow_plan(&*gap, n) else {
         return;
@@ -147,7 +136,6 @@ pub unsafe extern "C" fn ga_grow(gap: *mut garray_T, n: c_int) {
     (*gap).ga_data = data as *mut c_void;
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_remove_duplicate_strings(gap: *mut garray_T) {
     let fnames = (*gap).ga_data as *mut *mut c_char;
     sort_strings(fnames, (*gap).ga_len);
@@ -164,7 +152,6 @@ pub unsafe extern "C" fn ga_remove_duplicate_strings(gap: *mut garray_T) {
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_concat_strings(
     gap: *const garray_T,
     sep: *const c_char,
@@ -187,7 +174,6 @@ pub unsafe extern "C" fn ga_concat_strings(
     ret as *mut c_char
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_concat(gap: *mut garray_T, s: *const c_char) {
     if s.is_null() {
         return;
@@ -195,7 +181,6 @@ pub unsafe extern "C" fn ga_concat(gap: *mut garray_T, s: *const c_char) {
     ga_concat_len(gap, s, CStr::from_ptr(s).to_bytes().len());
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_concat_len(gap: *mut garray_T, s: *const c_char, len: usize) {
     if len == 0 {
         return;
@@ -208,14 +193,12 @@ pub unsafe extern "C" fn ga_concat_len(gap: *mut garray_T, s: *const c_char, len
     (*gap).ga_len += len as c_int;
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_append(gap: *mut garray_T, c: u8) {
     ga_grow(gap, 1);
     *((*gap).ga_data as *mut u8).add((*gap).ga_len as usize) = c;
     (*gap).ga_len += 1;
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_void {
     if item_size as c_int != (*gap).ga_itemsize {
         logmsg(

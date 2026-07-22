@@ -22,6 +22,10 @@ use crate::src::nvim::ex_docmd::{
     do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal,
 };
 use crate::src::nvim::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
+use crate::src::nvim::garray::{
+    ga_append, ga_clear_strings, ga_concat, ga_concat_len, ga_grow, ga_init,
+    ga_remove_duplicate_strings, ga_set_growsize,
+};
 use crate::src::nvim::getchar::openscript;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
@@ -113,14 +117,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 extern "C" {
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_remove_duplicate_strings(gap: *mut garray_T);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

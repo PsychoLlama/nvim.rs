@@ -14,6 +14,9 @@ use crate::src::nvim::eval_1::{
     callback_call, callback_from_typval, func_equal, get_copyID, partial_name, partial_unref,
     set_selfdict, var2fpos, var_item_copy,
 };
+use crate::src::nvim::garray::{
+    ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init,
+};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
@@ -82,12 +85,6 @@ extern "C" {
     fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
     fn hash_lock(ht: *mut hashtab_T);
     fn hash_unlock(ht: *mut hashtab_T);
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

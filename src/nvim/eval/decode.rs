@@ -11,6 +11,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::eval_1::string2float;
+use crate::src::nvim::garray::ga_concat_len;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
@@ -29,9 +30,6 @@ pub use crate::src::nvim::types::{
     uvarnumber_T, varnumber_T, BoolVarValue, ListLenSpecials, LuaRef, MessagePackType,
     ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
 pub const MPACK_EOF: C2Rust_Unnamed = 1;

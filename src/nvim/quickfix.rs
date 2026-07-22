@@ -26,6 +26,7 @@ use crate::src::nvim::ex_getln::get_list_range;
 use crate::src::nvim::fileio::{readfile, shorten_fnames, vim_fgets, vim_tempname};
 use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::fuzzy::fuzzy_match;
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::check_help_lang;
 use crate::src::nvim::highlight_group::syn_name2id;
@@ -197,11 +198,6 @@ extern "C" {
         dirname: *mut ::core::ffi::c_char,
         force: ::core::ffi::c_int,
     );
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     static firstwin: GlobalCell<*mut win_T>;
     static lastwin: GlobalCell<*mut win_T>;
     static prevwin: GlobalCell<*mut win_T>;

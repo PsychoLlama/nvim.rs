@@ -26,6 +26,7 @@ use crate::src::nvim::event::stream::stream_may_close;
 use crate::src::nvim::event::wstream::{
     wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
 };
+use crate::src::nvim::garray::{ga_clear, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::api_free_luaref;
@@ -111,9 +112,6 @@ use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
 extern "C" {
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn rpc_start(channel: *mut Channel);
     fn rpc_close(channel: *mut Channel);
     fn rpc_free(channel: *mut Channel);

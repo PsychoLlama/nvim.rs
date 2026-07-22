@@ -1,3 +1,4 @@
+use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
@@ -10,8 +11,6 @@ extern "C" {
     fn getpwent() -> *mut passwd;
     fn getpwuid(__uid: __uid_t) -> *mut passwd;
     fn getpwnam(__name: *const ::core::ffi::c_char) -> *mut passwd;
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

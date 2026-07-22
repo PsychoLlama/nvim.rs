@@ -17,6 +17,7 @@ use crate::src::nvim::ex_docmd::update_topline_cursor;
 use crate::src::nvim::ex_getln::{
     get_cmdline_info, putcmdline, redrawcmd, redrawcmdline, unputcmdline,
 };
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::input::get_keystroke;
 use crate::src::nvim::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
@@ -119,11 +120,6 @@ use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush
 use crate::src::nvim::undo::u_sync;
 extern "C" {
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

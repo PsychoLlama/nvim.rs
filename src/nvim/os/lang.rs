@@ -1,6 +1,7 @@
 use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::time_fd;
 use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
@@ -20,10 +21,6 @@ pub use crate::src::nvim::types::{
     int32_t, linenr_T, pos_T, proftime_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, uint64_t,
     xp_prefix_T, FILE, _IO_FILE,
 };
-extern "C" {
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;

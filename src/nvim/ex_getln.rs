@@ -47,6 +47,7 @@ use crate::src::nvim::ex_docmd::{
 };
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::extmark::extmark_clear;
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_init};
 use crate::src::nvim::getchar::{
     beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuffReadbuff,
     stuffReadbuffSpec, stuff_empty, stuffcharReadbuff, vgetc, vpeekc, vpeekc_any, vungetc,
@@ -193,10 +194,6 @@ use crate::src::nvim::window::{
 extern "C" {
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
 pub const kErrorTypeValidation: ErrorType = 1;

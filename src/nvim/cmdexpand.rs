@@ -30,6 +30,7 @@ use crate::src::nvim::ex_getln::{
     vim_strsave_fnameescape,
 };
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::src::nvim::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::getchar::{beep_flush, char_avail, vpeekc};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
@@ -151,11 +152,6 @@ extern "C" {
         hash: hash_T,
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     static pum_want: GlobalCell<C2Rust_Unnamed_22>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,

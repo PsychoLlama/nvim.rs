@@ -1,4 +1,5 @@
 use crate::src::nvim::cursor::get_cursor_line_ptr;
+use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, dy_flags, p_isf, p_isi, p_isp};
 use crate::src::nvim::mbyte::{
@@ -41,10 +42,6 @@ pub use crate::src::nvim::types::{
     undo_object, uvarnumber_T, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;
@@ -1200,7 +1197,6 @@ pub unsafe extern "C" fn vim_isblankline(mut lbuf: *mut ::core::ffi::c_char) -> 
         || *p as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
         || *p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_str2nr(
     start: *const ::core::ffi::c_char,
     prep: *mut ::core::ffi::c_int,

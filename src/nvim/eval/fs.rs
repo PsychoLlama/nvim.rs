@@ -16,6 +16,7 @@ use crate::src::nvim::file_search::{find_file_in_path_option, vim_findfile_clean
 use crate::src::nvim::fileio::{
     delete_recursive, file_pat_to_reg_pat, readdir_core, vim_copyfile, vim_rename, vim_tempname,
 };
+use crate::src::nvim::garray::{ga_clear_strings, ga_concat_strings, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     curbuf, current_sctx, curtab, curwin, e_cant_read_file_str, e_invarg, e_invarg2, e_invargNval,
@@ -79,15 +80,6 @@ pub use crate::src::nvim::types::{
     wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
 use crate::src::nvim::window::find_tabpage;
-extern "C" {
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat_strings(
-        gap: *const garray_T,
-        sep: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub const kErrorTypeValidation: ErrorType = 1;

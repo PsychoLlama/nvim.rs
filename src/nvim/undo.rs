@@ -20,6 +20,7 @@ use crate::src::nvim::ex_getln::{text_locked, text_locked_msg};
 use crate::src::nvim::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::src::nvim::fileio::{get2c, get4c, get8ctime, read_eintr};
 use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
@@ -92,11 +93,6 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_acl_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
     xfmark_T, FILE, QUEUE, _IO_FILE,
 };
-extern "C" {
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

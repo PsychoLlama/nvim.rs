@@ -88,6 +88,7 @@ use crate::src::nvim::file_search::{
 };
 use crate::src::nvim::fileio::{readfile, shorten_fnames};
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::{
     beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuffReadbuff, stuff_empty,
     typebuf_typed, vpeekc,
@@ -306,9 +307,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::winfloat::win_float_remove;
 extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     static cmdmod: GlobalCell<cmdmod_T>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,

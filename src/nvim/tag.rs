@@ -18,6 +18,7 @@ use crate::src::nvim::file_search::{
 };
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::garray::{ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::help::help_heuristic;
@@ -115,10 +116,6 @@ extern "C" {
         hash: hash_T,
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn set_errorlist(
         wp: *mut win_T,
         list: *mut list_T,

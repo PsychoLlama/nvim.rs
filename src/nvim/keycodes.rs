@@ -995,7 +995,6 @@ pub unsafe extern "C" fn special_to_buf(
     }
     return dlen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_special_key(
     srcp: *mut *const ::core::ffi::c_char,
     src_len: size_t,

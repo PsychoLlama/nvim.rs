@@ -16,6 +16,7 @@ use crate::src::nvim::ex_docmd::{
 };
 use crate::src::nvim::ex_eval::aborting;
 
+use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
 use crate::src::nvim::mbyte::mb_islower;
@@ -71,8 +72,6 @@ extern "C" {
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

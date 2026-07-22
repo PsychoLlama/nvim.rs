@@ -6,6 +6,7 @@ use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::fileio::vim_fgets;
 
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
     cmdmod, curbuf, curtab, curwin, e_fnametoolong, e_noident, firstwin, got_int, p_hf, p_hh,
@@ -61,11 +62,6 @@ pub use crate::src::nvim::types::{
     wline_T, xfmark_T, xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
 use crate::src::nvim::window::{win_close, win_enter, win_setheight, win_split};
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kTrue: TriState = 1;

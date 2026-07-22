@@ -3,6 +3,9 @@ use crate::src::nvim::cmdexpand::globpath;
 use crate::src::nvim::eval_1::eval_to_string;
 use crate::src::nvim::ex_docmd::eval_vars;
 use crate::src::nvim::fileio::{file_pat_to_reg_pat, match_file_list};
+use crate::src::nvim::garray::{
+    ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
+};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     curbuf, emsg_off, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig, NameBuff,
@@ -67,14 +70,6 @@ pub use crate::src::nvim::types::{
     wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_remove_duplicate_strings(gap: *mut garray_T);
-    fn ga_concat_strings(
-        gap: *const garray_T,
-        sep: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

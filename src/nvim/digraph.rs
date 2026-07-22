@@ -7,6 +7,7 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval_1::eval_to_string;
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::src::nvim::ex_getln::putcmdline;
+use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
@@ -56,11 +57,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

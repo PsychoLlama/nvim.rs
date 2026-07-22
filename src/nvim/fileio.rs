@@ -17,6 +17,7 @@ use crate::src::nvim::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_va
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::fold::{foldUpdateAll, foldmethodIsManual};
+use crate::src::nvim::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::{stuff_empty, typebuf_typed};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
@@ -125,9 +126,6 @@ extern "C" {
     fn closedir(__dirp: *mut DIR) -> ::core::ffi::c_int;
     fn opendir(__name: *const ::core::ffi::c_char) -> *mut DIR;
     fn dirfd(__dirp: *mut DIR) -> ::core::ffi::c_int;
-    fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

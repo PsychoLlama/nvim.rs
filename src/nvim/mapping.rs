@@ -16,6 +16,7 @@ use crate::src::nvim::eval_1::{eval_to_string, last_set_msg};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_session::put_eol;
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_grow, ga_init};
 use crate::src::nvim::getchar::{ins_typebuf, noremap_keys};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::{
@@ -88,11 +89,6 @@ pub use crate::src::nvim::types::{
 extern "C" {
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn ga_clear(gap: *mut garray_T);
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-    fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;

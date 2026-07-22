@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::ga_take_string;
+use crate::src::nvim::garray::{ga_concat, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::map::{
     map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, map_put_ref_uint64_t_MTDamagePair,
@@ -15,10 +16,6 @@ pub use crate::src::nvim::types::{
     MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t, String_0, VirtLines,
     VirtText, VirtTextChunk, VirtTextPos,
 };
-extern "C" {
-    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;
