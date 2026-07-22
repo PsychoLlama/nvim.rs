@@ -46,6 +46,14 @@ rustPlatform.buildRustPackage {
     mkdir -p $out/lib/nvim
     cp -r ${nvim-deps}/lib/nvim/parser $out/lib/nvim/parser
 
+    # Generate the vimscript syntax tables into the installed runtime, as
+    # upstream releases ship them. The source runtime deliberately omits
+    # generated.vim (the test suites' default runtime must not carry it), so
+    # run the generator — the installed binary itself — over the vendored
+    # metadata. Native-only, like helptags below.
+    HOME=$(mktemp -d) bash scripts/gen.sh --nvim $out/bin/nvim \
+      --runtime $out/share/nvim/runtime
+
     # Regenerate the help tags. Upstream's CMake build produced
     # `runtime/doc/tags` by running `:helptags`; with that tooling gone,
     # nothing else generates it and `:help <topic>` fails with "E433: No

@@ -28,6 +28,12 @@ package version: build-release
   cp target/release/nvim "$stage/bin/nvim"
   cp -r runtime "$stage/share/nvim/runtime"
   cp -r "$NVIM_DEPS_PREFIX/lib/nvim/parser" "$stage/lib/nvim/parser"
+  # Generate the vimscript syntax tables into the staged runtime, as upstream
+  # releases ship them. The source runtime deliberately omits generated.vim
+  # (the test suites' default runtime must not carry it), so it only exists
+  # in generated trees: target/runtime for tests, staged runtimes here.
+  HOME="$(mktemp -d)" scripts/gen.sh --nvim target/release/nvim \
+    --runtime "$stage/share/nvim/runtime"
   # Regenerate help tags against the staged docs, as nix/package.nix does.
   HOME="$(mktemp -d)" target/release/nvim --headless -u NONE \
     -c "helptags $stage/share/nvim/runtime/doc" -c "qa!"

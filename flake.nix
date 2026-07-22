@@ -90,6 +90,8 @@
                 ./lib.rs
                 ./src
                 ./runtime
+                # postInstall generates runtime files (syntax tables) with it.
+                ./scripts/gen.sh
               ];
             };
           };
