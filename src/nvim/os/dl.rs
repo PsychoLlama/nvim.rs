@@ -1,16 +1,7 @@
+use crate::src::nvim::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
+use crate::src::nvim::memory::xstrdup;
+use crate::src::nvim::message::semsg;
 pub use crate::src::nvim::types::{intptr_t, uv_lib_t};
-extern "C" {
-    fn uv_dlopen(filename: *const ::core::ffi::c_char, lib: *mut uv_lib_t) -> ::core::ffi::c_int;
-    fn uv_dlclose(lib: *mut uv_lib_t);
-    fn uv_dlsym(
-        lib: *mut uv_lib_t,
-        name: *const ::core::ffi::c_char,
-        ptr: *mut *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn uv_dlerror(lib: *const uv_lib_t) -> *const ::core::ffi::c_char;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-}
 pub type int_int_fn = Option<unsafe extern "C" fn(::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type gen_fn = Option<unsafe extern "C" fn() -> ()>;
 pub type str_int_fn =

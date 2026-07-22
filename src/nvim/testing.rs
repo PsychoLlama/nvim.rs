@@ -1,4 +1,30 @@
+use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
+use crate::src::nvim::eval::typval::{
+    tv_check_for_float_or_nr_arg, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
+    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg, tv_clear,
+    tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_equal, tv_get_float, tv_get_number_chk,
+    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk,
+};
+use crate::src::nvim::eval::vars::{
+    assert_error, get_vim_var_nr, get_vim_var_str, get_vim_var_tv, set_vim_var_string,
+};
+use crate::src::nvim::eval_1::{garbage_collect, pattern_match};
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::{
+    called_emsg, called_vim_beep, did_emsg, e_cant_read_file_str, emsg_assert_fails_context,
+    emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_on_display, emsg_silent, got_int,
+    in_assert_fails, lines_left, msg_col, need_wait_return, no_wait_return, suppress_errthrow,
+    trylevel, IObuff, Rows,
+};
+use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_ptr2char};
+use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{emsg, msg_reset_scroll};
+use crate::src::nvim::os::fs::os_fopen;
+use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen, strstr};
+use crate::src::nvim::runtime::{estack_sfile, exestack};
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 pub use crate::src::nvim::types::{
     ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
     Dict, Error, ErrorType, EvalFuncData, Float, Integer, KeyValuePair, LuaRef,
@@ -14,130 +40,11 @@ pub use crate::src::nvim::types::{
     ufunc_T, uint64_t, uint8_t, varnumber_T, vim_exception, FILE, QUEUE, _IO_FILE,
 };
 extern "C" {
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fgetc(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_cant_read_file_str: [::core::ffi::c_char; 0];
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn pattern_match(
-        pat: *const ::core::ffi::c_char,
-        text: *const ::core::ffi::c_char,
-        ic: bool,
-    ) -> ::core::ffi::c_int;
-    fn garbage_collect(testing: bool) -> bool;
-    fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    static hash_removed: ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn msg_reset_scroll();
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add_tv(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        tv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_float(tv: *const typval_T) -> float_T;
-    fn tv_check_for_opt_string_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_number_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_float_or_nr_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_string_or_number_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_string_or_list_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T;
-    fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn assert_error(gap: *mut garray_T);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char>;
-    static emsg_assert_fails_lnum: GlobalCell<::core::ffi::c_long>;
-    static emsg_assert_fails_context: GlobalCell<*mut ::core::ffi::c_char>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static called_vim_beep: GlobalCell<bool>;
-    static called_emsg: GlobalCell<::core::ffi::c_int>;
-    static emsg_on_display: GlobalCell<bool>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static trylevel: GlobalCell<::core::ffi::c_int>;
-    static suppress_errthrow: GlobalCell<bool>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static in_assert_fails: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static got_int: GlobalCell<bool>;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    static exestack: GlobalCell<garray_T>;
-    fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf_safelen(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> size_t;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

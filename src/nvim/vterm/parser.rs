@@ -1,3 +1,4 @@
+use crate::src::nvim::os::libc::{__assert_fail, strncpy};
 pub use crate::src::nvim::types::{
     int32_t, schar_T, size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState,
     ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
@@ -16,20 +17,7 @@ pub use crate::src::nvim::types::{
     VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
     VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
 };
-use ::c2rust_bitfields;
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn strncpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_char;
-}
+
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;

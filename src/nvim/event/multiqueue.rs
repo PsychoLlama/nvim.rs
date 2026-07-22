@@ -1,17 +1,9 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
     argv_callback, multiqueue, queue, size_t, Event, MultiQueue, PutCallback, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-}
 pub type MultiQueueItem = multiqueue_item;
 #[derive(Copy, Clone)]
 #[repr(C)]

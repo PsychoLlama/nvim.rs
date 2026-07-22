@@ -1,4 +1,44 @@
+use crate::src::nvim::api::extmark::parse_virt_text;
+use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object};
+use crate::src::nvim::buffer_updates::buf_updates_send_changes;
+use crate::src::nvim::change::changed_lines;
+use crate::src::nvim::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
+use crate::src::nvim::cursor::check_cursor_col;
+use crate::src::nvim::decoration::{clear_virttext, next_virt_text_chunk};
+use crate::src::nvim::diff::{diff_infold, diff_lnum_win};
+use crate::src::nvim::drawscreen::{
+    redraw_buf_later, redraw_curbuf_later, redraw_later, redraw_win_range_later,
+};
+use crate::src::nvim::eval::typval::tv_get_lnum;
+use crate::src::nvim::eval::vars::{
+    get_vim_var_nr, get_vim_var_str, set_vim_var_nr, set_vim_var_string,
+};
+use crate::src::nvim::eval_1::{eval_foldexpr, eval_foldtext};
+use crate::src::nvim::ex_session::{put_eol, put_line};
+use crate::src::nvim::extmark::extmark_splice_cols;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent::{get_indent_buf, get_sw_value};
+use crate::src::nvim::main::{
+    curbuf, current_sctx, curtab, curwin, did_emsg, diff_context, disable_fold_update,
+    e_modifiable, emsg_off, firstwin, got_int, need_diff_redraw, p_fcl, p_sel, KeyTyped, State,
+    VIsual, VIsual_active,
+};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_replace_buf};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::ops::skip_comment;
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, atoi, fprintf, gettext, memcpy, memmove, memset, ngettext, snprintf, strcat,
+    strcpy, strlen, strncmp, strstr,
+};
+use crate::src::nvim::plines::plines_win_nofold;
+use crate::src::nvim::r#move::changed_window_setting;
+use crate::src::nvim::search::linewhite;
+use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
+use crate::src::nvim::syntax::syn_get_foldlevel;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -33,188 +73,11 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::undo::u_save;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn parse_virt_text(chunks: Array, err: *mut Error, width: *mut ::core::ffi::c_int) -> VirtText;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
-    fn buf_updates_send_changes(
-        buf: *mut buf_T,
-        firstline: linenr_T,
-        num_added: int64_t,
-        num_removed: int64_t,
-    );
-    fn changed_lines(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        lnume: linenr_T,
-        xtra: linenr_T,
-        do_buf_event: bool,
-    );
-    static p_fcl: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn transstr(s: *const ::core::ffi::c_char, untab: bool) -> *mut ::core::ffi::c_char;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn check_cursor_col(win: *mut win_T);
-    fn clear_virttext(text: *mut VirtText);
-    fn next_virt_text_chunk(
-        vt: VirtText,
-        pos: *mut size_t,
-        attr: *mut ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    static diff_context: GlobalCell<::core::ffi::c_int>;
-    static need_diff_redraw: GlobalCell<bool>;
-    fn diff_infold(wp: *mut win_T, lnum: linenr_T) -> bool;
-    fn diff_lnum_win(lnum: linenr_T, wp: *mut win_T) -> linenr_T;
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: linenr_T);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ngettext(
-        __msgid1: *const ::core::ffi::c_char,
-        __msgid2: *const ::core::ffi::c_char,
-        __n: ::core::ffi::c_ulong,
-    ) -> *mut ::core::ffi::c_char;
-    static e_modifiable: [::core::ffi::c_char; 0];
-    fn eval_foldexpr(wp: *mut win_T, cp: *mut ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn eval_foldtext(wp: *mut win_T) -> Object;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn put_eol(fd: *mut FILE) -> ::core::ffi::c_int;
-    fn put_line(fd: *mut FILE, s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn extmark_splice_cols(
-        buf: *mut buf_T,
-        start_row: ::core::ffi::c_int,
-        start_col: colnr_T,
-        old_col: colnr_T,
-        new_col: colnr_T,
-        undo: ExtmarkOp,
-    );
-    static disable_fold_update: GlobalCell<::core::ffi::c_int>;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static KeyTyped: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    fn get_sw_value(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn get_indent_buf(buf: *mut buf_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn setpcmark();
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_adjust_cursor();
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_replace_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-        noalloc: bool,
-    ) -> ::core::ffi::c_int;
-    fn changed_window_setting(wp: *mut win_T);
-    fn skip_comment(
-        line: *mut ::core::ffi::c_char,
-        process: bool,
-        include_space: bool,
-        is_comment: *mut bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn line_breakcheck();
-    fn plines_win_nofold(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn linewhite(lnum: linenr_T) -> bool;
-    fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn u_save(top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

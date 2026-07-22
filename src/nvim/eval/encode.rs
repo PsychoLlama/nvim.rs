@@ -1,4 +1,19 @@
+use crate::src::nvim::eval::typval::{
+    tv_dict_find, tv_list_append_allocated_string, tv_list_idx_of_item,
+};
+use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
+use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::IObuff;
+use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
+use crate::src::nvim::memory::{memchrsub, memcnt, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
+use crate::src::nvim::message::{emsg, internal_error, semsg};
+use crate::src::nvim::msgpack_rpc::packer::{
+    mpack_bin, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer, mpack_str, mpack_uint64,
+};
+use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -13,85 +28,12 @@ pub use crate::src::nvim::types::{
     SpecialVarValue, String_0, VarLockStatus, VarType, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemscan(
-        addr: *const ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn get_copyID() -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static hash_removed: ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_list_idx_of_item(l: *const list_T, item: *const listitem_T) -> ::core::ffi::c_int;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_printable(c: ::core::ffi::c_int) -> bool;
-    fn mpack_check_buffer(packer: *mut PackerBuffer);
-    fn mpack_uint64(ptr: *mut *mut ::core::ffi::c_char, i: uint64_t);
-    fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
-    fn mpack_float8(ptr: *mut *mut ::core::ffi::c_char, i: ::core::ffi::c_double);
-    fn mpack_str(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_bin(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_ext(
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        type_0: int8_t,
-        packer: *mut PackerBuffer,
-    );
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf_safelen(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> size_t;
-    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
 }
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;

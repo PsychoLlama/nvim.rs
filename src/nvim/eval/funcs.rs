@@ -1,4 +1,274 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::mpack::object::mpack_parser_init;
+use crate::src::nvim::api::private::converter::{
+    object_to_vim, object_to_vim_take_luaref, vim_to_object,
+};
+use crate::src::nvim::api::private::dispatch::method_handlers;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_object, api_free_string, api_metadata, arena_array, cbuf_to_string,
+    cstr_as_string, dict_set_var,
+};
+use crate::src::nvim::api::vim::nvim_feedkeys;
+use crate::src::nvim::arglist::{f_argc, f_argidx, f_arglistid, f_argv};
+use crate::src::nvim::autocmd::{apply_autocmds, au_exists, autocmd_supported};
+use crate::src::nvim::buffer::{
+    bt_prompt, buf_close_terminal, buflist_findnr, buflist_findpat, setfname,
+};
+use crate::src::nvim::channel::{
+    channel_close, channel_connect, channel_create_event, channel_decref, channel_from_stdio,
+    channel_incref, channel_job_start, channel_send, channel_terminal_alloc,
+};
+use crate::src::nvim::charset::{getdigits_int, skipwhite};
+use crate::src::nvim::cmdexpand::{
+    cmdline_pum_active, f_cmdcomplete_info, f_getcompletion, f_getcompletiontype, ExpandCleanup,
+    ExpandInit, ExpandOne,
+};
+use crate::src::nvim::cmdhist::{f_histadd, f_histdel, f_histget, f_histnr};
+use crate::src::nvim::context::{
+    ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
+};
+use crate::src::nvim::cursor::{check_cursor, get_cursor_pos_ptr};
+use crate::src::nvim::diff::{f_diff_filler, f_diff_hlID};
+use crate::src::nvim::digraph::{
+    f_digraph_get, f_digraph_getlist, f_digraph_set, f_digraph_setlist,
+};
+use crate::src::nvim::edit::buf_prompt_text;
+use crate::src::nvim::eval::buffer::{
+    f_append, f_appendbufline, f_bufadd, f_bufexists, f_buflisted, f_bufload, f_bufloaded,
+    f_bufname, f_bufnr, f_bufwinid, f_bufwinnr, f_deletebufline, f_getbufinfo, f_getbufline,
+    f_getbufoneline, f_getline, f_prompt_appendbuf, f_prompt_setcallback, f_prompt_setinterrupt,
+    f_prompt_setprompt, f_setbufline, f_setline, find_buffer,
+};
+use crate::src::nvim::eval::decode::{
+    json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
+};
+use crate::src::nvim::eval::deprecated::{f_last_buffer_nr, f_rpcstart, f_rpcstop, f_termopen};
+use crate::src::nvim::eval::encode::{
+    encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2echo, encode_tv2json,
+    encode_vim_list_to_buf, encode_vim_to_msgpack,
+};
+use crate::src::nvim::eval::fs::{
+    f_browse, f_browsedir, f_chdir, f_delete, f_executable, f_exepath, f_filecopy, f_filereadable,
+    f_filewritable, f_finddir, f_findfile, f_fnamemodify, f_getcwd, f_getfperm, f_getfsize,
+    f_getftime, f_getftype, f_glob, f_glob2regpat, f_globpath, f_haslocaldir, f_isabsolutepath,
+    f_isdirectory, f_mkdir, f_pathshorten, f_readblob, f_readdir, f_readfile, f_rename, f_resolve,
+    f_simplify, f_tempname, f_writefile,
+};
+use crate::src::nvim::eval::list::{
+    f_add, f_count, f_extend, f_extendnew, f_filter, f_foreach, f_insert, f_map, f_mapnew,
+    f_remove, f_reverse,
+};
+use crate::src::nvim::eval::typval::{
+    callback_free, f_blob2list, f_has_key, f_items, f_join, f_keys, f_list2blob, f_list2str,
+    f_sort, f_uniq, f_values, tv_blob_alloc_ret, tv_blob_set_range, tv_check_for_buffer_arg,
+    tv_check_for_dict_arg, tv_check_for_list_arg, tv_check_for_list_or_blob_arg,
+    tv_check_for_lnum_arg, tv_check_for_nonempty_string_arg, tv_check_for_nonnull_dict_arg,
+    tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_check_for_string_or_func_arg,
+    tv_check_for_string_or_list_arg, tv_check_num, tv_check_str_or_nr, tv_clear, tv_copy,
+    tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
+    tv_dict_add_str_len, tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend, tv_dict_find,
+    tv_dict_free, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    tv_dict_get_number_def, tv_dict_get_string, tv_dict_item_remove, tv_dict_watcher_add,
+    tv_dict_watcher_remove, tv_equal, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_lnum_buf,
+    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
+    tv_get_string_chk, tv_islocked, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_list,
+    tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string, tv_list_append_tv,
+    tv_list_copy, tv_list_extend, tv_list_find, tv_list_find_nr, tv_list_flatten,
+    tv_list_item_remove, tv_list_unref, value_check_lock,
+};
+use crate::src::nvim::eval::userfunc::{
+    emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
+    get_func_arity, get_scriptlocal_funcname, get_user_func_name, printable_func_name,
+    restore_funccal, save_funccal, save_function_name, set_current_funccal, trans_function_name,
+    translated_function_exists,
+};
+use crate::src::nvim::eval::vars::{
+    cat_prefix_varname, f_getbufvar, f_gettabvar, f_gettabwinvar, f_getwinvar, f_setbufvar,
+    f_settabvar, f_settabwinvar, f_setwinvar, find_var, get_user_var_name, get_vim_var_nr,
+    get_vim_var_str, get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr,
+    set_vim_var_type, var_exists,
+};
+use crate::src::nvim::eval::window::{
+    f_getcmdwintype, f_gettabinfo, f_getwininfo, f_getwinpos, f_getwinposx, f_getwinposy,
+    f_tabpagenr, f_tabpagewinnr, f_win_execute, f_win_findbuf, f_win_getid, f_win_gettype,
+    f_win_gotoid, f_win_id2tabwin, f_win_id2win, f_win_move_separator, f_win_move_statusline,
+    f_win_screenpos, f_win_splitmove, f_winbufnr, f_wincol, f_winheight, f_winlayout, f_winline,
+    f_winnr, f_winrestcmd, f_winrestview, f_winsaveview, f_winwidth, find_tabwin,
+    find_win_by_nr_or_id, win_id2wp_tp,
+};
+use crate::src::nvim::eval_1::{
+    add_timer_info, add_timer_info_all, buf_byteidx_to_charidx, buf_charidx_to_byteidx,
+    callback_from_typval, clear_lval, common_job_callbacks, do_string_sub, eval1,
+    eval_expr_to_bool, eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option,
+    f_slice, f_system, f_systemlist, find_job, find_timer_by_nr, get_callback_depth, get_copyID,
+    get_lval, list2fpos, partial_name, prompt_get_input, save_tv_as_string, script_host_eval,
+    string2float, timer_due_cb, timer_start, timer_stop, timer_stop_all, tv_to_argv, var2fpos,
+    var_item_copy,
+};
+use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_empty, multiqueue_free, multiqueue_new, multiqueue_process_events,
+    multiqueue_replace_parent,
+};
+use crate::src::nvim::event::proc::{proc_stop, proc_wait};
+use crate::src::nvim::event::r#loop::{loop_on_put, loop_poll_events};
+use crate::src::nvim::event::time::{
+    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
+};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_docmd::{
+    cmd_exists, do_cmdline, do_cmdline_cmd, eval_vars, expand_filename, f_fullcommand,
+};
+use crate::src::nvim::ex_eval::aborting;
+use crate::src::nvim::ex_getln::{
+    f_getcmdcomplpat, f_getcmdcompltype, f_getcmdline, f_getcmdpos, f_getcmdprompt,
+    f_getcmdscreenpos, f_getcmdtype, f_setcmdline, f_setcmdpos, f_wildtrigger, get_user_input,
+    text_locked, text_locked_msg, vim_strsave_fnameescape,
+};
+use crate::src::nvim::fold::{
+    f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult,
+};
+use crate::src::nvim::fuzzy::{f_matchfuzzy, f_matchfuzzypos};
+use crate::src::nvim::getchar::{
+    f_getchar, f_getcharmod, f_getcharstr, restore_typeahead, save_typeahead, stuff_empty,
+    using_script, vgetc,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint};
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::highlight_group::{
+    get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
+    syn_get_final_id, syn_name2id,
+};
+use crate::src::nvim::indent::{f_indent, f_lispindent, get_sw_value, get_sw_value_col};
+use crate::src::nvim::indent_c::f_cindent;
+use crate::src::nvim::input::prompt_for_input;
+use crate::src::nvim::insexpand::{
+    f_complete, f_complete_add, f_complete_check, f_complete_info, f_preinserted, ins_compl_active,
+};
+use crate::src::nvim::keycodes::vim_strsave_escape_ks;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::{
+    nlua_exec, nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable,
+    nlua_typval_eval,
+};
+use crate::src::nvim::main::{
+    autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match, called_emsg,
+    capture_ga, channels, cmdline_row, cmdline_star, curbuf, current_sctx, curtab, curwin,
+    did_emsg, e_api_error, e_buffer_is_not_loaded, e_cannot_change_readonly_variable_str,
+    e_channotpty, e_dictkey, e_invalid_buffer_name_str, e_invalid_column_number_nr,
+    e_invalid_line_number_nr, e_invalwindow, e_invarg, e_invarg2, e_invargNval, e_invargval,
+    e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listblobreq, e_listdictarg,
+    e_listdictblobarg, e_no_spell, e_number_exp, e_reduce_of_an_empty_str_with_no_initial_value,
+    e_stdiochan2, e_toofewarg, e_toomanyarg, e_trailing_arg, e_unknown_function_str,
+    empty_string_option, emsg_noredir, emsg_off, emsg_silent, firstwin, garbage_collect_at_exit,
+    got_int, lastbuf, lines_left, main_loop, mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled,
+    msg_silent, need_clr_eos, on_print, p_cpo, p_enc, p_ic, p_magic, p_sel, p_spk, p_tgc,
+    p_verbose, p_wic, p_ws, provider_call_nesting, provider_caller_scope, redir_off, reg_executing,
+    reg_recorded, reg_recording, skip_update_topline, starting, stdin_isatty, stdout_isatty,
+    typebuf, vgetc_busy, vim_ignored, virtual_op, want_garbage_collect, wild_menu_showing,
+    windowsVersion, IObuff, NameBuff, Rows, State, EVALARG_EVALUATE,
+};
+use crate::src::nvim::map::mh_get_uint64_t;
+use crate::src::nvim::mapping::{f_hasmapto, f_maparg, f_mapcheck, f_maplist, f_mapset};
+use crate::src::nvim::mark::{
+    cleanup_jumplist, get_buf_local_marks, get_global_marks, setmark_pos, setpcmark,
+};
+use crate::src::nvim::mbyte::{
+    convert_setup, enc_locale, f_charclass, f_getcellwidths, f_iconv, f_setcellwidths,
+    mb_adjust_cursor, mb_prevptr, string_convert, utf_char2bytes, utf_ptr2char, utf_ptr2len,
+    utfc_ptr2len,
+};
+use crate::src::nvim::memline::{
+    decl, incl, ml_find_line_or_offset, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_get_pos,
+    ml_open, recover_names, swapfile_dict,
+};
+use crate::src::nvim::memory::{
+    alloc_block, arena_mem_free, free_block, strequal, strnequal, xcalloc, xfree, xmalloc,
+    xmallocz, xmemdup, xmemdupz, xstrdup,
+};
+use crate::src::nvim::menu::{f_menu_info, get_menu_cmd_modes, menu_get};
+use crate::src::nvim::message::{
+    do_dialog, emsg, internal_error, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts,
+    msg_scroll_flush, msg_start, semsg, semsg_multiline, str2special_save, verb_msg,
+};
+use crate::src::nvim::mouse::f_getmousepos;
+use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
+use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
+use crate::src::nvim::msgpack_rpc::server::{
+    server_address_list, server_address_new, server_start, server_stop,
+};
+use crate::src::nvim::normal::{find_decl, op_pending, unadjust_for_sel_inner};
+use crate::src::nvim::ops::{
+    block_prep, charwise_block_prep, cursor_pos_info, reset_lbr, restore_lbr,
+};
+use crate::src::nvim::option::set_option_value_give_err;
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::dl::os_libcall;
+use crate::src::nvim::os::env::{
+    expand_env_save, home_replace, os_copy_fullenv, os_env_exists, os_free_fullenv,
+    os_get_fullenv_size, os_get_hostname, os_get_pid, os_getenv, vim_env_iter, vim_getenv,
+    vim_setenv_ext, vim_unsetenv_ext,
+};
+use crate::src::nvim::os::fs::{os_isdir, os_setperm};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, acos, asin, atan, atan2, atoi, ceil, cos, cosh, exp, fabs, floor, fmod,
+    gettext, log, log10, memcmp, memcpy, memmove, memset, mktime, pow, round, sin, sinh, snprintf,
+    sqrt, strcasecmp, strchr, strcmp, strcpy, strftime, strlen, strncasecmp, strncmp, strtoul, tan,
+    tanh, time, trunc,
+};
+use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
+use crate::src::nvim::os::shell::shell_free_argv;
+use crate::src::nvim::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
+use crate::src::nvim::os::time::{os_hrtime, os_localtime_r, os_strptime};
+use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
+use crate::src::nvim::plines::{getvvcol, win_chartabsize};
+use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
+use crate::src::nvim::profile::{
+    profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
+};
+use crate::src::nvim::quickfix::{f_getloclist, f_getqflist, f_setloclist, f_setqflist};
+use crate::src::nvim::r#match::{
+    f_clearmatches, f_getmatches, f_matchadd, f_matchaddpos, f_matcharg, f_matchdelete,
+    f_setmatches,
+};
+use crate::src::nvim::r#move::{f_screenpos, f_virtcol2col, update_curswant, win_col_off};
+use crate::src::nvim::regexp::{reg_submatch, reg_submatch_list};
+use crate::src::nvim::register::{
+    format_reg_type, get_reg_contents, get_reg_type, get_unname_register, get_yank_register,
+    op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
+};
+use crate::src::nvim::runtime::{exestack, f_getscriptinfo, f_getstacktrace};
+use crate::src::nvim::search::{
+    f_searchcount, last_csearch, last_csearch_forward, last_csearch_until, searchit,
+    set_csearch_direction, set_csearch_until, set_last_csearch,
+};
+use crate::src::nvim::sha256::sha256_bytes;
+use crate::src::nvim::sign::{
+    f_sign_define, f_sign_getdefined, f_sign_getplaced, f_sign_jump, f_sign_place,
+    f_sign_placelist, f_sign_undefine, f_sign_unplace, f_sign_unplacelist,
+};
+use crate::src::nvim::spell::{eval_soundfold, parse_spelllang, spell_check, spell_move_to};
+use crate::src::nvim::spellsuggest::spell_suggest_list;
+use crate::src::nvim::state::{get_mode, get_was_safe_state, virtual_active};
+use crate::src::nvim::strings::{
+    f_byteidx, f_byteidxcomp, f_charidx, f_str2list, f_str2nr, f_strcharlen, f_strcharpart,
+    f_strchars, f_strdisplaywidth, f_strgetchar, f_stridx, f_string, f_strlen, f_strpart,
+    f_strridx, f_strtrans, f_strutf16len, f_strwidth, f_tolower, f_toupper, f_tr, f_trim,
+    f_utf16idx, vim_snprintf, vim_strchr, vim_strsave_escaped, vim_strsave_shellescape,
+    vim_vsnprintf_typval,
+};
+use crate::src::nvim::syntax::{
+    get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,
+};
+use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
+use crate::src::nvim::testing::{
+    f_assert_beeps, f_assert_equal, f_assert_equalfile, f_assert_exception, f_assert_fails,
+    f_assert_false, f_assert_inrange, f_assert_match, f_assert_nobeep, f_assert_notequal,
+    f_assert_notmatch, f_assert_report, f_assert_true, f_test_garbagecollect_now,
+    f_test_write_list_log,
+};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, AutoPat, AutoPatCmd,
     AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index, Callback,
@@ -67,102 +337,15 @@ pub use crate::src::nvim::types::{
     va_list, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T, QUEUE,
 };
+use crate::src::nvim::ui::{
+    ui_busy_start, ui_busy_stop, ui_current_col, ui_current_row, ui_flush, ui_gui_attached, ui_has,
+    ui_rgb_attached,
+};
+use crate::src::nvim::ui_compositor::ui_comp_get_grid_at_coord;
+use crate::src::nvim::undo::{f_undofile, f_undotree};
+use crate::src::nvim::version::{has_nvim_version, has_vim_patch};
+use crate::src::nvim::window::find_tabpage;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn acos(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn asin(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn atan(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn atan2(__y: ::core::ffi::c_double, __x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn cos(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn sin(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn tan(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn cosh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn sinh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn tanh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn exp(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn log(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn log10(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn pow(__x: ::core::ffi::c_double, __y: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn sqrt(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn ceil(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn fabs(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn floor(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn fmod(__x: ::core::ffi::c_double, __y: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn round(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn trunc(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn strtoul(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_ulong;
-    fn abort() -> !;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn time(__timer: *mut time_t) -> time_t;
-    fn mktime(__tp: *mut tm) -> time_t;
-    fn strftime(
-        __s: *mut ::core::ffi::c_char,
-        __maxsize: size_t,
-        __format: *const ::core::ffi::c_char,
-        __tp: *const tm,
-    ) -> size_t;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_kill(pid: ::core::ffi::c_int, signum: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn uv_random(
         loop_0: *mut uv_loop_t,
         req: *mut uv_random_t,
@@ -171,1052 +354,16 @@ extern "C" {
         flags: ::core::ffi::c_uint,
         cb: uv_random_cb,
     ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn strnequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char, n: size_t) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn alloc_block() -> *mut ::core::ffi::c_void;
-    fn free_block(block: *mut ::core::ffi::c_void);
-    fn arena_mem_free(mem: ArenaMem);
-    fn mpack_parser_init(p: *mut mpack_parser_t, c: mpack_uint32_t);
-    static method_handlers: [MsgpackRpcRequestHandler; 0];
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata: bool) -> Object;
-    fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
-    fn object_to_vim_take_luaref(
-        obj: *mut Object,
-        tv: *mut typval_T,
-        take_luaref: bool,
-        err: *mut Error,
-    );
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn cbuf_to_string(buf: *const ::core::ffi::c_char, size: size_t) -> String_0;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_string(value: String_0);
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
-    fn api_metadata() -> Object;
-    fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean);
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    static autocmd_busy: GlobalCell<bool>;
-    static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char>;
-    static autocmd_fname_full: GlobalCell<bool>;
-    static autocmd_bufnr: GlobalCell<::core::ffi::c_int>;
-    static autocmd_match: GlobalCell<*mut ::core::ffi::c_char>;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool;
-    fn au_exists(arg: *const ::core::ffi::c_char) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buf_close_terminal(buf: *mut buf_T);
-    fn buflist_findpat(
-        pattern: *const ::core::ffi::c_char,
-        pattern_end: *const ::core::ffi::c_char,
-        unlisted: bool,
-        diffmode: bool,
-        curtab_only: bool,
-    ) -> ::core::ffi::c_int;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn setfname(
-        buf: *mut buf_T,
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        message: bool,
-    ) -> ::core::ffi::c_int;
-    fn bt_prompt(buf: *mut buf_T) -> bool;
-    static channels: GlobalCell<Map_uint64_t_ptr_t>;
-    static on_print: GlobalCell<Callback>;
-    fn pty_proc_resize(ptyproc: *mut PtyProc, width: uint16_t, height: uint16_t);
-    fn channel_close(
-        id: uint64_t,
-        part: ChannelPart,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> bool;
-    fn channel_create_event(chan: *mut Channel, ext_source: *const ::core::ffi::c_char);
-    fn channel_incref(chan: *mut Channel);
-    fn channel_decref(chan: *mut Channel);
-    fn channel_job_start(
-        argv: *mut *mut ::core::ffi::c_char,
-        exepath: *const ::core::ffi::c_char,
-        on_stdout: CallbackReader,
-        on_stderr: CallbackReader,
-        on_exit: Callback,
-        pty: bool,
-        rpc: bool,
-        overlapped: bool,
-        detach: bool,
-        stdin_mode: ChannelStdinMode,
-        cwd: *const ::core::ffi::c_char,
-        pty_width: uint16_t,
-        pty_height: uint16_t,
-        env: *mut dict_T,
-        status_out: *mut varnumber_T,
-    ) -> *mut Channel;
-    fn channel_connect(
-        tcp: bool,
-        address: *const ::core::ffi::c_char,
-        rpc: bool,
-        on_output: CallbackReader,
-        timeout: ::core::ffi::c_int,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn channel_from_stdio(
-        rpc: bool,
-        on_output: CallbackReader,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn channel_send(
-        id: uint64_t,
-        data: *mut ::core::ffi::c_char,
-        len: size_t,
-        data_owned: bool,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> size_t;
-    fn channel_terminal_alloc(buf: *mut buf_T, chan: *mut Channel);
-    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
-    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ic: GlobalCell<::core::ffi::c_int>;
-    static p_magic: GlobalCell<::core::ffi::c_int>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_spk: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_tgc: GlobalCell<::core::ffi::c_int>;
-    static p_verbose: GlobalCell<OptInt>;
-    static p_wic: GlobalCell<::core::ffi::c_int>;
-    static p_ws: GlobalCell<::core::ffi::c_int>;
-    fn vim_strsave_escaped(
-        string: *const ::core::ffi::c_char,
-        esc_chars: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsave_shellescape(
-        string: *const ::core::ffi::c_char,
-        do_special: bool,
-        do_newline: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_vsnprintf_typval(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ap_start: ::core::ffi::VaList,
-        tvs: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn f_byteidx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_byteidxcomp(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_string(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strcharlen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strchars(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strwidth(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_strtrans(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_tolower(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_toupper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn cmdline_pum_active() -> bool;
-    fn ExpandOne(
-        xp: *mut expand_T,
-        str: *mut ::core::ffi::c_char,
-        orig: *mut ::core::ffi::c_char,
-        options: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn ExpandInit(xp: *mut expand_T);
-    fn ExpandCleanup(xp: *mut expand_T);
-    fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcompletiontype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_cmdcomplete_info(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn ctx_size() -> size_t;
-    fn ctx_get(index: size_t) -> *mut Context;
-    fn ctx_free(ctx: *mut Context);
-    fn ctx_save(ctx: *mut Context, flags: ::core::ffi::c_int);
-    fn ctx_restore(ctx: *mut Context, flags: ::core::ffi::c_int) -> bool;
-    fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict;
-    fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: *mut Error) -> ::core::ffi::c_int;
-    fn buf_prompt_text(buf: *const buf_T) -> *mut ::core::ffi::c_char;
-    static e_invalid_buffer_name_str: [::core::ffi::c_char; 0];
-    static e_buffer_is_not_loaded: [::core::ffi::c_char; 0];
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invargval: [::core::ffi::c_char; 0];
-    static e_invargNval: [::core::ffi::c_char; 0];
-    static e_invexpr2: [::core::ffi::c_char; 0];
-    static e_no_spell: [::core::ffi::c_char; 0];
-    static e_channotpty: [::core::ffi::c_char; 0];
-    static e_stdiochan2: [::core::ffi::c_char; 0];
-    static e_libcall: [::core::ffi::c_char; 0];
-    static e_number_exp: [::core::ffi::c_char; 0];
-    static e_cannot_change_readonly_variable_str: [::core::ffi::c_char; 0];
-    static e_toomanyarg: [::core::ffi::c_char; 0];
-    static e_toofewarg: [::core::ffi::c_char; 0];
-    static e_dictkey: [::core::ffi::c_char; 0];
-    static e_listblobreq: [::core::ffi::c_char; 0];
-    static e_listblobarg: [::core::ffi::c_char; 0];
-    static e_listdictarg: [::core::ffi::c_char; 0];
-    static e_listdictblobarg: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_unknown_function_str: [::core::ffi::c_char; 0];
-    static e_listarg: [::core::ffi::c_char; 0];
-    static e_api_error: [::core::ffi::c_char; 0];
-    static e_invalwindow: [::core::ffi::c_char; 0];
-    static e_invalid_column_number_nr: [::core::ffi::c_char; 0];
-    static e_invalid_line_number_nr: [::core::ffi::c_char; 0];
-    static e_reduce_of_an_empty_str_with_no_initial_value: [::core::ffi::c_char; 0];
-    fn check_cursor(wp: *mut win_T);
-    fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn find_buffer(avar: *mut typval_T) -> *mut buf_T;
-    fn f_append(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_appendbufline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_prompt_appendbuf(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufexists(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_buflisted(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufload(argvars: *mut typval_T, unused: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufloaded(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufname(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufwinid(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_bufwinnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getbufline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getbufoneline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setbufline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_prompt_setcallback(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_prompt_setinterrupt(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_prompt_setprompt(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn json_decode_string(
-        buf: *const ::core::ffi::c_char,
-        buf_len: size_t,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn typval_parser_error_free(parser: *mut mpack_parser_t);
-    fn mpack_parse_typval(
-        parser: *mut mpack_parser_t,
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn unpack_typval(
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-        ret: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    static kCtxAll: GlobalCell<::core::ffi::c_int>;
-    fn encode_vim_to_msgpack(
-        packer: *mut PackerBuffer,
-        tv: *mut typval_T,
-        objname: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn encode_list_write(
-        data: *mut ::core::ffi::c_void,
-        buf: *const ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn encode_vim_list_to_buf(
-        list: *const list_T,
-        ret_len: *mut size_t,
-        ret_buf: *mut *mut ::core::ffi::c_char,
-    ) -> bool;
-    fn encode_read_from_list(
-        state: *mut ListReaderState,
-        buf: *mut ::core::ffi::c_char,
-        nbuf: size_t,
-        read_bytes: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn encode_init_lrstate(list: *const list_T) -> ListReaderState;
-    static hash_removed: ::core::ffi::c_char;
-    fn verb_msg(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn semsg_multiline(
-        kind: *const ::core::ffi::c_char,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_start();
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn str2special_save(
-        str: *const ::core::ffi::c_char,
-        replace_spaces: bool,
-        replace_lt: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_scroll_flush();
-    fn msg_clr_eos();
-    fn do_dialog(
-        type_0: ::core::ffi::c_int,
-        title: *const ::core::ffi::c_char,
-        message: *const ::core::ffi::c_char,
-        buttons: *const ::core::ffi::c_char,
-        dfltbutton: ::core::ffi::c_int,
-        textfield: *const ::core::ffi::c_char,
-        ex_cmd: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_item_remove(l: *mut list_T, item: *mut listitem_T) -> *mut listitem_T;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_unref(l: *mut list_T);
-    fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T);
-    fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_list_copy(
-        conv: *const vimconv_T,
-        orig: *mut list_T,
-        deep: bool,
-        copyID: ::core::ffi::c_int,
-    ) -> *mut list_T;
-    fn tv_list_flatten(
-        list: *mut list_T,
-        first: *mut listitem_T,
-        maxitems: int64_t,
-        maxdepth: int64_t,
-    );
-    fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T);
-    fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sort(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_uniq(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T;
-    fn tv_list_find_nr(l: *mut list_T, n: ::core::ffi::c_int, ret_error: *mut bool) -> varnumber_T;
-    fn tv_dict_watcher_add(
-        dict: *mut dict_T,
-        key_pattern: *const ::core::ffi::c_char,
-        key_pattern_len: size_t,
-        callback: Callback,
-    );
-    fn callback_free(callback: *mut Callback);
-    fn tv_dict_watcher_remove(
-        dict: *mut dict_T,
-        key_pattern: *const ::core::ffi::c_char,
-        key_pattern_len: size_t,
-        callback: Callback,
-    ) -> bool;
-    fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_free(d: *mut dict_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
-    fn tv_dict_get_number_def(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        def: ::core::ffi::c_int,
-    ) -> varnumber_T;
-    fn tv_dict_get_bool(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        def: ::core::ffi::c_int,
-    ) -> varnumber_T;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_dict_get_callback(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: ptrdiff_t,
-        result: *mut Callback,
-    ) -> bool;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_bool(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: BoolVarValue,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str_len(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_allocated_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char);
-    fn tv_blob_set_range(
-        dest: *mut blob_T,
-        n1: varnumber_T,
-        n2: varnumber_T,
-        src: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn f_blob2list(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_list2blob(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_keys(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn tv_blob_alloc_ret(ret_tv: *mut typval_T) -> *mut blob_T;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn tv_islocked(tv: *const typval_T) -> bool;
-    fn value_check_lock(
-        lock: VarLockStatus,
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> bool;
-    fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool;
-    fn tv_check_str_or_nr(tv: *const typval_T) -> bool;
-    fn tv_check_num(tv: *const typval_T) -> bool;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_bool(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T;
-    fn tv_check_for_string_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_nonempty_string_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_number_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_number_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_bool_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_list_arg(args: *const typval_T, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tv_check_for_dict_arg(args: *const typval_T, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tv_check_for_nonnull_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_buffer_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_lnum_arg(args: *const typval_T, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tv_check_for_string_or_list_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_string_or_func_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_list_or_blob_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string_buf(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn emsg_funcname(errmsg: *const ::core::ffi::c_char, name: *const ::core::ffi::c_char);
-    fn get_func_arity(
-        name: *const ::core::ffi::c_char,
-        required: *mut ::core::ffi::c_int,
-        optional: *mut ::core::ffi::c_int,
-        varargs: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn find_func(name: *const ::core::ffi::c_char) -> *mut ufunc_T;
-    fn save_funccal(entry: *mut funccal_entry_T);
-    fn restore_funccal();
-    fn set_current_funccal(fc: *mut funccall_T);
-    fn func_call(
-        name: *mut ::core::ffi::c_char,
-        args: *mut typval_T,
-        partial: *mut partial_T,
-        selfdict: *mut dict_T,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn printable_func_name(fp: *mut ufunc_T) -> *mut ::core::ffi::c_char;
-    fn trans_function_name(
-        pp: *mut *mut ::core::ffi::c_char,
-        skip: bool,
-        flags: ::core::ffi::c_int,
-        fdp: *mut funcdict_T,
-        partial: *mut *mut partial_T,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_scriptlocal_funcname(funcname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn save_function_name(
-        name: *mut *mut ::core::ffi::c_char,
-        skip: bool,
-        flags: ::core::ffi::c_int,
-        fudi: *mut funcdict_T,
-    ) -> *mut ::core::ffi::c_char;
-    fn translated_function_exists(name: *const ::core::ffi::c_char) -> bool;
-    fn function_exists(name: *const ::core::ffi::c_char, no_deref: bool) -> bool;
-    fn get_user_func_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn func_unref(name: *mut ::core::ffi::c_char);
-    fn func_ref(name: *mut ::core::ffi::c_char);
-    fn func_ptr_ref(fp: *mut ufunc_T);
-    fn prepare_vimvar(idx: ::core::ffi::c_int, save_tv: *mut typval_T);
-    fn restore_vimvar(idx: ::core::ffi::c_int, save_tv: *mut typval_T);
-    fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T;
-    fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn cat_prefix_varname(
-        prefix: ::core::ffi::c_int,
-        name: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_user_var_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_type(idx: VimVarIndex, type_0: VarType);
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn find_var(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        htp: *mut *mut hashtab_T,
-        no_autoload: ::core::ffi::c_int,
-    ) -> *mut dictitem_T;
-    fn var_exists(var: *const ::core::ffi::c_char) -> bool;
-    fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_gettabwinvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getbufvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_settabvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_settabwinvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setwinvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setbufvar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn os_hrtime() -> uint64_t;
-    fn os_localtime_r(clock: *const time_t, result: *mut tm) -> *mut tm;
-    fn os_strptime(
-        str: *const ::core::ffi::c_char,
-        format: *const ::core::ffi::c_char,
-        tm: *mut tm,
-    ) -> *mut ::core::ffi::c_char;
-    fn win_id2wp_tp(id: ::core::ffi::c_int, tpp: *mut *mut tabpage_T) -> *mut win_T;
-    fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
-    fn find_tabwin(wvp: *mut typval_T, tvp: *mut typval_T) -> *mut win_T;
-    fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getwinpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getwinposx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getwinposy(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_findbuf(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_getid(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_gotoid(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_id2win(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_move_separator(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_move_statusline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_splitmove(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdwintype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winbufnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_wincol(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winheight(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winrestcmd(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winrestview(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winsaveview(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_winwidth(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn multiqueue_new(on_put: PutCallback, data: *mut ::core::ffi::c_void) -> *mut MultiQueue;
-    fn multiqueue_free(self_0: *mut MultiQueue);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn multiqueue_replace_parent(self_0: *mut MultiQueue, new_parent: *mut MultiQueue);
-    fn proc_wait(
-        proc: *mut Proc,
-        ms: ::core::ffi::c_int,
-        events: *mut MultiQueue,
-    ) -> ::core::ffi::c_int;
-    fn proc_stop(proc: *mut Proc);
-    fn time_watcher_init(
-        loop_0: *mut Loop,
-        watcher: *mut TimeWatcher,
-        data: *mut ::core::ffi::c_void,
-    );
-    fn time_watcher_start(
-        watcher: *mut TimeWatcher,
-        cb: time_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    );
-    fn time_watcher_stop(watcher: *mut TimeWatcher);
-    fn time_watcher_close(watcher: *mut TimeWatcher, cb: time_cb);
-    fn check_secure() -> bool;
-    fn aborting() -> bool;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn cmd_exists(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn expand_filename(
-        eap: *mut exarg_T,
-        cmdlinep: *mut *mut ::core::ffi::c_char,
-        errormsgp: *mut *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn eval_vars(
-        src: *mut ::core::ffi::c_char,
-        srcstart: *const ::core::ffi::c_char,
-        usedlen: *mut size_t,
-        lnump: *mut linenr_T,
-        errormsg: *mut *const ::core::ffi::c_char,
-        escaped: *mut ::core::ffi::c_int,
-        empty_is_error: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn text_locked() -> bool;
-    fn text_locked_msg();
-    fn vim_strsave_fnameescape(
-        fname: *const ::core::ffi::c_char,
-        what: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn f_getcmdcomplpat(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdcompltype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdprompt(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdscreenpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcmdtype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn get_user_input(
-        argvars: *const typval_T,
-        rettv: *mut typval_T,
-        inputdialog: bool,
-        secret: bool,
-    );
-    fn f_wildtrigger(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    fn stuff_empty() -> bool;
-    fn save_typeahead(tp: *mut tasave_T);
-    fn restore_typeahead(tp: *mut tasave_T);
-    fn using_script() -> ::core::ffi::c_int;
-    fn vgetc() -> ::core::ffi::c_int;
-    fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcharmod(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static cmdline_star: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static need_clr_eos: GlobalCell<bool>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static called_emsg: GlobalCell<::core::ffi::c_int>;
-    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static want_garbage_collect: GlobalCell<bool>;
-    static garbage_collect_at_exit: GlobalCell<bool>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static provider_caller_scope: GlobalCell<caller_scope>;
-    static provider_call_nesting: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static lastbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static starting: GlobalCell<::core::ffi::c_int>;
-    static stdin_isatty: GlobalCell<bool>;
-    static stdout_isatty: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static reg_recording: GlobalCell<::core::ffi::c_int>;
-    static reg_executing: GlobalCell<::core::ffi::c_int>;
-    static reg_recorded: GlobalCell<::core::ffi::c_int>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static emsg_noredir: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static typebuf: GlobalCell<typebuf_T>;
-    static got_int: GlobalCell<bool>;
-    static redir_off: GlobalCell<bool>;
-    static capture_ga: GlobalCell<*mut garray_T>;
-    static wild_menu_showing: GlobalCell<::core::ffi::c_int>;
-    static virtual_op: GlobalCell<TriState>;
-    static vim_ignored: GlobalCell<::core::ffi::c_int>;
-    static windowsVersion: GlobalCell<[::core::ffi::c_char; 20]>;
-    static skip_update_topline: GlobalCell<bool>;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_get_first_codepoint(sc: schar_T) -> ::core::ffi::c_int;
-    fn grid_getchar(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        attrp: *mut ::core::ffi::c_int,
-    ) -> schar_T;
-    fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    fn highlight_has_attr(
-        id: ::core::ffi::c_int,
-        flag: ::core::ffi::c_int,
-        modec: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn highlight_color(
-        id: ::core::ffi::c_int,
-        what: *const ::core::ffi::c_char,
-        modec: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn highlight_exists(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn syn_get_final_id(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn get_highlight_name_ext(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-        skip_cleared: bool,
-    ) -> *const ::core::ffi::c_char;
-    fn get_sw_value(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn get_sw_value_col(buf: *mut buf_T, col: colnr_T, left: bool) -> ::core::ffi::c_int;
-    fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_lispindent(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_cindent(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn ins_compl_active() -> bool;
-    fn f_complete(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_complete_check(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_complete_info(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_preinserted(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn prompt_for_input(
-        prompt: *mut ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        one_key: bool,
-        mouse_used: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn vim_strsave_escape_ks(p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut typval_T);
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_is_table_from_lua(arg: *const typval_T) -> bool;
-    fn nlua_register_table_as_callable(arg: *const typval_T) -> *mut ::core::ffi::c_char;
-    fn nlua_func_exists(lua_funcname: *const ::core::ffi::c_char) -> bool;
-    static main_loop: SharedCell<Loop>;
-    fn setmark_pos(
-        c: ::core::ffi::c_int,
-        pos: *mut pos_T,
-        fnum: ::core::ffi::c_int,
-        view_pt: *mut fmarkv_T,
-    ) -> ::core::ffi::c_int;
-    fn setpcmark();
-    fn cleanup_jumplist(wp: *mut win_T, loadfiles: bool);
-    fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T);
-    fn get_global_marks(l: *mut list_T);
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_adjust_cursor();
-    fn mb_prevptr(
-        line: *mut ::core::ffi::c_char,
-        p: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn enc_locale() -> *mut ::core::ffi::c_char;
-    fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn convert_setup(
-        vcp: *mut vimconv_T,
-        from: *mut ::core::ffi::c_char,
-        to: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn string_convert(
-        vcp: *const vimconv_T,
-        ptr: *mut ::core::ffi::c_char,
-        lenp: *mut size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn f_setcellwidths(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcellwidths(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_charclass(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn recover_names(
-        fname: *mut ::core::ffi::c_char,
-        do_list: bool,
-        ret_list: *mut list_T,
-        nr: ::core::ffi::c_int,
-        fname_out: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn swapfile_dict(fname: *const ::core::ffi::c_char, d: *mut dict_T);
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_find_line_or_offset(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        offp: *mut ::core::ffi::c_int,
-        no_ff: bool,
-    ) -> ::core::ffi::c_int;
-    fn incl(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn decl(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn menu_get(
-        path_name: *mut ::core::ffi::c_char,
-        modes: ::core::ffi::c_int,
-        list: *mut list_T,
-    ) -> bool;
-    fn get_menu_cmd_modes(
-        cmd: *const ::core::ffi::c_char,
-        forceit: bool,
-        noremap: *mut ::core::ffi::c_int,
-        unmenu: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn f_menu_info(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn update_curswant();
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
-    fn rpc_send_call(
-        id: uint64_t,
-        method_name: *const ::core::ffi::c_char,
-        args: Array,
-        result_mem: *mut ArenaMem,
-        err: *mut Error,
-    ) -> Object;
     fn get_client_info(
         chan: *mut Channel,
         key: *const ::core::ffi::c_char,
     ) -> *const ::core::ffi::c_char;
-    fn server_address_new(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn server_start(addr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn server_stop(endpoint: *const ::core::ffi::c_char, keep_vservername: bool) -> bool;
-    fn server_address_list(size: *mut size_t) -> *mut *mut ::core::ffi::c_char;
-    fn packer_string_buffer() -> PackerBuffer;
-    fn packer_take_string(buffer: *mut PackerBuffer) -> String_0;
-    fn op_pending() -> bool;
-    fn find_decl(
-        ptr: *mut ::core::ffi::c_char,
-        len: size_t,
-        locally: bool,
-        thisblock: bool,
-        flags_arg: ::core::ffi::c_int,
-    ) -> bool;
-    fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool;
-    fn reset_lbr() -> bool;
-    fn restore_lbr(lbr_saved: bool);
-    fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T, is_del: bool);
-    fn charwise_block_prep(
-        start: pos_T,
-        end: pos_T,
-        bdp: *mut block_def,
-        lnum: linenr_T,
-        inclusive: bool,
-    );
-    fn cursor_pos_info(dict: *mut dict_T);
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn free_string_option(p: *mut ::core::ffi::c_char);
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_setperm(name: *const ::core::ffi::c_char, perm: ::core::ffi::c_int)
-        -> ::core::ffi::c_int;
-    fn os_libcall(
-        libname: *const ::core::ffi::c_char,
-        funcname: *const ::core::ffi::c_char,
-        argv: *const ::core::ffi::c_char,
-        argi: ::core::ffi::c_int,
-        str_out: *mut *mut ::core::ffi::c_char,
-        int_out: *mut ::core::ffi::c_int,
-    ) -> bool;
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn os_get_fullenv_size() -> size_t;
-    fn os_free_fullenv(env: *mut *mut ::core::ffi::c_char);
-    fn os_copy_fullenv(env: *mut *mut ::core::ffi::c_char, env_size: size_t);
-    fn os_get_pid() -> int64_t;
-    fn os_get_hostname(hostname: *mut ::core::ffi::c_char, size: size_t);
-    fn expand_env_save(src: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_env_iter(
-        delim: ::core::ffi::c_char,
-        val: *const ::core::ffi::c_char,
-        iter: *const ::core::ffi::c_void,
-        dir: *mut *const ::core::ffi::c_char,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_void;
-    fn vim_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn home_replace(
-        buf: *const buf_T,
-        src: *const ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: size_t,
-        one: bool,
-    ) -> size_t;
-    fn vim_unsetenv_ext(var: *const ::core::ffi::c_char);
-    fn vim_setenv_ext(name: *const ::core::ffi::c_char, val: *const ::core::ffi::c_char);
-    fn get_appname(namelike: bool) -> *const ::core::ffi::c_char;
-    fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn shell_free_argv(argv: *mut *mut ::core::ffi::c_char);
-    fn concat_fnames_realloc(
-        fname1: *mut ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_FullName(
-        fname: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn win_chartabsize(
-        wp: *mut win_T,
-        p: *mut ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn profile_start() -> proftime_T;
-    fn profile_end(tm: proftime_T) -> proftime_T;
-    fn profile_msg(tm: proftime_T) -> *const ::core::ffi::c_char;
-    fn profile_setlimit(msec: int64_t) -> proftime_T;
-    fn profile_sub(tm1: proftime_T, tm2: proftime_T) -> proftime_T;
-    fn profile_signed(tm: proftime_T) -> int64_t;
-    fn pum_visible() -> bool;
-    fn pum_set_event_info(dict: *mut dict_T);
-    fn get_unname_register() -> ::core::ffi::c_int;
-    fn op_reg_set_previous(name: ::core::ffi::c_char) -> bool;
-    fn get_yank_register(regname: ::core::ffi::c_int, mode: ::core::ffi::c_int) -> *mut yankreg_T;
-    fn format_reg_type(
-        reg_type: MotionType,
-        reg_width: colnr_T,
-        buf: *mut ::core::ffi::c_char,
-        buf_len: size_t,
-    );
-    fn get_reg_type(regname: ::core::ffi::c_int, reg_width: *mut colnr_T) -> MotionType;
-    fn get_reg_contents(
-        regname: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_void;
-    fn write_reg_contents_lst(
-        name: ::core::ffi::c_int,
-        strings: *mut *mut ::core::ffi::c_char,
-        must_append: bool,
-        yank_type: MotionType,
-        block_len: colnr_T,
-    );
-    fn write_reg_contents_ex(
-        name: ::core::ffi::c_int,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-        must_append: bool,
-        yank_type: MotionType,
-        block_len: colnr_T,
-    );
-    fn reg_submatch(no: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn reg_submatch_list(no: ::core::ffi::c_int) -> *mut list_T;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -1224,340 +371,9 @@ extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
         -> bool;
-    static exestack: GlobalCell<garray_T>;
-    fn last_csearch() -> *const ::core::ffi::c_char;
-    fn last_csearch_forward() -> ::core::ffi::c_int;
-    fn last_csearch_until() -> ::core::ffi::c_int;
-    fn set_last_csearch(
-        c: ::core::ffi::c_int,
-        s: *mut ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    );
-    fn set_csearch_direction(cdir: Direction);
-    fn set_csearch_until(t_cmd: ::core::ffi::c_int);
-    fn searchit(
-        win: *mut win_T,
-        buf: *mut buf_T,
-        pos: *mut pos_T,
-        end_pos: *mut pos_T,
-        dir: Direction,
-        pat: *mut ::core::ffi::c_char,
-        patlen: size_t,
-        count: ::core::ffi::c_int,
-        options: ::core::ffi::c_int,
-        pat_use: ::core::ffi::c_int,
-        extra_arg: *mut searchit_arg_T,
-    ) -> ::core::ffi::c_int;
-    fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn sha256_bytes(
-        buf: *const uint8_t,
-        buf_len: size_t,
-        salt: *const uint8_t,
-        salt_len: size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn f_getstacktrace(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn spell_suggest_list(
-        gap: *mut garray_T,
-        word: *mut ::core::ffi::c_char,
-        maxcount: ::core::ffi::c_int,
-        need_cap: bool,
-        interactive: bool,
-    );
-    fn spell_check(
-        wp: *mut win_T,
-        ptr: *mut ::core::ffi::c_char,
-        attrp: *mut hlf_T,
-        capcol: *mut ::core::ffi::c_int,
-        docount: bool,
-    ) -> size_t;
-    fn spell_move_to(
-        wp: *mut win_T,
-        dir: ::core::ffi::c_int,
-        behaviour: smt_T,
-        curline: bool,
-        attrp: *mut hlf_T,
-    ) -> size_t;
-    fn parse_spelllang(wp: *mut win_T) -> *mut ::core::ffi::c_char;
-    fn eval_soundfold(word: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn syntax_present(win: *mut win_T) -> bool;
-    fn syn_get_id(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        trans: ::core::ffi::c_int,
-        spellp: *mut bool,
-        keep_state: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_syntax_info(seqnrp: *mut ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn syn_get_sub_char() -> ::core::ffi::c_int;
-    fn syn_get_stack_item(i: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn virtual_active(wp: *mut win_T) -> bool;
-    fn get_mode(buf: *mut ::core::ffi::c_char);
-    fn get_was_safe_state() -> bool;
-    fn get_tagfname(
-        tnp: *mut tagname_T,
-        first: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tagname_free(tnp: *mut tagname_T);
-    fn get_tags(
-        list: *mut list_T,
-        pat: *mut ::core::ffi::c_char,
-        buf_fname: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn get_tagstack(wp: *mut win_T, retdict: *mut dict_T);
-    fn set_tagstack(
-        wp: *mut win_T,
-        d: *const dict_T,
-        action: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T);
     fn terminal_buf(term: *const Terminal) -> Buffer;
     fn terminal_running(term: *const Terminal) -> bool;
-    fn ui_rgb_attached() -> bool;
-    fn ui_gui_attached() -> bool;
-    fn ui_busy_start();
-    fn ui_busy_stop();
-    fn ui_current_row() -> ::core::ffi::c_int;
-    fn ui_current_col() -> ::core::ffi::c_int;
-    fn ui_flush();
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_comp_get_grid_at_coord(
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
-    fn has_nvim_version(version_str: *const ::core::ffi::c_char) -> bool;
-    fn has_vim_patch(n: ::core::ffi::c_int, major_minor_version: ::core::ffi::c_int) -> bool;
-    fn find_tabpage(n: ::core::ffi::c_int) -> *mut tabpage_T;
-    fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_argidx(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_argv(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_histget(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_histnr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_diff_hlID(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_digraph_set(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_digraph_setlist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
-    fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_last_buffer_nr(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn eval_expr_valid_arg(tv: *const typval_T) -> bool;
-    fn eval_expr_typval(
-        expr: *const typval_T,
-        want_func: bool,
-        argv: *mut typval_T,
-        argc: ::core::ffi::c_int,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn eval_expr_to_bool(expr: *const typval_T, error: *mut bool) -> bool;
-    fn get_lval(
-        name: *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        lp: *mut lval_T,
-        unlet: bool,
-        skip: bool,
-        flags: ::core::ffi::c_int,
-        fne_flags: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn clear_lval(lp: *mut lval_T);
-    fn eval1(
-        arg: *mut *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
-    fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn eval_option(
-        arg: *mut *const ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        evaluate: bool,
-    ) -> ::core::ffi::c_int;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn get_copyID() -> ::core::ffi::c_int;
-    fn string2float(text: *const ::core::ffi::c_char, ret_value: *mut float_T) -> size_t;
-    fn tv_to_argv(
-        cmd_tv: *mut typval_T,
-        cmd: *mut *const ::core::ffi::c_char,
-        executable: *mut bool,
-    ) -> *mut *mut ::core::ffi::c_char;
-    fn f_system(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_systemlist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn callback_from_typval(callback: *mut Callback, arg: *const typval_T) -> bool;
-    fn get_callback_depth() -> ::core::ffi::c_int;
-    fn find_timer_by_nr(xx: varnumber_T) -> *mut timer_T;
-    fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T);
-    fn add_timer_info_all(rettv: *mut typval_T);
-    fn timer_due_cb(tw: *mut TimeWatcher, data: *mut ::core::ffi::c_void);
-    fn timer_start(
-        timeout: int64_t,
-        repeat_count: ::core::ffi::c_int,
-        callback: *const Callback,
-    ) -> uint64_t;
-    fn timer_stop(timer: *mut timer_T);
-    fn timer_stop_all();
-    fn save_tv_as_string(
-        tv: *mut typval_T,
-        len: *mut ptrdiff_t,
-        endnl: bool,
-        crlf: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn buf_byteidx_to_charidx(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        byteidx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn buf_charidx_to_byteidx(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        charidx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn var2fpos(
-        tv: *const typval_T,
-        dollar_lnum: bool,
-        ret_fnum: *mut ::core::ffi::c_int,
-        charcol: bool,
-        wp: *mut win_T,
-    ) -> *mut pos_T;
-    fn list2fpos(
-        arg: *mut typval_T,
-        posp: *mut pos_T,
-        fnump: *mut ::core::ffi::c_int,
-        curswantp: *mut colnr_T,
-        charcol: bool,
-    ) -> ::core::ffi::c_int;
-    fn var_item_copy(
-        conv: *const vimconv_T,
-        from: *mut typval_T,
-        to: *mut typval_T,
-        deep: bool,
-        copyID: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn do_string_sub(
-        str: *mut ::core::ffi::c_char,
-        len: size_t,
-        pat: *mut ::core::ffi::c_char,
-        sub: *mut ::core::ffi::c_char,
-        expr: *mut typval_T,
-        flags: *const ::core::ffi::c_char,
-        ret_len: *mut size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn common_job_callbacks(
-        vopts: *mut dict_T,
-        on_stdout: *mut CallbackReader,
-        on_stderr: *mut CallbackReader,
-        on_exit: *mut Callback,
-    ) -> bool;
-    fn find_job(id: uint64_t, show_error: bool) -> *mut Channel;
-    fn script_host_eval(
-        name: *mut ::core::ffi::c_char,
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-    );
-    fn eval_has_provider(feat: *const ::core::ffi::c_char, throw_if_fast: bool) -> bool;
-    fn prompt_get_input(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
-    fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_executable(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_exepath(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_filewritable(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_finddir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_findfile(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_fnamemodify(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getcwd(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getfperm(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getfsize(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getftime(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getftype(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_isdirectory(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_readdir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_readblob(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_readfile(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_rename(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_resolve(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_tempname(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_browse(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_browsedir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_filter(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_mapnew(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foreach(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_count(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_extendnew(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_reverse(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foldclosed(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foldclosedend(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foldlevel(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foldtext(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_foldtextresult(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matchfuzzy(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matchfuzzypos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_mapset(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_clearmatches(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getmatches(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setmatches(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matchaddpos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matcharg(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_matchdelete(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getmousepos(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_jump(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_undefine(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_unplace(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_sign_unplacelist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_setqflist(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_beeps(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_nobeep(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_equal(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_equalfile(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_notequal(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_exception(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_fails(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_false(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_inrange(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_match(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_notmatch(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_report(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_assert_true(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_test_garbagecollect_now(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_test_write_list_log(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_undotree(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn loop_on_put(queue: *mut MultiQueue, data: *mut ::core::ffi::c_void);
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

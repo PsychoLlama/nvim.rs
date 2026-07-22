@@ -1,4 +1,21 @@
-use crate::src::nvim::global_cell::SharedCell;
+use crate::src::nvim::charset::try_getdigits;
+use crate::src::nvim::event::libuv::{
+    uv_accept, uv_close, uv_freeaddrinfo, uv_listen, uv_pipe_bind, uv_pipe_connect, uv_pipe_init,
+    uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init, uv_tcp_nodelay,
+};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
+};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::stream::{stream_init, stream_may_close};
+
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::main_loop;
+use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
+use crate::src::nvim::os::fs::{os_path_exists, os_remove};
+use crate::src::nvim::os::libc::{__assert_fail, gettext, ntohs, snprintf, strlen, strrchr};
+use crate::src::nvim::os::time::os_hrtime;
+use crate::src::nvim::path::path_tail;
 pub use crate::src::nvim::types::{
     Event, Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, SocketWatcher, Stream,
     VarLockStatus, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -24,62 +41,6 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_10, uv_timer_s_u as C2Rust_Unnamed_11, uv_timer_t, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strrchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_close(handle: *mut uv_handle_t, close_cb_0: uv_close_cb);
-    fn uv_listen(
-        stream: *mut uv_stream_t,
-        backlog: ::core::ffi::c_int,
-        cb: uv_connection_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_accept(server: *mut uv_stream_t, client: *mut uv_stream_t) -> ::core::ffi::c_int;
-    fn uv_tcp_init(_: *mut uv_loop_t, handle: *mut uv_tcp_t) -> ::core::ffi::c_int;
-    fn uv_tcp_nodelay(handle: *mut uv_tcp_t, enable: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn uv_tcp_bind(
-        handle: *mut uv_tcp_t,
-        addr: *const sockaddr,
-        flags: ::core::ffi::c_uint,
-    ) -> ::core::ffi::c_int;
-    fn uv_tcp_getsockname(
-        handle: *const uv_tcp_t,
-        name: *mut sockaddr,
-        namelen: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_tcp_connect(
-        req: *mut uv_connect_t,
-        handle: *mut uv_tcp_t,
-        addr: *const sockaddr,
-        cb: uv_connect_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_init(
-        _: *mut uv_loop_t,
-        handle: *mut uv_pipe_t,
-        ipc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_bind(handle: *mut uv_pipe_t, name: *const ::core::ffi::c_char)
-        -> ::core::ffi::c_int;
-    fn uv_pipe_connect(
-        req: *mut uv_connect_t,
-        handle: *mut uv_pipe_t,
-        name: *const ::core::ffi::c_char,
-        cb: uv_connect_cb,
-    );
     fn uv_getaddrinfo(
         loop_0: *mut uv_loop_t,
         req: *mut uv_getaddrinfo_t,
@@ -88,42 +49,6 @@ extern "C" {
         service: *const ::core::ffi::c_char,
         hints: *const addrinfo,
     ) -> ::core::ffi::c_int;
-    fn uv_freeaddrinfo(ai: *mut addrinfo);
-    fn ntohs(__netshort: uint16_t) -> uint16_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn os_hrtime() -> uint64_t;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn stream_init(
-        loop_0: *mut Loop,
-        stream: *mut Stream,
-        fd: ::core::ffi::c_int,
-        uvstream: *mut uv_stream_t,
-    );
-    fn stream_may_close(stream: *mut Stream);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn try_getdigits(pp: *mut *mut ::core::ffi::c_char, nr: *mut intmax_t) -> bool;
-    static main_loop: SharedCell<Loop>;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 pub type __socket_type = ::core::ffi::c_uint;
 pub const SOCK_NONBLOCK: __socket_type = 2048;

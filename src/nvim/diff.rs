@@ -1,4 +1,60 @@
+use crate::src::nvim::autocmd::{
+    apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
+};
+use crate::src::nvim::buffer::{
+    bt_prompt, buf_is_empty, buf_valid, buflist_findnr, buflist_findpat, bufref_valid, set_bufref,
+};
+use crate::src::nvim::bufwrite::buf_write;
+use crate::src::nvim::change::{change_warning, changed_lines};
+use crate::src::nvim::charset::{getdigits_int, getdigits_int32, skipwhite};
+use crate::src::nvim::cursor::check_cursor;
+use crate::src::nvim::decoration::decor_conceal_line;
+use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::eval::typval::{tv_get_lnum, tv_get_number};
+use crate::src::nvim::eval::vars::{eval_diff, eval_patch};
+use crate::src::nvim::ex_cmds::{append_redir, ex_file};
+use crate::src::nvim::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
+use crate::src::nvim::extmark::extmark_adjust;
+use crate::src::nvim::fileio::{
+    buf_check_timestamp, shorten_fnames, vim_fgets, vim_gettempdir, vim_tempname,
+};
+use crate::src::nvim::fold::{
+    foldUpdate, foldUpdateAll, foldmethodIsDiff, foldmethodIsManual, hasFolding, newFoldLevel,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::linematch::linematch_nbuffers;
+use crate::src::nvim::main::{
+    cmdmod, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
+    e_cannot_have_more_than_nr_diff_anchors, e_diff_anchors_with_hidden_windows,
+    e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir, e_problem_creating_internal_diff,
+    first_tabpage, firstwin, need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr, KeyTyped,
+};
+use crate::src::nvim::mark::{mark_adjust, setpcmark};
+use crate::src::nvim::mbyte::{
+    mb_get_class_tab, mb_stricmp, utf_char2bytes, utf_char2len, utf_fold, utf_head_off,
+    utf_ptr2char, utfc_ptr2len,
+};
+use crate::src::nvim::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{memchrsub, xcalloc, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::normal::check_scrollbind;
+use crate::src::nvim::option::{set_option_direct_for, set_option_value_give_err};
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::env::{os_env_exists, os_unsetenv};
+use crate::src::nvim::os::fs::{
+    os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memcpy, memmove, memset, qsort,
+    snprintf, strcat, strcmp, strcpy, strlen, strncmp, tolower,
+};
+use crate::src::nvim::os::shell::call_shell;
+use crate::src::nvim::path::FullName_save;
+use crate::src::nvim::r#move::{
+    changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, check_topfill,
+    invalidate_botline_win, validate_cursor,
+};
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -38,323 +94,18 @@ pub use crate::src::nvim::types::{
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xdemitcb_t,
     xdemitconf_t, xdl_emit_hunk_consume_func_t, xfmark_T, xpparam_t, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::ui::vim_beep;
+use crate::src::nvim::undo::{u_save, u_sync};
+use crate::src::nvim::window::{
+    frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
+};
+use crate::src::xdiff::xdiffi::xdl_diff;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fwrite(
-        __ptr: *const ::core::ffi::c_void,
-        __size: size_t,
-        __n: size_t,
-        __s: *mut FILE,
-    ) -> ::core::ffi::c_ulong;
-    fn atol(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_long;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn augroup_exists(name: *const ::core::ffi::c_char) -> bool;
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buf_valid(buf: *mut buf_T) -> bool;
-    fn buflist_findpat(
-        pattern: *const ::core::ffi::c_char,
-        pattern_end: *const ::core::ffi::c_char,
-        unlisted: bool,
-        diffmode: bool,
-        curtab_only: bool,
-    ) -> ::core::ffi::c_int;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn bt_prompt(buf: *mut buf_T) -> bool;
-    fn buf_is_empty(buf: *mut buf_T) -> bool;
-    fn buf_write(
-        buf: *mut buf_T,
-        fname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        start: linenr_T,
-        end: linenr_T,
-        eap: *mut exarg_T,
-        append: bool,
-        forceit: bool,
-        reset_changed: bool,
-        filtering: bool,
-    ) -> ::core::ffi::c_int;
-    fn change_warning(buf: *mut buf_T, col: ::core::ffi::c_int);
-    fn changed_lines(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        lnume: linenr_T,
-        xtra: linenr_T,
-        do_buf_event: bool,
-    );
-    static p_dia: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_dip: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_dex: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_pex: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sbo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_srr: GlobalCell<*mut ::core::ffi::c_char>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strsave_shellescape(
-        string: *const ::core::ffi::c_char,
-        do_special: bool,
-        do_newline: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn getdigits_int32(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: int32_t) -> int32_t;
-    fn check_cursor(wp: *mut win_T);
-    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor_0: bool) -> bool;
-    static diff_context: GlobalCell<::core::ffi::c_int>;
-    static diff_foldcolumn: GlobalCell<::core::ffi::c_int>;
-    static diff_need_scrollbind: GlobalCell<bool>;
-    static need_diff_redraw: GlobalCell<bool>;
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    static e_invrange: [::core::ffi::c_char; 0];
-    static e_prev_dir: [::core::ffi::c_char; 0];
-    static e_problem_creating_internal_diff: [::core::ffi::c_char; 0];
-    static e_cannot_have_more_than_nr_diff_anchors: [::core::ffi::c_char; 0];
-    static e_failed_to_find_all_diff_anchors: [::core::ffi::c_char; 0];
-    static e_diff_anchors_with_hidden_windows: [::core::ffi::c_char; 0];
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    fn append_redir(
-        buf: *mut ::core::ffi::c_char,
-        buflen: size_t,
-        opt: *const ::core::ffi::c_char,
-        fname: *const ::core::ffi::c_char,
-    );
-    fn ex_file(eap: *mut exarg_T);
-    fn eval_diff(
-        origfile: *const ::core::ffi::c_char,
-        newfile: *const ::core::ffi::c_char,
-        outfile: *const ::core::ffi::c_char,
-    );
-    fn eval_patch(
-        origfile: *const ::core::ffi::c_char,
-        difffile: *const ::core::ffi::c_char,
-        outfile: *const ::core::ffi::c_char,
-    );
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn get_address(
-        eap: *mut exarg_T,
-        ptr: *mut *mut ::core::ffi::c_char,
-        addr_type: cmd_addr_T,
-        skip: bool,
-        silent: bool,
-        to_other_file: ::core::ffi::c_int,
-        address_count: ::core::ffi::c_int,
-        errormsg: *mut *const ::core::ffi::c_char,
-    ) -> linenr_T;
-    fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T);
-    fn extmark_adjust(
-        buf: *mut buf_T,
-        line1: linenr_T,
-        line2: linenr_T,
-        amount: linenr_T,
-        amount_after: linenr_T,
-        undo: ExtmarkOp,
-    );
-    fn shorten_fnames(force: ::core::ffi::c_int);
-    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
-    fn buf_check_timestamp(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn vim_gettempdir() -> *mut ::core::ffi::c_char;
-    fn vim_tempname() -> *mut ::core::ffi::c_char;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    fn foldmethodIsManual(wp: *mut win_T) -> bool;
-    fn foldmethodIsDiff(wp: *mut win_T) -> bool;
-    fn newFoldLevel();
-    fn foldUpdate(wp: *mut win_T, top: linenr_T, bot: linenr_T);
-    fn foldUpdateAll(win: *mut win_T);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static KeyTyped: GlobalCell<bool>;
-    fn xdl_diff(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xecfg: *const xdemitconf_t,
-        ecb: *mut xdemitcb_t,
-    ) -> ::core::ffi::c_int;
-    fn linematch_nbuffers(
-        diff_blk: *mut *const mmfile_t,
-        diff_len: *const ::core::ffi::c_int,
-        ndiffs: size_t,
-        decisions: *mut *mut ::core::ffi::c_int,
-        iwhite: bool,
-    ) -> size_t;
-    fn setpcmark();
-    fn mark_adjust(
-        line1: linenr_T,
-        line2: linenr_T,
-        amount: linenr_T,
-        amount_after: linenr_T,
-        op: ExtmarkOp,
-    );
-    fn mb_get_class_tab(
-        p: *const ::core::ffi::c_char,
-        chartab: *const uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_fold(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_stricmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_append(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        len: colnr_T,
-        newfile: bool,
-    ) -> ::core::ffi::c_int;
-    fn ml_delete(lnum: linenr_T) -> ::core::ffi::c_int;
-    fn changed_window_setting(wp: *mut win_T);
-    fn changed_line_abv_curs();
-    fn changed_line_abv_curs_win(wp: *mut win_T);
-    fn invalidate_botline_win(wp: *mut win_T);
-    fn validate_cursor(wp: *mut win_T);
-    fn check_topfill(wp: *mut win_T, down: bool);
-    fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: ::core::ffi::c_int);
-    fn set_option_direct_for(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-    );
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn free_string_option(p: *mut ::core::ffi::c_char);
-    fn os_chdir(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_size(file_info: *const FileInfo) -> uint64_t;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn os_unsetenv(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn call_shell(
-        cmd: *mut ::core::ffi::c_char,
-        opts: ::core::ffi::c_int,
-        extra_shell_arg: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
-    fn vim_beep(val: ::core::ffi::c_uint);
-    fn u_save(top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
-    fn u_sync(force: bool);
-    fn frames_locked() -> bool;
-    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn win_valid(win: *const win_T) -> bool;
-    fn set_fraction(wp: *mut win_T);
-    fn scroll_to_fraction(wp: *mut win_T, prev_height: ::core::ffi::c_int);
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

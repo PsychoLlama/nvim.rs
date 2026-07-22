@@ -1,4 +1,25 @@
+use crate::src::nvim::cursor::{
+    coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
+};
+use crate::src::nvim::drawscreen::{redraw_curbuf_later, showmode};
+use crate::src::nvim::edit::oneleft;
+use crate::src::nvim::eval::funcs::do_searchpair;
+use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent::inindent;
+use crate::src::nvim::main::{
+    curbuf, curwin, p_cpo, p_para, p_sections, p_sel, p_ws, redraw_cmdline, VIsual, VIsual_active,
+    VIsual_mode, VIsual_select_exclu_adj,
+};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::mbyte::{utf_class, utf_head_off, utfc_ptr2len};
+use crate::src::nvim::memline::{dec, decl, gchar_pos, inc, incl, ml_get, ml_get_len, ml_get_pos};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::normal::unadjust_for_sel;
+use crate::src::nvim::os::libc::snprintf;
+use crate::src::nvim::r#move::adjust_skipcol;
+use crate::src::nvim::search::{findmatch, findmatchlimit, linewhite};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -28,84 +49,6 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn inc_cursor() -> ::core::ffi::c_int;
-    fn dec_cursor() -> ::core::ffi::c_int;
-    fn gchar_cursor() -> ::core::ffi::c_int;
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn showmode() -> ::core::ffi::c_int;
-    fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    fn oneleft() -> ::core::ffi::c_int;
-    fn do_searchpair(
-        spat: *const ::core::ffi::c_char,
-        mpat: *const ::core::ffi::c_char,
-        epat: *const ::core::ffi::c_char,
-        dir: ::core::ffi::c_int,
-        skip: *const typval_T,
-        flags: ::core::ffi::c_int,
-        match_pos: *mut pos_T,
-        lnum_stop: linenr_T,
-        time_limit: int64_t,
-    ) -> ::core::ffi::c_int;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    static redraw_cmdline: GlobalCell<bool>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_select_exclu_adj: GlobalCell<bool>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    fn inindent(extra: ::core::ffi::c_int) -> bool;
-    fn setpcmark();
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_class(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn gchar_pos(pos: *mut pos_T) -> ::core::ffi::c_int;
-    fn inc(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn incl(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn dec(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn decl(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn adjust_skipcol();
-    fn unadjust_for_sel() -> bool;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_para: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sections: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ws: GlobalCell<::core::ffi::c_int>;
-    fn findmatch(oap: *mut oparg_T, initc: ::core::ffi::c_int) -> *mut pos_T;
-    fn findmatchlimit(
-        oap: *mut oparg_T,
-        initc: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        maxtravel: int64_t,
-    ) -> *mut pos_T;
-    fn linewhite(lnum: linenr_T) -> bool;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;

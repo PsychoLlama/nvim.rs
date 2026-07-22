@@ -1,4 +1,32 @@
+use crate::src::nvim::api::extmark::{parse_virt_text, virt_text_to_array};
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_array, api_free_object, api_set_error, api_typename, arena_array,
+    cstr_as_string, cstr_to_string, cstrn_as_string, find_buffer_by_handle, find_window_by_handle,
+    object_to_hl_id, try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::{
+    api_err_conflict, api_err_exp, api_err_invalid, api_err_required,
+};
+use crate::src::nvim::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds};
+use crate::src::nvim::buffer::{bufref_valid, set_bufref};
+use crate::src::nvim::drawscreen::{redraw_later, set_must_redraw};
+use crate::src::nvim::eval::window::{
+    restore_win, restore_win_noblock, switch_win, switch_win_noblock,
+};
+use crate::src::nvim::ex_docmd::expr_map_locked;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{syn_check_group, syn_id2name};
+use crate::src::nvim::main::{
+    autocmd_no_enter, autocmd_no_leave, cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
+    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, float_anchor_str,
+    opt_winborder_values, p_sb, p_spr, p_winborder, textlock,
+};
+use crate::src::nvim::mbyte::{mb_string2cells, mb_string2cells_len};
+use crate::src::nvim::memory::{strequal, xrealloc, xstrdup};
+use crate::src::nvim::option::{copy_option_part, didset_window_options};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
+use crate::src::nvim::r#move::changed_window_setting;
+use crate::src::nvim::strings::striequal;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BorderTextType,
     BufUpdateCallbacks, Buffer, CMD_index, Callback, CallbackType,
@@ -32,174 +60,18 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array;
-    fn parse_virt_text(chunks: Array, err: *mut Error, width: *mut ::core::ffi::c_int) -> VirtText;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn cstrn_as_string(str: *mut ::core::ffi::c_char, maxsize: size_t) -> String_0;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn api_free_object(value: Object);
-    fn api_free_array(value: Array);
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn object_to_hl_id(
-        obj: Object,
-        what: *const ::core::ffi::c_char,
-        err: *mut Error,
-    ) -> ::core::ffi::c_int;
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn api_err_required(err: *mut Error, name: *const ::core::ffi::c_char);
-    fn api_err_conflict(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        name2: *const ::core::ffi::c_char,
-    );
-    fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
-    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static e_textlock: [::core::ffi::c_char; 0];
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn set_must_redraw(type_0: ::core::ffi::c_int);
-    fn expr_map_locked() -> bool;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    static cmdwin_old_curwin: GlobalCell<*mut win_T>;
-    static cmdline_win: GlobalCell<*mut win_T>;
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn mb_string2cells_len(str: *const ::core::ffi::c_char, size: size_t) -> size_t;
-    fn changed_window_setting(wp: *mut win_T);
-    fn didset_window_options(wp: *mut win_T, valid_cursor: bool);
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
-    static p_sb: GlobalCell<::core::ffi::c_int>;
-    static p_spr: GlobalCell<::core::ffi::c_int>;
-    static p_winborder: GlobalCell<*mut ::core::ffi::c_char>;
-    fn striequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_comp_remove_grid(grid: *mut ScreenGrid);
-    static float_anchor_str: [*const ::core::ffi::c_char; 0];
-    fn window_layout_locked_err(cmd: cmdidx_T, err: *mut Error) -> bool;
-    fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error);
-    fn merge_win_config(dst: *mut WinConfig, src: WinConfig);
-    fn clear_float_config(fconfig: *mut WinConfig, free_fields: bool);
-    fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> bool;
-    fn win_split_ins(
-        size: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        new_wp: *mut win_T,
-        dir: ::core::ffi::c_int,
-        to_flatten: *mut frame_T,
-    ) -> *mut win_T;
-    fn win_valid(win: *const win_T) -> bool;
-    fn win_valid_any_tab(win: *mut win_T) -> bool;
-    fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool;
-    fn winframe_remove(
-        win: *mut win_T,
-        dirp: *mut ::core::ffi::c_int,
-        tp: *mut tabpage_T,
-        unflat_altfr: *mut *mut frame_T,
-    ) -> *mut win_T;
-    fn winframe_find_altwin(
-        win: *mut win_T,
-        dirp: *mut ::core::ffi::c_int,
-        tp: *mut tabpage_T,
-        altfr: *mut *mut frame_T,
-    ) -> *mut win_T;
-    fn winframe_restore(wp: *mut win_T, dir: ::core::ffi::c_int, unflat_altfr: *mut frame_T);
-    fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
-    fn win_goto(wp: *mut win_T);
-    fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
-    fn win_append(after: *mut win_T, wp: *mut win_T, tp: *mut tabpage_T);
-    fn win_remove(wp: *mut win_T, tp: *mut tabpage_T);
-    fn win_comp_pos() -> ::core::ffi::c_int;
-    fn win_setheight_win(height: ::core::ffi::c_int, win: *mut win_T);
-    fn win_setwidth_win(width: ::core::ffi::c_int, wp: *mut win_T);
-    fn last_status(morewin: bool);
-    fn win_locked(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T;
-    fn win_new_float(wp: *mut win_T, last: bool, fconfig: WinConfig, err: *mut Error)
-        -> *mut win_T;
-    fn win_set_minimal_style(wp: *mut win_T);
-    fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
-    fn win_float_find_altwin(win: *const win_T, tp: *const tabpage_T) -> *mut win_T;
-    fn switch_win(
-        switchwin: *mut switchwin_T,
-        win: *mut win_T,
-        tp: *mut tabpage_T,
-        no_display: bool,
-    ) -> ::core::ffi::c_int;
-    fn switch_win_noblock(
-        switchwin: *mut switchwin_T,
-        win: *mut win_T,
-        tp: *mut tabpage_T,
-        no_display: bool,
-    ) -> ::core::ffi::c_int;
-    fn restore_win(switchwin: *mut switchwin_T, no_display: bool);
-    fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool);
-}
+use crate::src::nvim::ui::ui_has;
+use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
+use crate::src::nvim::window::{
+    check_split_disallowed_err, clear_float_config, goto_tabpage_win, last_status,
+    lastwin_nofloating, merge_win_config, one_window, win_append, win_comp_pos, win_find_tabpage,
+    win_goto, win_locked, win_remove, win_set_buf, win_setheight_win, win_setwidth_win,
+    win_split_ins, win_valid, win_valid_any_tab, window_layout_locked_err, winframe_find_altwin,
+    winframe_remove, winframe_restore,
+};
+use crate::src::nvim::winfloat::{
+    win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
+};
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

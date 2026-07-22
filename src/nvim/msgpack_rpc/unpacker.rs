@@ -1,4 +1,16 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::mpack::conv::{
+    mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
+};
+use crate::src::mpack::mpack_core::{mpack_read, mpack_rtoken, mpack_tokbuf_init};
+use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::src::nvim::api::private::dispatch::msgpack_rpc_get_handler_for;
+use crate::src::nvim::api::private::helpers::api_set_error;
+
+use crate::src::nvim::grid::schar_from_buf;
+use crate::src::nvim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
+use crate::src::nvim::memory::{arena_mem_free, xrealloc, xstrdup};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy};
+use crate::src::nvim::strings::arena_printf;
 pub use crate::src::nvim::types::{
     consumed_blk, int32_t, int64_t, key_value_pair, mpack_data_t, mpack_node_s, mpack_node_t,
     mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
@@ -10,71 +22,12 @@ pub use crate::src::nvim::types::{
     LuaRef, MessageType, MsgpackRpcRequestHandler, Object, ObjectType, OptKeySet, OptionalKeys,
     StringArray, String_0, UIClientHandler,
 };
+use crate::src::nvim::ui_client::{
+    handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_mem_free(mem: ArenaMem);
-    fn mpack_tokbuf_init(tb: *mut mpack_tokbuf_t);
-    fn mpack_read(
-        tb: *mut mpack_tokbuf_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        tok: *mut mpack_token_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_rtoken(
-        buf: *mut *const ::core::ffi::c_char,
-        buflen: *mut size_t,
-        tok: *mut mpack_token_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_unpack_boolean(t: mpack_token_t) -> bool;
-    fn mpack_unpack_uint(t: mpack_token_t) -> mpack_uintmax_t;
-    fn mpack_unpack_sint(t: mpack_token_t) -> mpack_sintmax_t;
-    fn mpack_unpack_float_fast(t: mpack_token_t) -> ::core::ffi::c_double;
-    fn schar_from_buf(buf: *const ::core::ffi::c_char, len: size_t) -> schar_T;
-    fn msgpack_rpc_get_handler_for(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        error: *mut Error,
-    ) -> MsgpackRpcRequestHandler;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn mpack_parser_init(p: *mut mpack_parser_t, c: mpack_uint32_t);
-    fn mpack_parse(
-        parser: *mut mpack_parser_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        enter_cb: mpack_walk_cb,
-        exit_cb: mpack_walk_cb,
-    ) -> ::core::ffi::c_int;
-    fn arena_printf(arena: *mut Arena, fmt: *const ::core::ffi::c_char, ...) -> String_0;
-    static grid_line_buf_size: GlobalCell<size_t>;
-    static grid_line_buf_char: GlobalCell<*mut schar_T>;
-    static grid_line_buf_attr: GlobalCell<*mut sattr_T>;
-    fn ui_client_get_redraw_handler(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        error: *mut Error,
-    ) -> UIClientHandler;
-    fn handle_ui_client_redraw(
-        channel_id: uint64_t,
-        args: Array,
-        arena: *mut Arena,
-        error: *mut Error,
-    ) -> Object;
-    fn ui_client_event_grid_line(args: Array) -> !;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;

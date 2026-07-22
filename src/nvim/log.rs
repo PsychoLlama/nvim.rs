@@ -1,4 +1,20 @@
+use crate::src::nvim::eval::vars::get_vim_var_str;
+use crate::src::nvim::event::libuv::{
+    uv_mutex_init_recursive, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles, uv_strerror,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{g_min_log_level, g_stats, ui_client_channel_id};
+use crate::src::nvim::memory::{strequal, xfree, xstrlcat, xstrlcpy};
+use crate::src::nvim::message::msg_schedule_semsg;
+use crate::src::nvim::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv};
+use crate::src::nvim::os::fs::{os_exepath, os_isdir, os_mkdir_recurse};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, abort, backtrace, fclose, fflush, fgets, fopen, fprintf,
+    fputc, pclose, popen, snprintf, stderr, stdout, strerror, strftime, vfprintf,
+};
+use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
+use crate::src::nvim::os::time::os_localtime;
+use crate::src::nvim::path::path_tail;
 pub use crate::src::nvim::types::{
     VimVarIndex, XDGVarType, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list,
     __gnuc_va_list, __off64_t, __off_t, __pthread_internal_list, __pthread_list_t,
@@ -12,115 +28,7 @@ pub use crate::src::nvim::types::{
     va_list, FILE, _IO_FILE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    static mut stdout: *mut FILE;
-    static mut stderr: *mut FILE;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fflush(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fopen(
-        __filename: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vfprintf(
-        __s: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        __arg: ::core::ffi::VaList,
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fputc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fgets(
-        __s: *mut ::core::ffi::c_char,
-        __n: ::core::ffi::c_int,
-        __stream: *mut FILE,
-    ) -> *mut ::core::ffi::c_char;
-    fn pclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn popen(
-        __command: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn abort() -> !;
-    fn strerror(__errnum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_print_all_handles(loop_0: *mut uv_loop_t, stream: *mut FILE);
-    fn uv_mutex_init_recursive(handle: *mut uv_mutex_t) -> ::core::ffi::c_int;
-    fn uv_mutex_lock(handle: *mut uv_mutex_t);
-    fn uv_mutex_unlock(handle: *mut uv_mutex_t);
     fn uv_gettimeofday(tv: *mut uv_timeval64_t) -> ::core::ffi::c_int;
-    fn strftime(
-        __s: *mut ::core::ffi::c_char,
-        __maxsize: size_t,
-        __format: *const ::core::ffi::c_char,
-        __tp: *const tm,
-    ) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    static g_stats: GlobalCell<nvim_stats_s>;
-    static g_min_log_level: GlobalCell<::core::ffi::c_int>;
-    fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, ...);
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn os_mkdir_recurse(
-        dir: *const ::core::ffi::c_char,
-        mode: int32_t,
-        failed_dir: *mut *mut ::core::ffi::c_char,
-        created: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn os_getenv_buf(
-        name: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        bufsize: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn os_setenv(
-        name: *const ::core::ffi::c_char,
-        value: *const ::core::ffi::c_char,
-        overwrite: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_get_pid() -> int64_t;
-    fn expand_env(
-        src: *mut ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: ::core::ffi::c_int,
-    ) -> size_t;
-    fn os_localtime(result: *mut tm) -> *mut tm;
-    fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn stdpaths_user_state_subpath(
-        fname: *const ::core::ffi::c_char,
-        trailing_pathseps: size_t,
-        escape_commas: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    fn backtrace(
-        __array: *mut *mut ::core::ffi::c_void,
-        __size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

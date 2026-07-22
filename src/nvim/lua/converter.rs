@@ -1,4 +1,30 @@
+use crate::src::nvim::api::private::helpers::{
+    api_free_array, api_free_dict, api_free_object, api_set_error, api_typename, arena_array,
+    arena_dict, arena_string,
+};
+use crate::src::nvim::eval::decode::{decode_create_map_special_dict, decode_string};
+use crate::src::nvim::eval::encode::encode_vim_list_to_buf;
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc_len,
+    tv_list_alloc, tv_list_append_list, tv_list_append_owned_tv,
+};
+use crate::src::nvim::eval::userfunc::{find_func, register_luafunc};
+use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
+use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref, nlua_ref_global};
+use crate::src::nvim::lua::ffi::{
+    lua_checkstack, lua_createtable, lua_getmetatable, lua_gettop, lua_next, lua_pushboolean,
+    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue,
+    lua_rawequal, lua_rawgeti, lua_rawset, lua_rawseti, lua_setmetatable, lua_settop,
+    lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
+};
+use crate::src::nvim::main::nlua_global_refs;
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::message::{emsg, internal_error, semsg};
+use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset, strlen};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, handle_T, hash_T, hashitem_T,
@@ -15,116 +41,11 @@ pub use crate::src::nvim::types::{
     SpecialVarValue, String_0, Tabpage, VarLockStatus, VarType, Window, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_checkstack(L: *mut lua_State, sz: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_rawequal(
-        L: *mut lua_State,
-        idx1: ::core::ffi::c_int,
-        idx2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_tonumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Number;
-    fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushnil(L: *mut lua_State);
-    fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_pushboolean(L: *mut lua_State, b: ::core::ffi::c_int);
-    fn lua_rawgeti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_getmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_rawset(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_memdupz(
         arena: *mut Arena,
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_free_object(value: Object);
-    fn api_free_array(value: Array);
-    fn api_free_dict(value: Dict);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn decode_create_map_special_dict(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn decode_string(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        force_blob: bool,
-        s_allocated: bool,
-    ) -> typval_T;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static hash_removed: ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn find_func(name: *const ::core::ffi::c_char) -> *mut ufunc_T;
-    fn register_luafunc(ref_0: LuaRef) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn nlua_ref_global(lstate: *mut lua_State, index: ::core::ffi::c_int) -> LuaRef;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
-    static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t>;
-    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
-    fn encode_vim_list_to_buf(
-        list: *const list_T,
-        ret_len: *mut size_t,
-        ret_buf: *mut *mut ::core::ffi::c_char,
-    ) -> bool;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn get_copyID() -> ::core::ffi::c_int;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

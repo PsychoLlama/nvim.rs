@@ -1,4 +1,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::schar_from_buf;
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_iscomposing, utf_ptr2cells_len};
+use crate::src::nvim::os::libc::{__assert_fail, abs, memmove, memset, snprintf, strncmp};
 pub use crate::src::nvim::types::{
     int32_t, schar_T, size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState,
     ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
@@ -17,106 +20,17 @@ pub use crate::src::nvim::types::{
     VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
     VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
 };
-use ::c2rust_bitfields;
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn abs(__x: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn schar_from_buf(buf: *const ::core::ffi::c_char, len: size_t) -> schar_T;
-    fn utf_ptr2cells_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn utf_iscomposing(
-        c1: ::core::ffi::c_int,
-        c2: ::core::ffi::c_int,
-        state: *mut GraphemeState,
-    ) -> bool;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vterm_scroll_rect(
-        rect: VTermRect,
-        downward: ::core::ffi::c_int,
-        rightward: ::core::ffi::c_int,
-        moverect: Option<
-            unsafe extern "C" fn(
-                VTermRect,
-                VTermRect,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-        >,
-        eraserect: Option<
-            unsafe extern "C" fn(
-                VTermRect,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-        >,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_lookup_encoding(
-        type_0: VTermEncodingType,
-        designation: ::core::ffi::c_char,
-    ) -> *mut VTermEncoding;
-    fn vterm_parser_set_callbacks(
-        vt: *mut VTerm,
-        callbacks: *const VTermParserCallbacks,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_state_newpen(state: *mut VTermState);
-    fn vterm_state_resetpen(state: *mut VTermState);
-    fn vterm_state_savepen(state: *mut VTermState, save: ::core::ffi::c_int);
-    fn vterm_state_setpen(
-        state: *mut VTermState,
-        args: *const ::core::ffi::c_long,
-        argcount: ::core::ffi::c_int,
-    );
-    fn vterm_state_getpen(
-        state: *mut VTermState,
-        args: *mut ::core::ffi::c_long,
-        argcount: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn vterm_allocator_malloc(vt: *mut VTerm, size: size_t) -> *mut ::core::ffi::c_void;
-    fn vterm_allocator_free(vt: *mut VTerm, ptr: *mut ::core::ffi::c_void);
-    fn vterm_push_output_bytes(vt: *mut VTerm, bytes: *const ::core::ffi::c_char, len: size_t);
-    fn vterm_push_output_sprintf_ctrl(
-        vt: *mut VTerm,
-        ctrl: uint8_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    );
-    fn vterm_push_output_sprintf_str(
-        vt: *mut VTerm,
-        ctrl: uint8_t,
-        term: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    );
-}
+use crate::src::nvim::vterm::encoding::vterm_lookup_encoding;
+use crate::src::nvim::vterm::parser::vterm_parser_set_callbacks;
+use crate::src::nvim::vterm::pen::{
+    vterm_state_getpen, vterm_state_newpen, vterm_state_resetpen, vterm_state_savepen,
+    vterm_state_setpen,
+};
+use crate::src::nvim::vterm::vterm::{
+    vterm_allocator_free, vterm_allocator_malloc, vterm_push_output_bytes,
+    vterm_push_output_sprintf_ctrl, vterm_push_output_sprintf_str, vterm_scroll_rect,
+};
+
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;

@@ -1,41 +1,17 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
+use crate::src::nvim::os::env::os_getenv_noalloc;
+use crate::src::nvim::os::libc::{endpwent, getuid, setpwent, snprintf, strcmp, strlen, strncmp};
 pub use crate::src::nvim::types::{
     Direction, LuaRef, __gid_t, __uid_t, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T,
     scid_T, sctx_T, size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T,
 };
 extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn setpwent();
-    fn endpwent();
     fn getpwent() -> *mut passwd;
     fn getpwuid(__uid: __uid_t) -> *mut passwd;
     fn getpwnam(__name: *const ::core::ffi::c_char) -> *mut passwd;
-    fn getuid() -> __uid_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

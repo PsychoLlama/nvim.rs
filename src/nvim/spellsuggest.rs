@@ -1,4 +1,46 @@
+use crate::src::nvim::change::inserted_bytes;
+use crate::src::nvim::charset::{getdigits_int, rl_mirror_ascii, skiptowhite, skipwhite};
+use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
+use crate::src::nvim::eval::typval::tv_list_unref;
+use crate::src::nvim::eval::vars::{eval_spell_expr, get_spellword};
+use crate::src::nvim::fileio::vim_fgets;
+use crate::src::nvim::getchar::{
+    beep_flush, vgetc, AppendCharToRedobuff, AppendToRedobuff, AppendToRedobuffLit, ResetRedobuff,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::input::prompt_for_input;
+use crate::src::nvim::main::{
+    cmdline_row, cmdmsg_rl, curbuf, curwin, e_no_spell, e_notopen, got_int, lines_left, mouse_row,
+    msg_col, msg_row, msg_scroll, p_sps, p_verbose, IObuff, Rows, VIsual, VIsual_active,
+};
+use crate::src::nvim::mbyte::{
+    mb_charlen, mb_cptr2char_adv, mb_isupper, utf8len_tab, utf_char2bytes, utf_char2len, utf_fold,
+    utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+};
+use crate::src::nvim::memline::{ml_get_buf, ml_replace};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{
+    emsg, internal_error, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts,
+    msg_start, semsg, smsg,
+};
+use crate::src::nvim::normal::end_visual_mode;
+use crate::src::nvim::option::copy_option_part;
+use crate::src::nvim::os::fs::os_fopen;
+use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
+use crate::src::nvim::os::libc::{
+    __assert_fail, atoi, fclose, gettext, memcpy, memmove, memset, qsort, strcasecmp, strcat,
+    strcmp, strcpy, strlen, strncmp, strncpy,
+};
+use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
+use crate::src::nvim::spell::{
+    allcap_copy, byte_in_str, can_compound, captype, check_need_cap, make_case_word,
+    match_checkcompoundpattern, match_compoundrule, nofold_len, parse_spelllang, repl_from,
+    repl_to, spell_casefold, spell_check, spell_iswordp, spell_iswordp_nmw, spell_move_to,
+    spell_soundfold, spell_valid_case, spelltab, valid_word_prefix,
+};
+use crate::src::nvim::spellfile::suggest_load_files;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -29,110 +71,9 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, wordcount_T, xfmark_T, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::ui::{ui_has, vim_beep};
+use crate::src::nvim::undo::u_save_cursor;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn inserted_bytes(
-        lnum: linenr_T,
-        start_col: colnr_T,
-        old_col: ::core::ffi::c_int,
-        new_col: ::core::ffi::c_int,
-    );
-    static p_sps: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn rl_mirror_ascii(str: *mut ::core::ffi::c_char, end: *mut ::core::ffi::c_char);
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn get_cursor_line_len() -> colnr_T;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_no_spell: [::core::ffi::c_char; 0];
-    static e_notopen: [::core::ffi::c_char; 0];
-    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
@@ -150,161 +91,10 @@ extern "C" {
         hash: hash_T,
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_start();
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_clr_eos();
-    fn msg_advance(col: ::core::ffi::c_int);
-    fn tv_list_unref(l: *mut list_T);
-    fn eval_spell_expr(
-        badword: *mut ::core::ffi::c_char,
-        expr: *mut ::core::ffi::c_char,
-    ) -> *mut list_T;
-    fn get_spellword(
-        list: *mut list_T,
-        ret_word: *mut *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    fn beep_flush();
-    fn ResetRedobuff();
-    fn AppendToRedobuff(s: *const ::core::ffi::c_char);
-    fn AppendToRedobuffLit(str: *const ::core::ffi::c_char, len: ::core::ffi::c_int);
-    fn AppendCharToRedobuff(c: ::core::ffi::c_int);
-    fn vgetc() -> ::core::ffi::c_int;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static cmdmsg_rl: GlobalCell<bool>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static got_int: GlobalCell<bool>;
-    fn prompt_for_input(
-        prompt: *mut ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        one_key: bool,
-        mouse_used: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_iscomposing_legacy(c: ::core::ffi::c_int) -> bool;
-    fn utf_fold(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_isupper(a: ::core::ffi::c_int) -> bool;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn mb_charlen(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static utf8len_tab: [uint8_t; 256];
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
-        -> ::core::ffi::c_int;
-    fn end_visual_mode();
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    fn os_breakcheck();
-    fn line_breakcheck();
-    fn profile_setlimit(msec: int64_t) -> proftime_T;
-    fn profile_passed_limit(tm: proftime_T) -> bool;
-    static spelltab: GlobalCell<spelltab_T>;
-    static repl_from: GlobalCell<*mut ::core::ffi::c_char>;
-    static repl_to: GlobalCell<*mut ::core::ffi::c_char>;
-    fn spell_check(
-        wp: *mut win_T,
-        ptr: *mut ::core::ffi::c_char,
-        attrp: *mut hlf_T,
-        capcol: *mut ::core::ffi::c_int,
-        docount: bool,
-    ) -> size_t;
-    fn match_checkcompoundpattern(
-        ptr: *mut ::core::ffi::c_char,
-        wlen: ::core::ffi::c_int,
-        gap: *mut garray_T,
-    ) -> bool;
-    fn can_compound(
-        slang: *mut slang_T,
-        word: *const ::core::ffi::c_char,
-        flags: *const uint8_t,
-    ) -> bool;
-    fn match_compoundrule(slang: *mut slang_T, compflags: *const uint8_t) -> bool;
-    fn valid_word_prefix(
-        totprefcnt: ::core::ffi::c_int,
-        arridx: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        word: *mut ::core::ffi::c_char,
-        slang: *mut slang_T,
-        cond_req: bool,
-    ) -> ::core::ffi::c_int;
-    fn spell_valid_case(wordflags: ::core::ffi::c_int, treeflags: ::core::ffi::c_int) -> bool;
-    fn spell_move_to(
-        wp: *mut win_T,
-        dir: ::core::ffi::c_int,
-        behaviour: smt_T,
-        curline: bool,
-        attrp: *mut hlf_T,
-    ) -> size_t;
-    fn byte_in_str(str: *mut uint8_t, n: ::core::ffi::c_int) -> bool;
-    fn parse_spelllang(wp: *mut win_T) -> *mut ::core::ffi::c_char;
-    fn captype(
-        word: *const ::core::ffi::c_char,
-        end: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn spell_iswordp(p: *const ::core::ffi::c_char, wp: *const win_T) -> bool;
-    fn spell_iswordp_nmw(p: *const ::core::ffi::c_char, wp: *mut win_T) -> bool;
-    fn spell_casefold(
-        wp: *const win_T,
-        str: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-        buflen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bool;
-    fn allcap_copy(word: *const ::core::ffi::c_char, wcopy: *mut ::core::ffi::c_char);
-    fn nofold_len(
-        fword: *mut ::core::ffi::c_char,
-        flen: ::core::ffi::c_int,
-        word: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn make_case_word(
-        fword: *mut ::core::ffi::c_char,
-        cword: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    );
-    fn spell_soundfold(
-        slang: *mut slang_T,
-        inword: *mut ::core::ffi::c_char,
-        folded: bool,
-        res: *mut ::core::ffi::c_char,
-    );
-    fn suggest_load_files();
-    fn vim_beep(val: ::core::ffi::c_uint);
-    fn ui_has(ext: UIExtension) -> bool;
-    fn u_save_cursor() -> ::core::ffi::c_int;
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
@@ -3717,7 +3507,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 tword[c2rust_fresh9 as usize] =
                                                     c as ::core::ffi::c_char;
                                                 (*sp).ts_arridx = *idxs.offset(n as isize);
-                                                fl = utf8len_tab[c as usize] as ::core::ffi::c_int;
+                                                fl = (*utf8len_tab.ptr())[c as usize]
+                                                    as ::core::ffi::c_int;
                                                 if fl > 1 as ::core::ffi::c_int {
                                                     (*sp).ts_tcharlen = fl as uint8_t;
                                                     (*sp).ts_tcharidx = 1 as uint8_t;
@@ -4145,7 +3936,7 @@ unsafe extern "C" fn suggest_trie_walk(
                         }
                         if (*sp).ts_tcharlen as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                             (*sp).ts_tcharidx = 0 as uint8_t;
-                            (*sp).ts_tcharlen = utf8len_tab[c as usize];
+                            (*sp).ts_tcharlen = (*utf8len_tab.ptr())[c as usize];
                             (*sp).ts_fcharstart = ((*sp).ts_fidx as ::core::ffi::c_int
                                 - 1 as ::core::ffi::c_int)
                                 as uint8_t;

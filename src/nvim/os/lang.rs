@@ -1,4 +1,18 @@
+use crate::src::nvim::buffer::maketitle;
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
+use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::time_fd;
+use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{semsg, smsg};
+use crate::src::nvim::option::set_helplang_default;
+use crate::src::nvim::os::env::os_setenv;
+use crate::src::nvim::os::libc::{
+    bindtextdomain, gettext, setlocale, snprintf, strncasecmp, strtok_r, textdomain,
+};
+use crate::src::nvim::os::shell::get_cmd_output;
+use crate::src::nvim::path::{path_tail, path_tail_with_sep};
+use crate::src::nvim::profile::time_msg;
 pub use crate::src::nvim::types::{
     CMD_index, Direction, LineGetter, LuaRef, VimVarIndex, _IO_codecvt, _IO_lock_t, _IO_marker,
     _IO_wide_data, __off64_t, __off_t, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
@@ -7,64 +21,8 @@ pub use crate::src::nvim::types::{
     xp_prefix_T, FILE, _IO_FILE,
 };
 extern "C" {
-    fn setlocale(
-        __category: ::core::ffi::c_int,
-        __locale: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strtok_r(
-        __s: *mut ::core::ffi::c_char,
-        __delim: *const ::core::ffi::c_char,
-        __save_ptr: *mut *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn textdomain(__domainname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn bindtextdomain(
-        __domainname: *const ::core::ffi::c_char,
-        __dirname: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn maketitle();
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static time_fd: GlobalCell<*mut FILE>;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn set_helplang_default(lang: *const ::core::ffi::c_char);
-    fn os_setenv(
-        name: *const ::core::ffi::c_char,
-        value: *const ::core::ffi::c_char,
-        overwrite: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_cmd_output(
-        cmd: *mut ::core::ffi::c_char,
-        infile: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        ret_len: *mut size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
 }
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;

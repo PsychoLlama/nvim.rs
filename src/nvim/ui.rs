@@ -1,4 +1,48 @@
+use crate::src::nvim::api::extmark::describe_ns;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, arena_array, arena_dict, cstr_as_string,
+};
+use crate::src::nvim::api::private::validate::api_err_invalid;
+use crate::src::nvim::api::ui::{
+    remote_ui_bell, remote_ui_busy_start, remote_ui_busy_stop, remote_ui_chdir,
+    remote_ui_default_colors_set, remote_ui_error_exit, remote_ui_event, remote_ui_flush,
+    remote_ui_grid_clear, remote_ui_grid_cursor_goto, remote_ui_grid_resize, remote_ui_grid_scroll,
+    remote_ui_hl_attr_define, remote_ui_hl_group_set, remote_ui_mode_change,
+    remote_ui_mode_info_set, remote_ui_mouse_off, remote_ui_mouse_on, remote_ui_msg_set_pos,
+    remote_ui_option_set, remote_ui_raw_line, remote_ui_screenshot, remote_ui_set_icon,
+    remote_ui_set_title, remote_ui_stop, remote_ui_suspend, remote_ui_ui_send,
+    remote_ui_update_menu, remote_ui_visual_bell, remote_ui_win_viewport,
+    remote_ui_win_viewport_margins,
+};
+use crate::src::nvim::autocmd::do_autocmd_uienter;
+use crate::src::nvim::buffer::resettitle;
+use crate::src::nvim::cursor_shape::{cursor_get_mode_idx, mode_style_array, shape_table};
+use crate::src::nvim::drawscreen::{conceal_check_cursor_line, screen_resize};
+use crate::src::nvim::event::libuv::uv_cwd;
+use crate::src::nvim::event::multiqueue::multiqueue_put_event;
+use crate::src::nvim::ex_getln::cmdline_ui_flush;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::get_win_by_grid_handle;
+use crate::src::nvim::highlight::{highlight_use_hlstate, ui_send_all_hls};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
+use crate::src::nvim::main::{
+    bo_flags, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, curwin,
+    default_grid, emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails,
+    msg_grid_adj, noargs, normal_bg, normal_fg, normal_sp, p_debug, p_guicursor, p_lz, p_mouse,
+    p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting, textlock, ui_client_channel_id,
+    ui_event_ns_id, ui_ext_names, ui_refresh_cmdheight, updating_screen, State, VIsual_active,
+};
+use crate::src::nvim::map::{map_del_uint32_t_ptr_t, map_put_ref_uint32_t_ptr_t, mh_get_uint32_t};
+use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree};
+use crate::src::nvim::message::{
+    msg, msg_ext_ui_flush, msg_schedule_semsg, msg_schedule_semsg_multiline, msg_scroll_flush,
+    msg_source, msg_ui_refresh,
+};
+use crate::src::nvim::option::{set_option_value, ui_refresh_options};
+use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, llabs, memcpy, memset, strcmp};
+use crate::src::nvim::os::time::{os_hrtime, os_sleep};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4,
@@ -33,277 +77,15 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, NS, QUEUE,
 };
+use crate::src::nvim::ui_compositor::{
+    ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_grid_cursor_goto,
+    ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_init, ui_comp_msg_set_pos, ui_comp_raw_line,
+    ui_comp_should_draw,
+};
+use crate::src::nvim::window::{win_set_inner_size, win_ui_flush};
+use crate::src::nvim::winfloat::win_config_float;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn llabs(__x: ::core::ffi::c_longlong) -> ::core::ffi::c_longlong;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn uv_cwd(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    fn map_put_ref_uint32_t_ptr_t(
-        map: *mut Map_uint32_t_ptr_t,
-        key: uint32_t,
-        key_alloc: *mut *mut uint32_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn map_del_uint32_t_ptr_t(
-        map: *mut Map_uint32_t_ptr_t,
-        key: uint32_t,
-        key_alloc: *mut uint32_t,
-    ) -> ptr_t;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_clear_error(value: *mut Error);
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
-    fn remote_ui_stop(ui: *mut RemoteUI);
-    fn remote_ui_grid_clear(ui: *mut RemoteUI, grid: Integer);
-    fn remote_ui_grid_resize(ui: *mut RemoteUI, grid: Integer, width: Integer, height: Integer);
-    fn remote_ui_grid_scroll(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        top: Integer,
-        bot: Integer,
-        left: Integer,
-        right: Integer,
-        rows: Integer,
-        cols: Integer,
-    );
-    fn remote_ui_default_colors_set(
-        ui: *mut RemoteUI,
-        rgb_fg: Integer,
-        rgb_bg: Integer,
-        rgb_sp: Integer,
-        cterm_fg: Integer,
-        cterm_bg: Integer,
-    );
-    fn remote_ui_hl_attr_define(
-        ui: *mut RemoteUI,
-        id: Integer,
-        rgb_attrs: HlAttrs,
-        cterm_attrs: HlAttrs,
-        info: Array,
-    );
-    fn remote_ui_grid_cursor_goto(ui: *mut RemoteUI, grid: Integer, row: Integer, col: Integer);
-    fn remote_ui_raw_line(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        row: Integer,
-        startcol: Integer,
-        endcol: Integer,
-        clearcol: Integer,
-        clearattr: Integer,
-        flags: LineFlags,
-        chunk: *const schar_T,
-        attrs: *const sattr_T,
-    );
-    fn remote_ui_flush(ui: *mut RemoteUI);
-    fn remote_ui_ui_send(ui: *mut RemoteUI, content: String_0);
-    fn remote_ui_event(ui: *mut RemoteUI, name: *mut ::core::ffi::c_char, args: Array);
-    fn remote_ui_mode_info_set(ui: *mut RemoteUI, enabled: Boolean, cursor_styles: Array);
-    fn remote_ui_update_menu(ui: *mut RemoteUI);
-    fn remote_ui_busy_start(ui: *mut RemoteUI);
-    fn remote_ui_busy_stop(ui: *mut RemoteUI);
-    fn remote_ui_mouse_on(ui: *mut RemoteUI);
-    fn remote_ui_mouse_off(ui: *mut RemoteUI);
-    fn remote_ui_mode_change(ui: *mut RemoteUI, mode: String_0, mode_idx: Integer);
-    fn remote_ui_bell(ui: *mut RemoteUI);
-    fn remote_ui_visual_bell(ui: *mut RemoteUI);
-    fn remote_ui_suspend(ui: *mut RemoteUI);
-    fn remote_ui_set_title(ui: *mut RemoteUI, title: String_0);
-    fn remote_ui_set_icon(ui: *mut RemoteUI, icon: String_0);
-    fn remote_ui_screenshot(ui: *mut RemoteUI, path: String_0);
-    fn remote_ui_option_set(ui: *mut RemoteUI, name: String_0, value: Object);
-    fn remote_ui_chdir(ui: *mut RemoteUI, path: String_0);
-    fn remote_ui_hl_group_set(ui: *mut RemoteUI, name: String_0, id: Integer);
-    fn remote_ui_msg_set_pos(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        row: Integer,
-        scrolled: Boolean,
-        sep_char: String_0,
-        zindex: Integer,
-        compindex: Integer,
-    );
-    fn remote_ui_win_viewport(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        win: Window,
-        topline: Integer,
-        botline: Integer,
-        curline: Integer,
-        curcol: Integer,
-        line_count: Integer,
-        scroll_delta: Integer,
-    );
-    fn remote_ui_win_viewport_margins(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        win: Window,
-        top: Integer,
-        bottom: Integer,
-        left: Integer,
-        right: Integer,
-    );
-    fn remote_ui_error_exit(ui: *mut RemoteUI, status: Integer);
-    fn do_autocmd_uienter(chanid: uint64_t, attached: bool);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn resettitle();
-    static shape_table: GlobalCell<[cursorentry_T; 18]>;
-    fn mode_style_array(arena: *mut Arena) -> Array;
-    fn cursor_get_mode_idx() -> ::core::ffi::c_int;
-    fn conceal_check_cursor_line();
-    fn screen_resize(width: ::core::ffi::c_int, height: ::core::ffi::c_int);
-    fn os_hrtime() -> uint64_t;
-    fn os_sleep(ms: uint64_t);
-    static updating_screen: GlobalCell<bool>;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn cmdline_ui_flush();
-    fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    static default_grid: GlobalCell<ScreenGrid>;
-    fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
-    static called_vim_beep: GlobalCell<bool>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static starting: GlobalCell<::core::ffi::c_int>;
-    static exiting: GlobalCell<bool>;
-    static full_screen: GlobalCell<bool>;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static in_assert_fails: GlobalCell<bool>;
-    static expr_map_lock: GlobalCell<::core::ffi::c_int>;
-    static bo_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_debug: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_guicursor: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_lz: GlobalCell<::core::ffi::c_int>;
-    static p_mouse: GlobalCell<*mut ::core::ffi::c_char>;
-    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_tgc: GlobalCell<::core::ffi::c_int>;
-    static p_vb: GlobalCell<::core::ffi::c_int>;
-    static p_wd: GlobalCell<OptInt>;
-    fn highlight_use_hlstate() -> bool;
-    fn ui_send_all_hls(ui: *mut RemoteUI);
-    static cterm_normal_fg_color: GlobalCell<::core::ffi::c_int>;
-    static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int>;
-    static normal_fg: GlobalCell<RgbValue>;
-    static normal_bg: GlobalCell<RgbValue>;
-    static normal_sp: GlobalCell<RgbValue>;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_call_ref_ctx(
-        fast: bool,
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    static msg_grid_adj: GlobalCell<GridView>;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn msg_source(hl_id: ::core::ffi::c_int);
-    fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, ...);
-    fn msg_schedule_semsg_multiline(fmt: *const ::core::ffi::c_char, ...);
-    fn msg_scroll_flush();
-    fn msg_ui_refresh();
-    fn msg_ext_ui_flush();
-    fn set_option_value(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn ui_refresh_options();
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    static noargs: GlobalCell<Array>;
-    static ui_event_ns_id: GlobalCell<uint32_t>;
-    static resize_events: GlobalCell<*mut MultiQueue>;
-    static ui_refresh_cmdheight: GlobalCell<bool>;
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    fn ui_comp_init();
-    fn ui_comp_attach(ui: *mut RemoteUI);
-    fn ui_comp_detach(ui: *mut RemoteUI);
-    fn ui_comp_should_draw() -> bool;
-    fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer);
-    fn ui_comp_get_grid_at_coord(
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
-    fn ui_comp_raw_line(
-        grid: Integer,
-        row: Integer,
-        startcol: Integer,
-        endcol: Integer,
-        clearcol: Integer,
-        clearattr: Integer,
-        flags: LineFlags,
-        chunk: *const schar_T,
-        attrs: *const sattr_T,
-    );
-    fn ui_comp_msg_set_pos(
-        grid: Integer,
-        row: Integer,
-        scrolled: Boolean,
-        sep_char: String_0,
-        zindex: Integer,
-        compindex: Integer,
-    );
-    fn ui_comp_grid_scroll(
-        grid: Integer,
-        top: Integer,
-        bot: Integer,
-        left: Integer,
-        right: Integer,
-        rows: Integer,
-        cols: Integer,
-    );
-    fn ui_comp_grid_resize(grid: Integer, width: Integer, height: Integer);
-    fn win_set_inner_size(wp: *mut win_T, valid_cursor: bool);
-    fn win_ui_flush(validate: bool);
-    fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

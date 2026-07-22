@@ -1,6 +1,5 @@
 // Canonical type definitions extracted by tools/unify (phase 5a).
 // One definition per logical type; every module re-exports from here.
-use super::*;
 
 pub type VimState = vim_state;
 pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;

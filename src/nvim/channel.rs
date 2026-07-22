@@ -1,4 +1,51 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::converter::object_to_vim;
+use crate::src::nvim::api::private::helpers::{
+    arena_array, arena_dict, arena_string, cstr_as_string,
+};
+use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::eval::encode::{encode_list_write, encode_tv2json};
+use crate::src::nvim::eval::typval::{
+    callback_free, tv_clear, tv_dict_add_dict, tv_dict_add_list, tv_dict_find, tv_dict_free,
+    tv_dict_set_keys_readonly, tv_list_alloc, tv_list_append_string, tv_list_unref,
+};
+use crate::src::nvim::eval_1::{
+    callback_call, eval_fmt_source_name_line, get_v_event, restore_v_event,
+};
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::libuv_proc::libuv_proc_init;
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_free, multiqueue_new_child, multiqueue_put_event,
+};
+use crate::src::nvim::event::proc::{exit_on_closed_chan, proc_free, proc_spawn, proc_stop};
+use crate::src::nvim::event::rstream::{
+    rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
+    rstream_stop_inner,
+};
+use crate::src::nvim::event::socket::{socket_connect, socket_watcher_accept};
+use crate::src::nvim::event::stream::stream_may_close;
+use crate::src::nvim::event::wstream::{
+    wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::api_free_luaref;
+use crate::src::nvim::main::{
+    channels, curbuf, e_invarg2, e_invchan, e_invstream, e_invstreamrpc, e_jobspawn, e_streamkey,
+    embedded_mode, exiting, headless_mode, main_loop, ui_client_channel_id, IObuff,
+};
+use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
+use crate::src::nvim::memory::{arena_mem_free, xcalloc, xfree, xmemdup, xrealloc, xstrdup};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::msgpack_rpc::channel::rpc_init;
+use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
+use crate::src::nvim::os::fs::os_write;
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, dup2, fcntl, freopen, gettext, qsort, stderr, strlen,
+};
+use crate::src::nvim::os::pty_proc_unix::{
+    pty_proc_close_master, pty_proc_init, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
+};
+use crate::src::nvim::os::shell::shell_free_argv;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, CallbackReader, CallbackType,
@@ -60,196 +107,22 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, wbuffer, wbuffer_data_finalizer, win_T, window_S,
     wininfo_S, winopt_T, winsize, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
-    static mut stderr: *mut FILE;
-    fn freopen(
-        __filename: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-        __stream: *mut FILE,
-    ) -> *mut FILE;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn abort() -> !;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_mem_free(mem: ArenaMem);
-    fn dup2(__fd: ::core::ffi::c_int, __fd2: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn map_del_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut uint64_t,
-    ) -> ptr_t;
-    fn map_put_ref_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut *mut uint64_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn has_event(event: event_T) -> bool;
-    fn libuv_proc_init(loop_0: *mut Loop, data: *mut ::core::ffi::c_void) -> LibuvProc;
-    static channels: GlobalCell<Map_uint64_t_ptr_t>;
-    fn pty_proc_tty_name(ptyproc: *mut PtyProc) -> *const ::core::ffi::c_char;
-    fn pty_proc_resize(ptyproc: *mut PtyProc, width: uint16_t, height: uint16_t);
-    fn pty_proc_resume(ptyproc: *mut PtyProc);
-    fn pty_proc_close_master(ptyproc: *mut PtyProc);
-    fn pty_proc_init(loop_0: *mut Loop, data: *mut ::core::ffi::c_void) -> PtyProc;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invchan: [::core::ffi::c_char; 0];
-    static e_jobspawn: [::core::ffi::c_char; 0];
-    static e_invstream: [::core::ffi::c_char; 0];
-    static e_invstreamrpc: [::core::ffi::c_char; 0];
-    static e_streamkey: [::core::ffi::c_char; 0];
-    fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T;
-    fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T);
-    fn callback_call(
-        callback: *mut Callback,
-        argcount_in: ::core::ffi::c_int,
-        argvars_in: *mut typval_T,
-        rettv: *mut typval_T,
-    ) -> bool;
-    fn eval_fmt_source_name_line(buf: *mut ::core::ffi::c_char, bufsize: size_t);
-    fn encode_list_write(
-        data: *mut ::core::ffi::c_void,
-        buf: *const ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_unref(l: *mut list_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn callback_free(callback: *mut Callback);
-    fn tv_dict_free(d: *mut dict_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_dict(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        dict: *mut dict_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_set_keys_readonly(dict: *mut dict_T);
-    fn tv_clear(tv: *mut typval_T);
-    fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
-    fn multiqueue_free(self_0: *mut MultiQueue);
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
-    fn rstream_init(stream: *mut RStream);
-    fn rstream_start_inner(stream: *mut RStream);
-    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
-    fn rstream_stop_inner(stream: *mut RStream);
-    fn rstream_may_close(stream: *mut RStream);
-    fn proc_spawn(proc: *mut Proc, in_0: bool, out: bool, err: bool) -> ::core::ffi::c_int;
-    fn proc_stop(proc: *mut Proc);
-    fn proc_free(proc: *mut Proc);
-    fn exit_on_closed_chan(status: ::core::ffi::c_int);
-    fn socket_watcher_accept(
-        watcher: *mut SocketWatcher,
-        stream: *mut RStream,
-    ) -> ::core::ffi::c_int;
-    fn socket_connect(
-        loop_0: *mut Loop,
-        stream: *mut RStream,
-        is_tcp: bool,
-        address: *const ::core::ffi::c_char,
-        timeout: ::core::ffi::c_int,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> bool;
-    fn wstream_init_fd(
-        loop_0: *mut Loop,
-        stream: *mut Stream,
-        fd: ::core::ffi::c_int,
-        maxmem: size_t,
-    );
-    fn wstream_init(stream: *mut Stream, maxmem: size_t);
-    fn wstream_write(stream: *mut Stream, buffer: *mut WBuffer) -> ::core::ffi::c_int;
-    fn wstream_new_buffer(
-        data: *mut ::core::ffi::c_char,
-        size: size_t,
-        refcount: size_t,
-        cb: wbuffer_data_finalizer,
-    ) -> *mut WBuffer;
-    fn stream_may_close(stream: *mut Stream);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    static curbuf: GlobalCell<*mut buf_T>;
-    static exiting: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static embedded_mode: GlobalCell<bool>;
-    static headless_mode: GlobalCell<bool>;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn api_free_luaref(ref_0: LuaRef);
-    static main_loop: SharedCell<Loop>;
-    fn rpc_init();
     fn rpc_start(channel: *mut Channel);
     fn rpc_close(channel: *mut Channel);
     fn rpc_free(channel: *mut Channel);
-    fn server_owns_pipe_address(address: *const ::core::ffi::c_char) -> bool;
-    fn os_write(
-        fd: ::core::ffi::c_int,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-        non_blocking: bool,
-    ) -> ptrdiff_t;
-    fn shell_free_argv(argv: *mut *mut ::core::ffi::c_char);
-    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal;
     fn terminal_close(termpp: *mut *mut Terminal, status: ::core::ffi::c_int);
     fn terminal_set_state(term: *mut Terminal, suspended: bool);
     fn terminal_destroy(termpp: *mut *mut Terminal);
     fn terminal_receive(term: *mut Terminal, data: *const ::core::ffi::c_char, len: size_t);
     fn terminal_buf(term: *const Terminal) -> Buffer;
-    fn ui_client_attach_to_restarted_server();
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

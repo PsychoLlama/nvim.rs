@@ -1,4 +1,70 @@
+use crate::src::nvim::api::private::helpers::api_clear_error;
+use crate::src::nvim::api::win_config::parse_winborder;
+use crate::src::nvim::autocmd::{check_ei, get_event_name_no_group};
+use crate::src::nvim::charset::{
+    buf_init_chartab, char2cells, check_isopt, getdigits_int, hexhex2nr, init_chartab, ptr2cells,
+    transchar, transchar_byte,
+};
+use crate::src::nvim::cmdexpand::ExpandGeneric;
+use crate::src::nvim::cursor::coladvance;
+use crate::src::nvim::cursor_shape::parse_shape_opt;
+use crate::src::nvim::diff::{diffanchors_changed, diffopt_changed};
+use crate::src::nvim::digraph::keymap_init;
+use crate::src::nvim::drawscreen::{
+    comp_col, redrawWinline, redraw_all_later, redraw_buf_later, redraw_curbuf_later, redraw_later,
+    status_redraw_buf,
+};
+use crate::src::nvim::eval::userfunc::get_scriptlocal_funcname;
+use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
+use crate::src::nvim::ex_getln::check_opt_wim;
+use crate::src::nvim::fold::{
+    foldUpdateAll, foldmethodIsDiff, foldmethodIsExpr, foldmethodIsIndent, foldmethodIsMarker,
+    newFoldLevel,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{schar_from_char, schar_from_str};
+use crate::src::nvim::highlight_group::{get_highlight_name, init_highlight};
+use crate::src::nvim::indent::{briopt_check, tabstop_set};
+use crate::src::nvim::indent_c::parse_cino;
+use crate::src::nvim::insexpand::set_cpt_callbacks;
+use crate::src::nvim::main::{
+    bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab, curwin, didset_vim,
+    didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg, e_leadtab_requires_tab,
+    e_modifiable, e_unsupportedoption, empty_string_option, first_tabpage, firstbuf, firstwin,
+    km_startsel, km_stopsel, opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values,
+    opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values,
+    opt_ssop_values, opt_tc_values, opt_ve_values, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia,
+    p_cot, p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor,
+    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
+    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags, IObuff, VIsual_active,
+};
+use crate::src::nvim::mark::free_fmark;
+use crate::src::nvim::mbyte::{
+    enc_canonize, get_encoding_name, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar,
+};
+use crate::src::nvim::memline::ml_setflags;
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::src::nvim::message::{
+    messagesopt_changed, msg_grid_validate, verbose_open, verbose_stop,
+};
+use crate::src::nvim::option::{
+    copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option,
+    get_option_default, get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles,
+    set_iminsert_global, set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
+};
+use crate::src::nvim::os::env::vim_unsetenv_ext;
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, memcmp, memset, snprintf, strcmp, strlen, strncmp, strpbrk, strstr,
+};
+use crate::src::nvim::os::time::os_time;
+use crate::src::nvim::r#move::validate_virtcol;
+use crate::src::nvim::shada::get_shada_parameter;
+use crate::src::nvim::spell::{
+    compile_cap_prog, did_set_spell_option, spell_reload, valid_spellfile, valid_spelllang,
+};
+use crate::src::nvim::spellfile::spell_check_msm;
+use crate::src::nvim::spellsuggest::spell_check_sps;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharsOption, CompleteListItemGetter,
@@ -30,256 +96,10 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, vimoption_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
+use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
+use crate::src::nvim::winfloat::win_config_float;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strpbrk(
-        __s: *const ::core::ffi::c_char,
-        __accept: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn parse_winborder(
-        fconfig: *mut WinConfig,
-        border_opt: *mut ::core::ffi::c_char,
-        err: *mut Error,
-    ) -> bool;
-    static opt_bkc_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
-    static opt_bh_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
-    static opt_bt_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
-    static opt_cot_values: GlobalCell<[*const ::core::ffi::c_char; 12]>;
-    static opt_dip_algorithm_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
-    static opt_dip_inline_values: GlobalCell<[*const ::core::ffi::c_char; 5]>;
-    static opt_ff_values: GlobalCell<[*const ::core::ffi::c_char; 4]>;
-    static opt_ssop_values: GlobalCell<[*const ::core::ffi::c_char; 19]>;
-    static opt_scl_values: GlobalCell<[*const ::core::ffi::c_char; 23]>;
-    static opt_spo_values: GlobalCell<[*const ::core::ffi::c_char; 3]>;
-    static opt_tc_values: GlobalCell<[*const ::core::ffi::c_char; 6]>;
-    static opt_ve_values: GlobalCell<[*const ::core::ffi::c_char; 7]>;
-    fn check_ei(ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn get_event_name_no_group(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-        win: bool,
-    ) -> *mut ::core::ffi::c_char;
-    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
-    static p_bs: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_bkc: GlobalCell<*mut ::core::ffi::c_char>;
-    static bkc_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_bex: GlobalCell<*mut ::core::ffi::c_char>;
-    static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]>;
-    static p_breakat: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_cia: GlobalCell<*mut ::core::ffi::c_char>;
-    static cia_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_cot: GlobalCell<*mut ::core::ffi::c_char>;
-    static cot_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_pumborder: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ei: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_fenc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_fcs: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_hlg: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_isk: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_km: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_lcs: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_mousescroll: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_mousescroll_vert: GlobalCell<OptInt>;
-    static p_mousescroll_hor: GlobalCell<OptInt>;
-    static p_pm: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ruf: GlobalCell<*mut ::core::ffi::c_char>;
-    static ssop_flags: GlobalCell<::core::ffi::c_uint>;
-    static spo_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_tc: GlobalCell<*mut ::core::ffi::c_char>;
-    static tc_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_shada: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ve: GlobalCell<*mut ::core::ffi::c_char>;
-    static ve_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_vfile: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_winborder: GlobalCell<*mut ::core::ffi::c_char>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn init_chartab() -> ::core::ffi::c_int;
-    fn buf_init_chartab(buf: *mut buf_T, global: bool) -> ::core::ffi::c_int;
-    fn check_isopt(var: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn transchar(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn transchar_byte(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn hexhex2nr(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ExpandGeneric(
-        pat: *const ::core::ffi::c_char,
-        xp: *mut expand_T,
-        regmatch: *mut regmatch_T,
-        matches: *mut *mut *mut ::core::ffi::c_char,
-        numMatches: *mut ::core::ffi::c_int,
-        func: CompleteListItemGetter,
-        escaped: bool,
-    );
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn parse_shape_opt(what: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn diffanchors_changed(buflocal: bool) -> ::core::ffi::c_int;
-    fn diffopt_changed() -> ::core::ffi::c_int;
-    fn keymap_init() -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_modifiable: [::core::ffi::c_char; 0];
-    static e_unsupportedoption: [::core::ffi::c_char; 0];
-    static e_leadtab_requires_tab: [::core::ffi::c_char; 0];
-    static e_invalid_format_string_single_percent_s: [::core::ffi::c_char; 0];
-    fn comp_col();
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn redrawWinline(wp: *mut win_T, lnum: linenr_T);
-    fn status_redraw_buf(buf: *mut buf_T);
-    fn get_scriptlocal_funcname(funcname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn do_unlet(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        forceit: bool,
-    ) -> ::core::ffi::c_int;
-    fn get_var_value(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn check_opt_wim() -> ::core::ffi::c_int;
-    fn foldmethodIsIndent(wp: *mut win_T) -> bool;
-    fn foldmethodIsExpr(wp: *mut win_T) -> bool;
-    fn foldmethodIsMarker(wp: *mut win_T) -> bool;
-    fn foldmethodIsDiff(wp: *mut win_T) -> bool;
-    fn newFoldLevel();
-    fn foldUpdateAll(win: *mut win_T);
-    static didset_vim: GlobalCell<bool>;
-    static didset_vimruntime: GlobalCell<bool>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static ru_wid: GlobalCell<::core::ffi::c_int>;
-    static secure: GlobalCell<::core::ffi::c_int>;
-    static VIsual_active: GlobalCell<bool>;
-    static cmdpreview: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static km_stopsel: GlobalCell<bool>;
-    static km_startsel: GlobalCell<bool>;
-    static stl_syntax: GlobalCell<::core::ffi::c_int>;
-    fn schar_from_str(str: *const ::core::ffi::c_char) -> schar_T;
-    fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    fn init_highlight(both: bool, reset: bool);
-    fn get_highlight_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn parse_cino(buf: *mut buf_T);
-    fn tabstop_set(var: *mut ::core::ffi::c_char, array: *mut *mut colnr_T) -> bool;
-    fn briopt_check(briopt: *mut ::core::ffi::c_char, wp: *mut win_T) -> bool;
-    fn set_cpt_callbacks(args: *mut optset_T) -> ::core::ffi::c_int;
-    fn os_time() -> Timestamp;
-    fn free_fmark(fm: fmark_T);
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn enc_canonize(enc: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_encoding_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn ml_setflags(buf: *mut buf_T);
-    fn validate_virtcol(wp: *mut win_T);
-    fn msg_grid_validate();
-    fn messagesopt_changed() -> ::core::ffi::c_int;
-    fn verbose_stop();
-    fn verbose_open() -> ::core::ffi::c_int;
-    fn api_clear_error(value: *mut Error);
-    fn get_option_default(opt_idx: OptIndex, opt_flags: ::core::ffi::c_int) -> OptVal;
-    fn did_set_title();
-    fn redraw_titles();
-    fn valid_name(val: *const ::core::ffi::c_char, allowed: *const ::core::ffi::c_char) -> bool;
-    fn parse_winhl_opt(winhl: *const ::core::ffi::c_char, wp: *mut win_T) -> bool;
-    fn get_option(opt_idx: OptIndex) -> *mut vimoption_T;
-    fn set_option_direct(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-    );
-    fn get_option_varp_scope_from(
-        opt_idx: OptIndex,
-        opt_flags: ::core::ffi::c_int,
-        buf: *mut buf_T,
-        win: *mut win_T,
-    ) -> *mut ::core::ffi::c_void;
-    fn set_iminsert_global(buf: *mut buf_T);
-    fn set_imsearch_global(buf: *mut buf_T);
-    fn fill_culopt_flags(val: *mut ::core::ffi::c_char, wp: *mut win_T) -> ::core::ffi::c_int;
-    fn get_fileformat(buf: *const buf_T) -> ::core::ffi::c_int;
-    fn skip_to_option_part(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    fn vim_unsetenv_ext(var: *const ::core::ffi::c_char);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn get_shada_parameter(type_0: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn spell_reload();
-    fn valid_spelllang(val: *const ::core::ffi::c_char) -> bool;
-    fn valid_spellfile(val: *const ::core::ffi::c_char) -> bool;
-    fn did_set_spell_option() -> *const ::core::ffi::c_char;
-    fn compile_cap_prog(synblock: *mut synblock_T) -> *const ::core::ffi::c_char;
-    fn spell_check_sps() -> ::core::ffi::c_int;
-    fn spell_check_msm() -> ::core::ffi::c_int;
-    fn global_stl_height() -> ::core::ffi::c_int;
-    fn check_colorcolumn(
-        cc: *mut ::core::ffi::c_char,
-        wp: *mut win_T,
-    ) -> *const ::core::ffi::c_char;
-    fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
     fn terminal_notify_theme(term: *mut Terminal, dark: bool);
 }
 pub const kTrue: TriState = 1;

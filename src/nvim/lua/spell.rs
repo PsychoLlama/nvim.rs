@@ -1,4 +1,12 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_error, luaL_register, lua_createtable, lua_gettop, lua_pushinteger,
+    lua_pushlstring, lua_pushstring, lua_rawseti, lua_tolstring, lua_type,
+};
+use crate::src::nvim::main::{curwin, e_no_spell};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::os::libc::{__assert_fail, gettext};
+use crate::src::nvim::spell::{parse_spelllang, spell_check};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -28,45 +36,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_no_spell: [::core::ffi::c_char; 0];
-    static curwin: GlobalCell<*mut win_T>;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn spell_check(
-        wp: *mut win_T,
-        ptr: *mut ::core::ffi::c_char,
-        attrp: *mut hlf_T,
-        capcol: *mut ::core::ffi::c_int,
-        docount: bool,
-    ) -> size_t;
-    fn parse_spelllang(wp: *mut win_T) -> *mut ::core::ffi::c_char;
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

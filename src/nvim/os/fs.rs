@@ -1,4 +1,27 @@
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::event::libuv::{
+    uv_chdir, uv_cwd, uv_exepath, uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close,
+    uv_fs_copyfile, uv_fs_fchown, uv_fs_fstat, uv_fs_fsync, uv_fs_lstat, uv_fs_mkdir,
+    uv_fs_mkdtemp, uv_fs_open, uv_fs_realpath, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir,
+    uv_fs_scandir, uv_fs_scandir_next, uv_fs_stat, uv_fs_unlink, uv_fs_utime, uv_strerror,
+    uv_translate_sys_error,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{e_mkdir, e_noname, g_stats, p_verbose, stdin_fd};
+use crate::src::nvim::memory::{
+    memcnt, xfree, xmalloc, xmemcpyz, xmemdupz, xstrchrnul, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::message::{emsg, semsg, smsg, verbose_enter, verbose_leave};
+use crate::src::nvim::os::env::os_getenv;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, abort, dup, fcntl, fdopen, gettext, getuid, getxattr,
+    listxattr, memset, read, readv, setxattr, strerror, strlen, write,
+};
+use crate::src::nvim::path::{
+    append_path, dir_of_file_exists, get_past_head, gettail_dir, path_tail_with_sep, save_abs_path,
+    vim_ispathsep, FullName_save,
+};
 pub use crate::src::nvim::types::{
     Directory, FileID, FileInfo, OptInt, String_0, _IO_codecvt, _IO_lock_t, _IO_marker,
     _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t, __pthread_internal_list,
@@ -13,243 +36,7 @@ pub use crate::src::nvim::types::{
     uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
     uv_stat_t, uv_timespec_t, uv_uid_t, vim_acl_T, FILE, _IO_FILE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
-    fn fdopen(__fd: ::core::ffi::c_int, __modes: *const ::core::ffi::c_char) -> *mut FILE;
-    fn abort() -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strerror(__errnum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn uv_translate_sys_error(sys_errno: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_fs_req_cleanup(req: *mut uv_fs_t);
-    fn uv_fs_close(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_open(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_unlink(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_copyfile(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        new_path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_mkdir(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        mode: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_mkdtemp(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        tpl: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_rmdir(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_scandir(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_scandir_next(req: *mut uv_fs_t, ent: *mut uv_dirent_t) -> ::core::ffi::c_int;
-    fn uv_fs_stat(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_fstat(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_rename(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        new_path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_fsync(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_access(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        mode: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_chmod(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        mode: ::core::ffi::c_int,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_utime(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        atime: ::core::ffi::c_double,
-        mtime: ::core::ffi::c_double,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_lstat(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_realpath(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_chown(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        path: *const ::core::ffi::c_char,
-        uid: uv_uid_t,
-        gid: uv_gid_t,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_fchown(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        uid: uv_uid_t,
-        gid: uv_gid_t,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn uv_cwd(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn uv_chdir(dir: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn read(__fd: ::core::ffi::c_int, __buf: *mut ::core::ffi::c_void, __nbytes: size_t)
-        -> ssize_t;
-    fn write(__fd: ::core::ffi::c_int, __buf: *const ::core::ffi::c_void, __n: size_t) -> ssize_t;
-    fn dup(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn getuid() -> __uid_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrchrnul(
-        str: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_mkdir: [::core::ffi::c_char; 0];
-    static e_noname: [::core::ffi::c_char; 0];
-    fn setxattr(
-        __path: *const ::core::ffi::c_char,
-        __name: *const ::core::ffi::c_char,
-        __value: *const ::core::ffi::c_void,
-        __size: size_t,
-        __flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn getxattr(
-        __path: *const ::core::ffi::c_char,
-        __name: *const ::core::ffi::c_char,
-        __value: *mut ::core::ffi::c_void,
-        __size: size_t,
-    ) -> ssize_t;
-    fn listxattr(
-        __path: *const ::core::ffi::c_char,
-        __list: *mut ::core::ffi::c_char,
-        __size: size_t,
-    ) -> ssize_t;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    static g_stats: GlobalCell<nvim_stats_s>;
-    static stdin_fd: GlobalCell<::core::ffi::c_int>;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn verbose_enter();
-    fn verbose_leave();
-    static p_verbose: GlobalCell<OptInt>;
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_past_head(path: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_ispathsep(c: ::core::ffi::c_int) -> bool;
-    fn dir_of_file_exists(fname: *mut ::core::ffi::c_char) -> bool;
-    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
-    fn save_abs_path(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn gettail_dir(fname: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    fn append_path(
-        path: *mut ::core::ffi::c_char,
-        to_append: *const ::core::ffi::c_char,
-        max_len: size_t,
-    ) -> ::core::ffi::c_int;
-    fn ui_call_chdir(path: String_0);
-    fn readv(
-        __fd: ::core::ffi::c_int,
-        __iovec: *const iovec,
-        __count: ::core::ffi::c_int,
-    ) -> ssize_t;
-}
+use crate::src::nvim::ui::ui_call_chdir;
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

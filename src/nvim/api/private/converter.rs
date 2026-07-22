@@ -1,4 +1,19 @@
+use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, arena_string};
+use crate::src::nvim::eval::decode::decode_string;
+use crate::src::nvim::eval::encode::encode_vim_list_to_buf;
+use crate::src::nvim::eval::typval::{
+    tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc, tv_list_alloc,
+    tv_list_append_owned_tv,
+};
+use crate::src::nvim::eval::userfunc::{find_func, register_luafunc};
+use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
+use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::lua::executor::api_new_luaref;
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::message::internal_error;
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, strlen};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -13,56 +28,6 @@ pub use crate::src::nvim::types::{
     MessagePackType, Object, ObjectType, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0,
     VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn decode_string(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        force_blob: bool,
-        s_allocated: bool,
-    ) -> typval_T;
-    static hash_removed: ::core::ffi::c_char;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
-    fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T;
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn find_func(name: *const ::core::ffi::c_char) -> *mut ufunc_T;
-    fn register_luafunc(ref_0: LuaRef) -> *mut ::core::ffi::c_char;
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn get_copyID() -> ::core::ffi::c_int;
-    fn encode_vim_list_to_buf(
-        list: *const list_T,
-        ret_len: *mut size_t,
-        ret_buf: *mut *mut ::core::ffi::c_char,
-    ) -> bool;
-    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

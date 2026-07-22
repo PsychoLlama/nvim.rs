@@ -1,4 +1,32 @@
+use crate::src::nvim::arglist::alist_name;
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, buflist_findnr};
+use crate::src::nvim::eval::typval::tv_get_string;
+use crate::src::nvim::eval::vars::{get_globvar_dict, set_vim_var_string};
+use crate::src::nvim::eval_1::var_flavour;
+use crate::src::nvim::ex_docmd::{open_exfile, vim_mkdir_emsg};
+use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
+use crate::src::nvim::file_search::vim_chdirfile;
+use crate::src::nvim::fileio::shorten_fnames;
+use crate::src::nvim::fold::put_folds;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::{
+    curbuf, curtab, curwin, e_noname, e_notopen, e_prev_dir, e_write, first_tabpage, firstbuf,
+    firstwin, global_alist, globaldir, no_hlsearch, p_acd, p_hls, p_shm, p_stal, p_vdir, p_wh,
+    p_wiw, ssop_flags, topframe, vop_flags, Columns, Rows,
+};
+use crate::src::nvim::mapping::makemap;
+use crate::src::nvim::mbyte::utfc_ptr2len;
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::option::{makefoldset, makeset};
+use crate::src::nvim::os::env::home_replace_save;
+use crate::src::nvim::os::fs::{os_chdir, os_dirname, os_isdir};
+use crate::src::nvim::os::libc::{fclose, fprintf, fputs, gettext, putc, strcpy, strlen};
+use crate::src::nvim::path::{add_pathsep, vim_FullName, vim_ispathsep};
+use crate::src::nvim::runtime::do_source;
+use crate::src::nvim::strings::vim_strsave_escaped;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, CdCause, ChangedtickDictItem, DecorExt,
@@ -31,124 +59,7 @@ pub use crate::src::nvim::types::{
     undo_object, var_flavour_T, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
 };
-extern "C" {
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn putc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fputs(__s: *const ::core::ffi::c_char, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn alist_name(aep: *mut aentry_T) -> *mut ::core::ffi::c_char;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn bt_help(buf: *const buf_T) -> bool;
-    fn bt_normal(buf: *const buf_T) -> bool;
-    fn bt_terminal(buf: *const buf_T) -> bool;
-    fn bt_nofilename(buf: *const buf_T) -> bool;
-    static e_noname: [::core::ffi::c_char; 0];
-    static e_notopen: [::core::ffi::c_char; 0];
-    static e_prev_dir: [::core::ffi::c_char; 0];
-    static e_write: [::core::ffi::c_char; 0];
-    fn var_flavour(varname: *mut ::core::ffi::c_char) -> var_flavour_T;
-    static hash_removed: ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn get_globvar_dict() -> *mut dict_T;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn vim_mkdir_emsg(
-        name: *const ::core::ffi::c_char,
-        prot: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn open_exfile(
-        fname: *mut ::core::ffi::c_char,
-        forceit: ::core::ffi::c_int,
-        mode: *mut ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn vim_strsave_fnameescape(
-        fname: *const ::core::ffi::c_char,
-        what: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_chdirfile(fname: *mut ::core::ffi::c_char, cause: CdCause) -> ::core::ffi::c_int;
-    fn shorten_fnames(force: ::core::ffi::c_int);
-    fn put_folds(fd: *mut FILE, wp: *mut win_T) -> ::core::ffi::c_int;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static topframe: GlobalCell<*mut frame_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static global_alist: GlobalCell<alist_T>;
-    static globaldir: GlobalCell<*mut ::core::ffi::c_char>;
-    static no_hlsearch: GlobalCell<bool>;
-    fn makemap(fd: *mut FILE, buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn makeset(
-        fd: *mut FILE,
-        opt_flags: ::core::ffi::c_int,
-        local_only: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn makefoldset(fd: *mut FILE) -> ::core::ffi::c_int;
-    static p_acd: GlobalCell<::core::ffi::c_int>;
-    static p_hls: GlobalCell<::core::ffi::c_int>;
-    static p_stal: GlobalCell<OptInt>;
-    static ssop_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_vdir: GlobalCell<*mut ::core::ffi::c_char>;
-    static vop_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_wh: GlobalCell<OptInt>;
-    static p_wiw: GlobalCell<OptInt>;
-    fn os_chdir(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn home_replace_save(
-        buf: *mut buf_T,
-        src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_ispathsep(c: ::core::ffi::c_int) -> bool;
-    fn add_pathsep(p: *mut ::core::ffi::c_char) -> bool;
-    fn vim_FullName(
-        fname: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn do_source(
-        fname: *mut ::core::ffi::c_char,
-        check_other: bool,
-        is_vimrc: ::core::ffi::c_int,
-        ret_sid: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn vim_strsave_escaped(
-        string: *const ::core::ffi::c_char,
-        esc_chars: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn tabpage_index(ftp: *mut tabpage_T) -> ::core::ffi::c_int;
-}
+use crate::src::nvim::window::tabpage_index;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;

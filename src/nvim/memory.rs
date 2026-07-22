@@ -19,21 +19,12 @@ use core::ffi::{c_char, c_int, c_long, c_void, CStr};
 use core::ptr;
 use core::slice;
 
-extern "C" {
-    fn malloc(size: usize) -> *mut c_void;
-    fn calloc(nmemb: usize, size: usize) -> *mut c_void;
-    fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn free(ptr: *mut c_void);
-    static arena_alloc_count: GlobalCell<usize>;
-    static e_outofmem: [c_char; 0];
-    fn gettext(msgid: *const c_char) -> *mut c_char;
-    static emsg_silent: GlobalCell<c_int>;
-    static did_outofmem_msg: GlobalCell<bool>;
-    fn preserve_exit(errmsg: *const c_char) -> !;
-    fn mf_release_all() -> bool;
-    fn semsg(fmt: *const c_char, ...) -> bool;
-    fn clear_sb_text(all: bool);
-}
+use crate::src::nvim::main::{
+    arena_alloc_count, did_outofmem_msg, e_outofmem, emsg_silent, preserve_exit,
+};
+use crate::src::nvim::memfile::mf_release_all;
+use crate::src::nvim::message::{clear_sb_text, semsg};
+use crate::src::nvim::os::libc::{calloc, free, gettext, malloc, realloc};
 
 #[derive(Copy, Clone)]
 #[repr(C)]

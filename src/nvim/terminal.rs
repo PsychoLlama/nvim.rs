@@ -1,4 +1,51 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_object, cstr_as_string, dict_get_value, dict_set_var,
+};
+use crate::src::nvim::autocmd::{block_autocmds, has_event, is_autocmd_blocked, unblock_autocmds};
+use crate::src::nvim::buffer::do_buffer;
+use crate::src::nvim::cursor_shape::{parse_shape_opt, shape_table};
+use crate::src::nvim::drawscreen::{
+    redraw_statuslines, setcursor, show_cursor_info_later, showmode, unshowmode, update_screen,
+};
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_nr, tv_dict_set_keys_readonly, tv_list_alloc, tv_list_append_allocated_string,
+    tv_list_append_list, tv_list_append_string,
+};
+use crate::src::nvim::eval::vars::{get_globvar_dict, set_vim_var_string};
+use crate::src::nvim::eval_1::{eval_call_provider, get_v_event, restore_v_event};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_free, multiqueue_move_events, multiqueue_new, multiqueue_new_child,
+    multiqueue_process_events, multiqueue_put_event,
+};
+use crate::src::nvim::event::time::{
+    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
+};
+use crate::src::nvim::ex_docmd::do_cmdline;
+use crate::src::nvim::getchar::{
+    getcmdkeycmd, ins_char_typebuf, map_execute_lua, merge_modifiers, paste_repeat, ungetchars,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::schar_get_adv;
+use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr, hl_get_term_attr};
+use crate::src::nvim::highlight_group::name_to_color;
+use crate::src::nvim::main::{
+    buffer_handles, clear_cmdline, exiting, got_int, main_loop, mapped_ctrl_c, mod_mask, mouse_col,
+    mouse_grid, mouse_row, must_redraw, p_bg, redraw_cmdline, redraw_mode, restart_edit,
+    stop_insert_mode, tpf_flags, vgetc_char, vgetc_mod_mask, window_handles, KeyTyped,
+    RedrawingDisabled, State,
+};
+use crate::src::nvim::map::{mh_delete_ptr_t, mh_get_int, mh_get_ptr_t, mh_put_ptr_t};
+use crate::src::nvim::mbyte::{mb_check_adjust_col, utf_ptr2char, utf_ptr2len};
+use crate::src::nvim::memory::{
+    strequal, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup,
+};
+use crate::src::nvim::mouse::do_mousescroll;
+use crate::src::nvim::ops::clear_oparg;
+use crate::src::nvim::option::set_option_value;
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, snprintf, strlen};
+use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
+use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_9, ChangedtickDictItem,
@@ -55,69 +102,41 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_23, uv_timer_s_u as C2Rust_Unnamed_24, uv_timer_t,
     varnumber_T, vim_state, virt_line, visualinfo_T, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-use ::c2rust_bitfields;
+use crate::src::nvim::ui::{
+    ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_mode_info_set, vim_beep,
+};
+use crate::src::nvim::vterm::keyboard::{
+    vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
+    vterm_keyboard_unichar,
+};
+use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
+use crate::src::nvim::vterm::parser::vterm_input_write;
+use crate::src::nvim::vterm::pen::{
+    vterm_state_convert_color_to_rgb, vterm_state_set_palette_color, vterm_state_set_penattr,
+};
+use crate::src::nvim::vterm::screen::{
+    vterm_obtain_screen, vterm_screen_enable_altscreen, vterm_screen_enable_reflow,
+    vterm_screen_flush_damage, vterm_screen_get_cell, vterm_screen_reset,
+    vterm_screen_set_callbacks, vterm_screen_set_damage_merge,
+    vterm_screen_set_unrecognised_fallbacks,
+};
+use crate::src::nvim::vterm::state::{
+    vterm_obtain_state, vterm_state_focus_in, vterm_state_focus_out,
+    vterm_state_set_selection_callbacks, vterm_state_set_termprop,
+};
+use crate::src::nvim::vterm::vterm::{
+    vterm_free, vterm_get_size, vterm_new, vterm_output_set_callback, vterm_set_size,
+    vterm_set_utf8,
+};
+use crate::src::nvim::window::may_trigger_win_scrolled_resized;
+
+// Phase-5a blacklist residue: this module keeps concrete local copies of
+// types whose canonical form is opaque (file_buffer, window_S, ...), so
+// these declarations cannot become `use` imports until the phase-8 rewrite.
+// The copies are layout-identical to the canonical definitions (proven by
+// the 5a parity suite); the nominal decl/decl mismatch is expected.
+#[allow(clashing_extern_declarations)]
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
-    fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_delete_ptr_t(set: *mut Set_ptr_t, key: *mut ptr_t) -> uint32_t;
-    static buffer_handles: GlobalCell<Map_int_ptr_t>;
-    static window_handles: GlobalCell<Map_int_ptr_t>;
-    fn dict_get_value(
-        dict: *mut dict_T,
-        key: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
     fn is_aucmd_win(win: *mut win_T) -> bool;
     fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
     fn aucmd_restbuf(aco: *mut aco_save_T);
@@ -128,7 +147,6 @@ extern "C" {
         force: bool,
         buf: *mut buf_T,
     ) -> bool;
-    fn has_event(event: event_T) -> bool;
     fn apply_autocmds_group(
         event: event_T,
         fname: *mut ::core::ffi::c_char,
@@ -139,16 +157,6 @@ extern "C" {
         eap: *mut exarg_T,
         data: *mut Object,
     ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn is_autocmd_blocked() -> bool;
-    fn do_buffer(
-        action: ::core::ffi::c_int,
-        start: ::core::ffi::c_int,
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        forceit: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T);
     fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T);
     fn changed_lines(
@@ -160,115 +168,14 @@ extern "C" {
         do_buf_event: bool,
     );
     fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn parse_shape_opt(what: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    static shape_table: GlobalCell<[cursorentry_T; 18]>;
-    fn update_screen() -> ::core::ffi::c_int;
-    fn setcursor();
-    fn show_cursor_info_later(force: bool);
-    fn showmode() -> ::core::ffi::c_int;
-    fn unshowmode(force: bool);
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool);
     fn status_redraw_buf(buf: *mut buf_T);
-    fn redraw_statuslines();
-    fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T;
-    fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T);
-    fn eval_call_provider(
-        provider: *mut ::core::ffi::c_char,
-        method: *mut ::core::ffi::c_char,
-        arguments: *mut list_T,
-        discard: bool,
-    ) -> typval_T;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_set_keys_readonly(dict: *mut dict_T);
-    fn get_globvar_dict() -> *mut dict_T;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn multiqueue_new(on_put: PutCallback, data: *mut ::core::ffi::c_void) -> *mut MultiQueue;
-    fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
-    fn multiqueue_free(self_0: *mut MultiQueue);
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_move_events(dest: *mut MultiQueue, src: *mut MultiQueue);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn time_watcher_init(
-        loop_0: *mut Loop,
-        watcher: *mut TimeWatcher,
-        data: *mut ::core::ffi::c_void,
-    );
-    fn time_watcher_start(
-        watcher: *mut TimeWatcher,
-        cb: time_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    );
-    fn time_watcher_stop(watcher: *mut TimeWatcher);
-    fn time_watcher_close(watcher: *mut TimeWatcher, cb: time_cb);
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn ins_char_typebuf(
-        c: ::core::ffi::c_int,
-        modifiers: ::core::ffi::c_int,
-        on_key_ignore: bool,
-    ) -> ::core::ffi::c_int;
-    fn ungetchars(len: ::core::ffi::c_int);
-    fn merge_modifiers(
-        c_arg: ::core::ffi::c_int,
-        modifiers: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn getcmdkeycmd(
-        promptc: ::core::ffi::c_int,
-        cookie: *mut ::core::ffi::c_void,
-        indent: ::core::ffi::c_int,
-        do_concat: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn map_execute_lua(may_repeat: bool, discard: bool) -> bool;
-    fn paste_repeat(count: ::core::ffi::c_int);
-    static mod_mask: GlobalCell<::core::ffi::c_int>;
-    static vgetc_mod_mask: GlobalCell<::core::ffi::c_int>;
-    static vgetc_char: GlobalCell<::core::ffi::c_int>;
-    static redraw_cmdline: GlobalCell<bool>;
-    static redraw_mode: GlobalCell<bool>;
-    static clear_cmdline: GlobalCell<bool>;
-    static mouse_grid: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_col: GlobalCell<::core::ffi::c_int>;
     static firstwin: GlobalCell<*mut win_T>;
     static curwin: GlobalCell<*mut win_T>;
     static first_tabpage: GlobalCell<*mut tabpage_T>;
     static curtab: GlobalCell<*mut tabpage_T>;
     static curbuf: GlobalCell<*mut buf_T>;
-    static exiting: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    static stop_insert_mode: GlobalCell<bool>;
-    static KeyTyped: GlobalCell<bool>;
-    static must_redraw: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
-    static tpf_flags: GlobalCell<::core::ffi::c_uint>;
-    fn hl_add_url(attr: ::core::ffi::c_int, url: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn hl_get_term_attr(aep: *mut HlAttrs) -> ::core::ffi::c_int;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
-    static main_loop: SharedCell<Loop>;
     fn mark_adjust_buf(
         buf: *mut buf_T,
         line1: linenr_T,
@@ -279,9 +186,6 @@ extern "C" {
         mode: MarkAdjustMode,
         op: ExtmarkOp,
     );
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_check_adjust_col(win_: *mut ::core::ffi::c_void);
     fn ml_append_buf(
         buf: *mut buf_T,
         lnum: linenr_T,
@@ -297,7 +201,6 @@ extern "C" {
         noalloc: bool,
     ) -> ::core::ffi::c_int;
     fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> ::core::ffi::c_int;
-    fn do_mousescroll(cap: *mut cmdarg_T);
     fn mouse_find_win_inner(
         gridp: *mut ::core::ffi::c_int,
         rowp: *mut ::core::ffi::c_int,
@@ -307,108 +210,7 @@ extern "C" {
     fn validate_cursor(wp: *mut win_T);
     fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
     fn curs_columns(wp: *mut win_T, may_scroll: ::core::ffi::c_int);
-    fn clear_oparg(oap: *mut oparg_T);
-    fn set_option_value(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn free_string_option(p: *mut ::core::ffi::c_char);
-    fn state_enter(s: *mut VimState);
-    fn state_handle_k_event();
-    fn may_trigger_modechanged();
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn ui_busy_start();
-    fn ui_busy_stop();
-    fn vim_beep(val: ::core::ffi::c_uint);
-    fn ui_mode_info_set();
-    fn ui_flush();
-    fn ui_cursor_shape();
-    fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod_0: VTermModifier);
-    fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0: VTermModifier);
-    fn vterm_keyboard_start_paste(vt: *mut VTerm);
-    fn vterm_keyboard_end_paste(vt: *mut VTerm);
-    fn vterm_input_write(vt: *mut VTerm, bytes: *const ::core::ffi::c_char, len: size_t) -> size_t;
-    fn vterm_mouse_move(
-        vt: *mut VTerm,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        mod_0: VTermModifier,
-    );
-    fn vterm_mouse_button(
-        vt: *mut VTerm,
-        button: ::core::ffi::c_int,
-        pressed: bool,
-        mod_0: VTermModifier,
-    );
-    fn vterm_state_set_palette_color(
-        state: *mut VTermState,
-        index: ::core::ffi::c_int,
-        col: *const VTermColor,
-    );
-    fn vterm_state_convert_color_to_rgb(state: *const VTermState, col: *mut VTermColor);
-    fn vterm_state_set_penattr(
-        state: *mut VTermState,
-        attr: VTermAttr,
-        type_0: VTermValueType,
-        val: *mut VTermValue,
-    ) -> ::core::ffi::c_int;
-    fn vterm_screen_reset(screen: *mut VTermScreen, hard: ::core::ffi::c_int);
-    fn vterm_screen_get_cell(
-        screen: *const VTermScreen,
-        pos: VTermPos,
-        cell: *mut VTermScreenCell,
-    ) -> ::core::ffi::c_int;
-    fn vterm_obtain_screen(vt: *mut VTerm) -> *mut VTermScreen;
-    fn vterm_screen_enable_reflow(screen: *mut VTermScreen, reflow: bool);
-    fn vterm_screen_enable_altscreen(screen: *mut VTermScreen, altscreen: ::core::ffi::c_int);
-    fn vterm_screen_set_callbacks(
-        screen: *mut VTermScreen,
-        callbacks: *const VTermScreenCallbacks,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_screen_set_unrecognised_fallbacks(
-        screen: *mut VTermScreen,
-        fallbacks: *const VTermStateFallbacks,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_screen_flush_damage(screen: *mut VTermScreen);
-    fn vterm_screen_set_damage_merge(screen: *mut VTermScreen, size: VTermDamageSize);
-    fn vterm_new(rows: ::core::ffi::c_int, cols: ::core::ffi::c_int) -> *mut VTerm;
-    fn vterm_free(vt: *mut VTerm);
-    fn vterm_get_size(
-        vt: *const VTerm,
-        rowsp: *mut ::core::ffi::c_int,
-        colsp: *mut ::core::ffi::c_int,
-    );
-    fn vterm_set_size(vt: *mut VTerm, rows: ::core::ffi::c_int, cols: ::core::ffi::c_int);
-    fn vterm_set_utf8(vt: *mut VTerm, is_utf8: ::core::ffi::c_int);
-    fn vterm_output_set_callback(
-        vt: *mut VTerm,
-        func: Option<VTermOutputCallback>,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_obtain_state(vt: *mut VTerm) -> *mut VTermState;
-    fn vterm_state_set_termprop(
-        state: *mut VTermState,
-        prop: VTermProp,
-        val: *mut VTermValue,
-    ) -> ::core::ffi::c_int;
-    fn vterm_state_focus_in(state: *mut VTermState);
-    fn vterm_state_focus_out(state: *mut VTermState);
-    fn vterm_state_set_selection_callbacks(
-        state: *mut VTermState,
-        callbacks: *const VTermSelectionCallbacks,
-        user: *mut ::core::ffi::c_void,
-        buffer: *mut ::core::ffi::c_char,
-        buflen: size_t,
-    );
     fn win_valid(win: *const win_T) -> bool;
-    fn may_trigger_win_scrolled_resized();
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

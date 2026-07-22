@@ -1,4 +1,25 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::drawscreen::{setcursor, update_screen};
+use crate::src::nvim::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
+use crate::src::nvim::eval_1::{get_v_event, restore_v_event};
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_get};
+use crate::src::nvim::ex_getln::{cmdline_overstrike, get_cmdline_info};
+use crate::src::nvim::getchar::{
+    check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, using_script, vpeekc,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
+use crate::src::nvim::keycodes::get_special_key_name;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, main_loop,
+    mod_mask, motion_force, must_redraw, need_wait_return, restart_VIsual_select, restart_edit,
+    typebuf, virtual_op, State, VIsual_active, VIsual_mode, VIsual_select,
+};
+use crate::src::nvim::option::get_ve_flags;
+use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
+use crate::src::nvim::os::libc::{strcmp, strcpy};
+use crate::src::nvim::strings::vim_snprintf;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CmdRedraw, CmdlineColorChunk,
@@ -46,97 +67,7 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_state, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
     xfmark_T, xp_prefix_T, QUEUE,
 };
-extern "C" {
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn has_event(event: event_T) -> bool;
-    fn update_screen() -> ::core::ffi::c_int;
-    fn setcursor();
-    fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T;
-    fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T);
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_set_keys_readonly(dict: *mut dict_T);
-    fn multiqueue_get(self_0: *mut MultiQueue) -> Event;
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn cmdline_overstrike() -> bool;
-    fn get_cmdline_info() -> *mut CmdlineInfo;
-    fn stuff_empty() -> bool;
-    fn may_sync_undo();
-    fn using_script() -> ::core::ffi::c_int;
-    fn safe_vgetc() -> ::core::ffi::c_int;
-    fn vpeekc() -> ::core::ffi::c_int;
-    fn check_end_reg_executing(advance: bool);
-    static mod_mask: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_select: GlobalCell<bool>;
-    static restart_VIsual_select: GlobalCell<::core::ffi::c_int>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static debug_mode: GlobalCell<bool>;
-    static finish_op: GlobalCell<bool>;
-    static motion_force: GlobalCell<::core::ffi::c_int>;
-    static exmode_active: GlobalCell<bool>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static typebuf: GlobalCell<typebuf_T>;
-    static must_redraw: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    static global_busy: GlobalCell<::core::ffi::c_int>;
-    static last_mode: GlobalCell<[::core::ffi::c_char; 4]>;
-    static virtual_op: GlobalCell<TriState>;
-    fn ctrl_x_mode_not_defined_yet() -> bool;
-    fn ins_compl_active() -> bool;
-    static main_loop: SharedCell<Loop>;
-    fn get_special_key_name(
-        c: ::core::ffi::c_int,
-        modifiers: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_ve_flags(wp: *mut win_T) -> ::core::ffi::c_uint;
-    fn input_get(
-        buf: *mut uint8_t,
-        maxlen: ::core::ffi::c_int,
-        ms: ::core::ffi::c_int,
-        tb_change_cnt: ::core::ffi::c_int,
-        events: *mut MultiQueue,
-    ) -> ::core::ffi::c_int;
-    fn os_breakcheck();
-    fn input_available() -> size_t;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn ui_flush();
-}
+use crate::src::nvim::ui::ui_flush;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

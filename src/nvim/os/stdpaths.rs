@@ -1,77 +1,14 @@
+use crate::src::nvim::fileio::vim_gettempdir;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{IObuff, NameBuff};
+use crate::src::nvim::memory::{
+    memchrsub, memcnt, strequal, xfree, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::os::env::{expand_env_save, os_env_exists, os_getenv, os_getenv_noalloc};
+use crate::src::nvim::os::libc::{__assert_fail, memmove, memset, strlen, strstr, strtok_r};
+use crate::src::nvim::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
+use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{size_t, StringBuilder, XDGVarType};
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strtok_r(
-        __s: *mut ::core::ffi::c_char,
-        __delim: *const ::core::ffi::c_char,
-        __save_ptr: *mut *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn vim_gettempdir() -> *mut ::core::ffi::c_char;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn expand_env_save(src: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn concat_fnames_realloc(
-        fname1: *mut ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn path_is_absolute(fname: *const ::core::ffi::c_char) -> bool;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-}
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

@@ -1,4 +1,29 @@
+use crate::src::nvim::charset::{char2cells, getdigits_int, skiptowhite, skipwhite};
+use crate::src::nvim::drawscreen::status_redraw_curbuf;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_get_string_chk,
+    tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_string,
+};
+use crate::src::nvim::eval_1::eval_to_string;
+use crate::src::nvim::ex_docmd::{do_cmdline_cmd, getline_equal};
+use crate::src::nvim::ex_getln::putcmdline;
+use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
+    no_mapping, p_cpo, p_dg, p_enc, Columns,
+};
+use crate::src::nvim::mapping::do_map;
+use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup};
+use crate::src::nvim::message::{
+    emsg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, semsg,
+};
+use crate::src::nvim::normal::add_to_showcmd;
+use crate::src::nvim::os::input::fast_breakcheck;
+use crate::src::nvim::os::libc::{__assert_fail, gettext, strlen};
+use crate::src::nvim::runtime::{getsourceline, source_runtime};
+use crate::src::nvim::strings::vim_snprintf;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -32,107 +57,9 @@ pub use crate::src::nvim::types::{
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_dg: GlobalCell<::core::ffi::c_int>;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn status_redraw_curbuf();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_number_exp: [::core::ffi::c_char; 0];
-    fn eval_to_string(
-        arg: *mut ::core::ffi::c_char,
-        join_list: bool,
-        use_simple_function: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_advance(col: ::core::ffi::c_int);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_get_bool(tv: *const typval_T) -> varnumber_T;
-    fn tv_check_for_opt_bool_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn getline_equal(
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        func: LineGetter,
-    ) -> bool;
-    fn putcmdline(c: ::core::ffi::c_char, shift: bool);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    fn plain_vgetc() -> ::core::ffi::c_int;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static cmdline_star: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static emsg_skip: GlobalCell<::core::ffi::c_int>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static no_mapping: GlobalCell<::core::ffi::c_int>;
-    static allow_keys: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    fn do_map(
-        maptype: ::core::ffi::c_int,
-        arg: *mut ::core::ffi::c_char,
-        mode: ::core::ffi::c_int,
-        is_abbrev: bool,
-    ) -> ::core::ffi::c_int;
-    fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_iscomposing_first(c: ::core::ffi::c_int) -> bool;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn add_to_showcmd(c: ::core::ffi::c_int) -> bool;
-    fn fast_breakcheck();
-    fn source_runtime(
-        name: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn getsourceline(
-        c: ::core::ffi::c_int,
-        cookie: *mut ::core::ffi::c_void,
-        indent: ::core::ffi::c_int,
-        do_concat: bool,
-    ) -> *mut ::core::ffi::c_char;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

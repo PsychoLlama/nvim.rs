@@ -1,4 +1,76 @@
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
+use crate::src::nvim::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
+use crate::src::nvim::eval::funcs::{
+    call_internal_func, call_internal_method, check_internal_func, find_internal_func,
+};
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_copy, tv_dict_add, tv_dict_item_alloc, tv_dict_item_alloc_len,
+    tv_dict_item_remove, tv_dict_unref, tv_get_number_chk, tv_list_append, tv_list_init_static,
+    value_check_lock,
+};
+use crate::src::nvim::eval::vars::{
+    find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
+    skip_var_list, vars_clear, vars_clear_ext,
+};
+use crate::src::nvim::eval_1::{
+    callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval0, eval1, eval_isnamec,
+    eval_isnamec1, eval_lavars_used, fill_evalarg_from_eap, find_name_end, garbage_collect,
+    get_id_len, get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
+    set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
+};
+use crate::src::nvim::ex_docmd::{check_nextcmd, checkforcmd, do_cmdline, ends_excmd, skip_range};
+use crate::src::nvim::ex_eval::{
+    aborted_in_try, aborting, cleanup_conditionals, exception_state_clear, exception_state_restore,
+    exception_state_save, report_make_pending, update_force_abort,
+};
+use crate::src::nvim::ex_getln::{
+    getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
+};
+use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::insexpand::ins_compl_active;
+use crate::src::nvim::lua::executor::{
+    api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
+};
+use crate::src::nvim::main::{
+    cmdline_row, curbuf, current_sctx, curwin, debug_backtrace_level, debug_tick, did_emsg,
+    did_throw, do_profiling, e_dictkey, e_invarg2, e_invexpr2, e_invrange, e_missingparen,
+    e_not_callable_type_str, e_str_not_inside_function, e_toofewarg, e_toomanyarg, e_trailing_arg,
+    e_unknown_function_str, e_usingsid, emsg_off, emsg_severe, emsg_skip, ex_nesting_level,
+    got_int, lines_left, msg_row, msg_scroll, need_wait_return, no_wait_return, p_ic, p_mfd,
+    p_verbose, sandbox, trylevel, want_garbage_collect, IObuff, KeyTyped, RedrawingDisabled, Rows,
+    EVALARG_EVALUATE,
+};
+use crate::src::nvim::mbyte::mb_strnicmp;
+use crate::src::nvim::memory::{
+    xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::message::{
+    emsg, iemsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
+    msg_prt_line, msg_putchar, msg_puts, msg_start, semsg, smsg, swmsg, trunc_string,
+    verbose_enter_scroll, verbose_leave_scroll,
+};
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __ctype_b_loc, abort, gettext, memchr, memcmp, memcpy, memmove, memset,
+    snprintf, strchr, strcmp, strcpy, strlen, strncmp, strstr,
+};
+use crate::src::nvim::path::path_fnamecmp;
+use crate::src::nvim::profile::{
+    func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
+    profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
+    script_prof_save,
+};
+use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::runtime::{
+    autoload_name, estack_pop, estack_push_ufunc, exestack, get_sourced_lnum, script_autoload,
+    script_items,
+};
+use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
+use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat, AutoPatCmd,
     AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
@@ -36,220 +108,8 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
+use crate::src::nvim::ui::ui_has;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemrchr(
-        src: *const ::core::ffi::c_void,
-        c: uint8_t,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    static p_ic: GlobalCell<::core::ffi::c_int>;
-    static p_mfd: GlobalCell<OptInt>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: intmax_t) -> intmax_t;
-    fn dbg_find_breakpoint(
-        file: bool,
-        fname: *mut ::core::ffi::c_char,
-        after: linenr_T,
-    ) -> linenr_T;
-    fn has_profiling(file: bool, fname: *mut ::core::ffi::c_char, fp: *mut bool) -> bool;
-    fn dbg_breakpoint(name: *mut ::core::ffi::c_char, lnum: linenr_T);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invexpr2: [::core::ffi::c_char; 0];
-    static e_invrange: [::core::ffi::c_char; 0];
-    static e_toomanyarg: [::core::ffi::c_char; 0];
-    static e_toofewarg: [::core::ffi::c_char; 0];
-    static e_dictkey: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_usingsid: [::core::ffi::c_char; 0];
-    static e_missingparen: [::core::ffi::c_char; 0];
-    static e_unknown_function_str: [::core::ffi::c_char; 0];
-    static e_str_not_inside_function: [::core::ffi::c_char; 0];
-    static e_not_callable_type_str: [::core::ffi::c_char; 0];
-    static eval_lavars_used: GlobalCell<*mut bool>;
-    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
-    fn fill_evalarg_from_eap(evalarg: *mut evalarg_T, eap: *mut exarg_T, skip: bool);
-    fn skip_expr(pp: *mut *mut ::core::ffi::c_char, evalarg: *mut evalarg_T) -> ::core::ffi::c_int;
-    fn get_lval(
-        name: *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        lp: *mut lval_T,
-        unlet: bool,
-        skip: bool,
-        flags: ::core::ffi::c_int,
-        fne_flags: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn clear_lval(lp: *mut lval_T);
-    fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T);
-    fn eval0(
-        arg: *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        eap: *mut exarg_T,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
-    fn eval1(
-        arg: *mut *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn partial_unref(pt: *mut partial_T);
-    fn garbage_collect(testing: bool) -> bool;
-    fn set_ref_in_ht(
-        ht: *mut hashtab_T,
-        copyID: ::core::ffi::c_int,
-        list_stack: *mut *mut list_stack_T,
-    ) -> bool;
-    fn set_ref_in_list_items(
-        l: *mut list_T,
-        copyID: ::core::ffi::c_int,
-        ht_stack: *mut *mut ht_stack_T,
-    ) -> bool;
-    fn set_ref_in_item(
-        tv: *mut typval_T,
-        copyID: ::core::ffi::c_int,
-        ht_stack: *mut *mut ht_stack_T,
-        list_stack: *mut *mut list_stack_T,
-    ) -> bool;
-    fn callback_call(
-        callback: *mut Callback,
-        argcount_in: ::core::ffi::c_int,
-        argvars_in: *mut typval_T,
-        rettv: *mut typval_T,
-    ) -> bool;
-    fn get_id_len(arg: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn find_name_end(
-        arg: *const ::core::ffi::c_char,
-        expr_start: *mut *const ::core::ffi::c_char,
-        expr_end: *mut *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn eval_isnamec(c: ::core::ffi::c_int) -> bool;
-    fn eval_isnamec1(c: ::core::ffi::c_int) -> bool;
-    fn is_luafunc(partial: *mut partial_T) -> bool;
-    fn check_luafunc_name(str: *const ::core::ffi::c_char, paren: bool) -> ::core::ffi::c_int;
-    fn handle_subscript(
-        arg: *mut *const ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        evalarg: *mut evalarg_T,
-        verbose: bool,
-    ) -> ::core::ffi::c_int;
-    fn last_set_msg(script_ctx: sctx_T);
-    fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn find_internal_func(name: *const ::core::ffi::c_char) -> *const EvalFuncDef;
-    fn check_internal_func(
-        fdef: *const EvalFuncDef,
-        argcount: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn call_internal_func(
-        fname: *const ::core::ffi::c_char,
-        argcount: ::core::ffi::c_int,
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn call_internal_method(
-        fname: *const ::core::ffi::c_char,
-        argcount: ::core::ffi::c_int,
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-        basetv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    static hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_find_len(
@@ -259,209 +119,17 @@ extern "C" {
     ) -> *mut hashitem_T;
     fn hash_add(ht: *mut hashtab_T, key: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn trunc_string(
-        s: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        room_in: ::core::ffi::c_int,
-        buflen: ::core::ffi::c_int,
-    );
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_start();
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outnum(n: ::core::ffi::c_int);
-    fn msg_prt_line(s: *const ::core::ffi::c_char, list: bool);
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn message_filtered(msg: *const ::core::ffi::c_char) -> bool;
-    fn msg_clr_eos();
-    fn verbose_enter_scroll();
-    fn verbose_leave_scroll();
-    fn swmsg(hl: bool, fmt: *const ::core::ffi::c_char, ...);
-    fn tv_list_init_static(l: *mut list_T);
-    fn tv_list_append(l: *mut list_T, item: *mut listitem_T);
-    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
-    fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T;
-    fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
-    fn tv_dict_unref(d: *mut dict_T);
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn value_check_lock(
-        lock: VarLockStatus,
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> bool;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn skip_var_list(
-        arg: *const ::core::ffi::c_char,
-        var_count: *mut ::core::ffi::c_int,
-        semicolon: *mut ::core::ffi::c_int,
-        silent: bool,
-    ) -> *const ::core::ffi::c_char;
-    fn list_hashtable_vars(
-        ht: *mut hashtab_T,
-        prefix: *const ::core::ffi::c_char,
-        empty: ::core::ffi::c_int,
-        first: *mut ::core::ffi::c_int,
-    );
-    fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
-    fn find_var(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        htp: *mut *mut hashtab_T,
-        no_autoload: ::core::ffi::c_int,
-    ) -> *mut dictitem_T;
-    fn find_var_in_ht(
-        ht: *mut hashtab_T,
-        htname: ::core::ffi::c_int,
-        varname: *const ::core::ffi::c_char,
-        varname_len: size_t,
-        no_autoload: ::core::ffi::c_int,
-    ) -> *mut dictitem_T;
-    fn find_var_ht(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        varname: *mut *const ::core::ffi::c_char,
-    ) -> *mut hashtab_T;
-    fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem, scope: ScopeType);
-    fn vars_clear(ht: *mut hashtab_T);
-    fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool);
-    fn aborting() -> bool;
-    fn update_force_abort();
-    fn aborted_in_try() -> bool;
-    fn exception_state_save(estate: *mut exception_state_T);
-    fn exception_state_restore(estate: *mut exception_state_T);
-    fn exception_state_clear();
-    fn report_make_pending(pending: ::core::ffi::c_int, value: *mut ::core::ffi::c_void);
-    fn cleanup_conditionals(
-        cstack: *mut cstack_T,
-        searched_cond: ::core::ffi::c_int,
-        inclusive: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn checkforcmd(
-        pp: *mut *mut ::core::ffi::c_char,
-        cmd: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    ) -> bool;
-    fn skip_range(
-        cmd: *const ::core::ffi::c_char,
-        ctx: *mut ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn check_nextcmd(p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getcmdline(
-        firstc: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        indent: ::core::ffi::c_int,
-        do_concat: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char);
-    fn ui_ext_cmdline_block_leave();
     fn ga_clear(gap: *mut garray_T);
     fn ga_clear_strings(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    fn saveRedobuff(save_redo: *mut save_redo_T);
-    fn restoreRedobuff(save_redo: *mut save_redo_T);
-    fn ins_compl_active() -> bool;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_typval_call(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-        args: *mut typval_T,
-        argcount: ::core::ffi::c_int,
-        ret_tv: *mut typval_T,
-    );
-    fn typval_exec_lua_callable(
-        lua_cb: LuaRef,
-        argcount: ::core::ffi::c_int,
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn nlua_set_sctx(current: *mut sctx_T);
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn line_breakcheck();
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn profile_start() -> proftime_T;
-    fn profile_end(tm: proftime_T) -> proftime_T;
-    fn profile_zero() -> proftime_T;
-    fn profile_add(tm1: proftime_T, tm2: proftime_T) -> proftime_T;
-    fn profile_self(self_0: proftime_T, total: proftime_T, children: proftime_T) -> proftime_T;
-    fn profile_sub_wait(tm: proftime_T, tma: proftime_T) -> proftime_T;
-    fn prof_def_func() -> bool;
-    fn func_do_profile(fp: *mut ufunc_T);
-    fn func_line_start(cookie: *mut ::core::ffi::c_void);
-    fn func_line_end(cookie: *mut ::core::ffi::c_void);
-    fn script_prof_save(tm: *mut proftime_T);
-    fn script_prof_restore(tm: *const proftime_T);
-    fn skip_regexp(
-        startp: *mut ::core::ffi::c_char,
-        delim: ::core::ffi::c_int,
-        magic: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    static exestack: GlobalCell<garray_T>;
-    static script_items: GlobalCell<garray_T>;
-    fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T);
-    fn estack_pop();
-    fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut ::core::ffi::c_void) -> linenr_T;
-    fn autoload_name(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
-    fn save_search_patterns();
-    fn restore_search_patterns();
-    fn ui_has(ext: UIExtension) -> bool;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static emsg_skip: GlobalCell<::core::ffi::c_int>;
-    static emsg_severe: GlobalCell<bool>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
-    static debug_tick: GlobalCell<::core::ffi::c_int>;
-    static debug_backtrace_level: GlobalCell<::core::ffi::c_int>;
-    static do_profiling: GlobalCell<::core::ffi::c_int>;
-    static did_throw: GlobalCell<bool>;
-    static trylevel: GlobalCell<::core::ffi::c_int>;
-    static want_garbage_collect: GlobalCell<bool>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static sandbox: GlobalCell<::core::ffi::c_int>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    static KeyTyped: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

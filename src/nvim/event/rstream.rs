@@ -1,3 +1,12 @@
+use crate::src::nvim::event::libuv::{
+    uv_err_name, uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start,
+    uv_read_stop, uv_strerror,
+};
+use crate::src::nvim::event::multiqueue::multiqueue_put_event;
+use crate::src::nvim::event::stream::{stream_close_handle, stream_init, stream_may_close};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::memory::{alloc_block, free_block};
+use crate::src::nvim::os::libc::{__assert_fail, memmove};
 pub use crate::src::nvim::types::{
     Event, Loop, MultiQueue, RStream, Stream, __gid_t, __mode_t, __off_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, argv_callback, gid_t,
@@ -15,59 +24,6 @@ pub use crate::src::nvim::types::{
     uv_signal_t, uv_stat_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_6, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timespec_t, uv_uid_t,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_read_start(
-        _: *mut uv_stream_t,
-        alloc_cb_0: uv_alloc_cb,
-        read_cb_0: uv_read_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_read_stop(_: *mut uv_stream_t) -> ::core::ffi::c_int;
-    fn uv_idle_start(idle: *mut uv_idle_t, cb: uv_idle_cb) -> ::core::ffi::c_int;
-    fn uv_idle_stop(idle: *mut uv_idle_t) -> ::core::ffi::c_int;
-    fn uv_fs_req_cleanup(req: *mut uv_fs_t);
-    fn uv_fs_read(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        bufs: *const uv_buf_t,
-        nbufs: ::core::ffi::c_uint,
-        offset: int64_t,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn alloc_block() -> *mut ::core::ffi::c_void;
-    fn free_block(block: *mut ::core::ffi::c_void);
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn stream_init(
-        loop_0: *mut Loop,
-        stream: *mut Stream,
-        fd: ::core::ffi::c_int,
-        uvstream: *mut uv_stream_t,
-    );
-    fn stream_may_close(stream: *mut Stream);
-    fn stream_close_handle(stream: *mut Stream);
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

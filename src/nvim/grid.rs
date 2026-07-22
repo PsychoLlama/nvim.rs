@@ -1,4 +1,20 @@
+use crate::src::nvim::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::{hl_apply_winblend, hl_combine_attr};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    curtab, default_grid, exmode_active, firstwin, full_screen, hl_attr_active, linebuf_attr,
+    linebuf_char, linebuf_scratch, linebuf_vcol, p_arshape, p_tbidi, rdb_flags, resizing_screen,
+};
+use crate::src::nvim::map::mh_clear;
+use crate::src::nvim::map_glyph_cache::mh_put_glyph;
+use crate::src::nvim::mbyte::{
+    mb_string2cells, utf_char2bytes, utf_char2len, utf_cp_bounds, utf_ptr2cells, utf_ptr2cells_len,
+    utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len, utfc_ptrlen2schar,
+};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::optionstr::check_chars_options;
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, strlen, strnlen};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BorderTextType, BufUpdateCallbacks, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharBoundsOff, DecorExt,
@@ -29,124 +45,10 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strnlen(__string: *const ::core::ffi::c_char, __maxlen: size_t) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn mh_clear(h: *mut MapHash);
-    fn mh_put_glyph(set: *mut Set_glyph, key: String_0, new: *mut MHPutStatus) -> uint32_t;
-    fn decor_check_invalid_glyphs();
-    fn next_virt_text_chunk(
-        vt: VirtText,
-        pos: *mut size_t,
-        attr: *mut ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static full_screen: GlobalCell<bool>;
-    static exmode_active: GlobalCell<bool>;
-    static default_grid: GlobalCell<ScreenGrid>;
-    static resizing_screen: GlobalCell<bool>;
-    static linebuf_char: GlobalCell<*mut schar_T>;
-    static linebuf_attr: GlobalCell<*mut sattr_T>;
-    static linebuf_vcol: GlobalCell<*mut colnr_T>;
-    static linebuf_scratch: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_arshape: GlobalCell<::core::ffi::c_int>;
-    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_tbidi: GlobalCell<::core::ffi::c_int>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn hl_apply_winblend(winbl: ::core::ffi::c_int, attr: ::core::ffi::c_int)
-        -> ::core::ffi::c_int;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2cells_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptrlen2schar(
-        p: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-        firstc: *mut ::core::ffi::c_int,
-    ) -> schar_T;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_cp_bounds(
-        base: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> CharBoundsOff;
-    fn ui_line(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        invalid_row: bool,
-        startcol: ::core::ffi::c_int,
-        endcol: ::core::ffi::c_int,
-        clearcol: ::core::ffi::c_int,
-        clearattr: ::core::ffi::c_int,
-        wrap: bool,
-    );
-    fn ui_grid_cursor_goto(
-        grid_handle: handle_T,
-        new_row: ::core::ffi::c_int,
-        new_col: ::core::ffi::c_int,
-    );
-    fn ui_check_cursor_grid(grid_handle: handle_T);
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_call_grid_resize(grid: Integer, width: Integer, height: Integer);
-    fn ui_call_grid_scroll(
-        grid: Integer,
-        top: Integer,
-        bot: Integer,
-        left: Integer,
-        right: Integer,
-        rows: Integer,
-        cols: Integer,
-    );
-    fn check_chars_options() -> *const ::core::ffi::c_char;
-}
+use crate::src::nvim::ui::{
+    ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
+    ui_line,
+};
 pub type sscratch_T = int32_t;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;

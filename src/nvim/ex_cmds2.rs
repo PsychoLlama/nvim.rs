@@ -1,4 +1,43 @@
+use crate::src::nvim::arglist::{do_argfile, editing_arg_idx, ex_all, ex_rewind, set_arglist};
+use crate::src::nvim::autocmd::{
+    apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
+};
+use crate::src::nvim::buffer::{
+    bt_dontwrite, buf_hide, buf_set_name, buf_spname, buflist_findnr, bufref_valid, goto_buffer,
+    no_write_message, no_write_message_nobang, set_bufref, set_curbuf,
+};
+use crate::src::nvim::bufwrite::buf_write;
+use crate::src::nvim::change::unchanged;
+use crate::src::nvim::channel::channel_job_running;
+use crate::src::nvim::eval::typval::{
+    tv_list_alloc, tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
+};
+use crate::src::nvim::eval::vars::{
+    do_unlet, get_var_value, set_internal_string_var, set_vim_var_string,
+};
+use crate::src::nvim::eval_1::eval_call_provider;
+use crate::src::nvim::ex_cmds::{check_overwrite, set_swapcommand};
+use crate::src::nvim::ex_docmd::{dialog_msg, do_cmdline, do_cmdline_cmd};
+use crate::src::nvim::ex_getln::script_get;
+use crate::src::nvim::fileio::{buf_check_timestamp, check_timestamps};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    cmdline_row, cmdmod, curbuf, curtab, curwin, e_noname, e_winfixbuf_cannot_go_to_buffer,
+    emsg_off, exiting, first_tabpage, firstbuf, firstwin, got_int, listcmd_busy, msg_col,
+    msg_didany, msg_didout, msg_listdo_overwrite, msg_row, no_check_timestamps, no_wait_return,
+    p_aw, p_awa, p_confirm, p_write, prevwin, vgetc_busy,
+};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{
+    emsg, msg, msg_source, semsg, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
+};
+use crate::src::nvim::normal::do_check_scrollbind;
+use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen};
+use crate::src::nvim::path::vim_FullName;
+use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
+use crate::src::nvim::r#move::validate_cursor;
+use crate::src::nvim::runtime::source_runtime_vim_lua;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -31,184 +70,10 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_arglist(str: *mut ::core::ffi::c_char);
-    fn editing_arg_idx(win: *mut win_T) -> bool;
-    fn ex_rewind(eap: *mut exarg_T);
-    fn do_argfile(eap: *mut exarg_T, argn: ::core::ffi::c_int);
-    fn ex_all(eap: *mut exarg_T);
-    fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn au_event_restore(old_ei: *mut ::core::ffi::c_char);
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn goto_buffer(
-        eap: *mut exarg_T,
-        start: ::core::ffi::c_int,
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-    );
-    fn set_curbuf(buf: *mut buf_T, action: ::core::ffi::c_int, update_jumplist: bool);
-    fn no_write_message();
-    fn no_write_message_nobang(buf: *const buf_T);
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn buf_set_name(fnum: ::core::ffi::c_int, name: *mut ::core::ffi::c_char);
-    fn bt_dontwrite(buf: *const buf_T) -> bool;
-    fn buf_hide(buf: *const buf_T) -> bool;
-    fn buf_spname(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
-    fn buf_write(
-        buf: *mut buf_T,
-        fname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        start: linenr_T,
-        end: linenr_T,
-        eap: *mut exarg_T,
-        append: bool,
-        forceit: bool,
-        reset_changed: bool,
-        filtering: bool,
-    ) -> ::core::ffi::c_int;
-    fn unchanged(buf: *mut buf_T, ff: bool, always_inc_changedtick: bool);
-    fn channel_job_running(id: uint64_t) -> bool;
-    static e_noname: [::core::ffi::c_char; 0];
-    static e_winfixbuf_cannot_go_to_buffer: [::core::ffi::c_char; 0];
-    fn eval_call_provider(
-        provider: *mut ::core::ffi::c_char,
-        method: *mut ::core::ffi::c_char,
-        arguments: *mut list_T,
-        discard: bool,
-    ) -> typval_T;
-    static msg_listdo_overwrite: GlobalCell<::core::ffi::c_int>;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn msg_source(hl_id: ::core::ffi::c_int);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn wait_return(redraw: ::core::ffi::c_int);
-    fn vim_dialog_yesnocancel(
-        type_0: ::core::ffi::c_int,
-        title: *mut ::core::ffi::c_char,
-        message: *mut ::core::ffi::c_char,
-        dflt: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn vim_dialog_yesnoallcancel(
-        type_0: ::core::ffi::c_int,
-        title: *mut ::core::ffi::c_char,
-        message: *mut ::core::ffi::c_char,
-        dflt: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn set_internal_string_var(name: *const ::core::ffi::c_char, value: *mut ::core::ffi::c_char);
-    fn do_unlet(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        forceit: bool,
-    ) -> ::core::ffi::c_int;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn get_var_value(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn check_overwrite(
-        eap: *mut exarg_T,
-        buf: *mut buf_T,
-        fname: *mut ::core::ffi::c_char,
-        ffname: *mut ::core::ffi::c_char,
-        other: bool,
-    ) -> ::core::ffi::c_int;
-    fn set_swapcommand(command: *mut ::core::ffi::c_char, newlnum: linenr_T) -> bool;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn dialog_msg(
-        buff: *mut ::core::ffi::c_char,
-        format: *mut ::core::ffi::c_char,
-        fname: *mut ::core::ffi::c_char,
-    );
-    fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::ffi::c_char;
-    fn check_timestamps(focus: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn buf_check_timestamp(buf: *mut buf_T) -> ::core::ffi::c_int;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_didout: GlobalCell<bool>;
-    static msg_didany: GlobalCell<bool>;
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
-    static no_check_timestamps: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static prevwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static exiting: GlobalCell<bool>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static got_int: GlobalCell<bool>;
-    static listcmd_busy: GlobalCell<bool>;
-    fn setpcmark();
-    fn validate_cursor(wp: *mut win_T);
-    fn do_check_scrollbind(check: bool);
-    static p_aw: GlobalCell<::core::ffi::c_int>;
-    static p_awa: GlobalCell<::core::ffi::c_int>;
-    static p_confirm: GlobalCell<::core::ffi::c_int>;
-    static p_write: GlobalCell<::core::ffi::c_int>;
-    fn vim_FullName(
-        fname: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn qf_get_valid_size(eap: *mut exarg_T) -> size_t;
-    fn qf_get_cur_idx(eap: *mut exarg_T) -> size_t;
-    fn ex_cc(eap: *mut exarg_T);
-    fn ex_cnext(eap: *mut exarg_T);
-    fn source_runtime_vim_lua(
-        name: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn bufIsChanged(buf: *mut buf_T) -> bool;
-    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn win_valid(win: *const win_T) -> bool;
-    fn valid_tabpage(tpc: *mut tabpage_T) -> bool;
-    fn goto_tabpage_tp(
-        tp: *mut tabpage_T,
-        trigger_enter_autocmds: bool,
-        trigger_leave_autocmds: bool,
-    );
-    fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
-    fn win_goto(wp: *mut win_T);
-}
+use crate::src::nvim::undo::bufIsChanged;
+use crate::src::nvim::window::{
+    goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
+};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;

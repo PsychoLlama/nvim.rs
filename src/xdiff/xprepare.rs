@@ -1,43 +1,13 @@
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::memset;
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, mmfile_t, s_chanode, s_chastore, s_mmfile, s_xdfenv, s_xdfile,
     s_xpparam, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
 };
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xdl_mmfile_first(
-        mmf: *mut mmfile_t,
-        size: *mut ::core::ffi::c_long,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xdl_bogosqrt(n: ::core::ffi::c_long) -> ::core::ffi::c_long;
-    fn xdl_cha_init(
-        cha: *mut chastore_t,
-        isize: ::core::ffi::c_long,
-        icount: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-    fn xdl_cha_free(cha: *mut chastore_t);
-    fn xdl_cha_alloc(cha: *mut chastore_t) -> *mut ::core::ffi::c_void;
-    fn xdl_guess_lines(mf: *mut mmfile_t, sample: ::core::ffi::c_long) -> ::core::ffi::c_long;
-    fn xdl_recmatch(
-        l1: *const ::core::ffi::c_char,
-        s1: ::core::ffi::c_long,
-        l2: *const ::core::ffi::c_char,
-        s2: ::core::ffi::c_long,
-        flags: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-    fn xdl_hash_record(
-        data: *mut *const ::core::ffi::c_char,
-        top: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_ulong;
-    fn xdl_hashbits(size: ::core::ffi::c_uint) -> ::core::ffi::c_uint;
-}
+use crate::src::xdiff::xutils::{
+    xdl_bogosqrt, xdl_cha_alloc, xdl_cha_free, xdl_cha_init, xdl_guess_lines, xdl_hash_record,
+    xdl_hashbits, xdl_mmfile_first, xdl_recmatch,
+};
 pub type xdlclassifier_t = s_xdlclassifier;
 #[derive(Copy, Clone)]
 #[repr(C)]

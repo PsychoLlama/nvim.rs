@@ -1,4 +1,25 @@
+use crate::src::nvim::api::private::helpers::{
+    api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
+    arena_take_arraybuilder, cstr_as_string, find_buffer_by_handle, string_to_cstr, try_enter,
+    try_leave,
+};
+use crate::src::nvim::api::private::validate::{
+    api_err_conflict, api_err_exp, api_err_invalid, api_err_required, check_string_array,
+};
+use crate::src::nvim::autocmd::{
+    apply_autocmds_group, au_get_autocmds_for_event, aucmd_del_for_event_and_group,
+    aucmd_span_pattern, augroup_add, augroup_del, augroup_exists, augroup_find, augroup_name,
+    aupat_get_buflocal_nr, aupat_is_buflocal, aupat_normalize_buflocal_pat, autocmd_delete_id,
+    autocmd_register, do_autocmd_event, event_name2nr_str, event_nr2name,
+};
+use crate::src::nvim::buffer::do_modelines;
+use crate::src::nvim::eval::typval::{callback_free, callback_to_string};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::lua::executor::{api_new_luaref, nlua_ref_is_function};
+use crate::src::nvim::main::{curbuf, current_sctx};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen};
+use crate::src::nvim::strings::arena_printf;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat,
     BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index, Callback, CallbackType,
@@ -33,126 +54,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn api_err_required(err: *mut Error, name: *const ::core::ffi::c_char);
-    fn api_err_conflict(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        name2: *const ::core::ffi::c_char,
-    );
-    fn check_string_array(
-        arr: Array,
-        name: *mut ::core::ffi::c_char,
-        disallow_nl: bool,
-        err: *mut Error,
-    ) -> bool;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int);
-    fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec;
-    fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool);
-    fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn augroup_name(group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn augroup_exists(name: *const ::core::ffi::c_char) -> bool;
-    fn event_name2nr_str(str: String_0) -> event_T;
-    fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char;
-    fn do_autocmd_event(
-        event: event_T,
-        pat: *const ::core::ffi::c_char,
-        once: bool,
-        nested: ::core::ffi::c_int,
-        cmd: *const ::core::ffi::c_char,
-        del: bool,
-        group: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn autocmd_register(
-        id: int64_t,
-        event: event_T,
-        pat: *const ::core::ffi::c_char,
-        patlen: ::core::ffi::c_int,
-        group: ::core::ffi::c_int,
-        once: bool,
-        nested: bool,
-        desc: *mut ::core::ffi::c_char,
-        handler_cmd: *const ::core::ffi::c_char,
-        handler_fn: *mut Callback,
-    ) -> ::core::ffi::c_int;
-    fn aucmd_span_pattern(
-        pat: *const ::core::ffi::c_char,
-        start: *mut *const ::core::ffi::c_char,
-    ) -> size_t;
-    fn apply_autocmds_group(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        group: ::core::ffi::c_int,
-        buf: *mut buf_T,
-        eap: *mut exarg_T,
-        data: *mut Object,
-    ) -> bool;
-    fn aupat_is_buflocal(pat: *const ::core::ffi::c_char, patlen: ::core::ffi::c_int) -> bool;
-    fn aupat_get_buflocal_nr(
-        pat: *const ::core::ffi::c_char,
-        patlen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn aupat_normalize_buflocal_pat(
-        dest: *mut ::core::ffi::c_char,
-        pat: *const ::core::ffi::c_char,
-        patlen: ::core::ffi::c_int,
-        buflocal_nr: ::core::ffi::c_int,
-    );
-    fn autocmd_delete_id(id: int64_t) -> bool;
-    fn do_modelines(flags: ::core::ffi::c_int);
-    fn callback_free(callback: *mut Callback);
-    fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn nlua_ref_is_function(ref_0: LuaRef) -> bool;
-    fn arena_printf(arena: *mut Arena, fmt: *const ::core::ffi::c_char, ...) -> String_0;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

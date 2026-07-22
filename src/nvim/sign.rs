@@ -1,4 +1,47 @@
+use crate::src::nvim::api::extmark::{describe_ns, nvim_create_namespace};
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::buffer::{buflist_findname_exp, buflist_findnr};
+use crate::src::nvim::charset::{
+    backslash_halve, getdigits_int, skiptowhite, skiptowhite_esc, skipwhite, vim_isprintc,
+};
+use crate::src::nvim::cursor::check_cursor_lnum;
+use crate::src::nvim::decoration::{decor_find_sign, decor_put_sh, sign_item_cmp};
+use crate::src::nvim::drawscreen::redraw_buf_later;
+use crate::src::nvim::edit::beginline;
+use crate::src::nvim::eval::funcs::get_buf_arg;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
+    tv_dict_get_number, tv_dict_get_number_def, tv_dict_get_string, tv_get_lnum, tv_get_number_chk,
+    tv_get_string, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
+    tv_list_append_number,
+};
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::extmark::{extmark_del, extmark_del_id, extmark_set};
+use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::schar_get;
+use crate::src::nvim::highlight_group::{get_highlight_name_ext, syn_check_group};
+use crate::src::nvim::main::{
+    curtab, curwin, e_argreq, e_dictreq, e_invalid_buffer_name_str, e_invarg, e_invarg2, e_listreq,
+    e_trailing_arg, firstbuf, firstwin, got_int, namespace_ids,
+};
+use crate::src::nvim::map::{
+    map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_String, mh_get_cstr_t,
+};
+use crate::src::nvim::marktree::{
+    marktree_itr_current, marktree_itr_get, marktree_itr_get_overlap, marktree_itr_next,
+    marktree_itr_step_overlap, marktree_lookup_ns,
+};
+use crate::src::nvim::mbyte::{utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
+use crate::src::nvim::memory::{xcalloc, xfree, xmallocz, xrealloc, xstrdup};
+use crate::src::nvim::message::{
+    emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg, smsg,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, atoi, gettext, memcpy, memmove, qsort, snprintf, strcmp, strlen, strncmp,
+};
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -35,238 +78,9 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
     xp_prefix_T, NS, QUEUE,
 };
+use crate::src::nvim::window::buf_jump_open_win;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn mh_get_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> uint32_t;
-    fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t;
-    fn map_del_cstr_t_ptr_t(
-        map: *mut Map_cstr_t_ptr_t,
-        key: cstr_t,
-        key_alloc: *mut cstr_t,
-    ) -> ptr_t;
-    fn map_put_ref_cstr_t_ptr_t(
-        map: *mut Map_cstr_t_ptr_t,
-        key: cstr_t,
-        key_alloc: *mut *mut cstr_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    static namespace_ids: GlobalCell<Map_String_int>;
-    fn nvim_create_namespace(name: String_0) -> Integer;
-    fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buflist_findname_exp(fname: *mut ::core::ffi::c_char) -> *mut buf_T;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite_esc(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn backslash_halve(p: *mut ::core::ffi::c_char);
     static decor_items: GlobalCell<C2Rust_Unnamed_20>;
-    fn check_cursor_lnum(win: *mut win_T);
-    fn decor_put_sh(item: DecorSignHighlight) -> uint32_t;
-    fn sign_item_cmp(
-        p1: *const ::core::ffi::c_void,
-        p2: *const ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn decor_find_sign(decor: DecorInline) -> *mut DecorSignHighlight;
-    fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn beginline(flags: ::core::ffi::c_int);
-    static e_argreq: [::core::ffi::c_char; 0];
-    static e_invalid_buffer_name_str: [::core::ffi::c_char; 0];
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_dictreq: [::core::ffi::c_char; 0];
-    static e_listreq: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_puts_title(s: *const ::core::ffi::c_char);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
-    fn tv_dict_get_number_def(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        def: ::core::ffi::c_int,
-    ) -> varnumber_T;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    fn tv_check_for_string_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_nonnull_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_check_for_opt_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn extmark_set(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        idp: *mut uint32_t,
-        row: ::core::ffi::c_int,
-        col: colnr_T,
-        end_row: ::core::ffi::c_int,
-        end_col: colnr_T,
-        decor: DecorInline,
-        decor_flags: uint16_t,
-        right_gravity: bool,
-        end_right_gravity: bool,
-        no_undo: bool,
-        invalidate: bool,
-        err: *mut Error,
-    );
-    fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool;
-    fn extmark_del(buf: *mut buf_T, itr: *mut MarkTreeIter, key: MTKey, restore: bool);
-    fn foldOpenCursor();
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static got_int: GlobalCell<bool>;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn get_highlight_name_ext(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-        skip_cleared: bool,
-    ) -> *const ::core::ffi::c_char;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn marktree_itr_get(
-        b: *mut MarkTree,
-        row: int32_t,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_next(b: *mut MarkTree, itr: *mut MarkTreeIter) -> bool;
-    fn marktree_itr_current(itr: *mut MarkTreeIter) -> MTKey;
-    fn marktree_itr_get_overlap(
-        b: *mut MarkTree,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_step_overlap(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        pair: *mut MTPair,
-    ) -> bool;
-    fn marktree_lookup_ns(
-        b: *mut MarkTree,
-        ns: uint32_t,
-        id: uint32_t,
-        end: bool,
-        itr: *mut MarkTreeIter,
-    ) -> MTKey;
-    fn buf_jump_open_win(buf: *mut buf_T) -> *mut win_T;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const SIGN_WIDTH: C2Rust_Unnamed = 2;

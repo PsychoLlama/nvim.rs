@@ -1,23 +1,9 @@
 use crate::src::nvim::global_cell::SharedCell;
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_error, luaL_register, lua_createtable, lua_gettop, lua_pushlstring,
+    lua_tolstring, lua_type,
+};
 pub use crate::src::nvim::types::{luaL_Reg, lua_CFunction, lua_State, size_t};
-extern "C" {
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 unsafe extern "C" fn nlua_base64_encode(mut L: *mut lua_State) -> ::core::ffi::c_int {

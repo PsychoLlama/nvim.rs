@@ -1,4 +1,22 @@
+use crate::src::nvim::api::private::helpers::api_free_object;
+use crate::src::nvim::buffer::buf_is_empty;
+use crate::src::nvim::charset::vim_strsize;
+use crate::src::nvim::drawscreen::screenclear;
+use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{grid_line_flush, grid_line_puts, grid_line_start};
+use crate::src::nvim::highlight_group::{syn_id2attr, syn_name2id};
+use crate::src::nvim::lua::executor::nlua_exec;
+use crate::src::nvim::main::{
+    curbuf, curwin, default_gridview, firstwin, got_int, hl_attr_active, msg_col, p_ls, p_shm,
+    p_verbose, starting, topframe, Columns, Rows,
+};
+use crate::src::nvim::mbyte::{utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memory::{xfree, xmallocz};
+use crate::src::nvim::message::{msg_ext_set_kind, msg_putchar, msg_puts};
+use crate::src::nvim::os::env::{default_vim_dir, default_vimruntime_dir};
+use crate::src::nvim::os::libc::{__assert_fail, atoi, gettext, memchr, snprintf, strchr, strstr};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
     CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem,
@@ -32,85 +50,8 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn api_free_object(value: Object);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buf_is_empty(buf: *mut buf_T) -> bool;
-    static p_ls: GlobalCell<OptInt>;
-    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn screenclear();
-    fn plain_vgetc() -> ::core::ffi::c_int;
-    static default_gridview: GlobalCell<GridView>;
-    fn grid_line_start(view: *mut GridView, row: ::core::ffi::c_int);
-    fn grid_line_puts(
-        col: ::core::ffi::c_int,
-        text: *const ::core::ffi::c_char,
-        textlen: ::core::ffi::c_int,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn grid_line_flush();
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static topframe: GlobalCell<*mut frame_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static starting: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    static default_vim_dir: GlobalCell<*mut ::core::ffi::c_char>;
-    static default_vimruntime_dir: GlobalCell<*mut ::core::ffi::c_char>;
-    fn ui_has(ext: UIExtension) -> bool;
-    fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool;
-}
+use crate::src::nvim::ui::ui_has;
+use crate::src::nvim::window::one_window;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

@@ -1,4 +1,37 @@
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::charset::{getdigits_int, skipwhite};
+use crate::src::nvim::cursor::{check_cursor, gchar_cursor};
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_ret, tv_get_string_chk,
+    tv_list_alloc, tv_list_append_dict, tv_list_append_string,
+};
+use crate::src::nvim::eval::vars::del_menutrans_vars;
+use crate::src::nvim::ex_docmd::{
+    ends_excmd, exec_normal_cmd, restore_current_state, save_current_state,
+};
+use crate::src::nvim::getchar::ins_typebuf;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::replace_termcodes;
+use crate::src::nvim::main::{
+    curbuf, current_sctx, curwin, e_cannot_change_menus_while_listing, e_invarg, e_invarg2,
+    e_menu_only_exists_in_another_mode, e_trailing_arg, ex_normal_busy, finish_op, got_int, p_cpo,
+    p_sel, restart_edit, root_menu, sys_menu, State, VIsual, VIsual_active, VIsual_mode,
+    VIsual_reselect, VIsual_select,
+};
+use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{
+    emsg, msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
+    msg_puts_title, semsg, str2special_save,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, memmove, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp,
+    strncmp,
+};
+use crate::src::nvim::popupmenu::pum_show_popupmenu;
+use crate::src::nvim::state::get_real_state;
+use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -31,191 +64,11 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vimmenu_T, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
+use crate::src::nvim::ui::ui_call_update_menu;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn check_cursor(wp: *mut win_T);
-    fn gchar_cursor() -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_menu_only_exists_in_another_mode: [::core::ffi::c_char; 0];
-    static e_cannot_change_menus_while_listing: [::core::ffi::c_char; 0];
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outnum(n: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_outtrans_special(
-        strstart: *const ::core::ffi::c_char,
-        from: bool,
-        maxlen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn str2special_save(
-        str: *const ::core::ffi::c_char,
-        replace_spaces: bool,
-        replace_lt: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_puts_title(s: *const ::core::ffi::c_char);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_dict(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        dict: *mut dict_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_bool(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: BoolVarValue,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_allocated_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn del_menutrans_vars();
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn save_current_state(sst: *mut save_state_T) -> bool;
-    fn restore_current_state(sst: *mut save_state_T);
-    fn exec_normal_cmd(cmd: *mut ::core::ffi::c_char, remap: ::core::ffi::c_int, silent: bool);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    fn ins_typebuf(
-        str: *mut ::core::ffi::c_char,
-        noremap: ::core::ffi::c_int,
-        offset: ::core::ffi::c_int,
-        nottyped: bool,
-        silent: bool,
-    ) -> ::core::ffi::c_int;
-    static current_sctx: GlobalCell<sctx_T>;
-    static root_menu: GlobalCell<*mut vimmenu_T>;
-    static sys_menu: GlobalCell<bool>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_select: GlobalCell<bool>;
-    static VIsual_reselect: GlobalCell<::core::ffi::c_int>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static finish_op: GlobalCell<bool>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn replace_termcodes(
-        from: *const ::core::ffi::c_char,
-        from_len: size_t,
-        bufp: *mut *mut ::core::ffi::c_char,
-        sid_arg: scid_T,
-        flags: ::core::ffi::c_int,
-        did_simplify: *mut bool,
-        cpo_val: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn pum_show_popupmenu(menu: *mut vimmenu_T);
-    fn get_real_state() -> ::core::ffi::c_int;
-    fn ui_call_update_menu();
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

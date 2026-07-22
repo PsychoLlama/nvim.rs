@@ -1,4 +1,22 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::buffer_updates::buf_updates_send_splice;
+use crate::src::nvim::decoration::{
+    buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free, decor_redraw,
+    decor_state_invalidate, decor_type_flags,
+};
+
+use crate::src::nvim::main::{curbuf, curbuf_splice_pending};
+use crate::src::nvim::map::{
+    map_del_uint32_t_uint32_t, map_put_ref_uint32_t_uint32_t, map_ref_uint32_t_uint32_t,
+};
+use crate::src::nvim::marktree::{
+    marktree_clear, marktree_del_itr, marktree_get_alt, marktree_get_altpos, marktree_itr_current,
+    marktree_itr_get, marktree_itr_get_ext, marktree_itr_get_overlap, marktree_itr_next,
+    marktree_itr_step_overlap, marktree_lookup, marktree_lookup_ns, marktree_move,
+    marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
+};
+use crate::src::nvim::memline::ml_find_line_or_offset;
+use crate::src::nvim::memory::{xfree, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, memset};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -31,161 +49,7 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_6, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn map_put_ref_uint32_t_uint32_t(
-        map: *mut Map_uint32_t_uint32_t,
-        key: uint32_t,
-        key_alloc: *mut *mut uint32_t,
-        new_item: *mut bool,
-    ) -> *mut uint32_t;
-    fn map_ref_uint32_t_uint32_t(
-        map: *mut Map_uint32_t_uint32_t,
-        key: uint32_t,
-        key_alloc: *mut *mut uint32_t,
-    ) -> *mut uint32_t;
-    fn map_del_uint32_t_uint32_t(
-        map: *mut Map_uint32_t_uint32_t,
-        key: uint32_t,
-        key_alloc: *mut uint32_t,
-    ) -> uint32_t;
-    fn buf_updates_send_splice(
-        buf: *mut buf_T,
-        start_row: ::core::ffi::c_int,
-        start_col: colnr_T,
-        start_byte: bcount_t,
-        old_row: ::core::ffi::c_int,
-        old_col: colnr_T,
-        old_byte: bcount_t,
-        new_row: ::core::ffi::c_int,
-        new_col: colnr_T,
-        new_byte: bcount_t,
-    );
-    fn decor_redraw(
-        buf: *mut buf_T,
-        row1: ::core::ffi::c_int,
-        row2: ::core::ffi::c_int,
-        col1: ::core::ffi::c_int,
-        decor: DecorInline,
-    );
-    fn buf_put_decor(
-        buf: *mut buf_T,
-        decor: DecorInline,
-        row: ::core::ffi::c_int,
-        row2: ::core::ffi::c_int,
-    );
-    fn buf_decor_remove(
-        buf: *mut buf_T,
-        row1: ::core::ffi::c_int,
-        row2: ::core::ffi::c_int,
-        col1: ::core::ffi::c_int,
-        decor: DecorInline,
-        free: bool,
-    );
-    fn decor_free(decor: DecorInline);
-    fn decor_state_invalidate(buf: *mut buf_T);
-    fn buf_signcols_count_range(
-        buf: *mut buf_T,
-        row1: ::core::ffi::c_int,
-        row2: ::core::ffi::c_int,
-        add: ::core::ffi::c_int,
-        clear: TriState,
-    );
-    fn decor_type_flags(decor: DecorInline) -> uint16_t;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static curbuf_splice_pending: GlobalCell<::core::ffi::c_int>;
-    fn marktree_put(
-        b: *mut MarkTree,
-        key: MTKey,
-        end_row: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-        end_right: bool,
-    );
-    fn marktree_del_itr(b: *mut MarkTree, itr: *mut MarkTreeIter, rev: bool) -> uint64_t;
-    fn marktree_revise_meta(b: *mut MarkTree, itr: *mut MarkTreeIter, old_key: MTKey);
-    fn marktree_clear(b: *mut MarkTree);
-    fn marktree_move(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    );
-    fn marktree_itr_get(
-        b: *mut MarkTree,
-        row: int32_t,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_get_ext(
-        b: *mut MarkTree,
-        p: MTPos,
-        itr: *mut MarkTreeIter,
-        last: bool,
-        gravity: bool,
-        oldbase: *mut MTPos,
-        meta_filter: MetaFilter,
-    ) -> bool;
-    fn marktree_itr_next(b: *mut MarkTree, itr: *mut MarkTreeIter) -> bool;
-    fn marktree_itr_current(itr: *mut MarkTreeIter) -> MTKey;
-    fn marktree_itr_get_overlap(
-        b: *mut MarkTree,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_step_overlap(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        pair: *mut MTPair,
-    ) -> bool;
-    fn marktree_splice(
-        b: *mut MarkTree,
-        start_line: int32_t,
-        start_col: ::core::ffi::c_int,
-        old_extent_line: ::core::ffi::c_int,
-        old_extent_col: ::core::ffi::c_int,
-        new_extent_line: ::core::ffi::c_int,
-        new_extent_col: ::core::ffi::c_int,
-    ) -> bool;
-    fn marktree_move_region(
-        b: *mut MarkTree,
-        start_row: ::core::ffi::c_int,
-        start_col: colnr_T,
-        extent_row: ::core::ffi::c_int,
-        extent_col: colnr_T,
-        new_row: ::core::ffi::c_int,
-        new_col: colnr_T,
-    );
-    fn marktree_lookup_ns(
-        b: *mut MarkTree,
-        ns: uint32_t,
-        id: uint32_t,
-        end: bool,
-        itr: *mut MarkTreeIter,
-    ) -> MTKey;
-    fn marktree_lookup(b: *mut MarkTree, id: uint64_t, itr: *mut MarkTreeIter) -> MTKey;
-    fn marktree_get_altpos(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTPos;
-    fn marktree_get_alt(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTKey;
-    fn ml_find_line_or_offset(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        offp: *mut ::core::ffi::c_int,
-        no_ff: bool,
-    ) -> ::core::ffi::c_int;
-    fn u_force_get_undo_header(buf: *mut buf_T) -> *mut u_header_T;
-}
+use crate::src::nvim::undo::u_force_get_undo_header;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

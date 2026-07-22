@@ -1,4 +1,23 @@
+use crate::src::nvim::charset::{
+    getdigits_int, getwhitecols_curline, skiptowhite, skipwhite, vim_isIDc, vim_iswordc,
+    vim_iswordp, vim_strsize,
+};
+use crate::src::nvim::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
+use crate::src::nvim::eval::typval::tv_get_lnum;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent::{
+    fixthisline, get_expr_indent, get_indent, get_indent_lnum, get_sw_value,
+};
+use crate::src::nvim::keycodes::get_special_key_code;
+use crate::src::nvim::main::{curbuf, curwin, p_paste, State};
+use crate::src::nvim::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
+use crate::src::nvim::memline::{ml_get, ml_get_pos};
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
+use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
+use crate::src::nvim::plines::getvcol;
+use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -28,92 +47,6 @@ pub use crate::src::nvim::types::{
     uintmax_t, undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static p_paste: GlobalCell<::core::ffi::c_int>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_isIDc(c: ::core::ffi::c_int) -> bool;
-    fn vim_iswordc(c: ::core::ffi::c_int) -> bool;
-    fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getwhitecols_curline() -> intptr_t;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    fn get_sw_value(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn get_indent() -> ::core::ffi::c_int;
-    fn get_indent_lnum(lnum: linenr_T) -> ::core::ffi::c_int;
-    fn get_expr_indent() -> ::core::ffi::c_int;
-    fn fixthisline(get_the_indent: IndentGetter);
-    fn get_special_key_code(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn mb_prevptr(
-        line: *mut ::core::ffi::c_char,
-        p: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char;
-    fn skip_to_option_part(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    fn getvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn findmatchlimit(
-        oap: *mut oparg_T,
-        initc: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        maxtravel: int64_t,
-    ) -> *mut pos_T;
-    fn check_linecomment(line: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn linewhite(lnum: linenr_T) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;

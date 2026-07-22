@@ -1,6 +1,5 @@
 // Canonical type definitions extracted by tools/unify (phase 5a).
 // One definition per logical type; every module re-exports from here.
-use super::*;
 
 pub type chanode_t = s_chanode;
 pub type chastore_t = s_chastore;

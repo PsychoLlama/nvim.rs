@@ -1,3 +1,5 @@
+use crate::src::nvim::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
+use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 pub use crate::src::nvim::types::{
     Event, Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, SignalWatcher, Stream,
     VarLockStatus, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -18,17 +20,6 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
 };
-extern "C" {
-    fn uv_close(handle: *mut uv_handle_t, close_cb_0: uv_close_cb);
-    fn uv_signal_init(loop_0: *mut uv_loop_t, handle: *mut uv_signal_t) -> ::core::ffi::c_int;
-    fn uv_signal_start(
-        handle: *mut uv_signal_t,
-        signal_cb: uv_signal_cb,
-        signum: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_signal_stop(handle: *mut uv_signal_t) -> ::core::ffi::c_int;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

@@ -11,23 +11,10 @@ use core::ffi::{c_char, c_int, c_void, CStr};
 use core::ptr;
 use core::slice;
 
-extern "C" {
-    fn xfree(ptr: *mut c_void);
-    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn xmallocz(size: usize) -> *mut c_void;
-    fn xstrdup(str: *const c_char) -> *mut c_char;
-    fn logmsg(
-        log_level: c_int,
-        context: *const c_char,
-        func_name: *const c_char,
-        line_num: c_int,
-        eol: bool,
-        fmt: *const c_char,
-        ...
-    ) -> bool;
-    fn path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int;
-    fn sort_strings(files: *mut *mut c_char, count: c_int);
-}
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::memory::{xfree, xmallocz, xrealloc, xstrdup};
+use crate::src::nvim::path::path_fnamecmp;
+use crate::src::nvim::strings::sort_strings;
 
 #[derive(Copy, Clone)]
 #[repr(C)]

@@ -1,60 +1,13 @@
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::memory::{alloc_block, free_block};
+use crate::src::nvim::os::fs::{
+    os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
+};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{
     int32_t, iovec, ptrdiff_t, size_t, uint64_t, FileDescriptor, TriState,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn alloc_block() -> *mut ::core::ffi::c_void;
-    fn free_block(block: *mut ::core::ffi::c_void);
-    fn os_open(
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_close(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_open_stdin_fd() -> ::core::ffi::c_int;
-    fn os_read(
-        fd: ::core::ffi::c_int,
-        ret_eof: *mut bool,
-        ret_buf: *mut ::core::ffi::c_char,
-        size: size_t,
-        non_blocking: bool,
-    ) -> ptrdiff_t;
-    fn os_readv(
-        fd: ::core::ffi::c_int,
-        ret_eof: *mut bool,
-        iov: *mut iovec,
-        iov_size: size_t,
-        non_blocking: bool,
-    ) -> ptrdiff_t;
-    fn os_write(
-        fd: ::core::ffi::c_int,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-        non_blocking: bool,
-    ) -> ptrdiff_t;
-    fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_file_mkdir(fname: *mut ::core::ffi::c_char, mode: int32_t) -> ::core::ffi::c_int;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
 pub const UV_ENOEXEC: C2Rust_Unnamed = -8;

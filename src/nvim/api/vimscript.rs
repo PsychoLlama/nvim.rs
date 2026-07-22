@@ -1,4 +1,21 @@
+use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
+use crate::src::nvim::api::private::helpers::{
+    api_set_error, api_set_sctx, arena_array, arena_dict, arena_string, cstr_as_string,
+    cstr_to_string, try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::api_err_exp;
+use crate::src::nvim::eval::typval::{tv_clear, tv_dict_find};
+use crate::src::nvim::eval::userfunc::call_func;
+use crate::src::nvim::eval_1::{clear_evalarg, eval0};
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col, msg_silent,
+    redir_off, suppress_errthrow, EVALARG_EVALUATE,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, strlen};
+use crate::src::nvim::runtime::do_source_str;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArgvFunc, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -48,92 +65,14 @@ pub use crate::src::nvim::types::{
     undo_object, uvarnumber_T, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
+use crate::src::nvim::viml::parser::expressions::{
+    ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
+    viml_pexpr_parse,
+};
+use crate::src::nvim::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata: bool) -> Object;
-    fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    static EVALARG_EVALUATE: GlobalCell<evalarg_T>;
-    fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T);
-    fn eval0(
-        arg: *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        eap: *mut exarg_T,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_clear(tv: *mut typval_T);
-    fn call_func(
-        funcname: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-        rettv: *mut typval_T,
-        argcount_in: ::core::ffi::c_int,
-        argvars_in: *mut typval_T,
-        funcexe: *mut funcexe_T,
-    ) -> ::core::ffi::c_int;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static did_throw: GlobalCell<bool>;
-    static force_abort: GlobalCell<bool>;
-    static suppress_errthrow: GlobalCell<bool>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static redir_off: GlobalCell<bool>;
-    static capture_ga: GlobalCell<*mut garray_T>;
-    fn do_source_str(
-        str: *const ::core::ffi::c_char,
-        traceback_name: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    static east_node_type_tab: [*const ::core::ffi::c_char; 0];
-    static eltkn_cmp_type_tab: [*const ::core::ffi::c_char; 0];
-    static ccs_tab: [*const ::core::ffi::c_char; 0];
-    static expr_asgn_type_tab: [*const ::core::ffi::c_char; 0];
-    fn viml_pexpr_free_ast(ast: ExprAST);
-    fn viml_pexpr_parse(pstate: *mut ParserState, flags: ::core::ffi::c_int) -> ExprAST;
-    fn parser_simple_get_line(cookie: *mut ::core::ffi::c_void, ret_pline: *mut ParserLine);
-    fn viml_parser_destroy(pstate: *mut ParserState);
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

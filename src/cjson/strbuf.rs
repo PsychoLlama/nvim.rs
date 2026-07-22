@@ -1,24 +1,8 @@
+use crate::src::nvim::os::libc::{abort, fprintf, free, malloc, realloc, stderr, vfprintf};
 pub use crate::src::nvim::types::{
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
     __off64_t, __off_t, __va_list_tag, size_t, strbuf_t, va_list, FILE, _IO_FILE,
 };
-extern "C" {
-    static mut stderr: *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vfprintf(
-        __s: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        __arg: ::core::ffi::VaList,
-    ) -> ::core::ffi::c_int;
-    fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
-    fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
-    fn free(__ptr: *mut ::core::ffi::c_void);
-    fn abort() -> !;
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const STRBUF_DEFAULT_SIZE: ::core::ffi::c_int = 1023 as ::core::ffi::c_int;

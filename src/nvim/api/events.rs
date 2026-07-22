@@ -1,29 +1,14 @@
+use crate::src::nvim::api::private::helpers::api_typename;
+use crate::src::nvim::api::private::validate::api_err_exp;
+use crate::src::nvim::autocmd::do_termresponse_autocmd;
+use crate::src::nvim::eval::vars::set_vim_var_string;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::memory::strequal;
 pub use crate::src::nvim::types::{
     int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
     Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
     ObjectType, String_0, VimVarIndex,
 };
-extern "C" {
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn do_termresponse_autocmd(sequence: String_0);
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

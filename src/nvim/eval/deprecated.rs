@@ -1,4 +1,15 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::channel::{channel_close, channel_create_event, channel_job_start};
+use crate::src::nvim::eval::funcs::{f_jobstart, f_jobstop};
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string,
+};
+use crate::src::nvim::eval_1::find_job;
+use crate::src::nvim::ex_cmds::check_secure;
+
+use crate::src::nvim::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
+use crate::src::nvim::memory::{xmalloc, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::gettext;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue,
     Boolean, BufUpdateCallbacks, Callback, CallbackReader, CallbackType,
@@ -54,53 +65,6 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, winsize, wline_T,
     xfmark_T, QUEUE,
 };
-extern "C" {
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn channel_close(
-        id: uint64_t,
-        part: ChannelPart,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> bool;
-    fn channel_create_event(chan: *mut Channel, ext_source: *const ::core::ffi::c_char);
-    fn channel_job_start(
-        argv: *mut *mut ::core::ffi::c_char,
-        exepath: *const ::core::ffi::c_char,
-        on_stdout: CallbackReader,
-        on_stderr: CallbackReader,
-        on_exit: Callback,
-        pty: bool,
-        rpc: bool,
-        overlapped: bool,
-        detach: bool,
-        stdin_mode: ChannelStdinMode,
-        cwd: *const ::core::ffi::c_char,
-        pty_width: uint16_t,
-        pty_height: uint16_t,
-        env: *mut dict_T,
-        status_out: *mut varnumber_T,
-    ) -> *mut Channel;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_api_spawn_failed: [::core::ffi::c_char; 0];
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    fn find_job(id: uint64_t, show_error: bool) -> *mut Channel;
-    fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_free(d: *mut dict_T);
-    fn tv_dict_add_bool(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: BoolVarValue,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn check_secure() -> bool;
-    static firstbuf: GlobalCell<*mut buf_T>;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

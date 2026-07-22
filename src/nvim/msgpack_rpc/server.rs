@@ -1,4 +1,17 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::channel::channel_from_connection;
+use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::src::nvim::event::libuv::{uv_freeaddrinfo, uv_strerror};
+use crate::src::nvim::event::socket::{
+    socket_watcher_close, socket_watcher_init, socket_watcher_start,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{main_loop, IObuff, NameBuff};
+use crate::src::nvim::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup, xstrlcpy};
+use crate::src::nvim::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
+use crate::src::nvim::os::libc::{snprintf, strcmp, strlen, strstr};
+use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
+use crate::src::nvim::path::fix_fname;
 pub use crate::src::nvim::types::{
     Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, SocketWatcher, Stream, TriState,
     VarLockStatus, VimVarIndex, XDGVarType, __pthread_internal_list, __pthread_list_t,
@@ -23,69 +36,9 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
 };
 extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_freeaddrinfo(ai: *mut addrinfo);
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn channel_from_connection(watcher: *mut SocketWatcher);
-    fn socket_watcher_init(
-        loop_0: *mut Loop,
-        watcher: *mut SocketWatcher,
-        endpoint: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn socket_watcher_start(
-        watcher: *mut SocketWatcher,
-        backlog: ::core::ffi::c_int,
-        cb: socket_cb,
-    ) -> ::core::ffi::c_int;
-    fn socket_watcher_close(watcher: *mut SocketWatcher, cb: socket_close_cb);
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static main_loop: SharedCell<Loop>;
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn os_unsetenv(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_get_pid() -> int64_t;
-    fn get_appname(namelike: bool) -> *const ::core::ffi::c_char;
-    fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn fix_fname(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

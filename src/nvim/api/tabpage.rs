@@ -1,4 +1,13 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_set_error, arena_array, dict_get_value, dict_set_var,
+    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, try_enter, try_leave,
+};
+use crate::src::nvim::api::vim::nvim_get_current_win;
+
+use crate::src::nvim::main::{
+    autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curtab, curwin, e_cmdwin, firstwin,
+};
+use crate::src::nvim::os::libc::abort;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -31,52 +40,9 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn abort() -> !;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn dict_get_value(
-        dict: *mut dict_T,
-        key: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn nvim_get_current_win() -> Window;
-    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
-    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error);
-    fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool;
-    fn win_new_tabpage(
-        after: ::core::ffi::c_int,
-        filename: *mut ::core::ffi::c_char,
-        enter: bool,
-        first: *mut *mut win_T,
-    ) -> *mut tabpage_T;
-    fn valid_tabpage(tpc: *mut tabpage_T) -> bool;
-    fn tabpage_index(ftp: *mut tabpage_T) -> ::core::ffi::c_int;
-    fn win_goto(wp: *mut win_T);
-}
+use crate::src::nvim::window::{
+    tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
+};
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -1,4 +1,6 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{abs, memcpy, memset, snprintf, vsnprintf};
 pub use crate::src::nvim::types::{
     GraphemeState, ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
     VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
@@ -18,36 +20,9 @@ pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __va_list_tag, int32_t, schar_T, size_t, uint16_t, uint32_t,
     uint8_t, utf8proc_int32_t, va_list,
 };
-use ::c2rust_bitfields;
-extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vsnprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        __arg: ::core::ffi::VaList,
-    ) -> ::core::ffi::c_int;
-    fn abs(__x: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn vterm_state_free(state: *mut VTermState);
-    fn vterm_screen_free(screen: *mut VTermScreen);
-}
+use crate::src::nvim::vterm::screen::vterm_screen_free;
+use crate::src::nvim::vterm::state::vterm_state_free;
+
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;

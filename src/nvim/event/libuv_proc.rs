@@ -1,4 +1,10 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::eval::typval::tv_dict_to_env;
+use crate::src::nvim::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
+
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::ui_client_forward_stdin;
+use crate::src::nvim::os::env::os_free_fullenv;
+use crate::src::nvim::os::libc::{__assert_fail, close};
 pub use crate::src::nvim::types::{
     LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, Stream, VarLockStatus,
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
@@ -23,40 +29,6 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_close(handle: *mut uv_handle_t, close_cb_0: uv_close_cb);
-    fn uv_pipe(
-        fds: *mut uv_file,
-        read_flags: ::core::ffi::c_int,
-        write_flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_open(_: *mut uv_pipe_t, file: uv_file) -> ::core::ffi::c_int;
-    fn uv_spawn(
-        loop_0: *mut uv_loop_t,
-        handle: *mut uv_process_t,
-        options: *const uv_process_options_t,
-    ) -> ::core::ffi::c_int;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn os_free_fullenv(env: *mut *mut ::core::ffi::c_char);
-    static ui_client_forward_stdin: GlobalCell<bool>;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

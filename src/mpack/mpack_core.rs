@@ -1,20 +1,8 @@
+use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{
     mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_0,
     mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_value_s, mpack_value_t, size_t,
 };
-extern "C" {
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
 pub const MPACK_EOF: C2Rust_Unnamed = 1;

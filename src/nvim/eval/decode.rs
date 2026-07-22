@@ -1,4 +1,22 @@
+use crate::src::mpack::conv::{
+    mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
+};
+use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::src::nvim::charset::vim_str2nr;
+use crate::src::nvim::eval::encode::encode_list_write;
+use crate::src::nvim::eval::typval::{
+    tv_blob_alloc_ret, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
+    tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_number,
+    tv_list_append_owned_tv,
+};
+use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
+use crate::src::nvim::eval_1::string2float;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
+use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, strlen, strncmp};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -12,88 +30,7 @@ pub use crate::src::nvim::types::{
     ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn mpack_unpack_boolean(t: mpack_token_t) -> bool;
-    fn mpack_unpack_uint(t: mpack_token_t) -> mpack_uintmax_t;
-    fn mpack_unpack_sint(t: mpack_token_t) -> mpack_sintmax_t;
-    fn mpack_unpack_float_fast(t: mpack_token_t) -> ::core::ffi::c_double;
-    fn mpack_parser_init(p: *mut mpack_parser_t, c: mpack_uint32_t);
-    fn mpack_parse(
-        parser: *mut mpack_parser_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        enter_cb: mpack_walk_cb,
-        exit_cb: mpack_walk_cb,
-    ) -> ::core::ffi::c_int;
-    fn vim_str2nr(
-        start: *const ::core::ffi::c_char,
-        prep: *mut ::core::ffi::c_int,
-        len: *mut ::core::ffi::c_int,
-        what: ::core::ffi::c_int,
-        nptr: *mut varnumber_T,
-        unptr: *mut uvarnumber_T,
-        maxlen: ::core::ffi::c_int,
-        strict: bool,
-        overflow: *mut bool,
-    );
-    fn string2float(text: *const ::core::ffi::c_char, ret_value: *mut float_T) -> size_t;
-    fn encode_list_write(
-        data: *mut ::core::ffi::c_void,
-        buf: *const ::core::ffi::c_char,
-        len: size_t,
-    );
-    static hash_removed: ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
-    fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T;
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn tv_blob_alloc_ret(ret_tv: *mut typval_T) -> *mut blob_T;
-    fn tv_clear(tv: *mut typval_T);
-    static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]>;
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;

@@ -1,3 +1,5 @@
+use crate::src::mpack::mpack_core::{mpack_read, mpack_tokbuf_init, mpack_write};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset};
 pub use crate::src::nvim::types::{
     mpack_data_t, mpack_rpc_header_s, mpack_rpc_header_t, mpack_rpc_message_s, mpack_rpc_message_t,
     mpack_rpc_one_session_t, mpack_rpc_session_t, mpack_rpc_slot_s, mpack_sintmax_t,
@@ -5,37 +7,6 @@ pub use crate::src::nvim::types::{
     mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s,
     mpack_value_t, size_t,
 };
-extern "C" {
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn mpack_tokbuf_init(tb: *mut mpack_tokbuf_t);
-    fn mpack_read(
-        tb: *mut mpack_tokbuf_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        tok: *mut mpack_token_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_write(
-        tb: *mut mpack_tokbuf_t,
-        b: *mut *mut ::core::ffi::c_char,
-        bl: *mut size_t,
-        tok: *const mpack_token_t,
-    ) -> ::core::ffi::c_int;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
 pub const MPACK_EOF: C2Rust_Unnamed = 1;

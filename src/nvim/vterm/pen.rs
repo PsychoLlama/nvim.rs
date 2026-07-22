@@ -17,10 +17,8 @@ pub use crate::src::nvim::types::{
     VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
     VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
 };
-use ::c2rust_bitfields;
-extern "C" {
-    fn vterm_get_attr_type(attr: VTermAttr) -> VTermValueType;
-}
+use crate::src::nvim::vterm::vterm::vterm_get_attr_type;
+
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;

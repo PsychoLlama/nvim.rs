@@ -1,4 +1,23 @@
+use crate::src::nvim::charset::vim_strsize;
+use crate::src::nvim::eval::typval::{
+    tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_chk,
+};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    cmdmod, e_trailing_arg, e_val_too_large, got_int, maptick, p_hi, Columns, IObuff,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
+use crate::src::nvim::message::{
+    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title, semsg,
+    trunc_string,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, memcpy, memset, snprintf, strcmp, strlen, strncasecmp,
+};
+use crate::src::nvim::os::time::os_time;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_0, dict_T, dictvar_S, eslist_T, eslist_elem, exarg, exarg_T,
@@ -12,104 +31,12 @@ pub use crate::src::nvim::types::{
     VarLockStatus, VarType, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    static p_hi: GlobalCell<OptInt>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_val_too_large: [::core::ffi::c_char; 0];
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn trunc_string(
-        s: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        room_in: ::core::ffi::c_int,
-        buflen: ::core::ffi::c_int,
-    );
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_puts_title(s: *const ::core::ffi::c_char);
-    fn message_filtered(msg_0: *const ::core::ffi::c_char) -> bool;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string_buf(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn check_secure() -> bool;
-    fn get_cmdline_firstc() -> ::core::ffi::c_int;
-    fn get_list_range(
-        str: *mut *mut ::core::ffi::c_char,
-        num1: *mut ::core::ffi::c_int,
-        num2: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static maptick: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    fn os_time() -> Timestamp;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;

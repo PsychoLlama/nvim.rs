@@ -1,4 +1,30 @@
+use crate::src::nvim::api::extmark::virt_text_to_array;
+use crate::src::nvim::api::private::helpers::{arena_array, arena_string, cstr_as_string};
+use crate::src::nvim::change::changed_lines_invalidate_buf;
+use crate::src::nvim::decoration_provider::decor_providers_invoke_conceal_line;
+use crate::src::nvim::drawscreen::{
+    conceal_cursor_line, redraw_buf_line_later, redraw_buf_range_later,
+};
+use crate::src::nvim::extmark::extmark_set;
+use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{schar_from_char, schar_get, schar_get_first_codepoint, schar_high};
+use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr};
+use crate::src::nvim::highlight_group::{syn_id2attr, syn_id2name};
+use crate::src::nvim::main::{
+    curtab, curwin, decor_state, first_tabpage, firstwin, hl_mode_str, namespace_localscope,
+    virt_text_pos_str,
+};
+use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::marktree::{
+    marktree_get_altpos, marktree_itr_current, marktree_itr_get, marktree_itr_get_filter,
+    marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
+    marktree_itr_step_out_filter, marktree_itr_step_overlap,
+};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, memmove, qsort};
+use crate::src::nvim::r#move::changed_window_setting;
+use crate::src::nvim::sign::{buf_has_signs, describe_sign_text};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -37,135 +63,7 @@ pub use crate::src::nvim::types::{
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    static namespace_localscope: GlobalCell<Set_uint32_t>;
-    fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn changed_lines_invalidate_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        lnume: linenr_T,
-        xtra: linenr_T,
-    );
-    static virt_text_pos_str: [*const ::core::ffi::c_char; 0];
-    static hl_mode_str: [*const ::core::ffi::c_char; 0];
-    static decor_state: GlobalCell<DecorState>;
     static decor_items: GlobalCell<C2Rust_Unnamed_26>;
-    fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int) -> bool;
-    fn extmark_set(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        idp: *mut uint32_t,
-        row: ::core::ffi::c_int,
-        col: colnr_T,
-        end_row: ::core::ffi::c_int,
-        end_col: colnr_T,
-        decor: DecorInline,
-        decor_flags: uint16_t,
-        right_gravity: bool,
-        end_right_gravity: bool,
-        no_undo: bool,
-        invalidate: bool,
-        err: *mut Error,
-    );
-    fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool);
-    fn redraw_buf_range_later(buf: *mut buf_T, first: linenr_T, last: linenr_T);
-    fn conceal_cursor_line(wp: *const win_T) -> bool;
-    fn hasAnyFolding(win: *mut win_T) -> ::core::ffi::c_int;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    fn schar_high(sc: schar_T) -> bool;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_get_first_codepoint(sc: schar_T) -> ::core::ffi::c_int;
-    fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    fn hl_add_url(attr: ::core::ffi::c_int, url: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn marktree_itr_get(
-        b: *mut MarkTree,
-        row: int32_t,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_next(b: *mut MarkTree, itr: *mut MarkTreeIter) -> bool;
-    fn marktree_itr_get_filter(
-        b: *mut MarkTree,
-        row: int32_t,
-        col: ::core::ffi::c_int,
-        stop_row: ::core::ffi::c_int,
-        stop_col: ::core::ffi::c_int,
-        meta_filter: MetaFilter,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_step_out_filter(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        meta_filter: MetaFilter,
-    ) -> bool;
-    fn marktree_itr_next_filter(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        stop_row: ::core::ffi::c_int,
-        stop_col: ::core::ffi::c_int,
-        meta_filter: MetaFilter,
-    ) -> bool;
-    fn marktree_itr_current(itr: *mut MarkTreeIter) -> MTKey;
-    fn marktree_itr_get_overlap(
-        b: *mut MarkTree,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_step_overlap(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        pair: *mut MTPair,
-    ) -> bool;
-    fn marktree_get_altpos(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTPos;
-    fn changed_window_setting(wp: *mut win_T);
-    fn buf_has_signs(buf: *const buf_T) -> bool;
-    fn describe_sign_text(buf: *mut ::core::ffi::c_char, sign_text: *mut schar_T) -> size_t;
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

@@ -1,4 +1,33 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_set_error, arena_array, arena_dict, arena_string, buf_get_text,
+    cstr_as_string, dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark,
+    try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::{api_err_invalid, check_string_array};
+use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::src::nvim::buffer::{buf_ensure_loaded, do_buffer};
+use crate::src::nvim::buffer_updates::{buf_updates_register, buf_updates_unregister};
+use crate::src::nvim::change::changed_lines;
+use crate::src::nvim::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
+use crate::src::nvim::ex_cmds::rename_buffer;
+use crate::src::nvim::extmark::extmark_splice;
+
+use crate::src::nvim::lua::executor::nlua_call_ref;
+use crate::src::nvim::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
+use crate::src::nvim::main::{
+    curbuf, curtab, curwin, first_tabpage, firstwin, p_acd, RedrawingDisabled, State, VIsual,
+    VIsual_active, VIsual_mode,
+};
+use crate::src::nvim::mapping::{keymap_array, modify_keymap};
+use crate::src::nvim::mark::{mark_adjust_buf, mark_get};
+use crate::src::nvim::memline::{
+    ml_append_buf, ml_delete_buf, ml_find_line_or_offset, ml_get_buf, ml_get_buf_len,
+    ml_replace_buf,
+};
+use crate::src::nvim::memory::{memchrsub, strchrsub, xfree, xmemdupz};
+use crate::src::nvim::ops::get_region_bytecount;
+use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
+use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -34,27 +63,8 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
+use crate::src::nvim::undo::u_save_buf;
 extern "C" {
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn strchrsub(str: *mut ::core::ffi::c_char, c: ::core::ffi::c_char, x: ::core::ffi::c_char);
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_allocz(arena: *mut Arena, size: size_t) -> *mut ::core::ffi::c_char;
     fn arena_memdupz(
@@ -62,185 +72,6 @@ extern "C" {
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn check_string_array(
-        arr: Array,
-        name: *mut ::core::ffi::c_char,
-        disallow_nl: bool,
-        err: *mut Error,
-    ) -> bool;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn dict_get_value(
-        dict: *mut dict_T,
-        key: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn normalize_index(
-        buf: *mut buf_T,
-        index: int64_t,
-        end_exclusive: bool,
-        oob: *mut bool,
-    ) -> int64_t;
-    fn buf_get_text(
-        buf: *mut buf_T,
-        lnum: int64_t,
-        start_col: int64_t,
-        end_col: int64_t,
-        err: *mut Error,
-    ) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn set_mark(
-        buf: *mut buf_T,
-        name: String_0,
-        line: Integer,
-        col: Integer,
-        err: *mut Error,
-    ) -> bool;
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn buf_ensure_loaded(buf: *mut buf_T) -> bool;
-    fn do_buffer(
-        action: ::core::ffi::c_int,
-        start: ::core::ffi::c_int,
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        forceit: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn buf_updates_register(
-        buf: *mut buf_T,
-        channel_id: uint64_t,
-        cb: BufUpdateCallbacks,
-        send_buffer: bool,
-    ) -> bool;
-    fn buf_updates_unregister(buf: *mut buf_T, channelid: uint64_t);
-    fn changed_lines(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        lnume: linenr_T,
-        xtra: linenr_T,
-        do_buf_event: bool,
-    );
-    fn check_cursor_lnum(win: *mut win_T);
-    fn check_cursor_col(win: *mut win_T);
-    fn check_visual_pos();
-    fn rename_buffer(new_fname: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn extmark_splice(
-        buf: *mut buf_T,
-        start_row: ::core::ffi::c_int,
-        start_col: colnr_T,
-        old_row: ::core::ffi::c_int,
-        old_col: colnr_T,
-        old_byte: bcount_t,
-        new_row: ::core::ffi::c_int,
-        new_col: colnr_T,
-        new_byte: bcount_t,
-        undo: ExtmarkOp,
-    );
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    fn modify_keymap(
-        channel_id: uint64_t,
-        buffer: Buffer,
-        is_unmap: bool,
-        mode: String_0,
-        lhs: String_0,
-        rhs: String_0,
-        opts: *mut KeyDict_keymap,
-        err: *mut Error,
-    );
-    fn keymap_array(mode: String_0, buf: *mut buf_T, arena: *mut Arena) -> Array;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn mark_get(
-        buf: *mut buf_T,
-        win: *mut win_T,
-        fmp: *mut fmark_T,
-        flag: MarkGet,
-        name: ::core::ffi::c_int,
-    ) -> *mut fmark_T;
-    fn mark_adjust_buf(
-        buf: *mut buf_T,
-        line1: linenr_T,
-        line2: linenr_T,
-        amount: linenr_T,
-        amount_after: linenr_T,
-        adjust_folds: bool,
-        mode: MarkAdjustMode,
-        op: ExtmarkOp,
-    );
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_append_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        len: colnr_T,
-        newfile: bool,
-    ) -> ::core::ffi::c_int;
-    fn ml_replace_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-        noalloc: bool,
-    ) -> ::core::ffi::c_int;
-    fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> ::core::ffi::c_int;
-    fn ml_find_line_or_offset(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        offp: *mut ::core::ffi::c_int,
-        no_ff: bool,
-    ) -> ::core::ffi::c_int;
-    fn update_topline(wp: *mut win_T);
-    fn changed_cline_bef_curs(wp: *mut win_T);
-    fn invalidate_botline_win(wp: *mut win_T);
-    fn get_region_bytecount(
-        buf: *mut buf_T,
-        start_lnum: linenr_T,
-        end_lnum: linenr_T,
-        start_col: colnr_T,
-        end_col: colnr_T,
-    ) -> bcount_t;
-    static p_acd: GlobalCell<::core::ffi::c_int>;
-    fn u_save_buf(buf: *mut buf_T, top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

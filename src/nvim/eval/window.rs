@@ -1,4 +1,29 @@
+use crate::src::nvim::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
+use crate::src::nvim::buffer::{bt_quickfix, bt_terminal, do_autochdir};
+use crate::src::nvim::cursor::{check_cursor, check_pos};
+use crate::src::nvim::eval::funcs::execute_common;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_nonnull_dict_arg, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr,
+    tv_dict_alloc, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number, tv_get_number,
+    tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
+    tv_list_append_list, tv_list_append_number, tv_list_append_string,
+};
+use crate::src::nvim::ex_getln::text_or_buf_locked;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_auabort, e_invalwindow, e_invexpr2,
+    first_tabpage, firstwin, lastused_tabpage, lastwin, p_acd, prevwin, VIsual, VIsual_active,
+};
+use crate::src::nvim::memory::{strequal, xfree, xmallocz, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::normal::end_visual_mode;
+use crate::src::nvim::os::fs::{os_chdir, os_dirname};
+use crate::src::nvim::os::libc::{gettext, memset, strcmp, strtol};
+use crate::src::nvim::r#move::{
+    changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
+    validate_cursor, win_col_off,
+};
+use crate::src::nvim::strings::vim_snprintf_safelen;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -29,148 +54,16 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, win_execute_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
+use crate::src::nvim::window::{
+    check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,
+    unuse_tabpage, use_tabpage, valid_tabpage, win_drag_status_line, win_drag_vsep_line,
+    win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
+    win_valid, win_vert_neighbor,
+};
 extern "C" {
-    fn strtol(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_long;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn do_autochdir();
-    fn bt_quickfix(buf: *const buf_T) -> bool;
-    fn bt_terminal(buf: *const buf_T) -> bool;
-    fn check_pos(buf: *mut buf_T, pos: *mut pos_T);
-    fn check_cursor(wp: *mut win_T);
-    static e_invexpr2: [::core::ffi::c_char; 0];
-    static e_auabort: [::core::ffi::c_char; 0];
-    static e_invalwindow: [::core::ffi::c_char; 0];
-    fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_off: ::core::ffi::c_int);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_dict(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        dict: *mut dict_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_check_for_nonnull_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn text_or_buf_locked() -> bool;
-    static firstwin: GlobalCell<*mut win_T>;
-    static lastwin: GlobalCell<*mut win_T>;
-    static prevwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static lastused_tabpage: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    fn update_curswant();
-    fn changed_window_setting(wp: *mut win_T);
-    fn set_topline(wp: *mut win_T, lnum: linenr_T);
-    fn validate_botline_win(wp: *mut win_T);
-    fn validate_cursor(wp: *mut win_T);
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn check_topfill(wp: *mut win_T, down: bool);
-    static p_acd: GlobalCell<::core::ffi::c_int>;
-    fn end_visual_mode();
-    fn vim_snprintf_safelen(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> size_t;
-    fn os_chdir(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn check_split_disallowed(wp: *const win_T) -> ::core::ffi::c_int;
-    fn win_valid(win: *const win_T) -> bool;
-    fn win_splitmove(
-        wp: *mut win_T,
-        size: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn unuse_tabpage(tp: *mut tabpage_T);
-    fn use_tabpage(tp: *mut tabpage_T);
-    fn valid_tabpage(tpc: *mut tabpage_T) -> bool;
-    fn find_tabpage(n: ::core::ffi::c_int) -> *mut tabpage_T;
-    fn tabpage_index(ftp: *mut tabpage_T) -> ::core::ffi::c_int;
-    fn goto_tabpage_tp(
-        tp: *mut tabpage_T,
-        trigger_enter_autocmds: bool,
-        trigger_leave_autocmds: bool,
-    );
-    fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
-    fn win_goto(wp: *mut win_T);
-    fn win_vert_neighbor(
-        tp: *mut tabpage_T,
-        wp: *mut win_T,
-        up: bool,
-        count: ::core::ffi::c_int,
-    ) -> *mut win_T;
-    fn win_horz_neighbor(
-        tp: *mut tabpage_T,
-        wp: *mut win_T,
-        left: bool,
-        count: ::core::ffi::c_int,
-    ) -> *mut win_T;
-    fn win_drag_status_line(dragwin: *mut win_T, offset: ::core::ffi::c_int);
-    fn win_drag_vsep_line(dragwin: *mut win_T, offset: ::core::ffi::c_int);
-    fn win_new_height(wp: *mut win_T, height: ::core::ffi::c_int);
-    fn win_new_width(wp: *mut win_T, width: ::core::ffi::c_int);
-    fn win_get_tabwin(id: handle_T, tabnr: *mut ::core::ffi::c_int, winnr: *mut ::core::ffi::c_int);
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;

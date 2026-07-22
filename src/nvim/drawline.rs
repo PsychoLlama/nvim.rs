@@ -1,4 +1,68 @@
+use crate::src::nvim::buffer::bt_quickfix;
+use crate::src::nvim::charset::{
+    byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex,
+    transstr_buf, vim_isprintc,
+};
+use crate::src::nvim::cursor::get_cursor_rel_lnum;
+use crate::src::nvim::cursor_shape::cursor_is_block_during_visual;
+use crate::src::nvim::decoration::{
+    clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_recheck_draw_col,
+    decor_redraw_col_impl, decor_redraw_eol, decor_redraw_line, decor_redraw_signs,
+    decor_virt_lines, decor_virt_pos, decor_virt_pos_kind, next_virt_text_chunk,
+};
+use crate::src::nvim::decoration_provider::{
+    decor_providers_invoke_line, decor_providers_invoke_range,
+};
+use crate::src::nvim::diff::{diff_change_parse, diff_check_with_linestatus, diff_find_change};
+use crate::src::nvim::drawscreen::{
+    compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end,
+};
+use crate::src::nvim::eval::vars::set_vim_var_nr;
+use crate::src::nvim::fold::get_foldtext;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{
+    grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells, schar_from_char, schar_get_adv,
+    schar_get_ascii, schar_get_first_codepoint, schar_len,
+};
+use crate::src::nvim::highlight::{
+    hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr,
+};
+use crate::src::nvim::highlight_group::syn_id2attr;
+use crate::src::nvim::indent::{get_breakindent_win, tabstop_padding};
+use crate::src::nvim::insexpand::{
+    ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active,
+};
+use crate::src::nvim::main::{
+    breakat_flags, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, decor_state, did_emsg,
+    dollar_vcol, dy_flags, highlight_attr, highlight_match, hl_attr_active, linebuf_attr,
+    linebuf_char, linebuf_vcol, normal_bg, ns_hl_fast, p_cpo, p_sel, screen_search_hl,
+    search_match_endcol, search_match_lines, spell_redraw_lnum, State, VIsual, VIsual_active,
+    VIsual_mode,
+};
+use crate::src::nvim::mbyte::{
+    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf8len_tab, utf_head_off,
+    utf_ptr2CharInfo_impl, utf_ptr2cells, utfc_next_impl, utfc_ptr2len, utfc_ptr2schar,
+};
+use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::option::get_showbreak_value;
+use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
+use crate::src::nvim::plines::{
+    charsize_fast, charsize_regular, getvcol, getvvcol, init_charsize_arg,
+};
+use crate::src::nvim::r#match::{
+    get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
+};
+use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
+use crate::src::nvim::spell::{
+    check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
+};
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::statusline::build_statuscol_str;
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::syntax::{
+    get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
+};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg,
@@ -35,348 +99,16 @@ pub use crate::src::nvim::types::{
     uintptr_t, undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::ui_rgb_attached;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abs(__x: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn bt_quickfix(buf: *const buf_T) -> bool;
-    static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static dy_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn transstr_buf(
-        s: *const ::core::ffi::c_char,
-        slen: ssize_t,
-        buf: *mut ::core::ffi::c_char,
-        buflen: size_t,
-        untab: bool,
-    ) -> size_t;
-    fn transchar_buf(buf: *const buf_T, c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn transchar_hex(buf: *mut ::core::ffi::c_char, c: ::core::ffi::c_int) -> size_t;
-    fn rl_mirror_ascii(str: *mut ::core::ffi::c_char, end: *mut ::core::ffi::c_char);
-    fn byte2cells(b: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T;
-    fn cursor_is_block_during_visual(exclusive: bool) -> bool;
-    static decor_state: GlobalCell<DecorState>;
-    fn clear_virttext(text: *mut VirtText);
-    fn next_virt_text_chunk(
-        vt: VirtText,
-        pos: *mut size_t,
-        attr: *mut ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn decor_virt_pos(decor: *const DecorRange) -> bool;
-    fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos;
-    fn decor_redraw_line(wp: *mut win_T, row: ::core::ffi::c_int, state: *mut DecorState);
-    fn decor_has_more_decorations(state: *mut DecorState, row: ::core::ffi::c_int) -> bool;
-    fn decor_init_draw_col(win_col: ::core::ffi::c_int, hidden: bool, item: *mut DecorRange);
-    fn decor_recheck_draw_col(win_col: ::core::ffi::c_int, hidden: bool, state: *mut DecorState);
-    fn decor_redraw_col_impl(
-        wp: *mut win_T,
-        col: ::core::ffi::c_int,
-        win_col: ::core::ffi::c_int,
-        hidden: bool,
-        state: *mut DecorState,
-        max_col_last: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn decor_redraw_signs(
-        wp: *mut win_T,
-        buf: *mut buf_T,
-        row: ::core::ffi::c_int,
-        sattrs: *mut SignTextAttrs,
-        line_id: *mut ::core::ffi::c_int,
-        cul_id: *mut ::core::ffi::c_int,
-        num_id: *mut ::core::ffi::c_int,
-    );
-    fn decor_redraw_eol(
-        wp: *mut win_T,
-        state: *mut DecorState,
-        eol_attr: *mut ::core::ffi::c_int,
-        eol_col: ::core::ffi::c_int,
-    ) -> bool;
-    fn decor_virt_lines(
-        wp: *mut win_T,
-        start_row: ::core::ffi::c_int,
-        end_row: ::core::ffi::c_int,
-        num_below: *mut ::core::ffi::c_int,
-        lines: *mut VirtLines,
-        apply_folds: bool,
-    ) -> ::core::ffi::c_int;
-    fn decor_providers_invoke_line(wp: *mut win_T, row: ::core::ffi::c_int);
-    fn decor_providers_invoke_range(
-        wp: *mut win_T,
-        start_row: ::core::ffi::c_int,
-        start_col: ::core::ffi::c_int,
-        end_row: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-    );
-    fn diff_check_with_linestatus(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        linestatus: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn diff_change_parse(
-        diffline: *mut diffline_T,
-        change: *mut diffline_change_T,
-        change_start: *mut ::core::ffi::c_int,
-        change_end: *mut ::core::ffi::c_int,
-    ) -> bool;
-    fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut diffline_T) -> bool;
     static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
-    static screen_search_hl: GlobalCell<match_T>;
-    fn win_draw_end(
-        wp: *mut win_T,
-        c1: schar_T,
-        draw_margin: bool,
-        startrow: ::core::ffi::c_int,
-        endrow: ::core::ffi::c_int,
-        hl: hlf_T,
-    );
-    fn compute_foldcolumn(wp: *mut win_T, col: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn number_width(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn conceal_cursor_line(wp: *const win_T) -> bool;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn get_foldtext(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        lnume: linenr_T,
-        foldinfo: foldinfo_T,
-        buf: *mut ::core::ffi::c_char,
-        vt: *mut VirtText,
-    ) -> *mut ::core::ffi::c_char;
-    fn grid_adjust(
-        grid: *mut GridView,
-        row_off: *mut ::core::ffi::c_int,
-        col_off: *mut ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
-    fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_len(sc: schar_T) -> size_t;
-    fn schar_cells(sc: schar_T) -> ::core::ffi::c_int;
-    fn schar_get_first_codepoint(sc: schar_T) -> ::core::ffi::c_int;
-    fn schar_get_ascii(sc: schar_T) -> ::core::ffi::c_char;
-    fn linebuf_mirror(
-        firstp: *mut ::core::ffi::c_int,
-        lastp: *mut ::core::ffi::c_int,
-        clearp: *mut ::core::ffi::c_int,
-        width: ::core::ffi::c_int,
-    );
-    fn grid_put_linebuf(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        coloff: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        endcol: ::core::ffi::c_int,
-        clear_width: ::core::ffi::c_int,
-        bg_attr: ::core::ffi::c_int,
-        clear_attr: ::core::ffi::c_int,
-        last_vcol: colnr_T,
-        flags: ::core::ffi::c_int,
-    );
-    fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    static linebuf_char: GlobalCell<*mut schar_T>;
-    static linebuf_attr: GlobalCell<*mut sattr_T>;
-    static linebuf_vcol: GlobalCell<*mut colnr_T>;
-    fn win_bg_attr(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn hl_get_underline() -> ::core::ffi::c_int;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn hl_blend_attrs(
-        back_attr: ::core::ffi::c_int,
-        front_attr: ::core::ffi::c_int,
-        through: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn syn_attr2entry(attr: ::core::ffi::c_int) -> HlAttrs;
-    static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]>;
-    static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int>;
-    static normal_bg: GlobalCell<RgbValue>;
-    static ns_hl_fast: GlobalCell<NS>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
-    fn get_breakindent_win(wp: *mut win_T, line: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ins_compl_col_range_attr(lnum: linenr_T, col: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn ins_compl_lnum_in_range(lnum: linenr_T) -> bool;
-    fn ins_compl_win_active(wp: *mut win_T) -> bool;
-    fn prepare_search_hl_line(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        mincol: colnr_T,
-        line: *mut *mut ::core::ffi::c_char,
-        search_hl: *mut match_T,
-        search_attr: *mut ::core::ffi::c_int,
-        search_attr_from_match: *mut bool,
-    ) -> bool;
-    fn update_search_hl(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        line: *mut *mut ::core::ffi::c_char,
-        search_hl: *mut match_T,
-        has_match_conc: *mut ::core::ffi::c_int,
-        match_conc: *mut ::core::ffi::c_int,
-        lcs_eol_todo: bool,
-        on_last_col: *mut bool,
-        search_attr_from_match: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn get_prevcol_hl_flag(wp: *mut win_T, search_hl: *mut match_T, curcol: colnr_T) -> bool;
-    fn get_search_match_hl(
-        wp: *mut win_T,
-        search_hl: *mut match_T,
-        col: colnr_T,
-        char_attr: *mut ::core::ffi::c_int,
-    );
-    static utf8len_tab: [uint8_t; 256];
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn mb_ptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo;
-    fn mb_off_next(
-        base: *const ::core::ffi::c_char,
-        p: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn mb_charlen(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn gchar_pos(pos: *mut pos_T) -> ::core::ffi::c_int;
-    fn validate_virtcol(wp: *mut win_T);
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn win_col_off2(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn set_empty_rows(wp: *mut win_T, used: ::core::ffi::c_int);
-    fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ffi::c_char;
-    fn init_charsize_arg(
-        csarg: *mut CharsizeArg,
-        wp: *mut win_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> CSType;
-    fn charsize_regular(
-        csarg: *mut CharsizeArg,
-        cur: *mut ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn charsize_fast(
-        csarg: *mut CharsizeArg,
-        cur: *const ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn getvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
     fn qf_current_entry(wp: *mut win_T) -> linenr_T;
-    fn virtual_active(wp: *mut win_T) -> bool;
-    fn spell_check(
-        wp: *mut win_T,
-        ptr: *mut ::core::ffi::c_char,
-        attrp: *mut hlf_T,
-        capcol: *mut ::core::ffi::c_int,
-        docount: bool,
-    ) -> size_t;
-    fn spell_move_to(
-        wp: *mut win_T,
-        dir: ::core::ffi::c_int,
-        behaviour: smt_T,
-        curline: bool,
-        attrp: *mut hlf_T,
-    ) -> size_t;
-    fn spell_cat_line(
-        buf: *mut ::core::ffi::c_char,
-        line: *mut ::core::ffi::c_char,
-        maxlen: ::core::ffi::c_int,
-    );
-    fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bool;
-    fn spell_to_word_end(
-        start: *mut ::core::ffi::c_char,
-        win: *mut win_T,
-    ) -> *mut ::core::ffi::c_char;
-    fn build_statuscol_str(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        relnum: linenr_T,
-        buf: *mut ::core::ffi::c_char,
-        stcp: *mut statuscol_T,
-    ) -> ::core::ffi::c_int;
-    fn syntax_start(wp: *mut win_T, lnum: linenr_T);
-    fn get_syntax_attr(col: colnr_T, can_spell: *mut bool, keep_state: bool) -> ::core::ffi::c_int;
-    fn syntax_present(win: *mut win_T) -> bool;
-    fn get_syntax_info(seqnrp: *mut ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn syn_get_sub_char() -> ::core::ffi::c_int;
     fn terminal_get_line_attributes(
         term: *mut Terminal,
         wp: *mut win_T,
         linenr: ::core::ffi::c_int,
         term_attrs: *mut ::core::ffi::c_int,
     );
-    fn ui_rgb_attached() -> bool;
-    static dollar_vcol: GlobalCell<colnr_T>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static highlight_match: GlobalCell<bool>;
-    static search_match_lines: GlobalCell<linenr_T>;
-    static search_match_endcol: GlobalCell<colnr_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    static spell_redraw_lnum: GlobalCell<linenr_T>;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
@@ -5193,7 +4925,8 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
             len: 1 as ::core::ffi::c_int,
         };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;

@@ -1,4 +1,45 @@
+use crate::src::nvim::change::{
+    del_bytes, del_char, get_leader_len, ins_bytes, ins_str, open_line,
+};
+use crate::src::nvim::charset::{char2cells, getwhitecols_curline, skipwhite};
+use crate::src::nvim::cursor::{
+    check_cursor, check_cursor_col, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len,
+    get_cursor_line_ptr, get_cursor_pos_len, get_cursor_pos_ptr, inc_cursor, pchar_cursor,
+};
+use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::edit::{
+    backspace_until_column, beginline, get_nolist_virtcol, insertchar, set_can_cindent,
+    undisplay_dollar,
+};
+use crate::src::nvim::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
+use crate::src::nvim::eval_1::eval_to_number;
+use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent::{
+    change_indent, get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent,
+    get_number_indent, set_indent,
+};
+use crate::src::nvim::indent_c::{cindent_on, get_c_indent};
+use crate::src::nvim::main::{
+    can_si, can_si_back, cmdmod, cmdwin_buf, curbuf, current_sctx, curtab, curwin, did_ai, did_si,
+    firstwin, got_int, old_indent, p_paste, p_smd, replace_offset, sandbox, saved_cursor, Insstart,
+    State,
+};
+use crate::src::nvim::mark::mark_col_adjust;
+use crate::src::nvim::mbyte::{
+    utf_allow_break, utf_allow_break_before, utf_iscomposing_first, utf_ptr2char,
+};
+use crate::src::nvim::memline::{ml_get, ml_get_len, ml_replace};
+use crate::src::nvim::memory::{xfree, xstrdup};
+use crate::src::nvim::message::msgmore;
+use crate::src::nvim::ops::do_join;
+use crate::src::nvim::option::was_set_insecurely;
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::strncmp;
+use crate::src::nvim::r#move::update_topline;
+use crate::src::nvim::search::check_linecomment;
+use crate::src::nvim::strings::{vim_strchr, xstrnsave};
+use crate::src::nvim::textobject::startPS;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -28,136 +69,9 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ins_bytes(p: *mut ::core::ffi::c_char);
-    fn ins_str(s: *mut ::core::ffi::c_char, slen: size_t);
-    fn del_char(fixpos: bool) -> ::core::ffi::c_int;
-    fn del_bytes(count: colnr_T, fixpos_arg: bool, use_delcombine: bool) -> ::core::ffi::c_int;
-    fn open_line(
-        dir: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        second_line_indent: ::core::ffi::c_int,
-        did_do_comment: *mut bool,
-    ) -> bool;
-    fn get_leader_len(
-        line: *mut ::core::ffi::c_char,
-        flags: *mut *mut ::core::ffi::c_char,
-        backward: bool,
-        include_space: bool,
-    ) -> ::core::ffi::c_int;
-    static p_paste: GlobalCell<::core::ffi::c_int>;
-    static p_smd: GlobalCell<::core::ffi::c_int>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getwhitecols_curline() -> intptr_t;
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn inc_cursor() -> ::core::ffi::c_int;
-    fn dec_cursor() -> ::core::ffi::c_int;
-    fn check_cursor_col(win: *mut win_T);
-    fn check_cursor(wp: *mut win_T);
-    fn gchar_cursor() -> ::core::ffi::c_int;
-    fn pchar_cursor(c: ::core::ffi::c_char);
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn get_cursor_line_len() -> colnr_T;
-    fn get_cursor_pos_len() -> colnr_T;
-    fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    fn undisplay_dollar();
-    fn backspace_until_column(col: ::core::ffi::c_int);
-    fn insertchar(
-        c: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-        second_indent: ::core::ffi::c_int,
-    );
-    fn beginline(flags: ::core::ffi::c_int);
-    fn get_nolist_virtcol() -> colnr_T;
-    fn set_can_cindent(val: bool);
-    fn eval_to_number(expr: *mut ::core::ffi::c_char, use_simple_function: bool) -> varnumber_T;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_char(c: ::core::ffi::c_int);
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn beep_flush();
-    static current_sctx: GlobalCell<sctx_T>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static sandbox: GlobalCell<::core::ffi::c_int>;
-    static did_ai: GlobalCell<bool>;
-    static did_si: GlobalCell<bool>;
-    static can_si: GlobalCell<bool>;
-    static can_si_back: GlobalCell<bool>;
-    static old_indent: GlobalCell<::core::ffi::c_int>;
-    static saved_cursor: GlobalCell<pos_T>;
-    static Insstart: GlobalCell<pos_T>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static got_int: GlobalCell<bool>;
-    static replace_offset: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    fn get_indent() -> ::core::ffi::c_int;
-    fn get_indent_lnum(lnum: linenr_T) -> ::core::ffi::c_int;
-    fn set_indent(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> bool;
-    fn get_number_indent(lnum: linenr_T) -> ::core::ffi::c_int;
-    fn change_indent(
-        type_0: ::core::ffi::c_int,
-        amount: ::core::ffi::c_int,
-        round: ::core::ffi::c_int,
-        call_changed_bytes: bool,
-    );
-    fn get_expr_indent() -> ::core::ffi::c_int;
-    fn get_lisp_indent() -> ::core::ffi::c_int;
-    fn cindent_on() -> bool;
-    fn get_c_indent() -> ::core::ffi::c_int;
-    fn mark_col_adjust(
-        lnum: linenr_T,
-        mincol: colnr_T,
-        lnum_amount: linenr_T,
-        col_amount: colnr_T,
-        spaces_removed: ::core::ffi::c_int,
-    );
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_iscomposing_first(c: ::core::ffi::c_int) -> bool;
-    fn utf_allow_break_before(cc: ::core::ffi::c_int) -> bool;
-    fn utf_allow_break(cc: ::core::ffi::c_int, ncc: ::core::ffi::c_int) -> bool;
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
-        -> ::core::ffi::c_int;
-    fn msgmore(n: ::core::ffi::c_int);
-    fn update_topline(wp: *mut win_T);
-    fn do_join(
-        count: size_t,
-        insert_space: bool,
-        save_undo: bool,
-        use_formatoptions: bool,
-        setmark: bool,
-    ) -> ::core::ffi::c_int;
-    fn was_set_insecurely(
-        wp: *mut win_T,
-        opt_idx: OptIndex,
-        opt_flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn line_breakcheck();
-    fn check_linecomment(line: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn startPS(lnum: linenr_T, para: ::core::ffi::c_int, both: bool) -> bool;
-    fn ui_cursor_shape();
-    fn u_save_cursor() -> ::core::ffi::c_int;
-    fn u_save(top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
-    fn win_fdccol_count(wp: *mut win_T) -> ::core::ffi::c_int;
-}
+use crate::src::nvim::ui::ui_cursor_shape;
+use crate::src::nvim::undo::{u_save, u_save_cursor};
+use crate::src::nvim::window::win_fdccol_count;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;

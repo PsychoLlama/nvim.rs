@@ -1,4 +1,35 @@
+use crate::src::nvim::autocmd::is_aucmd_win;
+use crate::src::nvim::buffer::{
+    buf_hide, buf_is_empty, buf_set_name, buflist_add, buflist_findnr, bufref_valid,
+    curbuf_reusable, maketitle, otherfile, set_bufref,
+};
+use crate::src::nvim::charset::{rem_backslash, skipwhite};
+use crate::src::nvim::eval::typval::{
+    tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_string,
+};
+use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
+use crate::src::nvim::ex_cmds::do_ecmd;
+use crate::src::nvim::ex_cmds2::{autowrite, check_changed};
+use crate::src::nvim::ex_getln::gotocmdline;
+use crate::src::nvim::fileio::file_pat_to_reg_pat;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    arg_had_last, autocmd_no_enter, autocmd_no_leave, cmdmod, cmdwin_type, curbuf, curtab, curwin,
+    e_cannot_change_arglist_recursively, e_cmdwin, e_invarg, e_invrange, e_nomatch, e_nomatch2,
+    first_tabpage, firstwin, global_alist, got_int, lastused_tabpage, lastwin, max_alist_id, p_ea,
+    p_fic, p_tpm, tabpage_move_disallowed, Columns,
+};
+use crate::src::nvim::mark::{setmark, setpcmark};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::normal::reset_VIsual_and_resel;
+use crate::src::nvim::option::magic_isset;
+use crate::src::nvim::os::input::os_breakcheck;
+use crate::src::nvim::os::libc::{__assert_fail, gettext, memmove};
+use crate::src::nvim::path::{
+    expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp, path_full_compare,
+    FullName_save,
+};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -32,151 +63,22 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
+use crate::src::nvim::undo::bufIsChanged;
+use crate::src::nvim::version::list_in_columns;
+use crate::src::nvim::window::{
+    check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
+    valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static autocmd_no_enter: GlobalCell<::core::ffi::c_int>;
-    static autocmd_no_leave: GlobalCell<::core::ffi::c_int>;
-    fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn curbuf_reusable() -> bool;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn buf_set_name(fnum: ::core::ffi::c_int, name: *mut ::core::ffi::c_char);
-    fn buflist_add(
-        fname: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn otherfile(ffname: *mut ::core::ffi::c_char) -> bool;
-    fn maketitle();
-    fn buf_hide(buf: *const buf_T) -> bool;
-    fn buf_is_empty(buf: *mut buf_T) -> bool;
-    static p_ea: GlobalCell<::core::ffi::c_int>;
-    static p_fic: GlobalCell<::core::ffi::c_int>;
-    static p_tpm: GlobalCell<OptInt>;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn rem_backslash(str: *const ::core::ffi::c_char) -> bool;
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invrange: [::core::ffi::c_char; 0];
-    static e_nomatch: [::core::ffi::c_char; 0];
-    static e_nomatch2: [::core::ffi::c_char; 0];
-    static e_cannot_change_arglist_recursively: [::core::ffi::c_char; 0];
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
-    fn find_tabwin(wvp: *mut typval_T, tvp: *mut typval_T) -> *mut win_T;
-    fn autowrite(buf: *mut buf_T, forceit: bool) -> ::core::ffi::c_int;
-    fn check_changed(buf: *mut buf_T, flags: ::core::ffi::c_int) -> bool;
-    fn do_ecmd(
-        fnum: ::core::ffi::c_int,
-        ffname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        newlnum: linenr_T,
-        flags: ::core::ffi::c_int,
-        oldwin: *mut win_T,
-    ) -> ::core::ffi::c_int;
-    fn gotocmdline(clr: bool);
-    fn file_pat_to_reg_pat(
-        pat: *const ::core::ffi::c_char,
-        pat_end: *const ::core::ffi::c_char,
-        allow_dirs: *mut ::core::ffi::c_char,
-        no_bslash: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static lastwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static lastused_tabpage: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static global_alist: GlobalCell<alist_T>;
-    static max_alist_id: GlobalCell<::core::ffi::c_int>;
-    static arg_had_last: GlobalCell<bool>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static got_int: GlobalCell<bool>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    fn setmark(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn setpcmark();
-    fn reset_VIsual_and_resel();
-    fn magic_isset() -> bool;
-    fn os_breakcheck();
-    fn path_full_compare(
-        s1: *mut ::core::ffi::c_char,
-        s2: *mut ::core::ffi::c_char,
-        checkname: bool,
-        expandenv: bool,
-    ) -> FileComparison;
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
-    fn gen_expand_wildcards(
-        num_pat: ::core::ffi::c_int,
-        pat: *mut *mut ::core::ffi::c_char,
-        num_file: *mut ::core::ffi::c_int,
-        file: *mut *mut *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn fix_fname(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn expand_wildcards(
-        num_pat: ::core::ffi::c_int,
-        pat: *mut *mut ::core::ffi::c_char,
-        num_files: *mut ::core::ffi::c_int,
-        files: *mut *mut *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn bufIsChanged(buf: *mut buf_T) -> bool;
-    fn list_in_columns(
-        items: *mut *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        current: ::core::ffi::c_int,
-    );
-    static tabpage_move_disallowed: GlobalCell<::core::ffi::c_int>;
-    fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool;
-    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn win_valid(win: *const win_T) -> bool;
-    fn win_move_after(win1: *mut win_T, win2: *mut win_T);
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn valid_tabpage(tpc: *mut tabpage_T) -> bool;
-    fn tabpage_index(ftp: *mut tabpage_T) -> ::core::ffi::c_int;
-    fn goto_tabpage_tp(
-        tp: *mut tabpage_T,
-        trigger_enter_autocmds: bool,
-        trigger_leave_autocmds: bool,
-    );
-    fn win_enter(wp: *mut win_T, undo_sync: bool);
-    fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T;
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;

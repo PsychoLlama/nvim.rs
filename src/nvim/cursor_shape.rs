@@ -1,52 +1,18 @@
+use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
+use crate::src::nvim::charset::getdigits_int;
+use crate::src::nvim::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{finish_op, p_guicursor, p_sel, State, VIsual_active};
+use crate::src::nvim::os::libc::{strcmp, strlen, strncasecmp};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     cursorentry_T, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
     Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
     ObjectType, String_0,
 };
-extern "C" {
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    static p_guicursor: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn cmdline_overstrike() -> bool;
-    fn cmdline_at_end() -> bool;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static finish_op: GlobalCell<bool>;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn ui_mode_info_set();
-}
+use crate::src::nvim::ui::ui_mode_info_set;
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;

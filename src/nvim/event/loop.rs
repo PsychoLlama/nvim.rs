@@ -1,3 +1,16 @@
+use crate::src::nvim::event::libuv::{
+    uv_async_init, uv_async_send, uv_close, uv_is_closing, uv_loop_close, uv_loop_init,
+    uv_mutex_destroy, uv_mutex_init, uv_mutex_lock, uv_mutex_unlock, uv_run, uv_signal_init,
+    uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop,
+};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_free, multiqueue_move_events, multiqueue_new, multiqueue_new_child,
+    multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event, multiqueue_size,
+};
+use crate::src::nvim::log::{log_uv_handles, logmsg};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::abort;
+use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     Event, Loop, LuaRef, MultiQueue, Proc, ProcType, PutCallback, RStream, ScopeType, Stream,
     VarLockStatus, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -19,54 +32,7 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_9, uv_timer_s_u as C2Rust_Unnamed_10, uv_timer_t, QUEUE,
 };
 extern "C" {
-    fn abort() -> !;
-    fn uv_loop_init(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_loop_close(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_run(_: *mut uv_loop_t, mode: uv_run_mode) -> ::core::ffi::c_int;
-    fn uv_stop(_: *mut uv_loop_t);
     fn uv_walk(loop_0: *mut uv_loop_t, walk_cb: uv_walk_cb, arg: *mut ::core::ffi::c_void);
-    fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
-    fn uv_is_closing(handle: *const uv_handle_t) -> ::core::ffi::c_int;
-    fn uv_async_init(
-        _: *mut uv_loop_t,
-        async_0: *mut uv_async_t,
-        async_cb_0: uv_async_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_async_send(async_0: *mut uv_async_t) -> ::core::ffi::c_int;
-    fn uv_timer_init(_: *mut uv_loop_t, handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_timer_start(
-        handle: *mut uv_timer_t,
-        cb: uv_timer_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_signal_init(loop_0: *mut uv_loop_t, handle: *mut uv_signal_t) -> ::core::ffi::c_int;
-    fn uv_mutex_init(handle: *mut uv_mutex_t) -> ::core::ffi::c_int;
-    fn uv_mutex_destroy(handle: *mut uv_mutex_t);
-    fn uv_mutex_lock(handle: *mut uv_mutex_t);
-    fn uv_mutex_unlock(handle: *mut uv_mutex_t);
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn os_hrtime() -> uint64_t;
-    fn multiqueue_new(on_put: PutCallback, data: *mut ::core::ffi::c_void) -> *mut MultiQueue;
-    fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
-    fn multiqueue_free(self_0: *mut MultiQueue);
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_move_events(dest: *mut MultiQueue, src: *mut MultiQueue);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_purge_events(self_0: *mut MultiQueue);
-    fn multiqueue_size(self_0: *mut MultiQueue) -> size_t;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn log_uv_handles(loop_0: *mut ::core::ffi::c_void);
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

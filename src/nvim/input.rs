@@ -1,4 +1,16 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::ex_getln::getcmdline_prompt;
+use crate::src::nvim::getchar::{fix_input_buffer, merge_modifiers};
+
+use crate::src::nvim::main::{
+    allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row,
+    msg_scrolled, need_wait_return, no_mapping, no_wait_return, IObuff, State,
+};
+use crate::src::nvim::mbyte::{utf8len_tab, utf_ptr2char};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::message::{msg_putchar, set_keep_msg};
+use crate::src::nvim::mouse::{is_mouse_key, setmouse};
+use crate::src::nvim::os::input::input_get;
+use crate::src::nvim::os::libc::{atoi, gettext, memmove, snprintf};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -8,68 +20,7 @@ pub use crate::src::nvim::types::{
     Callback, CallbackType, Callback_data as C2Rust_Unnamed, LuaRef, MultiQueue, ScopeDictDictItem,
     ScopeType, SpecialVarValue, UIExtension, VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getcmdline_prompt(
-        firstc: ::core::ffi::c_int,
-        prompt: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        xp_context: ::core::ffi::c_int,
-        xp_arg: *const ::core::ffi::c_char,
-        highlight_callback: Callback,
-        one_key: bool,
-        mouse_used: *mut bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn merge_modifiers(
-        c_arg: ::core::ffi::c_int,
-        modifiers: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn fix_input_buffer(buf: *mut uint8_t, len: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static mod_mask: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scrolled: GlobalCell<::core::ffi::c_int>;
-    static keep_msg: GlobalCell<*mut ::core::ffi::c_char>;
-    static keep_msg_hl_id: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static no_mapping: GlobalCell<::core::ffi::c_int>;
-    static allow_keys: GlobalCell<::core::ffi::c_int>;
-    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static utf8len_tab: [uint8_t; 256];
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn set_keep_msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn is_mouse_key(c: ::core::ffi::c_int) -> bool;
-    fn setmouse();
-    fn ui_flush();
-    fn ui_has(ext: UIExtension) -> bool;
-    fn input_get(
-        buf: *mut uint8_t,
-        maxlen: ::core::ffi::c_int,
-        ms: ::core::ffi::c_int,
-        tb_change_cnt: ::core::ffi::c_int,
-        events: *mut MultiQueue,
-    ) -> ::core::ffi::c_int;
-}
+use crate::src::nvim::ui::{ui_flush, ui_has};
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;
@@ -460,7 +411,7 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
                 );
             }
         } else {
-            if utf8len_tab[n as usize] as ::core::ffi::c_int > len {
+            if (*utf8len_tab.ptr())[n as usize] as ::core::ffi::c_int > len {
                 continue;
             }
             *buf.offset(

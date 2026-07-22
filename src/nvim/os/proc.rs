@@ -1,38 +1,10 @@
+use crate::src::nvim::event::libuv::uv_kill;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::memory::xrealloc;
+use crate::src::nvim::os::libc::{__assert_fail, fclose, fopen, fscanf, snprintf};
 pub use crate::src::nvim::types::{
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, size_t, FILE, _IO_FILE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fopen(
-        __filename: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fscanf(__stream: *mut FILE, __format: *const ::core::ffi::c_char, ...)
-        -> ::core::ffi::c_int;
-    fn uv_kill(pid: ::core::ffi::c_int, signum: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
 pub const UV_ENOEXEC: C2Rust_Unnamed = -8;

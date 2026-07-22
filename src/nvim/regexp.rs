@@ -1,4 +1,32 @@
+use crate::src::nvim::charset::{getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc};
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
+};
+use crate::src::nvim::eval::userfunc::call_func;
+use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    called_emsg, e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
+    e_resulting_text_too_long, e_toomsbra, e_trailing, got_int, p_cpo, p_mmp, p_re, p_sel,
+    p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch, VIsual,
+    VIsual_active, VIsual_mode,
+};
+use crate::src::nvim::mbyte::{
+    mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
+    utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
+    utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utf_strnicmp, utfc_ptr2len,
+};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
+use crate::src::nvim::message::{
+    emsg, iemsg, internal_error, msg_puts, semsg, siemsg, verbose_enter, verbose_leave,
+};
+use crate::src::nvim::os::input::fast_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __ctype_b_loc, bsearch, gettext, memmove, memset, strcpy, strlen, strncmp,
+    strncpy,
+};
+use crate::src::nvim::profile::profile_passed_limit;
+use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem, DecorExt,
@@ -26,135 +54,22 @@ pub use crate::src::nvim::types::{
     uintmax_t, undo_object, utf8proc_int32_t, varnumber_T, virt_line, visualinfo_T, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
+// Phase-5a blacklist residue: this module keeps concrete local copies of
+// types whose canonical form is opaque (file_buffer, window_S, ...), so
+// these declarations cannot become `use` imports until the phase-8 rewrite.
+// The copies are layout-identical to the canonical definitions (proven by
+// the 5a parity suite); the nominal decl/decl mismatch is expected.
+#[allow(clashing_extern_declarations)]
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn bsearch(
-        __key: *const ::core::ffi::c_void,
-        __base: *const ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strsave_escaped(
-        string: *const ::core::ffi::c_char,
-        esc_chars: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn cmp_keyvalue_value_n(
-        a: *const ::core::ffi::c_void,
-        b: *const ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn vim_isIDc(c: ::core::ffi::c_int) -> bool;
     fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool;
     fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool;
-    fn vim_isfilec(c: ::core::ffi::c_int) -> bool;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn hex2nr(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_internal_error_in_regexp: [::core::ffi::c_char; 0];
-    static e_nopresub: [::core::ffi::c_char; 0];
-    static e_null: [::core::ffi::c_char; 0];
-    static e_re_damg: [::core::ffi::c_char; 0];
-    static e_re_corr: [::core::ffi::c_char; 0];
-    static e_toomsbra: [::core::ffi::c_char; 0];
-    static e_trailing: [::core::ffi::c_char; 0];
-    static e_resulting_text_too_long: [::core::ffi::c_char; 0];
-    fn eval_to_string(
-        arg: *mut ::core::ffi::c_char,
-        join_list: bool,
-        use_simple_function: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn partial_name(pt: *mut partial_T) -> *mut ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn siemsg(s: *const ::core::ffi::c_char, ...);
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn verbose_enter();
-    fn verbose_leave();
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_init_static10(sl: *mut staticList10_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn call_func(
-        funcname: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-        rettv: *mut typval_T,
-        argcount_in: ::core::ffi::c_int,
-        argvars_in: *mut typval_T,
-        funcexe: *mut funcexe_T,
-    ) -> ::core::ffi::c_int;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    static called_emsg: GlobalCell<::core::ffi::c_int>;
-    static rc_did_emsg: GlobalCell<bool>;
     static curwin: GlobalCell<*mut win_T>;
     static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_mode: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    static reg_do_extmatch: GlobalCell<::core::ffi::c_int>;
-    static re_extmatch_in: GlobalCell<*mut reg_extmatch_T>;
-    static re_extmatch_out: GlobalCell<*mut reg_extmatch_T>;
     fn mark_get(
         buf: *mut buf_T,
         win: *mut win_T,
@@ -162,50 +77,8 @@ extern "C" {
         flag: MarkGet,
         name: ::core::ffi::c_int,
     ) -> *mut fmark_T;
-    fn mb_get_class_tab(
-        p: *const ::core::ffi::c_char,
-        chartab: *const uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_ptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_composinglike(
-        p1: *const ::core::ffi::c_char,
-        p2: *const ::core::ffi::c_char,
-        state: *mut GraphemeState,
-    ) -> bool;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_iscomposing_legacy(c: ::core::ffi::c_int) -> bool;
-    fn utf_fold(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_toupper(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_islower(a: ::core::ffi::c_int) -> bool;
-    fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_isupper(a: ::core::ffi::c_int) -> bool;
-    fn utf_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        n1: size_t,
-        n2: size_t,
-    ) -> ::core::ffi::c_int;
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_mmp: GlobalCell<OptInt>;
-    static p_re: GlobalCell<OptInt>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn fast_breakcheck();
     fn init_charsize_arg(
         csarg: *mut CharsizeArg,
         wp: *mut win_T,
@@ -229,7 +102,6 @@ extern "C" {
         cursor: *mut colnr_T,
         end: *mut colnr_T,
     );
-    fn profile_passed_limit(tm: proftime_T) -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

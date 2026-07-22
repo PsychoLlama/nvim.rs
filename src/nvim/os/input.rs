@@ -1,4 +1,25 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::autocmd::{apply_autocmds, trigger_cursorhold};
+use crate::src::nvim::event::libuv::uv_guess_handle;
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
+};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::rstream::{
+    rstream_init_fd, rstream_may_close, rstream_start, rstream_stop,
+};
+use crate::src::nvim::getchar::{before_blocking, typebuf_changed};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::trans_special;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui, did_cursorhold, do_profiling,
+    getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid, mouse_row, p_mouset, p_ut,
+    preserve_exit, silent_mode, typebuf_was_filled, used_stdin, Columns, Rows, State,
+};
+use crate::src::nvim::os::libc::{__assert_fail, gettext, memcpy, memmove, sscanf};
+use crate::src::nvim::os::time::os_hrtime;
+use crate::src::nvim::profile::{prof_input_end, prof_input_start};
+use crate::src::nvim::state::get_real_state;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_16, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -44,92 +65,6 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, varnumber_T,
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn sscanf(
-        __s: *const ::core::ffi::c_char,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn uv_guess_handle(file: uv_file) -> uv_handle_type;
-    static did_cursorhold: GlobalCell<bool>;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn trigger_cursorhold() -> bool;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn os_hrtime() -> uint64_t;
-    fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
-    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
-    fn rstream_stop(stream: *mut RStream);
-    fn rstream_may_close(stream: *mut RStream);
-    fn typebuf_changed(tb_change_cnt: ::core::ffi::c_int) -> bool;
-    fn before_blocking();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static do_profiling: GlobalCell<::core::ffi::c_int>;
-    static current_ui: GlobalCell<uint64_t>;
-    static mouse_grid: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_col: GlobalCell<::core::ffi::c_int>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static silent_mode: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
-    static ctrl_c_interrupts: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    static typebuf_was_filled: GlobalCell<bool>;
-    fn trans_special(
-        srcp: *mut *const ::core::ffi::c_char,
-        src_len: size_t,
-        dst: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        escape_ks: bool,
-        did_simplify: *mut bool,
-    ) -> ::core::ffi::c_uint;
-    static main_loop: SharedCell<Loop>;
-    fn getout(exitval: ::core::ffi::c_int) -> !;
-    fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
-    static ch_before_blocking_events: GlobalCell<*mut MultiQueue>;
-    static p_mouset: GlobalCell<OptInt>;
-    static p_ut: GlobalCell<OptInt>;
-    static used_stdin: GlobalCell<bool>;
-    fn prof_input_start();
-    fn prof_input_end();
-    fn get_real_state() -> ::core::ffi::c_int;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

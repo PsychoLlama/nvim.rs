@@ -1,4 +1,14 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::eval::vars::set_vim_var_nr;
+use crate::src::nvim::event::signal::{
+    signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
+};
+use crate::src::nvim::ex_cmds2::autowrite_all;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{curbuf, main_loop, p_awa, preserve_exit, v_dying, IObuff};
+use crate::src::nvim::memline::ml_sync_all;
+use crate::src::nvim::os::libc::{__assert_fail, snprintf};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -46,57 +56,12 @@ pub use crate::src::nvim::types::{
     QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
     fn sigemptyset(__set: *mut sigset_t) -> ::core::ffi::c_int;
     fn pthread_sigmask(
         __how: ::core::ffi::c_int,
         __newmask: *const __sigset_t,
         __oldmask: *mut __sigset_t,
     ) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn signal_watcher_init(
-        loop_0: *mut Loop,
-        watcher: *mut SignalWatcher,
-        data: *mut ::core::ffi::c_void,
-    );
-    fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: ::core::ffi::c_int);
-    fn signal_watcher_stop(watcher: *mut SignalWatcher);
-    fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb);
-    fn autowrite_all();
-    static curbuf: GlobalCell<*mut buf_T>;
-    static v_dying: GlobalCell<::core::ffi::c_int>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static main_loop: SharedCell<Loop>;
-    fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
-    static p_awa: GlobalCell<::core::ffi::c_int>;
-    fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

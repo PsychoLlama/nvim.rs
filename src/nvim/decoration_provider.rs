@@ -1,4 +1,17 @@
+use crate::src::nvim::api::extmark::describe_ns;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_array, api_free_object, api_object_to_bool,
+};
+use crate::src::nvim::decoration::decor_check_to_be_deleted;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::hl_check_ns;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
+use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
+use crate::src::nvim::memory::{xfree, xrealloc};
+use crate::src::nvim::message::msg_schedule_semsg_multiline;
+use crate::src::nvim::os::libc::__assert_fail;
+use crate::src::nvim::r#move::validate_botline_win;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -33,52 +46,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    fn api_free_object(value: Object);
-    fn api_free_array(value: Array);
-    fn api_clear_error(value: *mut Error);
-    fn api_object_to_bool(
-        obj: Object,
-        what: *const ::core::ffi::c_char,
-        nil_value: bool,
-        err: *mut Error,
-    ) -> bool;
-    static decor_state: GlobalCell<DecorState>;
-    fn decor_check_to_be_deleted();
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static display_tick: GlobalCell<disptick_T>;
-    static ns_hl_active: GlobalCell<NS>;
-    fn hl_check_ns() -> bool;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn msg_schedule_semsg_multiline(fmt: *const ::core::ffi::c_char, ...);
-    fn validate_botline_win(wp: *mut win_T);
-}
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

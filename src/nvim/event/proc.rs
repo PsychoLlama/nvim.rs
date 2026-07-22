@@ -1,4 +1,27 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::event::libuv::{
+    uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
+};
+use crate::src::nvim::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
+};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::rstream::rstream_may_close;
+use crate::src::nvim::event::stream::{stream_init, stream_may_close};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
+    ui_client_exit_status,
+};
+use crate::src::nvim::memory::xrealloc;
+use crate::src::nvim::os::libc::{__assert_fail, memmove};
+use crate::src::nvim::os::proc::os_proc_tree_kill;
+use crate::src::nvim::os::pty_proc_unix::{
+    pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
+};
+use crate::src::nvim::os::shell::shell_free_argv;
+use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     Event, LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream, ScopeType,
     Stream, VarLockStatus, __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -24,76 +47,6 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     winsize, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn uv_unref(_: *mut uv_handle_t);
-    fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
-    fn uv_recv_buffer_size(
-        handle: *mut uv_handle_t,
-        value: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_init(
-        _: *mut uv_loop_t,
-        handle: *mut uv_pipe_t,
-        ipc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_timer_start(
-        handle: *mut uv_timer_t,
-        cb: uv_timer_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> ::core::ffi::c_int;
-    fn libuv_proc_close(uvproc: *mut LibuvProc);
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn os_hrtime() -> uint64_t;
-    fn rstream_may_close(stream: *mut RStream);
-    static exiting: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    static main_loop: SharedCell<Loop>;
-    fn os_exit(r: ::core::ffi::c_int) -> !;
-    fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
-    fn stream_init(
-        loop_0: *mut Loop,
-        stream: *mut Stream,
-        fd: ::core::ffi::c_int,
-        uvstream: *mut uv_stream_t,
-    );
-    fn stream_may_close(stream: *mut Stream);
-    fn os_proc_tree_kill(pid: ::core::ffi::c_int, sig: ::core::ffi::c_int) -> bool;
-    fn pty_proc_spawn(ptyproc: *mut PtyProc) -> ::core::ffi::c_int;
-    fn pty_proc_flush_master(ptyproc: *mut PtyProc);
-    fn pty_proc_close(ptyproc: *mut PtyProc);
-    fn pty_proc_close_master(ptyproc: *mut PtyProc);
-    fn pty_proc_teardown(loop_0: *mut Loop);
-    fn shell_free_argv(argv: *mut *mut ::core::ffi::c_char);
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

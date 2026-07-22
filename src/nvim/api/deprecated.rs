@@ -1,4 +1,33 @@
+use crate::src::nvim::api::buffer::{nvim_buf_get_lines, nvim_buf_set_lines};
+use crate::src::nvim::api::extmark::{
+    nvim_buf_clear_namespace, nvim_create_namespace, parse_virt_text,
+};
+use crate::src::nvim::api::private::dispatch::msgpack_rpc_get_handler_for;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_object, api_set_error, api_set_sctx, api_typename, arena_array,
+    copy_object, copy_string, cstr_as_string, dict_set_var, find_buffer_by_handle,
+    find_tab_by_handle, find_window_by_handle,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::api::vimscript::exec_impl;
+use crate::src::nvim::decoration::{clear_virttext, decor_find_virttext};
+use crate::src::nvim::eval::vars::get_globvar_dict;
+use crate::src::nvim::extmark::extmark_set;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::hl_get_attr_by_id;
+use crate::src::nvim::highlight_group::{
+    syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id,
+};
+use crate::src::nvim::lua::executor::nlua_exec;
+use crate::src::nvim::main::{
+    curbuf, current_sctx, curwin, got_int, msg_didout, msg_silent, no_wait_return,
+};
+use crate::src::nvim::memory::{xmalloc, xrealloc};
+use crate::src::nvim::message::{emsg, msg, msg_end};
+use crate::src::nvim::option::{
+    find_option, get_option_value_for, get_vimoption, object_as_optval, option_has_scope,
+    optval_as_object, set_option_value_for,
+};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -33,163 +62,6 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn nvim_buf_get_lines(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start: Integer,
-        end: Integer,
-        strict_indexing: Boolean,
-        arena: *mut Arena,
-        lstate: *mut lua_State,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_set_lines(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start: Integer,
-        end: Integer,
-        strict_indexing: Boolean,
-        replacement: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim_create_namespace(name: String_0) -> Integer;
-    fn nvim_buf_clear_namespace(
-        buf: Buffer,
-        ns_id: Integer,
-        line_start: Integer,
-        line_end: Integer,
-        err: *mut Error,
-    );
-    fn parse_virt_text(chunks: Array, err: *mut Error, width: *mut ::core::ffi::c_int) -> VirtText;
-    fn msgpack_rpc_get_handler_for(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        error: *mut Error,
-    ) -> MsgpackRpcRequestHandler;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
-    fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn copy_object(obj: Object, arena: *mut Arena) -> Object;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    fn exec_impl(
-        channel_id: uint64_t,
-        src: String_0,
-        opts: *mut KeyDict_exec_opts,
-        err: *mut Error,
-    ) -> String_0;
-    fn clear_virttext(text: *mut VirtText);
-    fn decor_find_virttext(
-        buf: *mut buf_T,
-        row: ::core::ffi::c_int,
-        ns_id: uint64_t,
-    ) -> *mut DecorVirtText;
-    fn get_globvar_dict() -> *mut dict_T;
-    fn extmark_set(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        idp: *mut uint32_t,
-        row: ::core::ffi::c_int,
-        col: colnr_T,
-        end_row: ::core::ffi::c_int,
-        end_col: colnr_T,
-        decor: DecorInline,
-        decor_flags: uint16_t,
-        right_gravity: bool,
-        end_right_gravity: bool,
-        no_undo: bool,
-        invalidate: bool,
-        err: *mut Error,
-    );
-    static msg_didout: GlobalCell<bool>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    fn hl_get_attr_by_id(
-        attr_id: Integer,
-        rgb: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn syn_get_final_id(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn msg_end() -> bool;
-    fn find_option(name: *const ::core::ffi::c_char) -> OptIndex;
-    fn optval_as_object(o: OptVal) -> Object;
-    fn object_as_optval(o: Object, error: *mut bool) -> OptVal;
-    fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool;
-    fn get_option_value_for(
-        opt_idx: OptIndex,
-        opt_flags: ::core::ffi::c_int,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-        err: *mut Error,
-    ) -> OptVal;
-    fn set_option_value_for(
-        name: *const ::core::ffi::c_char,
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-        err: *mut Error,
-    );
-    fn get_vimoption(
-        name: String_0,
-        opt_flags: ::core::ffi::c_int,
-        buf: *mut buf_T,
-        win: *mut win_T,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -1,4 +1,35 @@
+use crate::src::nvim::api::private::helpers::{
+    api_set_error, api_typename, arena_array, arena_dict, copy_string, cstr_as_string,
+    find_buffer_by_handle, find_window_by_handle, object_to_hl_id, string_to_cstr,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::charset::{transstr, vim_isprintc};
+use crate::src::nvim::decoration::{
+    clear_virtlines, clear_virttext, decor_free, decor_put_sh, decor_put_vt, decor_range_add_sh,
+    decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name,
+};
+use crate::src::nvim::decoration_provider::{decor_provider_clear, get_decor_provider};
+use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::extmark::{
+    extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::schar_high;
+use crate::src::nvim::main::{
+    curtab, decor_state, first_tabpage, firstwin, namespace_ids, namespace_localscope,
+    next_namespace_id,
+};
+use crate::src::nvim::map::{
+    map_put_ref_String_int, mh_delete_uint32_t, mh_get_String, mh_get_ptr_t, mh_get_uint32_t,
+    mh_put_ptr_t, mh_put_uint32_t,
+};
+use crate::src::nvim::marktree::mt_inspect;
+use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2schar};
+use crate::src::nvim::memline::ml_get_buf_len;
+use crate::src::nvim::memory::{strequal, xfree, xrealloc};
+use crate::src::nvim::os::libc::__assert_fail;
+use crate::src::nvim::r#move::changed_window_setting;
+use crate::src::nvim::sign::init_sign_text;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -39,146 +70,6 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
-    fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_delete_uint32_t(set: *mut Set_uint32_t, key: *mut uint32_t) -> uint32_t;
-    fn mh_put_uint32_t(set: *mut Set_uint32_t, key: uint32_t, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t;
-    fn map_put_ref_String_int(
-        map: *mut Map_String_int,
-        key: String_0,
-        key_alloc: *mut *mut String_0,
-        new_item: *mut bool,
-    ) -> *mut ::core::ffi::c_int;
-    static namespace_ids: GlobalCell<Map_String_int>;
-    static namespace_localscope: GlobalCell<Set_uint32_t>;
-    static next_namespace_id: GlobalCell<handle_T>;
-    static set_extmark_table: GlobalCell<[KeySetLink; 36]>;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn object_to_hl_id(
-        obj: Object,
-        what: *const ::core::ffi::c_char,
-        err: *mut Error,
-    ) -> ::core::ffi::c_int;
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    static decor_state: GlobalCell<DecorState>;
-    fn decor_put_sh(item: DecorSignHighlight) -> uint32_t;
-    fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText;
-    fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight;
-    fn decor_free(decor: DecorInline);
-    fn clear_virttext(text: *mut VirtText);
-    fn clear_virtlines(lines: *mut VirtLines);
-    fn decor_range_add_virt(
-        state: *mut DecorState,
-        start_row: ::core::ffi::c_int,
-        start_col: ::core::ffi::c_int,
-        end_row: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-        vt: *mut DecorVirtText,
-        owned: bool,
-    );
-    fn decor_range_add_sh(
-        state: *mut DecorState,
-        start_row: ::core::ffi::c_int,
-        start_col: ::core::ffi::c_int,
-        end_row: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-        sh: *mut DecorSignHighlight,
-        owned: bool,
-        ns: uint32_t,
-        mark_id: uint32_t,
-        subpriority: DecorPriority,
-    );
-    fn decor_to_dict_legacy(dict: *mut Dict, decor: DecorInline, hl_name: bool, arena: *mut Arena);
-    fn hl_group_name(hl_id: ::core::ffi::c_int, hl_name: bool) -> Object;
-    fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider;
-    fn decor_provider_clear(p: *mut DecorProvider);
-    fn extmark_set(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        idp: *mut uint32_t,
-        row: ::core::ffi::c_int,
-        col: colnr_T,
-        end_row: ::core::ffi::c_int,
-        end_col: colnr_T,
-        decor: DecorInline,
-        decor_flags: uint16_t,
-        right_gravity: bool,
-        end_right_gravity: bool,
-        no_undo: bool,
-        invalidate: bool,
-        err: *mut Error,
-    );
-    fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool;
-    fn extmark_clear(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        l_row: ::core::ffi::c_int,
-        l_col: colnr_T,
-        u_row: ::core::ffi::c_int,
-        u_col: colnr_T,
-    ) -> bool;
-    fn extmark_get(
-        buf: *mut buf_T,
-        ns_id: uint32_t,
-        l_row: ::core::ffi::c_int,
-        l_col: colnr_T,
-        u_row: ::core::ffi::c_int,
-        u_col: colnr_T,
-        amount: int64_t,
-        type_filter: ExtmarkType,
-        overlap: bool,
-    ) -> ExtmarkInfoArray;
-    fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> MTPair;
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    static firstwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    fn schar_high(sc: schar_T) -> bool;
-    fn mt_inspect(b: *mut MarkTree, keys: bool, dot: bool) -> String_0;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn changed_window_setting(wp: *mut win_T);
-    fn init_sign_text(
-        sp: *mut sign_T,
-        sign_text: *mut schar_T,
-        text: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn transstr(s: *const ::core::ffi::c_char, untab: bool) -> *mut ::core::ffi::c_char;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

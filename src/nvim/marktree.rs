@@ -1,4 +1,11 @@
+use crate::src::nvim::api::private::helpers::ga_take_string;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::map::{
+    map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, map_put_ref_uint64_t_MTDamagePair,
+    map_put_ref_uint64_t_ptr_t, mh_get_ptr_t, mh_get_uint64_t,
+};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdup, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, memmove, memset, snprintf};
 pub use crate::src::nvim::types::{
     colnr_T, garray_T, int16_t, int32_t, mtnode_inner_s, mtnode_s, ptr_t, schar_T, size_t, ssize_t,
     uint16_t, uint32_t, uint64_t, uint8_t, virt_line, DecorExt, DecorHighlightInline,
@@ -9,70 +16,6 @@ pub use crate::src::nvim::types::{
     VirtText, VirtTextChunk, VirtTextPos,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr_0: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr_0: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn map_put_ref_ptr_t_ptr_t(
-        map: *mut Map_ptr_t_ptr_t,
-        key: ptr_t,
-        key_alloc: *mut *mut ptr_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn map_del_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut uint64_t,
-    ) -> ptr_t;
-    fn map_put_ref_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut *mut uint64_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn map_put_ref_uint64_t_MTDamagePair(
-        map: *mut Map_uint64_t_MTDamagePair,
-        key: uint64_t,
-        key_alloc: *mut *mut uint64_t,
-        new_item: *mut bool,
-    ) -> *mut MTDamagePair;
-    fn ga_take_string(ga: *mut garray_T) -> String_0;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
 }

@@ -1,4 +1,78 @@
+use crate::src::nvim::api::private::dispatch::{
+    KeyDict__shada_buflist_item_get_field, KeyDict__shada_mark_get_field,
+    KeyDict__shada_register_get_field, KeyDict__shada_search_pat_get_field,
+};
+use crate::src::nvim::api::private::helpers::{
+    api_free_dict, api_free_string, copy_string, cstr_as_string,
+};
+use crate::src::nvim::buffer::{
+    bt_quickfix, bt_terminal, buflist_findnr, buflist_new, buflist_setfpos,
+};
+use crate::src::nvim::cmdhist::{clr_history, hist_get_array, hist_iter};
+use crate::src::nvim::eval::decode::{decode_string, unpack_typval};
+use crate::src::nvim::eval::encode::encode_vim_to_msgpack;
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string,
+};
+use crate::src::nvim::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
+use crate::src::nvim::eval_1::{
+    get_copyID, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global,
+};
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::ex_cmds::{sub_get_replacement, sub_set_replacement};
+use crate::src::nvim::ex_docmd::set_no_hlsearch;
+use crate::src::nvim::fileio::{modname, vim_rename};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::{
+    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, namedfm, no_hlsearch, p_enc, p_fs,
+    p_hi, p_shada, p_shadafile, p_verbose, NameBuff,
+};
+use crate::src::nvim::map::{
+    map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, map_ref_cstr_t_ptr_t, mh_get_cstr_t,
+    mh_get_ptr_t, mh_put_cstr_t, mh_put_ptr_t,
+};
+use crate::src::nvim::mark::{
+    cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
+    mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
+};
+use crate::src::nvim::mbyte::mb_strnicmp;
+use crate::src::nvim::memory::{
+    strequal, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup,
+};
+use crate::src::nvim::message::{semsg, siemsg, smsg, verbose_enter, verbose_leave};
+use crate::src::nvim::msgpack_rpc::packer::{
+    mpack_bin, mpack_check_buffer, mpack_integer, mpack_raw, mpack_str, mpack_uint64,
+    packer_string_buffer, packer_take_string,
+};
+use crate::src::nvim::msgpack_rpc::unpacker::{
+    push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
+};
+use crate::src::nvim::option::{copy_option_part, magic_isset};
+use crate::src::nvim::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
+use crate::src::nvim::os::fileio::{
+    file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,
+    file_try_read_buffered,
+};
+use crate::src::nvim::os::fs::{
+    os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, atoi, getgid, gettext, getuid, memchr, memcpy, memmove, memset, qsort,
+    strcmp, strlen,
+};
+use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
+use crate::src::nvim::os::time::os_time;
+use crate::src::nvim::path::{
+    concat_fnames_realloc, path_fnamecmp, path_tail_with_sep, path_try_shorten_fname,
+};
+use crate::src::nvim::regexp::regtilde;
+use crate::src::nvim::register::op_reg_get;
+use crate::src::nvim::search::{
+    get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
+    set_search_pattern, set_substitute_pattern,
+};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AdditionalDataBuilder, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_7,
@@ -36,337 +110,8 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
     yankreg_T, QUEUE,
 };
+use crate::src::nvim::version::longVersion;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn getuid() -> __uid_t;
-    fn getgid() -> __gid_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn mh_get_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> uint32_t;
-    fn mh_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
-    fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn map_del_cstr_t_ptr_t(
-        map: *mut Map_cstr_t_ptr_t,
-        key: cstr_t,
-        key_alloc: *mut cstr_t,
-    ) -> ptr_t;
-    fn map_ref_cstr_t_ptr_t(
-        map: *mut Map_cstr_t_ptr_t,
-        key: cstr_t,
-        key_alloc: *mut *mut cstr_t,
-    ) -> *mut ptr_t;
-    fn map_put_ref_cstr_t_ptr_t(
-        map: *mut Map_cstr_t_ptr_t,
-        key: cstr_t,
-        key_alloc: *mut *mut cstr_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_string(value: String_0);
-    fn api_free_dict(value: Dict);
-    fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buflist_new(
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-        flags: ::core::ffi::c_int,
-    ) -> *mut buf_T;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn buflist_setfpos(
-        buf: *mut buf_T,
-        win: *mut win_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        copy_options: bool,
-    );
-    fn bt_quickfix(buf: *const buf_T) -> bool;
-    fn bt_terminal(buf: *const buf_T) -> bool;
-    fn KeyDict__shada_search_pat_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict__shada_mark_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict__shada_register_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict__shada_buflist_item_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn clr_history(histype: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn hist_iter(
-        iter: *const ::core::ffi::c_void,
-        history_type: uint8_t,
-        zero: bool,
-        hist: *mut histentry_T,
-    ) -> *const ::core::ffi::c_void;
-    fn hist_get_array(
-        history_type: uint8_t,
-        new_hisidx: *mut *mut ::core::ffi::c_int,
-        new_hisnum: *mut *mut ::core::ffi::c_int,
-    ) -> *mut histentry_T;
-    fn decode_string(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        force_blob: bool,
-        s_allocated: bool,
-    ) -> typval_T;
-    fn unpack_typval(
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-        ret: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn get_copyID() -> ::core::ffi::c_int;
-    fn set_ref_in_ht(
-        ht: *mut hashtab_T,
-        copyID: ::core::ffi::c_int,
-        list_stack: *mut *mut list_stack_T,
-    ) -> bool;
-    fn set_ref_in_list_items(
-        l: *mut list_T,
-        copyID: ::core::ffi::c_int,
-        ht_stack: *mut *mut ht_stack_T,
-    ) -> bool;
-    fn var_flavour(varname: *mut ::core::ffi::c_char) -> var_flavour_T;
-    fn var_set_global(name: *const ::core::ffi::c_char, vartv: typval_T);
-    fn encode_vim_to_msgpack(
-        packer: *mut PackerBuffer,
-        tv: *mut typval_T,
-        objname: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    static hash_removed: ::core::ffi::c_char;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn siemsg(s: *const ::core::ffi::c_char, ...);
-    fn verbose_enter();
-    fn verbose_leave();
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn sub_get_replacement(ret_sub: *mut SubReplacementString);
-    fn sub_set_replacement(sub: SubReplacementString);
-    fn set_no_hlsearch(flag: bool);
-    fn get_globvar_ht() -> *mut hashtab_T;
-    fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T;
-    fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T);
-    fn modname(
-        fname: *const ::core::ffi::c_char,
-        ext: *const ::core::ffi::c_char,
-        prepend_dot: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_rename(
-        from: *const ::core::ffi::c_char,
-        to: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static no_hlsearch: GlobalCell<bool>;
-    fn os_time() -> Timestamp;
-    fn free_fmark(fm: fmark_T);
-    fn free_xfmark(fm: xfmark_T);
-    fn setpcmark();
-    fn mark_get(
-        buf: *mut buf_T,
-        win: *mut win_T,
-        fmp: *mut fmark_T,
-        flag: MarkGet,
-        name: ::core::ffi::c_int,
-    ) -> *mut fmark_T;
-    fn cleanup_jumplist(wp: *mut win_T, loadfiles: bool);
-    fn mark_jumplist_iter(
-        iter: *const ::core::ffi::c_void,
-        win: *const win_T,
-        fm: *mut xfmark_T,
-    ) -> *const ::core::ffi::c_void;
-    fn mark_global_iter(
-        iter: *const ::core::ffi::c_void,
-        name: *mut ::core::ffi::c_char,
-        fm: *mut xfmark_T,
-    ) -> *const ::core::ffi::c_void;
-    fn mark_buffer_iter(
-        iter: *const ::core::ffi::c_void,
-        buf: *const buf_T,
-        name: *mut ::core::ffi::c_char,
-        fm: *mut fmark_T,
-    ) -> *const ::core::ffi::c_void;
-    fn mark_set_global(name: ::core::ffi::c_char, fm: xfmark_T, update: bool) -> bool;
-    fn mark_set_local(
-        name: ::core::ffi::c_char,
-        buf: *mut buf_T,
-        fm: fmark_T,
-        update: bool,
-    ) -> bool;
-    fn set_last_cursor(win: *mut win_T);
-    static namedfm: GlobalCell<[xfmark_T; 36]>;
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_check_buffer(packer: *mut PackerBuffer);
-    fn mpack_uint64(ptr: *mut *mut ::core::ffi::c_char, i: uint64_t);
-    fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
-    fn mpack_str(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_bin(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_raw(data: *const ::core::ffi::c_char, len: size_t, packer: *mut PackerBuffer);
-    fn packer_string_buffer() -> PackerBuffer;
-    fn packer_take_string(buffer: *mut PackerBuffer) -> String_0;
-    fn unpack_string(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> String_0;
-    fn unpack_array(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> ssize_t;
-    fn unpack_integer(
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-        res: *mut Integer,
-    ) -> bool;
-    fn unpack_skip(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn push_additional_data(
-        ad: *mut AdditionalDataBuilder,
-        data: *const ::core::ffi::c_char,
-        size: size_t,
-    );
-    fn unpack_keydict(
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        ad: *mut AdditionalDataBuilder,
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-        error: *mut *mut ::core::ffi::c_char,
-    ) -> bool;
-    fn magic_isset() -> bool;
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_fs: GlobalCell<::core::ffi::c_int>;
-    static p_hi: GlobalCell<OptInt>;
-    static p_shada: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_shadafile: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn file_open(
-        ret_fp: *mut FileDescriptor,
-        fname: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut ::core::ffi::c_char, len: size_t);
-    fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> ::core::ffi::c_int;
-    fn file_flush(fp: *mut FileDescriptor) -> ::core::ffi::c_int;
-    fn file_read(
-        fp: *mut FileDescriptor,
-        ret_buf: *mut ::core::ffi::c_char,
-        size: size_t,
-    ) -> ptrdiff_t;
-    fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *mut ::core::ffi::c_char;
-    fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t;
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_getperm(name: *const ::core::ffi::c_char) -> int32_t;
-    fn os_fchown(fd: ::core::ffi::c_int, owner: uv_uid_t, group: uv_gid_t) -> ::core::ffi::c_int;
-    fn os_mkdir_recurse(
-        dir: *const ::core::ffi::c_char,
-        mode: int32_t,
-        failed_dir: *mut *mut ::core::ffi::c_char,
-        created: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_get_pid() -> int64_t;
-    fn expand_env(
-        src: *mut ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: ::core::ffi::c_int,
-    ) -> size_t;
-    fn home_replace(
-        buf: *const buf_T,
-        src: *const ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: size_t,
-        one: bool,
-    ) -> size_t;
-    fn home_replace_save(
-        buf: *mut buf_T,
-        src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn stdpaths_user_state_subpath(
-        fname: *const ::core::ffi::c_char,
-        trailing_pathseps: size_t,
-        escape_commas: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn regtilde(
-        source: *mut ::core::ffi::c_char,
-        magic: ::core::ffi::c_int,
-        preview: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn concat_fnames_realloc(
-        fname1: *mut ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn path_try_shorten_fname(full_path: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn op_global_reg_iter(
         iter: *const ::core::ffi::c_void,
         name: *mut ::core::ffi::c_char,
@@ -374,18 +119,6 @@ extern "C" {
         is_unnamed: *mut bool,
     ) -> *const ::core::ffi::c_void;
     fn op_reg_set(name: ::core::ffi::c_char, reg: yankreg_T, is_unnamed: bool) -> bool;
-    fn op_reg_get(name: ::core::ffi::c_char) -> *const yankreg_T;
-    fn get_search_pattern(pat: *mut SearchPattern);
-    fn get_substitute_pattern(pat: *mut SearchPattern);
-    fn set_search_pattern(pat: SearchPattern);
-    fn set_substitute_pattern(pat: SearchPattern);
-    fn set_last_used_pattern(is_substitute_pattern: bool);
-    fn search_was_last_used() -> bool;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    static longVersion: GlobalCell<*mut ::core::ffi::c_char>;
 }
 pub type __uint64_t = u64;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;

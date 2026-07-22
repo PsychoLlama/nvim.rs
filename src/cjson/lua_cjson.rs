@@ -1,142 +1,27 @@
+use crate::src::cjson::fpconv::{fpconv_g_fmt, fpconv_init, fpconv_strtod};
+use crate::src::cjson::strbuf::{
+    strbuf_append_string, strbuf_free, strbuf_init, strbuf_new, strbuf_resize,
+};
 use crate::src::nvim::global_cell::SharedCell;
+use crate::src::nvim::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_checklstring, luaL_checkstack, luaL_checktype, luaL_error,
+    luaL_getmetafield, lua_call, lua_checkstack, lua_createtable, lua_getfield, lua_getmetatable,
+    lua_gettable, lua_gettop, lua_insert, lua_newuserdata, lua_next, lua_objlen, lua_pcall,
+    lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata, lua_pushlstring,
+    lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawget,
+    lua_rawgeti, lua_rawset, lua_rawseti, lua_setfield, lua_setmetatable, lua_settop,
+    lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type,
+    lua_typename,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, floor, free, malloc, memcmp, memcpy, memset, qsort, realloc, strncasecmp,
+    strncmp, strtoll,
+};
 pub use crate::src::nvim::types::{
     LuaRef, __compar_fn_t, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, ptrdiff_t,
     size_t, strbuf_t, uintptr_t,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn floor(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_insert(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_checkstack(L: *mut lua_State, sz: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_typename(L: *mut lua_State, tp: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn lua_rawequal(
-        L: *mut lua_State,
-        idx1: ::core::ffi::c_int,
-        idx2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_tonumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Number;
-    fn lua_tointeger(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Integer;
-    fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
-    fn lua_touserdata(L: *mut lua_State, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_void;
-    fn lua_pushnil(L: *mut lua_State);
-    fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    fn lua_pushboolean(L: *mut lua_State, b: ::core::ffi::c_int);
-    fn lua_pushlightuserdata(L: *mut lua_State, p: *mut ::core::ffi::c_void);
-    fn lua_gettable(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_rawget(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_rawgeti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
-    fn lua_getmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_rawset(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_call(L: *mut lua_State, nargs: ::core::ffi::c_int, nresults: ::core::ffi::c_int);
-    fn lua_pcall(
-        L: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-        errfunc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn luaL_getmetafield(
-        L: *mut lua_State,
-        obj: ::core::ffi::c_int,
-        e: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_checklstring(
-        L: *mut lua_State,
-        numArg: ::core::ffi::c_int,
-        l: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn luaL_checkstack(L: *mut lua_State, sz: ::core::ffi::c_int, msg: *const ::core::ffi::c_char);
-    fn luaL_checktype(L: *mut lua_State, narg: ::core::ffi::c_int, t: ::core::ffi::c_int);
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn strtoll(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_longlong;
-    fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
-    fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
-    fn free(__ptr: *mut ::core::ffi::c_void);
-    fn abort() -> !;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn nlua_get_nil_ref(lstate: *mut lua_State) -> LuaRef;
-    fn nlua_get_empty_dict_ref(lstate: *mut lua_State) -> LuaRef;
-    fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
-    fn strbuf_new(len: size_t) -> *mut strbuf_t;
-    fn strbuf_init(s: *mut strbuf_t, len: size_t);
-    fn strbuf_free(s: *mut strbuf_t);
-    fn strbuf_resize(s: *mut strbuf_t, len: size_t);
-    fn strbuf_append_string(s: *mut strbuf_t, str: *const ::core::ffi::c_char);
-    fn fpconv_init();
-    fn fpconv_g_fmt(
-        _: *mut ::core::ffi::c_char,
-        _: ::core::ffi::c_double,
-        _: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn fpconv_strtod(
-        _: *const ::core::ffi::c_char,
-        _: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_double;
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct json_parse_t {

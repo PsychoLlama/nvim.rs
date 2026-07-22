@@ -1,4 +1,86 @@
+use crate::src::nvim::api::autocmd::{
+    nvim_clear_autocmds, nvim_create_augroup, nvim_create_autocmd, nvim_del_augroup_by_id,
+    nvim_del_augroup_by_name, nvim_del_autocmd, nvim_exec_autocmds, nvim_get_autocmds,
+};
+use crate::src::nvim::api::buffer::{
+    nvim__buf_stats, nvim_buf_attach, nvim_buf_del_keymap, nvim_buf_del_mark, nvim_buf_del_var,
+    nvim_buf_delete, nvim_buf_detach, nvim_buf_get_changedtick, nvim_buf_get_keymap,
+    nvim_buf_get_lines, nvim_buf_get_mark, nvim_buf_get_name, nvim_buf_get_offset,
+    nvim_buf_get_text, nvim_buf_get_var, nvim_buf_is_loaded, nvim_buf_is_valid,
+    nvim_buf_line_count, nvim_buf_set_keymap, nvim_buf_set_lines, nvim_buf_set_mark,
+    nvim_buf_set_name, nvim_buf_set_text, nvim_buf_set_var,
+};
+use crate::src::nvim::api::command::{
+    nvim_buf_create_user_command, nvim_buf_del_user_command, nvim_buf_get_commands, nvim_cmd,
+    nvim_create_user_command, nvim_del_user_command, nvim_get_commands, nvim_parse_cmd,
+};
+use crate::src::nvim::api::deprecated::{
+    buffer_del_line, buffer_del_var, buffer_get_line, buffer_get_line_slice, buffer_insert,
+    buffer_set_line, buffer_set_line_slice, buffer_set_var, nvim_buf_add_highlight,
+    nvim_buf_clear_highlight, nvim_buf_get_number, nvim_buf_get_option, nvim_buf_set_option,
+    nvim_buf_set_virtual_text, nvim_call_atomic, nvim_command_output, nvim_err_write,
+    nvim_err_writeln, nvim_exec, nvim_execute_lua, nvim_get_hl_by_id, nvim_get_hl_by_name,
+    nvim_get_option, nvim_get_option_info, nvim_notify, nvim_out_write, nvim_set_option,
+    nvim_subscribe, nvim_unsubscribe, nvim_win_get_option, nvim_win_set_option, tabpage_del_var,
+    tabpage_set_var, vim_del_var, vim_set_var, window_del_var, window_set_var,
+};
+use crate::src::nvim::api::events::{nvim_error_event, nvim_ui_term_event};
+use crate::src::nvim::api::extmark::{
+    nvim__buf_debug_extmarks, nvim__ns_get, nvim__ns_set, nvim_buf_clear_namespace,
+    nvim_buf_del_extmark, nvim_buf_get_extmark_by_id, nvim_buf_get_extmarks, nvim_buf_set_extmark,
+    nvim_create_namespace, nvim_get_namespaces,
+};
+use crate::src::nvim::api::options::{
+    nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
+};
+use crate::src::nvim::api::private::helpers::{
+    api_dict_to_keydict, api_keydict_to_dict, api_set_error,
+};
+use crate::src::nvim::api::tabpage::{
+    nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
+    nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
+    nvim_tabpage_set_win,
+};
+use crate::src::nvim::api::ui::{
+    nvim_ui_attach, nvim_ui_detach, nvim_ui_pum_set_bounds, nvim_ui_pum_set_height, nvim_ui_send,
+    nvim_ui_set_focus, nvim_ui_set_option, nvim_ui_try_resize, nvim_ui_try_resize_grid, ui_attach,
+};
+use crate::src::nvim::api::vim::{
+    nvim__chan_set_detach, nvim__complete_set, nvim__exec_lua_fast, nvim__get_lib_dir,
+    nvim__get_runtime, nvim__id, nvim__id_array, nvim__id_dict, nvim__id_float, nvim__inspect_cell,
+    nvim__invalidate_glyph_cache, nvim__redraw, nvim__runtime_inspect, nvim__screenshot,
+    nvim__stats, nvim__unpack, nvim_chan_send, nvim_create_buf, nvim_del_current_line,
+    nvim_del_keymap, nvim_del_mark, nvim_del_var, nvim_echo, nvim_eval_statusline, nvim_exec_lua,
+    nvim_feedkeys, nvim_get_api_info, nvim_get_chan_info, nvim_get_color_by_name,
+    nvim_get_color_map, nvim_get_context, nvim_get_current_buf, nvim_get_current_line,
+    nvim_get_current_tabpage, nvim_get_current_win, nvim_get_hl, nvim_get_hl_id_by_name,
+    nvim_get_hl_ns, nvim_get_keymap, nvim_get_mark, nvim_get_mode, nvim_get_proc,
+    nvim_get_proc_children, nvim_get_runtime_file, nvim_get_var, nvim_get_vvar, nvim_input,
+    nvim_input_mouse, nvim_list_bufs, nvim_list_chans, nvim_list_runtime_paths, nvim_list_tabpages,
+    nvim_list_uis, nvim_list_wins, nvim_load_context, nvim_open_term, nvim_paste, nvim_put,
+    nvim_replace_termcodes, nvim_select_popupmenu_item, nvim_set_client_info, nvim_set_current_buf,
+    nvim_set_current_dir, nvim_set_current_line, nvim_set_current_tabpage, nvim_set_current_win,
+    nvim_set_hl, nvim_set_hl_ns, nvim_set_hl_ns_fast, nvim_set_keymap, nvim_set_var, nvim_set_vvar,
+    nvim_strwidth,
+};
+use crate::src::nvim::api::vimscript::{
+    nvim_call_dict_function, nvim_call_function, nvim_command, nvim_eval, nvim_exec2,
+    nvim_parse_expression,
+};
+use crate::src::nvim::api::win_config::{nvim_open_win, nvim_win_get_config, nvim_win_set_config};
+use crate::src::nvim::api::window::{
+    nvim_win_close, nvim_win_del_var, nvim_win_get_buf, nvim_win_get_cursor, nvim_win_get_height,
+    nvim_win_get_number, nvim_win_get_position, nvim_win_get_tabpage, nvim_win_get_var,
+    nvim_win_get_width, nvim_win_hide, nvim_win_is_valid, nvim_win_set_buf, nvim_win_set_cursor,
+    nvim_win_set_height, nvim_win_set_hl_ns, nvim_win_set_var, nvim_win_set_width,
+    nvim_win_text_height,
+};
+use crate::src::nvim::ex_docmd::expr_map_locked;
+use crate::src::nvim::ex_getln::{get_text_locked_msg, text_locked};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{e_textlock, textlock};
+use crate::src::nvim::os::libc::{memcmp, memset};
 pub use crate::src::nvim::types::{
     handle_T, int64_t, key_value_pair, lua_State, object, object_data as C2Rust_Unnamed, size_t,
     uint64_t, ApiDispatchWrapper, Arena, Array, Boolean, Buffer, Dict, Error, ErrorType,
@@ -12,715 +94,7 @@ pub use crate::src::nvim::types::{
     KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeySetLink, KeyValuePair,
     LuaRef, MsgpackRpcRequestHandler, Object, ObjectType, OptionalKeys, String_0, Tabpage, Window,
 };
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_dict_to_keydict(
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        dict: Dict,
-        err: *mut Error,
-    ) -> bool;
-    fn api_keydict_to_dict(
-        value: *mut ::core::ffi::c_void,
-        table: *mut KeySetLink,
-        max_size: size_t,
-        arena: *mut Arena,
-    ) -> Dict;
-    static e_textlock: [::core::ffi::c_char; 0];
-    fn expr_map_locked() -> bool;
-    fn text_locked() -> bool;
-    fn get_text_locked_msg() -> *const ::core::ffi::c_char;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    fn nvim_get_autocmds(
-        opts: *mut KeyDict_get_autocmds,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_create_autocmd(
-        channel_id: uint64_t,
-        event: Object,
-        opts: *mut KeyDict_create_autocmd,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Integer;
-    fn nvim_del_autocmd(id: Integer, err: *mut Error);
-    fn nvim_clear_autocmds(opts: *mut KeyDict_clear_autocmds, arena: *mut Arena, err: *mut Error);
-    fn nvim_create_augroup(
-        channel_id: uint64_t,
-        name: String_0,
-        opts: *mut KeyDict_create_augroup,
-        err: *mut Error,
-    ) -> Integer;
-    fn nvim_del_augroup_by_id(id: Integer, err: *mut Error);
-    fn nvim_del_augroup_by_name(name: String_0, err: *mut Error);
-    fn nvim_exec_autocmds(
-        event: Object,
-        opts: *mut KeyDict_exec_autocmds,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim_parse_cmd(
-        str: String_0,
-        opts: *mut KeyDict_empty,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> KeyDict_cmd;
-    fn nvim_cmd(
-        channel_id: uint64_t,
-        cmd: *mut KeyDict_cmd,
-        opts: *mut KeyDict_cmd_opts,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> String_0;
-    fn nvim_create_user_command(
-        channel_id: uint64_t,
-        name: String_0,
-        cmd: Object,
-        opts: *mut KeyDict_user_command,
-        err: *mut Error,
-    );
-    fn nvim_del_user_command(name: String_0, err: *mut Error);
-    fn nvim_buf_create_user_command(
-        channel_id: uint64_t,
-        buf: Buffer,
-        name: String_0,
-        cmd: Object,
-        opts: *mut KeyDict_user_command,
-        err: *mut Error,
-    );
-    fn nvim_buf_del_user_command(buf: Buffer, name: String_0, err: *mut Error);
-    fn nvim_get_commands(
-        opts: *mut KeyDict_get_commands,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_buf_get_commands(
-        buf: Buffer,
-        opts: *mut KeyDict_get_commands,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_buf_line_count(buf: Buffer, err: *mut Error) -> Integer;
-    fn nvim_buf_attach(
-        channel_id: uint64_t,
-        buf: Buffer,
-        send_buffer: Boolean,
-        opts: *mut KeyDict_buf_attach,
-        err: *mut Error,
-    ) -> Boolean;
-    fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer, err: *mut Error) -> Boolean;
-    fn nvim_buf_get_lines(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start: Integer,
-        end: Integer,
-        strict_indexing: Boolean,
-        arena: *mut Arena,
-        lstate: *mut lua_State,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_set_lines(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start: Integer,
-        end: Integer,
-        strict_indexing: Boolean,
-        replacement: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim_buf_set_text(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start_row: Integer,
-        start_col: Integer,
-        end_row: Integer,
-        end_col: Integer,
-        replacement: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim_buf_get_text(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start_row: Integer,
-        start_col: Integer,
-        end_row: Integer,
-        end_col: Integer,
-        opts: *mut KeyDict_empty,
-        arena: *mut Arena,
-        lstate: *mut lua_State,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_get_offset(buf: Buffer, index: Integer, err: *mut Error) -> Integer;
-    fn nvim_buf_get_var(buf: Buffer, name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_buf_get_changedtick(buf: Buffer, err: *mut Error) -> Integer;
-    fn nvim_buf_get_keymap(
-        buf: Buffer,
-        mode: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_set_keymap(
-        channel_id: uint64_t,
-        buf: Buffer,
-        mode: String_0,
-        lhs: String_0,
-        rhs: String_0,
-        opts: *mut KeyDict_keymap,
-        err: *mut Error,
-    );
-    fn nvim_buf_del_keymap(
-        channel_id: uint64_t,
-        buf: Buffer,
-        mode: String_0,
-        lhs: String_0,
-        err: *mut Error,
-    );
-    fn nvim_buf_set_var(buf: Buffer, name: String_0, value: Object, err: *mut Error);
-    fn nvim_buf_del_var(buf: Buffer, name: String_0, err: *mut Error);
-    fn nvim_buf_get_name(buf: Buffer, err: *mut Error) -> String_0;
-    fn nvim_buf_set_name(buf: Buffer, name: String_0, err: *mut Error);
-    fn nvim_buf_is_loaded(buf: Buffer) -> Boolean;
-    fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete, err: *mut Error);
-    fn nvim_buf_is_valid(buf: Buffer) -> Boolean;
-    fn nvim_buf_del_mark(buf: Buffer, name: String_0, err: *mut Error) -> Boolean;
-    fn nvim_buf_set_mark(
-        buf: Buffer,
-        name: String_0,
-        line: Integer,
-        col: Integer,
-        opts: *mut KeyDict_empty,
-        err: *mut Error,
-    ) -> Boolean;
-    fn nvim_buf_get_mark(buf: Buffer, name: String_0, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim__buf_stats(buf: Buffer, arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_error_event(channel_id: uint64_t, type_0: Integer, msg: String_0);
-    fn nvim_ui_term_event(channel_id: uint64_t, event: String_0, value: Object, err: *mut Error);
-    fn nvim_exec(channel_id: uint64_t, src: String_0, output: Boolean, err: *mut Error)
-        -> String_0;
-    fn nvim_command_output(channel_id: uint64_t, command: String_0, err: *mut Error) -> String_0;
-    fn nvim_execute_lua(code: String_0, args: Array, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_buf_get_number(buffer: Buffer, err: *mut Error) -> Integer;
-    fn nvim_buf_clear_highlight(
-        buffer: Buffer,
-        ns_id: Integer,
-        line_start: Integer,
-        line_end: Integer,
-        err: *mut Error,
-    );
-    fn nvim_buf_add_highlight(
-        buffer: Buffer,
-        ns_id: Integer,
-        hl_group: String_0,
-        line: Integer,
-        col_start: Integer,
-        col_end: Integer,
-        err: *mut Error,
-    ) -> Integer;
-    fn nvim_buf_set_virtual_text(
-        buffer: Buffer,
-        src_id: Integer,
-        line: Integer,
-        chunks: Array,
-        opts: *mut KeyDict_empty,
-        err: *mut Error,
-    ) -> Integer;
-    fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean, arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_get_hl_by_name(
-        name: String_0,
-        rgb: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn buffer_insert(
-        buffer: Buffer,
-        lnum: Integer,
-        lines: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn buffer_get_line(
-        buffer: Buffer,
-        index: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> String_0;
-    fn buffer_set_line(
-        buffer: Buffer,
-        index: Integer,
-        line: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn buffer_del_line(buffer: Buffer, index: Integer, arena: *mut Arena, err: *mut Error);
-    fn buffer_get_line_slice(
-        buffer: Buffer,
-        start: Integer,
-        end: Integer,
-        include_start: Boolean,
-        include_end: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn buffer_set_line_slice(
-        buffer: Buffer,
-        start: Integer,
-        end: Integer,
-        include_start: Boolean,
-        include_end: Boolean,
-        replacement: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn buffer_set_var(
-        buffer: Buffer,
-        name: String_0,
-        value: Object,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn buffer_del_var(buffer: Buffer, name: String_0, arena: *mut Arena, err: *mut Error)
-        -> Object;
-    fn window_set_var(
-        window: Window,
-        name: String_0,
-        value: Object,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn window_del_var(window: Window, name: String_0, arena: *mut Arena, err: *mut Error)
-        -> Object;
-    fn tabpage_set_var(
-        tabpage: Tabpage,
-        name: String_0,
-        value: Object,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn tabpage_del_var(
-        tabpage: Tabpage,
-        name: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn vim_set_var(name: String_0, value: Object, arena: *mut Arena, err: *mut Error) -> Object;
-    fn vim_del_var(name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_get_option_info(name: String_0, arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_set_option(channel_id: uint64_t, name: String_0, value: Object, err: *mut Error);
-    fn nvim_get_option(name: String_0, err: *mut Error) -> Object;
-    fn nvim_buf_get_option(buffer: Buffer, name: String_0, err: *mut Error) -> Object;
-    fn nvim_buf_set_option(
-        channel_id: uint64_t,
-        buffer: Buffer,
-        name: String_0,
-        value: Object,
-        err: *mut Error,
-    );
-    fn nvim_win_get_option(window: Window, name: String_0, err: *mut Error) -> Object;
-    fn nvim_win_set_option(
-        channel_id: uint64_t,
-        window: Window,
-        name: String_0,
-        value: Object,
-        err: *mut Error,
-    );
-    fn nvim_call_atomic(
-        channel_id: uint64_t,
-        calls: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_subscribe(channel_id: uint64_t, event: String_0);
-    fn nvim_unsubscribe(channel_id: uint64_t, event: String_0);
-    fn nvim_out_write(str: String_0);
-    fn nvim_err_write(str: String_0);
-    fn nvim_err_writeln(str: String_0);
-    fn nvim_notify(
-        msg: String_0,
-        log_level: Integer,
-        opts: Dict,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_create_namespace(name: String_0) -> Integer;
-    fn nvim_get_namespaces(arena: *mut Arena) -> Dict;
-    fn nvim_buf_get_extmark_by_id(
-        buf: Buffer,
-        ns_id: Integer,
-        id: Integer,
-        opts: *mut KeyDict_get_extmark,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_get_extmarks(
-        buf: Buffer,
-        ns_id: Integer,
-        start: Object,
-        end: Object,
-        opts: *mut KeyDict_get_extmarks,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_buf_set_extmark(
-        buf: Buffer,
-        ns_id: Integer,
-        line: Integer,
-        col: Integer,
-        opts: *mut KeyDict_set_extmark,
-        err: *mut Error,
-    ) -> Integer;
-    fn nvim_buf_del_extmark(buf: Buffer, ns_id: Integer, id: Integer, err: *mut Error) -> Boolean;
-    fn nvim_buf_clear_namespace(
-        buf: Buffer,
-        ns_id: Integer,
-        line_start: Integer,
-        line_end: Integer,
-        err: *mut Error,
-    );
-    fn nvim__buf_debug_extmarks(
-        buf: Buffer,
-        keys: Boolean,
-        dot: Boolean,
-        err: *mut Error,
-    ) -> String_0;
-    fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts, err: *mut Error);
-    fn nvim__ns_get(ns_id: Integer, arena: *mut Arena, err: *mut Error) -> KeyDict_ns_opts;
-    fn nvim_get_option_value(name: String_0, opts: *mut KeyDict_option, err: *mut Error) -> Object;
-    fn nvim_set_option_value(
-        channel_id: uint64_t,
-        name: String_0,
-        value: Object,
-        opts: *mut KeyDict_option,
-        err: *mut Error,
-    );
-    fn nvim_get_all_options_info(arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_get_option_info2(
-        name: String_0,
-        opts: *mut KeyDict_option,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim_tabpage_get_var(
-        tabpage: Tabpage,
-        name: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_tabpage_set_var(tabpage: Tabpage, name: String_0, value: Object, err: *mut Error);
-    fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0, err: *mut Error);
-    fn nvim_tabpage_get_win(tabpage: Tabpage, err: *mut Error) -> Window;
-    fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window, err: *mut Error);
-    fn nvim_tabpage_get_number(tabpage: Tabpage, err: *mut Error) -> Integer;
-    fn nvim_tabpage_is_valid(tabpage: Tabpage) -> Boolean;
-    fn nvim_open_tabpage(
-        buf: Buffer,
-        enter: Boolean,
-        config: *mut KeyDict_tabpage_config,
-        err: *mut Error,
-    ) -> Tabpage;
-    fn nvim_ui_attach(
-        channel_id: uint64_t,
-        width: Integer,
-        height: Integer,
-        options: Dict,
-        err: *mut Error,
-    );
-    fn ui_attach(
-        channel_id: uint64_t,
-        width: Integer,
-        height: Integer,
-        enable_rgb: Boolean,
-        err: *mut Error,
-    );
-    fn nvim_ui_set_focus(channel_id: uint64_t, gained: Boolean, error: *mut Error);
-    fn nvim_ui_detach(channel_id: uint64_t, err: *mut Error);
-    fn nvim_ui_try_resize(channel_id: uint64_t, width: Integer, height: Integer, err: *mut Error);
-    fn nvim_ui_set_option(channel_id: uint64_t, name: String_0, value: Object, error: *mut Error);
-    fn nvim_ui_try_resize_grid(
-        channel_id: uint64_t,
-        grid: Integer,
-        width: Integer,
-        height: Integer,
-        err: *mut Error,
-    );
-    fn nvim_ui_pum_set_height(channel_id: uint64_t, height: Integer, err: *mut Error);
-    fn nvim_ui_pum_set_bounds(
-        channel_id: uint64_t,
-        width: Float,
-        height: Float,
-        row: Float,
-        col: Float,
-        err: *mut Error,
-    );
-    fn nvim_ui_send(channel_id: uint64_t, content: String_0, err: *mut Error);
-    fn nvim_get_hl_id_by_name(name: String_0) -> Integer;
-    fn nvim_get_hl(
-        ns_id: Integer,
-        opts: *mut KeyDict_get_highlight,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_set_hl(
-        channel_id: uint64_t,
-        ns_id: Integer,
-        name: String_0,
-        val: *mut KeyDict_highlight,
-        err: *mut Error,
-    );
-    fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns, err: *mut Error) -> Integer;
-    fn nvim_set_hl_ns(ns_id: Integer, err: *mut Error);
-    fn nvim_set_hl_ns_fast(ns_id: Integer, err: *mut Error);
-    fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean);
-    fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer;
-    fn nvim_input_mouse(
-        button: String_0,
-        action: String_0,
-        modifier: String_0,
-        grid: Integer,
-        row: Integer,
-        col: Integer,
-        err: *mut Error,
-    );
-    fn nvim_replace_termcodes(
-        str: String_0,
-        from_part: Boolean,
-        do_lt: Boolean,
-        special: Boolean,
-    ) -> String_0;
-    fn nvim_exec_lua(code: String_0, args: Array, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim__exec_lua_fast(
-        code: String_0,
-        args: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_strwidth(text: String_0, err: *mut Error) -> Integer;
-    fn nvim_list_runtime_paths(arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim__runtime_inspect(arena: *mut Arena) -> Array;
-    fn nvim_get_runtime_file(
-        name: String_0,
-        all: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim__get_lib_dir() -> String_0;
-    fn nvim__get_runtime(
-        pat: Array,
-        all: Boolean,
-        opts: *mut KeyDict_runtime,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_set_current_dir(dir: String_0, err: *mut Error);
-    fn nvim_get_current_line(arena: *mut Arena, err: *mut Error) -> String_0;
-    fn nvim_set_current_line(line: String_0, arena: *mut Arena, err: *mut Error);
-    fn nvim_del_current_line(arena: *mut Arena, err: *mut Error);
-    fn nvim_get_var(name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_set_var(name: String_0, value: Object, err: *mut Error);
-    fn nvim_del_var(name: String_0, err: *mut Error);
-    fn nvim_get_vvar(name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_set_vvar(name: String_0, value: Object, err: *mut Error);
-    fn nvim_echo(
-        chunks: Array,
-        history: Boolean,
-        opts: *mut KeyDict_echo_opts,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_list_bufs(arena: *mut Arena) -> Array;
-    fn nvim_get_current_buf() -> Buffer;
-    fn nvim_set_current_buf(buf: Buffer, err: *mut Error);
-    fn nvim_list_wins(arena: *mut Arena) -> Array;
-    fn nvim_get_current_win() -> Window;
-    fn nvim_set_current_win(win: Window, err: *mut Error);
-    fn nvim_create_buf(listed: Boolean, scratch: Boolean, err: *mut Error) -> Buffer;
-    fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term, err: *mut Error) -> Integer;
-    fn nvim_chan_send(chan: Integer, data: String_0, err: *mut Error);
-    fn nvim_list_tabpages(arena: *mut Arena) -> Array;
-    fn nvim_get_current_tabpage() -> Tabpage;
-    fn nvim_set_current_tabpage(tabpage: Tabpage, err: *mut Error);
-    fn nvim_paste(
-        channel_id: uint64_t,
-        data: String_0,
-        crlf: Boolean,
-        phase: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Boolean;
-    fn nvim_put(
-        lines: Array,
-        type_0: String_0,
-        after: Boolean,
-        follow: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim_get_color_by_name(name: String_0) -> Integer;
-    fn nvim_get_color_map(arena: *mut Arena) -> Dict;
-    fn nvim_get_context(opts: *mut KeyDict_context, arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_load_context(dict: Dict, err: *mut Error) -> Object;
-    fn nvim_get_mode(arena: *mut Arena) -> Dict;
-    fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array;
-    fn nvim_set_keymap(
-        channel_id: uint64_t,
-        mode: String_0,
-        lhs: String_0,
-        rhs: String_0,
-        opts: *mut KeyDict_keymap,
-        err: *mut Error,
-    );
-    fn nvim_del_keymap(channel_id: uint64_t, mode: String_0, lhs: String_0, err: *mut Error);
-    fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array;
-    fn nvim_set_client_info(
-        channel_id: uint64_t,
-        name: String_0,
-        version: Dict,
-        type_0: String_0,
-        methods: Dict,
-        attributes: Dict,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean, err: *mut Error);
-    fn nvim_get_chan_info(
-        channel_id: uint64_t,
-        chan: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_list_chans(arena: *mut Arena) -> Array;
-    fn nvim__id(obj: Object, arena: *mut Arena) -> Object;
-    fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array;
-    fn nvim__id_dict(dct: Dict, arena: *mut Arena) -> Dict;
-    fn nvim__id_float(flt: Float) -> Float;
-    fn nvim__stats(arena: *mut Arena) -> Dict;
-    fn nvim_list_uis(arena: *mut Arena) -> Array;
-    fn nvim_get_proc_children(pid: Integer, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim_get_proc(pid: Integer, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_select_popupmenu_item(
-        item: Integer,
-        insert: Boolean,
-        finish: Boolean,
-        opts: *mut KeyDict_empty,
-        err: *mut Error,
-    );
-    fn nvim__inspect_cell(
-        grid: Integer,
-        row: Integer,
-        col: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim__screenshot(path: String_0);
-    fn nvim__invalidate_glyph_cache();
-    fn nvim__unpack(str: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_del_mark(name: String_0, err: *mut Error) -> Boolean;
-    fn nvim_get_mark(
-        name: String_0,
-        opts: *mut KeyDict_empty,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
-    fn nvim_eval_statusline(
-        str: String_0,
-        opts: *mut KeyDict_eval_statusline,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim__complete_set(
-        index: Integer,
-        opts: *mut KeyDict_complete_set,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim__redraw(opts: *mut KeyDict_redraw, err: *mut Error);
-    fn nvim_exec2(
-        channel_id: uint64_t,
-        src: String_0,
-        opts: *mut KeyDict_exec_opts,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_command(cmd: String_0, err: *mut Error);
-    fn nvim_eval(expr: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_call_function(
-        fn_0: String_0,
-        args: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_call_dict_function(
-        dict: Object,
-        fn_0: String_0,
-        args: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nvim_parse_expression(
-        expr: String_0,
-        flags: String_0,
-        hl: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn nvim_open_win(
-        buf: Buffer,
-        enter: Boolean,
-        config: *mut KeyDict_win_config,
-        err: *mut Error,
-    ) -> Window;
-    fn nvim_win_set_config(win: Window, config: *mut KeyDict_win_config, err: *mut Error);
-    fn nvim_win_get_config(win: Window, arena: *mut Arena, err: *mut Error) -> KeyDict_win_config;
-    fn nvim_win_get_buf(win: Window, err: *mut Error) -> Buffer;
-    fn nvim_win_set_buf(win: Window, buf: Buffer, err: *mut Error);
-    fn nvim_win_get_cursor(win: Window, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim_win_set_cursor(win: Window, pos: Array, err: *mut Error);
-    fn nvim_win_get_height(win: Window, err: *mut Error) -> Integer;
-    fn nvim_win_set_height(win: Window, height: Integer, err: *mut Error);
-    fn nvim_win_get_width(win: Window, err: *mut Error) -> Integer;
-    fn nvim_win_set_width(win: Window, width: Integer, err: *mut Error);
-    fn nvim_win_get_var(win: Window, name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
-    fn nvim_win_set_var(win: Window, name: String_0, value: Object, err: *mut Error);
-    fn nvim_win_del_var(win: Window, name: String_0, err: *mut Error);
-    fn nvim_win_get_position(win: Window, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nvim_win_get_tabpage(win: Window, err: *mut Error) -> Tabpage;
-    fn nvim_win_get_number(win: Window, err: *mut Error) -> Integer;
-    fn nvim_win_is_valid(win: Window) -> Boolean;
-    fn nvim_win_hide(win: Window, err: *mut Error);
-    fn nvim_win_close(win: Window, force: Boolean, err: *mut Error);
-    fn nvim_win_set_hl_ns(win: Window, ns_id: Integer, err: *mut Error);
-    fn nvim_win_text_height(
-        win: Window,
-        opts: *mut KeyDict_win_text_height,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn handle_ui_client_redraw(
-        channel_id: uint64_t,
-        args: Array,
-        arena: *mut Arena,
-        error: *mut Error,
-    ) -> Object;
-}
+use crate::src::nvim::ui_client::handle_ui_client_redraw;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

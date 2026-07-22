@@ -1,4 +1,12 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::buffer::buf_collect_lines;
+use crate::src::nvim::api::private::helpers::arena_array;
+
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
+use crate::src::nvim::main::{cmdpreview, curbuf, curwin, textlock};
+use crate::src::nvim::memline::ml_flush_deleted_bytes;
+use crate::src::nvim::memory::{arena_mem_free, xfree, xrealloc};
+use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -31,49 +39,7 @@ pub use crate::src::nvim::types::{
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn buf_collect_lines(
-        buf: *mut buf_T,
-        n: size_t,
-        start: linenr_T,
-        start_idx: ::core::ffi::c_int,
-        replace_nl: bool,
-        l: *mut Array,
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-    );
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static cmdpreview: GlobalCell<bool>;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn ml_flush_deleted_bytes(
-        buf: *mut buf_T,
-        codepoints: *mut size_t,
-        codeunits: *mut size_t,
-    ) -> size_t;
-    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

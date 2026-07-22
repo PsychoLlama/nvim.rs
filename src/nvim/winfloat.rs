@@ -1,4 +1,23 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_set_error, find_buffer_by_handle, find_window_by_handle,
+};
+use crate::src::nvim::api::vim::nvim_create_buf;
+use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
+use crate::src::nvim::drawscreen::{redraw_later, set_must_redraw};
+
+use crate::src::nvim::grid::grid_adjust;
+use crate::src::nvim::main::{
+    cmdwin_win, curtab, curwin, e_cmdwin, empty_string_option, firstwin, lastwin, mouse_col,
+    mouse_grid, mouse_row, p_ch, p_ls, prevwin, Columns, Rows,
+};
+use crate::src::nvim::memory::{xfree, xrealloc, xstrdup};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::mouse::mouse_find_win_inner;
+use crate::src::nvim::option::{parse_winhl_opt, set_option_direct_for};
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::libc::{__assert_fail, memcmp, qsort, strlen};
+use crate::src::nvim::r#move::textpos2screenpos;
+use crate::src::nvim::strings::concat_str;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -30,111 +49,12 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn nvim_create_buf(listed: Boolean, scratch: Boolean, err: *mut Error) -> Buffer;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn set_must_redraw(type_0: ::core::ffi::c_int);
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static mouse_grid: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_col: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static lastwin: GlobalCell<*mut win_T>;
-    static prevwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    fn grid_adjust(
-        grid: *mut GridView,
-        row_off: *mut ::core::ffi::c_int,
-        col_off: *mut ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn mouse_find_win_inner(
-        gridp: *mut ::core::ffi::c_int,
-        rowp: *mut ::core::ffi::c_int,
-        colp: *mut ::core::ffi::c_int,
-    ) -> *mut win_T;
-    fn textpos2screenpos(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        rowp: *mut ::core::ffi::c_int,
-        scolp: *mut ::core::ffi::c_int,
-        ccolp: *mut ::core::ffi::c_int,
-        ecolp: *mut ::core::ffi::c_int,
-        local: bool,
-    );
-    fn parse_winhl_opt(winhl: *const ::core::ffi::c_char, wp: *mut win_T) -> bool;
-    fn set_option_direct_for(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-    );
-    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
-    static p_ch: GlobalCell<OptInt>;
-    static p_ls: GlobalCell<OptInt>;
-    fn free_string_option(p: *mut ::core::ffi::c_char);
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn ui_has(ext: UIExtension) -> bool;
-    fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error);
-    fn merge_win_config(dst: *mut WinConfig, src: WinConfig);
-    fn win_init(newp: *mut win_T, oldp: *mut win_T, flags: ::core::ffi::c_int);
-    fn win_valid(win: *const win_T) -> bool;
-    fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool;
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn winframe_remove(
-        win: *mut win_T,
-        dirp: *mut ::core::ffi::c_int,
-        tp: *mut tabpage_T,
-        unflat_altfr: *mut *mut frame_T,
-    ) -> *mut win_T;
-    fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
-    fn win_enter(wp: *mut win_T, undo_sync: bool);
-    fn win_alloc(after: *mut win_T, hidden: bool) -> *mut win_T;
-    fn win_free(wp: *mut win_T, tp: *mut tabpage_T);
-    fn win_append(after: *mut win_T, wp: *mut win_T, tp: *mut tabpage_T);
-    fn win_remove(wp: *mut win_T, tp: *mut tabpage_T);
-    fn win_comp_pos() -> ::core::ffi::c_int;
-    fn win_set_inner_size(wp: *mut win_T, valid_cursor: bool);
-    fn last_status(morewin: bool);
-    fn win_remove_status_line(wp: *mut win_T, add_hsep: bool);
-    fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T;
-}
+use crate::src::nvim::ui::ui_has;
+use crate::src::nvim::window::{
+    last_status, lastwin_nofloating, merge_win_config, tabpage_win_valid, win_alloc, win_append,
+    win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
+    win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
+};
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

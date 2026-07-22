@@ -1,27 +1,10 @@
+use crate::src::nvim::os::libc::strlen;
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, find_func_t, mmbuffer_t, s_chanode, s_chastore, s_mmbuffer, s_xdchange,
     s_xdemitcb, s_xdemitconf, s_xdfenv, s_xdfile, s_xrecord, size_t, xdchange_t, xdemitcb_t,
     xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t, xrecord_t,
 };
-extern "C" {
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xdl_emit_diffrec(
-        rec: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_long,
-        pre: *const ::core::ffi::c_char,
-        psize: ::core::ffi::c_long,
-        ecb: *mut xdemitcb_t,
-    ) -> ::core::ffi::c_int;
-    fn xdl_emit_hunk_hdr(
-        s1: ::core::ffi::c_long,
-        c1: ::core::ffi::c_long,
-        s2: ::core::ffi::c_long,
-        c2: ::core::ffi::c_long,
-        func: *const ::core::ffi::c_char,
-        funclen: ::core::ffi::c_long,
-        ecb: *mut xdemitcb_t,
-    ) -> ::core::ffi::c_int;
-}
+use crate::src::xdiff::xutils::{xdl_emit_diffrec, xdl_emit_hunk_hdr};
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct func_line {

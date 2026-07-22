@@ -1,4 +1,33 @@
+use crate::src::nvim::api::private::dispatch::{
+    KeyDict_highlight_cterm_get_field, KeyDict_highlight_get_field,
+};
+use crate::src::nvim::api::private::helpers::{
+    api_dict_to_keydict, api_set_error, arena_array, arena_dict, cstr_as_string,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
+use crate::src::nvim::decoration_provider::get_decor_provider;
+use crate::src::nvim::drawscreen::screen_invalidate_highlights;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{
+    highlight_attr_set_all, highlight_changed, name_to_color, name_to_ctermcolor, set_hl_group,
+    syn_check_group, syn_id2name, syn_ns_id2attr,
+};
+use crate::src::nvim::lua::executor::nlua_call_ref;
+use crate::src::nvim::main::{
+    curwin, highlight_attr, highlight_attr_last, hl_attr_active, hlf_names, must_redraw_pum,
+    need_highlight_changed, normal_bg, normal_fg, normal_sp, ns_hl_active, ns_hl_fast,
+    ns_hl_global, ns_hl_win, p_bg, p_pb,
+};
+use crate::src::nvim::map::{
+    map_put_ref_ColorKey_ColorItem, map_put_ref_int_ptr_t, map_put_ref_uint64_t_int, mh_clear,
+    mh_get_ColorKey, mh_get_int, mh_get_uint64_t, mh_put_HlEntry, mh_put_cstr_t,
+};
+use crate::src::nvim::memory::{arena_mem_free, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::option::check_blending;
+use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strcasecmp, strlen};
+use crate::src::nvim::popupmenu::pum_drawn;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -33,137 +62,9 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::ui_call_hl_attr_define;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn KeyDict_highlight_get_field(str: *const ::core::ffi::c_char, len: size_t)
-        -> *mut KeySetLink;
-    fn KeyDict_highlight_cterm_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn mh_clear(h: *mut MapHash);
-    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    fn mh_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn mh_put_HlEntry(set: *mut Set_HlEntry, key: HlEntry, new: *mut MHPutStatus) -> uint32_t;
-    fn mh_get_ColorKey(set: *mut Set_ColorKey, key: ColorKey) -> uint32_t;
-    fn map_put_ref_int_ptr_t(
-        map: *mut Map_int_ptr_t,
-        key: ::core::ffi::c_int,
-        key_alloc: *mut *mut ::core::ffi::c_int,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn map_put_ref_uint64_t_int(
-        map: *mut Map_uint64_t_int,
-        key: uint64_t,
-        key_alloc: *mut *mut uint64_t,
-        new_item: *mut bool,
-    ) -> *mut ::core::ffi::c_int;
-    fn map_put_ref_ColorKey_ColorItem(
-        map: *mut Map_ColorKey_ColorItem,
-        key: ColorKey,
-        key_alloc: *mut *mut ColorKey,
-        new_item: *mut bool,
-    ) -> *mut ColorItem;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_dict_to_keydict(
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        dict: Dict,
-        err: *mut Error,
-    ) -> bool;
-    fn remote_ui_hl_attr_define(
-        ui: *mut RemoteUI,
-        id: Integer,
-        rgb_attrs: HlAttrs,
-        cterm_attrs: HlAttrs,
-        info: Array,
-    );
-    fn remote_ui_hl_group_set(ui: *mut RemoteUI, name: String_0, id: Integer);
-    fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider;
-    fn screen_invalidate_highlights();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static curwin: GlobalCell<*mut win_T>;
-    static must_redraw_pum: GlobalCell<bool>;
-    static need_highlight_changed: GlobalCell<bool>;
-    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_pb: GlobalCell<OptInt>;
-    static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
-    static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]>;
-    static highlight_attr_last: GlobalCell<[::core::ffi::c_int; 76]>;
-    static normal_fg: GlobalCell<RgbValue>;
-    static normal_bg: GlobalCell<RgbValue>;
-    static normal_sp: GlobalCell<RgbValue>;
-    static ns_hl_global: GlobalCell<NS>;
-    static ns_hl_win: GlobalCell<NS>;
-    static ns_hl_fast: GlobalCell<NS>;
-    static ns_hl_active: GlobalCell<NS>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn set_hl_group(
-        id: ::core::ffi::c_int,
-        attrs: HlAttrs,
-        dict: *mut KeyDict_highlight,
-        link_id: ::core::ffi::c_int,
-    );
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_ns_id2attr(
-        ns_id: ::core::ffi::c_int,
-        hl_id: ::core::ffi::c_int,
-        optional: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn highlight_attr_set_all();
-    fn highlight_changed();
-    fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
-    fn name_to_ctermcolor(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn check_blending(wp: *mut win_T);
-    fn pum_drawn() -> bool;
-    fn ui_call_hl_attr_define(id: Integer, rgb_attrs: HlAttrs, cterm_attrs: HlAttrs, info: Array);
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

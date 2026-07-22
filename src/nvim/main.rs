@@ -1,4 +1,94 @@
+use crate::src::nvim::api::private::helpers::{api_free_object, api_metadata_raw, cstr_as_string};
+use crate::src::nvim::api::ui::remote_ui_wait_for_attach;
+use crate::src::nvim::arglist::{alist_add, alist_init, alist_name};
+use crate::src::nvim::autocmd::{
+    apply_autocmds, autocmd_init, block_autocmds, is_autocmd_blocked, unblock_autocmds,
+};
+use crate::src::nvim::buffer::{
+    buf_is_empty, buf_set_changedtick, buf_valid, buflist_new, bufref_valid, do_autochdir,
+    do_modelines, handle_swap_exists, open_buffer, set_buflisted, set_bufref, set_curbuf, setfname,
+};
+use crate::src::nvim::channel::{
+    channel_connect, channel_from_stdio, channel_init, channel_teardown,
+};
+use crate::src::nvim::diff::{diff_win_options, diffopt_horizontal};
+use crate::src::nvim::drawscreen::{
+    default_grid_alloc, redraw_all_later, redraw_later, screenclear,
+};
+use crate::src::nvim::eval::typval::{tv_list_alloc, tv_list_append_string};
+use crate::src::nvim::eval::userfunc::invoke_all_defer;
+use crate::src::nvim::eval::vars::{
+    get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
+    set_vim_var_string, set_vim_var_type,
+};
+use crate::src::nvim::eval_1::{
+    eval_has_provider, eval_init, garbage_collect, set_argv_var, timer_teardown,
+};
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_process_events};
+use crate::src::nvim::event::proc::proc_teardown;
+use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
+use crate::src::nvim::event::socket::socket_address_tcp_host_end;
+use crate::src::nvim::event::stream::stream_set_blocking;
+use crate::src::nvim::ex_cmds::do_ecmd;
+use crate::src::nvim::ex_docmd::{do_cmdline_cmd, filetype_maybe_enable, filetype_plugin_enable};
+use crate::src::nvim::ex_getln::cmdline_init;
+use crate::src::nvim::fileio::{readfile, shorten_fnames};
+use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff, vgetc};
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::hashtab::hash_debug_results;
+use crate::src::nvim::highlight::highlight_init;
+use crate::src::nvim::highlight_group::init_highlight;
+use crate::src::nvim::log::{log_init, logmsg};
+use crate::src::nvim::lua::executor::{
+    get_global_lstate, nlua_exec, nlua_exec_file, nlua_init, nlua_init_defaults, nlua_pcall,
+    nlua_run_script,
+};
+use crate::src::nvim::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memline::{
+    ml_close_all, ml_close_notmod, ml_recover, ml_sync_all, recover_names,
+};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::message::{msg_putchar, semsg, wait_return};
+use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::msgpack_rpc::server::{server_init, server_teardown};
+use crate::src::nvim::normal::{check_scrollbind, init_normal_cmds, normal_enter};
+use crate::src::nvim::option::{
+    reset_modifiable, set_init_1, set_init_2, set_init_3, set_init_tablocal, set_option_direct,
+    set_option_value_give_err, set_options_bin,
+};
+use crate::src::nvim::os::env::{
+    env_init, init_homedir, os_getenv, os_getenv_noalloc, os_hint_priority, vim_env_iter,
+};
+use crate::src::nvim::os::fs::{os_exepath, os_fopen, os_isdir, os_path_exists, os_write};
+use crate::src::nvim::os::input::{input_start, input_stop, os_breakcheck, os_isatty};
+use crate::src::nvim::os::lang::{init_locale, set_lang_var};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, atoi, exit, fprintf, gettext, memcpy, memset, printf, setbuf, snprintf,
+    stderr, stdout, strcasecmp, strlen, strncasecmp, tcdrain,
+};
+use crate::src::nvim::os::signal::{
+    signal_init, signal_reject_deadly, signal_stop, signal_teardown,
+};
+use crate::src::nvim::os::stdpaths::{
+    appname_is_valid, get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_subpath,
+};
+use crate::src::nvim::os::time::os_realtime;
+use crate::src::nvim::path::{
+    concat_fnames, path_full_compare, path_guess_exepath, path_tail, vim_FullName,
+};
+use crate::src::nvim::profile::{profile_dump, time_finish, time_init, time_msg, time_start};
+use crate::src::nvim::quickfix::qf_init_stack;
+use crate::src::nvim::r#move::update_topline;
+use crate::src::nvim::register::get_default_register_name;
+use crate::src::nvim::runtime::{
+    do_source, estack_init, estack_pop, estack_push, load_plugins, runtime_init,
+};
+use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
+use crate::src::nvim::strings::vim_snprintf;
+use crate::src::nvim::syntax::syn_maybe_enable;
+use crate::src::nvim::terminal::{terminal_init, terminal_teardown};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
     Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackReader, CallbackType,
@@ -61,327 +151,18 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_exception, vimmenu_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, FILE, NS, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::ui::{
+    do_autocmd_uienter_all, ui_call_error_exit, ui_call_set_title, ui_call_stop, ui_flush, ui_init,
+};
+use crate::src::nvim::ui_client::{ui_client_run, ui_client_start_server, ui_client_stop};
+use crate::src::nvim::ui_compositor::ui_comp_syn_init;
+use crate::src::nvim::version::list_version;
+use crate::src::nvim::window::{
+    goto_tabpage, make_tabpages, make_windows, only_one_window, win_alloc_first, win_close,
+    win_count, win_enter, win_equal, win_init_size, win_new_screensize,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    static mut stdout: *mut FILE;
-    static mut stderr: *mut FILE;
-    fn setbuf(__stream: *mut FILE, __buf: *mut ::core::ffi::c_char);
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn printf(__format: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn exit(__status: ::core::ffi::c_int) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn tcdrain(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn log_init();
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_object(value: Object);
-    fn api_metadata_raw() -> String_0;
-    fn remote_ui_wait_for_attach();
-    fn alist_init(al: *mut alist_T);
-    fn alist_add(al: *mut alist_T, fname: *mut ::core::ffi::c_char, set_fnum: ::core::ffi::c_int);
-    fn alist_name(aep: *mut aentry_T) -> *mut ::core::ffi::c_char;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn autocmd_init();
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn is_autocmd_blocked() -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn open_buffer(
-        read_stdin_0: bool,
-        eap: *mut exarg_T,
-        flags_arg: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buf_valid(buf: *mut buf_T) -> bool;
-    fn handle_swap_exists(old_curbuf: *mut bufref_T);
-    fn set_curbuf(buf: *mut buf_T, action: ::core::ffi::c_int, update_jumplist: bool);
-    fn do_autochdir();
-    fn buflist_new(
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-        flags: ::core::ffi::c_int,
-    ) -> *mut buf_T;
-    fn setfname(
-        buf: *mut buf_T,
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        message: bool,
-    ) -> ::core::ffi::c_int;
-    fn do_modelines(flags: ::core::ffi::c_int);
-    fn set_buflisted(on: ::core::ffi::c_int);
-    fn buf_is_empty(buf: *mut buf_T) -> bool;
-    fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T);
-    fn channel_teardown();
-    fn channel_init();
-    fn channel_connect(
-        tcp: bool,
-        address: *const ::core::ffi::c_char,
-        rpc: bool,
-        on_output: CallbackReader,
-        timeout: ::core::ffi::c_int,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn channel_from_stdio(
-        rpc: bool,
-        on_output: CallbackReader,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn diff_win_options(wp: *mut win_T, addbuf: bool);
-    fn diffopt_horizontal() -> bool;
-    fn default_grid_alloc() -> bool;
-    fn screenclear();
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    fn eval_init();
-    fn garbage_collect(testing: bool) -> bool;
-    fn timer_teardown();
-    fn set_argv_var(argv: *mut *mut ::core::ffi::c_char, argc: ::core::ffi::c_int);
-    fn eval_has_provider(feat: *const ::core::ffi::c_char, throw_if_fast: bool) -> bool;
-    fn hash_debug_results();
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn wait_return(redraw: ::core::ffi::c_int);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn invoke_all_defer();
-    fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_type(idx: VimVarIndex, type_0: VarType);
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T);
-    fn set_reg_var(c: ::core::ffi::c_int);
-    fn loop_init(loop_0: *mut Loop, data: *mut ::core::ffi::c_void);
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn loop_close(loop_0: *mut Loop, wait: bool) -> bool;
-    fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn os_realtime() -> int64_t;
-    fn socket_address_tcp_host_end(address: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn proc_teardown(loop_0: *mut Loop);
-    fn stream_set_blocking(fd: ::core::ffi::c_int, blocking: bool) -> ::core::ffi::c_int;
-    fn do_ecmd(
-        fnum: ::core::ffi::c_int,
-        ffname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        newlnum: linenr_T,
-        flags: ::core::ffi::c_int,
-        oldwin: *mut win_T,
-    ) -> ::core::ffi::c_int;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn filetype_plugin_enable();
-    fn filetype_maybe_enable();
-    fn cmdline_init();
-    fn readfile(
-        fname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        from: linenr_T,
-        lines_to_skip: linenr_T,
-        lines_to_read: linenr_T,
-        eap: *mut exarg_T,
-        flags: ::core::ffi::c_int,
-        silent: bool,
-    ) -> ::core::ffi::c_int;
-    fn shorten_fnames(force: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn stuffcharReadbuff(c: ::core::ffi::c_int);
-    fn open_scriptin(scriptin_name: *mut ::core::ffi::c_char) -> bool;
-    fn vgetc() -> ::core::ffi::c_int;
-    fn highlight_init();
-    fn init_highlight(both: bool, reset: bool);
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn get_global_lstate() -> *mut lua_State;
-    fn nlua_pcall(
-        lstate: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn nlua_init(
-        argv: *mut *mut ::core::ffi::c_char,
-        argc: ::core::ffi::c_int,
-        lua_arg0: ::core::ffi::c_int,
-    );
-    fn nlua_run_script(
-        argv: *mut *mut ::core::ffi::c_char,
-        argc: ::core::ffi::c_int,
-        lua_arg0: ::core::ffi::c_int,
-    ) -> !;
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_exec_file(path: *const ::core::ffi::c_char) -> bool;
-    fn nlua_init_defaults();
-    fn setpcmark();
-    fn ml_close_all(del_file: bool);
-    fn ml_close_notmod();
-    fn ml_recover(checkext: bool);
-    fn recover_names(
-        fname: *mut ::core::ffi::c_char,
-        do_list: bool,
-        ret_list: *mut list_T,
-        nr: ::core::ffi::c_int,
-        fname_out: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
-    fn update_topline(wp: *mut win_T);
-    fn setmouse();
-    fn server_init(listen_addr: *const ::core::ffi::c_char) -> bool;
-    fn server_teardown();
-    fn init_normal_cmds();
-    fn normal_enter(cmdwin: bool, noexmode: bool);
-    fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: ::core::ffi::c_int);
-    fn set_init_tablocal();
-    fn set_init_1(clean_arg: bool);
-    fn set_init_2(headless: bool);
-    fn set_init_3();
-    fn set_options_bin(
-        oldval: ::core::ffi::c_int,
-        newval: ::core::ffi::c_int,
-        opt_flags: ::core::ffi::c_int,
-    );
-    fn set_option_direct(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-    );
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn reset_modifiable();
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    fn os_write(
-        fd: ::core::ffi::c_int,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-        non_blocking: bool,
-    ) -> ptrdiff_t;
-    fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
-    fn input_start();
-    fn input_stop();
-    fn os_breakcheck();
-    fn os_isatty(fd: ::core::ffi::c_int) -> bool;
-    fn set_lang_var();
-    fn init_locale();
-    fn env_init();
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_hint_priority();
-    fn init_homedir();
-    fn vim_env_iter(
-        delim: ::core::ffi::c_char,
-        val: *const ::core::ffi::c_char,
-        iter: *const ::core::ffi::c_void,
-        dir: *mut *const ::core::ffi::c_char,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_void;
-    fn get_appname(namelike: bool) -> *const ::core::ffi::c_char;
-    fn appname_is_valid() -> bool;
-    fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn stdpaths_user_conf_subpath(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn signal_init();
-    fn signal_teardown();
-    fn signal_stop();
-    fn signal_reject_deadly();
-    fn path_full_compare(
-        s1: *mut ::core::ffi::c_char,
-        s2: *mut ::core::ffi::c_char,
-        checkname: bool,
-        expandenv: bool,
-    ) -> FileComparison;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn concat_fnames(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_FullName(
-        fname: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn path_guess_exepath(
-        argv0_0: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        bufsize: size_t,
-    );
-    fn profile_dump();
-    fn time_start(message: *const ::core::ffi::c_char);
-    fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
-    fn time_init(fname: *const ::core::ffi::c_char, proc_name: *const ::core::ffi::c_char);
-    fn time_finish();
-    fn get_default_register_name() -> ::core::ffi::c_int;
     fn qf_init(
         wp: *mut win_T,
         efile: *const ::core::ffi::c_char,
@@ -390,69 +171,12 @@ extern "C" {
         qf_title: *const ::core::ffi::c_char,
         enc: *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn qf_init_stack();
     fn qf_jump(
         qi: *mut qf_info_T,
         dir: ::core::ffi::c_int,
         errornr: ::core::ffi::c_int,
         forceit: ::core::ffi::c_int,
     );
-    fn estack_init();
-    fn estack_push(
-        type_0: etype_T,
-        name: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-    ) -> *mut estack_T;
-    fn estack_pop();
-    fn runtime_init();
-    fn load_plugins();
-    fn do_source(
-        fname: *mut ::core::ffi::c_char,
-        check_other: bool,
-        is_vimrc: ::core::ffi::c_int,
-        ret_sid: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn shada_write_file(file: *const ::core::ffi::c_char, nomerge: bool) -> ::core::ffi::c_int;
-    fn shada_read_everything(
-        fname: *const ::core::ffi::c_char,
-        forceit: bool,
-        missing_ok: bool,
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn syn_maybe_enable();
-    fn terminal_init();
-    fn terminal_teardown();
-    fn ui_call_set_title(title: String_0);
-    fn ui_call_stop();
-    fn ui_call_error_exit(status: Integer);
-    fn ui_init();
-    fn do_autocmd_uienter_all();
-    fn ui_flush();
-    fn ui_client_start_server(
-        exepath: *const ::core::ffi::c_char,
-        argc: size_t,
-        argv: *mut *mut ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn ui_client_run() -> !;
-    fn ui_client_stop();
-    fn ui_comp_syn_init();
-    fn list_version();
-    fn win_count() -> ::core::ffi::c_int;
-    fn make_windows(count: ::core::ffi::c_int, vertical: bool) -> ::core::ffi::c_int;
-    fn win_equal(next_curwin: *mut win_T, current: bool, dir: ::core::ffi::c_int);
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn win_alloc_first();
-    fn win_init_size();
-    fn make_tabpages(maxcount: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn goto_tabpage(n: ::core::ffi::c_int);
-    fn win_enter(wp: *mut win_T, undo_sync: bool);
-    fn win_new_screensize();
-    fn only_one_window() -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

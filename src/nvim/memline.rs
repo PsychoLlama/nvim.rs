@@ -1,4 +1,68 @@
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::autocmd::{apply_autocmds, has_autocmd};
+use crate::src::nvim::buffer::{buf_inc_changedtick, buf_spname, open_buffer, setfname};
+use crate::src::nvim::change::{changed_internal, unchanged};
+use crate::src::nvim::cursor::{check_cursor, coladvance};
+use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_list_append_allocated_string,
+};
+use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::src::nvim::event::libuv::{uv_strerror, uv_uptime};
+use crate::src::nvim::fileio::{
+    buf_store_file_info, modname, read_eintr, readfile, vim_deltempdir, vim_rename, vim_tempname,
+};
+use crate::src::nvim::getchar::flush_buffers;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::input::prompt_for_input;
+use crate::src::nvim::main::{
+    allbuf_lock, cmdline_row, cmdmod, curbuf, curwin, did_check_timestamps, firstbuf, getout,
+    got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
+    need_wait_return, no_lines_msg, no_wait_return, p_dir, p_shm, p_uc, p_verbose, recoverymode,
+    swap_exists_action, NameBuff,
+};
+use crate::src::nvim::map::mh_get_int64_t;
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::mbyte::{
+    mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len,
+};
+use crate::src::nvim::memfile::{
+    mf_close, mf_close_file, mf_free, mf_free_fnames, mf_get, mf_need_trans, mf_new,
+    mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty, mf_set_fnames, mf_sync,
+    mf_trans_del,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{
+    do_dialog, emsg, iemsg, msg, msg_end, msg_ext_set_kind, msg_home_replace, msg_multiline,
+    msg_outnum, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_reset_scroll, msg_start,
+    semsg, set_keep_msg, siemsg, smsg, verb_msg,
+};
+use crate::src::nvim::option::{
+    copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err,
+};
+use crate::src::nvim::os::env::{
+    expand_env, home_replace, home_replace_save, os_get_hostname, os_get_pid,
+};
+use crate::src::nvim::os::fs::{
+    os_fileinfo, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_isdir, os_mkdir_recurse,
+    os_open, os_path_exists, os_remove, os_set_cloexec,
+};
+use crate::src::nvim::os::input::{line_breakcheck, os_char_avail};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, close, gettext, lseek, memchr, memmove, readlink, strcasecmp,
+    strcmp, strcpy, strlen, strncasecmp, strncmp,
+};
+use crate::src::nvim::os::proc::os_proc_running;
+use crate::src::nvim::os::time::{os_ctime_r, os_time};
+use crate::src::nvim::os::users::{os_get_uname, os_get_username};
+use crate::src::nvim::path::{
+    after_pathsep, concat_fnames, expand_wildcards, fix_fname, path_fnamecmp, path_full_compare,
+    path_is_absolute, path_tail, same_directory, shorten_dir, vim_FullName, vim_ispathsep,
+    FreeWild,
+};
+use crate::src::nvim::spell::spell_delete_wordlist;
+use crate::src::nvim::statusline::get_trans_bufname;
+use crate::src::nvim::strings::{kv_do_printf, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -32,360 +96,9 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
     QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_uptime(uptime: *mut ::core::ffi::c_double) -> ::core::ffi::c_int;
-    fn lseek(__fd: ::core::ffi::c_int, __offset: __off_t, __whence: ::core::ffi::c_int) -> __off_t;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn readlink(
-        __path: *const ::core::ffi::c_char,
-        __buf: *mut ::core::ffi::c_char,
-        __len: size_t,
-    ) -> ssize_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstpcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn mh_get_int64_t(set: *mut Set_int64_t, key: int64_t) -> uint32_t;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn has_autocmd(event: event_T, sfname: *mut ::core::ffi::c_char, buf: *mut buf_T) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn open_buffer(
-        read_stdin: bool,
-        eap: *mut exarg_T,
-        flags_arg: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn setfname(
-        buf: *mut buf_T,
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        message: bool,
-    ) -> ::core::ffi::c_int;
-    fn buf_spname(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
-    fn buf_inc_changedtick(buf: *mut buf_T);
-    fn changed_internal(buf: *mut buf_T);
-    fn unchanged(buf: *mut buf_T, ff: bool, always_inc_changedtick: bool);
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn check_cursor(wp: *mut win_T);
-    fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
-    static msg_ext_skip_flush: GlobalCell<bool>;
-    fn verb_msg(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn msg_multiline(
-        str: String_0,
-        hl_id: ::core::ffi::c_int,
-        check_int: bool,
-        hist: bool,
-        need_clear: *mut bool,
-    );
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn siemsg(s: *const ::core::ffi::c_char, ...);
-    fn set_keep_msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int);
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_start();
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outnum(n: ::core::ffi::c_int);
-    fn msg_home_replace(fname: *const ::core::ffi::c_char);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn msg_reset_scroll();
-    fn msg_end() -> bool;
-    fn do_dialog(
-        type_0: ::core::ffi::c_int,
-        title: *const ::core::ffi::c_char,
-        message: *const ::core::ffi::c_char,
-        buttons: *const ::core::ffi::c_char,
-        dfltbutton: ::core::ffi::c_int,
-        textfield: *const ::core::ffi::c_char,
-        ex_cmd: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str_len(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn readfile(
-        fname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        from: linenr_T,
-        lines_to_skip: linenr_T,
-        lines_to_read: linenr_T,
-        eap: *mut exarg_T,
-        flags: ::core::ffi::c_int,
-        silent: bool,
-    ) -> ::core::ffi::c_int;
-    fn modname(
-        fname: *const ::core::ffi::c_char,
-        ext: *const ::core::ffi::c_char,
-        prepend_dot: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_rename(
-        from: *const ::core::ffi::c_char,
-        to: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo);
-    fn vim_deltempdir();
-    fn vim_tempname() -> *mut ::core::ffi::c_char;
-    fn read_eintr(
-        fd: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_void,
-        bufsize: size_t,
-    ) -> ssize_t;
-    fn flush_buffers(flush_typeahead: flush_buffers_T);
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static need_check_timestamps: GlobalCell<bool>;
-    static did_check_timestamps: GlobalCell<bool>;
-    static curwin: GlobalCell<*mut win_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static allbuf_lock: GlobalCell<::core::ffi::c_int>;
-    static inhibit_delete_count: GlobalCell<::core::ffi::c_int>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static swap_exists_action: GlobalCell<::core::ffi::c_int>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static recoverymode: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    static no_lines_msg: GlobalCell<[::core::ffi::c_char; 0]>;
-    fn prompt_for_input(
-        prompt: *mut ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        one_key: bool,
-        mouse_used: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn getout(exitval: ::core::ffi::c_int) -> !;
-    fn os_ctime_r(
-        clock: *const time_t,
-        result: *mut ::core::ffi::c_char,
-        result_len: size_t,
-        add_newline: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn os_time() -> Timestamp;
-    fn setpcmark();
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_utflen(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        codepoints: *mut size_t,
-        codeunits: *mut size_t,
-    );
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn mb_adjust_cursor();
-    fn mf_open(fname: *mut ::core::ffi::c_char, flags: ::core::ffi::c_int) -> *mut memfile_T;
-    fn mf_open_file(mfp: *mut memfile_T, fname: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mf_close(mfp: *mut memfile_T, del_file: bool);
-    fn mf_close_file(buf: *mut buf_T, getlines: bool);
-    fn mf_new_page_size(mfp: *mut memfile_T, new_size: ::core::ffi::c_uint);
-    fn mf_new(mfp: *mut memfile_T, negative: bool, page_count: ::core::ffi::c_uint) -> *mut bhdr_T;
-    fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: ::core::ffi::c_uint) -> *mut bhdr_T;
-    fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: bool);
-    fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T);
-    fn mf_sync(mfp: *mut memfile_T, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mf_set_dirty(mfp: *mut memfile_T);
-    fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T;
-    fn mf_free_fnames(mfp: *mut memfile_T);
-    fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut ::core::ffi::c_char);
-    fn mf_need_trans(mfp: *mut memfile_T) -> bool;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn get_fileformat(buf: *const buf_T) -> ::core::ffi::c_int;
-    fn set_fileformat(eol_style: ::core::ffi::c_int, opt_flags: ::core::ffi::c_int);
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    static p_dir: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_shm: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_uc: GlobalCell<OptInt>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_open(
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
-    fn os_mkdir_recurse(
-        dir: *const ::core::ffi::c_char,
-        mode: int32_t,
-        failed_dir: *mut *mut ::core::ffi::c_char,
-        created: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_link(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_inode(file_info: *const FileInfo) -> uint64_t;
-    fn os_fileinfo_size(file_info: *const FileInfo) -> uint64_t;
-    fn os_char_avail() -> bool;
-    fn line_breakcheck();
-    fn os_get_pid() -> int64_t;
-    fn os_get_hostname(hostname: *mut ::core::ffi::c_char, size: size_t);
-    fn expand_env(
-        src: *mut ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: ::core::ffi::c_int,
-    ) -> size_t;
-    fn home_replace(
-        buf: *const buf_T,
-        src: *const ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: size_t,
-        one: bool,
-    ) -> size_t;
-    fn home_replace_save(
-        buf: *mut buf_T,
-        src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn os_proc_running(pid: ::core::ffi::c_int) -> bool;
-    fn os_get_username(s: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn os_get_uname(uid: uv_uid_t, s: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn path_full_compare(
-        s1: *mut ::core::ffi::c_char,
-        s2: *mut ::core::ffi::c_char,
-        checkname: bool,
-        expandenv: bool,
-    ) -> FileComparison;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_ispathsep(c: ::core::ffi::c_int) -> bool;
-    fn shorten_dir(str: *mut ::core::ffi::c_char);
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn concat_fnames(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn FreeWild(count: ::core::ffi::c_int, files: *mut *mut ::core::ffi::c_char);
-    fn vim_FullName(
-        fname: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn fix_fname(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn after_pathsep(
-        b: *const ::core::ffi::c_char,
-        p: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn same_directory(f1: *mut ::core::ffi::c_char, f2: *mut ::core::ffi::c_char) -> bool;
-    fn expand_wildcards(
-        num_pat: ::core::ffi::c_int,
-        pat: *mut *mut ::core::ffi::c_char,
-        num_files: *mut ::core::ffi::c_int,
-        files: *mut *mut *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn path_is_absolute(fname: *const ::core::ffi::c_char) -> bool;
-    fn spell_delete_wordlist();
-    fn get_trans_bufname(buf: *mut buf_T);
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn ui_flush();
-    fn ui_has(ext: UIExtension) -> bool;
-    fn bufIsChanged(buf: *mut buf_T) -> bool;
-    static Versions: GlobalCell<[*mut ::core::ffi::c_char; 0]>;
-}
+use crate::src::nvim::ui::{ui_flush, ui_has};
+use crate::src::nvim::undo::bufIsChanged;
+use crate::src::nvim::version::Versions;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

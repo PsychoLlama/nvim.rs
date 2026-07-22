@@ -1,29 +1,10 @@
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::map::mh_realloc;
+use crate::src::nvim::memory::xrealloc;
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, strlen};
 pub use crate::src::nvim::types::{
     size_t, uint32_t, uint8_t, MHPutStatus, MapHash, Set_glyph, String_0,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn mh_realloc(h: *mut MapHash, n_min_buckets: uint32_t);
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-}
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;

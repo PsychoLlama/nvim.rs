@@ -1,30 +1,13 @@
+use crate::src::nvim::charset::kv_transstr;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{strequal, xrealloc};
+use crate::src::nvim::os::libc::{__ctype_b_loc, memcmp, memset, snprintf, strcmp, strlen};
+use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
     size_t, ssize_t, Arena, StringBuilder, String_0, TerminfoEntry, TPVAR,
 };
 extern "C" {
     pub type unibi_term;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
     fn unibi_destroy(_: *mut unibi_term);
     fn unibi_get_bool(_: *const unibi_term, _: unibi_boolean) -> ::core::ffi::c_int;
     fn unibi_get_num(_: *const unibi_term, _: unibi_numeric) -> ::core::ffi::c_int;
@@ -35,17 +18,8 @@ extern "C" {
     fn unibi_get_ext_str(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
     fn unibi_get_ext_bool_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
     fn unibi_get_ext_str_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
         -> *mut ::core::ffi::c_char;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt_0: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn kv_transstr(str: *mut StringBuilder, s: *const ::core::ffi::c_char, untab: bool) -> size_t;
 }
 pub type unibi_boolean = ::core::ffi::c_uint;
 pub const unibi_boolean_end_: unibi_boolean = 45;

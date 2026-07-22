@@ -1,37 +1,12 @@
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{memset, strlen, strncmp};
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, mmfile_t, s_chanode, s_chastore, s_mmfile, s_xdfenv, s_xdfile,
     s_xpparam, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
 };
+use crate::src::xdiff::xprepare::xdl_prepare_env;
+use crate::src::xdiff::xutils::xdl_fall_back_diff;
 use ::c2rust_bitfields;
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xdl_fall_back_diff(
-        diff_env: *mut xdfenv_t,
-        xpp: *const xpparam_t,
-        line1: ::core::ffi::c_int,
-        count1: ::core::ffi::c_int,
-        line2: ::core::ffi::c_int,
-        count2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn xdl_prepare_env(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xe: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-}
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct entry {

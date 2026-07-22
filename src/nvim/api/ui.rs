@@ -1,4 +1,26 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::helpers::{
+    api_set_error, api_typename, arena_array, arena_dict, cstr_as_string, string_to_cstr,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::wstream::wstream_new_buffer;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{schar_get, schar_get_adv};
+use crate::src::nvim::highlight::{hl_get_url, hlattrs2dict, syn_attr2entry};
+use crate::src::nvim::main::{
+    channels, current_ui, main_loop, noargs, p_bg, starting, stdin_fd, stdin_isatty, stdout_isatty,
+    t_colors, ui_ext_names, Columns,
+};
+use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
+use crate::src::nvim::mbyte::utf_ambiguous_width;
+use crate::src::nvim::memory::{alloc_block, arena_mem_free, free_block, strequal, xcalloc, xfree};
+use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
+use crate::src::nvim::msgpack_rpc::packer::mpack_object_array;
+use crate::src::nvim::option::set_tty_option;
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strlen};
+use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader, CallbackType,
     Callback_data as C2Rust_Unnamed_0, Channel, ChannelCallFrame, ChannelStreamType,
@@ -35,114 +57,12 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, QUEUE,
 };
+use crate::src::nvim::ui::{
+    ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
+    ui_refresh, ui_set_ext_option,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn alloc_block() -> *mut ::core::ffi::c_void;
-    fn free_block(block: *mut ::core::ffi::c_void);
-    fn arena_mem_free(mem: ArenaMem);
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn map_put_ref_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut *mut uint64_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn map_del_uint64_t_ptr_t(
-        map: *mut Map_uint64_t_ptr_t,
-        key: uint64_t,
-        key_alloc: *mut uint64_t,
-    ) -> ptr_t;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
-    fn may_trigger_vim_suspend_resume(suspend: bool);
-    fn do_autocmd_focusgained(gained: bool);
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn os_hrtime() -> uint64_t;
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn wstream_new_buffer(
-        data: *mut ::core::ffi::c_char,
-        size: size_t,
-        refcount: size_t,
-        cb: wbuffer_data_finalizer,
-    ) -> *mut WBuffer;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static current_ui: GlobalCell<uint64_t>;
-    static t_colors: GlobalCell<::core::ffi::c_int>;
-    static starting: GlobalCell<::core::ffi::c_int>;
-    static stdin_isatty: GlobalCell<bool>;
-    static stdout_isatty: GlobalCell<bool>;
-    static stdin_fd: GlobalCell<::core::ffi::c_int>;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
-    fn hl_get_url(index: uint32_t) -> *const ::core::ffi::c_char;
-    fn syn_attr2entry(attr: ::core::ffi::c_int) -> HlAttrs;
-    fn hlattrs2dict(
-        hl: *mut Dict,
-        hl_attrs: *mut Dict,
-        ae: HlAttrs,
-        use_rgb: bool,
-        short_keys: bool,
-    );
-    static main_loop: SharedCell<Loop>;
-    fn utf_ambiguous_width(p: *const ::core::ffi::c_char) -> bool;
-    fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool;
-    fn mpack_object_array(arr: Array, packer: *mut PackerBuffer);
-    fn set_tty_option(name: *const ::core::ffi::c_char, value: *mut ::core::ffi::c_char) -> bool;
-    fn ui_call_ui_send(content: String_0);
-    fn ui_active() -> size_t;
-    fn ui_refresh();
-    fn ui_can_attach_more() -> bool;
-    fn ui_attach_impl(ui: *mut RemoteUI, chanid: uint64_t);
-    fn ui_detach_impl(ui: *mut RemoteUI, chanid: uint64_t);
-    fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: bool);
-    fn ui_grid_resize(
-        grid_handle: handle_T,
-        width: ::core::ffi::c_int,
-        height: ::core::ffi::c_int,
-        err: *mut Error,
-    );
-    static noargs: GlobalCell<Array>;
-    static channels: GlobalCell<Map_uint64_t_ptr_t>;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

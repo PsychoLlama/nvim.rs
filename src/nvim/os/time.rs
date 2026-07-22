@@ -1,4 +1,13 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::event::libuv::{uv_err_name, uv_hrtime, uv_now, uv_sleep};
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{got_int, main_loop};
+use crate::src::nvim::memory::{xstrlcat, xstrlcpy};
+use crate::src::nvim::os::env::os_getenv_noalloc;
+use crate::src::nvim::os::input::os_input_ready;
+use crate::src::nvim::os::libc::{gettext, localtime_r, strftime, strncmp, strptime, time, tzset};
 pub use crate::src::nvim::types::{
     Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, Stream, Timestamp, VarLockStatus,
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
@@ -20,57 +29,7 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
 };
 extern "C" {
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn time(__timer: *mut time_t) -> time_t;
-    fn strftime(
-        __s: *mut ::core::ffi::c_char,
-        __maxsize: size_t,
-        __format: *const ::core::ffi::c_char,
-        __tp: *const tm,
-    ) -> size_t;
-    fn strptime(
-        __s: *const ::core::ffi::c_char,
-        __fmt: *const ::core::ffi::c_char,
-        __tp: *mut tm,
-    ) -> *mut ::core::ffi::c_char;
-    fn localtime_r(__timer: *const time_t, __tp: *mut tm) -> *mut tm;
-    fn tzset();
-    fn uv_now(_: *const uv_loop_t) -> uint64_t;
-    fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn uv_clock_gettime(clock_id: uv_clock_id, ts: *mut uv_timespec64_t) -> ::core::ffi::c_int;
-    fn uv_hrtime() -> uint64_t;
-    fn uv_sleep(msec: ::core::ffi::c_uint);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    static got_int: GlobalCell<bool>;
-    static main_loop: SharedCell<Loop>;
-    fn os_input_ready(events: *mut MultiQueue) -> bool;
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

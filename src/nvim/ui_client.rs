@@ -1,4 +1,26 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::dispatch::KeyDict_highlight_get_field;
+use crate::src::nvim::api::private::helpers::{
+    api_dict_to_keydict, api_free_array, api_metadata, api_set_error, copy_array, cstr_as_string,
+};
+use crate::src::nvim::channel::{channel_connect, channel_job_start};
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
+};
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::socket::socket_address_tcp_host_end;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::dict2hlattrs;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size, main_loop, os_exit, stderr_isatty,
+    stdin_isatty, stdout_isatty, t_colors, time_fd, ui_client_attached, ui_client_channel_id,
+    ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
+};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
+use crate::src::nvim::os::env::{os_env_exists, os_get_pid};
+use crate::src::nvim::os::libc::{__assert_fail, abort, close, dup, memcmp};
+use crate::src::nvim::profile::{time_finish, time_msg};
 pub use crate::src::nvim::types::{
     Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader, CallbackType,
     Callback_data as C2Rust_Unnamed_0, Channel, ChannelCallFrame, ChannelStdinMode,
@@ -38,96 +60,6 @@ pub use crate::src::nvim::types::{
     varnumber_T, winsize, FILE, QUEUE, _IO_FILE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn dup(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_array(value: Array);
-    fn api_metadata() -> Object;
-    fn copy_array(array: Array, arena: *mut Arena) -> Array;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_dict_to_keydict(
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        dict: Dict,
-        err: *mut Error,
-    ) -> bool;
-    fn KeyDict_highlight_get_field(str: *const ::core::ffi::c_char, len: size_t)
-        -> *mut KeySetLink;
-    fn channel_job_start(
-        argv: *mut *mut ::core::ffi::c_char,
-        exepath: *const ::core::ffi::c_char,
-        on_stdout: CallbackReader,
-        on_stderr: CallbackReader,
-        on_exit: Callback,
-        pty: bool,
-        rpc: bool,
-        overlapped: bool,
-        detach: bool,
-        stdin_mode: ChannelStdinMode,
-        cwd: *const ::core::ffi::c_char,
-        pty_width: uint16_t,
-        pty_height: uint16_t,
-        env: *mut dict_T,
-        status_out: *mut varnumber_T,
-    ) -> *mut Channel;
-    fn channel_connect(
-        tcp: bool,
-        address: *const ::core::ffi::c_char,
-        rpc: bool,
-        on_output: CallbackReader,
-        timeout: ::core::ffi::c_int,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> uint64_t;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn socket_address_tcp_host_end(address: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    static t_colors: GlobalCell<::core::ffi::c_int>;
-    static stdin_isatty: GlobalCell<bool>;
-    static stdout_isatty: GlobalCell<bool>;
-    static stderr_isatty: GlobalCell<bool>;
-    static time_fd: GlobalCell<*mut FILE>;
-    fn dict2hlattrs(
-        dict: *mut KeyDict_highlight,
-        use_rgb: bool,
-        link_id: *mut ::core::ffi::c_int,
-        base: *mut HlAttrs,
-        err: *mut Error,
-    ) -> HlAttrs;
-    static main_loop: SharedCell<Loop>;
-    fn os_exit(r: ::core::ffi::c_int) -> !;
-    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn os_get_pid() -> int64_t;
-    fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
-    fn time_finish();
     fn tui_start(
         tui_p: *mut *mut TUIData,
         width: *mut ::core::ffi::c_int,
@@ -195,14 +127,6 @@ extern "C" {
         chunk: *const schar_T,
         attrs: *const sattr_T,
     );
-    static grid_line_buf_size: GlobalCell<size_t>;
-    static grid_line_buf_char: GlobalCell<*mut schar_T>;
-    static grid_line_buf_attr: GlobalCell<*mut sattr_T>;
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
-    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
-    static ui_client_attached: GlobalCell<bool>;
-    static ui_client_forward_stdin: GlobalCell<bool>;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

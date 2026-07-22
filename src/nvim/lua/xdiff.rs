@@ -1,3 +1,16 @@
+use crate::src::nvim::api::private::dispatch::KeyDict_xdl_diff_get_field;
+use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_string, api_set_error};
+use crate::src::nvim::linematch::{fastforward_buf_to_lnum, linematch_nbuffers};
+use crate::src::nvim::lua::converter::nlua_pop_keydict;
+use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref};
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_buffinit, luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
+    lua_concat, lua_createtable, lua_error, lua_gettop, lua_isnumber, lua_objlen, lua_pcall,
+    lua_pushinteger, lua_pushstring, lua_pushvalue, lua_rawseti, lua_settop, lua_tolstring,
+    lua_tonumber, lua_type,
+};
+use crate::src::nvim::memory::{strequal, xfree};
+use crate::src::nvim::os::libc::{memcpy, memset};
 pub use crate::src::nvim::types::{
     find_func_t, int32_t, int64_t, key_value_pair, linenr_T, luaL_Buffer, lua_Integer, lua_Number,
     lua_State, mmbuffer_t, mmfile_t, object, object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer,
@@ -6,83 +19,7 @@ pub use crate::src::nvim::types::{
     FieldHashfn, Float, Integer, KeySetLink, KeyValuePair, LuaRef, Object, ObjectType,
     OptionalKeys, String_0,
 };
-extern "C" {
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_isnumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tonumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Number;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_pcall(
-        L: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-        errfunc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_error(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_concat(L: *mut lua_State, n: ::core::ffi::c_int);
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn luaL_buffinit(L: *mut lua_State, B: *mut luaL_Buffer);
-    fn luaL_prepbuffer(B: *mut luaL_Buffer) -> *mut ::core::ffi::c_char;
-    fn luaL_pushresult(B: *mut luaL_Buffer);
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn KeyDict_xdl_diff_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
-    fn api_free_string(value: String_0);
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn xdl_diff(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xecfg: *const xdemitconf_t,
-        ecb: *mut xdemitcb_t,
-    ) -> ::core::ffi::c_int;
-    fn fastforward_buf_to_lnum(s: mmfile_t, lnum: linenr_T) -> mmfile_t;
-    fn linematch_nbuffers(
-        diff_blk: *mut *const mmfile_t,
-        diff_len: *const ::core::ffi::c_int,
-        ndiffs: size_t,
-        decisions: *mut *mut ::core::ffi::c_int,
-        iwhite: bool,
-    ) -> size_t;
-    fn nlua_pop_keydict(
-        L: *mut lua_State,
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        err_opt: *mut *mut ::core::ffi::c_char,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef);
-}
+use crate::src::xdiff::xdiffi::xdl_diff;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

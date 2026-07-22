@@ -1,4 +1,94 @@
+use crate::src::nvim::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
+use crate::src::nvim::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
+use crate::src::nvim::api::private::converter::vim_to_object;
+use crate::src::nvim::api::private::helpers::{
+    api_metadata, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
+    arena_take_arraybuilder, copy_array, copy_dict, copy_object, copy_string, cstr_as_string,
+    dict_get_value, dict_set_var, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
+    get_default_stl_hl, parse_hl_msg, set_mark, string_to_array, try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
+use crate::src::nvim::autocmd::{
+    apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
+};
+use crate::src::nvim::buffer::{
+    buf_close_terminal, buflist_new, buflist_nr2name, bufref_valid, do_buffer, read_buffer_into,
+    set_bufref,
+};
+use crate::src::nvim::channel::{channel_all_info, channel_info, channel_send};
+use crate::src::nvim::context::{
+    ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict, kCtxAll,
+};
+use crate::src::nvim::cursor::get_cursor_rel_lnum;
+use crate::src::nvim::decoration::decor_redraw_signs;
+use crate::src::nvim::drawline::use_cursor_line_highlight;
+use crate::src::nvim::drawscreen::{
+    redraw_all_later, redraw_buf_later, redraw_buf_range_later, redraw_later, setcursor_mayforce,
+    update_screen, win_update_cursorline,
+};
+use crate::src::nvim::eval::typval::tv_dict_find;
+use crate::src::nvim::eval::vars::{get_globvar_dict, get_vimvar_dict, set_vim_var_nr};
+use crate::src::nvim::ex_docmd::{changedir_func, exec_normal};
+use crate::src::nvim::ex_eval::aborting;
+use crate::src::nvim::fold::fold_info;
+use crate::src::nvim::getchar::{ins_typebuf, paste_store};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{
+    get_win_by_grid_handle, schar_cache_clear, schar_get, win_grid_alloc,
+};
+use crate::src::nvim::highlight::{
+    dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
+    hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
+};
+use crate::src::nvim::highlight_group::{
+    color_name_table, name_to_color, ns_get_hl_defs, syn_check_group, syn_id2name,
+};
+use crate::src::nvim::insexpand::get_cot_flags;
+use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::lua::executor::{
+    api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
+};
+use crate::src::nvim::main::{
+    arena_alloc_count, channels, cmdpreview, cmdwin_buf, curbuf, current_sctx, curtab, curwin,
+    default_grid, did_emsg, e_cmdwin, e_invchan, ex_normal_busy, first_tabpage, firstbuf, firstwin,
+    g_stats, lines_left, msg_didany, msg_no_more, msg_scroll, msg_silent, must_redraw,
+    need_wait_return, no_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz, pum_grid,
+    redraw_tabline, textlock, tslua_query_parse_count, typebuf, typebuf_was_filled, vgetc_busy,
+    Columns, RedrawingDisabled, VIsual_active,
+};
+use crate::src::nvim::map::mh_get_uint64_t;
+use crate::src::nvim::mapping::{keymap_array, modify_keymap};
+use crate::src::nvim::mark::mark_get_global;
+use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
+use crate::src::nvim::memline::ml_open;
+use crate::src::nvim::memory::{memchrsub, strequal, xfree, xmalloc, xrealloc};
+use crate::src::nvim::message::{
+    do_autocmd_progress, hl_msg_free, msg_id_exists, msg_multihl, verbose_enter, verbose_leave,
+    verbose_stop,
+};
+use crate::src::nvim::msgpack_rpc::channel::rpc_set_client_info;
+use crate::src::nvim::msgpack_rpc::unpacker::unpack;
+use crate::src::nvim::normal::reset_VIsual_and_resel;
+use crate::src::nvim::option::{buf_copy_options, set_option_direct_for};
+use crate::src::nvim::optionstr::check_stl_option;
+use crate::src::nvim::os::input::{
+    input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw,
+};
+use crate::src::nvim::os::libc::{__assert_fail, labs, memcmp, memcpy, snprintf, strlen};
+use crate::src::nvim::os::proc::os_proc_children;
+use crate::src::nvim::popupmenu::{pum_ext_select_item, pum_set_info};
+use crate::src::nvim::r#move::{
+    changed_window_setting, update_topline, validate_cursor, win_col_off,
+};
+use crate::src::nvim::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
+use crate::src::nvim::runtime::{
+    do_in_runtimepath, do_source, get_lib_dir, runtime_get_named, runtime_inspect, script_autoload,
+};
+use crate::src::nvim::state::get_mode;
+use crate::src::nvim::statusline::{
+    build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status, win_redr_winbar,
+};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, ArrayBuilder,
     BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback, CallbackReader, CallbackType,
@@ -68,456 +158,17 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     winsize, wline_T, xfmark_T, yankreg_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
+use crate::src::nvim::window::{
+    global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn labs(__x: ::core::ffi::c_long) -> ::core::ffi::c_long;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    static arena_alloc_count: GlobalCell<size_t>;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
         -> *mut ::core::ffi::c_char;
-    fn api_buf_ensure_loaded(buf: Buffer, err: *mut Error) -> *mut buf_T;
-    fn nvim_buf_del_keymap(
-        channel_id: uint64_t,
-        buf: Buffer,
-        mode: String_0,
-        lhs: String_0,
-        err: *mut Error,
-    );
-    fn buffer_get_line(
-        buffer: Buffer,
-        index: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> String_0;
-    fn buffer_set_line(
-        buffer: Buffer,
-        index: Integer,
-        line: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn buffer_del_line(buffer: Buffer, index: Integer, arena: *mut Arena, err: *mut Error);
-    fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata: bool) -> Object;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn api_err_required(err: *mut Error, name: *const ::core::ffi::c_char);
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn dict_get_value(
-        dict: *mut dict_T,
-        key: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array;
-    fn api_metadata() -> Object;
-    fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn copy_array(array: Array, arena: *mut Arena) -> Array;
-    fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict;
-    fn copy_object(obj: Object, arena: *mut Arena) -> Object;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) -> HlMessage;
-    fn set_mark(
-        buf: *mut buf_T,
-        name: String_0,
-        line: Integer,
-        col: Integer,
-        err: *mut Error,
-    ) -> bool;
-    fn get_default_stl_hl(
-        wp: *mut win_T,
-        use_winbar: bool,
-        stc_hl_id: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn may_trigger_vim_suspend_resume(suspend: bool);
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buf_close_terminal(buf: *mut buf_T);
-    fn do_buffer(
-        action: ::core::ffi::c_int,
-        start: ::core::ffi::c_int,
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        forceit: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn buflist_new(
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-        flags: ::core::ffi::c_int,
-    ) -> *mut buf_T;
-    fn buflist_nr2name(
-        n: ::core::ffi::c_int,
-        fullname: ::core::ffi::c_int,
-        helptail: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn read_buffer_into(buf: *mut buf_T, start: linenr_T, end: linenr_T, sb: *mut StringBuilder);
-    static channels: GlobalCell<Map_uint64_t_ptr_t>;
     fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel;
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);
-    fn channel_send(
-        id: uint64_t,
-        data: *mut ::core::ffi::c_char,
-        len: size_t,
-        data_owned: bool,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> size_t;
-    fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict;
-    fn channel_all_info(arena: *mut Arena) -> Array;
-    static kCtxAll: GlobalCell<::core::ffi::c_int>;
-    fn get_cursor_rel_lnum(wp: *mut win_T, lnum: linenr_T) -> linenr_T;
-    fn ctx_free(ctx: *mut Context);
-    fn ctx_save(ctx: *mut Context, flags: ::core::ffi::c_int);
-    fn ctx_restore(ctx: *mut Context, flags: ::core::ffi::c_int) -> bool;
-    fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict;
-    fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: *mut Error) -> ::core::ffi::c_int;
-    fn decor_redraw_signs(
-        wp: *mut win_T,
-        buf: *mut buf_T,
-        row: ::core::ffi::c_int,
-        sattrs: *mut SignTextAttrs,
-        line_id: *mut ::core::ffi::c_int,
-        cul_id: *mut ::core::ffi::c_int,
-        num_id: *mut ::core::ffi::c_int,
-    );
-    fn use_cursor_line_highlight(wp: *mut win_T, lnum: linenr_T) -> bool;
-    fn msg_id_exists(id: int64_t) -> bool;
-    fn msg_multihl(
-        id: Object,
-        hl_msg: HlMessage,
-        kind: *const ::core::ffi::c_char,
-        history: bool,
-        err: bool,
-        msg_data: *mut MessageData,
-        needs_msg_clear: *mut bool,
-    ) -> Object;
-    fn hl_msg_free(hl_msg: HlMessage);
-    fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut MessageData);
-    fn verbose_enter();
-    fn verbose_leave();
-    fn verbose_stop();
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn get_globvar_dict() -> *mut dict_T;
-    fn get_vimvar_dict() -> *mut dict_T;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn changedir_func(new_dir: *mut ::core::ffi::c_char, scope: CdScope) -> bool;
-    fn exec_normal(was_typed: bool, use_vpeekc: bool);
-    fn aborting() -> bool;
-    fn fold_info(win: *mut win_T, lnum: linenr_T) -> foldinfo_T;
-    fn ins_typebuf(
-        str: *mut ::core::ffi::c_char,
-        noremap: ::core::ffi::c_int,
-        offset: ::core::ffi::c_int,
-        nottyped: bool,
-        silent: bool,
-    ) -> ::core::ffi::c_int;
-    fn paste_store(channel_id: uint64_t, state: TriState, str: String_0, crlf: bool);
-    static default_grid: GlobalCell<ScreenGrid>;
-    fn schar_cache_clear();
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn win_grid_alloc(wp: *mut win_T);
-    fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
-    static g_stats: GlobalCell<nvim_stats_s>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static msg_didany: GlobalCell<bool>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static msg_no_more: GlobalCell<bool>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static redraw_tabline: GlobalCell<bool>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static VIsual_active: GlobalCell<bool>;
-    static cmdpreview: GlobalCell<bool>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    static typebuf: GlobalCell<typebuf_T>;
-    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
-    static must_redraw: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    static typebuf_was_filled: GlobalCell<bool>;
-    static ns_hl_global: GlobalCell<NS>;
-    static ns_hl_fast: GlobalCell<NS>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_lz: GlobalCell<::core::ffi::c_int>;
-    fn highlight_use_hlstate() -> bool;
-    fn ns_hl_def(
-        ns_id: NS,
-        hl_id: ::core::ffi::c_int,
-        attrs: HlAttrs,
-        link_id: ::core::ffi::c_int,
-        dict: *mut KeyDict_highlight,
-    );
-    fn hl_check_ns() -> bool;
-    fn win_check_ns_hl(wp: *mut win_T) -> bool;
-    fn hl_ns_get_attrs(
-        ns_id: ::core::ffi::c_int,
-        hl_id: ::core::ffi::c_int,
-        optional: *mut bool,
-        attrs: *mut HlAttrs,
-    ) -> bool;
-    fn hl_get_attr_by_id(
-        attr_id: Integer,
-        rgb: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn dict2hlattrs(
-        dict: *mut KeyDict_highlight,
-        use_rgb: bool,
-        link_id: *mut ::core::ffi::c_int,
-        base: *mut HlAttrs,
-        err: *mut Error,
-    ) -> HlAttrs;
-    fn hl_inspect(attr: ::core::ffi::c_int, arena: *mut Arena) -> Array;
-    fn ns_get_hl_defs(
-        ns_id: NS,
-        opts: *mut KeyDict_get_highlight,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
-    static color_name_table: GlobalCell<[color_name_table_T; 708]>;
-    fn get_cot_flags() -> ::core::ffi::c_uint;
-    fn name_to_mod_mask(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn replace_termcodes(
-        from: *const ::core::ffi::c_char,
-        from_len: size_t,
-        bufp: *mut *mut ::core::ffi::c_char,
-        sid_arg: scid_T,
-        flags: ::core::ffi::c_int,
-        did_simplify: *mut bool,
-        cpo_val: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsave_escape_ks(p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn nlua_get_global_ref_count() -> ::core::ffi::c_int;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_is_deferred_safe() -> bool;
-    static tslua_query_parse_count: GlobalCell<uint64_t>;
-    fn modify_keymap(
-        channel_id: uint64_t,
-        buffer: Buffer,
-        is_unmap: bool,
-        mode: String_0,
-        lhs: String_0,
-        rhs: String_0,
-        opts: *mut KeyDict_keymap,
-        err: *mut Error,
-    );
-    fn keymap_array(mode: String_0, buf: *mut buf_T, arena: *mut Arena) -> Array;
-    fn mark_get_global(resolve: bool, name: ::core::ffi::c_int) -> *mut xfmark_T;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn update_topline(wp: *mut win_T);
-    fn changed_window_setting(wp: *mut win_T);
-    fn validate_cursor(wp: *mut win_T);
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn rpc_set_client_info(id: uint64_t, info: Dict);
-    fn unpack(
-        data: *const ::core::ffi::c_char,
-        size: size_t,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn reset_VIsual_and_resel();
-    fn set_option_direct_for(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-    );
-    fn buf_copy_options(buf: *mut buf_T, flags: ::core::ffi::c_int);
-    fn check_stl_option(s: *mut ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    fn input_enqueue_raw(data: *const ::core::ffi::c_char, size: size_t);
-    fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t;
-    fn input_enqueue_mouse(
-        code: ::core::ffi::c_int,
-        modifier: uint8_t,
-        grid: ::core::ffi::c_int,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    );
-    fn input_blocking() -> bool;
-    fn os_proc_children(
-        ppid: ::core::ffi::c_int,
-        proc_list: *mut *mut ::core::ffi::c_int,
-        proc_count: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn pum_set_info(selected: ::core::ffi::c_int, info: *mut ::core::ffi::c_char) -> *mut win_T;
-    fn pum_ext_select_item(item: ::core::ffi::c_int, insert: bool, finish: bool);
-    static pum_grid: GlobalCell<ScreenGrid>;
-    fn do_put(
-        regname: ::core::ffi::c_int,
-        reg: *mut yankreg_T,
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    );
-    fn prepare_yankreg_from_object(reg: *mut yankreg_T, regtype: String_0, lines: size_t) -> bool;
-    fn finish_yankreg_from_object(reg: *mut yankreg_T, clipboard_adjust: bool);
-    fn runtime_inspect(arena: *mut Arena) -> Array;
-    fn runtime_get_named(lua: bool, pat: Array, all: bool, arena: *mut Arena) -> Array;
-    fn do_in_runtimepath(
-        name: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        callback: DoInRuntimepathCB,
-        cookie: *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn get_lib_dir() -> *mut ::core::ffi::c_char;
-    fn do_source(
-        fname: *mut ::core::ffi::c_char,
-        check_other: bool,
-        is_vimrc: ::core::ffi::c_int,
-        ret_sid: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static e_invchan: [::core::ffi::c_char; 0];
-    fn get_mode(buf: *mut ::core::ffi::c_char);
-    fn update_screen() -> ::core::ffi::c_int;
-    fn setcursor_mayforce(wp: *mut win_T, force: bool);
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn redraw_buf_range_later(buf: *mut buf_T, first: linenr_T, last: linenr_T);
-    fn win_update_cursorline(wp: *mut win_T, foldinfo: *mut foldinfo_T);
-    fn win_redr_status(wp: *mut win_T);
-    fn win_redr_winbar(wp: *mut win_T);
-    fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> schar_T;
-    fn draw_tabline();
-    fn build_stl_str_hl(
-        wp: *mut win_T,
-        out: *mut ::core::ffi::c_char,
-        outlen: size_t,
-        fmt: *mut ::core::ffi::c_char,
-        opt_idx: OptIndex,
-        opt_scope: ::core::ffi::c_int,
-        fillchar: schar_T,
-        maxwidth: ::core::ffi::c_int,
-        hltab: *mut *mut stl_hlrec_t,
-        hltab_len: *mut size_t,
-        tabtab: *mut *mut StlClickRecord,
-        stcp: *mut statuscol_T,
-    ) -> ::core::ffi::c_int;
-    fn ui_flush();
-    fn ui_array(arena: *mut Arena) -> Array;
     fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal;
     fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T);
     fn terminal_check_size(term: *mut Terminal);
@@ -525,15 +176,6 @@ extern "C" {
     fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool);
     fn terminal_buf(term: *const Terminal) -> Buffer;
     fn terminal_running(term: *const Terminal) -> bool;
-    fn ui_call_screenshot(path: String_0);
-    fn goto_tabpage_tp(
-        tp: *mut tabpage_T,
-        trigger_enter_autocmds: bool,
-        trigger_leave_autocmds: bool,
-    );
-    fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
-    fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
-    fn global_stl_height() -> ::core::ffi::c_int;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

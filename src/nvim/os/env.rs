@@ -1,4 +1,31 @@
+use crate::src::nvim::charset::{skipwhite, vim_isIDc, vim_isfilec};
+use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
+use crate::src::nvim::eval::fs::modify_fname;
+use crate::src::nvim::eval::vars::get_vim_var_str;
+use crate::src::nvim::eval_1::skip_expr;
+use crate::src::nvim::event::libuv::{
+    uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    didset_vim, didset_vimruntime, nvim_testing, os_buf, p_hf, IObuff, NameBuff,
+};
+use crate::src::nvim::memory::{
+    xfree, xmalloc, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcat, xstrlcpy,
+};
+use crate::src::nvim::message::{emsg, internal_error};
+use crate::src::nvim::os::fs::{os_dirname, os_isdir, os_realpath};
+use crate::src::nvim::os::libc::{
+    __assert_fail, environ, getpid, memcpy, strcasecmp, strchr, strcmp, strcpy, strlen, strncmp,
+    strpbrk,
+};
+use crate::src::nvim::os::users::os_get_userdir;
+use crate::src::nvim::path::{
+    after_pathsep, append_path, concat_fnames, path_fnamencmp, path_is_absolute, path_tail,
+    path_tail_with_sep, vim_ispathsep,
+};
+use crate::src::nvim::strings::{striequal, vim_strchr, vim_strsave_escaped};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -29,159 +56,6 @@ pub use crate::src::nvim::types::{
     wline_T, xfmark_T, xp_prefix_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strpbrk(
-        __s: *const ::core::ffi::c_char,
-        __accept: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_os_homedir(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
-    fn uv_os_getenv(
-        name: *const ::core::ffi::c_char,
-        buffer: *mut ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_os_setenv(
-        name: *const ::core::ffi::c_char,
-        value: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn uv_os_unsetenv(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    static mut environ: *mut *mut ::core::ffi::c_char;
-    fn getpid() -> __pid_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemrchr(
-        src: *const ::core::ffi::c_void,
-        c: uint8_t,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn vim_strsave_escaped(
-        string: *const ::core::ffi::c_char,
-        esc_chars: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn striequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_isIDc(c: ::core::ffi::c_int) -> bool;
-    fn vim_isfilec(c: ::core::ffi::c_int) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ExpandOne(
-        xp: *mut expand_T,
-        str: *mut ::core::ffi::c_char,
-        orig: *mut ::core::ffi::c_char,
-        options: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn ExpandInit(xp: *mut expand_T);
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn skip_expr(pp: *mut *mut ::core::ffi::c_char, evalarg: *mut evalarg_T) -> ::core::ffi::c_int;
-    fn modify_fname(
-        src: *mut ::core::ffi::c_char,
-        tilde_file: bool,
-        usedlen: *mut size_t,
-        fnamep: *mut *mut ::core::ffi::c_char,
-        bufp: *mut *mut ::core::ffi::c_char,
-        fnamelen: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    static didset_vim: GlobalCell<bool>;
-    static didset_vimruntime: GlobalCell<bool>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static os_buf: GlobalCell<[::core::ffi::c_char; 4096]>;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_realpath(
-        name: *const ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    static nvim_testing: GlobalCell<bool>;
-    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
-    fn os_get_userdir(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_tail_with_sep(fname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_ispathsep(c: ::core::ffi::c_int) -> bool;
-    fn path_fnamencmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
-    fn concat_fnames(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-        sep: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn after_pathsep(
-        b: *const ::core::ffi::c_char,
-        p: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn append_path(
-        path: *mut ::core::ffi::c_char,
-        to_append: *const ::core::ffi::c_char,
-        max_len: size_t,
-    ) -> ::core::ffi::c_int;
-    fn path_is_absolute(fname: *const ::core::ffi::c_char) -> bool;
     fn uname(__name: *mut utsname) -> ::core::ffi::c_int;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_int;

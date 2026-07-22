@@ -1,4 +1,22 @@
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
+use crate::src::nvim::debugger::ex_breakadd;
+use crate::src::nvim::eval::userfunc::{func_tbl_get, get_current_funccal};
+use crate::src::nvim::eval::vars::set_vim_var_nr;
+use crate::src::nvim::event::libuv::uv_err_name;
+use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::{current_sctx, do_profiling, e_notopen, time_fd, IObuff};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::env::expand_env_save_opt;
+use crate::src::nvim::os::fs::os_fopen;
+use crate::src::nvim::os::libc::{
+    __assert_fail, fclose, fopen, fprintf, gettext, qsort, round, setvbuf, snprintf, stderr,
+    strcmp, strncmp,
+};
+use crate::src::nvim::os::time::os_hrtime;
+use crate::src::nvim::runtime::{exestack, get_scriptname, script_items};
 pub use crate::src::nvim::types::{
     Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, CMD_index, Dict, Direction,
     Float, Integer, KeyValuePair, LineGetter, LuaRef, Object, ObjectType, ScopeDictDictItem,
@@ -15,80 +33,9 @@ pub use crate::src::nvim::types::{
     uint8_t, varnumber_T, vim_exception, xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn round(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    static mut stderr: *mut FILE;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fopen(
-        __filename: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn setvbuf(
-        __stream: *mut FILE,
-        __buf: *mut ::core::ffi::c_char,
-        __modes: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_notopen: [::core::ffi::c_char; 0];
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn func_tbl_get() -> *mut hashtab_T;
-    fn get_current_funccal() -> *mut funccall_T;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static do_profiling: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static time_fd: GlobalCell<*mut FILE>;
-    static hash_removed: ::core::ffi::c_char;
-    fn ex_breakadd(eap: *mut exarg_T);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    fn expand_env_save_opt(src: *mut ::core::ffi::c_char, one: bool) -> *mut ::core::ffi::c_char;
-    fn os_hrtime() -> uint64_t;
-    static exestack: GlobalCell<garray_T>;
-    static script_items: GlobalCell<garray_T>;
-    fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut ::core::ffi::c_char;
 }
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;

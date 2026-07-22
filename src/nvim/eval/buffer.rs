@@ -1,4 +1,39 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf, block_autocmds, unblock_autocmds};
+use crate::src::nvim::buffer::{
+    bt_nofilename, bt_prompt, buf_ensure_loaded, buflist_add, buflist_findlnum,
+    buflist_findname_exp, buflist_findnr, buflist_new, bufref_valid, set_bufref,
+};
+use crate::src::nvim::change::{
+    appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes,
+};
+use crate::src::nvim::cursor::check_cursor_col;
+use crate::src::nvim::edit::buf_prompt_text;
+use crate::src::nvim::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
+use crate::src::nvim::eval::typval::{
+    callback_free, tv_check_str_or_nr, tv_clear, tv_dict_add_dict, tv_dict_add_list,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find, tv_get_lnum, tv_get_lnum_buf,
+    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_number, tv_list_append_string,
+    tv_list_item_remove,
+};
+use crate::src::nvim::eval::window::win_has_winnr;
+use crate::src::nvim::eval_1::{callback_from_typval, typval_tostring};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::extmark::extmark_splice_cols;
+
+use crate::src::nvim::main::{
+    cmdwin_buf, curbuf, curtab, curwin, did_emsg, emsg_off, first_tabpage, firstbuf, firstwin,
+    swap_exists_action, u_sync_once, VIsual_active,
+};
+use crate::src::nvim::memline::{
+    ml_append, ml_delete_flags, ml_get, ml_get_buf, ml_get_buf_len, ml_replace, ml_replace_buf,
+};
+use crate::src::nvim::memory::{strnequal, xfree, xstrdup};
+use crate::src::nvim::os::libc::{memset, strcmp, strlen};
+use crate::src::nvim::path::path_with_url;
+use crate::src::nvim::r#move::update_topline;
+use crate::src::nvim::sign::{buf_has_signs, get_buffer_signs};
+use crate::src::nvim::strings::{concat_str, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -33,166 +68,7 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strnequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char, n: size_t) -> bool;
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn buf_ensure_loaded(buf: *mut buf_T) -> bool;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buflist_new(
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-        flags: ::core::ffi::c_int,
-    ) -> *mut buf_T;
-    fn buflist_findname_exp(fname: *mut ::core::ffi::c_char) -> *mut buf_T;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn buflist_findlnum(buf: *mut buf_T) -> linenr_T;
-    fn buflist_add(
-        fname: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn bt_prompt(buf: *mut buf_T) -> bool;
-    fn bt_nofilename(buf: *const buf_T) -> bool;
-    fn inserted_bytes(
-        lnum: linenr_T,
-        start_col: colnr_T,
-        old_col: ::core::ffi::c_int,
-        new_col: ::core::ffi::c_int,
-    );
-    fn appended_lines_mark(lnum: linenr_T, count: ::core::ffi::c_int);
-    fn deleted_lines_mark(lnum: linenr_T, count: ::core::ffi::c_int);
-    fn changed_lines(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        lnume: linenr_T,
-        xtra: linenr_T,
-        do_buf_event: bool,
-    );
-    fn check_cursor_col(win: *mut win_T);
-    fn buf_prompt_text(buf: *const buf_T) -> *mut ::core::ffi::c_char;
-    fn callback_from_typval(callback: *mut Callback, arg: *const typval_T) -> bool;
-    fn typval_tostring(arg: *mut typval_T, quotes: bool) -> *mut ::core::ffi::c_char;
-    fn tv_get_buf(tv: *mut typval_T, curtab_only: ::core::ffi::c_int) -> *mut buf_T;
-    fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T;
-    fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T;
-    fn tv_list_item_remove(l: *mut list_T, item: *mut listitem_T) -> *mut listitem_T;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn callback_free(callback: *mut Callback);
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_dict(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        dict: *mut dict_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_check_str_or_nr(tv: *const typval_T) -> bool;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_lnum(tv: *const typval_T) -> linenr_T;
-    fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn win_has_winnr(wp: *mut win_T, tp: *mut tabpage_T) -> bool;
-    fn check_secure() -> bool;
-    fn extmark_splice_cols(
-        buf: *mut buf_T,
-        start_row: ::core::ffi::c_int,
-        start_col: colnr_T,
-        old_col: colnr_T,
-        new_col: colnr_T,
-        undo: ExtmarkOp,
-    );
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static u_sync_once: GlobalCell<::core::ffi::c_int>;
-    static swap_exists_action: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    fn ml_get(lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_append(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        len: colnr_T,
-        newfile: bool,
-    ) -> ::core::ffi::c_int;
-    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
-        -> ::core::ffi::c_int;
-    fn ml_replace_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-        noalloc: bool,
-    ) -> ::core::ffi::c_int;
-    fn ml_delete_flags(lnum: linenr_T, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn update_topline(wp: *mut win_T);
-    fn path_with_url(fname: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn buf_has_signs(buf: *const buf_T) -> bool;
-    fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T;
-    fn u_save(top: linenr_T, bot: linenr_T) -> ::core::ffi::c_int;
-    fn u_savesub(lnum: linenr_T) -> ::core::ffi::c_int;
-    fn u_sync(force: bool);
-    fn u_clearallandblockfree(buf: *mut buf_T);
-    fn bufIsChanged(buf: *mut buf_T) -> bool;
-}
+use crate::src::nvim::undo::{bufIsChanged, u_clearallandblockfree, u_save, u_savesub, u_sync};
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

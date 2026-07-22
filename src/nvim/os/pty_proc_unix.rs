@@ -1,4 +1,15 @@
+use crate::src::nvim::eval::typval::tv_dict_to_env;
+use crate::src::nvim::event::libuv::{
+    uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open, uv_signal_start, uv_signal_stop,
+    uv_strerror,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::os::fs::os_set_cloexec;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, environ, execvp,
+    fcntl, forkpty, ioctl, kill, killpg, ptsname, setsid, strerror, waitpid,
+};
 pub use crate::src::nvim::types::{
     Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream, ScopeType, Stream, VarLockStatus,
     __pid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
@@ -21,68 +32,12 @@ pub use crate::src::nvim::types::{
     QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
     fn signal(__sig: ::core::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
-    fn kill(__pid: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn killpg(__pgrp: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn dup(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    static mut environ: *mut *mut ::core::ffi::c_char;
-    fn execvp(
-        __file: *const ::core::ffi::c_char,
-        __argv: *const *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn _exit(__status: ::core::ffi::c_int) -> !;
-    fn setsid() -> __pid_t;
-    fn ptsname(__fd: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn strerror(__errnum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn ioctl(__fd: ::core::ffi::c_int, __request: ::core::ffi::c_ulong, ...) -> ::core::ffi::c_int;
-    fn waitpid(
-        __pid: __pid_t,
-        __stat_loc: *mut ::core::ffi::c_int,
-        __options: ::core::ffi::c_int,
-    ) -> __pid_t;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_pipe_open(_: *mut uv_pipe_t, file: uv_file) -> ::core::ffi::c_int;
-    fn uv_signal_start(
-        handle: *mut uv_signal_t,
-        signal_cb: uv_signal_cb,
-        signum: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_signal_stop(handle: *mut uv_signal_t) -> ::core::ffi::c_int;
-    fn uv_chdir(dir: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn uv_disable_stdio_inheritance();
-    fn cfsetospeed(__termios_p: *mut termios, __speed: speed_t) -> ::core::ffi::c_int;
-    fn cfsetispeed(__termios_p: *mut termios, __speed: speed_t) -> ::core::ffi::c_int;
-    fn forkpty(
-        __amaster: *mut ::core::ffi::c_int,
-        __name: *mut ::core::ffi::c_char,
-        __termp: *const termios,
-        __winp: *const winsize,
-    ) -> ::core::ffi::c_int;
     fn poll(
         __fds: *mut pollfd,
         __nfds: nfds_t,
         __timeout: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
 }
 pub type __sighandler_t = Option<unsafe extern "C" fn(::core::ffi::c_int) -> ()>;
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;

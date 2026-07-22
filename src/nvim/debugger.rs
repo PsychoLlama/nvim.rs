@@ -1,4 +1,25 @@
+use crate::src::nvim::charset::{getdigits_int32, skipwhite};
+use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::eval::typval::tv_free;
+use crate::src::nvim::eval_1::{eval_expr, typval_compare, typval_tostring};
+use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd};
+use crate::src::nvim::ex_getln::{getcmdline_prompt, getexline};
+use crate::src::nvim::fileio::file_pat_to_reg_pat;
+use crate::src::nvim::getchar::{restore_typeahead, save_typeahead};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    cmd_silent, cmdline_row, curbuf, curwin, debug_backtrace_level, debug_break_level,
+    debug_did_msg, debug_mode, debug_tick, did_emsg, e_invarg2, e_noname, emsg_off, emsg_silent,
+    ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left, msg_row, msg_scroll,
+    msg_silent, need_wait_return, no_wait_return, redir_off, NameBuff, RedrawingDisabled, Rows,
+    State,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{emsg, msg, msg_starthere, semsg, smsg};
+use crate::src::nvim::os::env::{expand_env_save, home_replace};
+use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
+use crate::src::nvim::path::fix_fname;
+use crate::src::nvim::runtime::{estack_sfile, exestack};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -34,123 +55,8 @@ pub use crate::src::nvim::types::{
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int32(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: int32_t) -> int32_t;
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_noname: [::core::ffi::c_char; 0];
-    fn eval_expr(arg: *mut ::core::ffi::c_char, eap: *mut exarg_T) -> *mut typval_T;
-    fn typval_compare(
-        typ1: *mut typval_T,
-        typ2: *mut typval_T,
-        type_0: exprtype_T,
-        ic: bool,
-    ) -> ::core::ffi::c_int;
-    fn typval_tostring(arg: *mut typval_T, quotes: bool) -> *mut ::core::ffi::c_char;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_starthere();
-    fn tv_free(tv: *mut typval_T);
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn getcmdline_prompt(
-        firstc: ::core::ffi::c_int,
-        prompt: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        xp_context: ::core::ffi::c_int,
-        xp_arg: *const ::core::ffi::c_char,
-        highlight_callback: Callback,
-        one_key: bool,
-        mouse_used: *mut bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn getexline(
-        c: ::core::ffi::c_int,
-        cookie: *mut ::core::ffi::c_void,
-        indent: ::core::ffi::c_int,
-        do_concat: bool,
-    ) -> *mut ::core::ffi::c_char;
     fn ga_clear(gap: *mut garray_T);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn file_pat_to_reg_pat(
-        pat: *const ::core::ffi::c_char,
-        pat_end: *const ::core::ffi::c_char,
-        allow_dirs: *mut ::core::ffi::c_char,
-        no_bslash: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn save_typeahead(tp: *mut tasave_T);
-    fn restore_typeahead(tp: *mut tasave_T);
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static lines_left: GlobalCell<::core::ffi::c_int>;
-    static ex_nesting_level: GlobalCell<::core::ffi::c_int>;
-    static debug_break_level: GlobalCell<::core::ffi::c_int>;
-    static debug_did_msg: GlobalCell<bool>;
-    static debug_tick: GlobalCell<::core::ffi::c_int>;
-    static debug_backtrace_level: GlobalCell<::core::ffi::c_int>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static debug_mode: GlobalCell<bool>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static cmd_silent: GlobalCell<bool>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
-    static ignore_script: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    static redir_off: GlobalCell<bool>;
-    fn expand_env_save(src: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn home_replace(
-        buf: *const buf_T,
-        src: *const ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: size_t,
-        one: bool,
-    ) -> size_t;
-    fn fix_fname(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static exestack: GlobalCell<garray_T>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -162,7 +68,6 @@ extern "C" {
         line: *const ::core::ffi::c_char,
         col: colnr_T,
     ) -> bool;
-    fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
 }
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;

@@ -1,4 +1,39 @@
+use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsize};
+use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
+use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
+use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
+use crate::src::nvim::eval_1::last_set_msg;
+use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::{
+    hl_get_syn_attr, hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
+};
+use crate::src::nvim::lua::executor::nlua_set_sctx;
+use crate::src::nvim::main::{
+    clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, current_sctx, curwin,
+    e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2, got_int,
+    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
+    include_default, include_link, include_none, msg_col, msg_grid, msg_silent,
+    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors,
+    updating_screen, Columns,
+};
+use crate::src::nvim::map::{map_put_ref_cstr_t_int, mh_get_cstr_t};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemrchr, xstrdup, xstrlcat};
+use crate::src::nvim::message::{
+    emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
+    msg_puts_hl, msg_source, semsg,
+};
+use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __ctype_b_loc, abort, atoi, gettext, memcmp, memcpy, memmove, memset, snprintf,
+    strcasecmp, strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
+};
+use crate::src::nvim::os::time::os_delay;
+use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
+use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
     Boolean, BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6,
@@ -33,211 +68,19 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::{
+    ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,
+    ui_rgb_attached,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn strtol(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_long;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemrchr(
-        src: *const ::core::ffi::c_void,
-        c: uint8_t,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
     fn arena_memdupz(
         arena: *mut Arena,
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn mh_get_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> uint32_t;
-    fn map_put_ref_cstr_t_int(
-        map: *mut Map_cstr_t_int,
-        key: cstr_t,
-        key_alloc: *mut *mut cstr_t,
-        new_item: *mut bool,
-    ) -> *mut ::core::ffi::c_int;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    static p_bg: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn vim_strup(p: *mut ::core::ffi::c_char);
-    fn vim_memcpy_up(dst: *mut ::core::ffi::c_char, src: *const ::core::ffi::c_char, n: size_t);
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn cursor_mode_uses_syn_id(syn_id: ::core::ffi::c_int) -> bool;
-    static updating_screen: GlobalCell<bool>;
-    fn decor_provider_invalidate_hl();
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_highlight_group_name_invalid_char: [::core::ffi::c_char; 0];
-    static e_highlight_group_name_too_long: [::core::ffi::c_char; 0];
-    fn last_set_msg(script_ctx: sctx_T);
-    fn do_unlet(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        forceit: bool,
-    ) -> ::core::ffi::c_int;
-    fn get_var_value(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static clear_cmdline: GlobalCell<bool>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static t_colors: GlobalCell<::core::ffi::c_int>;
-    static include_none: GlobalCell<::core::ffi::c_int>;
-    static include_default: GlobalCell<::core::ffi::c_int>;
-    static include_link: GlobalCell<::core::ffi::c_int>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static starting: GlobalCell<::core::ffi::c_int>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static need_highlight_changed: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 0]>;
-    static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]>;
-    static highlight_attr_last: GlobalCell<[::core::ffi::c_int; 76]>;
-    static highlight_user: GlobalCell<[::core::ffi::c_int; 9]>;
-    static highlight_stlnc: GlobalCell<[::core::ffi::c_int; 9]>;
-    static cterm_normal_fg_color: GlobalCell<::core::ffi::c_int>;
-    static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int>;
-    static normal_fg: GlobalCell<RgbValue>;
-    static normal_bg: GlobalCell<RgbValue>;
-    static normal_sp: GlobalCell<RgbValue>;
-    fn hl_get_syn_attr(
-        ns_id: ::core::ffi::c_int,
-        idx: ::core::ffi::c_int,
-        at_en: HlAttrs,
-    ) -> ::core::ffi::c_int;
-    fn ns_get_hl(
-        ns_hl: *mut NS,
-        hl_id: ::core::ffi::c_int,
-        link: bool,
-        nodefault: bool,
-    ) -> ::core::ffi::c_int;
-    fn hl_get_ui_attr(
-        ns_id: ::core::ffi::c_int,
-        idx: ::core::ffi::c_int,
-        final_id: ::core::ffi::c_int,
-        optional: bool,
-    ) -> ::core::ffi::c_int;
-    fn syn_attr2entry(attr: ::core::ffi::c_int) -> HlAttrs;
-    fn hlattrs2dict(
-        hl: *mut Dict,
-        hl_attrs: *mut Dict,
-        ae: HlAttrs,
-        use_rgb: bool,
-        short_keys: bool,
-    );
-    fn nlua_set_sctx(current: *mut sctx_T);
-    fn msg_source(hl_id: ::core::ffi::c_int);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn message_filtered(msg: *const ::core::ffi::c_char) -> bool;
-    fn msg_clr_eos();
-    fn msg_advance(col: ::core::ffi::c_int);
-    static msg_grid: GlobalCell<ScreenGrid>;
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn option_was_set(opt_idx: OptIndex) -> bool;
-    fn reset_option_was_set(opt_idx: OptIndex);
-    fn os_delay(ms: uint64_t, ignoreinput: bool);
-    static exestack: GlobalCell<garray_T>;
-    fn source_runtime_vim_lua(
-        name: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn ui_rgb_attached() -> bool;
-    fn ui_refresh();
-    fn ui_default_colors_set();
-    fn ui_mode_info_set();
-    fn ui_flush();
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_call_hl_group_set(name: String_0, id: Integer);
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

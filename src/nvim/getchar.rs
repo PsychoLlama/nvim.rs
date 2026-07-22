@@ -1,4 +1,67 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::helpers::api_clear_error;
+use crate::src::nvim::api::vim::nvim_paste;
+use crate::src::nvim::charset::{ptr2cells, skipwhite};
+use crate::src::nvim::cursor::get_cursor_line_ptr;
+use crate::src::nvim::drawscreen::{setcursor, showmode, unshowmode, update_screen};
+use crate::src::nvim::edit::{edit_putchar, edit_unputchar};
+use crate::src::nvim::eval::typval::{
+    tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string, tv_dict_has_key,
+    tv_get_number_chk,
+};
+use crate::src::nvim::eval::vars::set_vim_var_nr;
+use crate::src::nvim::eval_1::garbage_collect;
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::multiqueue::multiqueue_empty;
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_docmd::update_topline_cursor;
+use crate::src::nvim::ex_getln::{
+    get_cmdline_info, putcmdline, redrawcmd, redrawcmdline, unputcmdline,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::input::get_keystroke;
+use crate::src::nvim::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
+use crate::src::nvim::keycodes::special_to_buf;
+use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_execute_on_key};
+use crate::src::nvim::main::{
+    allow_keys, arrow_used, called_emsg, cmd_silent, cmdline_row, cmdline_star, cmdwin_type,
+    ctrl_c_interrupts, curbuf, curwin, debug_did_msg, did_ai, did_emsg, did_outofmem_msg,
+    did_swapwrite_msg, e_invarg2, e_invargNval, e_nesting, e_notopen_2, e_toocompl, emsg_silent,
+    ex_normal_busy, exmode_active, finish_op, firstwin, got_int, ignore_script, langmap_mapchar,
+    main_loop, mapped_ctrl_c, maptick, may_garbage_collect, mod_mask, mode_displayed, mouse_col,
+    mouse_grid, mouse_row, msg_col, msg_didout, msg_row, msg_scroll, msg_silent, must_redraw,
+    need_wait_return, no_mapping, no_zero_mapping, p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste,
+    p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc, pending_end_reg_executing,
+    pending_exmode_active, redo_VIsual_busy, redraw_cmdline, reg_executing, reg_recording,
+    repeat_luaref, restart_edit, scriptout, test_disable_char_avail, typebuf, typebuf_was_empty,
+    typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect, KeyStuffed,
+    KeyTyped, NameBuff, State, VIsual, VIsual_active, VIsual_reselect, VIsual_select,
+};
+use crate::src::nvim::mapping::{
+    eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
+};
+use crate::src::nvim::mbyte::{
+    mb_cptr2char_adv, mb_unescape, utf8len_tab, utf_char2bytes, utf_head_off,
+    utf_ptr2CharInfo_impl, utf_ptr2cells, utf_ptr2char, utfc_next_impl, utfc_ptr2len,
+};
+use crate::src::nvim::memline::ml_sync_all;
+use crate::src::nvim::memory::{
+    arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc,
+};
+use crate::src::nvim::message::{emsg, iemsg, internal_error, semsg, semsg_multiline};
+use crate::src::nvim::mouse::{is_mouse_key, mouse_comp_pos, mouse_find_win_inner};
+use crate::src::nvim::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
+use crate::src::nvim::ops::clear_oparg;
+use crate::src::nvim::os::env::expand_env;
+use crate::src::nvim::os::fileio::{file_close, file_open, file_open_stdin, file_read};
+use crate::src::nvim::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
+use crate::src::nvim::os::libc::{
+    __assert_fail, atoi, fprintf, gettext, memcpy, memmove, putc, snprintf, stderr, strcmp, strlen,
+    strncmp,
+};
+use crate::src::nvim::plines::{charsize_fast, charsize_regular, init_charsize_arg};
+use crate::src::nvim::r#move::{validate_cursor, win_col_off};
+use crate::src::nvim::state::{get_real_state, state_handle_k_event, state_no_longer_safe};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue,
     Boolean, BufUpdateCallbacks, CSType, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -52,318 +115,15 @@ pub use crate::src::nvim::types::{
     varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
     xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
+use crate::src::nvim::undo::u_sync;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    static mut stderr: *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn putc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn api_clear_error(value: *mut Error);
-    fn nvim_paste(
-        channel_id: uint64_t,
-        data: String_0,
-        crlf: Boolean,
-        phase: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Boolean;
-    static p_fs: GlobalCell<::core::ffi::c_int>;
-    static p_langmap: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_lrm: GlobalCell<::core::ffi::c_int>;
-    static p_lz: GlobalCell<::core::ffi::c_int>;
-    static p_mmd: GlobalCell<OptInt>;
-    static p_paste: GlobalCell<::core::ffi::c_int>;
-    static p_sc: GlobalCell<::core::ffi::c_int>;
-    static p_smd: GlobalCell<::core::ffi::c_int>;
-    static p_timeout: GlobalCell<::core::ffi::c_int>;
-    static p_tm: GlobalCell<OptInt>;
-    static p_ttimeout: GlobalCell<::core::ffi::c_int>;
-    static p_ttm: GlobalCell<OptInt>;
-    static p_uc: GlobalCell<OptInt>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn update_screen() -> ::core::ffi::c_int;
-    fn setcursor();
-    fn showmode() -> ::core::ffi::c_int;
-    fn unshowmode(force: bool);
-    fn edit_putchar(c: ::core::ffi::c_int, highlight: bool);
-    fn edit_unputchar();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invargNval: [::core::ffi::c_char; 0];
-    static e_nesting: [::core::ffi::c_char; 0];
-    static e_notopen_2: [::core::ffi::c_char; 0];
-    static e_toocompl: [::core::ffi::c_char; 0];
-    fn garbage_collect(testing: bool) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn semsg_multiline(
-        kind: *const ::core::ffi::c_char,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn tv_dict_has_key(d: *const dict_T, key: *const ::core::ffi::c_char) -> bool;
-    fn tv_dict_get_bool(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        def: ::core::ffi::c_int,
-    ) -> varnumber_T;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_check_for_opt_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn check_secure() -> bool;
-    fn update_topline_cursor();
-    fn putcmdline(c: ::core::ffi::c_char, shift: bool);
-    fn unputcmdline();
-    fn redrawcmdline();
-    fn redrawcmd();
-    fn get_cmdline_info() -> *mut CmdlineInfo;
-    static test_disable_char_avail: GlobalCell<bool>;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static mod_mask: GlobalCell<::core::ffi::c_int>;
-    static vgetc_mod_mask: GlobalCell<::core::ffi::c_int>;
-    static vgetc_char: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static redraw_cmdline: GlobalCell<bool>;
-    static mode_displayed: GlobalCell<bool>;
-    static cmdline_star: GlobalCell<::core::ffi::c_int>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static msg_didout: GlobalCell<bool>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static called_emsg: GlobalCell<::core::ffi::c_int>;
-    static need_wait_return: GlobalCell<bool>;
-    static vgetc_busy: GlobalCell<::core::ffi::c_int>;
-    static debug_did_msg: GlobalCell<bool>;
-    static may_garbage_collect: GlobalCell<bool>;
-    static want_garbage_collect: GlobalCell<bool>;
-    static mouse_grid: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_col: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_select: GlobalCell<bool>;
-    static VIsual_reselect: GlobalCell<::core::ffi::c_int>;
-    static redo_VIsual_busy: GlobalCell<bool>;
-    static did_ai: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static finish_op: GlobalCell<bool>;
-    static exmode_active: GlobalCell<bool>;
-    static pending_exmode_active: GlobalCell<bool>;
-    static reg_recording: GlobalCell<::core::ffi::c_int>;
-    static reg_executing: GlobalCell<::core::ffi::c_int>;
-    static pending_end_reg_executing: GlobalCell<bool>;
-    static no_mapping: GlobalCell<::core::ffi::c_int>;
-    static no_zero_mapping: GlobalCell<::core::ffi::c_int>;
-    static allow_keys: GlobalCell<::core::ffi::c_int>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static arrow_used: GlobalCell<bool>;
-    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
-    static ctrl_c_interrupts: GlobalCell<bool>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static cmd_silent: GlobalCell<bool>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static typebuf: GlobalCell<typebuf_T>;
-    static typebuf_was_empty: GlobalCell<bool>;
-    static ex_normal_busy: GlobalCell<::core::ffi::c_int>;
-    static ignore_script: GlobalCell<bool>;
-    static KeyTyped: GlobalCell<bool>;
-    static KeyStuffed: GlobalCell<::core::ffi::c_int>;
-    static maptick: GlobalCell<::core::ffi::c_int>;
-    static must_redraw: GlobalCell<::core::ffi::c_int>;
-    static scriptout: GlobalCell<*mut FILE>;
-    static got_int: GlobalCell<bool>;
-    static did_outofmem_msg: GlobalCell<bool>;
-    static did_swapwrite_msg: GlobalCell<bool>;
-    static langmap_mapchar: GlobalCell<[uint8_t; 256]>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static typebuf_was_filled: GlobalCell<bool>;
-    fn get_keystroke(events: *mut MultiQueue) -> ::core::ffi::c_int;
-    fn ctrl_x_mode_not_default() -> bool;
-    fn compl_status_local() -> bool;
-    fn vim_is_ctrl_x_key(c: ::core::ffi::c_int) -> bool;
-    fn special_to_buf(
-        key: ::core::ffi::c_int,
-        modifiers: ::core::ffi::c_int,
-        escape_ks: bool,
-        dst: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_uint;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_execute_on_key(c: ::core::ffi::c_int, typed_buf: *mut ::core::ffi::c_char) -> bool;
-    fn get_maphash_list(state: ::core::ffi::c_int, c: ::core::ffi::c_int) -> *mut mapblock_T;
-    fn get_buf_maphash_list(state: ::core::ffi::c_int, c: ::core::ffi::c_int) -> *mut mapblock_T;
-    fn eval_map_expr(mp: *mut mapblock_T, c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn langmap_adjust_mb(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    static main_loop: SharedCell<Loop>;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo;
-    fn mb_unescape(pp: *mut *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    static utf8len_tab: [uint8_t; 256];
-    fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
-    fn is_mouse_key(c: ::core::ffi::c_int) -> bool;
-    fn mouse_comp_pos(
-        win: *mut win_T,
-        rowp: *mut ::core::ffi::c_int,
-        colp: *mut ::core::ffi::c_int,
-        lnump: *mut linenr_T,
-    ) -> bool;
-    fn mouse_find_win_inner(
-        gridp: *mut ::core::ffi::c_int,
-        rowp: *mut ::core::ffi::c_int,
-        colp: *mut ::core::ffi::c_int,
-    ) -> *mut win_T;
-    fn validate_cursor(wp: *mut win_T);
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn add_to_showcmd(c: ::core::ffi::c_int) -> bool;
-    fn push_showcmd();
-    fn pop_showcmd();
-    fn normal_cmd(oap: *mut oparg_T, toplevel: bool);
-    fn clear_oparg(oap: *mut oparg_T);
-    static repeat_luaref: GlobalCell<LuaRef>;
-    fn file_open(
-        ret_fp: *mut FileDescriptor,
-        fname: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn file_open_stdin(fp: *mut FileDescriptor) -> ::core::ffi::c_int;
-    fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> ::core::ffi::c_int;
-    fn file_read(
-        fp: *mut FileDescriptor,
-        ret_buf: *mut ::core::ffi::c_char,
-        size: size_t,
-    ) -> ptrdiff_t;
-    fn input_get(
-        buf: *mut uint8_t,
-        maxlen: ::core::ffi::c_int,
-        ms: ::core::ffi::c_int,
-        tb_change_cnt: ::core::ffi::c_int,
-        events: *mut MultiQueue,
-    ) -> ::core::ffi::c_int;
-    fn os_breakcheck();
-    fn line_breakcheck();
-    fn input_available() -> size_t;
-    fn expand_env(
-        src: *mut ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: ::core::ffi::c_int,
-    ) -> size_t;
-    fn init_charsize_arg(
-        csarg: *mut CharsizeArg,
-        wp: *mut win_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> CSType;
-    fn charsize_regular(
-        csarg: *mut CharsizeArg,
-        cur: *mut ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn charsize_fast(
-        csarg: *mut CharsizeArg,
-        cur: *const ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn state_handle_k_event();
-    fn get_real_state() -> ::core::ffi::c_int;
-    fn state_no_longer_safe(reason: *const ::core::ffi::c_char);
-    fn ui_busy_start();
-    fn ui_busy_stop();
-    fn vim_beep(val: ::core::ffi::c_uint);
-    fn ui_cursor_goto(new_row: ::core::ffi::c_int, new_col: ::core::ffi::c_int);
-    fn ui_flush();
-    fn u_sync(force: bool);
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
@@ -1629,7 +1389,7 @@ unsafe extern "C" fn read_redo(mut init: bool, mut old_redo: bool) -> ::core::ff
         n = if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
             1 as ::core::ffi::c_int
         } else {
-            utf8len_tab[c as usize] as ::core::ffi::c_int
+            (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int
         };
     } else {
         n = 1 as ::core::ffi::c_int;
@@ -2126,7 +1886,7 @@ unsafe extern "C" fn gotchars_add_byte(
                     ((if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
                         1 as ::core::ffi::c_int
                     } else {
-                        utf8len_tab[c as usize] as ::core::ffi::c_int
+                        (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int
                     }) - 1 as ::core::ffi::c_int) as ::core::ffi::c_uint;
             }
             if (*state).pending_mbyte <= 0 as ::core::ffi::c_uint {
@@ -2757,7 +2517,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
             n = if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
                 1 as ::core::ffi::c_int
             } else {
-                utf8len_tab[c as usize] as ::core::ffi::c_int
+                (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int
             };
             if n > 1 as ::core::ffi::c_int {
                 (*no_mapping.ptr()) += 1;
@@ -3600,7 +3360,7 @@ unsafe extern "C" fn handle_mapping(
                 let mut p1: *const ::core::ffi::c_char = (*mp).m_keys;
                 let mut p2: *const ::core::ffi::c_char = mb_unescape(&raw mut p1);
                 if !p2.is_null()
-                    && utf8len_tab[tb_c1 as usize] as ::core::ffi::c_int > utfc_ptr2len(p2)
+                    && (*utf8len_tab.ptr())[tb_c1 as usize] as ::core::ffi::c_int > utfc_ptr2len(p2)
                 {
                     mlen = 0 as ::core::ffi::c_int;
                 }
@@ -4945,7 +4705,8 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
             len: 1 as ::core::ffi::c_int,
         };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;

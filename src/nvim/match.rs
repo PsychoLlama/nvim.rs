@@ -1,4 +1,31 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
+use crate::src::nvim::drawscreen::{redraw_later, redraw_win_range_later};
+use crate::src::nvim::eval::funcs::get_optional_window;
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
+    tv_dict_get_number, tv_dict_get_string, tv_dict_get_string_buf, tv_get_number,
+    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
+    tv_list_idx_of_item, tv_list_unref,
+};
+use crate::src::nvim::eval::window::find_win_by_nr_or_id;
+use crate::src::nvim::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
+use crate::src::nvim::fold::hasFolding;
+
+use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr, syn_id2name, syn_name2id};
+use crate::src::nvim::main::{
+    called_emsg, curwin, e_dictreq, e_invalwindow, e_invarg2, e_invcmd, e_listarg, e_listreq,
+    e_trailing_arg, got_int, hl_attr_active, ns_hl_fast, p_cpo, p_rdt, search_first_line,
+    search_hl_has_cursor_lnum, search_last_line,
+};
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memline::ml_get_buf;
+use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen, strncasecmp};
+use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
+use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -31,137 +58,7 @@ pub use crate::src::nvim::types::{
     wline_T, xfmark_T, NS, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_rdt: GlobalCell<OptInt>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static search_hl_has_cursor_lnum: GlobalCell<linenr_T>;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: linenr_T);
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invcmd: [::core::ffi::c_char; 0];
-    static e_dictreq: [::core::ffi::c_char; 0];
-    static e_listreq: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_listarg: [::core::ffi::c_char; 0];
-    static e_invalwindow: [::core::ffi::c_char; 0];
-    fn get_optional_window(argvars: *mut typval_T, idx: ::core::ffi::c_int) -> *mut win_T;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_unref(l: *mut list_T);
-    fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T);
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_list_idx_of_item(l: *const list_T, item: *const listitem_T) -> ::core::ffi::c_int;
-    fn tv_dict_alloc() -> *mut dict_T;
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_dict_get_string_buf(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        numbuf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_dict_add_list(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        list: *mut list_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_str(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
-    fn ex_errmsg(
-        msg: *const ::core::ffi::c_char,
-        arg: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn find_nextcmd(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_no_hlsearch(flag: bool);
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    static called_emsg: GlobalCell<::core::ffi::c_int>;
-    static search_first_line: GlobalCell<linenr_T>;
-    static search_last_line: GlobalCell<linenr_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static got_int: GlobalCell<bool>;
-    static ns_hl_fast: GlobalCell<NS>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn profile_setlimit(msec: int64_t) -> proftime_T;
-    fn profile_passed_limit(tm: proftime_T) -> bool;
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-    fn skip_regexp(
-        startp: *mut ::core::ffi::c_char,
-        delim: ::core::ffi::c_int,
-        magic: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

@@ -1,4 +1,43 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::cursor_shape::shape_table;
+use crate::src::nvim::event::libuv::{
+    uv_chdir, uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open,
+    uv_run, uv_sleep, uv_strerror, uv_timer_init, uv_timer_start, uv_tty_reset_mode, uv_write,
+};
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::{loop_poll_events, loop_purge, loop_size};
+use crate::src::nvim::event::signal::{
+    signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
+};
+use crate::src::nvim::event::stream::stream_set_blocking;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    main_loop, nvim_testing, stdin_isatty, t_colors, ui_client_channel_id, ui_client_error_exit,
+    ui_client_exit_status,
+};
+use crate::src::nvim::map::mh_put_cstr_t;
+use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
+use crate::src::nvim::memory::{
+    arena_mem_free, strequal, xcalloc, xfree, xrealloc, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
+use crate::src::nvim::os::env::{os_env_exists, os_getenv, os_getenv_noalloc};
+use crate::src::nvim::os::input::os_isatty;
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, fclose, fopen, fprintf, fwrite, kill, memcmp, memcpy, memset, snprintf,
+    sscanf, strchr, strcmp, strlen, strstr, strtol, tcgetattr, vsnprintf,
+};
+use crate::src::nvim::os::time::os_hrtime;
+use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::terminfo::{
+    terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
+    terminfo_is_bsd_console, terminfo_is_term_family,
+};
+use crate::src::nvim::tui::ugrid::{
+    ugrid_clear, ugrid_clear_chunk, ugrid_goto, ugrid_init, ugrid_resize, ugrid_scroll,
+};
 pub use crate::src::nvim::types::{
     Arena, ArenaMem, Array, Boolean, CursorShape, Dict, Float, HlAttrs, Integer, KeyEncoding,
     KeyValuePair, LineFlags, Loop, LuaRef, MHPutStatus, MapHash, MultiQueue, Object, ObjectType,
@@ -27,93 +66,9 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_10, uv_timer_s_u as C2Rust_Unnamed_11, uv_timer_t,
     uv_write_cb, uv_write_s, uv_write_t, va_list, FILE, QUEUE, TPVAR, _IO_FILE,
 };
+use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::c2rust_bitfields;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn kill(__pid: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fopen(
-        __filename: *const ::core::ffi::c_char,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vsnprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        __arg: ::core::ffi::VaList,
-    ) -> ::core::ffi::c_int;
-    fn sscanf(
-        __s: *const ::core::ffi::c_char,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fwrite(
-        __ptr: *const ::core::ffi::c_void,
-        __size: size_t,
-        __n: size_t,
-        __s: *mut FILE,
-    ) -> ::core::ffi::c_ulong;
-    fn strtol(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_long;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn uv_loop_init(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_loop_close(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_run(_: *mut uv_loop_t, mode: uv_run_mode) -> ::core::ffi::c_int;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
-    fn uv_write(
-        req: *mut uv_write_t,
-        handle: *mut uv_stream_t,
-        bufs: *const uv_buf_t,
-        nbufs: ::core::ffi::c_uint,
-        cb: uv_write_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_is_closing(handle: *const uv_handle_t) -> ::core::ffi::c_int;
     fn uv_tty_init(
         _: *mut uv_loop_t,
         _: *mut uv_tty_t,
@@ -121,40 +76,12 @@ extern "C" {
         readable: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn uv_tty_set_mode(_: *mut uv_tty_t, mode: uv_tty_mode_t) -> ::core::ffi::c_int;
-    fn uv_tty_reset_mode() -> ::core::ffi::c_int;
     fn uv_tty_get_winsize(
         _: *mut uv_tty_t,
         width: *mut ::core::ffi::c_int,
         height: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn uv_pipe_init(
-        _: *mut uv_loop_t,
-        handle: *mut uv_pipe_t,
-        ipc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_open(_: *mut uv_pipe_t, file: uv_file) -> ::core::ffi::c_int;
-    fn uv_timer_init(_: *mut uv_loop_t, handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_timer_start(
-        handle: *mut uv_timer_t,
-        cb: uv_timer_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_chdir(dir: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn uv_sleep(msec: ::core::ffi::c_uint);
-    fn tcgetattr(__fd: ::core::ffi::c_int, __termios_p: *mut termios) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
     fn arena_memdupz(
         arena: *mut Arena,
         buf: *const ::core::ffi::c_char,
@@ -162,112 +89,10 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
         -> *mut ::core::ffi::c_char;
-    fn mh_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, new: *mut MHPutStatus) -> uint32_t;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    static shape_table: GlobalCell<[cursorentry_T; 18]>;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn loop_purge(loop_0: *mut Loop);
-    fn loop_size(loop_0: *mut Loop) -> size_t;
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn os_hrtime() -> uint64_t;
-    fn signal_watcher_init(
-        loop_0: *mut Loop,
-        watcher: *mut SignalWatcher,
-        data: *mut ::core::ffi::c_void,
-    );
-    fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: ::core::ffi::c_int);
-    fn signal_watcher_stop(watcher: *mut SignalWatcher);
-    fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb);
-    fn stream_set_blocking(fd: ::core::ffi::c_int, blocking: bool) -> ::core::ffi::c_int;
-    static t_colors: GlobalCell<::core::ffi::c_int>;
-    static stdin_isatty: GlobalCell<bool>;
-    static main_loop: SharedCell<Loop>;
-    fn schar_cache_clear_if_full() -> bool;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_get_ascii(sc: schar_T) -> ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn utf_char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ambiguous_width(p: *const ::core::ffi::c_char) -> bool;
-    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
-    fn os_isatty(fd: ::core::ffi::c_int) -> bool;
-    static nvim_testing: GlobalCell<bool>;
-    fn os_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
     fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut TerminfoEntry);
     fn tinput_destroy(input: *mut TermInput);
     fn tinput_start(input: *mut TermInput);
     fn tinput_stop(input: *mut TermInput);
-    fn ugrid_init(grid: *mut UGrid);
-    fn ugrid_resize(grid: *mut UGrid, width: ::core::ffi::c_int, height: ::core::ffi::c_int);
-    fn ugrid_clear(grid: *mut UGrid);
-    fn ugrid_clear_chunk(
-        grid: *mut UGrid,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        endcol: ::core::ffi::c_int,
-        attr: sattr_T,
-    );
-    fn ugrid_goto(grid: *mut UGrid, row: ::core::ffi::c_int, col: ::core::ffi::c_int);
-    fn ugrid_scroll(
-        grid: *mut UGrid,
-        top: ::core::ffi::c_int,
-        bot: ::core::ffi::c_int,
-        left: ::core::ffi::c_int,
-        right: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-    );
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
-    static ui_client_exit_status: GlobalCell<::core::ffi::c_int>;
-    fn ui_client_attach(
-        width: ::core::ffi::c_int,
-        height: ::core::ffi::c_int,
-        term: *mut ::core::ffi::c_char,
-        rgb: bool,
-    );
-    fn ui_client_detach();
-    fn ui_client_set_size(width: ::core::ffi::c_int, height: ::core::ffi::c_int);
-    fn terminfo_is_term_family(
-        term: *const ::core::ffi::c_char,
-        family: *const ::core::ffi::c_char,
-    ) -> bool;
-    fn terminfo_is_bsd_console(term: *const ::core::ffi::c_char) -> bool;
-    fn terminfo_from_builtin(
-        term: *const ::core::ffi::c_char,
-        termname: *mut *mut ::core::ffi::c_char,
-    ) -> *const TerminfoEntry;
-    fn terminfo_from_database(
-        ti: *mut TerminfoEntry,
-        termname: *mut ::core::ffi::c_char,
-        arena: *mut Arena,
-    ) -> bool;
-    fn terminfo_info_msg(
-        ti: *const TerminfoEntry,
-        termname: *const ::core::ffi::c_char,
-        from_db: bool,
-    ) -> String_0;
-    fn terminfo_fmt(
-        buf_start: *mut ::core::ffi::c_char,
-        buf_end: *mut ::core::ffi::c_char,
-        str: *const ::core::ffi::c_char,
-        params: *mut TPVAR,
-    ) -> size_t;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

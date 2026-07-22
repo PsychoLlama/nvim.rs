@@ -1,4 +1,30 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
+use crate::src::nvim::buffer::{bt_help, buflist_findnr, set_buflisted, wipe_buffer};
+use crate::src::nvim::charset::{buf_init_chartab, skipwhite};
+use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
+use crate::src::nvim::ex_cmds::do_ecmd;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::fileio::vim_fgets;
+
+use crate::src::nvim::lua::executor::nlua_exec;
+use crate::src::nvim::main::{
+    cmdmod, curbuf, curtab, curwin, e_fnametoolong, e_noident, firstwin, got_int, p_hf, p_hh,
+    p_hlg, p_rtp, p_sb, restart_edit, Columns, IObuff, KeyTyped, NameBuff,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup, xstrlcat, xstrlcpy};
+use crate::src::nvim::message::{emsg, emsg_multiline, semsg, smsg};
+use crate::src::nvim::option::set_option_direct;
+use crate::src::nvim::optionstr::check_buf_options;
+use crate::src::nvim::os::fs::{os_fopen, os_isdir};
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, fclose, fprintf, fputs, gettext, memcpy, putc, qsort, snprintf, strcasecmp,
+    strchr, strcmp, strcpy, strlen, strncmp,
+};
+use crate::src::nvim::path::{add_pathsep, gen_expand_wildcards, path_full_compare, FreeWild};
+use crate::src::nvim::runtime::do_in_path;
+use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::src::nvim::tag::{do_tag, find_tags};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
     CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem,
@@ -34,201 +60,11 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, xp_prefix_T, FILE, QUEUE, _IO_FILE,
 };
+use crate::src::nvim::window::{win_close, win_enter, win_setheight, win_split};
 extern "C" {
-    fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn putc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fputs(__s: *const ::core::ffi::c_char, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn bt_help(buf: *const buf_T) -> bool;
-    fn set_buflisted(on: ::core::ffi::c_int);
-    fn wipe_buffer(buf: *mut buf_T, aucmd: bool);
-    static p_hf: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_hh: GlobalCell<OptInt>;
-    static p_hlg: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_rtp: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sb: GlobalCell<::core::ffi::c_int>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn sort_strings(files: *mut *mut ::core::ffi::c_char, count: ::core::ffi::c_int);
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn buf_init_chartab(buf: *mut buf_T, global: bool) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ExpandOne(
-        xp: *mut expand_T,
-        str: *mut ::core::ffi::c_char,
-        orig: *mut ::core::ffi::c_char,
-        options: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn ExpandInit(xp: *mut expand_T);
-    static e_noident: [::core::ffi::c_char; 0];
-    static e_fnametoolong: [::core::ffi::c_char; 0];
-    fn do_ecmd(
-        fnum: ::core::ffi::c_int,
-        ffname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        newlnum: linenr_T,
-        flags: ::core::ffi::c_int,
-        oldwin: *mut win_T,
-    ) -> ::core::ffi::c_int;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static KeyTyped: GlobalCell<bool>;
-    static got_int: GlobalCell<bool>;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
-    fn nlua_exec(
-        str: String_0,
-        chunkname: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg_multiline(
-        s: *const ::core::ffi::c_char,
-        kind: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        multiline: bool,
-    ) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn set_option_direct(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-    );
-    fn check_buf_options(buf: *mut buf_T);
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
-    fn line_breakcheck();
-    fn path_full_compare(
-        s1: *mut ::core::ffi::c_char,
-        s2: *mut ::core::ffi::c_char,
-        checkname: bool,
-        expandenv: bool,
-    ) -> FileComparison;
-    fn add_pathsep(p: *mut ::core::ffi::c_char) -> bool;
-    fn gen_expand_wildcards(
-        num_pat: ::core::ffi::c_int,
-        pat: *mut *mut ::core::ffi::c_char,
-        num_file: *mut ::core::ffi::c_int,
-        file: *mut *mut *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn FreeWild(count: ::core::ffi::c_int, files: *mut *mut ::core::ffi::c_char);
-    fn do_in_path(
-        path: *const ::core::ffi::c_char,
-        prefix: *const ::core::ffi::c_char,
-        name: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        callback: DoInRuntimepathCB,
-        cookie: *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn do_tag(
-        tag: *mut ::core::ffi::c_char,
-        type_0: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-        forceit: ::core::ffi::c_int,
-        verbose: bool,
-    );
-    fn find_tags(
-        pat: *mut ::core::ffi::c_char,
-        num_matches: *mut ::core::ffi::c_int,
-        matchesp: *mut *mut *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mincount: ::core::ffi::c_int,
-        buf_ffname: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn win_enter(wp: *mut win_T, undo_sync: bool);
-    fn win_setheight(height: ::core::ffi::c_int);
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;

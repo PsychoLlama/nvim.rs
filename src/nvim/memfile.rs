@@ -1,4 +1,22 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::fileio::{read_eintr, write_eintr};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
+use crate::src::nvim::map::{
+    map_del_int64_t_int64_t, map_del_int64_t_ptr_t, map_put_ref_int64_t_int64_t,
+    map_put_ref_int64_t_ptr_t, map_ref_int64_t_int64_t, mh_get_int64_t,
+};
+use crate::src::nvim::memline::{ml_get_buf, ml_open_file};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::{emsg, iemsg, semsg};
+use crate::src::nvim::os::fs::{
+    os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_link, os_fsync, os_open, os_remove,
+    os_set_cloexec,
+};
+use crate::src::nvim::os::input::{os_breakcheck, os_char_avail};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, close, gettext, lseek, memset, strerror,
+};
+use crate::src::nvim::path::FullName_save;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -44,88 +62,6 @@ pub use crate::src::nvim::types::{
     uv_timespec_t, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strerror(__errnum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn lseek(__fd: ::core::ffi::c_int, __offset: __off_t, __whence: ::core::ffi::c_int) -> __off_t;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mh_get_int64_t(set: *mut Set_int64_t, key: int64_t) -> uint32_t;
-    fn map_del_int64_t_int64_t(
-        map: *mut Map_int64_t_int64_t,
-        key: int64_t,
-        key_alloc: *mut int64_t,
-    ) -> int64_t;
-    fn map_put_ref_int64_t_int64_t(
-        map: *mut Map_int64_t_int64_t,
-        key: int64_t,
-        key_alloc: *mut *mut int64_t,
-        new_item: *mut bool,
-    ) -> *mut int64_t;
-    fn map_ref_int64_t_int64_t(
-        map: *mut Map_int64_t_int64_t,
-        key: int64_t,
-        key_alloc: *mut *mut int64_t,
-    ) -> *mut int64_t;
-    fn map_del_int64_t_ptr_t(
-        map: *mut Map_int64_t_ptr_t,
-        key: int64_t,
-        key_alloc: *mut int64_t,
-    ) -> ptr_t;
-    fn map_put_ref_int64_t_ptr_t(
-        map: *mut Map_int64_t_ptr_t,
-        key: int64_t,
-        key_alloc: *mut *mut int64_t,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_swapclose: [::core::ffi::c_char; 0];
-    fn read_eintr(
-        fd: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_void,
-        bufsize: size_t,
-    ) -> ssize_t;
-    fn write_eintr(
-        fd: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_void,
-        bufsize: size_t,
-    ) -> ssize_t;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static got_int: GlobalCell<bool>;
-    static did_swapwrite_msg: GlobalCell<bool>;
-    static main_loop: SharedCell<Loop>;
-    fn ml_open_file(buf: *mut buf_T);
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn os_open(
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo_link(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_fd(file_descriptor: ::core::ffi::c_int, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_blocksize(file_info: *const FileInfo) -> uint64_t;
-    fn os_char_avail() -> bool;
-    fn os_breakcheck();
-    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

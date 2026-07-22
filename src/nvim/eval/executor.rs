@@ -1,3 +1,11 @@
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
+};
+use crate::src::nvim::eval_1::{grow_string_tv, num_divide, num_modulus};
+use crate::src::nvim::main::e_letwrong;
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::libc::{abort, memmove};
+use crate::src::nvim::strings::{concat_str, vim_strchr};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -7,34 +15,7 @@ pub use crate::src::nvim::types::{
     ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
 };
 extern "C" {
-    fn abort() -> !;
-    static e_letwrong: [::core::ffi::c_char; 0];
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
-    fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
-    fn grow_string_tv(tv1: *mut typval_T, s2: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T);
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string_buf(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
 }
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;

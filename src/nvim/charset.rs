@@ -1,4 +1,17 @@
+use crate::src::nvim::cursor::get_cursor_line_ptr;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{curbuf, dy_flags, p_isf, p_isi, p_isp};
+use crate::src::nvim::mbyte::{
+    mb_islower, mb_isupper, mb_ptr2char_adv, mb_tolower, utf8len_tab, utf_char2bytes,
+    utf_char2cells, utf_char2len, utf_class_tab, utf_printable, utf_ptr2cells, utf_ptr2char,
+    utf_ptr2len, utfc_ptr2len,
+};
+use crate::src::nvim::memory::{xmalloc, xrealloc, xstrchrnul};
+use crate::src::nvim::option::{get_fileformat, skip_to_option_part};
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, abort, memmove, memset, strlen, strtoimax,
+};
+use crate::src::nvim::path::path_has_wildcard;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -29,61 +42,8 @@ pub use crate::src::nvim::types::{
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn strtoimax(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> intmax_t;
-    fn abort() -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrchrnul(
-        str: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static dy_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_isf: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_isi: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_isp: GlobalCell<*mut ::core::ffi::c_char>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    fn utf_char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_ptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_printable(c: ::core::ffi::c_int) -> bool;
-    fn utf_class_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> ::core::ffi::c_int;
-    fn mb_islower(a: ::core::ffi::c_int) -> bool;
-    fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_isupper(a: ::core::ffi::c_int) -> bool;
-    static utf8len_tab: [uint8_t; 256];
-    fn get_fileformat(buf: *const buf_T) -> ::core::ffi::c_int;
-    fn skip_to_option_part(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_has_wildcard(p: *const ::core::ffi::c_char) -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
@@ -1039,7 +999,7 @@ pub unsafe extern "C" fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool {
     let mut c: ::core::ffi::c_int = *p as uint8_t as ::core::ffi::c_int;
-    if utf8len_tab[c as usize] as ::core::ffi::c_int > 1 as ::core::ffi::c_int {
+    if (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int > 1 as ::core::ffi::c_int {
         c = utf_ptr2char(p);
     }
     return vim_iswordc_buf(c, buf);

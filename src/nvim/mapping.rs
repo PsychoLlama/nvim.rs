@@ -1,4 +1,51 @@
+use crate::src::nvim::api::private::converter::object_to_vim_take_luaref;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_object, api_set_error, api_set_sctx, arena_dict,
+    arena_take_arraybuilder, cstr_as_string, find_buffer_by_handle, string_to_cstr,
+};
+use crate::src::nvim::charset::{skipwhite, transchar, vim_iswordp};
+use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_dict_arg, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
+    tv_dict_get_string, tv_get_bool, tv_get_number, tv_get_string, tv_get_string_buf,
+    tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_dict,
+};
+use crate::src::nvim::eval::userfunc::find_func;
+use crate::src::nvim::eval::vars::set_vim_var_char;
+use crate::src::nvim::eval_1::{eval_to_string, last_set_msg};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_session::put_eol;
+use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::src::nvim::getchar::{ins_typebuf, noremap_keys};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::{
+    get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
+};
+use crate::src::nvim::lua::executor::{
+    api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
+};
+use crate::src::nvim::main::{
+    curbuf, current_sctx, curwin, e_invarg, e_noabbr, e_nomap, expr_map_lock, got_int,
+    langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent, no_abbr, p_cpo, p_langmap,
+    p_verbose, secure, typebuf, State,
+};
+use crate::src::nvim::mbyte::{
+    mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+};
+use crate::src::nvim::memory::{
+    arena_mem_free, xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::message::{
+    emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
+    msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, semsg, semsg_multiline,
+    str2special_arena, str2special_save, swmsg,
+};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, memmove, memset, putc, snprintf,
+    strcasecmp, strchr, strcmp, strlen, strncmp, strpbrk, strstr,
+};
+use crate::src::nvim::runtime::exestack;
+use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, ArrayBuilder,
     AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
@@ -39,275 +86,14 @@ pub use crate::src::nvim::types::{
     QUEUE, _IO_FILE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fputc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn putc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fputs(__s: *const ::core::ffi::c_char, __stream: *mut FILE) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strpbrk(
-        __s: *const ::core::ffi::c_char,
-        __accept: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_mem_free(mem: ArenaMem);
-    fn object_to_vim_take_luaref(
-        obj: *mut Object,
-        tv: *mut typval_T,
-        take_luaref: bool,
-        err: *mut Error,
-    );
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array;
-    fn api_free_object(value: Object);
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_langmap: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn sort_strings(files: *mut *mut ::core::ffi::c_char, count: ::core::ffi::c_int);
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn transchar(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn cmdline_fuzzy_complete(fuzzystr: *const ::core::ffi::c_char) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_noabbr: [::core::ffi::c_char; 0];
-    static e_nomap: [::core::ffi::c_char; 0];
-    fn eval_to_string(
-        arg: *mut ::core::ffi::c_char,
-        join_list: bool,
-        use_simple_function: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn last_set_msg(script_ctx: sctx_T);
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn semsg_multiline(
-        kind: *const ::core::ffi::c_char,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn iemsg(s: *const ::core::ffi::c_char);
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_start();
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_outtrans_special(
-        strstart: *const ::core::ffi::c_char,
-        from: bool,
-        maxlen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn str2special_save(
-        str: *const ::core::ffi::c_char,
-        replace_spaces: bool,
-        replace_lt: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn str2special_arena(
-        str: *const ::core::ffi::c_char,
-        replace_spaces: bool,
-        replace_lt: bool,
-        arena: *mut Arena,
-    ) -> *mut ::core::ffi::c_char;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn message_filtered(msg_0: *const ::core::ffi::c_char) -> bool;
-    fn msg_clr_eos();
-    fn swmsg(hl: bool, fmt: *const ::core::ffi::c_char, ...);
-    fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
-    fn tv_dict_get_bool(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        def: ::core::ffi::c_int,
-    ) -> varnumber_T;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_bool(tv: *const typval_T) -> varnumber_T;
-    fn tv_check_for_dict_arg(args: *const typval_T, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn tv_get_string_buf_chk(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string_buf(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn find_func(name: *const ::core::ffi::c_char) -> *mut ufunc_T;
-    fn set_vim_var_char(c: ::core::ffi::c_int);
-    fn put_eol(fd: *mut FILE) -> ::core::ffi::c_int;
-    fn check_secure() -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn fuzzy_match_str(
-        str: *mut ::core::ffi::c_char,
-        pat: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn fuzzymatches_to_strmatches(
-        fuzmatch: *mut fuzmatch_str_T,
-        matches: *mut *mut *mut ::core::ffi::c_char,
-        count: ::core::ffi::c_int,
-        funcsort: bool,
-    );
-    fn noremap_keys() -> bool;
-    fn ins_typebuf(
-        str: *mut ::core::ffi::c_char,
-        noremap: ::core::ffi::c_int,
-        offset: ::core::ffi::c_int,
-        nottyped: bool,
-        silent: bool,
-    ) -> ::core::ffi::c_int;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static secure: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static no_abbr: GlobalCell<bool>;
-    static mapped_ctrl_c: GlobalCell<::core::ffi::c_int>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static typebuf: GlobalCell<typebuf_T>;
-    static expr_map_lock: GlobalCell<::core::ffi::c_int>;
-    static got_int: GlobalCell<bool>;
-    static langmap_mapchar: GlobalCell<[uint8_t; 256]>;
-    fn get_special_key_name(
-        c: ::core::ffi::c_int,
-        modifiers: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn replace_termcodes(
-        from: *const ::core::ffi::c_char,
-        from_len: size_t,
-        bufp: *mut *mut ::core::ffi::c_char,
-        sid_arg: scid_T,
-        flags: ::core::ffi::c_int,
-        did_simplify: *mut bool,
-        cpo_val: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_strsave_escape_ks(p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_unescape_ks(p: *mut ::core::ffi::c_char);
-    fn api_free_luaref(ref_0: LuaRef);
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn nlua_set_sctx(current: *mut sctx_T);
-    fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut ::core::ffi::c_char;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_prevptr(
-        line: *mut ::core::ffi::c_char,
-        p: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn mb_unescape(pp: *mut *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    static exestack: GlobalCell<garray_T>;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

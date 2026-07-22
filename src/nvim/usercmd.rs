@@ -1,4 +1,30 @@
+use crate::src::nvim::api::private::helpers::{arena_dict, arena_string, cstr_as_string};
+use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
+use crate::src::nvim::eval_1::last_set_msg;
+use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::replace_termcodes;
+use crate::src::nvim::lua::executor::{
+    api_free_luaref, api_new_luaref, nlua_do_ucmd, nlua_funcref_str, nlua_set_sctx,
+};
+use crate::src::nvim::main::{
+    cmdmod, curbuf, current_sctx, curtab, got_int, p_cpo, p_verbose, Columns, IObuff,
+};
+use crate::src::nvim::mapping::set_context_in_map_cmd;
+use crate::src::nvim::mbyte::{mb_copy_char, utfc_ptr2len};
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::menu::set_context_in_menu_cmd;
+use crate::src::nvim::message::{
+    emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
+    msg_puts, msg_puts_hl, msg_puts_title, semsg,
+};
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, memmove, snprintf, strcat, strchr, strcmp, strcpy, strlen, strncasecmp,
+    strncmp,
+};
+use crate::src::nvim::runtime::exestack;
+use crate::src::nvim::strings::{arena_printf, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
     Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
@@ -35,143 +61,11 @@ pub use crate::src::nvim::types::{
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
     QUEUE,
 };
+use crate::src::nvim::window::{prevwin_curwin, tabpage_index};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn arena_printf(arena: *mut Arena, fmt: *const ::core::ffi::c_char, ...) -> String_0;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn last_set_msg(script_ctx: sctx_T);
-    fn do_cmdline(
-        cmdline: *mut ::core::ffi::c_char,
-        fgetline: LineGetter,
-        cookie: *mut ::core::ffi::c_void,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static got_int: GlobalCell<bool>;
-    fn replace_termcodes(
-        from: *const ::core::ffi::c_char,
-        from_len: size_t,
-        bufp: *mut *mut ::core::ffi::c_char,
-        sid_arg: scid_T,
-        flags: ::core::ffi::c_int,
-        did_simplify: *mut bool,
-        cpo_val: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn nlua_set_sctx(current: *mut sctx_T);
-    fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -> ::core::ffi::c_int;
-    fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut ::core::ffi::c_char;
-    fn set_context_in_map_cmd(
-        xp: *mut expand_T,
-        cmd: *mut ::core::ffi::c_char,
-        arg: *mut ::core::ffi::c_char,
-        forceit: bool,
-        isabbrev: bool,
-        isunmap: bool,
-        cmdidx: cmdidx_T,
-    ) -> *mut ::core::ffi::c_char;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_copy_char(fp: *mut *const ::core::ffi::c_char, tp: *mut *mut ::core::ffi::c_char);
-    fn set_context_in_menu_cmd(
-        xp: *mut expand_T,
-        cmd: *const ::core::ffi::c_char,
-        arg: *mut ::core::ffi::c_char,
-        forceit: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
-    fn msg_putchar(c: ::core::ffi::c_int);
-    fn msg_outtrans(
-        str: *const ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-    ) -> ::core::ffi::c_int;
-    fn msg_outtrans_special(
-        strstart: *const ::core::ffi::c_char,
-        from: bool,
-        maxlen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn msg_puts_title(s: *const ::core::ffi::c_char);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn message_filtered(msg_0: *const ::core::ffi::c_char) -> bool;
-    static exestack: GlobalCell<garray_T>;
-    fn line_breakcheck();
-    fn prevwin_curwin() -> *mut win_T;
-    fn tabpage_index(ftp: *mut tabpage_T) -> ::core::ffi::c_int;
 }
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;

@@ -1,4 +1,25 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_set_error, arena_array, arena_dict, cstr_as_string, dict_get_value,
+    dict_set_var, find_buffer_by_handle, find_window_by_handle, normalize_index, try_enter,
+    try_leave,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::autocmd::is_aucmd_win;
+use crate::src::nvim::cursor::check_cursor_col;
+use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::eval::window::{
+    restore_win, switch_win, win_execute_after, win_execute_before,
+};
+use crate::src::nvim::ex_docmd::ex_win_close;
+
+use crate::src::nvim::lua::executor::nlua_call_ref;
+use crate::src::nvim::main::{
+    cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, curwin, e_autocmd_close, e_cmdwin,
+};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::plines::{win_get_fill, win_text_height};
+use crate::src::nvim::r#move::{update_topline, validate_cursor};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -32,106 +53,10 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, win_execute_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
-extern "C" {
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn dict_get_value(
-        dict: *mut dict_T,
-        key: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn dict_set_var(
-        dict: *mut dict_T,
-        key: String_0,
-        value: Object,
-        del: bool,
-        retval: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn normalize_index(
-        buf: *mut buf_T,
-        index: int64_t,
-        end_exclusive: bool,
-        oob: *mut bool,
-    ) -> int64_t;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_clear_error(value: *mut Error);
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn check_cursor_col(win: *mut win_T);
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_cmdwin: [::core::ffi::c_char; 0];
-    static e_autocmd_close: [::core::ffi::c_char; 0];
-    fn win_execute_before(args: *mut win_execute_T, wp: *mut win_T, tp: *mut tabpage_T) -> bool;
-    fn win_execute_after(args: *mut win_execute_T);
-    fn switch_win(
-        switchwin: *mut switchwin_T,
-        win: *mut win_T,
-        tp: *mut tabpage_T,
-        no_display: bool,
-    ) -> ::core::ffi::c_int;
-    fn restore_win(switchwin: *mut switchwin_T, no_display: bool);
-    fn ex_win_close(forceit: ::core::ffi::c_int, win: *mut win_T, tp: *mut tabpage_T);
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static cmdwin_buf: GlobalCell<*mut buf_T>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    static cmdwin_old_curwin: GlobalCell<*mut win_T>;
-    fn nlua_call_ref(
-        ref_0: LuaRef,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-        mode: LuaRetMode,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn update_topline(wp: *mut win_T);
-    fn validate_cursor(wp: *mut win_T);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn win_text_height(
-        wp: *mut win_T,
-        start_lnum: linenr_T,
-        start_vcol: int64_t,
-        end_lnum: *mut linenr_T,
-        end_vcol: *mut int64_t,
-        fill: *mut int64_t,
-        max: int64_t,
-    ) -> int64_t;
-    fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error);
-    fn can_close_in_cmdwin(win: *mut win_T, err: *mut Error) -> bool;
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn win_close_othertab(
-        win: *mut win_T,
-        free_buf: ::core::ffi::c_int,
-        tp: *mut tabpage_T,
-        force: bool,
-    ) -> bool;
-    fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
-    fn win_setheight_win(height: ::core::ffi::c_int, win: *mut win_T);
-    fn win_setwidth_win(width: ::core::ffi::c_int, wp: *mut win_T);
-    fn win_get_tabwin(id: handle_T, tabnr: *mut ::core::ffi::c_int, winnr: *mut ::core::ffi::c_int);
-}
+use crate::src::nvim::window::{
+    can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
+    win_set_buf, win_setheight_win, win_setwidth_win,
+};
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

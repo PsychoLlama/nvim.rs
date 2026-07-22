@@ -1,3 +1,7 @@
+use crate::src::nvim::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
+use crate::src::nvim::event::stream::{stream_close_handle, stream_init};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
     Loop, MultiQueue, Stream, WBuffer, __gid_t, __mode_t, __off_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, gid_t, int64_t, loop_0,
@@ -16,40 +20,6 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timespec_t, uv_uid_t, uv_write_cb, uv_write_s,
     uv_write_t, wbuffer, wbuffer_data_finalizer,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn uv_write(
-        req: *mut uv_write_t,
-        handle: *mut uv_stream_t,
-        bufs: *const uv_buf_t,
-        nbufs: ::core::ffi::c_uint,
-        cb: uv_write_cb,
-    ) -> ::core::ffi::c_int;
-    fn uv_fs_req_cleanup(req: *mut uv_fs_t);
-    fn uv_fs_write(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        bufs: *const uv_buf_t,
-        nbufs: ::core::ffi::c_uint,
-        offset: int64_t,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn stream_init(
-        loop_0: *mut Loop,
-        stream: *mut Stream,
-        fd: ::core::ffi::c_int,
-        uvstream: *mut uv_stream_t,
-    );
-    fn stream_close_handle(stream: *mut Stream);
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

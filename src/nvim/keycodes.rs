@@ -1,76 +1,20 @@
+use crate::src::nvim::charset::{transchar, vim_isprintc, vim_str2nr};
+use crate::src::nvim::eval::vars::get_var_value;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{current_sctx, e_invarg, e_usingsid};
+use crate::src::nvim::mbyte::{
+    utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
+};
+use crate::src::nvim::memory::{xmalloc, xrealloc};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, snprintf, strcpy, strlen, strncasecmp, strncmp,
+};
+use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc};
 pub use crate::src::nvim::types::{
     int32_t, int64_t, key_extra, linenr_T, scid_T, sctx_T, size_t, ssize_t, uint16_t, uint64_t,
     uint8_t, uintmax_t, uvarnumber_T, varnumber_T, String_0,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn vim_strnicmp_asc(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_var_value(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static current_sctx: GlobalCell<sctx_T>;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn transchar(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn vim_str2nr(
-        start: *const ::core::ffi::c_char,
-        prep: *mut ::core::ffi::c_int,
-        len: *mut ::core::ffi::c_int,
-        what: ::core::ffi::c_int,
-        nptr: *mut varnumber_T,
-        unptr: *mut uvarnumber_T,
-        maxlen: ::core::ffi::c_int,
-        strict: bool,
-        overflow: *mut bool,
-    );
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_usingsid: [::core::ffi::c_char; 0];
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;
 pub const STR2NR_NO_OCT: C2Rust_Unnamed = 13;

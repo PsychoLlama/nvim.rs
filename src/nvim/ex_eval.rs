@@ -1,4 +1,33 @@
+use crate::src::nvim::charset::skipwhite;
+use crate::src::nvim::debugger::dbg_check_skipped;
+use crate::src::nvim::eval::typval::{tv_clear, tv_free, tv_list_unref};
+use crate::src::nvim::eval::userfunc::{do_return, get_return_cmd};
+use crate::src::nvim::eval::vars::{set_vim_var_list, set_vim_var_string};
+use crate::src::nvim::eval_1::{
+    clear_evalarg, eval0, eval_for_line, eval_to_bool, eval_to_string_skip, fill_evalarg_from_eap,
+    free_for_info, next_for_item,
+};
+use crate::src::nvim::ex_docmd::{ends_excmd, find_nextcmd, handle_did_throw, modifier_len};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_endif,
+    did_throw, e_argreq, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_interr, e_invarg2,
+    e_invexpr2, e_outofmem, e_str_not_inside_function, e_trailing_arg, e_while,
+    empty_string_option, emsg_off, emsg_silent, force_abort, got_int, msg_list, msg_row,
+    msg_scroll, msg_silent, need_rethrow, no_wait_return, p_cpo, p_verbose, suppress_errthrow,
+    trylevel, IObuff,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
+use crate::src::nvim::message::{
+    emsg, internal_error, msg_puts, semsg, smsg, verbose_enter, verbose_leave,
+};
+use crate::src::nvim::option::p_vfile;
+use crate::src::nvim::os::libc::{
+    __assert_fail, gettext, snprintf, strcat, strcpy, strlen, strncmp,
+};
+use crate::src::nvim::regexp::skip_regexp_err;
+use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
+use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 pub use crate::src::nvim::types::{
     auto_event, blob_T, blobvar_S, cleanup_T, cleanup_stuff, cmd_addr_T, cmdidx_T, colnr_T,
     cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_2, dict_T, dictvar_S, eslist_T, eslist_elem,
@@ -15,158 +44,6 @@ pub use crate::src::nvim::types::{
     QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcat(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static empty_string_option: GlobalCell<[::core::ffi::c_char; 0]>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_verbose: GlobalCell<OptInt>;
-    static p_vfile: GlobalCell<*mut ::core::ffi::c_char>;
-    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
-    fn concat_str(
-        str1: *const ::core::ffi::c_char,
-        str2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf_safelen(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> size_t;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn dbg_check_skipped(eap: *mut exarg_T) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_argreq: [::core::ffi::c_char; 0];
-    static e_endif: [::core::ffi::c_char; 0];
-    static e_endtry: [::core::ffi::c_char; 0];
-    static e_endwhile: [::core::ffi::c_char; 0];
-    static e_endfor: [::core::ffi::c_char; 0];
-    static e_while: [::core::ffi::c_char; 0];
-    static e_for: [::core::ffi::c_char; 0];
-    static e_interr: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invexpr2: [::core::ffi::c_char; 0];
-    static e_outofmem: [::core::ffi::c_char; 0];
-    static e_trailing_arg: [::core::ffi::c_char; 0];
-    static e_str_not_inside_function: [::core::ffi::c_char; 0];
-    fn fill_evalarg_from_eap(evalarg: *mut evalarg_T, eap: *mut exarg_T, skip: bool);
-    fn eval_to_bool(
-        arg: *mut ::core::ffi::c_char,
-        error: *mut bool,
-        eap: *mut exarg_T,
-        skip: bool,
-        use_simple_function: bool,
-    ) -> bool;
-    fn eval_to_string_skip(
-        arg: *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        skip: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn eval_for_line(
-        arg: *const ::core::ffi::c_char,
-        errp: *mut bool,
-        eap: *mut exarg_T,
-        evalarg: *mut evalarg_T,
-    ) -> *mut ::core::ffi::c_void;
-    fn next_for_item(fi_void: *mut ::core::ffi::c_void, arg: *mut ::core::ffi::c_char) -> bool;
-    fn free_for_info(fi_void: *mut ::core::ffi::c_void);
-    fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T);
-    fn eval0(
-        arg: *mut ::core::ffi::c_char,
-        rettv: *mut typval_T,
-        eap: *mut exarg_T,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn internal_error(where_0: *const ::core::ffi::c_char);
-    fn msg_puts(s: *const ::core::ffi::c_char);
-    fn verbose_enter();
-    fn verbose_leave();
-    fn tv_list_unref(l: *mut list_T);
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_free(tv: *mut typval_T);
-    fn do_return(
-        eap: *mut exarg_T,
-        reanimate: bool,
-        is_cmd: bool,
-        rettv: *mut ::core::ffi::c_void,
-    ) -> bool;
-    fn get_return_cmd(rettv: *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T);
-    fn handle_did_throw();
-    fn modifier_len(cmd: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn find_nextcmd(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static emsg_off: GlobalCell<::core::ffi::c_int>;
-    static did_endif: GlobalCell<bool>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static debug_break_level: GlobalCell<::core::ffi::c_int>;
-    static current_exception: GlobalCell<*mut except_T>;
-    static did_throw: GlobalCell<bool>;
-    static need_rethrow: GlobalCell<bool>;
-    static trylevel: GlobalCell<::core::ffi::c_int>;
-    static force_abort: GlobalCell<bool>;
-    static msg_list: GlobalCell<*mut *mut msglist_T>;
-    static suppress_errthrow: GlobalCell<bool>;
-    static caught_stack: GlobalCell<*mut except_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static emsg_silent: GlobalCell<::core::ffi::c_int>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static got_int: GlobalCell<bool>;
-    static exestack: GlobalCell<garray_T>;
-    fn estack_sfile(which: estack_arg_T) -> *mut ::core::ffi::c_char;
-    fn stacktrace_create() -> *mut list_T;
-    fn do_finish(eap: *mut exarg_T, reanimate: bool);
-    fn skip_regexp_err(
-        startp: *mut ::core::ffi::c_char,
-        delim: ::core::ffi::c_int,
-        magic: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

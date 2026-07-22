@@ -1,3 +1,5 @@
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{__ctype_b_loc, exit, fprintf, stderr};
 pub use crate::src::nvim::types::{
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, chanode_t, chastore_t,
     find_func_t, mmbuffer_t, mmfile_t, s_chanode, s_chastore, s_mmbuffer, s_mmfile, s_xdchange,
@@ -5,57 +7,11 @@ pub use crate::src::nvim::types::{
     xdemitcb_t, xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t, xpparam_t,
     xrecord_t, FILE, _IO_FILE,
 };
-extern "C" {
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    static mut stderr: *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn exit(__status: ::core::ffi::c_int) -> !;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xdl_prepare_env(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xe: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-    fn xdl_free_env(xe: *mut xdfenv_t);
-    fn xdl_emit_diff(
-        xe: *mut xdfenv_t,
-        xscr: *mut xdchange_t,
-        ecb: *mut xdemitcb_t,
-        xecfg: *const xdemitconf_t,
-    ) -> ::core::ffi::c_int;
-    fn xdl_do_patience_diff(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        env: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-    fn xdl_do_histogram_diff(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        env: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-    fn xdl_get_hunk(xscr: *mut *mut xdchange_t, xecfg: *const xdemitconf_t) -> *mut xdchange_t;
-    fn xdl_bogosqrt(n: ::core::ffi::c_long) -> ::core::ffi::c_long;
-    fn xdl_blankline(
-        line: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_long,
-        flags: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-    fn xdl_recmatch(
-        l1: *const ::core::ffi::c_char,
-        s1: ::core::ffi::c_long,
-        l2: *const ::core::ffi::c_char,
-        s2: ::core::ffi::c_long,
-        flags: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-}
+use crate::src::xdiff::xemit::{xdl_emit_diff, xdl_get_hunk};
+use crate::src::xdiff::xhistogram::xdl_do_histogram_diff;
+use crate::src::xdiff::xpatience::xdl_do_patience_diff;
+use crate::src::xdiff::xprepare::{xdl_free_env, xdl_prepare_env};
+use crate::src::xdiff::xutils::{xdl_blankline, xdl_bogosqrt, xdl_recmatch};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;

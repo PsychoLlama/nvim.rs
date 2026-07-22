@@ -1,4 +1,40 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::api::private::dispatch::{
+    handle_nvim_get_mode, handle_nvim_paste, handle_nvim_ui_try_resize,
+};
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_dict, api_free_object, api_set_error, arena_string, copy_dict,
+    cstr_as_string,
+};
+use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
+use crate::src::nvim::channel::channel_close;
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::multiqueue::{
+    event_create_oneshot, multiqueue_empty, multiqueue_new_child, multiqueue_process_events,
+    multiqueue_put_event,
+};
+use crate::src::nvim::event::proc::exit_on_closed_chan;
+use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::rstream::rstream_start;
+use crate::src::nvim::event::wstream::{
+    wstream_new_buffer, wstream_release_wbuffer, wstream_write,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    ch_before_blocking_events, channels, main_loop, resize_events, ui_client_attached,
+    ui_client_channel_id, ui_client_error_exit,
+};
+use crate::src::nvim::map::mh_get_uint64_t;
+use crate::src::nvim::memory::{
+    alloc_block, arena_mem_free, free_block, strequal, xcalloc, xfree, xmalloc, xrealloc,
+};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::msgpack_rpc::packer::{
+    mpack_integer, mpack_object, mpack_object_array, mpack_str,
+};
+use crate::src::nvim::os::input::input_blocking;
+use crate::src::nvim::os::libc::{__assert_fail, abort, snprintf};
+use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader,
     CallbackType, Callback_data as C2Rust_Unnamed_0, ChannelCallFrame, ChannelPart,
@@ -37,110 +73,15 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, QUEUE,
 };
+use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn alloc_block() -> *mut ::core::ffi::c_void;
-    fn free_block(block: *mut ::core::ffi::c_void);
-    fn arena_mem_free(mem: ArenaMem);
-    fn handle_nvim_ui_try_resize(
-        channel_id: uint64_t,
-        args: Array,
-        arena: *mut Arena,
-        error: *mut Error,
-    ) -> Object;
-    fn handle_nvim_paste(
-        channel_id: uint64_t,
-        args: Array,
-        arena: *mut Arena,
-        error: *mut Error,
-    ) -> Object;
-    fn handle_nvim_get_mode(
-        channel_id: uint64_t,
-        args: Array,
-        arena: *mut Arena,
-        error: *mut Error,
-    ) -> Object;
-    fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_free_object(value: Object);
-    fn api_free_dict(value: Dict);
-    fn api_clear_error(value: *mut Error);
-    fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn remote_ui_disconnect(channel_id: uint64_t, err: *mut Error, send_error_exit: bool);
-    fn remote_ui_flush_pending_data(ui: *mut RemoteUI);
-    static channels: GlobalCell<Map_uint64_t_ptr_t>;
-    fn channel_close(
-        id: uint64_t,
-        part: ChannelPart,
-        error: *mut *const ::core::ffi::c_char,
-    ) -> bool;
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);
     fn channel_info_changed(chan: *mut Channel, new_chan: bool);
-    fn os_hrtime() -> uint64_t;
-    fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
-    fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
-    fn multiqueue_process_events(self_0: *mut MultiQueue);
-    fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn event_create_oneshot(ev: Event, num: ::core::ffi::c_int) -> Event;
-    fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
-    fn exit_on_closed_chan(status: ::core::ffi::c_int);
-    fn wstream_write(stream: *mut Stream, buffer: *mut WBuffer) -> ::core::ffi::c_int;
-    fn wstream_new_buffer(
-        data: *mut ::core::ffi::c_char,
-        size: size_t,
-        refcount: size_t,
-        cb: wbuffer_data_finalizer,
-    ) -> *mut WBuffer;
-    fn wstream_release_wbuffer(buffer: *mut WBuffer);
-    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
-    static main_loop: SharedCell<Loop>;
-    static ch_before_blocking_events: GlobalCell<*mut MultiQueue>;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
-    fn mpack_str(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_object(obj: *mut Object, packer: *mut PackerBuffer);
-    fn mpack_object_array(arr: Array, packer: *mut PackerBuffer);
     fn unpacker_init(p: *mut Unpacker);
     fn unpacker_teardown(p: *mut Unpacker);
     fn unpacker_advance(p: *mut Unpacker) -> bool;
-    fn input_blocking() -> bool;
-    static resize_events: GlobalCell<*mut MultiQueue>;
-    static ui_client_channel_id: GlobalCell<uint64_t>;
-    static ui_client_error_exit: GlobalCell<::core::ffi::c_int>;
-    static ui_client_attached: GlobalCell<bool>;
-    fn ui_client_event_raw_line(g: *mut GridLineEvent);
-    fn ui_client_attach_to_restarted_server();
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

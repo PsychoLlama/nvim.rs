@@ -1,4 +1,25 @@
+use crate::src::mpack::conv::{
+    mpack_pack_array, mpack_pack_bin, mpack_pack_boolean, mpack_pack_chunk, mpack_pack_ext,
+    mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,
+    mpack_unpack_number,
+};
+use crate::src::mpack::object::{mpack_parse, mpack_parser_copy, mpack_parser_init, mpack_unparse};
+use crate::src::mpack::rpc::{
+    mpack_rpc_notify, mpack_rpc_receive, mpack_rpc_reply, mpack_rpc_request,
+    mpack_rpc_session_copy, mpack_rpc_session_init,
+};
 use crate::src::nvim::global_cell::SharedCell;
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_buffinit, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
+    luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register, luaL_unref,
+    lua_call, lua_createtable, lua_getfield, lua_getmetatable, lua_gettable, lua_gettop,
+    lua_insert, lua_isnumber, lua_isstring, lua_isuserdata, lua_newuserdata, lua_next, lua_objlen,
+    lua_pushboolean, lua_pushcclosure, lua_pushfstring, lua_pushinteger, lua_pushlstring,
+    lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawgeti,
+    lua_remove, lua_replace, lua_setfield, lua_setmetatable, lua_settable, lua_settop,
+    lua_toboolean, lua_tolstring, lua_tonumber, lua_topointer, lua_type,
+};
+use crate::src::nvim::os::libc::{__assert_fail, free, malloc, memcpy, snprintf};
 pub use crate::src::nvim::types::{
     luaL_Buffer, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, mpack_data_t,
     mpack_node_s, mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_rpc_header_s,
@@ -8,153 +29,6 @@ pub use crate::src::nvim::types::{
     mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, ptrdiff_t,
     size_t,
 };
-extern "C" {
-    fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
-    fn free(__ptr: *mut ::core::ffi::c_void);
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_remove(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_insert(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_replace(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_isnumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_isstring(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_isuserdata(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_rawequal(
-        L: *mut lua_State,
-        idx1: ::core::ffi::c_int,
-        idx2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_tonumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Number;
-    fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
-    fn lua_topointer(L: *mut lua_State, idx: ::core::ffi::c_int) -> *const ::core::ffi::c_void;
-    fn lua_pushnil(L: *mut lua_State);
-    fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_pushfstring(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    fn lua_pushboolean(L: *mut lua_State, b: ::core::ffi::c_int);
-    fn lua_gettable(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_rawgeti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
-    fn lua_getmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_settable(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_call(L: *mut lua_State, nargs: ::core::ffi::c_int, nresults: ::core::ffi::c_int);
-    fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_checklstring(
-        L: *mut lua_State,
-        numArg: ::core::ffi::c_int,
-        l: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn luaL_checknumber(L: *mut lua_State, numArg: ::core::ffi::c_int) -> lua_Number;
-    fn luaL_newmetatable(
-        L: *mut lua_State,
-        tname: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_checkudata(
-        L: *mut lua_State,
-        ud: ::core::ffi::c_int,
-        tname: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_void;
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn luaL_ref(L: *mut lua_State, t: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn luaL_unref(L: *mut lua_State, t: ::core::ffi::c_int, ref_0: ::core::ffi::c_int);
-    fn luaL_buffinit(L: *mut lua_State, B: *mut luaL_Buffer);
-    fn luaL_prepbuffer(B: *mut luaL_Buffer) -> *mut ::core::ffi::c_char;
-    fn luaL_pushresult(B: *mut luaL_Buffer);
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn mpack_pack_nil() -> mpack_token_t;
-    fn mpack_pack_boolean(v: ::core::ffi::c_uint) -> mpack_token_t;
-    fn mpack_pack_number(v: ::core::ffi::c_double) -> mpack_token_t;
-    fn mpack_pack_chunk(p: *const ::core::ffi::c_char, l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_pack_str(l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_pack_bin(l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_pack_ext(type_0: ::core::ffi::c_int, l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_pack_array(l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_pack_map(l: mpack_uint32_t) -> mpack_token_t;
-    fn mpack_unpack_boolean(t: mpack_token_t) -> bool;
-    fn mpack_unpack_number(t: mpack_token_t) -> ::core::ffi::c_double;
-    fn mpack_parser_init(p: *mut mpack_parser_t, c: mpack_uint32_t);
-    fn mpack_parse(
-        parser: *mut mpack_parser_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        enter_cb: mpack_walk_cb,
-        exit_cb: mpack_walk_cb,
-    ) -> ::core::ffi::c_int;
-    fn mpack_unparse(
-        parser: *mut mpack_parser_t,
-        b: *mut *mut ::core::ffi::c_char,
-        bl: *mut size_t,
-        enter_cb: mpack_walk_cb,
-        exit_cb: mpack_walk_cb,
-    ) -> ::core::ffi::c_int;
-    fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t);
-    fn mpack_rpc_session_init(s: *mut mpack_rpc_session_t, c: mpack_uint32_t);
-    fn mpack_rpc_receive(
-        s: *mut mpack_rpc_session_t,
-        b: *mut *const ::core::ffi::c_char,
-        bl: *mut size_t,
-        m: *mut mpack_rpc_message_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_rpc_request(
-        s: *mut mpack_rpc_session_t,
-        b: *mut *mut ::core::ffi::c_char,
-        bl: *mut size_t,
-        d: mpack_data_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_rpc_reply(
-        s: *mut mpack_rpc_session_t,
-        b: *mut *mut ::core::ffi::c_char,
-        bl: *mut size_t,
-        i: mpack_uint32_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_rpc_notify(
-        s: *mut mpack_rpc_session_t,
-        b: *mut *mut ::core::ffi::c_char,
-        bl: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn mpack_rpc_session_copy(d: *mut mpack_rpc_session_t, s: *mut mpack_rpc_session_t);
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Packer {

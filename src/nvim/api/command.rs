@@ -1,4 +1,30 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::dispatch::{
+    KeyDict_cmd_magic_get_field, KeyDict_cmd_mods_filter_get_field, KeyDict_cmd_mods_get_field,
+};
+use crate::src::nvim::api::private::helpers::{
+    api_dict_to_keydict, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict,
+    arena_string, cstr_as_string, cstrn_as_string, find_buffer_by_handle, string_to_cstr,
+    try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
+use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
+use crate::src::nvim::ex_docmd::{
+    excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range, get_command_name,
+    getargcmd, getargopt, invalid_range, is_cmd_ni, is_map_cmd, parse_cmdline, replace_makeprg,
+    set_cmd_addr_type, set_cmd_count, set_cmd_dflall_range, undo_cmdmod,
+};
+use crate::src::nvim::ex_eval::aborting;
+
+use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
+use crate::src::nvim::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
+use crate::src::nvim::mbyte::mb_islower;
+use crate::src::nvim::memory::{xcalloc, xfree, xrealloc};
+use crate::src::nvim::os::libc::{
+    __assert_fail, memcpy, memmove, memset, snprintf, strcmp, strlen, strncmp, strtol,
+};
+use crate::src::nvim::register::valid_yank_reg;
+use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem,
@@ -34,204 +60,23 @@ pub use crate::src::nvim::types::{
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
     QUEUE,
 };
+use crate::src::nvim::usercmd::{
+    commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
+    uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
+};
 extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strtol(
-        __nptr: *const ::core::ffi::c_char,
-        __endptr: *mut *mut ::core::ffi::c_char,
-        __base: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_long;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_memdupz(
         arena: *mut Arena,
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn KeyDict_cmd_magic_get_field(str: *const ::core::ffi::c_char, len: size_t)
-        -> *mut KeySetLink;
-    fn KeyDict_cmd_mods_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
-    fn KeyDict_cmd_mods_filter_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn api_err_required(err: *mut Error, name: *const ::core::ffi::c_char);
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn string_to_cstr(str: String_0) -> *mut ::core::ffi::c_char;
-    fn cstrn_as_string(str: *mut ::core::ffi::c_char, maxsize: size_t) -> String_0;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_dict_to_keydict(
-        retval: *mut ::core::ffi::c_void,
-        hashy: FieldHashfn,
-        dict: Dict,
-        err: *mut Error,
-    ) -> bool;
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn apply_autocmds(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-    ) -> bool;
-    fn has_event(event: event_T) -> bool;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut ::core::ffi::c_char);
-    fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T;
-    fn set_cmd_dflall_range(eap: *mut exarg_T);
-    fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool);
-    fn is_cmd_ni(cmdidx: cmdidx_T) -> bool;
-    fn parse_cmdline(
-        cmdline: *mut *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        cmdinfo: *mut CmdParseInfo,
-        errormsg: *mut *const ::core::ffi::c_char,
-    ) -> bool;
-    fn execute_cmd(
-        eap: *mut exarg_T,
-        cmdinfo: *mut CmdParseInfo,
-        preview: bool,
-    ) -> ::core::ffi::c_int;
-    fn undo_cmdmod(cmod: *mut cmdmod_T);
-    fn find_ex_command(
-        eap: *mut exarg_T,
-        full: *mut ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn excmd_get_argt(idx: cmdidx_T) -> uint32_t;
-    fn invalid_range(eap: *mut exarg_T) -> *mut ::core::ffi::c_char;
-    fn replace_makeprg(
-        eap: *mut exarg_T,
-        arg: *mut ::core::ffi::c_char,
-        cmdlinep: *mut *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn getargcmd(argp: *mut *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getargopt(eap: *mut exarg_T) -> ::core::ffi::c_int;
-    fn get_command_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn is_map_cmd(cmdidx: cmdidx_T) -> bool;
-    fn aborting() -> bool;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
-    static ucmds: GlobalCell<garray_T>;
-    fn get_user_command_name(
-        idx: ::core::ffi::c_int,
-        cmdidx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn parse_addr_type_arg(
-        value: *mut ::core::ffi::c_char,
-        vallen: ::core::ffi::c_int,
-        addr_type_arg: *mut cmd_addr_T,
-    ) -> ::core::ffi::c_int;
-    fn parse_compl_arg(
-        value: *const ::core::ffi::c_char,
-        vallen: ::core::ffi::c_int,
-        complp: *mut ::core::ffi::c_int,
-        argt: *mut uint32_t,
-        compl_arg: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn uc_validate_name(name: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn uc_add_command(
-        name: *mut ::core::ffi::c_char,
-        name_len: size_t,
-        rep: *const ::core::ffi::c_char,
-        argt: uint32_t,
-        def: int64_t,
-        flags: ::core::ffi::c_int,
-        context: ::core::ffi::c_int,
-        compl_arg: *mut ::core::ffi::c_char,
-        compl_luaref: LuaRef,
-        preview_luaref: LuaRef,
-        addr_type: cmd_addr_T,
-        luaref: LuaRef,
-        force: bool,
-    ) -> ::core::ffi::c_int;
-    fn free_ucmd(cmd: *mut ucmd_T);
-    fn uc_split_args_iter(
-        arg: *const ::core::ffi::c_char,
-        arglen: size_t,
-        end: *mut size_t,
-        buf: *mut ::core::ffi::c_char,
-        len: *mut size_t,
-    ) -> bool;
-    fn uc_nargs_upper_bound(arg: *const ::core::ffi::c_char, arglen: size_t) -> size_t;
-    fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static redir_off: GlobalCell<bool>;
-    static capture_ga: GlobalCell<*mut garray_T>;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn mb_islower(a: ::core::ffi::c_int) -> bool;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
-    fn valid_yank_reg(regname: ::core::ffi::c_int, writing: bool) -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

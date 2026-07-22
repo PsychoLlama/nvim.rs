@@ -1,3 +1,6 @@
+use crate::src::nvim::mbyte::string_convert;
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{
     iconv_t, size_t, vimconv_T, ParserHighlight, ParserHighlightChunk, ParserInputReader,
     ParserInputReader_lines as C2Rust_Unnamed_4, ParserLine, ParserLineGetter, ParserPosition,
@@ -6,27 +9,6 @@ pub use crate::src::nvim::types::{
     ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_2,
     ParserStateItem_type_0 as C2Rust_Unnamed_3, ParserState_stack as C2Rust_Unnamed_5,
 };
-extern "C" {
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn string_convert(
-        vcp: *const vimconv_T,
-        ptr: *mut ::core::ffi::c_char,
-        lenp: *mut size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const CONV_ICONV: C2Rust_Unnamed = 5;
 pub const CONV_TO_LATIN9: C2Rust_Unnamed = 4;

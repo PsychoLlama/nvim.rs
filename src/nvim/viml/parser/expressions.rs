@@ -1,4 +1,11 @@
+use crate::src::nvim::charset::{hex2nr, vim_str2nr};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::trans_special;
+use crate::src::nvim::mbyte::{mb_copy_char, utf_char2bytes, utf_char2len, utfc_ptr2len_len};
+use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xrealloc};
+use crate::src::nvim::os::libc::{
+    __assert_fail, abort, gettext, memchr, memcmp, memcpy, memmove, snprintf, strchr,
+};
 pub use crate::src::nvim::types::{
     expr_ast_node, expr_ast_node_data as C2Rust_Unnamed_21,
     expr_ast_node_data_ass as C2Rust_Unnamed_22, expr_ast_node_data_cmp as C2Rust_Unnamed_28,
@@ -17,77 +24,7 @@ pub use crate::src::nvim::types::{
     ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
     ParserStateItem_type_0 as C2Rust_Unnamed_4, ParserState_stack as C2Rust_Unnamed_6,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn vim_str2nr(
-        start: *const ::core::ffi::c_char,
-        prep: *mut ::core::ffi::c_int,
-        len: *mut ::core::ffi::c_int,
-        what: ::core::ffi::c_int,
-        nptr: *mut varnumber_T,
-        unptr: *mut uvarnumber_T,
-        maxlen: ::core::ffi::c_int,
-        strict: bool,
-        overflow: *mut bool,
-    );
-    fn hex2nr(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn trans_special(
-        srcp: *mut *const ::core::ffi::c_char,
-        src_len: size_t,
-        dst: *mut ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        escape_ks: bool,
-        did_simplify: *mut bool,
-    ) -> ::core::ffi::c_uint;
-    fn utfc_ptr2len_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_copy_char(fp: *mut *const ::core::ffi::c_char, tp: *mut *mut ::core::ffi::c_char);
-    fn viml_parser_get_remaining_line(pstate: *mut ParserState, ret_pline: *mut ParserLine)
-        -> bool;
-}
+use crate::src::nvim::viml::parser::parser::viml_parser_get_remaining_line;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;
 pub const STR2NR_NO_OCT: C2Rust_Unnamed = 13;

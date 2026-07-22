@@ -1,4 +1,6 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::os::libc::{__assert_fail, abort, fprintf, sprintf, stderr, strlen, write};
 pub use crate::src::nvim::types::{
     TermKey, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType,
@@ -7,34 +9,7 @@ pub use crate::src::nvim::types::{
     __uid_t, cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios, FILE, _IO_FILE,
 };
 extern "C" {
-    static mut stderr: *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn sprintf(
-        __s: *mut ::core::ffi::c_char,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn fstat(__fd: ::core::ffi::c_int, __buf: *mut stat) -> ::core::ffi::c_int;
-    fn write(__fd: ::core::ffi::c_int, __buf: *const ::core::ffi::c_void, __n: size_t) -> ssize_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
 }
 pub type __dev_t = ::core::ffi::c_ulong;
 pub type __ino_t = ::core::ffi::c_ulong;

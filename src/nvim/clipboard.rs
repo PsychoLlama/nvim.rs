@@ -23,29 +23,15 @@ pub use crate::src::nvim::types::{
     VarLockStatus, VarType, QUEUE,
 };
 
-extern "C" {
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn eval_call_provider(
-        provider: *mut ::core::ffi::c_char,
-        method: *mut ::core::ffi::c_char,
-        arguments: *mut list_T,
-        discard: bool,
-    ) -> typval_T;
-    fn eval_has_provider(feat: *const ::core::ffi::c_char, throw_if_fast: bool) -> bool;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn redirecting() -> ::core::ffi::c_int;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
-    fn get_y_register(reg: ::core::ffi::c_int) -> *mut yankreg_T;
-    fn get_y_previous() -> *mut yankreg_T;
-    fn update_yankreg_width(reg: *mut yankreg_T);
-    fn free_register(reg: *mut yankreg_T);
-}
+use crate::src::nvim::api::private::helpers::cstr_to_string;
+use crate::src::nvim::eval::typval::{tv_list_alloc, tv_list_append_list, tv_list_append_string};
+use crate::src::nvim::eval_1::{eval_call_provider, eval_has_provider};
+use crate::src::nvim::memory::{xcalloc, xfree};
+use crate::src::nvim::message::{emsg, msg, redirecting};
+use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::register::{
+    free_register, get_y_previous, get_y_register, update_yankreg_width,
+};
 pub const VAR_LIST: VarType = 4;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;

@@ -1,4 +1,44 @@
+use crate::src::nvim::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
+use crate::src::nvim::buffer::{bt_nofilename, buf_set_file_id, bufref_valid, set_bufref};
+use crate::src::nvim::change::unchanged;
+use crate::src::nvim::drawscreen::status_redraw_all;
+use crate::src::nvim::eval::vars::eval_charconvert;
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_eval::{aborting, should_abort};
+use crate::src::nvim::fileio::{
+    add_quoted_fname, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
+    msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
+    vim_tempname, write_eintr,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::input::ask_yesno;
+use crate::src::nvim::main::{
+    cmdmod, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
+    msg_scroll, msg_silent, need_maketitle, no_wait_return, p_bdir, p_bex, p_bk, p_bsk, p_ccv,
+    p_cpo, p_fs, p_pm, p_wb, IObuff,
+};
+use crate::src::nvim::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
+use crate::src::nvim::memline::{
+    get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp,
+};
+use crate::src::nvim::memory::{verbose_try_malloc, xfree, xmalloc, xmemcpyz, xstrlcat};
+use crate::src::nvim::message::{emsg, msg, msg_progress, msg_puts_hl, semsg, set_keep_msg};
+use crate::src::nvim::option::{copy_option_part, get_bkc_flags, get_fileformat_force, shortmess};
+use crate::src::nvim::os::fs::{
+    os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
+    os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
+    os_fsync, os_get_acl, os_getperm, os_isdir, os_mkdir_recurse, os_nodetype, os_open,
+    os_path_exists, os_remove, os_set_acl, os_setperm,
+};
+use crate::src::nvim::os::input::os_breakcheck;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, memmove,
+    snprintf, strlen,
+};
+use crate::src::nvim::path::{after_pathsep, path_fnamecmp, path_tail};
+use crate::src::nvim::sha256::{sha256_finish, sha256_start, sha256_update};
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -32,267 +72,8 @@ pub use crate::src::nvim::types::{
     uv_uid_t, varnumber_T, vim_acl_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn iconv_close(__cd: iconv_t) -> ::core::ffi::c_int;
-    fn iconv(
-        __cd: iconv_t,
-        __inbuf: *mut *mut ::core::ffi::c_char,
-        __inbytesleft: *mut size_t,
-        __outbuf: *mut *mut ::core::ffi::c_char,
-        __outbytesleft: *mut size_t,
-    ) -> size_t;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn getuid() -> __uid_t;
-    fn getgid() -> __gid_t;
-    fn verbose_try_malloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemcpyz(
-        dst: *mut ::core::ffi::c_void,
-        src: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xstrlcat(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn apply_autocmds_exarg(
-        event: event_T,
-        fname: *mut ::core::ffi::c_char,
-        fname_io: *mut ::core::ffi::c_char,
-        force: bool,
-        buf: *mut buf_T,
-        eap: *mut exarg_T,
-    ) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buf_set_file_id(buf: *mut buf_T);
-    fn bt_nofilename(buf: *const buf_T) -> bool;
-    fn unchanged(buf: *mut buf_T, ff: bool, always_inc_changedtick: bool);
-    fn status_redraw_all();
-    static e_interr: [::core::ffi::c_char; 0];
-    static e_fsync: [::core::ffi::c_char; 0];
-    static e_longname: [::core::ffi::c_char; 0];
-    static e_empty_buffer: [::core::ffi::c_char; 0];
-    fn eval_charconvert(
-        enc_from: *const ::core::ffi::c_char,
-        enc_to: *const ::core::ffi::c_char,
-        fname_from: *const ::core::ffi::c_char,
-        fname_to: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn aborting() -> bool;
-    fn should_abort(retcode: ::core::ffi::c_int) -> bool;
-    fn check_secure() -> bool;
-    fn filemess(buf: *mut buf_T, name: *mut ::core::ffi::c_char, s: *mut ::core::ffi::c_char);
-    fn set_rw_fname(
-        fname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn add_quoted_fname(
-        ret_buf: *mut ::core::ffi::c_char,
-        buf_len: size_t,
-        buf: *const buf_T,
-        fname: *const ::core::ffi::c_char,
-    );
-    fn msg_add_fileformat(eol_type: ::core::ffi::c_int) -> bool;
-    fn msg_add_lines(insert_space: ::core::ffi::c_int, lnum: linenr_T, nchars: off_T);
-    fn time_differs(file_info: *const FileInfo, mtime: int64_t, mtime_ns: int64_t) -> bool;
-    fn need_conversion(fenc: *const ::core::ffi::c_char) -> bool;
-    fn get_fio_flags(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn modname(
-        fname: *const ::core::ffi::c_char,
-        ext: *const ::core::ffi::c_char,
-        prepend_dot: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_rename(
-        from: *const ::core::ffi::c_char,
-        to: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo);
-    fn vim_tempname() -> *mut ::core::ffi::c_char;
-    fn match_file_list(
-        list: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        ffname: *mut ::core::ffi::c_char,
-    ) -> bool;
-    fn write_eintr(
-        fd: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_void,
-        bufsize: size_t,
-    ) -> ssize_t;
-    static msg_scroll: GlobalCell<::core::ffi::c_int>;
-    static no_wait_return: GlobalCell<::core::ffi::c_int>;
-    static need_maketitle: GlobalCell<bool>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static exiting: GlobalCell<bool>;
-    static ex_no_reprint: GlobalCell<bool>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    static msg_silent: GlobalCell<::core::ffi::c_int>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    static got_int: GlobalCell<bool>;
-    fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2len_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn enc_canonize(enc: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn my_iconv_open(
-        to: *mut ::core::ffi::c_char,
-        from: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_void;
-    fn ml_timestamp(buf: *mut buf_T);
-    fn make_percent_swname(
-        dir: *mut ::core::ffi::c_char,
-        dir_end: *mut ::core::ffi::c_char,
-        name: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool);
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn get_file_in_dir(
-        fname: *mut ::core::ffi::c_char,
-        dname: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn msg_progress(
-        s: *mut ::core::ffi::c_char,
-        id: *mut ::core::ffi::c_char,
-        status: *mut ::core::ffi::c_char,
-        hl_id: ::core::ffi::c_int,
-        hist: bool,
-        trunc: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn set_keep_msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int);
-    fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
-    fn shortmess(x: ::core::ffi::c_int) -> bool;
-    fn get_bkc_flags(buf: *mut buf_T) -> ::core::ffi::c_uint;
-    fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> ::core::ffi::c_int;
-    fn copy_option_part(
-        option: *mut *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        maxlen: size_t,
-        sep_chars: *mut ::core::ffi::c_char,
-    ) -> size_t;
-    static p_bk: GlobalCell<::core::ffi::c_int>;
-    static p_bdir: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_bex: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_bsk: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_ccv: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_fs: GlobalCell<::core::ffi::c_int>;
-    static p_pm: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_wb: GlobalCell<::core::ffi::c_int>;
-    fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_nodetype(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_open(
-        path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-        mode: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_close(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_copy(
-        path: *const ::core::ffi::c_char,
-        new_path: *const ::core::ffi::c_char,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_getperm(name: *const ::core::ffi::c_char) -> int32_t;
-    fn os_setperm(name: *const ::core::ffi::c_char, perm: ::core::ffi::c_int)
-        -> ::core::ffi::c_int;
-    fn os_copy_xattr(from_file: *const ::core::ffi::c_char, to_file: *const ::core::ffi::c_char);
-    fn os_get_acl(fname: *const ::core::ffi::c_char) -> vim_acl_T;
-    fn os_set_acl(fname: *const ::core::ffi::c_char, aclent: vim_acl_T);
-    fn os_free_acl(aclent: vim_acl_T);
-    fn os_chown(
-        path: *const ::core::ffi::c_char,
-        owner: uv_uid_t,
-        group: uv_gid_t,
-    ) -> ::core::ffi::c_int;
-    fn os_fchown(fd: ::core::ffi::c_int, owner: uv_uid_t, group: uv_gid_t) -> ::core::ffi::c_int;
-    fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
-    fn os_file_settime(
-        path: *const ::core::ffi::c_char,
-        atime: ::core::ffi::c_double,
-        mtime: ::core::ffi::c_double,
-    ) -> ::core::ffi::c_int;
-    fn os_file_is_writable(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_mkdir_recurse(
-        dir: *const ::core::ffi::c_char,
-        mode: int32_t,
-        failed_dir: *mut *mut ::core::ffi::c_char,
-        created: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_link(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
-    fn os_fileinfo_id_equal(file_info_1: *const FileInfo, file_info_2: *const FileInfo) -> bool;
-    fn os_fileinfo_hardlinks(file_info: *const FileInfo) -> uint64_t;
-    fn os_breakcheck();
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_fnamecmp(
-        fname1: *const ::core::ffi::c_char,
-        fname2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn after_pathsep(
-        b: *const ::core::ffi::c_char,
-        p: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn sha256_start(ctx: *mut context_sha256_T);
-    fn sha256_update(ctx: *mut context_sha256_T, input: *const uint8_t, length: size_t);
-    fn sha256_finish(ctx: *mut context_sha256_T, digest: *mut uint8_t);
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf_add(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn ui_flush();
-    fn u_write_undo(
-        name: *const ::core::ffi::c_char,
-        forceit: bool,
-        buf: *mut buf_T,
-        hash: *mut uint8_t,
-    );
-    fn u_unchanged(buf: *mut buf_T);
-    fn u_update_save_nr(buf: *mut buf_T);
-    fn curbufIsChanged() -> bool;
-}
+use crate::src::nvim::ui::ui_flush;
+use crate::src::nvim::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
 pub const UV_ENOEXEC: C2Rust_Unnamed = -8;

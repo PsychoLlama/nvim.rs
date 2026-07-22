@@ -1,4 +1,15 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{schar_from_buf, schar_from_char};
+use crate::src::nvim::highlight::hl_blend_attrs;
+use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{
+    curtab, curwin, default_grid, firstwin, hl_attr_active, msg_grid, p_wd, rdb_flags, Columns,
+    Rows,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
+use crate::src::nvim::os::time::os_sleep;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, Boolean, BufUpdateCallbacks, Callback,
     CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
@@ -29,77 +40,10 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn llabs(__x: ::core::ffi::c_longlong) -> ::core::ffi::c_longlong;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static default_grid: GlobalCell<ScreenGrid>;
-    fn schar_from_buf(buf: *const ::core::ffi::c_char, len: size_t) -> schar_T;
-    fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    static rdb_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_wd: GlobalCell<OptInt>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn hl_blend_attrs(
-        back_attr: ::core::ffi::c_int,
-        front_attr: ::core::ffi::c_int,
-        through: *mut bool,
-    ) -> ::core::ffi::c_int;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    static msg_grid: GlobalCell<ScreenGrid>;
-    fn os_sleep(ms: uint64_t);
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_call_flush();
-    fn ui_composed_call_grid_resize(grid: Integer, width: Integer, height: Integer);
-    fn ui_composed_call_grid_cursor_goto(grid: Integer, row: Integer, col: Integer);
-    fn ui_composed_call_grid_scroll(
-        grid: Integer,
-        top: Integer,
-        bot: Integer,
-        left: Integer,
-        right: Integer,
-        rows: Integer,
-        cols: Integer,
-    );
-    fn ui_composed_call_raw_line(
-        grid: Integer,
-        row: Integer,
-        startcol: Integer,
-        endcol: Integer,
-        clearcol: Integer,
-        clearattr: Integer,
-        flags: LineFlags,
-        chunk: *const schar_T,
-        attrs: *const sattr_T,
-    );
-}
+use crate::src::nvim::ui::{
+    ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
+    ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
+};
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

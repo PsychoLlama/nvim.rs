@@ -1,4 +1,29 @@
+use crate::src::nvim::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
+use crate::src::nvim::cursor::get_cursor_pos_ptr;
+use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_string_arg, tv_get_string, tv_get_string_buf, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_list, tv_list_append_number,
+};
+use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::schar_from_buf;
+use crate::src::nvim::main::{
+    cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc, IObuff,
+};
+use crate::src::nvim::mark::mark_mb_adjustpos;
+use crate::src::nvim::memline::ml_get_buf;
+use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{emsg, msg, semsg};
+use crate::src::nvim::optionstr::check_chars_options;
+use crate::src::nvim::os::env::os_getenv_noalloc;
+use crate::src::nvim::os::libc::{
+    __assert_fail, __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open,
+    memcmp, memcpy, memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen,
+    strncasecmp, strncmp, tolower, toupper,
+};
+use crate::src::nvim::r#move::changed_window_setting_all;
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem, CharBoundsOff, CharInfo, DecorExt,
@@ -32,80 +57,6 @@ pub use crate::src::nvim::types::{
 };
 use ::c2rust_bitfields;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn toupper(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn iconv_close(__cd: iconv_t) -> ::core::ffi::c_int;
-    fn iconv_open(
-        __tocode: *const ::core::ffi::c_char,
-        __fromcode: *const ::core::ffi::c_char,
-    ) -> iconv_t;
-    fn iconv(
-        __cd: iconv_t,
-        __inbuf: *mut *mut ::core::ffi::c_char,
-        __inbytesleft: *mut size_t,
-        __outbuf: *mut *mut ::core::ffi::c_char,
-        __outbytesleft: *mut size_t,
-    ) -> size_t;
-    fn setlocale(
-        __category: ::core::ffi::c_int,
-        __locale: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strcpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strncasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
     fn utf8proc_get_property(codepoint: utf8proc_int32_t) -> *const utf8proc_property_t;
     fn utf8proc_decompose_char(
         codepoint: utf8proc_int32_t,
@@ -127,52 +78,6 @@ extern "C" {
     fn utf8proc_toupper(c: utf8proc_int32_t) -> utf8proc_int32_t;
     fn towlower(__wc: wint_t) -> wint_t;
     fn towupper(__wc: wint_t) -> wint_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn char2cells(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_iswordc_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> bool;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn redraw_all_later(type_0: ::core::ffi::c_int);
-    static p_ambw: GlobalCell<*mut ::core::ffi::c_char>;
-    static cmp_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_enc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_emoji: GlobalCell<::core::ffi::c_int>;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_listreq: [::core::ffi::c_char; 0];
-    fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_check_for_string_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string_buf(
-        tv: *const typval_T,
-        buf: *mut ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
-    fn beep_flush();
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static fenc_default: GlobalCell<*mut ::core::ffi::c_char>;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-    fn schar_from_buf(buf: *const ::core::ffi::c_char, len: size_t) -> schar_T;
-    fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn changed_window_setting_all();
-    fn check_chars_options() -> *const ::core::ffi::c_char;
-    fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn nl_langinfo(__item: nl_item) -> *mut ::core::ffi::c_char;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;

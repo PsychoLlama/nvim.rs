@@ -1,20 +1,6 @@
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{__assert_fail, memchr, pow};
 pub use crate::src::nvim::types::{int32_t, linenr_T, mmfile_t, s_mmfile, size_t};
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn pow(__x: ::core::ffi::c_double, __y: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-}
 pub type diffcmppath_T = diffcmppath_S;
 #[derive(Copy, Clone)]
 #[repr(C)]

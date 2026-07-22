@@ -1,4 +1,23 @@
+use crate::src::nvim::charset::{ptr2cells, vim_isprintc, vim_strsize};
+use crate::src::nvim::decoration::{decor_conceal_line, decor_virt_lines};
+use crate::src::nvim::diff::{diff_check_fill, diffopt_filler};
+use crate::src::nvim::fold::{hasFolding, hasFoldingWin, lineFolded};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent::{get_breakindent_win, tabstop_padding};
+use crate::src::nvim::main::{
+    breakat_flags, curwin, namespace_localscope, p_sel, State, VIsual, VIsual_active,
+};
+use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::marktree::{
+    marktree_itr_current, marktree_itr_get_filter, marktree_itr_next_filter,
+};
+use crate::src::nvim::mbyte::{
+    utf8len_tab, utf_ptr2CharInfo_impl, utf_ptr2char, utfc_next_impl, utfc_ptr2len,
+};
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::option::get_showbreak_value;
+use crate::src::nvim::r#move::{win_col_off, win_col_off2};
+use crate::src::nvim::state::virtual_active;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg,
@@ -29,75 +48,6 @@ pub use crate::src::nvim::types::{
     uintptr_t, undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
-    static namespace_localscope: GlobalCell<Set_uint32_t>;
-    static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]>;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor: bool) -> bool;
-    fn decor_virt_lines(
-        wp: *mut win_T,
-        start_row: ::core::ffi::c_int,
-        end_row: ::core::ffi::c_int,
-        num_below: *mut ::core::ffi::c_int,
-        lines: *mut VirtLines,
-        apply_folds: bool,
-    ) -> ::core::ffi::c_int;
-    fn diff_check_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn diffopt_filler() -> bool;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    fn hasFoldingWin(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-        cache: bool,
-        infop: *mut foldinfo_T,
-    ) -> bool;
-    fn lineFolded(win: *mut win_T, lnum: linenr_T) -> bool;
-    static curwin: GlobalCell<*mut win_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
-    fn get_breakindent_win(wp: *mut win_T, line: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn marktree_itr_get_filter(
-        b: *mut MarkTree,
-        row: int32_t,
-        col: ::core::ffi::c_int,
-        stop_row: ::core::ffi::c_int,
-        stop_col: ::core::ffi::c_int,
-        meta_filter: MetaFilter,
-        itr: *mut MarkTreeIter,
-    ) -> bool;
-    fn marktree_itr_next_filter(
-        b: *mut MarkTree,
-        itr: *mut MarkTreeIter,
-        stop_row: ::core::ffi::c_int,
-        stop_col: ::core::ffi::c_int,
-        meta_filter: MetaFilter,
-    ) -> bool;
-    fn marktree_itr_current(itr: *mut MarkTreeIter) -> MTKey;
-    fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo;
-    static utf8len_tab: [uint8_t; 256];
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn win_col_off2(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ffi::c_char;
-    fn virtual_active(wp: *mut win_T) -> bool;
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;
@@ -263,7 +213,8 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
             len: 1 as ::core::ffi::c_int,
         };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;

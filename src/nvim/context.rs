@@ -1,4 +1,22 @@
+use crate::src::nvim::api::private::converter::object_to_vim;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_array, api_free_string, api_set_error, arena_dict, copy_array,
+    copy_object, cstr_as_string, string_to_array,
+};
+use crate::src::nvim::api::vimscript::exec_impl;
+use crate::src::nvim::eval::encode::encode_vim_list_to_buf;
+use crate::src::nvim::eval::typval::tv_clear;
+use crate::src::nvim::eval::userfunc::func_tbl_get;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
+use crate::src::nvim::option::{get_option_value, optval_free, set_option_value};
+use crate::src::nvim::os::libc::{__assert_fail, snprintf, strlen, strncmp};
+use crate::src::nvim::shada::{
+    shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
+    shada_read_string,
+};
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -10,67 +28,6 @@ pub use crate::src::nvim::types::{
     OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType,
     SpecialVarValue, String_0, TriState, VarLockStatus, VarType, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
-    fn exec_impl(
-        channel_id: uint64_t,
-        src: String_0,
-        opts: *mut KeyDict_exec_opts,
-        err: *mut Error,
-    ) -> String_0;
-    fn encode_vim_list_to_buf(
-        list: *const list_T,
-        ret_len: *mut size_t,
-        ret_buf: *mut *mut ::core::ffi::c_char,
-    ) -> bool;
-    static hash_removed: ::core::ffi::c_char;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array;
-    fn api_free_string(value: String_0);
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_free_array(value: Array);
-    fn api_clear_error(value: *mut Error);
-    fn copy_array(array: Array, arena: *mut Arena) -> Array;
-    fn copy_object(obj: Object, arena: *mut Arena) -> Object;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn tv_clear(tv: *mut typval_T);
-    fn func_tbl_get() -> *mut hashtab_T;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn optval_free(o: OptVal);
-    fn get_option_value(opt_idx: OptIndex, opt_flags: ::core::ffi::c_int) -> OptVal;
-    fn set_option_value(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
-    fn shada_encode_regs() -> String_0;
-    fn shada_encode_jumps() -> String_0;
-    fn shada_encode_buflist() -> String_0;
-    fn shada_encode_gvars() -> String_0;
-    fn shada_read_string(string: String_0, flags: ::core::ffi::c_int);
-}
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

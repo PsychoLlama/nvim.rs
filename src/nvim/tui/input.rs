@@ -1,4 +1,28 @@
-use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
+use crate::src::nvim::event::libuv::{
+    uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
+};
+use crate::src::nvim::event::r#loop::loop_schedule_fast;
+use crate::src::nvim::event::rstream::{
+    rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
+    rstream_stop,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{main_loop, os_exit, p_ttimeout, p_ttm, ui_client_channel_id};
+use crate::src::nvim::map::{map_put_ref_int_ptr_t, mh_get_int};
+use crate::src::nvim::memory::{strnequal, xfree, xrealloc};
+use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, memmove, snprintf, strlen};
+use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::termkey::driver_csi::{
+    termkey_interpret_csi, termkey_interpret_csi_param, termkey_interpret_modereport,
+    termkey_interpret_mouse,
+};
+use crate::src::nvim::tui::termkey::termkey::{
+    termkey_destroy, termkey_get_buffer_remaining, termkey_get_buffer_size, termkey_get_canonflags,
+    termkey_getkey, termkey_getkey_force, termkey_hook_terminfo_getstr, termkey_interpret_string,
+    termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags,
+    termkey_start, termkey_strfkey,
+};
 pub use crate::src::nvim::types::{
     Array, Boolean, Dict, Event, Float, Integer, KeyEncoding, KeyValuePair, Loop, LuaRef, MapHash,
     Map_int_ptr_t, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, RStream, ScopeType,
@@ -25,133 +49,6 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_6, uv_timer_s_u as C2Rust_Unnamed_7, uv_timer_t, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strnequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char, n: size_t) -> bool;
-    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    fn map_put_ref_int_ptr_t(
-        map: *mut Map_int_ptr_t,
-        key: ::core::ffi::c_int,
-        key_alloc: *mut *mut ::core::ffi::c_int,
-        new_item: *mut bool,
-    ) -> *mut ptr_t;
-    fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
-    fn uv_timer_init(_: *mut uv_loop_t, handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_timer_start(
-        handle: *mut uv_timer_t,
-        cb: uv_timer_cb,
-        timeout: uint64_t,
-        repeat: uint64_t,
-    ) -> ::core::ffi::c_int;
-    fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_timer_get_due_in(handle: *const uv_timer_t) -> uint64_t;
-    fn loop_schedule_fast(loop_0: *mut Loop, event: Event);
-    static main_loop: SharedCell<Loop>;
-    fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
-    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
-    fn rstream_stop(stream: *mut RStream);
-    fn rstream_available(stream: *mut RStream) -> size_t;
-    fn rstream_consume(stream: *mut RStream, consumed: size_t);
-    fn rstream_may_close(stream: *mut RStream);
-    fn os_exit(r: ::core::ffi::c_int) -> !;
-    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
-    static p_ttimeout: GlobalCell<::core::ffi::c_int>;
-    static p_ttm: GlobalCell<OptInt>;
-    fn kv_do_printf(
-        str: *mut StringBuilder,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn termkey_interpret_mouse(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        event: *mut TermKeyMouseEvent,
-        button: *mut ::core::ffi::c_int,
-        line: *mut ::core::ffi::c_int,
-        col: *mut ::core::ffi::c_int,
-    ) -> TermKeyResult;
-    fn termkey_interpret_modereport(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        initial: *mut ::core::ffi::c_int,
-        mode: *mut ::core::ffi::c_int,
-        value: *mut ::core::ffi::c_int,
-    ) -> TermKeyResult;
-    fn termkey_interpret_csi(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        params: *mut TermKeyCsiParam,
-        nparams: *mut size_t,
-        cmd: *mut ::core::ffi::c_uint,
-    ) -> TermKeyResult;
-    fn termkey_interpret_csi_param(
-        param: TermKeyCsiParam,
-        paramp: *mut ::core::ffi::c_int,
-        subparams: *mut ::core::ffi::c_int,
-        nsubparams: *mut size_t,
-    ) -> TermKeyResult;
-    fn termkey_interpret_string(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        strp: *mut *const ::core::ffi::c_char,
-    ) -> TermKeyResult;
-    fn termkey_new_abstract(term: *mut TerminfoEntry, flags: ::core::ffi::c_int) -> *mut TermKey;
-    fn termkey_destroy(tk: *mut TermKey);
-    fn termkey_hook_terminfo_getstr(
-        tk: *mut TermKey,
-        hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
-        data: *mut ::core::ffi::c_void,
-    );
-    fn termkey_start(tk: *mut TermKey) -> ::core::ffi::c_int;
-    fn termkey_get_canonflags(tk: *mut TermKey) -> ::core::ffi::c_int;
-    fn termkey_set_canonflags(tk: *mut TermKey, flags: ::core::ffi::c_int);
-    fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t;
-    fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> ::core::ffi::c_int;
-    fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t;
-    fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult;
-    fn termkey_getkey_force(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult;
-    fn termkey_push_bytes(
-        tk: *mut TermKey,
-        bytes: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> size_t;
-    fn termkey_strfkey(
-        tk: *mut TermKey,
-        buffer: *mut ::core::ffi::c_char,
-        len: size_t,
-        key: *mut TermKeyKey,
-        format: TermKeyFormat,
-    ) -> size_t;
-    static ui_client_channel_id: GlobalCell<uint64_t>;
     fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState);
     fn tui_enable_extended_underline(tui: *mut TUIData);
     fn tui_query_bg_color(tui: *mut TUIData);

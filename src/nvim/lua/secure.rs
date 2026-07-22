@@ -1,49 +1,18 @@
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
+use crate::src::nvim::lua::executor::{get_global_lstate, nlua_error, nlua_pcall};
+use crate::src::nvim::lua::ffi::{
+    lua_createtable, lua_getfield, lua_gettop, lua_pushnumber, lua_pushstring, lua_settable,
+    lua_settop, lua_toboolean, lua_tolstring,
+};
+use crate::src::nvim::main::{e_invarg2, e_trustfile};
+use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz};
+use crate::src::nvim::message::{semsg, smsg};
+use crate::src::nvim::os::libc::{gettext, memcpy, strcmp};
 pub use crate::src::nvim::types::{
     cmd_addr_T, cmdidx_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem,
     exarg, exarg_T, int32_t, linenr_T, lua_Number, lua_State, size_t, uint32_t, CMD_index,
     LineGetter,
 };
-extern "C" {
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_settable(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_trustfile: [::core::ffi::c_char; 0];
-    fn get_global_lstate() -> *mut lua_State;
-    fn nlua_error(lstate: *mut lua_State, msg: *const ::core::ffi::c_char);
-    fn nlua_pcall(
-        lstate: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-}
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;

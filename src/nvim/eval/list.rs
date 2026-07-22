@@ -1,4 +1,28 @@
+use crate::src::nvim::eval::typval::{
+    tv_blob_copy, tv_blob_remove, tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy,
+    tv_dict_add_tv, tv_dict_alloc_ret, tv_dict_copy, tv_dict_extend, tv_dict_item_remove,
+    tv_dict_remove, tv_dict_unref, tv_equal, tv_get_number_chk, tv_get_string, tv_get_string_chk,
+    tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend,
+    tv_list_find, tv_list_insert_tv, tv_list_item_remove, tv_list_remove, tv_list_reverse,
+    tv_list_unref, value_check_lock,
+};
+use crate::src::nvim::eval::vars::{
+    get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
+    set_vim_var_type, var_check_fixed, var_check_ro,
+};
+use crate::src::nvim::eval_1::{eval_expr_typval, get_copyID};
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::main::{
+    did_emsg, e_invalblob, e_invarg, e_invarg2, e_list_index_out_of_range_nr, e_listblobarg,
+    e_listblobreq, e_listdictarg, e_listdictblobarg, e_string_required,
+};
+use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
+use crate::src::nvim::memory::xmemdupz;
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
+use crate::src::nvim::strings::reverse_text;
 pub use crate::src::nvim::types::{
     blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
@@ -11,140 +35,12 @@ pub use crate::src::nvim::types::{
     ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, QUEUE,
 };
 extern "C" {
-    static e_invarg: [::core::ffi::c_char; 0];
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invalblob: [::core::ffi::c_char; 0];
-    static e_listblobreq: [::core::ffi::c_char; 0];
-    static e_listblobarg: [::core::ffi::c_char; 0];
-    static e_listdictarg: [::core::ffi::c_char; 0];
-    static e_listdictblobarg: [::core::ffi::c_char; 0];
-    static e_list_index_out_of_range_nr: [::core::ffi::c_char; 0];
-    static e_string_required: [::core::ffi::c_char; 0];
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strstr(
-        __haystack: *const ::core::ffi::c_char,
-        __needle: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn eval_expr_typval(
-        expr: *const typval_T,
-        want_func: bool,
-        argv: *mut typval_T,
-        argc: ::core::ffi::c_int,
-        rettv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn get_copyID() -> ::core::ffi::c_int;
-    static hash_removed: ::core::ffi::c_char;
     fn hash_lock(ht: *mut hashtab_T);
     fn hash_unlock(ht: *mut hashtab_T);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_item_remove(l: *mut list_T, item: *mut listitem_T) -> *mut listitem_T;
-    fn tv_list_unref(l: *mut list_T);
-    fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut listitem_T);
-    fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T);
-    fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
-    fn tv_list_copy(
-        conv: *const vimconv_T,
-        orig: *mut list_T,
-        deep: bool,
-        copyID: ::core::ffi::c_int,
-    ) -> *mut list_T;
-    fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T);
-    fn tv_list_remove(
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-        arg_errmsg: *const ::core::ffi::c_char,
-    );
-    fn tv_list_reverse(l: *mut list_T);
-    fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T;
-    fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
-    fn tv_dict_unref(d: *mut dict_T);
-    fn tv_dict_add_tv(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        tv: *mut typval_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char);
-    fn tv_dict_copy(
-        conv: *const vimconv_T,
-        orig: *mut dict_T,
-        deep: bool,
-        copyID: ::core::ffi::c_int,
-    ) -> *mut dict_T;
-    fn tv_blob_remove(
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-        arg_errmsg: *const ::core::ffi::c_char,
-    );
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn tv_dict_remove(
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-        arg_errmsg: *const ::core::ffi::c_char,
-    );
-    fn tv_blob_copy(from: *mut blob_T, to: *mut typval_T);
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn value_check_lock(
-        lock: VarLockStatus,
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> bool;
-    fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_check_for_string_or_list_or_blob_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn prepare_vimvar(idx: ::core::ffi::c_int, save_tv: *mut typval_T);
-    fn restore_vimvar(idx: ::core::ffi::c_int, save_tv: *mut typval_T);
-    fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T;
-    fn set_vim_var_type(idx: VimVarIndex, type_0: VarType);
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
-    fn var_check_ro(
-        flags: ::core::ffi::c_int,
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> bool;
-    fn var_check_fixed(
-        flags: ::core::ffi::c_int,
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-    ) -> bool;
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn reverse_text(s: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

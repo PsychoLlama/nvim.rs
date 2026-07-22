@@ -1,4 +1,27 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::change::inserted_bytes;
+use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
+
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{curbuf, curwin, p_sel, restart_edit, State, VIsual, VIsual_active};
+use crate::src::nvim::mark::mark_mb_adjustpos;
+use crate::src::nvim::mbyte::{
+    utf8len_tab, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2char, utfc_next_impl,
+};
+use crate::src::nvim::memline::{
+    dec, inc, ml_get_buf, ml_get_buf_len, ml_get_buf_mut, ml_get_len, ml_replace,
+};
+use crate::src::nvim::memory::xmallocz;
+use crate::src::nvim::option::{get_sidescrolloff_value, get_ve_flags};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memset};
+use crate::src::nvim::plines::{
+    charsize_fast, charsize_regular, getvcol, getvvcol, init_charsize_arg, linetabsize,
+    linetabsize_eol,
+};
+use crate::src::nvim::r#move::{
+    changed_cline_bef_curs, set_valid_virtcol, validate_virtcol, win_col_off,
+};
+use crate::src::nvim::state::virtual_active;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg,
@@ -28,114 +51,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, uintptr_t, undo_object, varnumber_T, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn abort() -> !;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-    fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn inserted_bytes(
-        lnum: linenr_T,
-        start_col: colnr_T,
-        old_col: ::core::ffi::c_int,
-        new_col: ::core::ffi::c_int,
-    );
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn hasAnyFolding(win: *mut win_T) -> ::core::ffi::c_int;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual: GlobalCell<pos_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T);
-    fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo;
-    static utf8len_tab: [uint8_t; 256];
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_mut(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
-        -> ::core::ffi::c_int;
-    fn inc(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn dec(lp: *mut pos_T) -> ::core::ffi::c_int;
-    fn set_valid_virtcol(wp: *mut win_T, vcol: colnr_T);
-    fn changed_cline_bef_curs(wp: *mut win_T);
-    fn validate_virtcol(wp: *mut win_T);
-    fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn get_ve_flags(wp: *mut win_T) -> ::core::ffi::c_uint;
-    fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t;
-    static p_sel: GlobalCell<*mut ::core::ffi::c_char>;
-    fn linetabsize(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn init_charsize_arg(
-        csarg: *mut CharsizeArg,
-        wp: *mut win_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> CSType;
-    fn charsize_regular(
-        csarg: *mut CharsizeArg,
-        cur: *mut ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn charsize_fast(
-        csarg: *mut CharsizeArg,
-        cur: *const ::core::ffi::c_char,
-        vcol: colnr_T,
-        cur_char: int32_t,
-    ) -> CharSize;
-    fn getvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn virtual_active(wp: *mut win_T) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;
@@ -822,7 +737,8 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
             len: 1 as ::core::ffi::c_int,
         };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;

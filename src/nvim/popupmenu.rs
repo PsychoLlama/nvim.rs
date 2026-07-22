@@ -1,4 +1,49 @@
+use crate::src::nvim::api::buffer::nvim_buf_set_lines;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, api_free_array, arena_array, cstr_as_string, cstr_to_string,
+};
+use crate::src::nvim::api::win_config::parse_winborder;
+use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
+use crate::src::nvim::buffer::{bt_nofile, buf_clear};
+use crate::src::nvim::charset::{ptr2cells, transstr, vim_strsize};
+use crate::src::nvim::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
+use crate::src::nvim::drawscreen::{redraw_later, setcursor_mayforce, update_screen};
+use crate::src::nvim::eval::typval::{tv_dict_add_bool, tv_dict_add_float, tv_dict_add_nr};
+use crate::src::nvim::ex_cmds::{do_ecmd, prepare_tagpreview};
+use crate::src::nvim::fuzzy::fuzzy_match_str_with_pos;
+use crate::src::nvim::getchar::{vgetc, vungetc};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{
+    get_win_by_grid_handle, grid_alloc, grid_assign_handle, grid_draw_border, grid_free,
+    grid_invalidate, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
+    schar_from_str, screengrid_line_start,
+};
+use crate::src::nvim::highlight::{hl_combine_attr, hl_get_ui_attr};
+use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::insexpand::{
+    compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
+};
+use crate::src::nvim::main::{
+    cia_flags, cmdline_row, cmdline_win, cmdwin_type, curbuf, curtab, curwin, default_grid,
+    e_menu_only_exists_in_another_mode, firstwin, g_do_tagpreview, hl_attr_active, linebuf_attr,
+    linebuf_char, mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, ns_hl_fast,
+    opt_winborder_values, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid,
+    textlock, Columns, RedrawingDisabled, Rows, State,
+};
+use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
+use crate::src::nvim::memory::{
+    arena_mem_free, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup,
+};
+use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::mouse::mouse_find_win_outer;
+use crate::src::nvim::option::set_option_value_give_err;
+use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
+use crate::src::nvim::plines::{init_charsize_arg, linesize_fast, linesize_regular, plines_m_win};
+use crate::src::nvim::r#move::{
+    update_topline, validate_cheight, validate_cursor, validate_cursor_col,
+};
+use crate::src::nvim::strings::reverse_text;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, CMD_index, CSType, Callback, CallbackType,
@@ -34,289 +79,24 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, vimmenu_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::{
+    ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
+    ui_call_popupmenu_select, ui_call_popupmenu_show, ui_call_win_close, ui_call_win_float_pos,
+    ui_has, ui_pum_get_height, ui_pum_get_pos,
+};
+use crate::src::nvim::ui_compositor::{
+    ui_comp_compose_grid, ui_comp_put_grid, ui_comp_remove_grid,
+};
+use crate::src::nvim::window::{
+    goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
+};
+use crate::src::nvim::winfloat::{
+    win_config_float, win_float_create_preview, win_float_find_preview,
+};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn nvim_buf_set_lines(
-        channel_id: uint64_t,
-        buf: Buffer,
-        start: Integer,
-        end: Integer,
-        strict_indexing: Boolean,
-        replacement: Array,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
-    fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn api_free_array(value: Array);
-    fn api_clear_error(value: *mut Error);
-    fn parse_winborder(
-        fconfig: *mut WinConfig,
-        border_opt: *mut ::core::ffi::c_char,
-        err: *mut Error,
-    ) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buf_clear();
-    fn bt_nofile(buf: *const buf_T) -> bool;
-    static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]>;
-    static cia_flags: GlobalCell<::core::ffi::c_uint>;
-    static p_pumborder: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_pb: GlobalCell<OptInt>;
-    static p_ph: GlobalCell<OptInt>;
-    static p_pw: GlobalCell<OptInt>;
-    static p_pmw: GlobalCell<OptInt>;
-    static p_mousemev: GlobalCell<::core::ffi::c_int>;
-    static p_pvh: GlobalCell<OptInt>;
-    fn reverse_text(s: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn transstr(s: *const ::core::ffi::c_char, untab: bool) -> *mut ::core::ffi::c_char;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn cmdline_compl_pattern() -> *mut ::core::ffi::c_char;
-    fn cmdline_compl_is_fuzzy() -> bool;
-    static e_menu_only_exists_in_another_mode: [::core::ffi::c_char; 0];
-    fn update_screen() -> ::core::ffi::c_int;
-    fn setcursor_mayforce(wp: *mut win_T, force: bool);
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn emsg(s: *const ::core::ffi::c_char) -> bool;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_float(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: float_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_add_bool(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        val: BoolVarValue,
-    ) -> ::core::ffi::c_int;
-    fn do_ecmd(
-        fnum: ::core::ffi::c_int,
-        ffname: *mut ::core::ffi::c_char,
-        sfname: *mut ::core::ffi::c_char,
-        eap: *mut exarg_T,
-        newlnum: linenr_T,
-        flags: ::core::ffi::c_int,
-        oldwin: *mut win_T,
-    ) -> ::core::ffi::c_int;
-    fn prepare_tagpreview(undo_sync: bool) -> bool;
-    fn fuzzy_match_str_with_pos(
-        str: *mut ::core::ffi::c_char,
-        pat: *const ::core::ffi::c_char,
-    ) -> *mut garray_T;
     fn ga_clear(gap: *mut garray_T);
-    fn vgetc() -> ::core::ffi::c_int;
-    fn vungetc(c: ::core::ffi::c_int);
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static cmdline_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_grid: GlobalCell<::core::ffi::c_int>;
-    static mouse_row: GlobalCell<::core::ffi::c_int>;
-    static mouse_col: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static textlock: GlobalCell<::core::ffi::c_int>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static no_u_sync: GlobalCell<::core::ffi::c_int>;
-    static RedrawingDisabled: GlobalCell<::core::ffi::c_int>;
-    static must_redraw_pum: GlobalCell<bool>;
-    static g_do_tagpreview: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_type: GlobalCell<::core::ffi::c_int>;
-    static cmdline_win: GlobalCell<*mut win_T>;
-    static default_grid: GlobalCell<ScreenGrid>;
-    static linebuf_char: GlobalCell<*mut schar_T>;
-    static linebuf_attr: GlobalCell<*mut sattr_T>;
-    fn schar_from_str(str: *const ::core::ffi::c_char) -> schar_T;
-    fn grid_invalidate(grid: *mut ScreenGrid);
-    fn screengrid_line_start(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    );
-    fn grid_line_put_schar(col: ::core::ffi::c_int, schar: schar_T, attr: ::core::ffi::c_int);
-    fn grid_line_puts(
-        col: ::core::ffi::c_int,
-        text: *const ::core::ffi::c_char,
-        textlen: ::core::ffi::c_int,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn grid_line_fill(
-        start_col: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-        sc: schar_T,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn grid_line_flush();
-    fn grid_alloc(
-        grid: *mut ScreenGrid,
-        rows: ::core::ffi::c_int,
-        columns: ::core::ffi::c_int,
-        copy: bool,
-        valid: bool,
-    );
-    fn grid_free(grid: *mut ScreenGrid);
-    fn grid_assign_handle(grid: *mut ScreenGrid);
-    fn grid_draw_border(
-        grid: *mut ScreenGrid,
-        config: *mut WinConfig,
-        adj: *mut ::core::ffi::c_int,
-        winbl: ::core::ffi::c_int,
-        hl_attr: *mut ::core::ffi::c_int,
-    );
-    fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
-    static ns_hl_fast: GlobalCell<NS>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn hl_get_ui_attr(
-        ns_id: ::core::ffi::c_int,
-        idx: ::core::ffi::c_int,
-        final_id: ::core::ffi::c_int,
-        optional: bool,
-    ) -> ::core::ffi::c_int;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn ins_compl_leader() -> *mut ::core::ffi::c_char;
-    fn get_cot_flags() -> ::core::ffi::c_uint;
-    fn compl_match_curr_select(selected: ::core::ffi::c_int) -> bool;
-    fn ins_compl_active() -> bool;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_strnicmp(
-        s1: *const ::core::ffi::c_char,
-        s2: *const ::core::ffi::c_char,
-        nn: size_t,
-    ) -> ::core::ffi::c_int;
-    fn menu_is_separator(name: *mut ::core::ffi::c_char) -> bool;
-    fn get_menu_mode_flag() -> ::core::ffi::c_int;
-    fn execute_menu(eap: *const exarg_T, menu: *mut vimmenu_T, mode_idx: ::core::ffi::c_int);
-    fn menu_find(path_name: *const ::core::ffi::c_char) -> *mut vimmenu_T;
-    fn mouse_find_win_outer(
-        gridp: *mut ::core::ffi::c_int,
-        rowp: *mut ::core::ffi::c_int,
-        colp: *mut ::core::ffi::c_int,
-    ) -> *mut win_T;
-    fn update_topline(wp: *mut win_T);
-    fn validate_cursor(wp: *mut win_T);
-    fn validate_cheight(wp: *mut win_T);
-    fn validate_cursor_col(wp: *mut win_T);
-    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
-    fn init_charsize_arg(
-        csarg: *mut CharsizeArg,
-        wp: *mut win_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> CSType;
-    fn linesize_regular(
-        csarg: *mut CharsizeArg,
-        vcol_arg: ::core::ffi::c_int,
-        len: colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn linesize_fast(
-        csarg: *const CharsizeArg,
-        vcol_arg: ::core::ffi::c_int,
-        len: colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn plines_m_win(
-        wp: *mut win_T,
-        first: linenr_T,
-        last: linenr_T,
-        max: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    static pum_grid: GlobalCell<ScreenGrid>;
     static pum_want: GlobalCell<C2Rust_Unnamed_24>;
-    fn ui_pum_get_height() -> ::core::ffi::c_int;
-    fn ui_pum_get_pos(
-        pwidth: *mut ::core::ffi::c_double,
-        pheight: *mut ::core::ffi::c_double,
-        prow: *mut ::core::ffi::c_double,
-        pcol: *mut ::core::ffi::c_double,
-    ) -> bool;
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_call_option_set(name: String_0, value: Object);
-    fn ui_call_grid_resize(grid: Integer, width: Integer, height: Integer);
-    fn ui_call_grid_destroy(grid: Integer);
-    fn ui_call_win_float_pos(
-        grid: Integer,
-        win: Window,
-        anchor: String_0,
-        anchor_grid: Integer,
-        anchor_row: Float,
-        anchor_col: Float,
-        mouse_enabled: Boolean,
-        zindex: Integer,
-        compindex: Integer,
-        screen_row: Integer,
-        screen_col: Integer,
-    );
-    fn ui_call_win_close(grid: Integer);
-    fn ui_call_popupmenu_show(
-        items: Array,
-        selected: Integer,
-        row: Integer,
-        col: Integer,
-        grid: Integer,
-    );
-    fn ui_call_popupmenu_hide();
-    fn ui_call_popupmenu_select(selected: Integer);
-    fn ui_comp_put_grid(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-        height: ::core::ffi::c_int,
-        width: ::core::ffi::c_int,
-        valid: bool,
-        on_top: bool,
-    ) -> bool;
-    fn ui_comp_remove_grid(grid: *mut ScreenGrid);
-    fn ui_comp_compose_grid(grid: *mut ScreenGrid);
-    fn win_valid(win: *const win_T) -> bool;
-    fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
-    fn valid_tabpage(tpc: *mut tabpage_T) -> bool;
-    fn goto_tabpage_tp(
-        tp: *mut tabpage_T,
-        trigger_enter_autocmds: bool,
-        trigger_leave_autocmds: bool,
-    );
-    fn win_enter(wp: *mut win_T, undo_sync: bool);
-    fn win_setheight(height: ::core::ffi::c_int);
-    fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
-    fn win_float_find_preview() -> *mut win_T;
-    fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T;
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

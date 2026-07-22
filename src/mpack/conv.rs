@@ -1,15 +1,8 @@
+use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
     mpack_sintmax_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed, mpack_token_t,
     mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-}
 pub type mpack_sint32_t = ::core::ffi::c_int;
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;

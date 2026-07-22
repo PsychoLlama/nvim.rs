@@ -1,4 +1,23 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::charset::{skipwhite, vim_iswordc, vim_iswordp};
+use crate::src::nvim::eval::typval::{
+    callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find, tv_dict_get_callback,
+    tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_get_string,
+    tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
+    tv_list_append_tv, tv_list_find,
+};
+use crate::src::nvim::eval_1::callback_call;
+
+use crate::src::nvim::insexpand::{
+    ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start,
+};
+use crate::src::nvim::main::{curbuf, e_invarg2, e_invargNval, e_invargval, e_listarg, p_ws};
+use crate::src::nvim::mbyte::{
+    mb_charlen, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len,
+};
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::libc::{__assert_fail, ceil, floor, gettext, qsort, strlen, strncmp};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -31,95 +50,9 @@ pub use crate::src::nvim::types::{
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn ceil(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn floor(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn qsort(
-        __base: *mut ::core::ffi::c_void,
-        __nmemb: size_t,
-        __size: size_t,
-        __compar: __compar_fn_t,
-    );
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static p_ws: GlobalCell<::core::ffi::c_int>;
-    fn callback_call(
-        callback: *mut Callback,
-        argcount_in: ::core::ffi::c_int,
-        argvars_in: *mut typval_T,
-        rettv: *mut typval_T,
-    ) -> bool;
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T);
-    fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T;
-    fn callback_free(callback: *mut Callback);
-    fn tv_dict_unref(d: *mut dict_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_has_key(d: *const dict_T, key: *const ::core::ffi::c_char) -> bool;
-    fn tv_dict_get_string(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        save: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn tv_dict_get_callback(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: ptrdiff_t,
-        result: *mut Callback,
-    ) -> bool;
-    fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_check_for_nonnull_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
     fn ga_clear(gap: *mut garray_T);
     fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    static curbuf: GlobalCell<*mut buf_T>;
-    fn ctrl_x_mode_whole_line() -> bool;
-    fn find_word_start(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn find_word_end(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn find_line_end(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn mb_toupper(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_islower(a: ::core::ffi::c_int) -> bool;
-    fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn mb_isupper(a: ::core::ffi::c_int) -> bool;
-    fn mb_charlen(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn vim_iswordc(c: ::core::ffi::c_int) -> bool;
-    fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool;
-    fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static e_invarg2: [::core::ffi::c_char; 0];
-    static e_invargval: [::core::ffi::c_char; 0];
-    static e_invargNval: [::core::ffi::c_char; 0];
-    static e_listarg: [::core::ffi::c_char; 0];
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

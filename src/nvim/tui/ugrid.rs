@@ -1,20 +1,6 @@
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{int32_t, sattr_T, schar_T, size_t, uint32_t, UCell, UGrid};
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-}
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 52] = unsafe {
     ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
         *b"void ugrid_scroll(UGrid *, int, int, int, int, int)\0",

@@ -92,6 +92,7 @@ pub mod src {
             pub mod window;
         } // mod eval
         pub mod event {
+            pub mod libuv;
             pub mod libuv_proc;
             pub mod r#loop;
             pub mod multiqueue;
@@ -134,6 +135,7 @@ pub mod src {
             pub mod base64;
             pub mod converter;
             pub mod executor;
+            pub mod ffi;
             pub mod secure;
             pub mod spell;
             pub mod stdlib;
@@ -171,6 +173,7 @@ pub mod src {
             pub mod fs;
             pub mod input;
             pub mod lang;
+            pub mod libc;
             pub mod mem;
             pub mod proc;
             pub mod pty_proc_unix;

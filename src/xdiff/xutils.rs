@@ -1,36 +1,12 @@
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{__ctype_b_loc, memchr, memcmp, memcpy, strlen};
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, mmbuffer_t, mmfile_t, s_chanode, s_chastore, s_mmbuffer, s_mmfile,
     s_xdemitcb, s_xdfenv, s_xdfile, s_xpparam, s_xrecord, size_t, xdemitcb_t, xdfenv_t, xdfile_t,
     xpparam_t, xrecord_t,
 };
-extern "C" {
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xdl_free_env(xe: *mut xdfenv_t);
-    fn xdl_do_diff(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xe: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-}
+use crate::src::xdiff::xdiffi::xdl_do_diff;
+use crate::src::xdiff::xprepare::xdl_free_env;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;

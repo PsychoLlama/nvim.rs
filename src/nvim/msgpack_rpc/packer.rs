@@ -1,26 +1,11 @@
+use crate::src::nvim::lua::executor::api_free_luaref;
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy};
 pub use crate::src::nvim::types::{
     handle_T, int64_t, int8_t, key_value_pair, object, object_data as C2Rust_Unnamed,
     packer_buffer_t, ptrdiff_t, size_t, uint32_t, uint64_t, Array, Boolean, Dict, Float, Integer,
     KeyValuePair, LuaRef, Object, ObjectType, PackerBuffer, PackerBufferFlush, String_0,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn api_free_luaref(ref_0: LuaRef);
-}
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;

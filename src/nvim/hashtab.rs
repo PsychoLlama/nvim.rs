@@ -11,12 +11,9 @@ use core::ffi::{c_char, c_int, c_uint, c_void, CStr};
 use core::ptr;
 use core::slice;
 
-extern "C" {
-    fn gettext(msgid: *const c_char) -> *mut c_char;
-    fn xfree(ptr: *mut c_void);
-    fn xcalloc(count: usize, size: usize) -> *mut c_void;
-    fn siemsg(s: *const c_char, ...);
-}
+use crate::src::nvim::memory::{xcalloc, xfree};
+use crate::src::nvim::message::siemsg;
+use crate::src::nvim::os::libc::gettext;
 
 pub type hash_T = usize;
 

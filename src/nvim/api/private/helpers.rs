@@ -1,4 +1,28 @@
+use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_item_alloc_len, tv_dict_item_remove,
+    tv_dict_watcher_notify,
+};
+use crate::src::nvim::eval::vars::{before_set_vvar, get_vimvar_dict};
+use crate::src::nvim::ex_eval::{
+    discard_current_exception, free_global_msglist, get_exception_string,
+};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{highlight_num_groups, syn_check_group, syn_id2name};
+use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
+use crate::src::nvim::main::{
+    buffer_handles, curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw,
+    force_abort, got_int, msg_list, need_rethrow, tabpage_handles, trylevel, window_handles,
+};
+use crate::src::nvim::map::mh_get_int;
+use crate::src::nvim::mark::setmark_pos;
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{memchrsub, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrndup};
+use crate::src::nvim::message::hl_msg_free;
+use crate::src::nvim::msgpack_rpc::unpacker::unpack;
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen, strnlen, vsnprintf};
+use crate::src::nvim::runtime::script_is_lua;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, ArrayBuilder, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
@@ -34,38 +58,6 @@ pub use crate::src::nvim::types::{
     wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn vsnprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        __arg: ::core::ffi::VaList,
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strnlen(__string: *const ::core::ffi::c_char, __maxlen: size_t) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn memchrsub(
-        data: *mut ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-        len: size_t,
-    );
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xstrndup(str: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_memdupz(
@@ -73,91 +65,6 @@ extern "C" {
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata: bool) -> Object;
-    fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
-    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    static buffer_handles: GlobalCell<Map_int_ptr_t>;
-    static window_handles: GlobalCell<Map_int_ptr_t>;
-    static tabpage_handles: GlobalCell<Map_int_ptr_t>;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn hl_msg_free(hl_msg: HlMessage);
-    fn tv_dict_watcher_notify(
-        dict: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        newtv: *mut typval_T,
-        oldtv: *mut typval_T,
-    );
-    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
-    fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn get_vimvar_dict() -> *mut dict_T;
-    fn before_set_vvar(
-        varname: *const ::core::ffi::c_char,
-        di: *mut dictitem_T,
-        tv: *mut typval_T,
-        copy: bool,
-        watched: bool,
-        type_error: *mut bool,
-    ) -> bool;
-    fn free_global_msglist();
-    fn get_exception_string(
-        value: *mut ::core::ffi::c_void,
-        type_0: except_type_T,
-        cmdname: *mut ::core::ffi::c_char,
-        should_free: *mut bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn discard_current_exception();
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static current_exception: GlobalCell<*mut except_T>;
-    static did_throw: GlobalCell<bool>;
-    static need_rethrow: GlobalCell<bool>;
-    static trylevel: GlobalCell<::core::ffi::c_int>;
-    static force_abort: GlobalCell<bool>;
-    static msg_list: GlobalCell<*mut *mut msglist_T>;
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static got_int: GlobalCell<bool>;
-    fn highlight_num_groups() -> ::core::ffi::c_int;
-    fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn api_free_luaref(ref_0: LuaRef);
-    fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
-    fn setmark_pos(
-        c: ::core::ffi::c_int,
-        pos: *mut pos_T,
-        fnum: ::core::ffi::c_int,
-        view_pt: *mut fmarkv_T,
-    ) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn unpack(
-        data: *const ::core::ffi::c_char,
-        size: size_t,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
-    fn script_is_lua(sid: scid_T) -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

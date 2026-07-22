@@ -1,26 +1,11 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{api_set_error, api_typename};
+
+use crate::src::nvim::main::IObuff;
+use crate::src::nvim::os::libc::{memchr, snprintf, strchr};
 pub use crate::src::nvim::types::{
     int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, Array, Boolean, Dict,
     Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0,
 };
-extern "C" {
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    static IObuff: GlobalCell<[::core::ffi::c_char; 1025]>;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

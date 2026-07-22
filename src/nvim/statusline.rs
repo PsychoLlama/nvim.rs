@@ -1,4 +1,52 @@
+use crate::src::nvim::api::private::helpers::{
+    api_free_array, arena_array, arena_dict, arena_string, cstr_as_string,
+};
+use crate::src::nvim::autocmd::is_aucmd_win;
+use crate::src::nvim::buffer::{
+    append_arg_number, bt_quickfix, buf_spname, calc_percentage, col_print, get_rel_pos,
+};
+use crate::src::nvim::charset::{
+    getdigits_int, ptr2cells, skipdigits, trans_characters, transstr_buf, vim_strnsize, vim_strsize,
+};
+use crate::src::nvim::digraph::get_keymap_str;
+use crate::src::nvim::drawline::{fill_foldcolumn, use_cursor_line_highlight};
+use crate::src::nvim::drawscreen::{compute_foldcolumn, redrawing};
+use crate::src::nvim::eval::vars::{
+    do_unlet, get_vim_var_nr, set_internal_string_var, set_var, set_vim_var_nr,
+};
+use crate::src::nvim::eval_1::eval_to_string_safe;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::grid::{
+    grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
+    grid_line_start, schar_get, schar_get_adv, schar_len, screengrid_line_start,
+};
+use crate::src::nvim::highlight::hl_combine_attr;
+use crate::src::nvim::highlight_group::{syn_id2attr, syn_name2id_len};
+use crate::src::nvim::main::{
+    curbuf, curtab, curwin, default_grid, default_gridview, did_emsg, edit_submode, first_tabpage,
+    firstbuf, firstwin, highlight_stlnc, highlight_user, hl_attr_active, msg_col, msg_grid_adj,
+    msg_loclist, msg_qflist, msg_row, ns_hl_fast, p_ch, p_ru, p_ruf, p_sc, p_sloc, p_stl, p_tal,
+    p_wbr, redraw_cmdline, redraw_not_allowed, redraw_tabline, ru_col, showcmd_buf, t_colors,
+    tab_page_click_defs, tab_page_click_defs_size, topframe, updating_screen, wild_menu_showing,
+    Columns, KeyTyped, NameBuff, Rows, State, VIsual_active,
+};
+use crate::src::nvim::mbyte::{utf_ptr2cells, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{
+    arena_mem_free, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrlcpy,
+};
+use crate::src::nvim::message::msg_clr_eos;
+use crate::src::nvim::option::{
+    find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
+};
+use crate::src::nvim::os::env::home_replace;
+use crate::src::nvim::os::libc::{
+    __assert_fail, abs, atoi, gettext, memcpy, memmove, memset, strchr, strlen, toupper,
+};
+use crate::src::nvim::path::{path_tail, shorten_dir};
+use crate::src::nvim::plines::getvvcol;
+use crate::src::nvim::sign::describe_sign_text;
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6,
@@ -33,273 +81,11 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, NS, QUEUE,
 };
+use crate::src::nvim::ui::{ui_call_msg_ruler, ui_call_tabline_update, ui_has};
+use crate::src::nvim::undo::bufIsChanged;
+use crate::src::nvim::window::{global_stl_height, lastwin_nofloating, tabline_height};
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn abs(__x: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
-        -> *mut ::core::ffi::c_char;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
-    fn xstrlcpy(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        dsize: size_t,
-    ) -> size_t;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_mem_free(mem: ArenaMem);
-    fn toupper(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
-    fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_free_array(value: Array);
-    fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    static msg_loclist: GlobalCell<*mut ::core::ffi::c_char>;
-    static msg_qflist: GlobalCell<*mut ::core::ffi::c_char>;
-    fn calc_percentage(part: int64_t, whole: int64_t) -> ::core::ffi::c_int;
-    fn col_print(
-        buf: *mut ::core::ffi::c_char,
-        buflen: size_t,
-        col: ::core::ffi::c_int,
-        vcol: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_rel_pos(
-        wp: *mut win_T,
-        buf: *mut ::core::ffi::c_char,
-        buflen: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn append_arg_number(
-        wp: *mut win_T,
-        buf: *mut ::core::ffi::c_char,
-        buflen: size_t,
-    ) -> ::core::ffi::c_int;
-    fn bt_quickfix(buf: *const buf_T) -> bool;
-    fn buf_spname(buf: *mut buf_T) -> *mut ::core::ffi::c_char;
-    static p_ch: GlobalCell<OptInt>;
-    static p_ru: GlobalCell<::core::ffi::c_int>;
-    static p_ruf: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_stl: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_wbr: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sc: GlobalCell<::core::ffi::c_int>;
-    static p_sloc: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_tal: GlobalCell<*mut ::core::ffi::c_char>;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn vim_snprintf(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn vim_snprintf_safelen(
-        str: *mut ::core::ffi::c_char,
-        str_m: size_t,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> size_t;
-    fn trans_characters(buf: *mut ::core::ffi::c_char, bufsize: ::core::ffi::c_int);
-    fn transstr_buf(
-        s: *const ::core::ffi::c_char,
-        slen: ssize_t,
-        buf: *mut ::core::ffi::c_char,
-        buflen: size_t,
-        untab: bool,
-    ) -> size_t;
-    fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn vim_strnsize(s: *const ::core::ffi::c_char, len: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn skipdigits(q: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn get_keymap_str(
-        wp: *mut win_T,
-        fmt: *mut ::core::ffi::c_char,
-        buf: *mut ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn use_cursor_line_highlight(wp: *mut win_T, lnum: linenr_T) -> bool;
-    fn fill_foldcolumn(
-        wp: *mut win_T,
-        foldinfo: foldinfo_T,
-        lnum: linenr_T,
-        attr: ::core::ffi::c_int,
-        fdc: ::core::ffi::c_int,
-        is_virt: bool,
-        wlv_off: *mut ::core::ffi::c_int,
-        out_vcol: *mut colnr_T,
-        out_buffer: *mut schar_T,
-    );
-    fn redrawing() -> bool;
-    fn compute_foldcolumn(wp: *mut win_T, col: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    static updating_screen: GlobalCell<bool>;
-    static redraw_not_allowed: GlobalCell<bool>;
-    fn eval_to_string_safe(
-        arg: *mut ::core::ffi::c_char,
-        use_sandbox: bool,
-        use_simple_function: bool,
-    ) -> *mut ::core::ffi::c_char;
-    fn set_internal_string_var(name: *const ::core::ffi::c_char, value: *mut ::core::ffi::c_char);
-    fn do_unlet(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        forceit: bool,
-    ) -> ::core::ffi::c_int;
-    fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
-    fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_var(name: *const ::core::ffi::c_char, name_len: size_t, tv: *mut typval_T, copy: bool);
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static Columns: GlobalCell<::core::ffi::c_int>;
-    static redraw_cmdline: GlobalCell<bool>;
-    static edit_submode: GlobalCell<*mut ::core::ffi::c_char>;
-    static msg_col: GlobalCell<::core::ffi::c_int>;
-    static msg_row: GlobalCell<::core::ffi::c_int>;
-    static did_emsg: GlobalCell<::core::ffi::c_int>;
-    static t_colors: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static topframe: GlobalCell<*mut frame_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static redraw_tabline: GlobalCell<bool>;
-    static firstbuf: GlobalCell<*mut buf_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static ru_col: GlobalCell<::core::ffi::c_int>;
-    static VIsual_active: GlobalCell<bool>;
-    static State: GlobalCell<::core::ffi::c_int>;
-    static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]>;
-    static KeyTyped: GlobalCell<bool>;
-    static wild_menu_showing: GlobalCell<::core::ffi::c_int>;
-    static default_grid: GlobalCell<ScreenGrid>;
-    static default_gridview: GlobalCell<GridView>;
-    fn grid_adjust(
-        grid: *mut GridView,
-        row_off: *mut ::core::ffi::c_int,
-        col_off: *mut ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
-    fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
-    fn schar_len(sc: schar_T) -> size_t;
-    fn grid_line_start(view: *mut GridView, row: ::core::ffi::c_int);
-    fn screengrid_line_start(
-        grid: *mut ScreenGrid,
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    );
-    fn grid_line_put_schar(col: ::core::ffi::c_int, schar: schar_T, attr: ::core::ffi::c_int);
-    fn grid_line_puts(
-        col: ::core::ffi::c_int,
-        text: *const ::core::ffi::c_char,
-        textlen: ::core::ffi::c_int,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn grid_line_fill(
-        start_col: ::core::ffi::c_int,
-        end_col: ::core::ffi::c_int,
-        sc: schar_T,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn grid_line_flush();
-    static highlight_user: GlobalCell<[::core::ffi::c_int; 9]>;
-    static highlight_stlnc: GlobalCell<[::core::ffi::c_int; 9]>;
-    static ns_hl_fast: GlobalCell<NS>;
-    static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int>;
-    fn hl_combine_attr(
-        char_attr: ::core::ffi::c_int,
-        prim_attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn syn_name2id_len(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
-    fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_find_line_or_offset(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        offp: *mut ::core::ffi::c_int,
-        no_ff: bool,
-    ) -> ::core::ffi::c_int;
-    static msg_grid_adj: GlobalCell<GridView>;
-    fn msg_clr_eos();
-    static showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]>;
-    fn get_option_default(opt_idx: OptIndex, opt_flags: ::core::ffi::c_int) -> OptVal;
-    fn was_set_insecurely(
-        wp: *mut win_T,
-        opt_idx: OptIndex,
-        opt_flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn find_option(name: *const ::core::ffi::c_char) -> OptIndex;
-    fn set_option_direct(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-    );
-    fn get_fileformat(buf: *const buf_T) -> ::core::ffi::c_int;
-    fn home_replace(
-        buf: *const buf_T,
-        src: *const ::core::ffi::c_char,
-        dst: *mut ::core::ffi::c_char,
-        dstlen: size_t,
-        one: bool,
-    ) -> size_t;
-    fn path_tail(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn shorten_dir(str: *mut ::core::ffi::c_char);
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    static tab_page_click_defs: GlobalCell<*mut StlClickDefinition>;
-    static tab_page_click_defs_size: GlobalCell<size_t>;
-    fn describe_sign_text(buf: *mut ::core::ffi::c_char, sign_text: *mut schar_T) -> size_t;
-    fn ui_has(ext: UIExtension) -> bool;
-    fn ui_call_tabline_update(
-        current: Tabpage,
-        tabs: Array,
-        current_buffer: Buffer,
-        buffers: Array,
-    );
-    fn ui_call_msg_ruler(content: Array);
-    fn tabline_height() -> ::core::ffi::c_int;
-    fn global_stl_height() -> ::core::ffi::c_int;
-    fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T;
-    fn bufIsChanged(buf: *mut buf_T) -> bool;
 }
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;

@@ -1,3 +1,9 @@
+use crate::src::nvim::event::libuv::{
+    uv_close, uv_guess_handle, uv_idle_init, uv_is_closing, uv_loop_close, uv_loop_init,
+    uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
+};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
     Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, Stream, VarLockStatus,
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, dict_T,
@@ -18,41 +24,6 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn uv_loop_init(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_loop_close(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    fn uv_run(_: *mut uv_loop_t, mode: uv_run_mode) -> ::core::ffi::c_int;
-    fn uv_close(handle: *mut uv_handle_t, close_cb_0: uv_close_cb);
-    fn uv_stream_get_write_queue_size(stream: *const uv_stream_t) -> size_t;
-    fn uv_stream_set_blocking(
-        handle: *mut uv_stream_t,
-        blocking: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_is_closing(handle: *const uv_handle_t) -> ::core::ffi::c_int;
-    fn uv_guess_handle(file: uv_file) -> uv_handle_type;
-    fn uv_pipe_init(
-        _: *mut uv_loop_t,
-        handle: *mut uv_pipe_t,
-        ipc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn uv_pipe_open(_: *mut uv_pipe_t, file: uv_file) -> ::core::ffi::c_int;
-    fn uv_idle_init(_: *mut uv_loop_t, idle: *mut uv_idle_t) -> ::core::ffi::c_int;
-    fn logmsg(
-        log_level: ::core::ffi::c_int,
-        context: *const ::core::ffi::c_char,
-        func_name: *const ::core::ffi::c_char,
-        line_num: ::core::ffi::c_int,
-        eol: bool,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> bool;
-}
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
 pub const UV_SIGNAL: uv_handle_type = 16;

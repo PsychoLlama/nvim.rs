@@ -1,4 +1,38 @@
+use crate::src::nvim::buffer::buf_is_empty;
+use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum, coladvance};
+use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
+use crate::src::nvim::diff::diff_get_corresponding_line;
+use crate::src::nvim::drawscreen::{
+    conceal_cursor_line, number_width, redrawWinline, redraw_buf_later, redraw_later, redrawing,
+    win_cursorline_standout, win_scroll_lines,
+};
+use crate::src::nvim::edit::{
+    beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner,
+};
+use crate::src::nvim::eval::typval::{
+    tv_check_for_number_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
+};
+use crate::src::nvim::eval::window::find_win_by_nr_or_id;
+use crate::src::nvim::fold::{foldAdjustCursor, hasFolding};
+use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    cmdwin_win, curbuf, curtab, curwin, default_grid, dollar_vcol, e_invalid_line_number_nr,
+    first_tabpage, firstwin, lastwin, mouse_dragging, p_cpo, p_sj, p_so, p_sol, p_ss, p_window,
+    restart_edit, skip_update_topline, Rows, VIsual_active, VIsual_select,
+};
+use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_head_off};
+use crate::src::nvim::memline::ml_get_buf;
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::mouse::vcol2col;
+use crate::src::nvim::normal::{nv_g_home_m_cmd, nv_screengo};
+use crate::src::nvim::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
+use crate::src::nvim::os::libc::{__assert_fail, gettext, labs};
+use crate::src::nvim::plines::{
+    getvcol, getvvcol, linetabsize_eol, plines_m_win, plines_win, plines_win_full,
+    plines_win_nofill, win_get_fill, win_may_fill,
+};
+use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt, DecorHighlightInline,
@@ -29,141 +63,8 @@ pub use crate::src::nvim::types::{
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
     wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn labs(__x: ::core::ffi::c_long) -> ::core::ffi::c_long;
-    fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn buf_is_empty(buf: *mut buf_T) -> bool;
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn check_cursor_lnum(win: *mut win_T);
-    fn check_cursor(wp: *mut win_T);
-    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor_0: bool) -> bool;
-    fn win_lines_concealed(wp: *mut win_T) -> bool;
-    fn diff_get_corresponding_line(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T;
-    fn redrawing() -> bool;
-    fn win_scroll_lines(wp: *mut win_T, row: ::core::ffi::c_int, line_count: ::core::ffi::c_int);
-    fn number_width(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
-    fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn redrawWinline(wp: *mut win_T, lnum: linenr_T);
-    fn conceal_cursor_line(wp: *const win_T) -> bool;
-    fn win_cursorline_standout(wp: *const win_T) -> bool;
-    fn beginline(flags: ::core::ffi::c_int);
-    fn cursor_up_inner(wp: *mut win_T, n: linenr_T, skip_conceal: bool);
-    fn cursor_up(n: linenr_T, upd_topline: bool) -> ::core::ffi::c_int;
-    fn cursor_down_inner(wp: *mut win_T, n: ::core::ffi::c_int, skip_conceal: bool);
-    fn cursor_down(n: ::core::ffi::c_int, upd_topline: bool) -> ::core::ffi::c_int;
-    static e_invalid_line_number_nr: [::core::ffi::c_char; 0];
-    fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn tv_dict_add_nr(
-        d: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        nr: varnumber_T,
-    ) -> ::core::ffi::c_int;
-    fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
-    fn tv_get_number(tv: *const typval_T) -> varnumber_T;
-    fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
-    fn tv_check_for_number_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
-    fn hasFolding(
-        win: *mut win_T,
-        lnum: linenr_T,
-        firstp: *mut linenr_T,
-        lastp: *mut linenr_T,
-    ) -> bool;
-    fn foldAdjustCursor(wp: *mut win_T);
-    fn beep_flush();
-    static Rows: GlobalCell<::core::ffi::c_int>;
-    static dollar_vcol: GlobalCell<colnr_T>;
-    static mouse_dragging: GlobalCell<::core::ffi::c_int>;
-    static firstwin: GlobalCell<*mut win_T>;
-    static lastwin: GlobalCell<*mut win_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static first_tabpage: GlobalCell<*mut tabpage_T>;
-    static curtab: GlobalCell<*mut tabpage_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static VIsual_active: GlobalCell<bool>;
-    static VIsual_select: GlobalCell<bool>;
-    static restart_edit: GlobalCell<::core::ffi::c_int>;
-    static cmdwin_win: GlobalCell<*mut win_T>;
-    static skip_update_topline: GlobalCell<bool>;
-    static default_grid: GlobalCell<ScreenGrid>;
-    fn utf_head_off(
-        base_in: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn mb_adjust_cursor();
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn vcol2col(wp: *mut win_T, lnum: linenr_T, vcol: colnr_T, coladdp: *mut colnr_T) -> colnr_T;
-    fn nv_screengo(
-        oap: *mut oparg_T,
-        dir: ::core::ffi::c_int,
-        dist: ::core::ffi::c_int,
-        skip_conceal: bool,
-    ) -> bool;
-    fn nv_g_home_m_cmd(cap: *mut cmdarg_T);
-    fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ffi::c_char;
-    fn get_scrolloff_value(wp: *mut win_T) -> int64_t;
-    fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t;
-    static p_cpo: GlobalCell<*mut ::core::ffi::c_char>;
-    static p_sj: GlobalCell<OptInt>;
-    static p_so: GlobalCell<OptInt>;
-    static p_ss: GlobalCell<OptInt>;
-    static p_sol: GlobalCell<::core::ffi::c_int>;
-    static p_window: GlobalCell<OptInt>;
-    fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn getvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-    fn win_may_fill(wp: *mut win_T) -> bool;
-    fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> ::core::ffi::c_int;
-    fn plines_win_nofill(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
-    fn plines_win_full(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        nextp: *mut linenr_T,
-        foldedp: *mut bool,
-        cache: bool,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
-    fn plines_m_win(
-        wp: *mut win_T,
-        first: linenr_T,
-        last: linenr_T,
-        max: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn vim_strchr(
-        string: *const ::core::ffi::c_char,
-        c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn win_fdccol_count(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn win_check_anchored_floats(win: *mut win_T);
-}
+use crate::src::nvim::window::win_fdccol_count;
+use crate::src::nvim::winfloat::win_check_anchored_floats;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;

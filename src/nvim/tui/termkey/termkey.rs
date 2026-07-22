@@ -1,83 +1,23 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::{
+    __ctype_b_loc, __errno_location, memcpy, memmove, snprintf, strlen, strncmp, tcgetattr,
+    tcsetattr, tolower,
+};
+use crate::src::nvim::tui::termkey::driver_csi::{
+    free_driver_csi, new_driver_csi, peekkey_csi, termkey_interpret_modereport,
+    termkey_interpret_mouse,
+};
+use crate::src::nvim::tui::termkey::driver_ti::{
+    free_driver_ti, new_driver_ti, peekkey_ti, start_driver_ti, stop_driver_ti,
+};
 pub use crate::src::nvim::types::{
     cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, TermKey, TermKeyCsi, TermKeyDriver,
     TermKeyDriverNode, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_2, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
     TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_1, TerminfoEntry,
 };
-extern "C" {
-    fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
-    fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn snprintf(
-        __s: *mut ::core::ffi::c_char,
-        __maxlen: size_t,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memcpy(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strncmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn tcgetattr(__fd: ::core::ffi::c_int, __termios_p: *mut termios) -> ::core::ffi::c_int;
-    fn tcsetattr(
-        __fd: ::core::ffi::c_int,
-        __optional_actions: ::core::ffi::c_int,
-        __termios_p: *const termios,
-    ) -> ::core::ffi::c_int;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn termkey_interpret_mouse(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        event: *mut TermKeyMouseEvent,
-        button: *mut ::core::ffi::c_int,
-        line: *mut ::core::ffi::c_int,
-        col: *mut ::core::ffi::c_int,
-    ) -> TermKeyResult;
-    fn termkey_interpret_modereport(
-        tk: *mut TermKey,
-        key: *const TermKeyKey,
-        initial: *mut ::core::ffi::c_int,
-        mode: *mut ::core::ffi::c_int,
-        value: *mut ::core::ffi::c_int,
-    ) -> TermKeyResult;
-    fn new_driver_csi(tk: *mut TermKey, term: *mut TerminfoEntry) -> *mut ::core::ffi::c_void;
-    fn free_driver_csi(info: *mut ::core::ffi::c_void);
-    fn peekkey_csi(
-        tk: *mut TermKey,
-        info: *mut ::core::ffi::c_void,
-        key: *mut TermKeyKey,
-        force: ::core::ffi::c_int,
-        nbytep: *mut size_t,
-    ) -> TermKeyResult;
-    fn new_driver_ti(tk: *mut TermKey, term: *mut TerminfoEntry) -> *mut ::core::ffi::c_void;
-    fn start_driver_ti(tk: *mut TermKey, info: *mut ::core::ffi::c_void) -> ::core::ffi::c_int;
-    fn stop_driver_ti(tk: *mut TermKey, info: *mut ::core::ffi::c_void) -> ::core::ffi::c_int;
-    fn free_driver_ti(info: *mut ::core::ffi::c_void);
-    fn peekkey_ti(
-        tk: *mut TermKey,
-        info: *mut ::core::ffi::c_void,
-        key: *mut TermKeyKey,
-        force: ::core::ffi::c_int,
-        nbytep: *mut size_t,
-    ) -> TermKeyResult;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;

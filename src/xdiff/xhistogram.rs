@@ -1,45 +1,13 @@
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::memset;
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, mmfile_t, s_chanode, s_chastore, s_mmfile, s_xdfenv, s_xdfile,
     s_xpparam, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
 };
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xdl_cha_init(
-        cha: *mut chastore_t,
-        isize: ::core::ffi::c_long,
-        icount: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-    fn xdl_cha_free(cha: *mut chastore_t);
-    fn xdl_cha_alloc(cha: *mut chastore_t) -> *mut ::core::ffi::c_void;
-    fn xdl_recmatch(
-        l1: *const ::core::ffi::c_char,
-        s1: ::core::ffi::c_long,
-        l2: *const ::core::ffi::c_char,
-        s2: ::core::ffi::c_long,
-        flags: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_int;
-    fn xdl_hashbits(size: ::core::ffi::c_uint) -> ::core::ffi::c_uint;
-    fn xdl_fall_back_diff(
-        diff_env: *mut xdfenv_t,
-        xpp: *const xpparam_t,
-        line1: ::core::ffi::c_int,
-        count1: ::core::ffi::c_int,
-        line2: ::core::ffi::c_int,
-        count2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn xdl_prepare_env(
-        mf1: *mut mmfile_t,
-        mf2: *mut mmfile_t,
-        xpp: *const xpparam_t,
-        xe: *mut xdfenv_t,
-    ) -> ::core::ffi::c_int;
-}
+use crate::src::xdiff::xprepare::xdl_prepare_env;
+use crate::src::xdiff::xutils::{
+    xdl_cha_alloc, xdl_cha_free, xdl_cha_init, xdl_fall_back_diff, xdl_hashbits, xdl_recmatch,
+};
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct region {

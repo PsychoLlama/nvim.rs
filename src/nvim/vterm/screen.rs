@@ -1,4 +1,5 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::os::libc::{abort, fprintf, memmove, stderr};
 pub use crate::src::nvim::types::{
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, int32_t, schar_T,
     size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState, ScreenCell, ScreenPen,
@@ -18,65 +19,15 @@ pub use crate::src::nvim::types::{
     VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12, FILE,
     _IO_FILE,
 };
-use ::c2rust_bitfields;
-extern "C" {
-    static mut stderr: *mut FILE;
-    fn fprintf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn memmove(
-        __dest: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn abort() -> !;
-    fn vterm_scroll_rect(
-        rect: VTermRect,
-        downward: ::core::ffi::c_int,
-        rightward: ::core::ffi::c_int,
-        moverect: Option<
-            unsafe extern "C" fn(
-                VTermRect,
-                VTermRect,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-        >,
-        eraserect: Option<
-            unsafe extern "C" fn(
-                VTermRect,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-        >,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_state_convert_color_to_rgb(state: *const VTermState, col: *mut VTermColor);
-    fn vterm_obtain_state(vt: *mut VTerm) -> *mut VTermState;
-    fn vterm_state_reset(state: *mut VTermState, hard: ::core::ffi::c_int);
-    fn vterm_state_set_callbacks(
-        state: *mut VTermState,
-        callbacks: *const VTermStateCallbacks,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_state_set_unrecognised_fallbacks(
-        state: *mut VTermState,
-        fallbacks: *const VTermStateFallbacks,
-        user: *mut ::core::ffi::c_void,
-    );
-    fn vterm_state_get_lineinfo(
-        state: *const VTermState,
-        row: ::core::ffi::c_int,
-    ) -> *const VTermLineInfo;
-    fn vterm_allocator_malloc(vt: *mut VTerm, size: size_t) -> *mut ::core::ffi::c_void;
-    fn vterm_allocator_free(vt: *mut VTerm, ptr: *mut ::core::ffi::c_void);
-    fn vterm_get_size(
-        vt: *const VTerm,
-        rowsp: *mut ::core::ffi::c_int,
-        colsp: *mut ::core::ffi::c_int,
-    );
-}
+use crate::src::nvim::vterm::pen::vterm_state_convert_color_to_rgb;
+use crate::src::nvim::vterm::state::{
+    vterm_obtain_state, vterm_state_get_lineinfo, vterm_state_reset, vterm_state_set_callbacks,
+    vterm_state_set_unrecognised_fallbacks,
+};
+use crate::src::nvim::vterm::vterm::{
+    vterm_allocator_free, vterm_allocator_malloc, vterm_get_size, vterm_scroll_rect,
+};
+
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;

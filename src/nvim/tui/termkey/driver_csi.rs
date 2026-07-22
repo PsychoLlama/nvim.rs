@@ -1,26 +1,12 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::os::libc::{__assert_fail, abort, strncpy};
 pub use crate::src::nvim::types::{
     cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, uint8_t, TermKey, TermKeyCsi,
     TermKeyCsiParam, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_0, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
     TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed, TerminfoEntry,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn strncpy(
-        __dest: *mut ::core::ffi::c_char,
-        __src: *const ::core::ffi::c_char,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn abort() -> !;
-}
 pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
 pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
 pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;

@@ -1,4 +1,6 @@
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::memory::{strequal, xcalloc, xfree, xrealloc};
+use crate::src::nvim::os::libc::{abort, memcmp, memset};
 pub use crate::src::nvim::types::{
     cstr_t, int16_t, int32_t, int64_t, mtnode_s, ptr_t, size_t, ssize_t, uint32_t, uint64_t,
     uint8_t, ColorItem, ColorKey, HlAttrs, HlEntry, HlKind, MHPutStatus, MTDamage, MTDamagePair,
@@ -8,23 +10,6 @@ pub use crate::src::nvim::types::{
     Map_uint64_t_ptr_t, RgbValue, Set_ColorKey, Set_HlEntry, Set_String, Set_cstr_t, Set_int,
     Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, String_0,
 };
-extern "C" {
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memcmp(
-        __s1: *const ::core::ffi::c_void,
-        __s2: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    fn abort() -> !;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-}
 pub const kHlInvalid: HlKind = 7;
 pub const kHlBlendThrough: HlKind = 6;
 pub const kHlBlend: HlKind = 5;

@@ -1,4 +1,21 @@
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::api::private::helpers::{
+    api_set_error, api_set_sctx, api_typename, find_buffer_by_handle, find_window_by_handle,
+    try_enter, try_leave,
+};
+use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::autocmd::{
+    aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
+};
+use crate::src::nvim::buffer::{buflist_new, bufref_valid, set_bufref, wipe_buffer};
+
+use crate::src::nvim::main::{curbuf, current_sctx, curwin};
+use crate::src::nvim::memline::ml_open;
+use crate::src::nvim::memory::xstrdup;
+use crate::src::nvim::option::{
+    find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
+    option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
+};
+use crate::src::nvim::os::libc::{__assert_fail, strcmp};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
     Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
@@ -31,95 +48,7 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
-    fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
-    fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
-    fn api_err_invalid(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        val_s: *const ::core::ffi::c_char,
-        val_n: int64_t,
-        quote_val: bool,
-    );
-    fn api_err_exp(
-        err: *mut Error,
-        name: *const ::core::ffi::c_char,
-        expected: *const ::core::ffi::c_char,
-        actual: *const ::core::ffi::c_char,
-    );
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    fn has_event(event: event_T) -> bool;
-    fn block_autocmds();
-    fn unblock_autocmds();
-    fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool;
-    fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T);
-    fn bufref_valid(bufref: *mut bufref_T) -> bool;
-    fn buflist_new(
-        ffname_arg: *mut ::core::ffi::c_char,
-        sfname_arg: *mut ::core::ffi::c_char,
-        lnum: linenr_T,
-        flags: ::core::ffi::c_int,
-    ) -> *mut buf_T;
-    fn wipe_buffer(buf: *mut buf_T, aucmd: bool);
-    static current_sctx: GlobalCell<sctx_T>;
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int;
-    fn find_option(name: *const ::core::ffi::c_char) -> OptIndex;
-    fn optval_free(o: OptVal);
-    fn optval_as_object(o: OptVal) -> Object;
-    fn object_as_optval(o: Object, error: *mut bool) -> OptVal;
-    fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool;
-    fn set_option_direct(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        set_sid: scid_T,
-    );
-    fn get_option_value_for(
-        opt_idx: OptIndex,
-        opt_flags: ::core::ffi::c_int,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-        err: *mut Error,
-    ) -> OptVal;
-    fn set_option_value_for(
-        name: *const ::core::ffi::c_char,
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-        scope: OptScope,
-        from: *mut ::core::ffi::c_void,
-        err: *mut Error,
-    );
-    fn get_vimoption(
-        name: String_0,
-        opt_flags: ::core::ffi::c_int,
-        buf: *mut buf_T,
-        win: *mut win_T,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
-    fn get_all_vimoptions(arena: *mut Arena) -> Dict;
-    fn close_windows(buf: *mut buf_T, keep_curwin: bool);
-}
+use crate::src::nvim::window::close_windows;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -1,4 +1,42 @@
+use crate::src::cjson::lua_cjson::lua_cjson_new;
+use crate::src::mpack::lmpack::luaopen_mpack;
+use crate::src::nvim::api::private::helpers::{
+    api_clear_error, dict_check_writable, find_buffer_by_handle, find_tab_by_handle,
+    find_window_by_handle, try_enter, try_leave,
+};
+use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_item_alloc_len, tv_dict_item_remove,
+    tv_dict_watcher_notify,
+};
+use crate::src::nvim::eval::vars::{before_set_vvar, get_globvar_dict, get_vimvar_dict};
+use crate::src::nvim::eval::window::{win_execute_after, win_execute_before};
+use crate::src::nvim::ex_docmd::{apply_cmdmod, undo_cmdmod};
+use crate::src::nvim::ex_eval::aborting;
+use crate::src::nvim::fold::foldUpdate;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::lua::base64::luaopen_base64;
+use crate::src::nvim::lua::converter::{nlua_pop_typval, nlua_push_typval};
+use crate::src::nvim::lua::ffi::{
+    luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_checkudata, luaL_error,
+    luaL_newmetatable, luaL_register, luaL_where, lua_concat, lua_createtable, lua_error,
+    lua_getfield, lua_gettop, lua_newuserdata, lua_next, lua_pcall, lua_pushcclosure,
+    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue,
+    lua_pushvfstring, lua_rawseti, lua_setfield, lua_setmetatable, lua_settop, lua_toboolean,
+    lua_tolstring, lua_type,
+};
+use crate::src::nvim::lua::spell::luaopen_spell;
+use crate::src::nvim::lua::xdiff::nlua_xdl_diff;
+use crate::src::nvim::main::{buffer_handles, cmdmod, curbuf, g_min_log_level, window_handles};
+use crate::src::nvim::map::mh_get_int;
+use crate::src::nvim::mbyte::{
+    convert_setup, convert_setup_ext, enc_canonize, enc_skip, mb_utf_index_to_bytes, mb_utflen,
+    string_convert, utf_cp_bounds_len, utf_ptr2len_len,
+};
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{strequal, xfree};
+use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
+use crate::src::nvim::runtime::script_autoload;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Buffer, Callback, CallbackType,
     Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharBoundsOff, DecorExt,
@@ -33,201 +71,14 @@ pub use crate::src::nvim::types::{
     undo_object, va_list, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T,
     win_execute_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
+use crate::src::nvim::window::win_find_tabpage;
 extern "C" {
-    fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
-    fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_settop(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_toboolean(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_tolstring(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        len: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushnil(L: *mut lua_State);
-    fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
-    fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_pushvfstring(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        argp: ::core::ffi::VaList,
-    ) -> *const ::core::ffi::c_char;
-    fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
-    fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
-    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
-    fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_pcall(
-        L: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-        errfunc: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_error(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_concat(L: *mut lua_State, n: ::core::ffi::c_int);
-    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
-    fn luaL_argerror(
-        L: *mut lua_State,
-        numarg: ::core::ffi::c_int,
-        extramsg: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_checklstring(
-        L: *mut lua_State,
-        numArg: ::core::ffi::c_int,
-        l: *mut size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn luaL_checkinteger(L: *mut lua_State, numArg: ::core::ffi::c_int) -> lua_Integer;
-    fn luaL_newmetatable(
-        L: *mut lua_State,
-        tname: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn luaL_checkudata(
-        L: *mut lua_State,
-        ud: ::core::ffi::c_int,
-        tname: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_void;
-    fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
-    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
-    fn memset(
-        __s: *mut ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn memchr(
-        __s: *const ::core::ffi::c_void,
-        __c: ::core::ffi::c_int,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcasecmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    static g_min_log_level: GlobalCell<::core::ffi::c_int>;
-    fn lua_cjson_new(l: *mut lua_State) -> ::core::ffi::c_int;
-    fn luaopen_mpack(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
-    fn try_enter(tstate: *mut TryState);
-    fn try_leave(tstate: *const TryState, err: *mut Error);
-    fn dict_check_writable(
-        dict: *mut dict_T,
-        key: String_0,
-        del: bool,
-        err: *mut Error,
-    ) -> *mut dictitem_T;
-    fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
-    fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
-    fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T;
-    fn api_clear_error(value: *mut Error);
-    fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
-    fn aucmd_restbuf(aco: *mut aco_save_T);
-    static buffer_handles: GlobalCell<Map_int_ptr_t>;
-    static window_handles: GlobalCell<Map_int_ptr_t>;
-    fn tv_dict_watcher_notify(
-        dict: *mut dict_T,
-        key: *const ::core::ffi::c_char,
-        newtv: *mut typval_T,
-        oldtv: *mut typval_T,
-    );
-    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
-    fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
-    fn tv_dict_find(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    ) -> *mut dictitem_T;
-    fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int;
-    fn tv_clear(tv: *mut typval_T);
-    fn tv_copy(from: *const typval_T, to: *mut typval_T);
-    fn get_globvar_dict() -> *mut dict_T;
-    fn get_vimvar_dict() -> *mut dict_T;
-    fn before_set_vvar(
-        varname: *const ::core::ffi::c_char,
-        di: *mut dictitem_T,
-        tv: *mut typval_T,
-        copy: bool,
-        watched: bool,
-        type_error: *mut bool,
-    ) -> bool;
-    fn win_execute_before(args: *mut win_execute_T, wp: *mut win_T, tp: *mut tabpage_T) -> bool;
-    fn win_execute_after(args: *mut win_execute_T);
-    fn apply_cmdmod(cmod: *mut cmdmod_T);
-    fn undo_cmdmod(cmod: *mut cmdmod_T);
-    fn aborting() -> bool;
-    fn foldUpdate(wp: *mut win_T, top: linenr_T, bot: linenr_T);
-    fn luaopen_base64(L: *mut lua_State) -> ::core::ffi::c_int;
-    static curbuf: GlobalCell<*mut buf_T>;
-    static cmdmod: GlobalCell<cmdmod_T>;
-    fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> bool;
-    fn nlua_push_typval(
-        lstate: *mut lua_State,
-        tv: *mut typval_T,
-        flags: ::core::ffi::c_int,
-    ) -> bool;
-    fn luaopen_spell(L: *mut lua_State) -> ::core::ffi::c_int;
-    fn nlua_xdl_diff(lstate: *mut lua_State) -> ::core::ffi::c_int;
-    fn utf_ptr2len_len(
-        p: *const ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn mb_utflen(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        codepoints: *mut size_t,
-        codeunits: *mut size_t,
-    );
-    fn mb_utf_index_to_bytes(
-        s: *const ::core::ffi::c_char,
-        len: size_t,
-        index: size_t,
-        use_utf16_units: bool,
-    ) -> ssize_t;
-    fn utf_cp_bounds_len(
-        base: *const ::core::ffi::c_char,
-        p_in: *const ::core::ffi::c_char,
-        p_len: ::core::ffi::c_int,
-    ) -> CharBoundsOff;
-    fn enc_skip(p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn enc_canonize(enc: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn convert_setup(
-        vcp: *mut vimconv_T,
-        from: *mut ::core::ffi::c_char,
-        to: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn convert_setup_ext(
-        vcp: *mut vimconv_T,
-        from: *mut ::core::ffi::c_char,
-        from_unicode_is_utf8: bool,
-        to: *mut ::core::ffi::c_char,
-        to_unicode_is_utf8: bool,
-    ) -> ::core::ffi::c_int;
-    fn string_convert(
-        vcp: *const vimconv_T,
-        ptr: *mut ::core::ffi::c_char,
-        lenp: *mut size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
-    fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
