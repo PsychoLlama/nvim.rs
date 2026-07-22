@@ -1,11 +1,5 @@
-#include <stdio.h>
-#include <string.h>
+#include "shim.h"
 
-#include "nvim/grid.h"
-#include "nvim/mbyte.h"
-#include "nvim/vterm/pen.h"
-#include "nvim/vterm/screen.h"
-#include "nvim/vterm/vterm_internal_defs.h"
 #include "vterm_test.h"
 
 int parser_text(const char bytes[], size_t len, void *user)

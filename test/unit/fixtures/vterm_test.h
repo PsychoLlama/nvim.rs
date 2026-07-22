@@ -1,8 +1,6 @@
-#include <stdbool.h>
-#include <stdint.h>
-
-#include "nvim/macros_defs.h"
-#include "nvim/vterm/vterm.h"
+// Nvim types come from shim.h (the C compile) or the generated cdefs chunk
+// (the specs' ffi.cdef; testutil drops the '#' lines of fixture headers and
+// reduces the EXTERN/INIT markers like the old preprocessor defines did).
 
 EXTERN VTermPos state_pos;
 EXTERN bool want_state_putglyph INIT (=false);

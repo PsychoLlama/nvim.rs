@@ -41,9 +41,9 @@ M.translations_enabled = false
 -- must skip under ASan because redzones/quarantine distort their measurements.
 M.is_asan = os.getenv('NVIM_TEST_ASAN') == '1'
 M.is_zig_build = false
--- Must match VTERM_TEST_FILE in the upstream build's auto/config.h; the
--- vterm fixture (unit-fixtures.so) writes there.
-M.vterm_test_file = root .. '/target/upstream/build/test/vterm_test_output'
+-- Must match the VTERM_TEST_FILE define in scripts/build-unit-fixtures.sh;
+-- the vterm fixture (unit-fixtures.so) writes there.
+M.vterm_test_file = root .. '/target/vterm_test_output'
 M.test_lua_prg = deps_prefix and (deps_prefix .. '/bin/luajit') or nil
 M.test_luajit_prg = M.test_lua_prg
 -- target/ is dressed up as a CMake-style build dir (runtime/, lib/nvim/) by

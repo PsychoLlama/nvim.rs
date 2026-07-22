@@ -6,6 +6,12 @@
 # so ffi.C sees the symbols, and its nvim references resolve from the binary
 # (linked with --export-dynamic).
 #
+# The nvim declaration surface is the ffigen-generated cdefs chunk (see
+# test/unit/fixtures/shim.h), so the fixtures compile against the layouts of
+# the crate under test — no C headers beyond this repo. VTERM_TEST_FILE is
+# where the vterm fixture logs callbacks; must match paths.vterm_test_file in
+# test/cmakeconfig/paths.lua (upstream wired the same pair through CMake).
+#
 # Shared by run-tests.sh (the unit suite loads it) and abi-ledger.py (its
 # undefined symbols are part of the export contract: they must keep resolving
 # from the nvim binary). Skips the compile when the output is newer than the
@@ -15,22 +21,26 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-: "${NVIM_DEPS_PREFIX:?NVIM_DEPS_PREFIX must be set (enter the flake dev shell)}"
 
 out=${1:?usage: $0 <output.so>}
 
-# The fixtures include the upstream C headers; reconstruct them if needed.
-"$root/scripts/prep-unit-headers.sh"
+# The fixtures include the generated cdefs chunk; (re)generate it if stale.
+"$root/scripts/gen-unit-cdefs.sh"
 
-up=$root/target/upstream
+chunk=$root/target/ffi/unit-cdefs.h
 unit_fixtures=$root/test/unit/fixtures
-if [[ ! -e $out || $unit_fixtures/multiqueue.c -nt $out ||
-  $unit_fixtures/vterm_test.c -nt $out ]]; then
+stale=0
+for src in "$unit_fixtures"/multiqueue.{c,h} "$unit_fixtures"/vterm_test.{c,h} \
+  "$unit_fixtures/shim.h" "$chunk"; do
+  if [[ ! -e $out || $src -nt $out ]]; then
+    stale=1
+  fi
+done
+if [[ $stale == 1 ]]; then
   echo "compiling test fixture: $(basename "$out")" >&2
   mkdir -p "$(dirname "$out")"
   cc -shared -fPIC -O2 -o "$out" \
     "$unit_fixtures/multiqueue.c" "$unit_fixtures/vterm_test.c" \
-    -I"$unit_fixtures" -I"$up/src/src" -I"$up/build/src/nvim/auto" \
-    -I"$up/build/include" -I"$up/build/cmake.config" \
-    -I"$NVIM_DEPS_PREFIX/include"
+    -I"$unit_fixtures" -I"$root/target/ffi" \
+    -DVTERM_TEST_FILE="\"$root/target/vterm_test_output\""
 fi
