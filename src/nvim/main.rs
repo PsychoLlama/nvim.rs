@@ -3593,6 +3593,7 @@ pub static stl_syntax: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::c
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 pub static virtual_op: GlobalCell<TriState> = GlobalCell::new(kNone);
+#[no_mangle]
 pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
 pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());

@@ -2063,6 +2063,7 @@ pub unsafe extern "C" fn ui_call_suspend() {
         ui_log(b"suspend\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
+#[no_mangle]
 pub unsafe extern "C" fn ui_call_set_title(mut title: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2115,6 +2116,7 @@ pub unsafe extern "C" fn ui_call_option_set(mut name: String_0, mut value: Objec
         ui_log(b"option_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
+#[no_mangle]
 pub unsafe extern "C" fn ui_call_chdir(mut path: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;

@@ -4169,12 +4169,14 @@ pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
     );
     termresponse_changed.set(true_0 != 0);
 }
+#[no_mangle]
 pub unsafe extern "C" fn block_autocmds() {
     if !is_autocmd_blocked() {
         termresponse_changed.set(false_0 != 0);
     }
     (*autocmd_blocked.ptr()) += 1;
 }
+#[no_mangle]
 pub unsafe extern "C" fn unblock_autocmds() {
     (*autocmd_blocked.ptr()) -= 1;
     if !is_autocmd_blocked()

@@ -26,6 +26,15 @@ symbol named in a comment counts), which errs in the safe direction: a
 symbol is only ever misclassified toward "keep exported", never toward
 "safe to change". Dynamically constructed names ('mem_' .. name) are
 invisible to the scan and must be listed in DYNAMIC_SPEC_REFS by hand.
+
+A few *functional* specs also resolve symbols by name — ffi_spec, tui_spec,
+job_spec and preload.lua `ffi.cdef` a handful of declarations and call them
+through ffi.C against the running binary (the phase-5c de-export surfaced
+this as runtime "undefined symbol" failures). LuaJIT requires a cdef before
+any ffi.C access, so the cdef chunks are a complete oracle for that surface:
+tokens are taken from cdef arguments only (long-bracket or quoted string),
+not whole files — a whole-file scan would pin every nvim_* name mentioned in
+RPC-driven specs, which resolve by dispatch-table string, not symbol.
 NB: user Lua could in principle ffi.C into
 any export (--export-dynamic exposes them all); the project makes no compat
 guarantees, so that surface is deliberately not part of the contract.
@@ -129,10 +138,28 @@ def deps_libraries():
 DYNAMIC_SPEC_REFS = {"mem_malloc", "mem_free", "mem_calloc", "mem_realloc"}
 
 
+# ffi.cdef arguments in functional specs: a long-bracket string (optionally
+# parenthesized) or a plain quoted string. The chunk contents are tokenized;
+# type names over-match harmlessly (same safe direction as the unit scan).
+CDEF_RE = re.compile(
+    r"cdef\s*\(?\s*(?:\[(=*)\[(?P<long>.*?)\]\1\]|'(?P<sq>[^']*)'|\"(?P<dq>[^\"]*)\")",
+    re.S,
+)
+
+
 def spec_tokens():
     tokens = set(DYNAMIC_SPEC_REFS)
     for spec in ROOT.glob("test/unit/**/*.lua"):
         tokens.update(TOKEN_RE.findall(spec.read_text()))
+    return tokens
+
+
+def functional_cdef_tokens():
+    tokens = set()
+    for spec in ROOT.glob("test/functional/**/*.lua"):
+        for m in CDEF_RE.finditer(spec.read_text(errors="replace")):
+            chunk = m.group("long") or m.group("sq") or m.group("dq") or ""
+            tokens.update(TOKEN_RE.findall(chunk))
     return tokens
 
 
@@ -154,12 +181,16 @@ def build_ledger():
     for name in spec_tokens() & exports.keys():
         refs[name].append("unit-specs")
 
+    for name in functional_cdef_tokens() & exports.keys():
+        refs[name].append("functional-specs")
+
+    test_refs = {"unit-specs", "functional-specs", FIXTURE_SO.name}
     counts = {cls: 0 for cls in ("external", "test", "internal")}
     lines = []
     for name in sorted(exports):
         kind, file = exports[name]
         r = refs[name]
-        if any(not ref.startswith("unit-") for ref in r):
+        if any(ref not in test_refs for ref in r):
             cls = "external"
         elif r:
             cls = "test"

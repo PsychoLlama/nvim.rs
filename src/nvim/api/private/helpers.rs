@@ -564,6 +564,7 @@ pub unsafe extern "C" fn find_buffer_by_handle(
     }
     return rv;
 }
+#[no_mangle]
 pub unsafe extern "C" fn find_window_by_handle(
     mut window: Window,
     mut err: *mut Error,
