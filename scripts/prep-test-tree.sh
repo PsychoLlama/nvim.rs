@@ -17,9 +17,6 @@ ln -sfn "$NVIM_DEPS_PREFIX/lib/nvim" "$root/target/lib/nvim"
 if [[ -L $root/target/runtime ]]; then rm "$root/target/runtime"; fi
 mkdir -p "$root/target/runtime"
 ln -sfn ../../runtime/doc "$root/target/runtime/doc"
-# Upstream's build runtime also carried the generated vimscript syntax
-# tables; only specs that opt in via add_builddir_to_rtp() see them.
-"$root/scripts/gen-vimvim.sh"
 # Specs resolve nvim through $BUILD_DIR/bin/nvim (and fs_spec asserts that
 # layout), so the tested binary is exposed here; $NVIM_BIN overrides the
 # default cargo build (e.g. the ASan recipes point it at target/asan). A real
@@ -35,3 +32,8 @@ nvim_bin=${NVIM_BIN:-$root/target/debug/nvim}
 if [[ -e $nvim_bin ]]; then
   ln -f "$nvim_bin" "$root/target/bin/nvim"
 fi
+
+# Upstream's build runtime also carried the generated vimscript syntax
+# tables; only specs that opt in via add_builddir_to_rtp() see them. Runs
+# after the bin/ link: the generator is the built nvim itself.
+"$root/scripts/gen-vimvim.sh"
