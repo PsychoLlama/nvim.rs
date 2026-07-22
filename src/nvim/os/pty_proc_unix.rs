@@ -358,7 +358,6 @@ unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi
     };
 }
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ffi::c_int {
     static termios_default: GlobalCell<termios> = GlobalCell::new(termios {
         c_iflag: 0,
@@ -478,13 +477,11 @@ pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ff
     );
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_tty_name(
     mut ptyproc: *mut PtyProc,
 ) -> *const ::core::ffi::c_char {
     return ptsname((*ptyproc).tty_fd);
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_resize(
     mut ptyproc: *mut PtyProc,
     mut width: uint16_t,
@@ -502,11 +499,9 @@ pub unsafe extern "C" fn pty_proc_resize(
         &raw mut (*ptyproc).winsize,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_resume(mut ptyproc: *mut PtyProc) {
     killpg((*(ptyproc as *mut Proc)).pid as __pid_t, SIGCONT);
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_flush_master(mut ptyproc: *mut PtyProc) {
     let mut pollfd: pollfd = pollfd {
         fd: (*ptyproc).tty_fd,
@@ -521,7 +516,6 @@ pub unsafe extern "C" fn pty_proc_flush_master(mut ptyproc: *mut PtyProc) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_close(mut ptyproc: *mut PtyProc) {
     pty_proc_close_master(ptyproc);
     let mut proc: *mut Proc = ptyproc as *mut Proc;
@@ -531,14 +525,12 @@ pub unsafe extern "C" fn pty_proc_close(mut ptyproc: *mut PtyProc) {
             .expect("non-null function pointer")(proc);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_close_master(mut ptyproc: *mut PtyProc) {
     if (*ptyproc).tty_fd >= 0 as ::core::ffi::c_int {
         close((*ptyproc).tty_fd);
         (*ptyproc).tty_fd = -1 as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_teardown(mut loop_0: *mut Loop) {
     uv_signal_stop(&raw mut (*loop_0).children_watcher);
 }
@@ -738,7 +730,6 @@ unsafe extern "C" fn chld_handler(mut handle: *mut uv_signal_t, mut _signum: ::c
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pty_proc_init(
     mut loop_0: *mut Loop,
     mut data: *mut ::core::ffi::c_void,

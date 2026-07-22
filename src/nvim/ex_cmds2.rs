@@ -1108,70 +1108,60 @@ static e_compiler_not_supported_str: GlobalCell<[::core::ffi::c_char; 33]> =
             *b"E666: Compiler not supported: %s\0",
         )
     });
-#[no_mangle]
 pub unsafe extern "C" fn ex_ruby(mut eap: *mut exarg_T) {
     script_host_execute(
         b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_rubyfile(mut eap: *mut exarg_T) {
     script_host_execute_file(
         b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_rubydo(mut eap: *mut exarg_T) {
     script_host_do_range(
         b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_python3(mut eap: *mut exarg_T) {
     script_host_execute(
         b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_py3file(mut eap: *mut exarg_T) {
     script_host_execute_file(
         b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_pydo3(mut eap: *mut exarg_T) {
     script_host_do_range(
         b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_perl(mut eap: *mut exarg_T) {
     script_host_execute(
         b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_perlfile(mut eap: *mut exarg_T) {
     script_host_execute_file(
         b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_perldo(mut eap: *mut exarg_T) {
     script_host_do_range(
         b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         eap,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::core::ffi::c_int {
     let mut bufref: bufref_T = bufref_T {
         br_buf: ::core::ptr::null_mut::<buf_T>(),
@@ -1195,7 +1185,6 @@ pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::
     }
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn autowrite_all() {
     if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
         return;
@@ -1218,7 +1207,6 @@ pub unsafe extern "C" fn autowrite_all() {
         buf = (*buf).b_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) -> bool {
     let mut forceit: bool = flags & CCGD_FORCEIT as ::core::ffi::c_int != 0;
     let mut bufref: bufref_T = bufref_T {
@@ -1266,7 +1254,6 @@ pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::f
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool) {
     let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
     let mut ret: ::core::ffi::c_int = 0;
@@ -1399,7 +1386,6 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn dialog_close_terminal(mut buf: *mut buf_T) -> bool {
     let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
     dialog_msg(
@@ -1442,7 +1428,6 @@ unsafe extern "C" fn add_bufnum(
     *bufnrs.offset(*bufnump as isize) = nr;
     *bufnump = *bufnump + 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -> bool {
     let mut ret: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0;
@@ -1629,7 +1614,6 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
     xfree(bufnrs as *mut ::core::ffi::c_void);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_fname() -> ::core::ffi::c_int {
     if (*curbuf.get()).b_ffname.is_null() {
         emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
@@ -1637,7 +1621,6 @@ pub unsafe extern "C" fn check_fname() -> ::core::ffi::c_int {
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_write_all(
     mut buf: *mut buf_T,
     mut forceit: bool,
@@ -1667,7 +1650,6 @@ pub unsafe extern "C" fn buf_write_all(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
     if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
         if ((*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
@@ -2007,7 +1989,6 @@ pub unsafe extern "C" fn ex_listdo(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_compiler(mut eap: *mut exarg_T) {
     let mut old_cur_comp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *(*eap).arg as ::core::ffi::c_int == NUL {
@@ -2085,7 +2066,6 @@ pub unsafe extern "C" fn ex_compiler(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_checktime(mut eap: *mut exarg_T) {
     let mut save_no_check_timestamps: ::core::ffi::c_int = no_check_timestamps.get();
     no_check_timestamps.set(0 as ::core::ffi::c_int);
@@ -2163,7 +2143,6 @@ unsafe extern "C" fn script_host_do_range(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_drop(mut eap: *mut exarg_T) {
     let mut split: bool = false_0 != 0;
     set_arglist((*eap).arg);

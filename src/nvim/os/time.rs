@@ -87,11 +87,9 @@ pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)
     .wrapping_add(1 as ::core::ffi::c_uint);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn os_hrtime() -> uint64_t {
     return uv_hrtime();
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_realtime() -> int64_t {
     let mut ts: uv_timespec64_t = uv_timespec64_t {
         tv_sec: 0 as int64_t,
@@ -114,11 +112,9 @@ pub unsafe extern "C" fn os_realtime() -> int64_t {
     }
     return ts.tv_sec * 1000000000 as int64_t + ts.tv_nsec as int64_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_now() -> uint64_t {
     return uv_now(&raw mut (*main_loop.ptr()).uv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
     logmsg(
         LOGLVL_DBG,
@@ -165,7 +161,6 @@ pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_sleep(mut ms: uint64_t) {
     if ms > UINT_MAX as uint64_t {
         ms = UINT_MAX as uint64_t;
@@ -173,7 +168,6 @@ pub unsafe extern "C" fn os_sleep(mut ms: uint64_t) {
     uv_sleep(ms as ::core::ffi::c_uint);
 }
 static tz_cache: GlobalCell<[::core::ffi::c_char; 64]> = GlobalCell::new([0; 64]);
-#[no_mangle]
 pub unsafe extern "C" fn os_localtime_r(mut clock: *const time_t, mut result: *mut tm) -> *mut tm {
     let mut tz: *const ::core::ffi::c_char =
         os_getenv_noalloc(b"TZ\0".as_ptr() as *const ::core::ffi::c_char);
@@ -195,12 +189,10 @@ pub unsafe extern "C" fn os_localtime_r(mut clock: *const time_t, mut result: *m
     }
     return localtime_r(clock, result);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_localtime(mut result: *mut tm) -> *mut tm {
     let mut rawtime: time_t = time(::core::ptr::null_mut::<time_t>());
     return os_localtime_r(&raw mut rawtime, result);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_ctime_r(
     mut clock: *const time_t,
     mut result: *mut ::core::ffi::c_char,
@@ -249,7 +241,6 @@ pub unsafe extern "C" fn os_ctime_r(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_ctime(
     mut result: *mut ::core::ffi::c_char,
     mut result_len: size_t,
@@ -258,7 +249,6 @@ pub unsafe extern "C" fn os_ctime(
     let mut rawtime: time_t = time(::core::ptr::null_mut::<time_t>());
     return os_ctime_r(&raw mut rawtime, result, result_len, add_newline);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_strptime(
     mut str: *const ::core::ffi::c_char,
     mut format: *const ::core::ffi::c_char,
@@ -266,7 +256,6 @@ pub unsafe extern "C" fn os_strptime(
 ) -> *mut ::core::ffi::c_char {
     return strptime(str, format, tm);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_time() -> Timestamp {
     return time(::core::ptr::null_mut::<time_t>()) as Timestamp;
 }

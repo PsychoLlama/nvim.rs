@@ -130,7 +130,6 @@ pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
 pub const CSI_ARG_MASK: ::core::ffi::c_uint =
     !((1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int);
 pub const CSI_ARG_MISSING: ::core::ffi::c_long = 2147483647 as ::core::ffi::c_long;
-#[no_mangle]
 pub static vterm_primary_device_attr: GlobalCell<[::core::ffi::c_char; 9]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0")
@@ -306,7 +305,6 @@ unsafe extern "C" fn vterm_state_new(mut vt: *mut VTerm) -> *mut VTermState {
     }
     return state;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_free(mut state: *mut VTermState) {
     vterm_allocator_free((*state).vt, (*state).tabstops as *mut ::core::ffi::c_void);
     vterm_allocator_free(
@@ -3899,7 +3897,6 @@ pub unsafe extern "C" fn vterm_state_set_unrecognised_fallbacks(
         (*state).fbdata = NULL;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_set_termprop(
     mut state: *mut VTermState,
     mut prop: VTermProp,

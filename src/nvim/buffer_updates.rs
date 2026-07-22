@@ -137,7 +137,6 @@ pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_register(
     mut buf: *mut buf_T,
     mut channel_id: uint64_t,
@@ -271,11 +270,9 @@ pub unsafe extern "C" fn buf_updates_register(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_active(mut buf: *mut buf_T) -> bool {
     return (*buf).update_channels.size != 0 || (*buf).update_callbacks.size != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid: uint64_t) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
@@ -298,7 +295,6 @@ pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channelid: uint64_t) {
     let mut size: size_t = (*buf).update_channels.size;
     if size == 0 {
@@ -333,7 +329,6 @@ pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channel
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_free_callbacks(mut buf: *mut buf_T) {
     xfree((*buf).update_channels.items as *mut ::core::ffi::c_void);
     (*buf).update_channels.capacity = 0 as size_t;
@@ -349,7 +344,6 @@ pub unsafe extern "C" fn buf_free_callbacks(mut buf: *mut buf_T) {
     (*buf).update_callbacks.size = (*buf).update_callbacks.capacity;
     (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload: bool) {
     let mut size: size_t = (*buf).update_channels.size;
     if size != 0 {
@@ -435,7 +429,6 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
         (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_send_changes(
     mut buf: *mut buf_T,
     mut firstline: linenr_T,
@@ -675,7 +668,6 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     }
     (*buf).update_callbacks.size = j;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_send_splice(
     mut buf: *mut buf_T,
     mut start_row: ::core::ffi::c_int,
@@ -830,7 +822,6 @@ pub unsafe extern "C" fn buf_updates_send_splice(
     }
     (*buf).update_callbacks.size = j;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_channels.size {
@@ -904,7 +895,6 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
     }
     (*buf).update_callbacks.size = j;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_updates_changedtick_single(
     mut buf: *mut buf_T,
     mut channel_id: uint64_t,
@@ -938,7 +928,6 @@ pub unsafe extern "C" fn buf_updates_changedtick_single(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_update_callbacks_free(mut cb: BufUpdateCallbacks) {
     api_free_luaref(cb.on_lines);
     api_free_luaref(cb.on_bytes);

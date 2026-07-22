@@ -524,10 +524,8 @@ static e_non_null_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char
             *b"E1297: Non-NULL Dictionary required for argument %d\0",
         )
     });
-#[no_mangle]
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-#[no_mangle]
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(b"\0".as_ptr() as *const ::core::ffi::c_char);
 unsafe extern "C" fn tv_list_item_alloc() -> *mut listitem_T {
@@ -584,7 +582,6 @@ pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut list_T {
     (*list).lua_table_ref = LUA_NOREF as LuaRef;
     return list;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_init_static10(sl: *mut staticList10_T) {
     let l: *mut list_T = &raw mut (*sl).sl_list;
     memset(
@@ -623,7 +620,6 @@ pub const SL_SIZE: usize = ::core::mem::size_of::<[listitem_T; 10]>()
             .wrapping_rem(::core::mem::size_of::<listitem_T>())
             == 0) as ::core::ffi::c_int as usize,
     );
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_init_static(l: *mut list_T) {
     memset(
         l as *mut ::core::ffi::c_void,
@@ -732,7 +728,6 @@ pub unsafe extern "C" fn tv_list_remove_items(
         li = nli;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_move_items(
     l: *mut list_T,
     item: *mut listitem_T,
@@ -939,7 +934,6 @@ pub unsafe extern "C" fn tv_list_copy(
     }
     return copy;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_check_range_index_one(
     l: *mut list_T,
     n1: *mut ::core::ffi::c_int,
@@ -957,7 +951,6 @@ pub unsafe extern "C" fn tv_list_check_range_index_one(
     }
     return ::core::ptr::null_mut::<listitem_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_check_range_index_two(
     l: *mut list_T,
     n1: *mut ::core::ffi::c_int,
@@ -992,7 +985,6 @@ pub unsafe extern "C" fn tv_list_check_range_index_two(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_assign_range(
     dest: *mut list_T,
     src: *mut list_T,
@@ -1073,7 +1065,6 @@ pub unsafe extern "C" fn tv_list_assign_range(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_flatten(
     mut list: *mut list_T,
     mut first: *mut listitem_T,
@@ -1258,7 +1249,6 @@ unsafe extern "C" fn tv_list_slice(
     }
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_slice_or_index(
     mut _list: *mut list_T,
     mut range: bool,
@@ -1416,7 +1406,6 @@ pub unsafe extern "C" fn tv_list_join(
     ga_clear(_gap);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_join(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1463,7 +1452,6 @@ pub unsafe extern "C" fn f_join(
         (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_list2str(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1517,7 +1505,6 @@ pub unsafe extern "C" fn f_list2str(
     ga_append(&raw mut ga, NUL as uint8_t);
     (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_remove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2067,7 +2054,6 @@ unsafe extern "C" fn do_sort_uniq(
     }
     sortinfo.set(old_sortinfo);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sort(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2075,7 +2061,6 @@ pub unsafe extern "C" fn f_sort(
 ) {
     do_sort_uniq(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_uniq(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2120,7 +2105,6 @@ pub unsafe extern "C" fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: boo
     };
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_list_reverse(l: *mut list_T) {
     if tv_list_len(l) <= 1 as ::core::ffi::c_int {
         return;
@@ -2285,7 +2269,6 @@ pub unsafe extern "C" fn tv_dict_watcher_add(
     (*watcher).needs_free = false_0 != 0;
     QUEUE_INSERT_TAIL(&raw mut (*dict).watchers, &raw mut (*watcher).node);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_callback_equal(
     mut cb1: *const Callback,
     mut cb2: *const Callback,
@@ -2325,7 +2308,6 @@ pub unsafe extern "C" fn callback_free(mut callback: *mut Callback) {
     (*callback).type_0 = kCallbackNone;
     (*callback).data.funcref = ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_put(mut cb: *mut Callback, mut tv: *mut typval_T) {
     match (*cb).type_0 as ::core::ffi::c_uint {
         2 => {
@@ -2344,7 +2326,6 @@ pub unsafe extern "C" fn callback_put(mut cb: *mut Callback, mut tv: *mut typval
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_copy(mut dest: *mut Callback, mut src: *mut Callback) {
     (*dest).type_0 = (*src).type_0;
     match (*src).type_0 as ::core::ffi::c_uint {
@@ -2364,7 +2345,6 @@ pub unsafe extern "C" fn callback_copy(mut dest: *mut Callback, mut src: *mut Ca
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_to_string(
     mut cb: *mut Callback,
     mut arena: *mut Arena,
@@ -2462,7 +2442,6 @@ unsafe extern "C" fn tv_dict_watcher_matches(
     }
     return strcmp(key, (*watcher).key_pattern) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_watcher_notify(
     dict: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -2603,7 +2582,6 @@ pub unsafe extern "C" fn tv_dict_item_free(item: *mut dictitem_T) {
         xfree(item as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
     let new_di: *mut dictitem_T =
         tv_dict_item_alloc(&raw mut (*di).di_key as *mut ::core::ffi::c_char);
@@ -2645,7 +2623,6 @@ pub unsafe extern "C" fn tv_dict_alloc() -> *mut dict_T {
     (*d).lua_table_ref = LUA_NOREF as LuaRef;
     return d;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
     hash_lock(&raw mut (*d).dv_hashtab);
     '_c2rust_label: {
@@ -2685,7 +2662,6 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
     (*d).dv_hashtab.ht_locked -= 1;
     hash_init(&raw mut (*d).dv_hashtab);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_free_dict(d: *mut dict_T) {
     if (*d).dv_used_prev.is_null() {
         gc_first_dict.set((*d).dv_used_next);
@@ -2738,14 +2714,12 @@ pub unsafe extern "C" fn tv_dict_find(
     }
     return (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_has_key(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
 ) -> bool {
     return !tv_dict_find(d, key, -1 as ptrdiff_t).is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_get_tv(
     mut d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -2765,7 +2739,6 @@ pub unsafe extern "C" fn tv_dict_get_number(
 ) -> varnumber_T {
     return tv_dict_get_number_def(d, key, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_get_number_def(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -2777,7 +2750,6 @@ pub unsafe extern "C" fn tv_dict_get_number_def(
     }
     return tv_get_number(&raw mut (*di).di_tv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_get_bool(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -2789,7 +2761,6 @@ pub unsafe extern "C" fn tv_dict_get_bool(
     }
     return tv_get_bool(&raw mut (*di).di_tv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_to_env(mut denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char {
     let mut env_size: size_t = tv_dict_len(denv) as size_t;
     let mut i: size_t = 0 as size_t;
@@ -2916,7 +2887,6 @@ pub unsafe extern "C" fn tv_dict_get_callback(
     tv_clear(&raw mut tv);
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_wrong_func_name(
     mut d: *mut dict_T,
     mut tv: *mut typval_T,
@@ -2959,7 +2929,6 @@ pub unsafe extern "C" fn tv_dict_add_list(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_add_tv(
     mut d: *mut dict_T,
     mut key: *const ::core::ffi::c_char,
@@ -3023,7 +2992,6 @@ pub unsafe extern "C" fn tv_dict_add_float(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_add_bool(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -3048,7 +3016,6 @@ pub unsafe extern "C" fn tv_dict_add_str(
 ) -> ::core::ffi::c_int {
     return tv_dict_add_str_len(d, key, key_len, val, -1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_add_str_len(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -3082,7 +3049,6 @@ pub unsafe extern "C" fn tv_dict_add_allocated_str(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_add_func(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -3390,7 +3356,6 @@ pub unsafe extern "C" fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
         dihi_ = dihi_.offset(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_alloc() -> *mut blob_T {
     let blob: *mut blob_T = xcalloc(1 as size_t, ::core::mem::size_of::<blob_T>()) as *mut blob_T;
     ga_init(
@@ -3400,12 +3365,10 @@ pub unsafe extern "C" fn tv_blob_alloc() -> *mut blob_T {
     );
     return blob;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_free(b: *mut blob_T) {
     ga_clear(&raw mut (*b).bv_ga);
     xfree(b as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_unref(b: *mut blob_T) {
     if !b.is_null() && {
         (*b).bv_refcount -= 1;
@@ -3414,7 +3377,6 @@ pub unsafe extern "C" fn tv_blob_unref(b: *mut blob_T) {
         tv_blob_free(b);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_equal(b1: *const blob_T, b2: *const blob_T) -> bool {
     let len1: ::core::ffi::c_int = tv_blob_len(b1);
     let len2: ::core::ffi::c_int = tv_blob_len(b2);
@@ -3512,7 +3474,6 @@ unsafe extern "C" fn tv_blob_index(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_slice_or_index(
     mut blob: *const blob_T,
     mut is_range: bool,
@@ -3528,7 +3489,6 @@ pub unsafe extern "C" fn tv_blob_slice_or_index(
         return tv_blob_index(blob, len, n1, rettv);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_check_index(
     mut bloblen: ::core::ffi::c_int,
     mut n1: varnumber_T,
@@ -3545,7 +3505,6 @@ pub unsafe extern "C" fn tv_blob_check_index(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_check_range(
     mut bloblen: ::core::ffi::c_int,
     mut n1: varnumber_T,
@@ -3563,7 +3522,6 @@ pub unsafe extern "C" fn tv_blob_check_range(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_set_range(
     mut dest: *mut blob_T,
     mut n1: varnumber_T,
@@ -3587,7 +3545,6 @@ pub unsafe extern "C" fn tv_blob_set_range(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_set_append(
     mut blob: *mut blob_T,
     mut idx: ::core::ffi::c_int,
@@ -3602,7 +3559,6 @@ pub unsafe extern "C" fn tv_blob_set_append(
         tv_blob_set(blob, idx, byte);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_remove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3691,7 +3647,6 @@ pub unsafe extern "C" fn tv_blob_remove(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_blob2list(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3709,7 +3664,6 @@ pub unsafe extern "C" fn f_blob2list(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_list2blob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3753,7 +3707,6 @@ pub unsafe extern "C" fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t
     (*ret_tv).v_lock = VAR_UNLOCKED;
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_alloc_lock(mut lock: VarLockStatus) -> *mut dict_T {
     let d: *mut dict_T = tv_dict_alloc();
     (*d).dv_lock = lock;
@@ -3825,7 +3778,6 @@ unsafe extern "C" fn tv_dict2list(
         dihi_ = dihi_.offset(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_items(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3857,7 +3809,6 @@ pub unsafe extern "C" fn f_items(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_keys(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3865,7 +3816,6 @@ pub unsafe extern "C" fn f_keys(
 ) {
     tv_dict2list(argvars, rettv, kDict2ListKeys);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_values(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3873,7 +3823,6 @@ pub unsafe extern "C" fn f_values(
 ) {
     tv_dict2list(argvars, rettv, kDict2ListValues);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_has_key(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3898,7 +3847,6 @@ pub unsafe extern "C" fn f_has_key(
     )
     .is_null() as ::core::ffi::c_int as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_dict_remove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3950,13 +3898,11 @@ pub unsafe extern "C" fn tv_dict_remove(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_alloc_ret(ret_tv: *mut typval_T) -> *mut blob_T {
     let b: *mut blob_T = tv_blob_alloc();
     tv_blob_set_ret(ret_tv, b);
     return b;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_blob_copy(from: *mut blob_T, to: *mut typval_T) {
     (*to).v_type = VAR_BLOB;
     (*to).v_lock = VAR_UNLOCKED;
@@ -4164,7 +4110,6 @@ pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_free(mut tv: *mut typval_T) {
     if tv.is_null() {
         return;
@@ -4722,11 +4667,9 @@ pub unsafe extern "C" fn tv_get_number_chk(
         0 as ::core::ffi::c_int
     }) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_get_bool(tv: *const typval_T) -> varnumber_T {
     return tv_get_number_chk(tv, ::core::ptr::null_mut::<bool>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
     return tv_get_number_chk(tv, ret_error);
 }
@@ -4747,7 +4690,6 @@ pub unsafe extern "C" fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
     }
     return lnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T {
     if (*tv).v_type as ::core::ffi::c_uint
         == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -4812,7 +4754,6 @@ pub unsafe extern "C" fn tv_get_float(tv: *const typval_T) -> float_T {
     }
     return 0 as ::core::ffi::c_int as float_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4830,7 +4771,6 @@ pub unsafe extern "C" fn tv_check_for_string_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4852,7 +4792,6 @@ pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_opt_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4866,7 +4805,6 @@ pub unsafe extern "C" fn tv_check_for_opt_string_arg(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4884,7 +4822,6 @@ pub unsafe extern "C" fn tv_check_for_number_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_opt_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4898,7 +4835,6 @@ pub unsafe extern "C" fn tv_check_for_opt_number_arg(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4919,7 +4855,6 @@ pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4941,7 +4876,6 @@ pub unsafe extern "C" fn tv_check_for_bool_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_opt_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4953,7 +4887,6 @@ pub unsafe extern "C" fn tv_check_for_opt_bool_arg(
     }
     return tv_check_for_bool_arg(args, idx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4971,7 +4904,6 @@ pub unsafe extern "C" fn tv_check_for_blob_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -4989,7 +4921,6 @@ pub unsafe extern "C" fn tv_check_for_list_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5007,7 +4938,6 @@ pub unsafe extern "C" fn tv_check_for_dict_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5027,7 +4957,6 @@ pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_opt_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5041,7 +4970,6 @@ pub unsafe extern "C" fn tv_check_for_opt_dict_arg(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5062,21 +4990,18 @@ pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_buffer_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     return tv_check_for_string_or_number_arg(args, idx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_lnum_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     return tv_check_for_string_or_number_arg(args, idx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5097,7 +5022,6 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5120,7 +5044,6 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_opt_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5134,7 +5057,6 @@ pub unsafe extern "C" fn tv_check_for_opt_string_or_list_arg(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5157,7 +5079,6 @@ pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_check_for_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -5255,7 +5176,6 @@ pub unsafe extern "C" fn tv_get_string_buf(
         b"\0".as_ptr() as *const ::core::ffi::c_char
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv2bool(tv: *const typval_T) -> bool {
     match (*tv).v_type as ::core::ffi::c_uint {
         1 => return (*tv).vval.v_number != 0 as varnumber_T,
@@ -5300,7 +5220,6 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
     fe_found_var: false_0 != 0,
 };
-#[no_mangle]
 pub static _typval_encode_nothing_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]

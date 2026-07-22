@@ -1836,7 +1836,6 @@ pub type C2Rust_Unnamed_48 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_49 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -1858,14 +1857,12 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[no_mangle]
 pub static g_min_log_level: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 pub const SESSION_FILE: [::core::ffi::c_char; 12] =
     unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
 pub static global_opt_idx: GlobalCell<[OptIndex; 264]> = GlobalCell::new([
     kOptAleph,
     kOptAllowrevins,
@@ -2132,7 +2129,6 @@ pub static global_opt_idx: GlobalCell<[OptIndex; 264]> = GlobalCell::new([
     kOptWritebackup,
     kOptWritedelay,
 ]);
-#[no_mangle]
 pub static buf_opt_idx: GlobalCell<[OptIndex; 92]> = GlobalCell::new([
     kOptAutocomplete,
     kOptAutoindent,
@@ -2227,7 +2223,6 @@ pub static buf_opt_idx: GlobalCell<[OptIndex; 92]> = GlobalCell::new([
     kOptVartabstop,
     kOptWrapmargin,
 ]);
-#[no_mangle]
 pub static win_opt_idx: GlobalCell<[OptIndex; 51]> = GlobalCell::new([
     kOptArabic,
     kOptBreakindent,
@@ -2281,7 +2276,6 @@ pub static win_opt_idx: GlobalCell<[OptIndex; 51]> = GlobalCell::new([
     kOptWinhighlight,
     kOptWrap,
 ]);
-#[no_mangle]
 pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MapHash {
@@ -2297,7 +2291,6 @@ pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_Strin
     },
     values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
 });
-#[no_mangle]
 pub static namespace_localscope: GlobalCell<Set_uint32_t> = GlobalCell::new(Set_uint32_t {
     h: MapHash {
         n_buckets: 0 as uint32_t,
@@ -2310,9 +2303,7 @@ pub static namespace_localscope: GlobalCell<Set_uint32_t> = GlobalCell::new(Set_
     },
     keys: ::core::ptr::null_mut::<uint32_t>(),
 });
-#[no_mangle]
 pub static next_namespace_id: GlobalCell<handle_T> = GlobalCell::new(1 as handle_T);
-#[no_mangle]
 pub static buffer_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
@@ -2328,7 +2319,6 @@ pub static buffer_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_p
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-#[no_mangle]
 pub static window_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
@@ -2344,7 +2334,6 @@ pub static window_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_p
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-#[no_mangle]
 pub static tabpage_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     set: Set_int {
         h: MapHash {
@@ -2360,7 +2349,6 @@ pub static tabpage_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-#[no_mangle]
 pub static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 10]> = GlobalCell::new([
     b"ext_cmdline\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext_popupmenu\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2379,46 +2367,33 @@ pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub static last_cursormoved_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0 as linenr_T,
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
 });
-#[no_mangle]
 pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static autocmd_no_enter: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static autocmd_no_leave: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T {
     br_buf: ::core::ptr::null_mut::<buf_T>(),
     br_fnum: 0 as ::core::ffi::c_int,
     br_buf_free_count: 0 as ::core::ffi::c_int,
 });
-#[no_mangle]
 pub static au_pending_free_buf: GlobalCell<*mut buf_T> =
     GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[no_mangle]
 pub static au_pending_free_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static autocmd_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static autocmd_fname_full: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static autocmd_bufnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static autocmd_match: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
 pub static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_31> = GlobalCell::new(C2Rust_Unnamed_31 {
@@ -2426,14 +2401,11 @@ pub static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_31> = GlobalCell::new(C2Rust
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<aucmdwin_T>(),
 });
-#[no_mangle]
 pub static deferred_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-#[no_mangle]
 pub static msg_loclist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"[Location List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
-#[no_mangle]
 pub static msg_qflist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"[Quickfix List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
@@ -2441,7 +2413,6 @@ pub static msg_qflist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-#[no_mangle]
 pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64_t_ptr_t {
     set: Set_uint64_t {
         h: MapHash {
@@ -2457,14 +2428,12 @@ pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-#[no_mangle]
 pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_5 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
-#[no_mangle]
 pub static virt_text_pos_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"eol\0".as_ptr() as *const ::core::ffi::c_char,
     b"eol_right_align\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2473,14 +2442,12 @@ pub static virt_text_pos_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = Glob
     b"right_align\0".as_ptr() as *const ::core::ffi::c_char,
     b"win_col\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub static hl_mode_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"replace\0".as_ptr() as *const ::core::ffi::c_char,
     b"combine\0".as_ptr() as *const ::core::ffi::c_char,
     b"blend\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     itr: [MarkTreeIter {
         pos: MTPos {
@@ -2528,14 +2495,10 @@ pub static decor_items: GlobalCell<C2Rust_Unnamed_36> = GlobalCell::new(C2Rust_U
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<DecorSignHighlight>(),
 });
-#[no_mangle]
 pub static diff_context: GlobalCell<::core::ffi::c_int> = GlobalCell::new(6 as ::core::ffi::c_int);
-#[no_mangle]
 pub static diff_foldcolumn: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(2 as ::core::ffi::c_int);
-#[no_mangle]
 pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
 pub static win_extmark_arr: GlobalCell<C2Rust_Unnamed_37> = GlobalCell::new(C2Rust_Unnamed_37 {
@@ -2543,11 +2506,8 @@ pub static win_extmark_arr: GlobalCell<C2Rust_Unnamed_37> = GlobalCell::new(C2Ru
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<WinExtmark>(),
 });
-#[no_mangle]
 pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
     rm: regmmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
@@ -2568,637 +2528,513 @@ pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
     has_cursor: false,
     tm: 0,
 });
-#[no_mangle]
 pub static search_hl_has_cursor_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-#[no_mangle]
 pub static e_abort: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E470: Command aborted\0")
 });
-#[no_mangle]
 pub static e_afterinit: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E905: Cannot set this option after startup\0",
     )
 });
-#[no_mangle]
 pub static e_api_spawn_failed: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E903: Could not spawn API job\0",
     )
 });
-#[no_mangle]
 pub static e_argreq: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E471: Argument required\0")
 });
-#[no_mangle]
 pub static e_backslash: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E10: \\ should be followed by /, ? or &\0",
     )
 });
-#[no_mangle]
 pub static e_cmdwin: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
         *b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0",
     )
 });
-#[no_mangle]
 pub static e_curdir: GlobalCell<[::core::ffi::c_char; 69]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 69], [::core::ffi::c_char; 69]>(
         *b"E12: Command not allowed in secure mode in current dir or tag search\0",
     )
 });
-#[no_mangle]
 pub static e_invalid_buffer_name_str: GlobalCell<[::core::ffi::c_char; 30]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
             *b"E158: Invalid buffer name: %s\0",
         )
     });
-#[no_mangle]
 pub static e_command_too_recursive: GlobalCell<[::core::ffi::c_char; 28]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
             *b"E169: Command too recursive\0",
         )
     });
-#[no_mangle]
 pub static e_buffer_is_not_loaded: GlobalCell<[::core::ffi::c_char; 27]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(
             *b"E681: Buffer is not loaded\0",
         )
     });
-#[no_mangle]
 pub static e_endif: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E171: Missing :endif\0")
 });
-#[no_mangle]
 pub static e_endtry: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E600: Missing :endtry\0")
 });
-#[no_mangle]
 pub static e_endwhile: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E170: Missing :endwhile\0")
 });
-#[no_mangle]
 pub static e_endfor: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E170: Missing :endfor\0")
 });
-#[no_mangle]
 pub static e_while: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E588: :endwhile without :while\0",
     )
 });
-#[no_mangle]
 pub static e_for: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E588: :endfor without :for\0")
 });
-#[no_mangle]
 pub static e_exists: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E13: File exists (add ! to override)\0",
     )
 });
-#[no_mangle]
 pub static e_failed: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E472: Command failed\0")
 });
-#[no_mangle]
 pub static e_intern2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E685: Internal error: %s\0")
 });
-#[no_mangle]
 pub static e_interr: GlobalCell<[::core::ffi::c_char; 12]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Interrupted\0")
 });
-#[no_mangle]
 pub static e_invarg: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E474: Invalid argument\0")
 });
-#[no_mangle]
 pub static e_invarg2: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E475: Invalid argument: %s\0")
 });
-#[no_mangle]
 pub static e_invargval: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E475: Invalid value for argument %s\0",
     )
 });
-#[no_mangle]
 pub static e_invargNval: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E475: Invalid value for argument %s: %s\0",
     )
 });
-#[no_mangle]
 pub static e_duparg2: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E983: Duplicate argument: %s\0",
     )
 });
-#[no_mangle]
 pub static e_invexpr2: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E15: Invalid expression: \"%s\"\0",
     )
 });
-#[no_mangle]
 pub static e_invrange: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E16: Invalid range\0")
 });
-#[no_mangle]
 pub static e_internal_error_in_regexp: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E473: Internal error in regexp\0",
         )
     });
-#[no_mangle]
 pub static e_invcmd: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E476: Invalid command\0")
 });
-#[no_mangle]
 pub static e_isadir2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E17: \"%s\" is a directory\0")
 });
-#[no_mangle]
 pub static e_no_spell: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E756: Spell checking is not possible\0",
     )
 });
-#[no_mangle]
 pub static e_invchan: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E900: Invalid channel id\0")
 });
-#[no_mangle]
 pub static e_invchanjob: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E900: Invalid channel id: not a job\0",
     )
 });
-#[no_mangle]
 pub static e_jobtblfull: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E901: Job table is full\0")
 });
-#[no_mangle]
 pub static e_jobspawn: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E903: Process failed to start: %s: \"%s\"\0",
     )
 });
-#[no_mangle]
 pub static e_channotpty: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E904: channel is not a pty\0")
 });
-#[no_mangle]
 pub static e_stdiochan2: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E905: Couldn't open stdio channel: %s\0",
     )
 });
-#[no_mangle]
 pub static e_invstream: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E906: invalid stream for channel\0",
     )
 });
-#[no_mangle]
 pub static e_invstreamrpc: GlobalCell<[::core::ffi::c_char; 48]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
         *b"E906: invalid stream for rpc channel, use 'rpc'\0",
     )
 });
-#[no_mangle]
 pub static e_streamkey: GlobalCell<[::core::ffi::c_char; 68]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
         *b"E5210: dict key '%s' already set for buffered stream in channel %lu\0",
     )
 });
-#[no_mangle]
 pub static e_libcall: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E364: Library call failed for \"%s()\"\0",
     )
 });
-#[no_mangle]
 pub static e_fsync: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E667: Fsync failed: %s\0")
 });
-#[no_mangle]
 pub static e_mkdir: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"E739: Cannot create directory %s: %s\0",
     )
 });
-#[no_mangle]
 pub static e_markinval: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E19: Mark has invalid line number\0",
     )
 });
-#[no_mangle]
 pub static e_marknotset: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E20: Mark not set\0")
 });
-#[no_mangle]
 pub static e_modifiable: GlobalCell<[::core::ffi::c_char; 46]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 46], [::core::ffi::c_char; 46]>(
         *b"E21: Cannot make changes, 'modifiable' is off\0",
     )
 });
-#[no_mangle]
 pub static e_nesting: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E22: Scripts nested too deep\0",
     )
 });
-#[no_mangle]
 pub static e_noalt: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E23: No alternate file\0")
 });
-#[no_mangle]
 pub static e_noabbr: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E24: No such abbreviation\0")
 });
-#[no_mangle]
 pub static e_nobang: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E477: No ! allowed\0")
 });
-#[no_mangle]
 pub static e_nogroup: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E28: No such highlight group name: %s\0",
     )
 });
-#[no_mangle]
 pub static e_noinstext: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E29: No inserted text yet\0")
 });
-#[no_mangle]
 pub static e_nolastcmd: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E30: No previous command line\0",
     )
 });
-#[no_mangle]
 pub static e_nomap: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E31: No such mapping\0")
 });
-#[no_mangle]
 pub static e_noident: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E349: No identifier under cursor\0",
     )
 });
-#[no_mangle]
 pub static e_nomatch: GlobalCell<[::core::ffi::c_char; 15]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E479: No match\0")
 });
-#[no_mangle]
 pub static e_nomatch2: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E480: No match: %s\0")
 });
-#[no_mangle]
 pub static e_noname: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E32: No file name\0")
 });
-#[no_mangle]
 pub static e_nopresub: GlobalCell<[::core::ffi::c_char; 47]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
         *b"E33: No previous substitute regular expression\0",
     )
 });
-#[no_mangle]
 pub static e_noprev: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E34: No previous command\0")
 });
-#[no_mangle]
 pub static e_noprevre: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E35: No previous regular expression\0",
     )
 });
-#[no_mangle]
 pub static e_norange: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E481: No range allowed\0")
 });
-#[no_mangle]
 pub static e_noroom: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E36: Not enough room\0")
 });
-#[no_mangle]
 pub static e_notmp: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E483: Can't get temp file name\0",
     )
 });
-#[no_mangle]
 pub static e_notopen: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E484: Can't open file %s\0")
 });
-#[no_mangle]
 pub static e_notopen_2: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E484: Can't open file %s: %s\0",
     )
 });
-#[no_mangle]
 pub static e_cant_read_file_str: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E485: Can't read file %s\0")
 });
-#[no_mangle]
 pub static e_null: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E38: Null argument\0")
 });
-#[no_mangle]
 pub static e_number_exp: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E39: Number expected\0")
 });
-#[no_mangle]
 pub static e_openerrf: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E40: Can't open errorfile %s\0",
     )
 });
-#[no_mangle]
 pub static e_outofmem: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E41: Out of memory!\0")
 });
-#[no_mangle]
 pub static e_patnotf: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"Pattern not found\0")
 });
-#[no_mangle]
 pub static e_patnotf2: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E486: Pattern not found: %s\0")
 });
-#[no_mangle]
 pub static e_positive: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E487: Argument must be positive\0",
     )
 });
-#[no_mangle]
 pub static e_prev_dir: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E459: Cannot go back to previous directory\0",
     )
 });
-#[no_mangle]
 pub static e_no_errors: GlobalCell<[::core::ffi::c_char; 15]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E42: No Errors\0")
 });
-#[no_mangle]
 pub static e_loclist: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E776: No location list\0")
 });
-#[no_mangle]
 pub static e_re_damg: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E43: Damaged match string\0")
 });
-#[no_mangle]
 pub static e_re_corr: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E44: Corrupted regexp program\0",
     )
 });
-#[no_mangle]
 pub static e_readonly: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E45: 'readonly' option is set (add ! to override)\0",
     )
 });
-#[no_mangle]
 pub static e_letwrong: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E734: Wrong variable type for %s=\0",
     )
 });
-#[no_mangle]
 pub static e_illvar: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
         *b"E461: Illegal variable name: %s\0",
     )
 });
-#[no_mangle]
 pub static e_cannot_mod: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E995: Cannot modify existing variable\0",
     )
 });
-#[no_mangle]
 pub static e_cannot_change_readonly_variable_str: GlobalCell<[::core::ffi::c_char; 45]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
             *b"E46: Cannot change read-only variable \"%.*s\"\0",
         )
     });
-#[no_mangle]
 pub static e_dictreq: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E715: Dictionary required\0")
 });
-#[no_mangle]
 pub static e_blobidx: GlobalCell<[::core::ffi::c_char; 35]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
         *b"E979: Blob index out of range: %ld\0",
     )
 });
-#[no_mangle]
 pub static e_invalblob: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
         *b"E978: Invalid operation for Blob\0",
     )
 });
-#[no_mangle]
 pub static e_toomanyarg: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E118: Too many arguments for function: %s\0",
     )
 });
-#[no_mangle]
 pub static e_toofewarg: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E119: Not enough arguments for function: %s\0",
     )
 });
-#[no_mangle]
 pub static e_dictkey: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E716: Key not present in Dictionary: \"%s\"\0",
     )
 });
-#[no_mangle]
 pub static e_dictkey_len: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E716: Key not present in Dictionary: \"%.*s\"\0",
     )
 });
-#[no_mangle]
 pub static e_listreq: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E714: List required\0")
 });
-#[no_mangle]
 pub static e_listblobreq: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E897: List or Blob required\0")
 });
-#[no_mangle]
 pub static e_listblobarg: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E899: Argument of %s must be a List or Blob\0",
     )
 });
-#[no_mangle]
 pub static e_listdictarg: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E712: Argument of %s must be a List or Dictionary\0",
     )
 });
-#[no_mangle]
 pub static e_listdictblobarg: GlobalCell<[::core::ffi::c_char; 56]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
         *b"E896: Argument of %s must be a List, Dictionary or Blob\0",
     )
 });
-#[no_mangle]
 pub static e_readerrf: GlobalCell<[::core::ffi::c_char; 35]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
         *b"E47: Error while reading errorfile\0",
     )
 });
-#[no_mangle]
 pub static e_sandbox: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E48: Not allowed in sandbox\0")
 });
-#[no_mangle]
 pub static e_secure: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E523: Not allowed here\0")
 });
-#[no_mangle]
 pub static e_textlock: GlobalCell<[::core::ffi::c_char; 50]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
         *b"E565: Not allowed to change text or change window\0",
     )
 });
-#[no_mangle]
 pub static e_screenmode: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E359: Screen mode setting not supported\0",
     )
 });
-#[no_mangle]
 pub static e_scroll: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E49: Invalid scroll size\0")
 });
-#[no_mangle]
 pub static e_shellempty: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E91: 'shell' option is empty\0",
     )
 });
-#[no_mangle]
 pub static e_signdata: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E255: Couldn't read in sign data!\0",
     )
 });
-#[no_mangle]
 pub static e_swapclose: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E72: Close error on swap file\0",
     )
 });
-#[no_mangle]
 pub static e_toocompl: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E74: Command too complex\0")
 });
-#[no_mangle]
 pub static e_longname: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E75: Name too long\0")
 });
-#[no_mangle]
 pub static e_toomsbra: GlobalCell<[::core::ffi::c_char; 16]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"E76: Too many [\0")
 });
-#[no_mangle]
 pub static e_toomany: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E77: Too many file names\0")
 });
-#[no_mangle]
 pub static e_trailing: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E488: Trailing characters\0")
 });
-#[no_mangle]
 pub static e_trailing_arg: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E488: Trailing characters: %s\0",
     )
 });
-#[no_mangle]
 pub static e_umark: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E78: Unknown mark\0")
 });
-#[no_mangle]
 pub static e_wildexpand: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E79: Cannot expand wildcards\0",
     )
 });
-#[no_mangle]
 pub static e_winheight: GlobalCell<[::core::ffi::c_char; 56]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
         *b"E591: 'winheight' cannot be smaller than 'winminheight'\0",
     )
 });
-#[no_mangle]
 pub static e_winwidth: GlobalCell<[::core::ffi::c_char; 54]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 54], [::core::ffi::c_char; 54]>(
         *b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0",
     )
 });
-#[no_mangle]
 pub static e_write: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E80: Error while writing\0")
 });
-#[no_mangle]
 pub static e_zerocount: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E939: Positive count required\0",
     )
 });
-#[no_mangle]
 pub static e_usingsid: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
         *b"E81: Using <SID> not in a script context\0",
     )
 });
-#[no_mangle]
 pub static e_missingparen: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
         *b"E107: Missing parentheses: %s\0",
     )
 });
-#[no_mangle]
 pub static e_empty_buffer: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E749: Empty buffer\0")
 });
-#[no_mangle]
 pub static e_nobufnr: GlobalCell<[::core::ffi::c_char; 31]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
         *b"E86: Buffer %ld does not exist\0",
     )
 });
-#[no_mangle]
 pub static e_no_write_since_last_change: GlobalCell<[::core::ffi::c_char; 32]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
             *b"E37: No write since last change\0",
         )
     });
-#[no_mangle]
 pub static e_no_write_since_last_change_add_bang_to_override: GlobalCell<
     [::core::ffi::c_char; 52],
 > = GlobalCell::new(unsafe {
@@ -3206,7 +3042,6 @@ pub static e_no_write_since_last_change_add_bang_to_override: GlobalCell<
         *b"E37: No write since last change (add ! to override)\0",
     )
 });
-#[no_mangle]
 pub static e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: GlobalCell<
     [::core::ffi::c_char; 66],
 > = GlobalCell::new(unsafe {
@@ -3214,325 +3049,272 @@ pub static e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: Glob
         *b"E89: No write since last change for buffer %d (add ! to override)\0",
     )
 });
-#[no_mangle]
 pub static e_buffer_nr_not_found: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E92: Buffer %d not found\0")
 });
-#[no_mangle]
 pub static e_unknown_function_str: GlobalCell<[::core::ffi::c_char; 27]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(
             *b"E117: Unknown function: %s\0",
         )
     });
-#[no_mangle]
 pub static e_str_not_inside_function: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E193: %s not inside a function\0",
         )
     });
-#[no_mangle]
 pub static e_job_still_running: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E948: Job still running\0")
 });
-#[no_mangle]
 pub static e_job_still_running_add_bang_to_end_the_job: GlobalCell<[::core::ffi::c_char; 47]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
             *b"E948: Job still running (add ! to end the job)\0",
         )
     });
-#[no_mangle]
 pub static e_invalpat: GlobalCell<[::core::ffi::c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
         *b"E682: Invalid search pattern or delimiter\0",
     )
 });
-#[no_mangle]
 pub static e_bufloaded: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E139: File is loaded in another buffer\0",
     )
 });
-#[no_mangle]
 pub static e_notset: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E764: Option '%s' is not set\0",
     )
 });
-#[no_mangle]
 pub static e_invalidreg: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E850: Invalid register name\0")
 });
-#[no_mangle]
 pub static e_dirnotf: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
         *b"E919: Directory not found in '%s': \"%s\"\0",
     )
 });
-#[no_mangle]
 pub static e_au_recursive: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
         *b"E952: Autocommand caused recursive behavior\0",
     )
 });
-#[no_mangle]
 pub static e_menu_only_exists_in_another_mode: GlobalCell<[::core::ffi::c_char; 39]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
             *b"E328: Menu only exists in another mode\0",
         )
     });
-#[no_mangle]
 pub static e_autocmd_close: GlobalCell<[::core::ffi::c_char; 34]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"E813: Cannot close autocmd window\0",
     )
 });
-#[no_mangle]
 pub static e_list_index_out_of_range_nr: GlobalCell<[::core::ffi::c_char; 35]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
             *b"E684: List index out of range: %ld\0",
         )
     });
-#[no_mangle]
 pub static e_listarg: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E686: Argument of %s must be a List\0",
     )
 });
-#[no_mangle]
 pub static e_unsupportedoption: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E519: Option not supported\0")
 });
-#[no_mangle]
 pub static e_fnametoolong: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E856: Filename too long\0")
 });
-#[no_mangle]
 pub static e_using_float_as_string: GlobalCell<[::core::ffi::c_char; 32]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
             *b"E806: Using a Float as a String\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_edit_other_buf: GlobalCell<[::core::ffi::c_char; 45]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
             *b"E788: Not allowed to edit another buffer now\0",
         )
     });
-#[no_mangle]
 pub static e_using_number_as_bool_nr: GlobalCell<[::core::ffi::c_char; 36]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
             *b"E1023: Using a Number as a Bool: %d\0",
         )
     });
-#[no_mangle]
 pub static e_not_callable_type_str: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E1085: Not a callable type: %s\0",
         )
     });
-#[no_mangle]
 pub static e_auabort: GlobalCell<[::core::ffi::c_char; 43]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
         *b"E855: Autocommands caused command to abort\0",
     )
 });
-#[no_mangle]
 pub static e_api_error: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E5555: API call: %s\0")
 });
-#[no_mangle]
 pub static e_fast_api_disabled: GlobalCell<[::core::ffi::c_char; 53]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
         *b"E5560: %s must not be called in a fast event context\0",
     )
 });
-#[no_mangle]
 pub static e_floatonly: GlobalCell<[::core::ffi::c_char; 62]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
         *b"E5601: Cannot close window, only floating window would remain\0",
     )
 });
-#[no_mangle]
 pub static e_floatexchange: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
         *b"E5602: Cannot exchange or rotate float\0",
     )
 });
-#[no_mangle]
 pub static e_cant_find_directory_str_in_cdpath: GlobalCell<[::core::ffi::c_char; 42]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
             *b"E344: Can't find directory \"%s\" in cdpath\0",
         )
     });
-#[no_mangle]
 pub static e_cant_find_file_str_in_path: GlobalCell<[::core::ffi::c_char; 35]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
             *b"E345: Can't find file \"%s\" in path\0",
         )
     });
-#[no_mangle]
 pub static e_no_more_directory_str_found_in_cdpath: GlobalCell<[::core::ffi::c_char; 45]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
             *b"E346: No more directory \"%s\" found in cdpath\0",
         )
     });
-#[no_mangle]
 pub static e_no_more_file_str_found_in_path: GlobalCell<[::core::ffi::c_char; 38]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
             *b"E347: No more file \"%s\" found in path\0",
         )
     });
-#[no_mangle]
 pub static e_value_is_locked: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E741: Value is locked\0")
 });
-#[no_mangle]
 pub static e_value_is_locked_str: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E741: Value is locked: %.*s\0")
 });
-#[no_mangle]
 pub static e_cannot_change_value: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E742: Cannot change value\0")
 });
-#[no_mangle]
 pub static e_cannot_change_value_of_str: GlobalCell<[::core::ffi::c_char; 34]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
             *b"E742: Cannot change value of %.*s\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_set_variable_in_sandbox_str: GlobalCell<[::core::ffi::c_char; 49]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
             *b"E794: Cannot set variable in the sandbox: \"%.*s\"\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_delete_variable_str: GlobalCell<[::core::ffi::c_char; 34]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
             *b"E795: Cannot delete variable %.*s\0",
         )
     });
-#[no_mangle]
 pub static e_invalwindow: GlobalCell<[::core::ffi::c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E957: Invalid window number\0")
 });
-#[no_mangle]
 pub static e_problem_creating_internal_diff: GlobalCell<[::core::ffi::c_char; 41]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
             *b"E960: Problem creating the internal diff\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_define_autocommands_for_all_events: GlobalCell<[::core::ffi::c_char; 49]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
             *b"E1155: Cannot define autocommands for ALL events\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_change_arglist_recursively: GlobalCell<[::core::ffi::c_char; 51]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
             *b"E1156: Cannot change the argument list recursively\0",
         )
     });
-#[no_mangle]
 pub static e_resulting_text_too_long: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E1240: Resulting text too long\0",
         )
     });
-#[no_mangle]
 pub static e_line_number_out_of_range: GlobalCell<[::core::ffi::c_char; 32]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
             *b"E1247: Line number out of range\0",
         )
     });
-#[no_mangle]
 pub static e_highlight_group_name_invalid_char: GlobalCell<[::core::ffi::c_char; 39]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
             *b"E5248: Invalid character in group name\0",
         )
     });
-#[no_mangle]
 pub static e_highlight_group_name_too_long: GlobalCell<[::core::ffi::c_char; 37]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
             *b"E1249: Highlight group name too long\0",
         )
     });
-#[no_mangle]
 pub static e_string_required: GlobalCell<[::core::ffi::c_char; 22]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E928: String required\0")
 });
-#[no_mangle]
 pub static e_invalid_column_number_nr: GlobalCell<[::core::ffi::c_char; 33]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
             *b"E964: Invalid column number: %ld\0",
         )
     });
-#[no_mangle]
 pub static e_invalid_line_number_nr: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E966: Invalid line number: %ld\0",
         )
     });
-#[no_mangle]
 pub static e_reduce_of_an_empty_str_with_no_initial_value: GlobalCell<[::core::ffi::c_char; 50]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
             *b"E998: Reduce of an empty %s with no initial value\0",
         )
     });
-#[no_mangle]
 pub static e_invalid_value_for_blob_nr: GlobalCell<[::core::ffi::c_char; 36]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
             *b"E1239: Invalid value for blob: 0xlX\0",
         )
     });
-#[no_mangle]
 pub static e_stray_closing_curly_str: GlobalCell<[::core::ffi::c_char; 44]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
             *b"E1278: Stray '}' without a matching '{': %s\0",
         )
     });
-#[no_mangle]
 pub static e_missing_close_curly_str: GlobalCell<[::core::ffi::c_char; 23]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E1279: Missing '}': %s\0")
     });
-#[no_mangle]
 pub static e_cannot_change_menus_while_listing: GlobalCell<[::core::ffi::c_char; 41]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
             *b"E1310: Cannot change menus while listing\0",
         )
     });
-#[no_mangle]
 pub static e_not_allowed_to_change_window_layout_in_this_autocmd: GlobalCell<
     [::core::ffi::c_char; 63],
 > = GlobalCell::new(unsafe {
@@ -3540,134 +3322,110 @@ pub static e_not_allowed_to_change_window_layout_in_this_autocmd: GlobalCell<
         *b"E1312: Not allowed to change the window layout in this autocmd\0",
     )
 });
-#[no_mangle]
 pub static e_val_too_large: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E1510: Value too large: %s\0")
 });
-#[no_mangle]
 pub static e_val_too_large_len: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
         *b"E1510: Value too large: %.*s\0",
     )
 });
-#[no_mangle]
 pub static e_undobang_cannot_redo_or_move_branch: GlobalCell<[::core::ffi::c_char; 68]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
             *b"E5767: Cannot use :undo! to redo or move to a different undo branch\0",
         )
     });
-#[no_mangle]
 pub static e_winfixbuf_cannot_go_to_buffer: GlobalCell<[::core::ffi::c_char; 52]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
             *b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
         )
     });
-#[no_mangle]
 pub static e_invalid_return_type_from_findfunc: GlobalCell<[::core::ffi::c_char; 45]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
             *b"E1514: 'findfunc' did not return a List type\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_switch_to_a_closing_buffer: GlobalCell<[::core::ffi::c_char; 41]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
             *b"E1546: Cannot switch to a closing buffer\0",
         )
     });
-#[no_mangle]
 pub static e_cannot_have_more_than_nr_diff_anchors: GlobalCell<[::core::ffi::c_char; 45]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
             *b"E1549: Cannot have more than %d diff anchors\0",
         )
     });
-#[no_mangle]
 pub static e_failed_to_find_all_diff_anchors: GlobalCell<[::core::ffi::c_char; 39]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
             *b"E1550: Failed to find all diff anchors\0",
         )
     });
-#[no_mangle]
 pub static e_diff_anchors_with_hidden_windows: GlobalCell<[::core::ffi::c_char; 60]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
             *b"E1562: Diff anchors cannot be used with hidden diff windows\0",
         )
     });
-#[no_mangle]
 pub static e_leadtab_requires_tab: GlobalCell<[::core::ffi::c_char; 66]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
             *b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
         )
     });
-#[no_mangle]
 pub static e_invalid_format_string_single_percent_s: GlobalCell<[::core::ffi::c_char; 55]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
             *b"E1577: Invalid format string, only one \"%s\" is allowed\0",
         )
     });
-#[no_mangle]
 pub static e_trustfile: GlobalCell<[::core::ffi::c_char; 36]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"E5570: Cannot update trust file: %s\0",
     )
 });
-#[no_mangle]
 pub static e_cannot_read_from_str_2: GlobalCell<[::core::ffi::c_char; 28]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
             *b"E282: Cannot read from \"%s\"\0",
         )
     });
-#[no_mangle]
 pub static e_conflicting_configs: GlobalCell<[::core::ffi::c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
         *b"E5422: Conflicting configs: \"%s\" \"%s\"\0",
     )
 });
-#[no_mangle]
 pub static e_unknown_option2: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E355: Unknown option: %s\0")
 });
-#[no_mangle]
 pub static top_bot_msg: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"search hit TOP, continuing at BOTTOM\0",
     )
 });
-#[no_mangle]
 pub static bot_top_msg: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
         *b"search hit BOTTOM, continuing at TOP\0",
     )
 });
-#[no_mangle]
 pub static line_msg: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b" line \0")
 });
-#[no_mangle]
 pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
     eval_flags: EVAL_EVALUATE as ::core::ffi::c_int,
     eval_getline: None,
     eval_cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     eval_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 });
-#[no_mangle]
 pub static msg_ext_need_clear: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_ext_skip_flush: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_ext_overwrite: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_ext_skip_verbose: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
@@ -3690,21 +3448,16 @@ pub static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     comp_disabled: false,
     pending_comp_index_update: true,
 });
-#[no_mangle]
 pub static msg_grid_pos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static msg_grid_adj: GlobalCell<GridView> = GlobalCell::new(GridView {
     target: ::core::ptr::null_mut::<ScreenGrid>(),
     row_offset: 0,
     col_offset: 0,
 });
-#[no_mangle]
 pub static msg_scrolled_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static msg_grid_scroll_discount: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static msg_listdo_overwrite: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 #[inline]
@@ -3732,12 +3485,9 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
 // caller comparing against it (the unit tests do, via FFI).
 #[no_mangle]
 pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
-#[no_mangle]
 pub static kTVTranslate: GlobalCell<size_t> = GlobalCell::new(18446744073709551615 as size_t);
-#[no_mangle]
 pub static disable_fold_update: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
@@ -3745,198 +3495,117 @@ pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
 };
 pub const VIMRC_FILE: [::core::ffi::c_char; 8] =
     unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".nvimrc\0") };
-#[no_mangle]
 pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
     log_skip: 0 as int16_t,
 });
 pub const NO_BUFFERS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub static Rows: GlobalCell<::core::ffi::c_int> = GlobalCell::new(24 as ::core::ffi::c_int);
-#[no_mangle]
 pub static Columns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(80 as ::core::ffi::c_int);
-#[no_mangle]
 pub static mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static vgetc_mod_mask: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static vgetc_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static cmdline_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static redraw_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static clear_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static mode_displayed: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static cmdline_star: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static exec_from_reg: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static dollar_vcol: GlobalCell<colnr_T> = GlobalCell::new(-1 as colnr_T);
-#[no_mangle]
 pub static edit_submode: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static edit_submode_pre: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static edit_submode_extra: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static edit_submode_highl: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
-#[no_mangle]
 pub static cmdmsg_rl: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static msg_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static msg_scrolled: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static msg_scrolled_ign: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_did_scroll: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static keep_msg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static keep_msg_hl_id: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static need_fileinfo: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_scroll: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static msg_didout: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_didany: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_nowait: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static emsg_off: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static info_message: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_hist_off: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_clr_eos: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
 pub static emsg_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static emsg_severe: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static emsg_assert_fails_lnum: GlobalCell<::core::ffi::c_long> =
     GlobalCell::new(0 as ::core::ffi::c_long);
-#[no_mangle]
 pub static emsg_assert_fails_context: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static did_endif: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_emsg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static called_vim_beep: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_emsg_syntax: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static called_emsg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static ex_exitval: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static emsg_on_display: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static rc_did_emsg: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static no_wait_return: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static need_wait_return: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_wait_return: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_maketitle: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static quit_more: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static vgetc_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static lines_left: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static msg_no_more: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ex_nesting_level: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static debug_break_level: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static debug_did_msg: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static debug_tick: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static debug_backtrace_level: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static do_profiling: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static current_exception: GlobalCell<*mut except_T> =
     GlobalCell::new(::core::ptr::null_mut::<except_T>());
-#[no_mangle]
 pub static did_throw: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_rethrow: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static check_cstack: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static trylevel: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static force_abort: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static msg_list: GlobalCell<*mut *mut msglist_T> =
     GlobalCell::new(::core::ptr::null_mut::<*mut msglist_T>());
-#[no_mangle]
 pub static suppress_errthrow: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static caught_stack: GlobalCell<*mut except_T> =
     GlobalCell::new(::core::ptr::null_mut::<except_T>());
-#[no_mangle]
 pub static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
 pub const SID_CMDARG: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SID_CARG: ::core::ffi::c_int = -3 as ::core::ffi::c_int;
 pub const SID_ENV: ::core::ffi::c_int = -4 as ::core::ffi::c_int;
-#[no_mangle]
 pub static current_sctx: GlobalCell<sctx_T> = GlobalCell::new(sctx_T {
     sc_sid: 0 as scid_T,
     sc_seq: 0 as ::core::ffi::c_int,
     sc_lnum: 0 as linenr_T,
     sc_chan: 0 as uint64_t,
 });
-#[no_mangle]
 pub static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
-#[no_mangle]
 pub static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
     script_ctx: sctx_T {
         sc_sid: 0,
@@ -3958,55 +3627,33 @@ pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(cal
     autocmd_bufnr: 0,
     funccalp: ::core::ptr::null_mut::<::core::ffi::c_void>(),
 });
-#[no_mangle]
 pub static provider_call_nesting: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static t_colors: GlobalCell<::core::ffi::c_int> = GlobalCell::new(256 as ::core::ffi::c_int);
-#[no_mangle]
 pub static include_none: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static include_default: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static include_link: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub static search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub static search_first_line: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-#[no_mangle]
 pub static search_last_line: GlobalCell<linenr_T> =
     GlobalCell::new(MAXLNUM as ::core::ffi::c_int as linenr_T);
-#[no_mangle]
 pub static no_smartcase: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static no_check_timestamps: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static mouse_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static mouse_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static mouse_past_bottom: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static mouse_past_eol: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static mouse_dragging: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static root_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
-#[no_mangle]
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 #[no_mangle]
 pub static firstwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
@@ -4016,7 +3663,6 @@ pub static lastwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_m
 pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[no_mangle]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
 #[no_mangle]
 pub static first_tabpage: GlobalCell<*mut tabpage_T> =
@@ -4024,18 +3670,13 @@ pub static first_tabpage: GlobalCell<*mut tabpage_T> =
 #[no_mangle]
 pub static curtab: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
-#[no_mangle]
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
-#[no_mangle]
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static firstbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[no_mangle]
 pub static lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 #[no_mangle]
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[no_mangle]
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: garray_T {
         ga_len: 0,
@@ -4047,176 +3688,108 @@ pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_refcount: 0,
     id: 0,
 });
-#[no_mangle]
 pub static max_alist_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static arg_had_last: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ru_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static ru_wid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static sc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
 pub static starting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(2 as ::core::ffi::c_int);
 #[no_mangle]
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static v_dying: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static stdout_isatty: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static stderr_isatty: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static stdin_fd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static full_screen: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static secure: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static textlock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static allbuf_lock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub static sandbox: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static VIsual: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
-#[no_mangle]
 pub static VIsual_active: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static VIsual_select: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static VIsual_select_reg: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static VIsual_select_exclu_adj: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static restart_VIsual_select: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static VIsual_reselect: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static VIsual_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new('v' as ::core::ffi::c_int);
-#[no_mangle]
 pub static redo_VIsual_busy: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static resel_VIsual_mode: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new('\0' as ::core::ffi::c_int);
-#[no_mangle]
 pub static resel_VIsual_line_count: GlobalCell<linenr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub static resel_VIsual_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub static where_paste_started: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
-#[no_mangle]
 pub static did_ai: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ai_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
-#[no_mangle]
 pub static end_comment_pending: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new('\0' as ::core::ffi::c_int);
-#[no_mangle]
 pub static did_syncbind: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_si: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static can_si: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static can_si_back: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static old_indent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static saved_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0 as linenr_T,
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
 });
-#[no_mangle]
 pub static Insstart: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
-#[no_mangle]
 pub static Insstart_orig: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
-#[no_mangle]
 pub static orig_line_count: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-#[no_mangle]
 pub static vr_lines_changed: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static inhibit_delete_count: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static fenc_default: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static State: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(MODE_NORMAL as ::core::ffi::c_int);
-#[no_mangle]
 pub static debug_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static finish_op: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static opcount: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static motion_force: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static exmode_active: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static pending_exmode_active: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ex_no_reprint: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static reg_recording: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static reg_executing: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static pending_end_reg_executing: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static reg_recorded: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static no_mapping: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static no_zero_mapping: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static allow_keys: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static no_u_sync: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static u_sync_once: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static force_restart_edit: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static restart_edit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static arrow_used: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ins_at_eol: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static no_abbr: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static mapped_ctrl_c: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
 #[no_mangle]
 pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
@@ -4240,40 +3813,27 @@ pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_save_msg_scroll: 0,
     cmod_did_esilent: 0,
 });
-#[no_mangle]
 pub static msg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 #[no_mangle]
 pub static emsg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static emsg_noredir: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static cmd_silent: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static in_assert_fails: GlobalCell<bool> = GlobalCell::new(false);
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[no_mangle]
 pub static swap_exists_action: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static IObuff: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
 #[no_mangle]
 pub static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
-#[no_mangle]
 pub static msg_buf: GlobalCell<[::core::ffi::c_char; 480]> = GlobalCell::new([0; 480]);
-#[no_mangle]
 pub static os_buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
-#[no_mangle]
 pub static RedrawingDisabled: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static typebuf: GlobalCell<typebuf_T> = GlobalCell::new(typebuf_T {
     tb_buf: ::core::ptr::null_mut::<uint8_t>(),
     tb_noremap: ::core::ptr::null_mut::<uint8_t>(),
@@ -4285,172 +3845,100 @@ pub static typebuf: GlobalCell<typebuf_T> = GlobalCell::new(typebuf_T {
     tb_no_abbr_cnt: 0 as ::core::ffi::c_int,
     tb_change_cnt: 0 as ::core::ffi::c_int,
 });
-#[no_mangle]
 pub static typebuf_was_empty: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ex_normal_busy: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static expr_map_lock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static ignore_script: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static stop_insert_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static KeyTyped: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static KeyStuffed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static maptick: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static must_redraw: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static skip_redraw: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static do_redraw: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_highlight_changed: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static scriptout: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
-#[no_mangle]
 pub static got_int: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static bangredo: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static searchcmdlen: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static reg_do_extmatch: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static re_extmatch_in: GlobalCell<*mut reg_extmatch_T> =
     GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
-#[no_mangle]
 pub static re_extmatch_out: GlobalCell<*mut reg_extmatch_T> =
     GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
-#[no_mangle]
 pub static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static global_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static listcmd_busy: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static need_start_insertmode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static last_mode: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"n\0\0\0")
 });
-#[no_mangle]
 pub static last_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static repeat_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static new_last_cmdline: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static postponed_split: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static postponed_split_flags: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static postponed_split_tab: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static g_do_tagpreview: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static g_tag_at_cursor: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static replace_offset: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static escape_chars: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b" \t\\\"|\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
-#[no_mangle]
 pub static keep_help_flag: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static redir_off: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static redir_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
-#[no_mangle]
 pub static redir_reg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static redir_vname: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static capture_ga: GlobalCell<*mut garray_T> =
     GlobalCell::new(::core::ptr::null_mut::<garray_T>());
-#[no_mangle]
 pub static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
-#[no_mangle]
 pub static save_p_ls: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static save_p_wmh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static wild_menu_showing: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static globaldir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static last_chdir_reason: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static km_stopsel: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static km_startsel: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static cmdwin_type: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static cmdwin_result: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static cmdwin_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static cmdwin_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[no_mangle]
 pub static cmdwin_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub static no_lines_msg: GlobalCell<[::core::ffi::c_char; 23]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"--No lines in buffer--\0")
 });
-#[no_mangle]
 pub static sub_nsubs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
-#[no_mangle]
 pub static stl_syntax: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static virtual_op: GlobalCell<TriState> = GlobalCell::new(kNone);
-#[no_mangle]
 pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
-#[no_mangle]
 pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-#[no_mangle]
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
-#[no_mangle]
 pub static vim_ignored: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static windowsVersion: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new([
     0 as ::core::ffi::c_char,
     0,
@@ -4473,15 +3961,10 @@ pub static windowsVersion: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::n
     0,
     0,
 ]);
-#[no_mangle]
 pub static magic_overruled: GlobalCell<optmagic_T> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
-#[no_mangle]
 pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
@@ -4504,39 +3987,30 @@ pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     comp_disabled: false,
     pending_comp_index_update: true,
 });
-#[no_mangle]
 pub static default_gridview: GlobalCell<GridView> = GlobalCell::new(GridView {
     target: (default_grid.as_raw() as *const _) as *mut ScreenGrid,
     row_offset: 0,
     col_offset: 0,
 });
-#[no_mangle]
 pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static linebuf_char: GlobalCell<*mut schar_T> =
     GlobalCell::new(::core::ptr::null_mut::<schar_T>());
-#[no_mangle]
 pub static linebuf_attr: GlobalCell<*mut sattr_T> =
     GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
-#[no_mangle]
 pub static linebuf_vcol: GlobalCell<*mut colnr_T> =
     GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
-#[no_mangle]
 pub static linebuf_scratch: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static opt_ambw_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"single\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bg_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"light\0".as_ptr() as *const ::core::ffi::c_char,
     b"dark\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bs_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"indent\0".as_ptr() as *const ::core::ffi::c_char,
     b"eol\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4544,7 +4018,6 @@ pub static opt_bs_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCe
     b"nostop\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bkc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4553,7 +4026,6 @@ pub static opt_bkc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalC
     b"breakhardlink\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bo_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     b"backspace\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4577,7 +4049,6 @@ pub static opt_bo_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = GlobalC
     b"wildmode\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_briopt_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"shift:\0".as_ptr() as *const ::core::ffi::c_char,
     b"min:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4586,7 +4057,6 @@ pub static opt_briopt_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = Glob
     b"column:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bh_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"hide\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4595,7 +4065,6 @@ pub static opt_bh_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCe
     b"wipe\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_bt_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"acwrite\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4607,19 +4076,16 @@ pub static opt_bt_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCe
     b"prompt\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_cmp_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"internal\0".as_ptr() as *const ::core::ffi::c_char,
     b"keepascii\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_cb_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"unnamed\0".as_ptr() as *const ::core::ffi::c_char,
     b"unnamedplus\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_cpt_values: GlobalCell<[*const ::core::ffi::c_char; 16]> = GlobalCell::new([
     b".\0".as_ptr() as *const ::core::ffi::c_char,
     b"w\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4638,7 +4104,6 @@ pub static opt_cpt_values: GlobalCell<[*const ::core::ffi::c_char; 16]> = Global
     b"o\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_cot_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = GlobalCell::new([
     b"menu\0".as_ptr() as *const ::core::ffi::c_char,
     b"menuone\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4653,14 +4118,12 @@ pub static opt_cot_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = Global
     b"nearest\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_csl_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"slash\0".as_ptr() as *const ::core::ffi::c_char,
     b"backslash\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_culopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"line\0".as_ptr() as *const ::core::ffi::c_char,
     b"screenline\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4668,14 +4131,12 @@ pub static opt_culopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = Glob
     b"both\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_debug_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"msg\0".as_ptr() as *const ::core::ffi::c_char,
     b"throw\0".as_ptr() as *const ::core::ffi::c_char,
     b"beep\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_dip_values: GlobalCell<[*const ::core::ffi::c_char; 20]> = GlobalCell::new([
     b"filler\0".as_ptr() as *const ::core::ffi::c_char,
     b"anchor\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4698,7 +4159,6 @@ pub static opt_dip_values: GlobalCell<[*const ::core::ffi::c_char; 20]> = Global
     b"linematch:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_dip_algorithm_values: GlobalCell<[*const ::core::ffi::c_char; 5]> =
     GlobalCell::new([
         b"myers\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4707,7 +4167,6 @@ pub static opt_dip_algorithm_values: GlobalCell<[*const ::core::ffi::c_char; 5]>
         b"histogram\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
     ]);
-#[no_mangle]
 pub static opt_dip_inline_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     b"simple\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4715,7 +4174,6 @@ pub static opt_dip_inline_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = 
     b"word\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_dy_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"lastline\0".as_ptr() as *const ::core::ffi::c_char,
     b"truncate\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4723,26 +4181,22 @@ pub static opt_dy_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCe
     b"msgsep\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_ead_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"both\0".as_ptr() as *const ::core::ffi::c_char,
     b"ver\0".as_ptr() as *const ::core::ffi::c_char,
     b"hor\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_ff_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"unix\0".as_ptr() as *const ::core::ffi::c_char,
     b"dos\0".as_ptr() as *const ::core::ffi::c_char,
     b"mac\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_fcl_values: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_fdc_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = GlobalCell::new([
     b"auto\0".as_ptr() as *const ::core::ffi::c_char,
     b"auto:1\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4766,7 +4220,6 @@ pub static opt_fdc_values: GlobalCell<[*const ::core::ffi::c_char; 21]> = Global
     b"9\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_fdm_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"manual\0".as_ptr() as *const ::core::ffi::c_char,
     b"expr\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4776,7 +4229,6 @@ pub static opt_fdm_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalC
     b"diff\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_fdo_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = GlobalCell::new([
     b"all\0".as_ptr() as *const ::core::ffi::c_char,
     b"block\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4791,33 +4243,28 @@ pub static opt_fdo_values: GlobalCell<[*const ::core::ffi::c_char; 12]> = Global
     b"jump\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_icm_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"nosplit\0".as_ptr() as *const ::core::ffi::c_char,
     b"split\0".as_ptr() as *const ::core::ffi::c_char,
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_jop_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"stack\0".as_ptr() as *const ::core::ffi::c_char,
     b"view\0".as_ptr() as *const ::core::ffi::c_char,
     b"clean\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_km_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"startsel\0".as_ptr() as *const ::core::ffi::c_char,
     b"stopsel\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_lop_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"expr:0\0".as_ptr() as *const ::core::ffi::c_char,
     b"expr:1\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_mopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"hit-enter\0".as_ptr() as *const ::core::ffi::c_char,
     b"wait:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4825,20 +4272,17 @@ pub static opt_mopt_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = Global
     b"progress:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_mousem_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"extend\0".as_ptr() as *const ::core::ffi::c_char,
     b"popup\0".as_ptr() as *const ::core::ffi::c_char,
     b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_mousescroll_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"hor:\0".as_ptr() as *const ::core::ffi::c_char,
     b"ver:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_nf_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"bin\0".as_ptr() as *const ::core::ffi::c_char,
     b"octal\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4848,7 +4292,6 @@ pub static opt_nf_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCe
     b"blank\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_pumborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4860,7 +4303,6 @@ pub static opt_pumborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = G
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_rdb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"compositor\0".as_ptr() as *const ::core::ffi::c_char,
     b"nothrottle\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4870,33 +4312,28 @@ pub static opt_rdb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalC
     b"flush\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_rlc_values: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"search\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_sbo_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"ver\0".as_ptr() as *const ::core::ffi::c_char,
     b"hor\0".as_ptr() as *const ::core::ffi::c_char,
     b"jump\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_sel_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"inclusive\0".as_ptr() as *const ::core::ffi::c_char,
     b"exclusive\0".as_ptr() as *const ::core::ffi::c_char,
     b"old\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_slm_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"mouse\0".as_ptr() as *const ::core::ffi::c_char,
     b"key\0".as_ptr() as *const ::core::ffi::c_char,
     b"cmd\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_ssop_values: GlobalCell<[*const ::core::ffi::c_char; 19]> = GlobalCell::new([
     b"buffers\0".as_ptr() as *const ::core::ffi::c_char,
     b"winpos\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4918,14 +4355,12 @@ pub static opt_ssop_values: GlobalCell<[*const ::core::ffi::c_char; 19]> = Globa
     b"skiprtp\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_sloc_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"last\0".as_ptr() as *const ::core::ffi::c_char,
     b"statusline\0".as_ptr() as *const ::core::ffi::c_char,
     b"tabline\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_scl_values: GlobalCell<[*const ::core::ffi::c_char; 23]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"no\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4951,13 +4386,11 @@ pub static opt_scl_values: GlobalCell<[*const ::core::ffi::c_char; 23]> = Global
     b"number\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_spo_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"camel\0".as_ptr() as *const ::core::ffi::c_char,
     b"noplainbuffer\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_sps_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"best\0".as_ptr() as *const ::core::ffi::c_char,
     b"fast\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4967,14 +4400,12 @@ pub static opt_sps_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalC
     b"timeout:\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_spk_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"cursor\0".as_ptr() as *const ::core::ffi::c_char,
     b"screen\0".as_ptr() as *const ::core::ffi::c_char,
     b"topline\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_swb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"useopen\0".as_ptr() as *const ::core::ffi::c_char,
     b"usetab\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4984,13 +4415,11 @@ pub static opt_swb_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalC
     b"uselast\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_tcl_values: GlobalCell<[*const ::core::ffi::c_char; 3]> = GlobalCell::new([
     b"left\0".as_ptr() as *const ::core::ffi::c_char,
     b"uselast\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_tc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"followic\0".as_ptr() as *const ::core::ffi::c_char,
     b"ignore\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4999,7 +4428,6 @@ pub static opt_tc_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCe
     b"smart\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_tpf_values: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"BS\0".as_ptr() as *const ::core::ffi::c_char,
     b"HT\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5010,7 +4438,6 @@ pub static opt_tpf_values: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalC
     b"C1\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_ve_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"block\0".as_ptr() as *const ::core::ffi::c_char,
     b"insert\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5020,7 +4447,6 @@ pub static opt_ve_values: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCe
     b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_wim_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
     b"full\0".as_ptr() as *const ::core::ffi::c_char,
     b"longest\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5029,7 +4455,6 @@ pub static opt_wim_values: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalC
     b"noselect\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_wop_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"fuzzy\0".as_ptr() as *const ::core::ffi::c_char,
     b"tagfile\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5037,14 +4462,12 @@ pub static opt_wop_values: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalC
     b"exacttext\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_wak_values: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"yes\0".as_ptr() as *const ::core::ffi::c_char,
     b"menu\0".as_ptr() as *const ::core::ffi::c_char,
     b"no\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = GlobalCell::new([
     b"\0".as_ptr() as *const ::core::ffi::c_char,
     b"double\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5056,554 +4479,337 @@ pub static opt_winborder_values: GlobalCell<[*const ::core::ffi::c_char; 9]> = G
     b"none\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub static empty_string_option: GlobalCell<[::core::ffi::c_char; 1]> =
     GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 1], [::core::ffi::c_char; 1]>(*b"\0") });
-#[no_mangle]
 pub static p_ambw: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_acd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ai: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bomb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_channel: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cink: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cinsd: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cinw: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cfu: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ofu: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tsrfu: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ci: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_aw: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_awa: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bk: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bkc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static bkc_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bdir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bex: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static breakat_flags: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
-#[no_mangle]
 pub static bo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_bsk: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_breakat: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bh: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_bt: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_busy: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cmp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static cmp_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_enc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_deco: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ccv: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cino: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cedit: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cb: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static cb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cwh: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ch: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cms: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cpt: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cto: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_columns: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_confirm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cia: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static cia_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cot: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static cot_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ac: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_act: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_acl: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pumborder: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_pb: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ph: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pmw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_com: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cpo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_debug: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_def: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_inc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dia: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dip: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dex: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dict: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dg: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_dir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_dy: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static dy_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ead: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_emoji: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ea: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ep: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_eb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ef: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_efm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_gefm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_gp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_eof: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_eol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ei: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_et: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_exrc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_fenc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fencs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ff: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ffs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
 pub static p_fic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ft: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fcs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ffu: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fixeol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_fcl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fdls: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_fdo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static fdo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_fex: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_flp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_fs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_gd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_guicursor: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_guifont: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_guifontwide: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_hf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_hh: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_hlg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_hid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_hl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_hls: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_hi: GlobalCell<OptInt> = GlobalCell::new(0);
 #[no_mangle]
 pub static p_arshape: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_icon: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_iconstring: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_iminsert: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_imsearch: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_inf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_inex: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_is: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_inde: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_indk: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_icm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_isf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_isi: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_isk: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_isp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_js: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_jop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static jop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_keymap: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_kp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_km: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_langmap: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_lnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lrm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_lines: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_linespace: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lisp: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_lispwords: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ls: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_stal: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lcs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_lz: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_lpl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_magic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_menc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mef: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mps: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mat: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mco: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mfd: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mmd: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mmp: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mis: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mopt: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_msc: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_msm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ml: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mle: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mls: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ma: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mod: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mouse: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mousem: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mousemev: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mousef: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_mousescroll: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_mousescroll_vert: GlobalCell<OptInt> = GlobalCell::new(3 as OptInt);
-#[no_mangle]
 pub static p_mousescroll_hor: GlobalCell<OptInt> = GlobalCell::new(6 as OptInt);
-#[no_mangle]
 pub static p_mouset: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_more: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_nf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_opfunc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_para: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_paste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pex: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_pm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_path: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_cdpath: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_pi: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pyx: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_qe: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ro: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_rdb: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static rdb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_rdt: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_re: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_report: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_pvh: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_chi: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ari: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ri: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ru: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ruf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_pp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_qftf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_rtp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_scbk: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sj: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_so: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sbo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sections: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_secure: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sel: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_slm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ssop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static ssop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 #[no_mangle]
 pub static p_sh: GlobalCell<*mut ::core::ffi::c_char> =
@@ -5611,10 +4817,8 @@ pub static p_sh: GlobalCell<*mut ::core::ffi::c_char> =
 #[no_mangle]
 pub static p_shcf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_shq: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 #[no_mangle]
@@ -5623,260 +4827,153 @@ pub static p_sxq: GlobalCell<*mut ::core::ffi::c_char> =
 #[no_mangle]
 pub static p_sxe: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_srr: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_stmp: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_stl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_wbr: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_shm: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sbr: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sloc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_sft: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_smd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ss: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_siso: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_scs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_si: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sta: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sts: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sua: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_swf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_smc: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tpm: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tal: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tpf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static tpf_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tfu: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_spc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_spf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_spl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_spo: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static spo_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sps: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_spr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_sol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_su: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_swb: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static swb_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_spk: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_syn: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tcl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static tcl_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ts: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tbs: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tc: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static tc_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tl: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tags: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tgst: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tbidi: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_to: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_timeout: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tm: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_title: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_titlelen: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_titleold: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_titlestring: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tsr: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_tgc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ttimeout: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ttm: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_tf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 #[no_mangle]
 pub static p_udir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_udf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ul: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ur: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_uc: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ut: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_shada: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_shadafile: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_termsync: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_vsts: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_vts: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_vdir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_vop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static vop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_vb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ve: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static ve_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_verbose: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_warn: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static wop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_window: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wak: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_wig: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_ww: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_wc: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wcm: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wim: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_wmnu: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_winborder: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static p_wh: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wmh: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wmw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wiw: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wm: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_ws: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_write: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wa: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wb: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_wd: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
 pub static p_cdh: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 76]> = GlobalCell::new([
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"SpecialKey\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5955,47 +5052,29 @@ pub static hlf_names: GlobalCell<[*const ::core::ffi::c_char; 76]> = GlobalCell:
     b"OkMsg\0".as_ptr() as *const ::core::ffi::c_char,
     b"PreInsert\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub static highlight_attr: GlobalCell<[::core::ffi::c_int; 76]> = GlobalCell::new([0; 76]);
-#[no_mangle]
 pub static highlight_attr_last: GlobalCell<[::core::ffi::c_int; 76]> = GlobalCell::new([0; 76]);
-#[no_mangle]
 pub static highlight_user: GlobalCell<[::core::ffi::c_int; 9]> = GlobalCell::new([0; 9]);
-#[no_mangle]
 pub static highlight_stlnc: GlobalCell<[::core::ffi::c_int; 9]> = GlobalCell::new([0; 9]);
-#[no_mangle]
 pub static cterm_normal_fg_color: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static cterm_normal_bg_color: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static normal_fg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-#[no_mangle]
 pub static normal_bg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-#[no_mangle]
 pub static normal_sp: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-#[no_mangle]
 pub static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
-#[no_mangle]
 pub static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-#[no_mangle]
 pub static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-#[no_mangle]
 pub static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
-#[no_mangle]
 pub static hl_attr_active: GlobalCell<*mut ::core::ffi::c_int> =
     GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut ::core::ffi::c_int);
-#[no_mangle]
 pub static curbuf_splice_pending: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
-#[no_mangle]
 pub static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t> =
     GlobalCell::new(::core::ptr::null_mut::<nlua_ref_state_t>());
-#[no_mangle]
 pub static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);
-#[no_mangle]
 pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
     uv: uv_loop_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -6931,7 +6010,6 @@ unsafe fn main_0(
     normal_enter(false_0 != 0, false_0 != 0);
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
     exiting.set(true_0 != 0);
     if ui_client_channel_id.get() != 0 {
@@ -6970,7 +6048,6 @@ pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
     );
     exit(r);
 }
-#[no_mangle]
 pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
     '_c2rust_label: {
         if ui_client_channel_id.get() == 0 {
@@ -7109,7 +6186,6 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
     }
     os_exit(exitval);
 }
-#[no_mangle]
 pub unsafe extern "C" fn preserve_exit(mut errmsg: *const ::core::ffi::c_char) -> ! {
     static really_exiting: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if really_exiting.get() {
@@ -13625,10 +12701,8 @@ unsafe extern "C" fn check_swap_exists_action() {
     }
     handle_swap_exists(::core::ptr::null_mut::<bufref_T>());
 }
-#[no_mangle]
 pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub const MAX_ARG_CMDS: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-#[no_mangle]
 pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([
     xfmark_T {
         fmark: fmark_T {
@@ -14243,18 +13317,12 @@ pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([
         fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
 ]);
-#[no_mangle]
 pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-#[no_mangle]
 pub static showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new([0; 41]);
-#[no_mangle]
 pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);
-#[no_mangle]
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     handle: 0 as handle_T,
     chars: ::core::ptr::null_mut::<schar_T>(),
@@ -14284,48 +13352,32 @@ pub static pum_want: GlobalCell<C2Rust_Unnamed_46> = GlobalCell::new(C2Rust_Unna
     insert: false,
     finish: false,
 });
-#[no_mangle]
 pub static tab_page_click_defs: GlobalCell<*mut StlClickDefinition> =
     GlobalCell::new(::core::ptr::null_mut::<StlClickDefinition>());
-#[no_mangle]
 pub static tab_page_click_defs_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-#[no_mangle]
 pub static noargs: GlobalCell<Array> = GlobalCell::new(Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 });
-#[no_mangle]
 pub static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
-#[no_mangle]
 pub static resize_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-#[no_mangle]
 pub static ui_refresh_cmdheight: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
 pub static grid_line_buf_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-#[no_mangle]
 pub static grid_line_buf_char: GlobalCell<*mut schar_T> =
     GlobalCell::new(::core::ptr::null_mut::<schar_T>());
-#[no_mangle]
 pub static grid_line_buf_attr: GlobalCell<*mut sattr_T> =
     GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
-#[no_mangle]
 pub static ui_client_channel_id: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
-#[no_mangle]
 pub static ui_client_error_exit: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub static ui_client_exit_status: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static ui_client_attached: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static ui_client_forward_stdin: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static tabpage_move_disallowed: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static float_anchor_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"NW\0".as_ptr() as *const ::core::ffi::c_char,
     b"NE\0".as_ptr() as *const ::core::ffi::c_char,

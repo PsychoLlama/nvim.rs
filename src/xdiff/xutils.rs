@@ -33,7 +33,6 @@ pub const XDF_WHITESPACE_FLAGS: ::core::ffi::c_int = XDF_IGNORE_WHITESPACE
     | XDF_IGNORE_WHITESPACE_CHANGE
     | XDF_IGNORE_WHITESPACE_AT_EOL
     | XDF_IGNORE_CR_AT_EOL;
-#[no_mangle]
 pub unsafe extern "C" fn xdl_bogosqrt(mut n: ::core::ffi::c_long) -> ::core::ffi::c_long {
     let mut i: ::core::ffi::c_long = 0;
     i = 1 as ::core::ffi::c_long;
@@ -43,7 +42,6 @@ pub unsafe extern "C" fn xdl_bogosqrt(mut n: ::core::ffi::c_long) -> ::core::ffi
     }
     return i;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_emit_diffrec(
     mut rec: *const ::core::ffi::c_char,
     mut size: ::core::ffi::c_long,
@@ -82,7 +80,6 @@ pub unsafe extern "C" fn xdl_emit_diffrec(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_mmfile_first(
     mut mmf: *mut mmfile_t,
     mut size: *mut ::core::ffi::c_long,
@@ -90,11 +87,9 @@ pub unsafe extern "C" fn xdl_mmfile_first(
     *size = (*mmf).size as ::core::ffi::c_long;
     return (*mmf).ptr as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_mmfile_size(mut mmf: *mut mmfile_t) -> ::core::ffi::c_long {
     return (*mmf).size as ::core::ffi::c_long;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_cha_init(
     mut cha: *mut chastore_t,
     mut isize: ::core::ffi::c_long,
@@ -109,7 +104,6 @@ pub unsafe extern "C" fn xdl_cha_init(
     (*cha).scurr = 0 as ::core::ffi::c_long;
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_cha_free(mut cha: *mut chastore_t) {
     let mut cur: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
     let mut tmp: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
@@ -123,7 +117,6 @@ pub unsafe extern "C" fn xdl_cha_free(mut cha: *mut chastore_t) {
         xfree(tmp as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_cha_alloc(mut cha: *mut chastore_t) -> *mut ::core::ffi::c_void {
     let mut ancur: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
     let mut data: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -151,7 +144,6 @@ pub unsafe extern "C" fn xdl_cha_alloc(mut cha: *mut chastore_t) -> *mut ::core:
     (*ancur).icurr += (*cha).isize;
     return data;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_guess_lines(
     mut mf: *mut mmfile_t,
     mut sample: ::core::ffi::c_long,
@@ -186,7 +178,6 @@ pub unsafe extern "C" fn xdl_guess_lines(
     }
     return nl + 1 as ::core::ffi::c_long;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_blankline(
     mut line: *const ::core::ffi::c_char,
     mut size: ::core::ffi::c_long,
@@ -231,7 +222,6 @@ unsafe extern "C" fn ends_with_optional_cr(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_recmatch(
     mut l1: *const ::core::ffi::c_char,
     mut s1: ::core::ffi::c_long,
@@ -461,7 +451,6 @@ unsafe extern "C" fn xdl_hash_record_with_whitespace(
     };
     return ha;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_hash_record(
     mut data: *mut *const ::core::ffi::c_char,
     mut top: *const ::core::ffi::c_char,
@@ -484,7 +473,6 @@ pub unsafe extern "C" fn xdl_hash_record(
     };
     return ha;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_hashbits(mut size: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
     let mut val: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
     let mut bits: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
@@ -501,7 +489,6 @@ pub unsafe extern "C" fn xdl_hashbits(mut size: ::core::ffi::c_uint) -> ::core::
         1 as ::core::ffi::c_uint
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_num_out(
     mut out: *mut ::core::ffi::c_char,
     mut val: ::core::ffi::c_long,
@@ -649,7 +636,6 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_emit_hunk_hdr(
     mut s1: ::core::ffi::c_long,
     mut c1: ::core::ffi::c_long,
@@ -684,7 +670,6 @@ pub unsafe extern "C" fn xdl_emit_hunk_hdr(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_fall_back_diff(
     mut diff_env: *mut xdfenv_t,
     mut xpp: *const xpparam_t,

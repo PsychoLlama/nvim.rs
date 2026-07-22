@@ -2289,7 +2289,6 @@ unsafe extern "C" fn set_search_match(mut t: *mut pos_T) {
         coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_pattern_and_range(
     mut incsearch_start: *mut pos_T,
     mut search_delim: *mut ::core::ffi::c_int,
@@ -5126,11 +5125,9 @@ unsafe extern "C" fn empty_pattern_magic(
                     && magic_val as ::core::ffi::c_uint
                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdpreview_get_bufnr() -> handle_T {
     return cmdpreview_bufnr.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdpreview_get_ns() -> ::core::ffi::c_int {
     return cmdpreview_ns.get();
 }
@@ -5881,7 +5878,6 @@ unsafe extern "C" fn abandon_cmdline() {
         redraw_cmdline.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn getcmdline(
     mut firstc: ::core::ffi::c_int,
     mut count: ::core::ffi::c_int,
@@ -5890,7 +5886,6 @@ pub unsafe extern "C" fn getcmdline(
 ) -> *mut ::core::ffi::c_char {
     return command_line_enter(firstc, count, indent, true_0 != 0) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getcmdline_prompt(
     firstc: ::core::ffi::c_int,
     prompt: *const ::core::ffi::c_char,
@@ -5985,7 +5980,6 @@ pub unsafe extern "C" fn getcmdline_prompt(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut i: ::core::ffi::c_int = 0;
@@ -6087,7 +6081,6 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn text_locked() -> bool {
     if cmdwin_type.get() != 0 as ::core::ffi::c_int {
         return true_0 != 0;
@@ -6097,11 +6090,9 @@ pub unsafe extern "C" fn text_locked() -> bool {
     }
     return textlock.get() != 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn text_locked_msg() {
     emsg(gettext(get_text_locked_msg()));
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_text_locked_msg() -> *const ::core::ffi::c_char {
     if cmdwin_type.get() != 0 as ::core::ffi::c_int {
         return &raw const e_cmdwin as *const ::core::ffi::c_char;
@@ -6109,7 +6100,6 @@ pub unsafe extern "C" fn get_text_locked_msg() -> *const ::core::ffi::c_char {
         return &raw const e_textlock as *const ::core::ffi::c_char;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn text_or_buf_locked() -> bool {
     if text_locked() {
         text_locked_msg();
@@ -6117,7 +6107,6 @@ pub unsafe extern "C" fn text_or_buf_locked() -> bool {
     }
     return curbuf_locked();
 }
-#[no_mangle]
 pub unsafe extern "C" fn curbuf_locked() -> bool {
     if (*curbuf.get()).b_ro_locked > 0 as ::core::ffi::c_int {
         emsg(gettext(
@@ -6127,7 +6116,6 @@ pub unsafe extern "C" fn curbuf_locked() -> bool {
     }
     return allbuf_locked();
 }
-#[no_mangle]
 pub unsafe extern "C" fn allbuf_locked() -> bool {
     if allbuf_lock.get() > 0 as ::core::ffi::c_int {
         emsg(gettext(
@@ -6152,7 +6140,6 @@ unsafe extern "C" fn cmd_startcol() -> ::core::ffi::c_int {
             0 as ::core::ffi::c_int
         });
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmd_screencol(mut bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut m: ::core::ffi::c_int = 0;
     let mut col: ::core::ffi::c_int = cmd_startcol();
@@ -6194,7 +6181,6 @@ unsafe extern "C" fn correct_screencol(
         *col += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn getexline(
     mut c: ::core::ffi::c_int,
     mut _cookie: *mut ::core::ffi::c_void,
@@ -6206,11 +6192,9 @@ pub unsafe extern "C" fn getexline(
     }
     return getcmdline(c, 1 as ::core::ffi::c_int, indent, do_concat);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_overstrike() -> bool {
     return (*ccline.ptr()).overstrike != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_at_end() -> bool {
     return (*ccline.ptr()).cmdpos >= (*ccline.ptr()).cmdlen;
 }
@@ -6232,7 +6216,6 @@ unsafe extern "C" fn alloc_cmdbuff(mut len: ::core::ffi::c_int) {
     (*ccline.ptr()).cmdbuff = xmalloc(len as size_t) as *mut ::core::ffi::c_char;
     (*ccline.ptr()).cmdbufflen = len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn realloc_cmdbuff(mut len: ::core::ffi::c_int) {
     if len < (*ccline.ptr()).cmdbufflen {
         return;
@@ -7208,7 +7191,6 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
     }
     arena_mem_free(arena_finish(&raw mut arena));
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_ext_cmdline_block_append(
     mut indent: size_t,
     mut line: *const ::core::ffi::c_char,
@@ -7329,13 +7311,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
         ui_call_cmdline_block_show(cmdline_block.get());
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_ext_cmdline_block_leave() {
     api_free_array(cmdline_block.get());
     cmdline_block.set(ARRAY_DICT_INIT);
     ui_call_cmdline_block_hide();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_screen_cleared() {
     if !ui_has(kUICmdline) {
         return;
@@ -7356,7 +7336,6 @@ pub unsafe extern "C" fn cmdline_screen_cleared() {
     }
     redrawcmd();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_ui_flush() {
     if !ui_has(kUICmdline) {
         return;
@@ -7383,7 +7362,6 @@ pub unsafe extern "C" fn cmdline_ui_flush() {
         line = (*line).prev_ccline;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn putcmdline(mut c: ::core::ffi::c_char, mut shift: bool) {
     if cmd_silent.get() {
         return;
@@ -7413,7 +7391,6 @@ pub unsafe extern "C" fn putcmdline(mut c: ::core::ffi::c_char, mut shift: bool)
     (*ccline.ptr()).special_shift = shift;
     ui_cursor_shape();
 }
-#[no_mangle]
 pub unsafe extern "C" fn unputcmdline() {
     if cmd_silent.get() {
         return;
@@ -7436,7 +7413,6 @@ pub unsafe extern "C" fn unputcmdline() {
     (*ccline.ptr()).special_char = NUL as ::core::ffi::c_char;
     ui_cursor_shape();
 }
-#[no_mangle]
 pub unsafe extern "C" fn put_on_cmdline(
     mut str: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -7640,7 +7616,6 @@ unsafe extern "C" fn cmdline_paste(
     }
     return cmdline_paste_reg(regname, literally, remcr);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, mut literally: bool) {
     if literally {
         put_on_cmdline(s, -1 as ::core::ffi::c_int, true_0 != 0);
@@ -7667,7 +7642,6 @@ pub unsafe extern "C" fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, mu
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn redrawcmdline() {
     if cmd_silent.get() {
         return;
@@ -7708,7 +7682,6 @@ unsafe extern "C" fn redrawcmdprompt() {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn redrawcmd() {
     if cmd_silent.get() {
         return;
@@ -7739,7 +7712,6 @@ pub unsafe extern "C" fn redrawcmd() {
     cmdline_was_last_drawn.set(true_0 != 0);
     redrawing_cmdline.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn compute_cmdrow() {
     if exmode_active.get() as ::core::ffi::c_int != 0
         || msg_scrolled.get() != 0 as ::core::ffi::c_int
@@ -7760,7 +7732,6 @@ pub unsafe extern "C" fn compute_cmdrow() {
     }
     lines_left.set(cmdline_row.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursorcmd() {
     if cmd_silent.get() as ::core::ffi::c_int != 0 || ui_has(kUICmdline) as ::core::ffi::c_int != 0
     {
@@ -7775,7 +7746,6 @@ pub unsafe extern "C" fn cursorcmd() {
     });
     msg_cursor_goto(msg_row.get(), msg_col.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn gotocmdline(mut clr: bool) {
     if ui_has(kUICmdline) {
         return;
@@ -7818,7 +7788,6 @@ unsafe extern "C" fn ccheck_abbr(mut c: ::core::ffi::c_int) -> ::core::ffi::c_in
     return check_abbr(c, (*ccline.ptr()).cmdbuff, (*ccline.ptr()).cmdpos, spos)
         as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_fnameescape(
     fname: *const ::core::ffi::c_char,
     what: ::core::ffi::c_int,
@@ -7857,7 +7826,6 @@ pub const SHELL_ESC_CHARS: [::core::ffi::c_char; 23] = unsafe {
 pub const BUFFER_ESC_CHARS: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b" \t\n*?[`$\\%#'\"|!<\0")
 };
-#[no_mangle]
 pub unsafe extern "C" fn escape_fname(mut pp: *mut *mut ::core::ffi::c_char) {
     let mut p: *mut ::core::ffi::c_char =
         xmalloc(strlen(*pp).wrapping_add(2 as size_t)) as *mut ::core::ffi::c_char;
@@ -7866,7 +7834,6 @@ pub unsafe extern "C" fn escape_fname(mut pp: *mut *mut ::core::ffi::c_char) {
     xfree(*pp as *mut ::core::ffi::c_void);
     *pp = p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tilde_replace(
     mut orig_pat: *mut ::core::ffi::c_char,
     mut num_files: ::core::ffi::c_int,
@@ -7888,11 +7855,9 @@ pub unsafe extern "C" fn tilde_replace(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cmdline_info() -> *mut CmdlineInfo {
     return ccline.ptr();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
     return last_prompt_id.get();
 }
@@ -7975,7 +7940,6 @@ unsafe extern "C" fn get_cmdline_completion() -> *mut ::core::ffi::c_char {
     }
     return cmdcomplete_type_to_str(xp_context, (*(*p).xpc).xp_arg);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdcomplpat(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7984,7 +7948,6 @@ pub unsafe extern "C" fn f_getcmdcomplpat(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_completion_pattern();
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdcompltype(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7993,7 +7956,6 @@ pub unsafe extern "C" fn f_getcmdcompltype(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_completion();
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdline(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8002,7 +7964,6 @@ pub unsafe extern "C" fn f_getcmdline(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_str();
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdpos(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8015,7 +7976,6 @@ pub unsafe extern "C" fn f_getcmdpos(
         0 as ::core::ffi::c_int
     }) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdprompt(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8029,7 +7989,6 @@ pub unsafe extern "C" fn f_getcmdprompt(
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdscreenpos(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8042,7 +8001,6 @@ pub unsafe extern "C" fn f_getcmdscreenpos(
         0 as ::core::ffi::c_int
     }) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdtype(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8090,7 +8048,6 @@ unsafe extern "C" fn set_cmdline_pos(mut pos: ::core::ffi::c_int) -> ::core::ffi
     });
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setcmdline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8124,7 +8081,6 @@ pub unsafe extern "C" fn f_setcmdline(
         pos,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setcmdpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8137,11 +8093,9 @@ pub unsafe extern "C" fn f_setcmdpos(
         (*rettv).vval.v_number = set_cmdline_pos(pos) as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cmdline_firstc() -> ::core::ffi::c_int {
     return (*ccline.ptr()).cmdfirstc;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_list_range(
     mut str: *mut *mut ::core::ffi::c_char,
     mut num1: *mut ::core::ffi::c_int,
@@ -8200,7 +8154,6 @@ pub unsafe extern "C" fn get_list_range(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_init() {
     memset(
         ccline.ptr() as *mut ::core::ffi::c_void,
@@ -8208,7 +8161,6 @@ pub unsafe extern "C" fn cmdline_init() {
         ::core::mem::size_of::<CmdlineInfo>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_cedit(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if *p_cedit.get() as ::core::ffi::c_int == NUL {
         cedit_key.set(-1 as ::core::ffi::c_int);
@@ -8558,11 +8510,9 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     setcursor();
     return cmdwin_result.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_in_cmdwin() -> bool {
     return cmdwin_type.get() != 0 as ::core::ffi::c_int && get_cmdline_type() == NUL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_get(
     eap: *mut exarg_T,
     lenp: *mut size_t,
@@ -8618,7 +8568,6 @@ pub unsafe extern "C" fn script_get(
     tv_list_free(l);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_input(
     argvars: *const typval_T,
     rettv: *mut typval_T,
@@ -8816,7 +8765,6 @@ pub unsafe extern "C" fn get_user_input(
     need_wait_return.set(false_0 != 0);
     msg_didout.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_wildtrigger(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,

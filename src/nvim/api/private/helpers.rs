@@ -272,7 +272,6 @@ unsafe extern "C" fn map_get_int_ptr_t(
         *(*map).values.offset(k as isize)
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn try_enter(tstate: *mut TryState) {
     *tstate = TryState {
         current_exception: current_exception.get(),
@@ -291,7 +290,6 @@ pub unsafe extern "C" fn try_enter(tstate: *mut TryState) {
     did_emsg.set(false_0);
     (*trylevel.ptr()) += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
     '_c2rust_label: {
         if trylevel.get() > 0 as ::core::ffi::c_int {
@@ -375,7 +373,6 @@ pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
     need_rethrow.set((*tstate).need_rethrow != 0);
     did_emsg.set((*tstate).did_emsg);
 }
-#[no_mangle]
 pub unsafe extern "C" fn dict_get_value(
     mut dict: *mut dict_T,
     mut key: String_0,
@@ -397,7 +394,6 @@ pub unsafe extern "C" fn dict_get_value(
     }
     return vim_to_object(&raw mut (*di).di_tv, arena, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn dict_check_writable(
     mut dict: *mut dict_T,
     mut key: String_0,
@@ -451,7 +447,6 @@ pub unsafe extern "C" fn dict_check_writable(
     }
     return di;
 }
-#[no_mangle]
 pub unsafe extern "C" fn dict_set_var(
     mut dict: *mut dict_T,
     mut key: String_0,
@@ -548,7 +543,6 @@ pub unsafe extern "C" fn dict_set_var(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_buffer_by_handle(
     mut buffer: Buffer,
     mut err: *mut Error,
@@ -570,7 +564,6 @@ pub unsafe extern "C" fn find_buffer_by_handle(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_window_by_handle(
     mut window: Window,
     mut err: *mut Error,
@@ -592,7 +585,6 @@ pub unsafe extern "C" fn find_window_by_handle(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_tab_by_handle(
     mut tabpage: Tabpage,
     mut err: *mut Error,
@@ -614,7 +606,6 @@ pub unsafe extern "C" fn find_tab_by_handle(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cchar_to_string(mut c: ::core::ffi::c_char) -> String_0 {
     let mut buf: [::core::ffi::c_char; 2] = [c, NUL as ::core::ffi::c_char];
     return String_0 {
@@ -629,7 +620,6 @@ pub unsafe extern "C" fn cchar_to_string(mut c: ::core::ffi::c_char) -> String_0
         }) as size_t,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cstr_to_string(mut str: *const ::core::ffi::c_char) -> String_0 {
     if str.is_null() {
         return STRING_INIT;
@@ -640,11 +630,9 @@ pub unsafe extern "C" fn cstr_to_string(mut str: *const ::core::ffi::c_char) -> 
         size: len,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn string_to_cstr(mut str: String_0) -> *mut ::core::ffi::c_char {
     return xstrndup(str.data, str.size);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cbuf_to_string(
     mut buf: *const ::core::ffi::c_char,
     mut size: size_t,
@@ -654,14 +642,12 @@ pub unsafe extern "C" fn cbuf_to_string(
         size: size,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cstrn_to_string(
     mut str: *const ::core::ffi::c_char,
     mut maxsize: size_t,
 ) -> String_0 {
     return cbuf_to_string(str, strnlen(str, maxsize));
 }
-#[no_mangle]
 pub unsafe extern "C" fn cstrn_as_string(
     mut str: *mut ::core::ffi::c_char,
     mut maxsize: size_t,
@@ -671,7 +657,6 @@ pub unsafe extern "C" fn cstrn_as_string(
         size: strnlen(str, maxsize),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cstr_as_string(mut str: *const ::core::ffi::c_char) -> String_0 {
     if str.is_null() {
         return STRING_INIT;
@@ -681,7 +666,6 @@ pub unsafe extern "C" fn cstr_as_string(mut str: *const ::core::ffi::c_char) -> 
         size: strlen(str),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ga_take_string(mut ga: *mut garray_T) -> String_0 {
     let mut str: String_0 = String_0 {
         data: (*ga).ga_data as *mut ::core::ffi::c_char,
@@ -692,7 +676,6 @@ pub unsafe extern "C" fn ga_take_string(mut ga: *mut garray_T) -> String_0 {
     (*ga).ga_maxlen = 0 as ::core::ffi::c_int;
     return str;
 }
-#[no_mangle]
 pub unsafe extern "C" fn string_to_array(
     input: String_0,
     mut crlf: bool,
@@ -880,7 +863,6 @@ pub unsafe extern "C" fn string_to_array(
     }
     return arena_take_arraybuilder(arena, &raw mut ret);
 }
-#[no_mangle]
 pub unsafe extern "C" fn normalize_index(
     mut buf: *mut buf_T,
     mut index: int64_t,
@@ -916,7 +898,6 @@ pub unsafe extern "C" fn normalize_index(
     index += 1;
     return index;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_get_text(
     mut buf: *mut buf_T,
     mut lnum: int64_t,
@@ -989,11 +970,9 @@ pub unsafe extern "C" fn buf_get_text(
         size: (end_col - start_col) as size_t,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_free_string(mut value: String_0) {
     xfree(value.data as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn arena_array(mut arena: *mut Arena, mut max_size: size_t) -> Array {
     let mut arr: Array = Array {
         size: 0 as size_t,
@@ -1008,7 +987,6 @@ pub unsafe extern "C" fn arena_array(mut arena: *mut Arena, mut max_size: size_t
     ) as *mut Object;
     return arr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn arena_dict(mut arena: *mut Arena, mut max_size: size_t) -> Dict {
     let mut dict: Dict = Dict {
         size: 0 as size_t,
@@ -1023,7 +1001,6 @@ pub unsafe extern "C" fn arena_dict(mut arena: *mut Arena, mut max_size: size_t)
     ) as *mut KeyValuePair;
     return dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn arena_string(mut arena: *mut Arena, mut str: String_0) -> String_0 {
     if str.size != 0 {
         return String_0 {
@@ -1041,7 +1018,6 @@ pub unsafe extern "C" fn arena_string(mut arena: *mut Arena, mut str: String_0) 
         };
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn arena_take_arraybuilder(
     mut arena: *mut Arena,
     mut arr: *mut ArrayBuilder,
@@ -1080,7 +1056,6 @@ pub unsafe extern "C" fn api_free_object(mut value: Object) {
         0 | 1 | 2 | 3 | 8 | 9 | 10 | _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_free_array(mut value: Array) {
     let mut i: size_t = 0 as size_t;
     while i < value.size {
@@ -1089,7 +1064,6 @@ pub unsafe extern "C" fn api_free_array(mut value: Array) {
     }
     xfree(value.items as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_free_dict(mut value: Dict) {
     let mut i: size_t = 0 as size_t;
     while i < value.size {
@@ -1099,7 +1073,6 @@ pub unsafe extern "C" fn api_free_dict(mut value: Dict) {
     }
     xfree(value.items as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_clear_error(mut value: *mut Error) {
     if !((*value).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         return;
@@ -1110,7 +1083,6 @@ pub unsafe extern "C" fn api_clear_error(mut value: *mut Error) {
 }
 static mem_for_metadata: GlobalCell<ArenaMem> =
     GlobalCell::new(::core::ptr::null_mut::<consumed_blk>());
-#[no_mangle]
 pub unsafe extern "C" fn api_metadata() -> Object {
     static metadata: GlobalCell<Object> = GlobalCell::new(object {
         type_0: kObjectTypeNil,
@@ -1140,14 +1112,12 @@ pub unsafe extern "C" fn api_metadata() -> Object {
     }
     return metadata.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_metadata_raw() -> String_0 {
     return String_0 {
         data: (packed_api_metadata.ptr() as *const _) as *const uint8_t as *mut ::core::ffi::c_char,
         size: ::core::mem::size_of::<[uint8_t; 32041]>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_string(mut str: String_0, mut arena: *mut Arena) -> String_0 {
     if !str.data.is_null() {
         return String_0 {
@@ -1158,7 +1128,6 @@ pub unsafe extern "C" fn copy_string(mut str: String_0, mut arena: *mut Arena) -
         return STRING_INIT;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_array(mut array: Array, mut arena: *mut Arena) -> Array {
     let mut rv: Array = arena_array(arena, array.size);
     let mut i: size_t = 0 as size_t;
@@ -1183,7 +1152,6 @@ pub unsafe extern "C" fn copy_array(mut array: Array, mut arena: *mut Arena) -> 
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_dict(mut dict: Dict, mut arena: *mut Arena) -> Dict {
     let mut rv: Dict = arena_dict(arena, dict.size);
     let mut i: size_t = 0 as size_t;
@@ -1199,7 +1167,6 @@ pub unsafe extern "C" fn copy_dict(mut dict: Dict, mut arena: *mut Arena) -> Dic
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_object(mut obj: Object, mut arena: *mut Arena) -> Object {
     match obj.type_0 as ::core::ffi::c_uint {
         8 | 10 | 9 | 0 | 1 | 2 | 3 => return obj,
@@ -1239,7 +1206,6 @@ pub unsafe extern "C" fn copy_object(mut obj: Object, mut arena: *mut Arena) -> 
     }
     unreachable!();
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_set_error(
     mut err: *mut Error,
     mut errType: ErrorType,
@@ -1291,7 +1257,6 @@ pub unsafe extern "C" fn api_set_error(
     vsnprintf((*err).msg, bufsize, format, args2.as_va_list());
     (*err).type_0 = errType;
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_object_to_bool(
     mut obj: Object,
     mut what: *const ::core::ffi::c_char,
@@ -1322,7 +1287,6 @@ pub unsafe extern "C" fn api_object_to_bool(
         return false_0 != 0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn object_to_hl_id(
     mut obj: Object,
     mut what: *const ::core::ffi::c_char,
@@ -1359,7 +1323,6 @@ pub unsafe extern "C" fn object_to_hl_id(
         return 0 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_typename(mut t: ObjectType) -> *mut ::core::ffi::c_char {
     match t as ::core::ffi::c_uint {
         0 => {
@@ -1400,7 +1363,6 @@ pub unsafe extern "C" fn api_typename(mut t: ObjectType) -> *mut ::core::ffi::c_
     }
     unreachable!();
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_hl_msg(
     mut chunks: Array,
     mut is_err: bool,
@@ -1489,7 +1451,6 @@ pub unsafe extern "C" fn parse_hl_msg(
         items: ::core::ptr::null_mut::<HlMessageChunk>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_dict_to_keydict(
     mut retval: *mut ::core::ffi::c_void,
     mut hashy: FieldHashfn,
@@ -1659,7 +1620,6 @@ pub unsafe extern "C" fn api_dict_to_keydict(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_keydict_to_dict(
     mut value: *mut ::core::ffi::c_void,
     mut table: *mut KeySetLink,
@@ -1749,7 +1709,6 @@ pub unsafe extern "C" fn api_keydict_to_dict(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_luarefs_free_object(mut value: Object) {
     match value.type_0 as ::core::ffi::c_uint {
         7 => {
@@ -1764,7 +1723,6 @@ pub unsafe extern "C" fn api_luarefs_free_object(mut value: Object) {
         _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_luarefs_free_keydict(
     mut dict: *mut ::core::ffi::c_void,
     mut table: *mut KeySetLink,
@@ -1783,7 +1741,6 @@ pub unsafe extern "C" fn api_luarefs_free_keydict(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_luarefs_free_array(mut value: Array) {
     let mut i: size_t = 0 as size_t;
     while i < value.size {
@@ -1791,7 +1748,6 @@ pub unsafe extern "C" fn api_luarefs_free_array(mut value: Array) {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_luarefs_free_dict(mut value: Dict) {
     let mut i: size_t = 0 as size_t;
     while i < value.size {
@@ -1799,7 +1755,6 @@ pub unsafe extern "C" fn api_luarefs_free_dict(mut value: Dict) {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_mark(
     mut buf: *mut buf_T,
     mut name: String_0,
@@ -1879,7 +1834,6 @@ pub unsafe extern "C" fn set_mark(
     }
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_default_stl_hl(
     mut wp: *mut win_T,
     mut use_winbar: bool,
@@ -1903,7 +1857,6 @@ pub unsafe extern "C" fn get_default_stl_hl(
         };
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_set_sctx(mut channel_id: uint64_t) -> sctx_T {
     let mut old_current_sctx: sctx_T = current_sctx.get();
     if channel_id != VIML_INTERNAL_CALL {

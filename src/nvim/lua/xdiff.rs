@@ -535,7 +535,6 @@ unsafe extern "C" fn process_xdl_diff_opts(
     api_free_luaref(opts.on_hunk);
     return mode;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut buf: luaL_Buffer = luaL_Buffer {
         p: ::core::ptr::null_mut::<::core::ffi::c_char>(),

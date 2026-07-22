@@ -478,7 +478,6 @@ static ns_hl_attr: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_ptr_t {
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-#[no_mangle]
 pub unsafe extern "C" fn highlight_init() {
     set_put_HlEntry(
         attr_entries.ptr(),
@@ -502,7 +501,6 @@ pub unsafe extern "C" fn highlight_init() {
         ::core::ptr::null_mut::<*mut HlEntry>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_use_hlstate() -> bool {
     if hlstate_active.get() {
         return false_0 != 0;
@@ -555,7 +553,6 @@ unsafe extern "C" fn get_attr_entry(mut entry: HlEntry) -> ::core::ffi::c_int {
     arena_mem_free(arena_finish(&raw mut arena));
     return id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_send_all_hls(mut ui: *mut RemoteUI) {
     let mut i: size_t = 1 as size_t;
     while i < (*attr_entries.ptr()).h.size as size_t {
@@ -578,7 +575,6 @@ pub unsafe extern "C" fn ui_send_all_hls(mut ui: *mut RemoteUI) {
         hlf = hlf.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_syn_attr(
     mut ns_id: ::core::ffi::c_int,
     mut idx: ::core::ffi::c_int,
@@ -603,7 +599,6 @@ pub unsafe extern "C" fn hl_get_syn_attr(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ns_hl_def(
     mut ns_id: NS,
     mut hl_id: ::core::ffi::c_int,
@@ -662,7 +657,6 @@ pub unsafe extern "C" fn ns_hl_def(
     );
     (*p).hl_cached = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ns_get_hl(
     mut ns_hl: *mut NS,
     mut hl_id: ::core::ffi::c_int,
@@ -881,7 +875,6 @@ pub unsafe extern "C" fn ns_get_hl(
         return it.attr_id;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_check_ns() -> bool {
     let mut ns: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if ns_hl_fast.get() > 0 as ::core::ffi::c_int {
@@ -906,7 +899,6 @@ pub unsafe extern "C" fn hl_check_ns() -> bool {
     need_highlight_changed.set(true_0 != 0);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_check_ns_hl(mut wp: *mut win_T) -> bool {
     ns_hl_win.set(
         (if !wp.is_null() {
@@ -917,7 +909,6 @@ pub unsafe extern "C" fn win_check_ns_hl(mut wp: *mut win_T) -> bool {
     );
     return hl_check_ns();
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_ns_get_attrs(
     mut ns_id: ::core::ffi::c_int,
     mut hl_id: ::core::ffi::c_int,
@@ -939,7 +930,6 @@ pub unsafe extern "C" fn hl_ns_get_attrs(
     *attrs = syn_attr2entry(syn_attr);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_ui_attr(
     mut ns_id: ::core::ffi::c_int,
     mut idx: ::core::ffi::c_int,
@@ -970,7 +960,6 @@ pub unsafe extern "C" fn hl_get_ui_attr(
         winid: 0,
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_apply_winblend(
     mut winbl: ::core::ffi::c_int,
     mut attr: ::core::ffi::c_int,
@@ -982,7 +971,6 @@ pub unsafe extern "C" fn hl_apply_winblend(
     }
     return attr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool) {
     let mut ns_id: ::core::ffi::c_int = (*wp).w_ns_hl;
     update_ns_hl(ns_id);
@@ -1068,7 +1056,6 @@ pub unsafe extern "C" fn update_window_hl(mut wp: *mut win_T, mut invalid: bool)
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn update_ns_hl(mut ns_id: ::core::ffi::c_int) {
     if ns_id <= 0 as ::core::ffi::c_int {
         return;
@@ -1107,7 +1094,6 @@ pub unsafe extern "C" fn update_ns_hl(mut ns_id: ::core::ffi::c_int) {
     p = get_decor_provider(ns_id as NS, true_0 != 0);
     (*p).hl_cached = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_bg_attr(mut wp: *mut win_T) -> ::core::ffi::c_int {
     if ns_hl_fast.get() < 0 as ::core::ffi::c_int {
         let mut local: ::core::ffi::c_int = if wp == curwin.get() {
@@ -1128,7 +1114,6 @@ pub unsafe extern "C" fn win_bg_attr(mut wp: *mut win_T) -> ::core::ffi::c_int {
         return *(*hl_attr_active.ptr()).offset(HLF_INACTIVE as ::core::ffi::c_int as isize);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_underline() -> ::core::ffi::c_int {
     let mut attrs: HlAttrs = HLATTRS_INIT;
     attrs.cterm_ae_attr = HL_UNDERLINE as ::core::ffi::c_int as int16_t as int32_t;
@@ -1141,7 +1126,6 @@ pub unsafe extern "C" fn hl_get_underline() -> ::core::ffi::c_int {
         winid: 0,
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_add_url(
     mut attr: ::core::ffi::c_int,
     mut url: *const ::core::ffi::c_char,
@@ -1162,7 +1146,6 @@ pub unsafe extern "C" fn hl_add_url(
     });
     return hl_combine_attr(attr, new);
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::c_char {
     '_c2rust_label: {
         if !(*urls.ptr()).keys.is_null() {
@@ -1177,7 +1160,6 @@ pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::
     };
     return *(*urls.ptr()).keys.offset(index as isize) as *const ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_term_attr(mut aep: *mut HlAttrs) -> ::core::ffi::c_int {
     return get_attr_entry(HlEntry {
         attr: *aep,
@@ -1187,7 +1169,6 @@ pub unsafe extern "C" fn hl_get_term_attr(mut aep: *mut HlAttrs) -> ::core::ffi:
         winid: 0,
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
     let mut url: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut __i: uint32_t = 0;
@@ -1271,7 +1252,6 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
         });
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_invalidate_blends() {
     mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
     mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
@@ -1286,7 +1266,6 @@ unsafe extern "C" fn hl_combine_ae(mut char_ae: int32_t, mut prim_ae: int32_t) -
         | prim_ae & !(HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t)
         | new_ul;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_combine_attr(
     mut char_attr: ::core::ffi::c_int,
     mut prim_attr: ::core::ffi::c_int,
@@ -1403,7 +1382,6 @@ unsafe extern "C" fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     }
     return attrs;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_blend_attrs(
     mut back_attr: ::core::ffi::c_int,
     mut front_attr: ::core::ffi::c_int,
@@ -1644,7 +1622,6 @@ unsafe extern "C" fn hl_cterm2rgb_color(mut nr: ::core::ffi::c_int) -> ::core::f
     }
     return (r << 16 as ::core::ffi::c_int) + (g << 8 as ::core::ffi::c_int) + b;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_attr2entry(mut attr: ::core::ffi::c_int) -> HlAttrs {
     if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
     {
@@ -1652,7 +1629,6 @@ pub unsafe extern "C" fn syn_attr2entry(mut attr: ::core::ffi::c_int) -> HlAttrs
     }
     return (*(*attr_entries.ptr()).keys.offset(attr as isize)).attr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_get_attr_by_id(
     mut attr_id: Integer,
     mut rgb: Boolean,
@@ -1688,7 +1664,6 @@ pub unsafe extern "C" fn hl_get_attr_by_id(
     );
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hlattrs2dict(
     mut hl: *mut Dict,
     mut hl_attrs: *mut Dict,
@@ -2031,7 +2006,6 @@ pub unsafe extern "C" fn hlattrs2dict(
         };
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn dict2hlattrs(
     mut dict: *mut KeyDict_highlight,
     mut use_rgb: bool,
@@ -2783,7 +2757,6 @@ pub unsafe extern "C" fn dict2hlattrs(
     }
     return hlattrs;
 }
-#[no_mangle]
 pub unsafe extern "C" fn object_to_color(
     mut val: Object,
     mut key: *mut ::core::ffi::c_char,
@@ -2835,7 +2808,6 @@ pub unsafe extern "C" fn object_to_color(
     }
     panic!("Reached end of non-void function without returning");
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_inspect(mut attr: ::core::ffi::c_int, mut arena: *mut Arena) -> Array {
     if !hlstate_active.get() {
         return Array {

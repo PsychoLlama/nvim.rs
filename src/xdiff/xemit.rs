@@ -37,7 +37,6 @@ unsafe extern "C" fn xdl_emit_record(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_get_hunk(
     mut xscr: *mut *mut xdchange_t,
     mut xecfg: *const xdemitconf_t,
@@ -92,7 +91,6 @@ pub unsafe extern "C" fn xdl_get_hunk(
     }
     return lxch;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_emit_diff(
     mut xe: *mut xdfenv_t,
     mut xscr: *mut xdchange_t,

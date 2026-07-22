@@ -62,7 +62,6 @@ unsafe extern "C" fn strtod_buffer_size(mut s: *const ::core::ffi::c_char) -> ::
     }
     return p.offset_from(s) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fpconv_strtod(
     mut nptr: *const ::core::ffi::c_char,
     mut endptr: *mut *mut ::core::ffi::c_char,
@@ -147,7 +146,6 @@ unsafe extern "C" fn set_number_format(
     *fmt.offset(c2rust_fresh4 as isize) = 'g' as ::core::ffi::c_char;
     *fmt.offset(i as isize) = 0 as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fpconv_g_fmt(
     mut str: *mut ::core::ffi::c_char,
     mut num: ::core::ffi::c_double,
@@ -190,7 +188,6 @@ pub unsafe extern "C" fn fpconv_g_fmt(
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fpconv_init() {
     fpconv_update_locale();
 }

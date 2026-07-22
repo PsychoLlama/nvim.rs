@@ -182,7 +182,6 @@ pub const UV_FS_CUSTOM: uv_fs_type = 0;
 pub const UV_FS_UNKNOWN: uv_fs_type = -1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn rstream_init_fd(
     mut loop_0: *mut Loop,
     mut stream: *mut RStream,
@@ -196,7 +195,6 @@ pub unsafe extern "C" fn rstream_init_fd(
     );
     rstream_init(stream);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_init_stream(
     mut stream: *mut RStream,
     mut uvstream: *mut uv_stream_t,
@@ -209,7 +207,6 @@ pub unsafe extern "C" fn rstream_init_stream(
     );
     rstream_init(stream);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_init(mut stream: *mut RStream) {
     (*stream).read_cb = None;
     (*stream).num_bytes = 0 as size_t;
@@ -221,7 +218,6 @@ pub unsafe extern "C" fn rstream_init(mut stream: *mut RStream) {
             as stream_close_cb;
     (*stream).s.close_cb_data = stream as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_start_inner(mut stream: *mut RStream) {
     if !(*stream).s.uvstream.is_null() {
         uv_read_start(
@@ -236,7 +232,6 @@ pub unsafe extern "C" fn rstream_start_inner(mut stream: *mut RStream) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_start(
     mut stream: *mut RStream,
     mut cb: stream_read_cb,
@@ -249,7 +244,6 @@ pub unsafe extern "C" fn rstream_start(
         rstream_start_inner(stream);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_stop_inner(mut stream: *mut RStream) {
     if !(*stream).s.uvstream.is_null() {
         uv_read_stop((*stream).s.uvstream);
@@ -257,7 +251,6 @@ pub unsafe extern "C" fn rstream_stop_inner(mut stream: *mut RStream) {
         uv_idle_stop(&raw mut (*stream).s.uv.idle);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_stop(mut stream: *mut RStream) {
     rstream_stop_inner(stream);
     (*stream).want_read = false_0 != 0;
@@ -432,11 +425,9 @@ unsafe extern "C" fn read_event(mut argv: *mut *mut ::core::ffi::c_void) {
         stream_close_handle(&raw mut (*stream).s);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_available(mut stream: *mut RStream) -> size_t {
     return (*stream).write_pos.offset_from((*stream).read_pos) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_consume(mut stream: *mut RStream, mut consumed: size_t) {
     (*stream).read_pos = (*stream).read_pos.offset(consumed as isize);
     let mut remaining: size_t = (*stream).write_pos.offset_from((*stream).read_pos) as size_t;
@@ -526,7 +517,6 @@ unsafe extern "C" fn rstream_close_cb(mut s: *mut Stream, mut data: *mut ::core:
         free_block((*stream).buffer as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn rstream_may_close(mut stream: *mut RStream) {
     stream_may_close(&raw mut (*stream).s);
 }

@@ -1132,7 +1132,6 @@ unsafe extern "C" fn is_menus_locked() -> ::core::ffi::c_int {
     }
     return false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_menu(mut eap: *mut exarg_T) {
     let mut map_to: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut noremap: ::core::ffi::c_int = 0;
@@ -1958,7 +1957,6 @@ unsafe extern "C" fn menu_get_recursive(
     }
     return dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_get(
     path_name: *mut ::core::ffi::c_char,
     mut modes: ::core::ffi::c_int,
@@ -2165,7 +2163,6 @@ static expand_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 static expand_modes: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static expand_emenu: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_menu_cmd(
     mut xp: *mut expand_T,
     mut cmd: *const ::core::ffi::c_char,
@@ -2295,7 +2292,6 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_menu_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -2335,7 +2331,6 @@ pub unsafe extern "C" fn get_menu_name(
     should_advance.set(!should_advance.get());
     return str;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_menu_names(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -2463,7 +2458,6 @@ unsafe extern "C" fn menu_namecmp(
         && (*mname.offset(i as isize) as ::core::ffi::c_int == NUL
             || *mname.offset(i as isize) as ::core::ffi::c_int == TAB);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_menu_cmd_modes(
     mut cmd: *const ::core::ffi::c_char,
     mut forceit: bool,
@@ -2703,14 +2697,12 @@ unsafe extern "C" fn menu_text(
     }
     return text;
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_is_menubar(name: *const ::core::ffi::c_char) -> bool {
     return !menu_is_popup(name)
         && !menu_is_toolbar(name)
         && !menu_is_winbar(name)
         && *name as ::core::ffi::c_int != MNU_HIDDEN_CHAR;
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_is_popup(name: *const ::core::ffi::c_char) -> bool {
     return strncmp(
         name,
@@ -2718,7 +2710,6 @@ pub unsafe extern "C" fn menu_is_popup(name: *const ::core::ffi::c_char) -> bool
         5 as size_t,
     ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_is_toolbar(name: *const ::core::ffi::c_char) -> bool {
     return strncmp(
         name,
@@ -2726,7 +2717,6 @@ pub unsafe extern "C" fn menu_is_toolbar(name: *const ::core::ffi::c_char) -> bo
         7 as size_t,
     ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_is_separator(mut name: *mut ::core::ffi::c_char) -> bool {
     return *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '-' as ::core::ffi::c_int
@@ -2768,7 +2758,6 @@ unsafe extern "C" fn get_menu_mode() -> ::core::ffi::c_int {
     }
     return MENU_INDEX_INVALID as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_menu_mode_flag() -> ::core::ffi::c_int {
     let mut mode: ::core::ffi::c_int = get_menu_mode();
     if mode == MENU_INDEX_INVALID as ::core::ffi::c_int {
@@ -2776,7 +2765,6 @@ pub unsafe extern "C" fn get_menu_mode_flag() -> ::core::ffi::c_int {
     }
     return (1 as ::core::ffi::c_int) << mode;
 }
-#[no_mangle]
 pub unsafe extern "C" fn show_popupmenu() {
     let mut menu_mode: ::core::ffi::c_int = get_menu_mode();
     if menu_mode == MENU_INDEX_INVALID as ::core::ffi::c_int {
@@ -2814,7 +2802,6 @@ pub unsafe extern "C" fn show_popupmenu() {
     }
     pum_show_popupmenu(menu);
 }
-#[no_mangle]
 pub unsafe extern "C" fn execute_menu(
     mut eap: *const exarg_T,
     mut menu: *mut vimmenu_T,
@@ -3028,7 +3015,6 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
     }
     return menu;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_emenu(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut mode_idx: ::core::ffi::c_int = MENU_INDEX_INVALID as ::core::ffi::c_int;
@@ -3075,7 +3061,6 @@ pub unsafe extern "C" fn ex_emenu(mut eap: *mut exarg_T) {
     }
     execute_menu(eap, menu, mode_idx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) -> *mut vimmenu_T {
     let mut menu: *mut vimmenu_T = *get_root_menu(path_name);
     let mut saved_name: *mut ::core::ffi::c_char = xstrdup(path_name);
@@ -3123,7 +3108,6 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
     return menu;
 }
 static menutrans_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-#[no_mangle]
 pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     if (*menutrans_ga.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
@@ -3423,7 +3407,6 @@ unsafe extern "C" fn menuitem_getinfo(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_menu_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

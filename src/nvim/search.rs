@@ -910,7 +910,6 @@ pub unsafe extern "C" fn search_regcomp(
 pub unsafe extern "C" fn get_search_pat() -> *mut ::core::ffi::c_char {
     return mr_pattern.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn save_re_pat(
     mut idx: ::core::ffi::c_int,
     mut pat: *mut ::core::ffi::c_char,
@@ -934,7 +933,6 @@ pub unsafe extern "C" fn save_re_pat(
     set_no_hlsearch(false_0 != 0);
 }
 static save_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn save_search_patterns() {
     let c2rust_fresh0 = save_level.get();
     save_level.set(save_level.get() + 1);
@@ -970,7 +968,6 @@ pub unsafe extern "C" fn save_search_patterns() {
     saved_spats_last_idx.set(last_idx.get());
     saved_spats_no_hlsearch.set(no_hlsearch.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_search_patterns() {
     (*save_level.ptr()) -= 1;
     if save_level.get() != 0 as ::core::ffi::c_int {
@@ -1021,7 +1018,6 @@ static saved_last_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::c
 static saved_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static saved_search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
 static saved_search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn save_last_search_pattern() {
     (*did_save_last_search_spat.ptr()) += 1;
     if did_save_last_search_spat.get() != 1 as ::core::ffi::c_int {
@@ -1042,7 +1038,6 @@ pub unsafe extern "C" fn save_last_search_pattern() {
     saved_last_idx.set(last_idx.get());
     saved_no_hlsearch.set(no_hlsearch.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_last_search_pattern() {
     (*did_save_last_search_spat.ptr()) -= 1;
     if did_save_last_search_spat.get() > 0 as ::core::ffi::c_int {
@@ -1071,19 +1066,15 @@ unsafe extern "C" fn restore_incsearch_state() {
     search_match_endcol.set(saved_search_match_endcol.get());
     search_match_lines.set(saved_search_match_lines.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_search_pattern() -> *mut ::core::ffi::c_char {
     return (*spats.ptr())[RE_SEARCH as ::core::ffi::c_int as usize].pat;
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_search_pattern_len() -> size_t {
     return (*spats.ptr())[RE_SEARCH as ::core::ffi::c_int as usize].patlen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ignorecase(mut pat: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     return ignorecase_opt(pat, p_ic.get(), p_scs.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ignorecase_opt(
     mut pat: *mut ::core::ffi::c_char,
     mut ic_in: ::core::ffi::c_int,
@@ -1156,20 +1147,16 @@ pub unsafe extern "C" fn pat_has_uppercase(mut pat: *mut ::core::ffi::c_char) ->
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_csearch() -> *const ::core::ffi::c_char {
     return lastc_bytes.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_csearch_forward() -> ::core::ffi::c_int {
     return (lastcdir.get() as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int)
         as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_csearch_until() -> ::core::ffi::c_int {
     return last_t_cmd.get() as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_last_csearch(
     mut c: ::core::ffi::c_int,
     mut s: *mut ::core::ffi::c_char,
@@ -1191,24 +1178,19 @@ pub unsafe extern "C" fn set_last_csearch(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_csearch_direction(mut cdir: Direction) {
     lastcdir.set(cdir);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_csearch_until(mut t_cmd: ::core::ffi::c_int) {
     last_t_cmd.set(t_cmd != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_search_pat() -> *mut ::core::ffi::c_char {
     return (*spats.ptr())[last_idx.get() as usize].pat;
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_search_dir() {
     (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.dir = '/' as ::core::ffi::c_char;
     set_vv_searchforward();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_last_search_pat(
     mut s: *const ::core::ffi::c_char,
     mut idx: ::core::ffi::c_int,
@@ -1254,7 +1236,6 @@ pub unsafe extern "C" fn set_last_search_pat(
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_pat_prog(mut regmatch: *mut regmmatch_T) {
     if (*spats.ptr())[last_idx.get() as usize].pat.is_null() {
         (*regmatch).regprog = ::core::ptr::null_mut::<regprog_T>();
@@ -1272,7 +1253,6 @@ pub unsafe extern "C" fn last_pat_prog(mut regmatch: *mut regmmatch_T) {
     );
     (*emsg_off.ptr()) -= 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn searchit(
     mut win: *mut win_T,
     mut buf: *mut buf_T,
@@ -1731,7 +1711,6 @@ pub unsafe extern "C" fn searchit(
     }
     return submatch + 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_search_direction(mut cdir: ::core::ffi::c_int) {
     (*spats.ptr())[0 as ::core::ffi::c_int as usize].off.dir = cdir as ::core::ffi::c_char;
 }
@@ -1755,7 +1734,6 @@ unsafe extern "C" fn first_submatch(mut rp: *mut regmmatch_T) -> ::core::ffi::c_
     }
     return submatch;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_search(
     mut oap: *mut oparg_T,
     mut dirc: ::core::ffi::c_int,
@@ -2293,7 +2271,6 @@ pub unsafe extern "C" fn do_search(
     xfree(msgbuf as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn search_for_exact_line(
     mut buf: *mut buf_T,
     mut pos: *mut pos_T,
@@ -2374,7 +2351,6 @@ pub unsafe extern "C" fn search_for_exact_line(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = (*cap).nchar;
     let mut dir: ::core::ffi::c_int = (*cap).arg;
@@ -2475,7 +2451,6 @@ pub unsafe extern "C" fn searchc(mut cap: *mut cmdarg_T, mut t_cmd: bool) -> ::c
     (*curwin.get()).w_cursor.col = col as colnr_T;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn findmatch(
     mut oap: *mut oparg_T,
     mut initc: ::core::ffi::c_int,
@@ -2601,7 +2576,6 @@ unsafe extern "C" fn find_mps_values(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn findmatchlimit(
     mut oap: *mut oparg_T,
     mut initc: ::core::ffi::c_int,
@@ -3325,7 +3299,6 @@ pub unsafe extern "C" fn findmatchlimit(
     }
     return NULL_0 as *mut pos_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_linecomment(
     mut line: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -3394,7 +3367,6 @@ pub unsafe extern "C" fn check_linecomment(
     }
     return p.offset_from(line) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn showmatch(mut c: ::core::ffi::c_int) {
     let mut lpos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut vcol: colnr_T = 0;
@@ -3494,7 +3466,6 @@ pub unsafe extern "C" fn showmatch(mut c: ::core::ffi::c_int) {
     State.set(save_state);
     ui_cursor_shape();
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_search(
     mut count: ::core::ffi::c_int,
     mut forward: bool,
@@ -3735,7 +3706,6 @@ unsafe extern "C" fn is_zero_width(
     vim_regfree(regmatch.regprog);
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn linewhite(mut lnum: linenr_T) -> bool {
     let mut p: *mut ::core::ffi::c_char = skipwhite(ml_get(lnum));
     return *p as ::core::ffi::c_int == NUL;
@@ -4022,7 +3992,6 @@ unsafe extern "C" fn update_search_stat(
     (*stat).last_maxcount = last_maxcount.get();
     p_ws.set(save_ws);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_searchcount(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4218,7 +4187,6 @@ unsafe extern "C" fn get_line_and_copy(
     xstrlcpy(buf, line, LSIZE as ::core::ffi::c_int as size_t);
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_pattern_in_path(
     mut ptr: *mut ::core::ffi::c_char,
     mut dir: Direction,
@@ -5255,7 +5223,6 @@ unsafe extern "C" fn show_pat_in_path(
         msg_putchar('\n' as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_search_pattern(pat: *mut SearchPattern) {
     memcpy(
         pat as *mut ::core::ffi::c_void,
@@ -5264,7 +5231,6 @@ pub unsafe extern "C" fn get_search_pattern(pat: *mut SearchPattern) {
         ::core::mem::size_of::<SearchPattern>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_substitute_pattern(pat: *mut SearchPattern) {
     memcpy(
         pat as *mut ::core::ffi::c_void,
@@ -5278,7 +5244,6 @@ pub unsafe extern "C" fn get_substitute_pattern(pat: *mut SearchPattern) {
         ::core::mem::size_of::<SearchOffset>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_search_pattern(pat: SearchPattern) {
     free_spat((spats.ptr() as *mut SearchPattern).offset(0 as ::core::ffi::c_int as isize));
     memcpy(
@@ -5289,7 +5254,6 @@ pub unsafe extern "C" fn set_search_pattern(pat: SearchPattern) {
     );
     set_vv_searchforward();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_substitute_pattern(pat: SearchPattern) {
     free_spat((spats.ptr() as *mut SearchPattern).offset(1 as ::core::ffi::c_int as isize));
     memcpy(
@@ -5305,7 +5269,6 @@ pub unsafe extern "C" fn set_substitute_pattern(pat: SearchPattern) {
         ::core::mem::size_of::<SearchOffset>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_last_used_pattern(is_substitute_pattern: bool) {
     last_idx.set(if is_substitute_pattern as ::core::ffi::c_int != 0 {
         1 as ::core::ffi::c_int
@@ -5313,7 +5276,6 @@ pub unsafe extern "C" fn set_last_used_pattern(is_substitute_pattern: bool) {
         0 as ::core::ffi::c_int
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn search_was_last_used() -> bool {
     return last_idx.get() == 0 as ::core::ffi::c_int;
 }

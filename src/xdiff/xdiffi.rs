@@ -356,7 +356,6 @@ unsafe extern "C" fn xdl_split(
         ec += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_recs_cmp(
     mut dd1: *mut diffdata_t,
     mut off1: ::core::ffi::c_long,
@@ -434,7 +433,6 @@ pub unsafe extern "C" fn xdl_recs_cmp(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_do_diff(
     mut mf1: *mut mmfile_t,
     mut mf2: *mut mmfile_t,
@@ -804,7 +802,6 @@ unsafe extern "C" fn xdl_bug(mut msg: *const ::core::ffi::c_char) {
     );
     exit(1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_change_compact(
     mut xdf: *mut xdfile_t,
     mut xdfo: *mut xdfile_t,
@@ -925,7 +922,6 @@ pub unsafe extern "C" fn xdl_change_compact(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_build_script(
     mut xe: *mut xdfenv_t,
     mut xscr: *mut *mut xdchange_t,
@@ -965,7 +961,6 @@ pub unsafe extern "C" fn xdl_build_script(
     *xscr = cscr;
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_free_script(mut xscr: *mut xdchange_t) {
     let mut xch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
     loop {
@@ -1040,7 +1035,6 @@ unsafe extern "C" fn xdl_mark_ignorable_lines(
         xch = (*xch).next as *mut xdchange_t;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_diff(
     mut mf1: *mut mmfile_t,
     mut mf2: *mut mmfile_t,

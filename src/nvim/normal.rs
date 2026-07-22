@@ -2959,7 +2959,6 @@ unsafe extern "C" fn nv_compare(
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_normal_cmds() {
     '_c2rust_label: {
         if ::core::mem::size_of::<[nv_cmd; 188]>()
@@ -3069,7 +3068,6 @@ unsafe extern "C" fn check_text_locked(mut oap: *mut oparg_T) -> bool {
     text_locked_msg();
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_text_or_curbuf_locked(mut oap: *mut oparg_T) -> bool {
     if check_text_locked(oap) {
         return true_0 != 0;
@@ -3083,7 +3081,6 @@ pub unsafe extern "C" fn check_text_or_curbuf_locked(mut oap: *mut oparg_T) -> b
     return true_0 != 0;
 }
 static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null_mut::<oparg_T>());
-#[no_mangle]
 pub unsafe extern "C" fn op_pending() -> bool {
     return !(!(*current_oap.ptr()).is_null()
         && !finish_op.get()
@@ -3092,7 +3089,6 @@ pub unsafe extern "C" fn op_pending() -> bool {
         && (*current_oap.get()).op_type == OP_NOP as ::core::ffi::c_int
         && (*current_oap.get()).regname == NUL);
 }
-#[no_mangle]
 pub unsafe extern "C" fn normal_enter(mut cmdwin: bool, mut noexmode: bool) {
     let mut state: NormalState = NormalState {
         state: VimState {
@@ -4137,7 +4133,6 @@ unsafe extern "C" fn set_vcount_ca(mut cap: *mut cmdarg_T, mut set_prevcount: *m
     );
     *set_prevcount = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn end_visual_mode() {
     VIsual_select_exclu_adj.set(false_0 != 0);
     VIsual_active.set(false_0 != 0);
@@ -4155,7 +4150,6 @@ pub unsafe extern "C" fn end_visual_mode() {
     adjust_cursor_eol();
     may_trigger_modechanged();
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_VIsual_and_resel() {
     if VIsual_active.get() {
         end_visual_mode();
@@ -4163,7 +4157,6 @@ pub unsafe extern "C" fn reset_VIsual_and_resel() {
     }
     VIsual_reselect.set(false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_VIsual() {
     if VIsual_active.get() {
         end_visual_mode();
@@ -4171,7 +4164,6 @@ pub unsafe extern "C" fn reset_VIsual() {
         VIsual_reselect.set(false_0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_visual_mode() {
     if VIsual_mode_orig.get() != NUL {
         (*curbuf.get()).b_visual.vi_mode = VIsual_mode_orig.get();
@@ -4226,7 +4218,6 @@ unsafe extern "C" fn find_is_eval_item(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_ident_under_cursor(
     mut text: *mut *mut ::core::ffi::c_char,
     mut find_type: ::core::ffi::c_int,
@@ -4250,7 +4241,6 @@ pub unsafe extern "C" fn find_ident_under_cursor(
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_ident_at_pos(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -4404,7 +4394,6 @@ unsafe extern "C" fn prep_redo_cmd(mut cap: *mut cmdarg_T) {
         AppendCharToRedobuff((*cap).nchar);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn prep_redo(
     mut regname: ::core::ffi::c_int,
     mut num: ::core::ffi::c_int,
@@ -4425,7 +4414,6 @@ pub unsafe extern "C" fn prep_redo(
         cmd5,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn prep_redo_num2(
     mut regname: ::core::ffi::c_int,
     mut num1: ::core::ffi::c_int,
@@ -4477,7 +4465,6 @@ unsafe extern "C" fn checkclearopq(mut oap: *mut oparg_T) -> bool {
     clearopbeep(oap);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clearop(mut oap: *mut oparg_T) {
     (*oap).op_type = OP_NOP as ::core::ffi::c_int;
     (*oap).regname = 0 as ::core::ffi::c_int;
@@ -4485,7 +4472,6 @@ pub unsafe extern "C" fn clearop(mut oap: *mut oparg_T) {
     (*oap).use_reg_one = false_0 != 0;
     motion_force.set(NUL);
 }
-#[no_mangle]
 pub unsafe extern "C" fn clearopbeep(mut oap: *mut oparg_T) {
     clearop(oap);
     beep_flush();
@@ -4514,7 +4500,6 @@ unsafe extern "C" fn unshift_special(mut cap: *mut cmdarg_T) {
     }
     (*cap).cmdchar = simplify_key((*cap).cmdchar, mod_mask.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_clear_cmdline() {
     if mode_displayed.get() {
         clear_cmdline.set(true_0 != 0);
@@ -4525,7 +4510,6 @@ pub unsafe extern "C" fn may_clear_cmdline() {
 static old_showcmd_buf: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new([0; 41]);
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn clear_showcmd() {
     if p_sc.get() == 0 {
         return;
@@ -4650,7 +4634,6 @@ pub unsafe extern "C" fn clear_showcmd() {
     }
     display_showcmd();
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_to_showcmd(mut c: ::core::ffi::c_int) -> bool {
     static ignore: GlobalCell<[::core::ffi::c_int; 23]> = GlobalCell::new([
         -(253 as ::core::ffi::c_int
@@ -4753,7 +4736,6 @@ pub unsafe extern "C" fn add_to_showcmd(mut c: ::core::ffi::c_int) -> bool {
     display_showcmd();
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_to_showcmd_c(mut c: ::core::ffi::c_int) {
     add_to_showcmd(c);
     setcursor();
@@ -4770,7 +4752,6 @@ unsafe extern "C" fn del_from_showcmd(mut len: ::core::ffi::c_int) {
         display_showcmd();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn push_showcmd() {
     if p_sc.get() != 0 {
         strcpy(
@@ -4779,7 +4760,6 @@ pub unsafe extern "C" fn push_showcmd() {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pop_showcmd() {
     if p_sc.get() == 0 {
         return;
@@ -4885,11 +4865,9 @@ unsafe extern "C" fn display_showcmd() {
     );
     grid_line_flush();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vtopline(mut wp: *mut win_T) -> ::core::ffi::c_int {
     return plines_m_win_fill(wp, 1 as linenr_T, (*wp).w_topline) - (*wp).w_topfill;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_check_scrollbind(mut check: bool) {
     static old_curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
     static old_vtopline: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
@@ -4924,7 +4902,6 @@ pub unsafe extern "C" fn do_check_scrollbind(mut check: bool) {
     old_buf.set((*curwin.get()).w_buffer);
     old_leftcol.set((*curwin.get()).w_leftcol);
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_scrollbind(
     mut vtopline_diff: linenr_T,
     mut leftcol_diff: ::core::ffi::c_int,
@@ -5125,7 +5102,6 @@ unsafe extern "C" fn is_ident(
     }
     return incomment as ::core::ffi::c_int == false_0 && instring == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_decl(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -5286,7 +5262,6 @@ pub unsafe extern "C" fn find_decl(
     p_scs.set(save_p_scs as ::core::ffi::c_int);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nv_screengo(
     mut oap: *mut oparg_T,
     mut dir: ::core::ffi::c_int,
@@ -5464,7 +5439,6 @@ pub unsafe extern "C" fn nv_screengo(
     adjust_skipcol();
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nv_scroll_line(mut cap: *mut cmdarg_T) {
     if !checkclearop((*cap).oap) {
         scroll_redraw((*cap).arg, (*cap).count1 as linenr_T);
@@ -6296,7 +6270,6 @@ unsafe extern "C" fn nv_Zet(mut cap: *mut cmdarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_nv_ident(mut c1: ::core::ffi::c_int, mut c2: ::core::ffi::c_int) {
     let mut oa: oparg_T = oparg_T {
         op_type: 0,
@@ -6733,7 +6706,6 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
     }
     xfree(buf as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_visual_text(
     mut cap: *mut cmdarg_T,
     mut pp: *mut *mut ::core::ffi::c_char,
@@ -8514,12 +8486,10 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn start_selection() {
     may_start_select('k' as ::core::ffi::c_int);
     n_start_visual_mode('v' as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_start_select(mut c: ::core::ffi::c_int) {
     VIsual_select.set(
         (c == 'o' as ::core::ffi::c_int
@@ -8617,7 +8587,6 @@ unsafe extern "C" fn nv_gv_cmd(mut cap: *mut cmdarg_T) {
     redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
     showmode();
 }
-#[no_mangle]
 pub unsafe extern "C" fn nv_g_home_m_cmd(mut cap: *mut cmdarg_T) {
     let mut i: ::core::ffi::c_int = 0;
     let flag: bool = (*cap).nchar == '^' as ::core::ffi::c_int;
@@ -9435,7 +9404,6 @@ unsafe extern "C" fn adjust_for_sel(mut cap: *mut cmdarg_T) {
         VIsual_select_exclu_adj.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn unadjust_for_sel() -> bool {
     if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
         && !equalpos(VIsual.get(), (*curwin.get()).w_cursor)
@@ -9450,7 +9418,6 @@ pub unsafe extern "C" fn unadjust_for_sel() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn unadjust_for_sel_inner(mut pp: *mut pos_T) -> bool {
     VIsual_select_exclu_adj.set(false_0 != 0);
     if (*pp).coladd > 0 as ::core::ffi::c_int {
@@ -9601,7 +9568,6 @@ unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
     }
     clearop((*cap).oap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_cursor_for_append_to_line() {
     (*curwin.get()).w_set_curswant = true_0;
     if get_ve_flags(curwin.get()) == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint {
@@ -10075,7 +10041,6 @@ unsafe extern "C" fn nv_event(mut cap: *mut cmdarg_T) {
         (*cap).retval |= CA_COMMAND_BUSY as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn normal_cmd(mut oap: *mut oparg_T, mut toplevel: bool) {
     let mut s: NormalState = NormalState {
         state: VimState {

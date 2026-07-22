@@ -1103,7 +1103,6 @@ pub unsafe extern "C" fn profile_sub_wait(mut tm: proftime_T, mut tma: proftime_
 unsafe extern "C" fn profile_equal(mut tm1: proftime_T, mut tm2: proftime_T) -> bool {
     return tm1 == tm2;
 }
-#[no_mangle]
 pub unsafe extern "C" fn profile_signed(mut tm: proftime_T) -> int64_t {
     return if tm <= INT64_MAX as proftime_T {
         tm as int64_t
@@ -1127,7 +1126,6 @@ pub unsafe extern "C" fn profile_cmp(
 }
 static profile_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn profile_reset() {
     let mut id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while id <= (*script_items.ptr()).ga_len {
@@ -1190,7 +1188,6 @@ pub unsafe extern "C" fn profile_reset() {
     *ptr_ = NULL;
     let _ = *ptr_;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_profile(mut eap: *mut exarg_T) {
     static pause_time: GlobalCell<proftime_T> = GlobalCell::new(0);
     let mut e: *mut ::core::ffi::c_char = skiptowhite((*eap).arg);
@@ -1258,7 +1255,6 @@ static pexpand_cmds: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new
     b"stop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ::core::ptr::null_mut::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_profile_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1268,7 +1264,6 @@ pub unsafe extern "C" fn get_profile_name(
         _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_profile_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -1310,16 +1305,13 @@ pub unsafe extern "C" fn set_context_in_profile_cmd(
     (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
 }
 static wait_time: GlobalCell<proftime_T> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn prof_input_start() {
     wait_time.set(profile_start());
 }
-#[no_mangle]
 pub unsafe extern "C" fn prof_input_end() {
     wait_time.set(profile_end(wait_time.get()));
     profile_set_wait(profile_add(profile_get_wait(), wait_time.get()));
 }
-#[no_mangle]
 pub unsafe extern "C" fn prof_def_func() -> bool {
     if (*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int {
         return (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
@@ -1428,7 +1420,6 @@ unsafe extern "C" fn prof_self_cmp(
     let mut p2: *mut ufunc_T = *(s2 as *mut *mut ufunc_T);
     return profile_cmp((*p1).uf_tm_self, (*p2).uf_tm_self);
 }
-#[no_mangle]
 pub unsafe extern "C" fn func_do_profile(mut fp: *mut ufunc_T) {
     let mut len: ::core::ffi::c_int = (*fp).uf_lines.ga_len;
     if (*fp).uf_prof_initialized == 0 {
@@ -1456,7 +1447,6 @@ pub unsafe extern "C" fn func_do_profile(mut fp: *mut ufunc_T) {
     }
     (*fp).uf_profiling = true_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn prof_child_enter(mut tm: *mut proftime_T) {
     let mut fc: *mut funccall_T = get_current_funccal();
     if !fc.is_null() && (*(*fc).fc_func).uf_profiling != 0 {
@@ -1464,7 +1454,6 @@ pub unsafe extern "C" fn prof_child_enter(mut tm: *mut proftime_T) {
     }
     script_prof_save(tm);
 }
-#[no_mangle]
 pub unsafe extern "C" fn prof_child_exit(mut tm: *mut proftime_T) {
     let mut fc: *mut funccall_T = get_current_funccal();
     if !fc.is_null() && (*(*fc).fc_func).uf_profiling != 0 {
@@ -1477,7 +1466,6 @@ pub unsafe extern "C" fn prof_child_exit(mut tm: *mut proftime_T) {
     }
     script_prof_restore(tm);
 }
-#[no_mangle]
 pub unsafe extern "C" fn func_line_start(mut cookie: *mut ::core::ffi::c_void) {
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
     let mut fp: *mut ufunc_T = (*fcp).fc_func;
@@ -1508,7 +1496,6 @@ pub unsafe extern "C" fn func_line_start(mut cookie: *mut ::core::ffi::c_void) {
         (*fp).uf_tml_wait = profile_get_wait();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn func_line_exec(mut cookie: *mut ::core::ffi::c_void) {
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
     let mut fp: *mut ufunc_T = (*fcp).fc_func;
@@ -1516,7 +1503,6 @@ pub unsafe extern "C" fn func_line_exec(mut cookie: *mut ::core::ffi::c_void) {
         (*fp).uf_tml_execed = true_0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn func_line_end(mut cookie: *mut ::core::ffi::c_void) {
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
     let mut fp: *mut ufunc_T = (*fcp).fc_func;
@@ -1689,7 +1675,6 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
     }
     xfree(sorttab as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn profile_init(mut si: *mut scriptitem_T) {
     (*si).sn_pr_count = 0 as ::core::ffi::c_int;
     (*si).sn_pr_total = profile_zero();
@@ -1703,7 +1688,6 @@ pub unsafe extern "C" fn profile_init(mut si: *mut scriptitem_T) {
     (*si).sn_prof_on = true_0 != 0;
     (*si).sn_pr_nest = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_prof_save(mut tm: *mut proftime_T) {
     if (*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
         && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len
@@ -1723,7 +1707,6 @@ pub unsafe extern "C" fn script_prof_save(mut tm: *mut proftime_T) {
     }
     *tm = profile_get_wait();
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_prof_restore(mut tm: *const proftime_T) {
     if !((*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
         && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len)
@@ -1856,7 +1839,6 @@ unsafe extern "C" fn script_dump_profile(mut fd: *mut FILE) {
         id += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn profile_dump() {
     if (*profile_fname.ptr()).is_null() {
         return;
@@ -1876,7 +1858,6 @@ pub unsafe extern "C" fn profile_dump() {
         fclose(fd);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_line_start() {
     if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int
         || (*current_sctx.ptr()).sc_sid > (*script_items.ptr()).ga_len
@@ -1920,7 +1901,6 @@ pub unsafe extern "C" fn script_line_start() {
         (*si).sn_prl_wait = profile_get_wait();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_line_exec() {
     if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int
         || (*current_sctx.ptr()).sc_sid > (*script_items.ptr()).ga_len
@@ -1935,7 +1915,6 @@ pub unsafe extern "C" fn script_line_exec() {
         (*si).sn_prl_execed = true_0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_line_end() {
     if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int
         || (*current_sctx.ptr()).sc_sid > (*script_items.ptr()).ga_len
@@ -1965,14 +1944,12 @@ pub unsafe extern "C" fn script_line_end() {
 }
 static g_start_time: GlobalCell<proftime_T> = GlobalCell::new(0);
 static g_prev_time: GlobalCell<proftime_T> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn time_push(mut rel: *mut proftime_T, mut start: *mut proftime_T) {
     let mut now: proftime_T = profile_start();
     *rel = profile_sub(now, g_prev_time.get());
     *start = now;
     g_prev_time.set(now);
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_pop(mut tp: proftime_T) {
     g_prev_time.set((*g_prev_time.ptr()).wrapping_sub(tp));
 }
@@ -1984,7 +1961,6 @@ unsafe extern "C" fn time_diff(mut then: proftime_T, mut now: proftime_T) {
         diff as ::core::ffi::c_double / 1.0E6f64,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_start(mut message: *const ::core::ffi::c_char) {
     if (*time_fd.ptr()).is_null() {
         return;
@@ -2005,7 +1981,6 @@ pub unsafe extern "C" fn time_start(mut message: *const ::core::ffi::c_char) {
     );
     time_msg(message, ::core::ptr::null::<proftime_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_msg(
     mut mesg: *const ::core::ffi::c_char,
     mut start: *const proftime_T,
@@ -2034,7 +2009,6 @@ pub unsafe extern "C" fn time_msg(
         mesg,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_init(
     mut fname: *const ::core::ffi::c_char,
     mut proc_name: *const ::core::ffi::c_char,
@@ -2081,7 +2055,6 @@ pub unsafe extern "C" fn time_init(
         proc_name,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_finish() {
     if (*time_fd.ptr()).is_null() {
         return;

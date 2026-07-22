@@ -1562,34 +1562,26 @@ unsafe extern "C" fn decor_redraw_col(
     return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub static first_lang: GlobalCell<*mut slang_T> =
     GlobalCell::new(::core::ptr::null_mut::<slang_T>());
-#[no_mangle]
 pub static int_wordlist: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub const SY_MAXLEN: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
-#[no_mangle]
 pub static spelltab: GlobalCell<spelltab_T> = GlobalCell::new(spelltab_T {
     st_isw: [false; 256],
     st_isu: [false; 256],
     st_fold: [0; 256],
     st_upper: [0; 256],
 });
-#[no_mangle]
 pub static did_set_spelltab: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub static e_format: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"E759: Format error in spell file\0".as_ptr() as *const ::core::ffi::c_char
         as *mut ::core::ffi::c_char,
 );
-#[no_mangle]
 pub static repl_from: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static repl_to: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn spell_check(
     mut wp: *mut win_T,
     mut ptr: *mut ::core::ffi::c_char,
@@ -2568,7 +2560,6 @@ unsafe extern "C" fn find_word(mut mip: *mut matchinf_T, mut mode: ::core::ffi::
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_checkcompoundpattern(
     mut ptr: *mut ::core::ffi::c_char,
     mut wlen: ::core::ffi::c_int,
@@ -2595,7 +2586,6 @@ pub unsafe extern "C" fn match_checkcompoundpattern(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn can_compound(
     mut slang: *mut slang_T,
     mut word: *const ::core::ffi::c_char,
@@ -3133,7 +3123,6 @@ pub unsafe extern "C" fn can_compound(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_compoundrule(
     mut slang: *mut slang_T,
     mut compflags: *const uint8_t,
@@ -3181,7 +3170,6 @@ pub unsafe extern "C" fn match_compoundrule(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn valid_word_prefix(
     mut totprefcnt: ::core::ffi::c_int,
     mut arridx: ::core::ffi::c_int,
@@ -3319,7 +3307,6 @@ unsafe extern "C" fn fold_more(mut mip: *mut matchinf_T) -> ::core::ffi::c_int {
     (*mip).mi_fwordlen += flen;
     return flen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_valid_case(
     mut wordflags: ::core::ffi::c_int,
     mut treeflags: ::core::ffi::c_int,
@@ -3331,14 +3318,12 @@ pub unsafe extern "C" fn spell_valid_case(
             && (treeflags & WF_ONECAP as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                 || wordflags & WF_ONECAP as ::core::ffi::c_int != 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_check_window(mut wp: *mut win_T) -> bool {
     return (*wp).w_onebuf_opt.wo_spell != 0
         && *(*(*wp).w_s).b_p_spl as ::core::ffi::c_int != NUL
         && (*(*wp).w_s).b_langp.ga_len > 0 as ::core::ffi::c_int
         && !(*((*(*wp).w_s).b_langp.ga_data as *mut *mut ::core::ffi::c_char)).is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn no_spell_checking(mut wp: *mut win_T) -> bool {
     if (*wp).w_onebuf_opt.wo_spell == 0
         || *(*(*wp).w_s).b_p_spl as ::core::ffi::c_int == NUL
@@ -3398,7 +3383,6 @@ unsafe extern "C" fn can_syn_spell(
     );
     return can_spell;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_move_to(
     mut wp: *mut win_T,
     mut dir: ::core::ffi::c_int,
@@ -3708,7 +3692,6 @@ pub unsafe extern "C" fn spell_move_to(
     xfree(buf as *mut ::core::ffi::c_void);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_cat_line(
     mut buf: *mut ::core::ffi::c_char,
     mut line: *mut ::core::ffi::c_char,
@@ -4373,7 +4356,6 @@ unsafe extern "C" fn spell_load_lang(mut lang: *mut ::core::ffi::c_char) {
     }
     (*curbuf.get()).b_locked -= 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_enc() -> *mut ::core::ffi::c_char {
     if strlen(p_enc.get()) < 60 as size_t
         && strcmp(
@@ -4394,7 +4376,6 @@ unsafe extern "C" fn int_wordlist_spl(mut fname: *mut ::core::ffi::c_char) {
         spell_enc(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn slang_alloc(mut lang: *mut ::core::ffi::c_char) -> *mut slang_T {
     let mut lp: *mut slang_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<slang_T>()) as *mut slang_T;
@@ -4416,7 +4397,6 @@ pub unsafe extern "C" fn slang_alloc(mut lang: *mut ::core::ffi::c_char) -> *mut
     hash_init(&raw mut (*lp).sl_wordcount);
     return lp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn slang_free(mut lp: *mut slang_T) {
     xfree((*lp).sl_name as *mut ::core::ffi::c_void);
     xfree((*lp).sl_fname as *mut ::core::ffi::c_void);
@@ -4434,7 +4414,6 @@ unsafe extern "C" fn free_fromto(mut ftp: *mut fromto_T) {
     xfree((*ftp).ft_from as *mut ::core::ffi::c_void);
     xfree((*ftp).ft_to as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn slang_clear(mut lp: *mut slang_T) {
     let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
     let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -4571,7 +4550,6 @@ pub unsafe extern "C" fn slang_clear(mut lp: *mut slang_T) {
     (*lp).sl_compsylmax = MAXWLEN as ::core::ffi::c_int;
     (*lp).sl_regions[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn slang_clear_sug(mut lp: *mut slang_T) {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         &raw mut (*lp).sl_sbyts as *mut *mut ::core::ffi::c_void;
@@ -4618,7 +4596,6 @@ unsafe extern "C" fn spell_load_cb(
     }
     return num_fnames > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn count_common_word(
     mut lp: *mut slang_T,
     mut word: *mut ::core::ffi::c_char,
@@ -4669,7 +4646,6 @@ pub unsafe extern "C" fn count_common_word(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn byte_in_str(mut str: *mut uint8_t, mut n: ::core::ffi::c_int) -> bool {
     let mut p: *mut uint8_t = str;
     while *p as ::core::ffi::c_int != NUL {
@@ -4680,7 +4656,6 @@ pub unsafe extern "C" fn byte_in_str(mut str: *mut uint8_t, mut n: ::core::ffi::
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_syl_tab(mut slang: *mut slang_T) -> ::core::ffi::c_int {
     ga_init(
         &raw mut (*slang).sl_syl_items,
@@ -4770,7 +4745,6 @@ unsafe extern "C" fn count_syllables(
     }
     return cnt;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_spelllang(mut wp: *mut win_T) -> *mut ::core::ffi::c_char {
     let mut spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut region_cp: [::core::ffi::c_char; 3] = [0; 3];
@@ -5248,7 +5222,6 @@ unsafe extern "C" fn find_region(
     }
     return i / 2 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn captype(
     mut word: *const ::core::ffi::c_char,
     mut end: *const ::core::ffi::c_char,
@@ -5308,7 +5281,6 @@ pub unsafe extern "C" fn captype(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_delete_wordlist() {
     if (*int_wordlist.ptr()).is_null() {
         return;
@@ -9420,7 +9392,6 @@ pub unsafe extern "C" fn spell_delete_wordlist() {
     *ptr_ = NULL;
     let _ = *ptr_;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_free_all() {
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
@@ -9443,7 +9414,6 @@ pub unsafe extern "C" fn spell_free_all() {
     *ptr__0 = NULL;
     let _ = *ptr__0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_reload() {
     init_spell_chartab();
     spell_free_all();
@@ -9462,7 +9432,6 @@ pub unsafe extern "C" fn spell_reload() {
         wp = (*wp).w_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn open_spellbuf() -> *mut buf_T {
     let mut buf: *mut buf_T = xcalloc(1 as size_t, ::core::mem::size_of::<buf_T>()) as *mut buf_T;
     (*buf).b_spell = true_0 != 0;
@@ -9480,7 +9449,6 @@ pub unsafe extern "C" fn open_spellbuf() -> *mut buf_T {
     ml_open_file(buf);
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn close_spellbuf(mut buf: *mut buf_T) {
     if buf.is_null() {
         return;
@@ -9488,7 +9456,6 @@ pub unsafe extern "C" fn close_spellbuf(mut buf: *mut buf_T) {
     ml_close(buf, true_0);
     xfree(buf as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_spell_chartab(mut sp: *mut spelltab_T) {
     memset(
         &raw mut (*sp).st_isw as *mut ::core::ffi::c_void,
@@ -9525,7 +9492,6 @@ pub unsafe extern "C" fn clear_spell_chartab(mut sp: *mut spelltab_T) {
         i_2 += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_spell_chartab() {
     did_set_spelltab.set(false_0 != 0);
     clear_spell_chartab(spelltab.ptr());
@@ -9550,7 +9516,6 @@ pub unsafe extern "C" fn init_spell_chartab() {
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_iswordp(
     mut p: *const ::core::ffi::c_char,
     mut wp: *const win_T,
@@ -9580,7 +9545,6 @@ pub unsafe extern "C" fn spell_iswordp(
     }
     return (*spelltab.ptr()).st_isw[c_0 as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_iswordp_nmw(
     mut p: *const ::core::ffi::c_char,
     mut wp: *mut win_T,
@@ -9625,7 +9589,6 @@ unsafe extern "C" fn spell_iswordp_w(
     }
     return (*spelltab.ptr()).st_isw[*s as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_casefold(
     mut wp: *const win_T,
     mut str: *const ::core::ffi::c_char,
@@ -9663,7 +9626,6 @@ pub unsafe extern "C" fn spell_casefold(
     *buf.offset(outi as isize) = NUL as ::core::ffi::c_char;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_need_cap(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -9726,7 +9688,6 @@ pub unsafe extern "C" fn check_need_cap(
     xfree(line_copy as *mut ::core::ffi::c_void);
     return need_cap;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_spellrepall(mut _eap: *mut exarg_T) {
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut save_ws: bool = p_ws.get() != 0;
@@ -9819,7 +9780,6 @@ pub unsafe extern "C" fn ex_spellrepall(mut _eap: *mut exarg_T) {
         do_sub_msg(false_0 != 0);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn onecap_copy(
     mut word: *const ::core::ffi::c_char,
     mut wcopy: *mut ::core::ffi::c_char,
@@ -9847,7 +9807,6 @@ pub unsafe extern "C" fn onecap_copy(
         (MAXWLEN as ::core::ffi::c_int - l) as size_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn allcap_copy(
     mut word: *const ::core::ffi::c_char,
     mut wcopy: *mut ::core::ffi::c_char,
@@ -9882,7 +9841,6 @@ pub unsafe extern "C" fn allcap_copy(
     }
     *d = NUL as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nofold_len(
     mut fword: *mut ::core::ffi::c_char,
     mut flen: ::core::ffi::c_int,
@@ -9902,7 +9860,6 @@ pub unsafe extern "C" fn nofold_len(
     }
     return p.offset_from(word) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn make_case_word(
     mut fword: *mut ::core::ffi::c_char,
     mut cword: *mut ::core::ffi::c_char,
@@ -9916,7 +9873,6 @@ pub unsafe extern "C" fn make_case_word(
         strcpy(cword, fword);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_soundfold(
     word: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -9942,7 +9898,6 @@ pub unsafe extern "C" fn eval_soundfold(
     }
     return xstrdup(word);
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_soundfold(
     mut slang: *mut slang_T,
     mut inword: *mut ::core::ffi::c_char,
@@ -10406,7 +10361,6 @@ unsafe extern "C" fn spell_soundfold_wsal(
     }
     *res.offset(l as isize) = NUL as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_spellinfo(mut _eap: *mut exarg_T) {
     if no_spell_checking(curwin.get()) {
         return;
@@ -10438,7 +10392,6 @@ pub const DUMPFLAG_COUNT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DUMPFLAG_ICASE: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const DUMPFLAG_ONECAP: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const DUMPFLAG_ALLCAP: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn ex_spelldump(mut eap: *mut exarg_T) {
     if no_spell_checking(curwin.get()) {
         return;
@@ -10473,7 +10426,6 @@ pub unsafe extern "C" fn ex_spelldump(mut eap: *mut exarg_T) {
     }
     redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_dump_compl(
     mut pat: *mut ::core::ffi::c_char,
     mut ic: ::core::ffi::c_int,
@@ -10937,7 +10889,6 @@ unsafe extern "C" fn dump_prefixes(
     }
     return lnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_to_word_end(
     mut start: *mut ::core::ffi::c_char,
     mut win: *mut win_T,
@@ -10948,7 +10899,6 @@ pub unsafe extern "C" fn spell_to_word_end(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_word_start(mut startcol: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if no_spell_checking(curwin.get()) {
         return startcol;
@@ -10980,7 +10930,6 @@ pub unsafe extern "C" fn spell_word_start(mut startcol: ::core::ffi::c_int) -> :
     return col;
 }
 static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub unsafe extern "C" fn spell_expand_check_cap(mut col: colnr_T) {
     spell_expand_need_cap.set(check_need_cap(
         curwin.get(),
@@ -10988,7 +10937,6 @@ pub unsafe extern "C" fn spell_expand_check_cap(mut col: colnr_T) {
         col,
     ));
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_spelling(
     mut _lnum: linenr_T,
     mut pat: *mut ::core::ffi::c_char,
@@ -11011,11 +10959,9 @@ pub unsafe extern "C" fn expand_spelling(
     *matchp = ga.ga_data as *mut *mut ::core::ffi::c_char;
     return ga.ga_len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn valid_spelllang(mut val: *const ::core::ffi::c_char) -> bool {
     return valid_name(val, b".-_,@\0".as_ptr() as *const ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn valid_spellfile(mut val: *const ::core::ffi::c_char) -> bool {
     let mut spf_name: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut spf: *mut ::core::ffi::c_char = val as *mut ::core::ffi::c_char;
@@ -11047,7 +10993,6 @@ pub unsafe extern "C" fn valid_spellfile(mut val: *const ::core::ffi::c_char) ->
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_spell_option() -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
@@ -11065,7 +11010,6 @@ pub unsafe extern "C" fn did_set_spell_option() -> *const ::core::ffi::c_char {
     }
     return errmsg;
 }
-#[no_mangle]
 pub unsafe extern "C" fn compile_cap_prog(
     mut synblock: *mut synblock_T,
 ) -> *const ::core::ffi::c_char {

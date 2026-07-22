@@ -325,7 +325,6 @@ unsafe extern "C" fn map_get_String_int(
         *(*map).values.offset(k as isize)
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_extmark_free_all_mem() {
     let mut name: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -356,7 +355,6 @@ pub unsafe extern "C" fn api_extmark_free_all_mem() {
         keys: ::core::ptr::null_mut::<uint32_t>(),
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
     let mut id: handle_T = map_get_String_int(namespace_ids.ptr(), name);
     if id > 0 as ::core::ffi::c_int {
@@ -371,7 +369,6 @@ pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
     }
     return id as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
     let mut retval: Dict = arena_dict(arena, (*namespace_ids.ptr()).set.h.size as size_t);
     let mut name: String_0 = String_0 {
@@ -399,7 +396,6 @@ pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn describe_ns(
     mut ns_id: NS,
     mut unknown: *const ::core::ffi::c_char,
@@ -421,14 +417,12 @@ pub unsafe extern "C" fn describe_ns(
     }
     return unknown;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false_0 != 0;
     }
     return ns < next_namespace_id.get() as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn virt_text_to_array(
     mut vt: VirtText,
     mut hl_name: bool,
@@ -645,7 +639,6 @@ unsafe extern "C" fn extmark_to_array(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_get_extmark_by_id(
     mut buf: Buffer,
     mut ns_id: Integer,
@@ -684,7 +677,6 @@ pub unsafe extern "C" fn nvim_buf_get_extmark_by_id(
     }
     return extmark_to_array(extmark, false_0 != 0, details, hl_name, arena);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_get_extmarks(
     mut buf: Buffer,
     mut ns_id: Integer,
@@ -852,7 +844,6 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
     marks.items = ::core::ptr::null_mut::<MTPair>();
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_set_extmark(
     mut buf: Buffer,
     mut ns_id: Integer,
@@ -1763,7 +1754,6 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
     }
     return 0 as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_del_extmark(
     mut buf: Buffer,
     mut ns_id: Integer,
@@ -1786,7 +1776,6 @@ pub unsafe extern "C" fn nvim_buf_del_extmark(
     }
     return extmark_del_id(b, ns_id as uint32_t, id as uint32_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_clear_namespace(
     mut buf: Buffer,
     mut ns_id: Integer,
@@ -1824,7 +1813,6 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
         MAXCOL as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_set_decoration_provider(
     mut ns_id: Integer,
     mut opts: *mut KeyDict_set_decoration_provider,
@@ -2004,7 +1992,6 @@ unsafe extern "C" fn extmark_get_index_from_obj(
     }
     panic!("Reached end of non-void function without returning");
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_virt_text(
     mut chunks: Array,
     mut err: *mut Error,
@@ -2154,7 +2141,6 @@ pub unsafe extern "C" fn parse_virt_text(
     clear_virttext(&raw mut virt_text);
     return virt_text;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim__buf_debug_extmarks(
     mut buf: Buffer,
     mut keys: Boolean,
@@ -2171,7 +2157,6 @@ pub unsafe extern "C" fn nvim__buf_debug_extmarks(
         dot as bool,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim__ns_set(
     mut ns_id: Integer,
     mut opts: *mut KeyDict_ns_opts,
@@ -2319,7 +2304,6 @@ pub unsafe extern "C" fn nvim__ns_set(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim__ns_get(
     mut ns_id: Integer,
     mut arena: *mut Arena,

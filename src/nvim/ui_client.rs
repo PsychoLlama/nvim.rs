@@ -329,7 +329,6 @@ static tui_height: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core:
 static tui_term: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
 static tui_rgb: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_start_server(
     mut exepath: *const ::core::ffi::c_char,
     mut argc: size_t,
@@ -426,7 +425,6 @@ pub unsafe extern "C" fn ui_client_start_server(
     }
     return (*channel).id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_attach(
     mut width: ::core::ffi::c_int,
     mut height: ::core::ffi::c_int,
@@ -729,7 +727,6 @@ pub unsafe extern "C" fn ui_client_attach(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_detach() {
     rpc_send_event(
         ui_client_channel_id.get(),
@@ -742,7 +739,6 @@ pub unsafe extern "C" fn ui_client_detach() {
     );
     ui_client_attached.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_run() -> ! {
     tui_start(
         tui.ptr(),
@@ -779,14 +775,12 @@ pub unsafe extern "C" fn ui_client_run() -> ! {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_stop() {
     ui_client_attached.set(false_0 != 0);
     if !tui_is_stopped(tui.get()) {
         tui_stop(tui.get());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_set_size(
     mut width: ::core::ffi::c_int,
     mut height: ::core::ffi::c_int,
@@ -828,7 +822,6 @@ pub unsafe extern "C" fn ui_client_set_size(
     tui_width.set(width);
     tui_height.set(height);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_get_redraw_handler(
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,
@@ -843,7 +836,6 @@ pub unsafe extern "C" fn ui_client_get_redraw_handler(
     }
     return (*event_handlers.ptr())[hash as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_ui_client_redraw(
     mut _channel_id: uint64_t,
     mut _args: Array,
@@ -892,7 +884,6 @@ unsafe extern "C" fn ui_client_dict2hlattrs(mut d: Dict, mut rgb: bool) -> HlAtt
     }
     return attrs;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
     if args.size < 3 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -934,11 +925,9 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
         ) as *mut sattr_T);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_line(mut _args: Array) -> ! {
     abort();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_raw_line(mut g: *mut GridLineEvent) {
     let mut grid: ::core::ffi::c_int = (*g).args[0 as ::core::ffi::c_int as usize];
     let mut row: ::core::ffi::c_int = (*g).args[1 as ::core::ffi::c_int as usize];
@@ -963,7 +952,6 @@ pub unsafe extern "C" fn ui_client_event_raw_line(mut g: *mut GridLineEvent) {
         grid_line_buf_attr.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1073,13 +1061,11 @@ static restart_args: GlobalCell<Array> = GlobalCell::new(Array {
     items: ::core::ptr::null_mut::<Object>(),
 });
 static restart_pending: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_restart(mut args: Array) {
     api_free_array(restart_args.get());
     restart_args.set(copy_array(args, ::core::ptr::null_mut::<Arena>()));
     restart_pending.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
     let mut listen_addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut is_tcp: bool = false;
@@ -1172,7 +1158,6 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
         items: ::core::ptr::null_mut::<Object>(),
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1194,7 +1179,6 @@ pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
             .integer as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {
     if args.size < 2 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1220,27 +1204,21 @@ pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {
         .array;
     tui_mode_info_set(tui.get(), arg_1 as bool, arg_2);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_update_menu(mut _args: Array) {
     tui_update_menu(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_busy_start(mut _args: Array) {
     tui_busy_start(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_busy_stop(mut _args: Array) {
     tui_busy_stop(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mouse_on(mut _args: Array) {
     tui_mouse_on(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mouse_off(mut _args: Array) {
     tui_mouse_off(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mode_change(mut args: Array) {
     if args.size < 2 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1266,23 +1244,18 @@ pub unsafe extern "C" fn ui_client_event_mode_change(mut args: Array) {
         .integer;
     tui_mode_change(tui.get(), arg_1, arg_2);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_bell(mut _args: Array) {
     tui_bell(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_visual_bell(mut _args: Array) {
     tui_visual_bell(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_flush(mut _args: Array) {
     tui_flush(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_suspend(mut _args: Array) {
     tui_suspend(tui.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_set_title(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1303,7 +1276,6 @@ pub unsafe extern "C" fn ui_client_event_set_title(mut args: Array) {
         .string;
     tui_set_title(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_set_icon(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1324,7 +1296,6 @@ pub unsafe extern "C" fn ui_client_event_set_icon(mut args: Array) {
         .string;
     tui_set_icon(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_screenshot(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1345,7 +1316,6 @@ pub unsafe extern "C" fn ui_client_event_screenshot(mut args: Array) {
         .string;
     tui_screenshot(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_option_set(mut args: Array) {
     if args.size < 2 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1367,7 +1337,6 @@ pub unsafe extern "C" fn ui_client_event_option_set(mut args: Array) {
     let mut arg_2: Object = *args.items.offset(1 as ::core::ffi::c_int as isize);
     tui_option_set(tui.get(), arg_1, arg_2);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_chdir(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1388,7 +1357,6 @@ pub unsafe extern "C" fn ui_client_event_chdir(mut args: Array) {
         .string;
     tui_chdir(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_ui_send(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1409,7 +1377,6 @@ pub unsafe extern "C" fn ui_client_event_ui_send(mut args: Array) {
         .string;
     tui_ui_send(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_default_colors_set(mut args: Array) {
     if args.size < 5 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1451,7 +1418,6 @@ pub unsafe extern "C" fn ui_client_event_default_colors_set(mut args: Array) {
         .integer;
     tui_default_colors_set(tui.get(), arg_1, arg_2, arg_3, arg_4, arg_5);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
     if args.size < 4 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1493,7 +1459,6 @@ pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
         .array;
     tui_hl_attr_define(tui.get(), arg_1, arg_2, arg_3, arg_4);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_clear(mut args: Array) {
     if args.size < 1 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1514,7 +1479,6 @@ pub unsafe extern "C" fn ui_client_event_grid_clear(mut args: Array) {
         .integer;
     tui_grid_clear(tui.get(), arg_1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_cursor_goto(mut args: Array) {
     if args.size < 3 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1545,7 +1509,6 @@ pub unsafe extern "C" fn ui_client_event_grid_cursor_goto(mut args: Array) {
         .integer;
     tui_grid_cursor_goto(tui.get(), arg_1, arg_2, arg_3);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_scroll(mut args: Array) {
     if args.size < 7 as size_t
         || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -1713,7 +1676,6 @@ static event_handlers: GlobalCell<[UIClientHandler; 27]> = GlobalCell::new(unsaf
         },
     ]
 });
-#[no_mangle]
 pub unsafe extern "C" fn ui_client_handler_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,

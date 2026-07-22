@@ -692,30 +692,24 @@ static hisnum: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
     0 as ::core::ffi::c_int,
 ]);
 static hislen: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn get_hislen() -> ::core::ffi::c_int {
     return hislen.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_histentry(mut hist_type: ::core::ffi::c_int) -> *mut histentry_T {
     return (*history.ptr())[hist_type as usize] as *mut histentry_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_histentry(
     mut hist_type: ::core::ffi::c_int,
     mut entry: *mut histentry_T,
 ) {
     (*history.ptr())[hist_type as usize] = entry as *mut histentry_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_hisidx(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
     return (hisidx.ptr() as *mut ::core::ffi::c_int).offset(hist_type as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_hisnum(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
     return (hisnum.ptr() as *mut ::core::ffi::c_int).offset(hist_type as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn hist_char2type(c: ::core::ffi::c_int) -> HistoryType {
     match c {
         58 => return HIST_CMD,
@@ -734,7 +728,6 @@ static history_names: GlobalCell<[*mut ::core::ffi::c_char; 6]> = GlobalCell::ne
     b"debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ::core::ptr::null_mut::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_history_arg(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -765,7 +758,6 @@ pub unsafe extern "C" fn get_history_arg(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_history() {
     '_c2rust_label: {
         if p_hi.get() >= 0 as OptInt && p_hi.get() <= 2147483647 as OptInt {
@@ -972,7 +964,6 @@ unsafe extern "C" fn get_histtype(
     return HIST_INVALID;
 }
 static last_maptick: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn add_to_history(
     mut histype: ::core::ffi::c_int,
     mut new_entry: *const ::core::ffi::c_char,
@@ -1105,7 +1096,6 @@ unsafe extern "C" fn calc_hist_idx(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clr_history(histype: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if hislen.get() != 0 as ::core::ffi::c_int
         && histype >= 0 as ::core::ffi::c_int
@@ -1226,7 +1216,6 @@ unsafe extern "C" fn del_history_idx(
     (*hisidx.ptr())[histype as usize] = i;
     return true_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_histadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1264,7 +1253,6 @@ pub unsafe extern "C" fn f_histadd(
     );
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_histdel(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1298,7 +1286,6 @@ pub unsafe extern "C" fn f_histdel(
     }
     (*rettv).vval.v_number = n as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_histget(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1334,7 +1321,6 @@ pub unsafe extern "C" fn f_histget(
     }
     (*rettv).v_type = VAR_STRING;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_histnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1353,7 +1339,6 @@ pub unsafe extern "C" fn f_histnr(
         (*rettv).vval.v_number = HIST_INVALID as ::core::ffi::c_int as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
     let mut histype1: ::core::ffi::c_int = HIST_CMD as ::core::ffi::c_int;
     let mut histype2: ::core::ffi::c_int = HIST_CMD as ::core::ffi::c_int;
@@ -1523,7 +1508,6 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
         histype1 += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn hist_iter(
     iter: *const ::core::ffi::c_void,
     history_type: uint8_t,
@@ -1589,7 +1573,6 @@ pub unsafe extern "C" fn hist_iter(
         hiter
     }) as *const ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hist_get_array(
     history_type: uint8_t,
     new_hisidx: *mut *mut ::core::ffi::c_int,

@@ -297,7 +297,6 @@ unsafe extern "C" fn win_linetabsize(
         return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_chartabsize(
     mut wp: *mut win_T,
     mut p: *mut ::core::ffi::c_char,
@@ -311,7 +310,6 @@ pub unsafe extern "C" fn win_chartabsize(
     }
     return ptr2cells(p);
 }
-#[no_mangle]
 pub unsafe extern "C" fn linetabsize_col(
     mut startvcol: ::core::ffi::c_int,
     mut s: *mut ::core::ffi::c_char,
@@ -343,7 +341,6 @@ pub unsafe extern "C" fn linetabsize_col(
         return linesize_regular(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn linetabsize(mut wp: *mut win_T, mut lnum: linenr_T) -> ::core::ffi::c_int {
     return win_linetabsize(
         wp,
@@ -352,7 +349,6 @@ pub unsafe extern "C" fn linetabsize(mut wp: *mut win_T, mut lnum: linenr_T) -> 
         MAXCOL as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn linetabsize_eol(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -404,7 +400,6 @@ pub unsafe extern "C" fn init_charsize_arg(
         return kCharsizeFast as ::core::ffi::c_int != 0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn charsize_regular(
     mut csarg: *mut CharsizeArg,
     cur: *mut ::core::ffi::c_char,
@@ -686,7 +681,6 @@ unsafe extern "C" fn charsize_fast_impl(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn charsize_fast(
     mut csarg: *mut CharsizeArg,
     mut cur: *const ::core::ffi::c_char,
@@ -695,7 +689,6 @@ pub unsafe extern "C" fn charsize_fast(
 ) -> CharSize {
     return charsize_fast_impl((*csarg).win, cur, (*csarg).use_tabstop, vcol, cur_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn charsize_nowrap(
     mut buf: *mut buf_T,
     mut cur: *const ::core::ffi::c_char,
@@ -799,7 +792,6 @@ unsafe extern "C" fn virt_text_cursor_off(
     }
     return off;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getvcol(
     mut wp: *mut win_T,
     mut pos: *mut pos_T,
@@ -903,7 +895,6 @@ pub unsafe extern "C" fn getvcol(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn getvcol_nolist(mut posp: *mut pos_T) -> colnr_T {
     let mut list_save: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
     let mut vcol: colnr_T = 0;
@@ -973,7 +964,6 @@ pub unsafe extern "C" fn getvvcol(
         getvcol(wp, pos, start, cursor, end);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn getvcols(
     mut wp: *mut win_T,
     mut pos1: *mut pos_T,
@@ -1033,12 +1023,10 @@ pub unsafe extern "C" fn getvcols(
         *right = to1;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_may_fill(mut wp: *mut win_T) -> bool {
     return (*wp).w_onebuf_opt.wo_diff != 0 && diffopt_filler() as ::core::ffi::c_int != 0
         || buf_meta_total((*wp).w_buffer, kMTMetaLines) != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_get_fill(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1059,7 +1047,6 @@ pub unsafe extern "C" fn win_get_fill(
     }
     return virt_lines;
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_win(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1067,7 +1054,6 @@ pub unsafe extern "C" fn plines_win(
 ) -> ::core::ffi::c_int {
     return plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_win_nofill(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1095,7 +1081,6 @@ pub unsafe extern "C" fn plines_win_nofill(
     }
     return lines;
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_win_nofold(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1159,7 +1144,6 @@ pub unsafe extern "C" fn plines_win_nofold(
         INT_MAX
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_win_col(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1240,7 +1224,6 @@ pub unsafe extern "C" fn plines_win_col(
     }
     return lines;
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_win_full(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1278,7 +1261,6 @@ pub unsafe extern "C" fn plines_win_full(
         plines_win_nofill(wp, lnum, limit_winheight)
     }) + filler_lines;
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_m_win(
     mut wp: *mut win_T,
     mut first: linenr_T,
@@ -1303,7 +1285,6 @@ pub unsafe extern "C" fn plines_m_win(
     }
     return if max < count { max } else { count };
 }
-#[no_mangle]
 pub unsafe extern "C" fn plines_m_win_fill(
     mut wp: *mut win_T,
     mut first: linenr_T,
@@ -1337,7 +1318,6 @@ pub unsafe extern "C" fn plines_m_win_fill(
         0 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_text_height(
     wp: *mut win_T,
     start_lnum: linenr_T,

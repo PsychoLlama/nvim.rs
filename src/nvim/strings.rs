@@ -286,7 +286,6 @@ fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
 
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated
 /// buffer, zero-filling the remainder (strncpy semantics).
-#[no_mangle]
 pub unsafe extern "C" fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
     let n = strnlen(string, len);
     let ret = xmallocz(len) as *mut c_char;
@@ -309,7 +308,6 @@ pub unsafe extern "C" fn vim_strsave_escaped(
 /// Copy `string`, prefixing `cc` to every byte in `esc_chars` (and, with
 /// `bsl`, to the backslashes `rem_backslash` flags). Multibyte characters
 /// are copied whole and never escaped.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_escaped_ext(
     string: *const c_char,
     esc_chars: *const c_char,
@@ -382,7 +380,6 @@ pub unsafe extern "C" fn vim_strnsave_unquoted(
 /// Single-quote `string` for the shell, doubling embedded quotes
 /// (`'` → `'\''`) and — depending on the shell flavor and flags — escaping
 /// newlines, `!`, `\`, and `%`/`#` cmdline specials.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_shellescape(
     string: *const c_char,
     do_special: bool,
@@ -472,7 +469,6 @@ pub unsafe extern "C" fn vim_strsave_shellescape(
 }
 
 /// ASCII-uppercased copy of `string`.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_up(string: *const c_char) -> *mut c_char {
     let p1 = xmalloc(strlen(string).wrapping_add(1)) as *mut c_char;
     vim_strcpy_up(p1, string);
@@ -480,7 +476,6 @@ pub unsafe extern "C" fn vim_strsave_up(string: *const c_char) -> *mut c_char {
 }
 
 /// ASCII-uppercased copy of at most `len` bytes of `string`.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char {
     let p1 = xmalloc(len.wrapping_add(1)) as *mut c_char;
     vim_strncpy_up(p1, string, len);
@@ -488,14 +483,12 @@ pub unsafe extern "C" fn vim_strnsave_up(string: *const c_char, len: size_t) -> 
 }
 
 /// ASCII-uppercase the C string in place.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strup(p: *mut c_char) {
     let len = CStr::from_ptr(p).to_bytes().len();
     ascii_upcase(slice::from_raw_parts_mut(p as *mut u8, len));
 }
 
 /// `strcpy` that ASCII-uppercases while copying.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
     let bytes = CStr::from_ptr(src).to_bytes_with_nul();
     let out = slice::from_raw_parts_mut(dst as *mut u8, bytes.len());
@@ -504,7 +497,6 @@ pub unsafe extern "C" fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
 }
 
 /// Like `vim_strcpy_up` but copies at most `n` bytes; always terminates.
-#[no_mangle]
 pub unsafe extern "C" fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     let len = strnlen(src, n);
     let out = slice::from_raw_parts_mut(dst as *mut u8, len + 1);
@@ -517,7 +509,6 @@ pub unsafe extern "C" fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n:
 
 /// `memcpy` that ASCII-uppercases while copying: exactly `n` bytes, no
 /// terminator.
-#[no_mangle]
 pub unsafe extern "C" fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     if n == 0 {
         return;
@@ -558,7 +549,6 @@ pub unsafe extern "C" fn strcase_save(orig: *const c_char, upper: bool) -> *mut 
 }
 
 /// Truncate unescaped trailing spaces and tabs in place.
-#[no_mangle]
 pub unsafe extern "C" fn del_trailing_spaces(ptr: *mut c_char) {
     let len = CStr::from_ptr(ptr).to_bytes().len();
     let s = slice::from_raw_parts_mut(ptr as *mut u8, len);
@@ -568,12 +558,10 @@ pub unsafe extern "C" fn del_trailing_spaces(ptr: *mut c_char) {
 
 /// Case-insensitive `strcmp` equality where NULL only equals NULL.
 /// strcasecmp is locale-aware, so the libc call stays.
-#[no_mangle]
 pub unsafe extern "C" fn striequal(a: *const c_char, b: *const c_char) -> bool {
     (a.is_null() && b.is_null()) || (!a.is_null() && !b.is_null() && strcasecmp(a, b) == 0)
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn vim_strnicmp_asc(
     s1: *const c_char,
     s2: *const c_char,
@@ -608,7 +596,6 @@ unsafe extern "C" fn sort_compare(
     strcmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char))
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
     qsort(
         files as *mut ::core::ffi::c_void,
@@ -624,18 +611,15 @@ pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
     );
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn has_non_ascii(s: *const c_char) -> bool {
     !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes())
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn has_non_ascii_len(s: *const c_char, len: size_t) -> bool {
     !s.is_null() && len != 0 && any_non_ascii(slice::from_raw_parts(s as *const u8, len))
 }
 
 /// Freshly allocated `str1 ++ str2`, NUL-terminated.
-#[no_mangle]
 pub unsafe extern "C" fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
     let a = CStr::from_ptr(str1).to_bytes();
     let b = CStr::from_ptr(str2).to_bytes_with_nul();
@@ -735,7 +719,6 @@ unsafe extern "C" fn tv_float(tvs: *mut typval_T, idxp: *mut ::core::ffi::c_int)
     }
     return f;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_snprintf_add(
     mut str: *mut ::core::ffi::c_char,
     mut str_m: size_t,
@@ -792,7 +775,6 @@ unsafe extern "C" fn infinity_str(
     }
     return (*table.ptr())[idx as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_snprintf_safelen(
     mut str: *mut ::core::ffi::c_char,
     mut str_m: size_t,
@@ -822,7 +804,6 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
         str_l as size_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_vsnprintf(
     mut str: *mut ::core::ffi::c_char,
     mut str_m: size_t,
@@ -1501,7 +1482,6 @@ unsafe extern "C" fn skip_to_arg<'a, 'f: 'a>(
     *arg_cur += 1;
     *arg_idx += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_vsnprintf_typval(
     mut str: *mut ::core::ffi::c_char,
     mut str_m: size_t,
@@ -2793,7 +2773,6 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
     return str_l as ::core::ffi::c_int;
 }
 pub const TMP_LEN: ::core::ffi::c_int = 350 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn kv_do_printf(
     mut str: *mut StringBuilder,
     mut fmt: *const ::core::ffi::c_char,
@@ -2865,7 +2844,6 @@ pub unsafe extern "C" fn kv_do_printf(
     (*str).size = (*str).size.wrapping_add(printed as size_t);
     return printed;
 }
-#[no_mangle]
 pub unsafe extern "C" fn arena_printf(
     mut arena: *mut Arena,
     mut fmt: *const ::core::ffi::c_char,
@@ -2939,7 +2917,6 @@ pub unsafe extern "C" fn reverse_text(mut s: *mut ::core::ffi::c_char) -> *mut :
     *rev.offset(len as isize) = NUL as ::core::ffi::c_char;
     return rev;
 }
-#[no_mangle]
 pub unsafe extern "C" fn strrep(
     mut src: *const ::core::ffi::c_char,
     mut what: *const ::core::ffi::c_char,
@@ -3059,7 +3036,6 @@ unsafe extern "C" fn byteidx_common(
     }
     (*rettv).vval.v_number = t.offset_from(str) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_byteidx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3067,7 +3043,6 @@ pub unsafe extern "C" fn f_byteidx(
 ) {
     byteidx_common(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_byteidxcomp(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3075,7 +3050,6 @@ pub unsafe extern "C" fn f_byteidxcomp(
 ) {
     byteidx_common(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_charidx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3168,7 +3142,6 @@ pub unsafe extern "C" fn f_charidx(
         0 as ::core::ffi::c_int
     }) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_str2list(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3182,7 +3155,6 @@ pub unsafe extern "C" fn f_str2list(
         p = p.offset(utf_ptr2len(p) as isize);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_str2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3251,7 +3223,6 @@ pub unsafe extern "C" fn f_str2nr(
         (*rettv).vval.v_number = n;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strgetchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3283,7 +3254,6 @@ pub unsafe extern "C" fn f_strgetchar(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_stridx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3321,7 +3291,6 @@ pub unsafe extern "C" fn f_stridx(
         (*rettv).vval.v_number = pos.offset_from(haystack_start) as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_string(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3333,7 +3302,6 @@ pub unsafe extern "C" fn f_string(
         ::core::ptr::null_mut::<size_t>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strlen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3372,7 +3340,6 @@ unsafe extern "C" fn strchar_common(
     }
     (*rettv).vval.v_number = len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strcharlen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3380,7 +3347,6 @@ pub unsafe extern "C" fn f_strcharlen(
 ) {
     strchar_common(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strchars(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3408,7 +3374,6 @@ pub unsafe extern "C" fn f_strchars(
     }
     strchar_common(argvars, rettv, skipcc != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strutf16len(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3454,7 +3419,6 @@ pub unsafe extern "C" fn f_strutf16len(
     }
     (*rettv).vval.v_number = len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strdisplaywidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3471,7 +3435,6 @@ pub unsafe extern "C" fn f_strdisplaywidth(
     (*rettv).vval.v_number =
         (linetabsize_col(col, s as *mut ::core::ffi::c_char) - col) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3481,7 +3444,6 @@ pub unsafe extern "C" fn f_strwidth(
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     (*rettv).vval.v_number = mb_string2cells(s) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strcharpart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3568,7 +3530,6 @@ pub unsafe extern "C" fn f_strcharpart(
         len as size_t,
     ) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strpart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3622,7 +3583,6 @@ pub unsafe extern "C" fn f_strpart(
         len as size_t,
     ) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strridx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3672,7 +3632,6 @@ pub unsafe extern "C" fn f_strridx(
         (*rettv).vval.v_number = lastmatch.offset_from(haystack) as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_strtrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3684,7 +3643,6 @@ pub unsafe extern "C" fn f_strtrans(
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_utf16idx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3775,7 +3733,6 @@ pub unsafe extern "C" fn f_utf16idx(
     }
     (*rettv).vval.v_number = utf16idx as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_tolower(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3787,7 +3744,6 @@ pub unsafe extern "C" fn f_tolower(
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_toupper(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3799,7 +3755,6 @@ pub unsafe extern "C" fn f_toupper(
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_tr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3905,7 +3860,6 @@ pub unsafe extern "C" fn f_tr(
     );
     ga_clear(&raw mut ga);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_trim(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4013,7 +3967,6 @@ pub unsafe extern "C" fn f_trim(
     }
     (*rettv).vval.v_string = xstrnsave(head, tail.offset_from(head) as size_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmp_keyvalue_value(
     mut a: *const ::core::ffi::c_void,
     mut b: *const ::core::ffi::c_void,
@@ -4022,7 +3975,6 @@ pub unsafe extern "C" fn cmp_keyvalue_value(
     let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
     return strcmp((*kv1).value, (*kv2).value);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmp_keyvalue_value_n(
     mut a: *const ::core::ffi::c_void,
     mut b: *const ::core::ffi::c_void,
@@ -4039,7 +3991,6 @@ pub unsafe extern "C" fn cmp_keyvalue_value_n(
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmp_keyvalue_value_i(
     mut a: *const ::core::ffi::c_void,
     mut b: *const ::core::ffi::c_void,
@@ -4048,7 +3999,6 @@ pub unsafe extern "C" fn cmp_keyvalue_value_i(
     let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
     return strcasecmp((*kv1).value, (*kv2).value);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmp_keyvalue_value_ni(
     mut a: *const ::core::ffi::c_void,
     mut b: *const ::core::ffi::c_void,

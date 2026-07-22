@@ -1978,7 +1978,6 @@ static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     type_0: kCallbackNone,
 });
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut retval: ::core::ffi::c_int = 0;
@@ -1996,7 +1995,6 @@ pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::co
         ::core::ptr::null::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_tagfunc(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_callback(
         tfu_cb.ptr(),
@@ -2005,7 +2003,6 @@ pub unsafe extern "C" fn set_ref_in_tagfunc(mut copyID: ::core::ffi::c_int) -> b
         ::core::ptr::null_mut::<*mut list_stack_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_buflocal_tfu_callback(mut buf: *mut buf_T) {
     callback_free(&raw mut (*buf).b_tfu_cb);
     if (*tfu_cb.ptr()).type_0 as ::core::ffi::c_uint
@@ -2014,7 +2011,6 @@ pub unsafe extern "C" fn set_buflocal_tfu_callback(mut buf: *mut buf_T) {
         callback_copy(&raw mut (*buf).b_tfu_cb, tfu_cb.ptr());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_tag(
     mut tag: *mut ::core::ffi::c_char,
     mut type_0: ::core::ffi::c_int,
@@ -3116,7 +3112,6 @@ unsafe extern "C" fn add_llist_tags(
     let _ = *ptr__1;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tag_freematch() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         tagmatchname.ptr() as *mut *mut ::core::ffi::c_void;
@@ -3132,7 +3127,6 @@ unsafe extern "C" fn taglen_advance(mut l: ::core::ffi::c_int) {
         msg_advance(13 as ::core::ffi::c_int + l);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
     let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
     let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
@@ -4661,7 +4655,6 @@ unsafe extern "C" fn findtags_copy_matches(
     *matchesp = matches;
     return (*st).match_count;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_tags(
     mut pat: *mut ::core::ffi::c_char,
     mut num_matches: *mut ::core::ffi::c_int,
@@ -4897,7 +4890,6 @@ unsafe extern "C" fn found_tagfile_cb(
     }
     return num_fnames > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_tagfname(
     mut tnp: *mut tagname_T,
     mut first: ::core::ffi::c_int,
@@ -5047,7 +5039,6 @@ pub unsafe extern "C" fn get_tagfname(
     xfree(fname as *mut ::core::ffi::c_void);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tagname_free(mut tnp: *mut tagname_T) {
     xfree((*tnp).tn_tags as *mut ::core::ffi::c_void);
     vim_findfile_cleanup((*tnp).tn_search_ctx);
@@ -5710,7 +5701,6 @@ unsafe extern "C" fn find_extra(mut pp: *mut *mut ::core::ffi::c_char) -> ::core
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tagstack_clear_entry(mut item: *mut taggy_T) {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         &raw mut (*item).tagname as *mut *mut ::core::ffi::c_void;
@@ -5723,7 +5713,6 @@ pub unsafe extern "C" fn tagstack_clear_entry(mut item: *mut taggy_T) {
     *ptr__0 = NULL_0;
     let _ = *ptr__0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_tags(
     mut tagnames: bool,
     mut pat: *mut ::core::ffi::c_char,
@@ -5880,7 +5869,6 @@ unsafe extern "C" fn add_tag_field(
     xfree(buf as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_tags(
     mut list: *mut list_T,
     mut pat: *mut ::core::ffi::c_char,
@@ -6097,7 +6085,6 @@ unsafe extern "C" fn get_tag_details(mut tag: *mut taggy_T, mut retdict: *mut di
     );
     tv_list_append_number(pos, (*fmark).mark.coladd as varnumber_T);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_tagstack(mut wp: *mut win_T, mut retdict: *mut dict_T) {
     tv_dict_add_nr(
         retdict,
@@ -6264,7 +6251,6 @@ unsafe extern "C" fn tagstack_set_curidx(mut wp: *mut win_T, mut curidx: ::core:
         (*wp).w_tagstacklen
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_tagstack(
     mut wp: *mut win_T,
     mut d: *const dict_T,

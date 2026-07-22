@@ -544,7 +544,6 @@ pub const OPT_MODELINE: C2Rust_Unnamed_17 = 4;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn nvim_exec(
     mut channel_id: uint64_t,
     mut src: String_0,
@@ -554,7 +553,6 @@ pub unsafe extern "C" fn nvim_exec(
     let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: output };
     return exec_impl(channel_id, src, &raw mut opts, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_command_output(
     mut channel_id: uint64_t,
     mut command: String_0,
@@ -565,7 +563,6 @@ pub unsafe extern "C" fn nvim_command_output(
     };
     return exec_impl(channel_id, command, &raw mut opts, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_execute_lua(
     mut code: String_0,
     mut args: Array,
@@ -581,7 +578,6 @@ pub unsafe extern "C" fn nvim_execute_lua(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_get_number(mut buffer: Buffer, mut err: *mut Error) -> Integer {
     let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
     if buf.is_null() {
@@ -602,7 +598,6 @@ unsafe extern "C" fn src2ns(mut src_id: *mut Integer) -> uint32_t {
     }
     return *src_id as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_clear_highlight(
     mut buffer: Buffer,
     mut ns_id: Integer,
@@ -612,7 +607,6 @@ pub unsafe extern "C" fn nvim_buf_clear_highlight(
 ) {
     nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_add_highlight(
     mut buffer: Buffer,
     mut ns_id: Integer,
@@ -684,7 +678,6 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
     );
     return ns_id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_set_virtual_text(
     mut buffer: Buffer,
     mut src_id: Integer,
@@ -767,7 +760,6 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
     );
     return src_id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_hl_by_id(
     mut hl_id: Integer,
     mut rgb: Boolean,
@@ -792,7 +784,6 @@ pub unsafe extern "C" fn nvim_get_hl_by_id(
     let mut attrcode: ::core::ffi::c_int = syn_id2attr(hl_id as ::core::ffi::c_int);
     return hl_get_attr_by_id(attrcode as Integer, rgb, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_hl_by_name(
     mut name: String_0,
     mut rgb: Boolean,
@@ -817,7 +808,6 @@ pub unsafe extern "C" fn nvim_get_hl_by_name(
     }
     return nvim_get_hl_by_id(id as Integer, rgb, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_insert(
     mut buffer: Buffer,
     mut lnum: Integer,
@@ -836,7 +826,6 @@ pub unsafe extern "C" fn buffer_insert(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_get_line(
     mut buffer: Buffer,
     mut index: Integer,
@@ -867,7 +856,6 @@ pub unsafe extern "C" fn buffer_get_line(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_set_line(
     mut buffer: Buffer,
     mut index: Integer,
@@ -896,7 +884,6 @@ pub unsafe extern "C" fn buffer_set_line(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_del_line(
     mut buffer: Buffer,
     mut index: Integer,
@@ -920,7 +907,6 @@ pub unsafe extern "C" fn buffer_del_line(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_get_line_slice(
     mut buffer: Buffer,
     mut start: Integer,
@@ -944,7 +930,6 @@ pub unsafe extern "C" fn buffer_get_line_slice(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_set_line_slice(
     mut buffer: Buffer,
     mut start: Integer,
@@ -969,7 +954,6 @@ pub unsafe extern "C" fn buffer_set_line_slice(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_set_var(
     mut buffer: Buffer,
     mut name: String_0,
@@ -994,7 +978,6 @@ pub unsafe extern "C" fn buffer_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buffer_del_var(
     mut buffer: Buffer,
     mut name: String_0,
@@ -1021,7 +1004,6 @@ pub unsafe extern "C" fn buffer_del_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn window_set_var(
     mut window: Window,
     mut name: String_0,
@@ -1046,7 +1028,6 @@ pub unsafe extern "C" fn window_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn window_del_var(
     mut window: Window,
     mut name: String_0,
@@ -1073,7 +1054,6 @@ pub unsafe extern "C" fn window_del_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabpage_set_var(
     mut tabpage: Tabpage,
     mut name: String_0,
@@ -1098,7 +1078,6 @@ pub unsafe extern "C" fn tabpage_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabpage_del_var(
     mut tabpage: Tabpage,
     mut name: String_0,
@@ -1125,7 +1104,6 @@ pub unsafe extern "C" fn tabpage_del_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_set_var(
     mut name: String_0,
     mut value: Object,
@@ -1142,7 +1120,6 @@ pub unsafe extern "C" fn vim_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_del_var(
     mut name: String_0,
     mut arena: *mut Arena,
@@ -1168,7 +1145,6 @@ unsafe extern "C" fn convert_index(mut index: int64_t) -> int64_t {
         index
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_option_info(
     mut name: String_0,
     mut arena: *mut Arena,
@@ -1183,7 +1159,6 @@ pub unsafe extern "C" fn nvim_get_option_info(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_set_option(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -1192,11 +1167,9 @@ pub unsafe extern "C" fn nvim_set_option(
 ) {
     set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_option(mut name: String_0, mut err: *mut Error) -> Object {
     return get_option_from(NULL, kOptScopeGlobal, name, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_get_option(
     mut buffer: Buffer,
     mut name: String_0,
@@ -1211,7 +1184,6 @@ pub unsafe extern "C" fn nvim_buf_get_option(
     }
     return get_option_from(buf as *mut ::core::ffi::c_void, kOptScopeBuf, name, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_set_option(
     mut channel_id: uint64_t,
     mut buffer: Buffer,
@@ -1232,7 +1204,6 @@ pub unsafe extern "C" fn nvim_buf_set_option(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_option(
     mut window: Window,
     mut name: String_0,
@@ -1247,7 +1218,6 @@ pub unsafe extern "C" fn nvim_win_get_option(
     }
     return get_option_from(win as *mut ::core::ffi::c_void, kOptScopeWin, name, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_option(
     mut channel_id: uint64_t,
     mut window: Window,
@@ -1397,7 +1367,6 @@ unsafe extern "C" fn set_option_to(
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
     current_sctx.set(save_current_sctx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_call_atomic(
     mut channel_id: uint64_t,
     mut calls: Array,
@@ -1549,9 +1518,7 @@ pub unsafe extern "C" fn nvim_call_atomic(
     api_clear_error(&raw mut nested_error);
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
-#[no_mangle]
 pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
     static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
@@ -1728,19 +1695,15 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
     (*no_wait_return.ptr()) -= 1;
     msg_end();
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_out_write(mut str: String_0) {
     write_msg(str, false_0 != 0, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_err_write(mut str: String_0) {
     write_msg(str, true_0 != 0, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_err_writeln(mut str: String_0) {
     write_msg(str, true_0 != 0, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_notify(
     mut msg_0: String_0,
     mut log_level: Integer,

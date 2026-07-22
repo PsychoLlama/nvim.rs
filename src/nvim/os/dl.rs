@@ -11,7 +11,6 @@ pub type int_str_fn =
 pub type str_str_fn =
     Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> *const ::core::ffi::c_char>;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn os_libcall(
     mut libname: *const ::core::ffi::c_char,
     mut funcname: *const ::core::ffi::c_char,

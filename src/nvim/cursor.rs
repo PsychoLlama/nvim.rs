@@ -151,7 +151,6 @@ pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn getviscol() -> ::core::ffi::c_int {
     let mut x: colnr_T = 0;
     getvvcol(
@@ -163,7 +162,6 @@ pub unsafe extern "C" fn getviscol() -> ::core::ffi::c_int {
     );
     return x;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getviscol2(mut col: colnr_T, mut coladd: colnr_T) -> ::core::ffi::c_int {
     let mut x: colnr_T = 0;
     let mut pos: pos_T = pos_T {
@@ -183,7 +181,6 @@ pub unsafe extern "C" fn getviscol2(mut col: colnr_T, mut coladd: colnr_T) -> ::
     );
     return x;
 }
-#[no_mangle]
 pub unsafe extern "C" fn coladvance_force(mut wcol: colnr_T) -> ::core::ffi::c_int {
     let mut rc: ::core::ffi::c_int = coladvance2(
         curwin.get(),
@@ -477,7 +474,6 @@ unsafe extern "C" fn coladvance2(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getvpos(
     mut wp: *mut win_T,
     mut pos: *mut pos_T,
@@ -485,15 +481,12 @@ pub unsafe extern "C" fn getvpos(
 ) -> ::core::ffi::c_int {
     return coladvance2(wp, pos, false_0 != 0, virtual_active(wp), wcol);
 }
-#[no_mangle]
 pub unsafe extern "C" fn inc_cursor() -> ::core::ffi::c_int {
     return inc(&raw mut (*curwin.get()).w_cursor);
 }
-#[no_mangle]
 pub unsafe extern "C" fn dec_cursor() -> ::core::ffi::c_int {
     return dec(&raw mut (*curwin.get()).w_cursor);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cursor_rel_lnum(mut wp: *mut win_T, mut lnum: linenr_T) -> linenr_T {
     let mut cursor: linenr_T = (*wp).w_cursor.lnum;
     if lnum == cursor || hasAnyFolding(wp) == 0 {
@@ -517,7 +510,6 @@ pub unsafe extern "C" fn get_cursor_rel_lnum(mut wp: *mut win_T, mut lnum: linen
     }
     return if lnum < cursor { -retval } else { retval };
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_pos(mut buf: *mut buf_T, mut pos: *mut pos_T) {
     (*pos).lnum = if (*pos).lnum < (*buf).b_ml.ml_line_count {
         (*pos).lnum
@@ -532,7 +524,6 @@ pub unsafe extern "C" fn check_pos(mut buf: *mut buf_T, mut pos: *mut pos_T) {
         };
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_cursor_lnum(mut win: *mut win_T) {
     let mut buf: *mut buf_T = (*win).w_buffer;
     if (*win).w_cursor.lnum > (*buf).b_ml.ml_line_count {
@@ -549,7 +540,6 @@ pub unsafe extern "C" fn check_cursor_lnum(mut win: *mut win_T) {
         (*win).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_cursor_col(mut win: *mut win_T) {
     let mut oldcol: colnr_T = (*win).w_cursor.col;
     let mut oldcoladd: colnr_T = (*win).w_cursor.col + (*win).w_cursor.coladd;
@@ -617,7 +607,6 @@ pub unsafe extern "C" fn check_cursor(mut wp: *mut win_T) {
     check_cursor_lnum(wp);
     check_cursor_col(wp);
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_visual_pos() {
     if (*VIsual.ptr()).lnum > (*curbuf.get()).b_ml.ml_line_count {
         (*VIsual.ptr()).lnum = (*curbuf.get()).b_ml.ml_line_count;
@@ -631,7 +620,6 @@ pub unsafe extern "C" fn check_visual_pos() {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn adjust_cursor_col() {
     if (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
         && (!VIsual_active.get() || *p_sel.get() as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
@@ -640,7 +628,6 @@ pub unsafe extern "C" fn adjust_cursor_col() {
         (*curwin.get()).w_cursor.col -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_leftcol(mut leftcol: colnr_T) -> bool {
     if (*curwin.get()).w_leftcol == leftcol {
         return false_0 != 0;
@@ -689,11 +676,9 @@ pub unsafe extern "C" fn set_leftcol(mut leftcol: colnr_T) -> bool {
     redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn gchar_cursor() -> ::core::ffi::c_int {
     return utf_ptr2char(get_cursor_pos_ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn char_before_cursor() -> ::core::ffi::c_int {
     if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
@@ -704,25 +689,20 @@ pub unsafe extern "C" fn char_before_cursor() -> ::core::ffi::c_int {
         utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize))) + 1 as ::core::ffi::c_int;
     return utf_ptr2char(p.offset(-(prev_len as isize)));
 }
-#[no_mangle]
 pub unsafe extern "C" fn pchar_cursor(mut c: ::core::ffi::c_char) {
     *ml_get_buf_mut(curbuf.get(), (*curwin.get()).w_cursor.lnum)
         .offset((*curwin.get()).w_cursor.col as isize) = c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char {
     return ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char {
     return ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum)
         .offset((*curwin.get()).w_cursor.col as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_len() -> colnr_T {
     return ml_get_buf_len(curbuf.get(), (*curwin.get()).w_cursor.lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cursor_pos_len() -> colnr_T {
     return ml_get_buf_len(curbuf.get(), (*curwin.get()).w_cursor.lnum)
         - (*curwin.get()).w_cursor.col;

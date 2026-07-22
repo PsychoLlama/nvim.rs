@@ -2082,7 +2082,6 @@ static e_illegal_map_mode_string_str: GlobalCell<[::core::ffi::c_char; 37]> =
             *b"E1276: Illegal map mode string: '%s'\0",
         )
     });
-#[no_mangle]
 pub unsafe extern "C" fn get_maphash_list(
     mut state: ::core::ffi::c_int,
     mut c: ::core::ffi::c_int,
@@ -2100,7 +2099,6 @@ pub unsafe extern "C" fn get_maphash_list(
         c ^ 0x80 as ::core::ffi::c_int
     }) as usize] as *mut mapblock_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_buf_maphash_list(
     mut state: ::core::ffi::c_int,
     mut c: ::core::ffi::c_int,
@@ -2135,7 +2133,6 @@ unsafe extern "C" fn mapblock_free(mut mpp: *mut *mut mapblock_T) {
     *mpp = (*mp).m_next;
     xfree(mp as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_mode_to_chars(
     mut mode: ::core::ffi::c_int,
     mut buf: *mut ::core::ffi::c_char,
@@ -3085,7 +3082,6 @@ unsafe extern "C" fn buf_do_map(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_map(
     mut maptype: ::core::ffi::c_int,
     mut arg: *mut ::core::ffi::c_char,
@@ -3206,7 +3202,6 @@ unsafe extern "C" fn do_mapclear(
     let mut mode: ::core::ffi::c_int = get_map_mode(&raw mut cmdp, forceit != 0);
     map_clear_mode(curbuf.get(), mode, local, abbr != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_clear_mode(
     mut buf: *mut buf_T,
     mut mode: ::core::ffi::c_int,
@@ -3273,7 +3268,6 @@ pub unsafe extern "C" fn map_clear_mode(
         hash += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_to_exists(
     str: *const ::core::ffi::c_char,
     modechars: *const ::core::ffi::c_char,
@@ -3318,7 +3312,6 @@ pub unsafe extern "C" fn map_to_exists(
     xfree(buf as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_to_exists_mode(
     rhs: *const ::core::ffi::c_char,
     mode: ::core::ffi::c_int,
@@ -3449,7 +3442,6 @@ unsafe extern "C" fn translate_mapping(
     ga_append(&raw mut ga, NUL as uint8_t);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_map_cmd(
     mut xp: *mut expand_T,
     mut cmd: *mut ::core::ffi::c_char,
@@ -3543,7 +3535,6 @@ pub unsafe extern "C" fn set_context_in_map_cmd(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandMappings(
     mut pat: *mut ::core::ffi::c_char,
     mut regmatch: *mut regmatch_T,
@@ -3723,7 +3714,6 @@ pub unsafe extern "C" fn ExpandMappings(
         OK
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_abbr(
     mut c: ::core::ffi::c_int,
     mut ptr: *mut ::core::ffi::c_char,
@@ -3908,7 +3898,6 @@ pub unsafe extern "C" fn check_abbr(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_map_expr(
     mut mp: *mut mapblock_T,
     mut c: ::core::ffi::c_int,
@@ -3981,7 +3970,6 @@ pub unsafe extern "C" fn eval_map_expr(
     xfree(p as *mut ::core::ffi::c_void);
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn makemap(mut fd: *mut FILE, mut buf: *mut buf_T) -> ::core::ffi::c_int {
     let mut did_cpo: bool = false_0 != 0;
     let mut abbr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4241,7 +4229,6 @@ pub unsafe extern "C" fn makemap(mut fd: *mut FILE, mut buf: *mut buf_T) -> ::co
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn put_escstr(
     mut fd: *mut FILE,
     mut strstart: *const ::core::ffi::c_char,
@@ -4355,7 +4342,6 @@ pub unsafe extern "C" fn put_escstr(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_map(
     mut keys: *mut ::core::ffi::c_char,
     mut mode: ::core::ffi::c_int,
@@ -4427,7 +4413,6 @@ pub unsafe extern "C" fn check_map(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_hasmapto(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4944,7 +4929,6 @@ unsafe extern "C" fn get_map_mode_string(
     }
     return mode;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_mapset(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -5182,7 +5166,6 @@ pub unsafe extern "C" fn f_mapset(
             mp_result[0 as ::core::ffi::c_int as usize];
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_maplist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5283,7 +5266,6 @@ pub unsafe extern "C" fn f_maplist(
         buffer_local += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_maparg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5291,7 +5273,6 @@ pub unsafe extern "C" fn f_maparg(
 ) {
     get_maparg(argvars, rettv, true_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_mapcheck(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5299,7 +5280,6 @@ pub unsafe extern "C" fn f_mapcheck(
 ) {
     get_maparg(argvars, rettv, false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_map(
     mut lhs: *mut ::core::ffi::c_char,
     mut rhs: *mut ::core::ffi::c_char,
@@ -5368,7 +5348,6 @@ unsafe extern "C" fn langmap_set_entry(mut from: ::core::ffi::c_int, mut to: ::c
     (*entries.offset(0 as ::core::ffi::c_int as isize)).from = from;
     (*entries.offset(0 as ::core::ffi::c_int as isize)).to = to;
 }
-#[no_mangle]
 pub unsafe extern "C" fn langmap_adjust_mb(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut entries: *mut langmap_entry_T = (*langmap_mapga.ptr()).ga_data as *mut langmap_entry_T;
     let mut a: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5387,7 +5366,6 @@ pub unsafe extern "C" fn langmap_adjust_mb(mut c: ::core::ffi::c_int) -> ::core:
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn langmap_init() {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 256 as ::core::ffi::c_int {
@@ -5400,7 +5378,6 @@ pub unsafe extern "C" fn langmap_init() {
         8 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_langmap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     ga_clear(langmap_mapga.ptr());
     langmap_init();
@@ -5647,11 +5624,9 @@ unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::
     xfree(parsed_args.rhs as *mut ::core::ffi::c_void);
     xfree(parsed_args.orig_rhs as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_abbreviate(mut eap: *mut exarg_T) {
     do_exmap(eap, true_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_map(mut eap: *mut exarg_T) {
     if secure.get() != 0 {
         secure.set(2 as ::core::ffi::c_int);
@@ -5660,19 +5635,15 @@ pub unsafe extern "C" fn ex_map(mut eap: *mut exarg_T) {
     }
     do_exmap(eap, false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_unmap(mut eap: *mut exarg_T) {
     do_exmap(eap, false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_mapclear(mut eap: *mut exarg_T) {
     do_mapclear((*eap).cmd, (*eap).arg, (*eap).forceit, false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_abclear(mut eap: *mut exarg_T) {
     do_mapclear((*eap).cmd, (*eap).arg, true_0, true_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn modify_keymap(
     mut channel_id: uint64_t,
     mut buffer: Buffer,
@@ -5936,7 +5907,6 @@ pub unsafe extern "C" fn modify_keymap(
     xfree(parsed_args.orig_rhs as *mut ::core::ffi::c_void);
     xfree(parsed_args.desc as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn keymap_array(
     mut mode: String_0,
     mut buf: *mut buf_T,

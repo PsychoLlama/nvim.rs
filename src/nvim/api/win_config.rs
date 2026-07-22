@@ -986,7 +986,6 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     },
     _cmdline_offset: 0,
 };
-#[no_mangle]
 pub unsafe extern "C" fn nvim_open_win(
     mut buf: Buffer,
     mut enter: Boolean,
@@ -1922,7 +1921,6 @@ unsafe extern "C" fn win_config_float_tp(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_config(
     mut win: Window,
     mut config: *mut KeyDict_win_config,
@@ -2050,7 +2048,6 @@ unsafe extern "C" fn config_put_bordertext(
         _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_config(
     mut win: Window,
     mut arena: *mut Arena,
@@ -2465,7 +2462,6 @@ unsafe extern "C" fn parse_bordertext_pos(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_border_style(
     mut style: Object,
     mut fconfig: *mut WinConfig,
@@ -2952,7 +2948,6 @@ unsafe extern "C" fn generate_api_error(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_winborder(
     mut fconfig: *mut WinConfig,
     mut border_opt: *mut ::core::ffi::c_char,

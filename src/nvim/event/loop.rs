@@ -166,7 +166,6 @@ pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn loop_init(mut loop_0: *mut Loop, mut _data: *mut ::core::ffi::c_void) {
     uv_loop_init(&raw mut (*loop_0).uv);
     (*loop_0).recursive = 0 as ::core::ffi::c_int;
@@ -222,20 +221,17 @@ unsafe extern "C" fn loop_uv_run(mut loop_0: *mut Loop, mut ms: int64_t) -> bool
     (*loop_0).recursive -= 1;
     return *timeout_expired;
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_poll_events(mut loop_0: *mut Loop, mut ms: int64_t) -> bool {
     let mut timeout_expired: bool = loop_uv_run(loop_0, ms);
     multiqueue_process_events((*loop_0).fast_events);
     return timeout_expired;
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_schedule_fast(mut loop_0: *mut Loop, mut event: Event) {
     uv_mutex_lock(&raw mut (*loop_0).mutex);
     multiqueue_put_event((*loop_0).thread_events, event);
     uv_async_send(&raw mut (*loop_0).async_0);
     uv_mutex_unlock(&raw mut (*loop_0).mutex);
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_schedule_deferred(mut loop_0: *mut Loop, mut event: Event) {
     let mut eventp: *mut Event = xmalloc(::core::mem::size_of::<Event>()) as *mut Event;
     *eventp = event;
@@ -266,7 +262,6 @@ unsafe extern "C" fn loop_deferred_event(mut argv: *mut *mut ::core::ffi::c_void
     multiqueue_put_event((*loop_0).events, *eventp);
     xfree(eventp as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_on_put(
     mut _queue: *mut MultiQueue,
     mut data: *mut ::core::ffi::c_void,
@@ -284,7 +279,6 @@ unsafe extern "C" fn loop_walk_cb(
         uv_close(handle, None);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_close(mut loop_0: *mut Loop, mut wait: bool) -> bool {
     let mut rv: bool = true_0 != 0;
     (*loop_0).closing = true_0 != 0;
@@ -361,14 +355,12 @@ pub unsafe extern "C" fn loop_close(mut loop_0: *mut Loop, mut wait: bool) -> bo
     (*loop_0).children.items = ::core::ptr::null_mut::<*mut Proc>();
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_purge(mut loop_0: *mut Loop) {
     uv_mutex_lock(&raw mut (*loop_0).mutex);
     multiqueue_purge_events((*loop_0).thread_events);
     multiqueue_purge_events((*loop_0).fast_events);
     uv_mutex_unlock(&raw mut (*loop_0).mutex);
 }
-#[no_mangle]
 pub unsafe extern "C" fn loop_size(mut loop_0: *mut Loop) -> size_t {
     uv_mutex_lock(&raw mut (*loop_0).mutex);
     let mut rv: size_t = multiqueue_size((*loop_0).thread_events);

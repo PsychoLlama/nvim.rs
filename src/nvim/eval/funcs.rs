@@ -2353,7 +2353,6 @@ static e_missing_function_argument: GlobalCell<[::core::ffi::c_char; 33]> =
 static dummy_ap: GlobalCell<::core::ffi::VaListImpl> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], ::core::ffi::VaListImpl>([0u8; 24])
 });
-#[no_mangle]
 pub unsafe extern "C" fn get_function_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -2400,7 +2399,6 @@ pub unsafe extern "C" fn get_function_name(
     }
     return IObuff.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_expr_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -2418,7 +2416,6 @@ pub unsafe extern "C" fn get_expr_name(
     (*intidx.ptr()) += 1;
     return get_user_var_name(xp, intidx.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_internal_func(
     name: *const ::core::ffi::c_char,
 ) -> *const EvalFuncDef {
@@ -2430,7 +2427,6 @@ pub unsafe extern "C" fn find_internal_func(
         ::core::ptr::null::<EvalFuncDef>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_internal_func(
     fdef: *const EvalFuncDef,
     argcount: ::core::ffi::c_int,
@@ -2457,7 +2453,6 @@ pub unsafe extern "C" fn check_internal_func(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_internal_func(
     fname: *const ::core::ffi::c_char,
     argcount: ::core::ffi::c_int,
@@ -2476,7 +2471,6 @@ pub unsafe extern "C" fn call_internal_func(
     (*fdef).func.expect("non-null function pointer")(argvars, rettv, (*fdef).data);
     return FCERR_NONE as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_internal_method(
     fname: *const ::core::ffi::c_char,
     argcount: ::core::ffi::c_int,
@@ -2691,7 +2685,6 @@ unsafe extern "C" fn f_atan2(
         (*rettv).vval.v_float = 0.0f64 as float_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_get_buf(
     mut tv: *mut typval_T,
     mut curtab_only: ::core::ffi::c_int,
@@ -2734,7 +2727,6 @@ pub unsafe extern "C" fn tv_get_buf(
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
     if !tv_check_str_or_nr(tv) {
         return ::core::ptr::null_mut::<buf_T>();
@@ -2744,7 +2736,6 @@ pub unsafe extern "C" fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
     (*emsg_off.ptr()) -= 1;
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_buf_arg(mut arg: *mut typval_T) -> *mut buf_T {
     (*emsg_off.ptr()) += 1;
     let mut buf: *mut buf_T = tv_get_buf(arg, false_0);
@@ -3059,7 +3050,6 @@ unsafe extern "C" fn f_charcol(
 ) {
     get_col(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_optional_window(
     mut argvars: *mut typval_T,
     mut idx: ::core::ffi::c_int,
@@ -3914,7 +3904,6 @@ unsafe extern "C" fn get_list_line(
         xstrdup(s)
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn execute_common(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7138,7 +7127,6 @@ static pty_ignored_env_vars: GlobalCell<[*const ::core::ffi::c_char; 8]> = Globa
 ]);
 static required_env_vars: GlobalCell<[*const ::core::ffi::c_char; 1]> =
     GlobalCell::new([::core::ptr::null::<::core::ffi::c_char>()]);
-#[no_mangle]
 pub unsafe extern "C" fn create_environment(
     mut job_env: *const dictitem_T,
     clear_env: bool,
@@ -7271,7 +7259,6 @@ pub unsafe extern "C" fn create_environment(
     }
     return env;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_jobstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7710,7 +7697,6 @@ pub unsafe extern "C" fn f_jobstart(
         return;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_jobstop(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -11099,7 +11085,6 @@ unsafe extern "C" fn f_searchpairpos(
     tv_list_append_number((*rettv).vval.v_list, lnum as varnumber_T);
     tv_list_append_number((*rettv).vval.v_list, col as varnumber_T);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_searchpair(
     mut spat: *const ::core::ffi::c_char,
     mut mpat: *const ::core::ffi::c_char,
@@ -13814,7 +13799,6 @@ static functions: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(
         data: EvalFuncData { float_func: None },
     }; 644],
 );
-#[no_mangle]
 pub unsafe extern "C" fn find_internal_func_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,

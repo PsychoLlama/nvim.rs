@@ -292,7 +292,6 @@ unsafe extern "C" fn remote_ui_destroy(mut ui: *mut RemoteUI) {
     let _ = *ptr_;
     xfree(ui as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_disconnect(
     mut channel_id: uint64_t,
     mut err: *mut Error,
@@ -341,7 +340,6 @@ pub unsafe extern "C" fn remote_ui_disconnect(
     }
     remote_ui_destroy(ui);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_wait_for_attach() {
     let mut remaining: int64_t = -1 as int64_t;
     let mut before: uint64_t = if remaining > 0 as int64_t {
@@ -369,7 +367,6 @@ pub unsafe extern "C" fn remote_ui_wait_for_attach() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_attach(
     mut channel_id: uint64_t,
     mut width: Integer,
@@ -467,7 +464,6 @@ pub unsafe extern "C" fn nvim_ui_attach(
     }
     may_trigger_vim_suspend_resume(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_attach(
     mut channel_id: uint64_t,
     mut width: Integer,
@@ -505,7 +501,6 @@ pub unsafe extern "C" fn ui_attach(
     };
     nvim_ui_attach(channel_id, width, height, opts, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_set_focus(
     mut channel_id: uint64_t,
     mut gained: Boolean,
@@ -520,11 +515,9 @@ pub unsafe extern "C" fn nvim_ui_set_focus(
     }
     do_autocmd_focusgained(gained);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_detach(mut channel_id: uint64_t, mut err: *mut Error) {
     remote_ui_disconnect(channel_id, err, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_connect(
     mut channel_id: uint64_t,
     mut server_addr: *mut ::core::ffi::c_char,
@@ -559,9 +552,7 @@ pub unsafe extern "C" fn remote_ui_connect(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_stop(mut _ui: *mut RemoteUI) {}
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_try_resize(
     mut channel_id: uint64_t,
     mut width: Integer,
@@ -584,7 +575,6 @@ pub unsafe extern "C" fn nvim_ui_try_resize(
     (*ui).height = height as ::core::ffi::c_int;
     ui_refresh();
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_set_option(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -818,7 +808,6 @@ unsafe extern "C" fn ui_set_option(
         return;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_try_resize_grid(
     mut channel_id: uint64_t,
     mut grid: Integer,
@@ -840,7 +829,6 @@ pub unsafe extern "C" fn nvim_ui_try_resize_grid(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_pum_set_height(
     mut channel_id: uint64_t,
     mut height: Integer,
@@ -868,7 +856,6 @@ pub unsafe extern "C" fn nvim_ui_pum_set_height(
     }
     (*ui).pum_nlines = height as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
     mut channel_id: uint64_t,
     mut width: Float,
@@ -984,7 +971,6 @@ unsafe extern "C" fn ui_flush_callback(mut packer: *mut PackerBuffer) {
     ui_flush_buf(ui, true_0 != 0);
     ui_alloc_buf(ui);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_grid_clear(mut ui: *mut RemoteUI, mut grid: Integer) {
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -1013,7 +999,6 @@ pub unsafe extern "C" fn remote_ui_grid_clear(mut ui: *mut RemoteUI, mut grid: I
         };
     push_call(ui, name, args);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_grid_resize(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -1061,7 +1046,6 @@ pub unsafe extern "C" fn remote_ui_grid_resize(
         };
     push_call(ui, name, args);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_grid_scroll(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -1228,7 +1212,6 @@ pub unsafe extern "C" fn remote_ui_grid_scroll(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_default_colors_set(
     mut ui: *mut RemoteUI,
     mut rgb_fg: Integer,
@@ -1366,7 +1349,6 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_hl_attr_define(
     mut ui: *mut RemoteUI,
     mut id: Integer,
@@ -1495,7 +1477,6 @@ pub unsafe extern "C" fn remote_ui_hl_attr_define(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_highlight_set(
     mut ui: *mut RemoteUI,
     mut id: ::core::ffi::c_int,
@@ -1551,7 +1532,6 @@ pub unsafe extern "C" fn remote_ui_highlight_set(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_grid_cursor_goto(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -1599,7 +1579,6 @@ pub unsafe extern "C" fn remote_ui_grid_cursor_goto(
         remote_ui_cursor_goto(ui, row, col);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_cursor_goto(
     mut ui: *mut RemoteUI,
     mut row: Integer,
@@ -1639,7 +1618,6 @@ pub unsafe extern "C" fn remote_ui_cursor_goto(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_put(
     mut ui: *mut RemoteUI,
     mut cell: *const ::core::ffi::c_char,
@@ -1666,7 +1644,6 @@ pub unsafe extern "C" fn remote_ui_put(
     };
     push_call(ui, b"put\0".as_ptr() as *const ::core::ffi::c_char, args);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_raw_line(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -1856,7 +1833,6 @@ unsafe extern "C" fn ui_flush_buf(mut ui: *mut RemoteUI, mut incomplete_event: b
     (*ui).flushed_events = true_0 != 0;
     (*ui).ncells_pending = 0 as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_flush(mut ui: *mut RemoteUI) {
     if (*ui).nevents > 0 as uint32_t || (*ui).flushed_events as ::core::ffi::c_int != 0 {
         if !(*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] {
@@ -1875,7 +1851,6 @@ pub unsafe extern "C" fn remote_ui_flush(mut ui: *mut RemoteUI) {
         (*ui).flushed_events = false_0 != 0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_ui_send(mut ui: *mut RemoteUI, mut content: String_0) {
     if !(*ui).stdout_tty {
         return;
@@ -1903,7 +1878,6 @@ pub unsafe extern "C" fn remote_ui_ui_send(mut ui: *mut RemoteUI, mut content: S
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_flush_pending_data(mut ui: *mut RemoteUI) {
     ui_flush_buf(ui, false_0 != 0);
 }
@@ -1990,7 +1964,6 @@ unsafe extern "C" fn translate_firstarg(
     }
     return new_args;
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_event(
     mut ui: *mut RemoteUI,
     mut name: *mut ::core::ffi::c_char,
@@ -2148,7 +2121,6 @@ pub unsafe extern "C" fn remote_ui_event(
     }
     arena_mem_free(arena_finish(&raw mut arena));
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_send(
     mut _channel_id: uint64_t,
     mut content: String_0,
@@ -2156,7 +2128,6 @@ pub unsafe extern "C" fn nvim_ui_send(
 ) {
     ui_call_ui_send(content);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_mode_info_set(
     mut ui: *mut RemoteUI,
     mut enabled: Boolean,
@@ -2193,7 +2164,6 @@ pub unsafe extern "C" fn remote_ui_mode_info_set(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_update_menu(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2201,7 +2171,6 @@ pub unsafe extern "C" fn remote_ui_update_menu(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_busy_start(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2209,7 +2178,6 @@ pub unsafe extern "C" fn remote_ui_busy_start(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_busy_stop(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2217,7 +2185,6 @@ pub unsafe extern "C" fn remote_ui_busy_stop(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_mouse_on(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2225,7 +2192,6 @@ pub unsafe extern "C" fn remote_ui_mouse_on(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_mouse_off(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2233,7 +2199,6 @@ pub unsafe extern "C" fn remote_ui_mouse_off(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_mode_change(
     mut ui: *mut RemoteUI,
     mut mode: String_0,
@@ -2268,7 +2233,6 @@ pub unsafe extern "C" fn remote_ui_mode_change(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_bell(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2276,7 +2240,6 @@ pub unsafe extern "C" fn remote_ui_bell(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_visual_bell(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2284,7 +2247,6 @@ pub unsafe extern "C" fn remote_ui_visual_bell(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_suspend(mut ui: *mut RemoteUI) {
     push_call(
         ui,
@@ -2292,7 +2254,6 @@ pub unsafe extern "C" fn remote_ui_suspend(mut ui: *mut RemoteUI) {
         noargs.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_set_title(mut ui: *mut RemoteUI, mut title: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -2317,7 +2278,6 @@ pub unsafe extern "C" fn remote_ui_set_title(mut ui: *mut RemoteUI, mut title: S
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_set_icon(mut ui: *mut RemoteUI, mut icon: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -2342,7 +2302,6 @@ pub unsafe extern "C" fn remote_ui_set_icon(mut ui: *mut RemoteUI, mut icon: Str
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_screenshot(mut ui: *mut RemoteUI, mut path: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -2367,7 +2326,6 @@ pub unsafe extern "C" fn remote_ui_screenshot(mut ui: *mut RemoteUI, mut path: S
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_option_set(
     mut ui: *mut RemoteUI,
     mut name: String_0,
@@ -2399,7 +2357,6 @@ pub unsafe extern "C" fn remote_ui_option_set(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_chdir(mut ui: *mut RemoteUI, mut path: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -2420,7 +2377,6 @@ pub unsafe extern "C" fn remote_ui_chdir(mut ui: *mut RemoteUI, mut path: String
     };
     push_call(ui, b"chdir\0".as_ptr() as *const ::core::ffi::c_char, args);
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_hl_group_set(
     mut ui: *mut RemoteUI,
     mut name: String_0,
@@ -2455,7 +2411,6 @@ pub unsafe extern "C" fn remote_ui_hl_group_set(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_msg_set_pos(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -2518,7 +2473,6 @@ pub unsafe extern "C" fn remote_ui_msg_set_pos(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_win_viewport(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -2601,7 +2555,6 @@ pub unsafe extern "C" fn remote_ui_win_viewport(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_win_viewport_margins(
     mut ui: *mut RemoteUI,
     mut grid: Integer,
@@ -2666,7 +2619,6 @@ pub unsafe extern "C" fn remote_ui_win_viewport_margins(
         args,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn remote_ui_error_exit(mut ui: *mut RemoteUI, mut status: Integer) {
     let mut args: Array = Array {
         size: 0 as size_t,

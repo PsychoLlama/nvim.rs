@@ -28,9 +28,7 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub static gc_first_dict: GlobalCell<*mut dict_T> =
     GlobalCell::new(::core::ptr::null_mut::<dict_T>());
-#[no_mangle]
 pub static gc_first_list: GlobalCell<*mut list_T> =
     GlobalCell::new(::core::ptr::null_mut::<list_T>());

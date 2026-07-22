@@ -104,7 +104,6 @@ pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KILL_TIMEOUT_MS: ::core::ffi::c_int = 2000 as ::core::ffi::c_int;
 static proc_is_tearing_down: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static exit_need_delay: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn proc_spawn(
     mut proc: *mut Proc,
     mut in_0: bool,
@@ -262,7 +261,6 @@ pub unsafe extern "C" fn proc_spawn(
     );
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn proc_teardown(mut loop_0: *mut Loop) {
     proc_is_tearing_down.set(true_0 != 0);
     let mut i: size_t = 0 as size_t;
@@ -332,13 +330,11 @@ pub unsafe extern "C" fn proc_teardown(mut loop_0: *mut Loop) {
     }
     pty_proc_teardown(loop_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn proc_close_streams(mut proc: *mut Proc) {
     stream_may_close(&raw mut (*proc).in_0);
     rstream_may_close(&raw mut (*proc).out);
     rstream_may_close(&raw mut (*proc).err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn proc_wait(
     mut proc: *mut Proc,
     mut ms: ::core::ffi::c_int,
@@ -431,7 +427,6 @@ pub unsafe extern "C" fn proc_wait(
     }
     return (*proc).status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn proc_stop(mut proc: *mut Proc) {
     let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
     if exited as ::core::ffi::c_int != 0 || (*proc).stopped_time != 0 {
@@ -457,7 +452,6 @@ pub unsafe extern "C" fn proc_stop(mut proc: *mut Proc) {
         0 as uint64_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn proc_free(mut proc: *mut Proc) {
     if !(*proc).argv.is_null() {
         shell_free_argv((*proc).argv);
@@ -720,7 +714,6 @@ unsafe extern "C" fn exit_event(mut argv: *mut *mut ::core::ffi::c_void) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn exit_on_closed_chan(mut status: ::core::ffi::c_int) {
     logmsg(
         LOGLVL_DBG,

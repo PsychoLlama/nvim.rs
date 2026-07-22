@@ -354,7 +354,6 @@ unsafe extern "C" fn json_decoder_pop(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decode_create_map_special_dict(
     ret_tv: *mut typval_T,
     len: ptrdiff_t,
@@ -372,7 +371,6 @@ pub unsafe extern "C" fn decode_create_map_special_dict(
     );
     return list;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decode_string(
     s: *const ::core::ffi::c_char,
     len: size_t,
@@ -1905,7 +1903,6 @@ unsafe extern "C" fn typval_parse_enter(
         _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_t) {
     let mut i: uint32_t = 0 as uint32_t;
     while i < (*parser).size as uint32_t {
@@ -2094,7 +2091,6 @@ unsafe extern "C" fn typval_parse_exit(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_parse_typval(
     mut parser: *mut mpack_parser_t,
     mut data: *mut *const ::core::ffi::c_char,
@@ -2113,7 +2109,6 @@ pub unsafe extern "C" fn mpack_parse_typval(
         ),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_typval(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,

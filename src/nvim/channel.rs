@@ -476,7 +476,6 @@ unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static next_chan_id: GlobalCell<uint64_t> =
     GlobalCell::new((CHAN_STDERR + 1 as ::core::ffi::c_int) as uint64_t);
-#[no_mangle]
 pub unsafe extern "C" fn channel_teardown() {
     let mut chan: *mut Channel = ::core::ptr::null_mut::<Channel>();
     let mut __i: uint32_t = 0;
@@ -491,7 +490,6 @@ pub unsafe extern "C" fn channel_teardown() {
         __i = __i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_close(
     mut id: uint64_t,
     mut part: ChannelPart,
@@ -631,7 +629,6 @@ pub unsafe extern "C" fn channel_close(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_init() {
     channel_alloc(kChannelStreamStderr);
     rpc_init();
@@ -673,7 +670,6 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
     map_put_uint64_t_ptr_t(channels.ptr(), (*chan).id, chan as ptr_t);
     return chan;
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_create_event(
     mut chan: *mut Channel,
     mut ext_source: *const ::core::ffi::c_char,
@@ -775,12 +771,10 @@ pub unsafe extern "C" fn channel_decref(mut chan: *mut Channel) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_reader_free(mut reader: *mut CallbackReader) {
     callback_free(&raw mut (*reader).cb);
     ga_clear(&raw mut (*reader).buffer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_reader_start(
     mut reader: *mut CallbackReader,
     mut type_0: *const ::core::ffi::c_char,
@@ -855,7 +849,6 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
 unsafe extern "C" fn close_cb(mut _stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     channel_decref(data as *mut Channel);
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_job_start(
     mut argv: *mut *mut ::core::ffi::c_char,
     mut exepath: *const ::core::ffi::c_char,
@@ -1004,7 +997,6 @@ pub unsafe extern "C" fn channel_job_start(
     *status_out = (*chan).id as varnumber_T;
     return chan;
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_connect(
     mut tcp: bool,
     mut address: *const ::core::ffi::c_char,
@@ -1068,7 +1060,6 @@ pub unsafe extern "C" fn channel_connect(
     channel_create_event(channel, address);
     return (*channel).id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_from_connection(mut watcher: *mut SocketWatcher) {
     let mut channel: *mut Channel = channel_alloc(kChannelStreamSocket);
     socket_watcher_accept(watcher, &raw mut (*channel).stream.socket);
@@ -1084,7 +1075,6 @@ pub unsafe extern "C" fn channel_from_connection(mut watcher: *mut SocketWatcher
         &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_from_stdio(
     mut rpc: bool,
     mut on_output: CallbackReader,
@@ -1154,7 +1144,6 @@ pub unsafe extern "C" fn channel_from_stdio(
     }
     return (*channel).id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_send(
     mut id: uint64_t,
     mut data: *mut ::core::ffi::c_char,
@@ -1247,7 +1236,6 @@ unsafe extern "C" fn buffer_to_tv_list(
     }
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn on_channel_data(
     mut stream: *mut RStream,
     mut buf: *const ::core::ffi::c_char,
@@ -1258,7 +1246,6 @@ pub unsafe extern "C" fn on_channel_data(
     let mut chan: *mut Channel = data as *mut Channel;
     return on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_data);
 }
-#[no_mangle]
 pub unsafe extern "C" fn on_job_stderr(
     mut stream: *mut RStream,
     mut buf: *const ::core::ffi::c_char,
@@ -1355,7 +1342,6 @@ unsafe extern "C" fn on_channel_event(mut args: *mut *mut ::core::ffi::c_void) {
     }
     channel_decref(chan);
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_reader_callbacks(
     mut chan: *mut Channel,
     mut reader: *mut CallbackReader,
@@ -1487,7 +1473,6 @@ unsafe extern "C" fn channel_callback_call(
         tv_list_unref(argv[1 as ::core::ffi::c_int as usize].vval.v_list);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_terminal_alloc(mut buf: *mut buf_T, mut chan: *mut Channel) {
     let mut topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
@@ -1717,7 +1702,6 @@ unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
     arena_mem_free(arena_finish(&raw mut arena));
     channel_decref(chan);
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_job_running(mut id: uint64_t) -> bool {
     let mut chan: *mut Channel = find_channel(id);
     return !chan.is_null()
@@ -1725,7 +1709,6 @@ pub unsafe extern "C" fn channel_job_running(mut id: uint64_t) -> bool {
             == kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
         && !proc_is_stopped(&raw mut (*chan).stream.proc);
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -> Dict {
     let mut chan: *mut Channel = find_channel(id);
     if chan.is_null() {
@@ -1922,7 +1905,6 @@ unsafe extern "C" fn int64_t_cmp(
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn channel_all_info(mut arena: *mut Arena) -> Array {
     let mut ids: C2Rust_Unnamed_34 = C2Rust_Unnamed_34 {
         size: 0 as size_t,

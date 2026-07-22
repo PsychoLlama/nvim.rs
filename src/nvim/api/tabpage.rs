@@ -120,7 +120,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const KEYSET_OPTIDX_tabpage_config__after: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_list_wins(
     mut tabpage: Tabpage,
     mut arena: *mut Arena,
@@ -160,7 +159,6 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_get_var(
     mut tabpage: Tabpage,
     mut name: String_0,
@@ -176,7 +174,6 @@ pub unsafe extern "C" fn nvim_tabpage_get_var(
     }
     return dict_get_value((*tab).tp_vars, name, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_set_var(
     mut tabpage: Tabpage,
     mut name: String_0,
@@ -197,7 +194,6 @@ pub unsafe extern "C" fn nvim_tabpage_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_del_var(
     mut tabpage: Tabpage,
     mut name: String_0,
@@ -220,7 +216,6 @@ pub unsafe extern "C" fn nvim_tabpage_del_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_get_win(mut tabpage: Tabpage, mut err: *mut Error) -> Window {
     let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
     if tab.is_null() || !valid_tabpage(tab) {
@@ -242,7 +237,6 @@ pub unsafe extern "C" fn nvim_tabpage_get_win(mut tabpage: Tabpage, mut err: *mu
     }
     abort();
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_set_win(
     mut tabpage: Tabpage,
     mut win: Window,
@@ -283,7 +277,6 @@ pub unsafe extern "C" fn nvim_tabpage_set_win(
         (*tp).tp_curwin = wp;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_get_number(
     mut tabpage: Tabpage,
     mut err: *mut Error,
@@ -294,7 +287,6 @@ pub unsafe extern "C" fn nvim_tabpage_get_number(
     }
     return tabpage_index(tab) as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_is_valid(mut tabpage: Tabpage) -> Boolean {
     let mut stub: Error = Error {
         type_0: kErrorTypeNone,
@@ -304,7 +296,6 @@ pub unsafe extern "C" fn nvim_tabpage_is_valid(mut tabpage: Tabpage) -> Boolean 
     api_clear_error(&raw mut stub);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_open_tabpage(
     mut buf: Buffer,
     mut enter: Boolean,

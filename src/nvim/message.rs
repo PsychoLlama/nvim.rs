@@ -1479,7 +1479,6 @@ static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
-#[no_mangle]
 pub unsafe extern "C" fn msg_id_exists(mut id: int64_t) -> bool {
     return id > 0 as int64_t && id < msg_id_next.get();
 }
@@ -1502,7 +1501,6 @@ unsafe extern "C" fn ui_ext_msg_set_pos(mut row: ::core::ffi::c_int, mut scrolle
     );
     (*msg_grid.ptr()).pending_comp_index_update = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_grid_set_pos(mut row: ::core::ffi::c_int, mut scrolled: bool) {
     if !(*msg_grid.ptr()).throttled {
         ui_ext_msg_set_pos(row, scrolled);
@@ -1513,11 +1511,9 @@ pub unsafe extern "C" fn msg_grid_set_pos(mut row: ::core::ffi::c_int, mut scrol
         (*msg_grid_adj.ptr()).row_offset = -row;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_use_grid() -> bool {
     return !(*default_grid.ptr()).chars.is_null() && !ui_has(kUIMessages);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_grid_validate() {
     grid_assign_handle(msg_grid.ptr());
     let mut should_alloc: bool = msg_use_grid();
@@ -1603,7 +1599,6 @@ pub unsafe extern "C" fn msg_grid_validate() {
         cmdline_row.set(msg_grid_pos.get());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn verb_msg(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     verbose_enter();
     let mut n: ::core::ffi::c_int =
@@ -1615,7 +1610,6 @@ pub unsafe extern "C" fn verb_msg(mut s: *const ::core::ffi::c_char) -> ::core::
 pub unsafe extern "C" fn msg(mut s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool {
     return msg_keep(s, hl_id, false_0 != 0, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_multiline(
     mut str: String_0,
     mut hl_id: ::core::ffi::c_int,
@@ -1810,7 +1804,6 @@ unsafe extern "C" fn format_progress_message(
         return hl_msg;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_multihl(
     mut id: Object,
     mut hl_msg: HlMessage,
@@ -1910,7 +1903,6 @@ pub unsafe extern "C" fn msg_multihl(
     }
     return id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_keep(
     mut s: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,
@@ -1986,7 +1978,6 @@ pub unsafe extern "C" fn msg_keep(
     (*entered.ptr()) -= 1;
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_strtrunc(
     mut s: *const ::core::ffi::c_char,
     mut force: ::core::ffi::c_int,
@@ -2120,7 +2111,6 @@ pub unsafe extern "C" fn trunc_string(
         *buf.offset((buflen - 1 as ::core::ffi::c_int) as isize) = NUL as ::core::ffi::c_char;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn smsg(
     mut hl_id: ::core::ffi::c_int,
     mut s: *const ::core::ffi::c_char,
@@ -2136,7 +2126,6 @@ pub unsafe extern "C" fn smsg(
     );
     return msg(IObuff.ptr() as *mut ::core::ffi::c_char, hl_id) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn smsg_keep(
     mut hl_id: ::core::ffi::c_int,
     mut s: *const ::core::ffi::c_char,
@@ -2161,7 +2150,6 @@ static last_sourcing_lnum: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static last_sourcing_name: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn reset_last_sourcing() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
@@ -2249,7 +2237,6 @@ unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if recursive.get() {
@@ -2312,7 +2299,6 @@ unsafe extern "C" fn emsg_not_now() -> ::core::ffi::c_int {
     }
     return false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn emsg_multiline(
     mut s: *const ::core::ffi::c_char,
     mut kind: *const ::core::ffi::c_char,
@@ -2492,14 +2478,12 @@ pub unsafe extern "C" fn emsg(mut s: *const ::core::ffi::c_char) -> bool {
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn emsg_invreg(mut name: ::core::ffi::c_int) {
     semsg(
         gettext(b"E354: Invalid register name: '%s'\0".as_ptr() as *const ::core::ffi::c_char),
         transchar_buf(::core::ptr::null::<buf_T>(), name),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) -> bool {
     let mut ret: bool = false;
     let mut ap: ::core::ffi::VaListImpl;
@@ -2507,7 +2491,6 @@ pub unsafe extern "C" fn semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args:
     ret = semsgv(fmt, ap.as_va_list());
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn semsg_multiline(
     mut kind: *const ::core::ffi::c_char,
     fmt: *const ::core::ffi::c_char,
@@ -2550,14 +2533,12 @@ unsafe extern "C" fn semsgv(
     );
     return emsg(errbuf.ptr() as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn iemsg(mut s: *const ::core::ffi::c_char) {
     if emsg_not_now() != 0 {
         return;
     }
     emsg(s);
 }
-#[no_mangle]
 pub unsafe extern "C" fn siemsg(mut s: *const ::core::ffi::c_char, mut c2rust_args: ...) {
     if emsg_not_now() != 0 {
         return;
@@ -2566,7 +2547,6 @@ pub unsafe extern "C" fn siemsg(mut s: *const ::core::ffi::c_char, mut c2rust_ar
     ap = c2rust_args.clone();
     semsgv(s, ap.as_va_list());
 }
-#[no_mangle]
 pub unsafe extern "C" fn internal_error(mut where_0: *const ::core::ffi::c_char) {
     siemsg(
         gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
@@ -2579,7 +2559,6 @@ unsafe extern "C" fn msg_semsg_event(mut argv: *mut *mut ::core::ffi::c_void) {
     emsg(s);
     xfree(s as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
     let mut ap: ::core::ffi::VaListImpl;
     ap = c2rust_args.clone();
@@ -2622,7 +2601,6 @@ unsafe extern "C" fn msg_semsg_multiline_event(mut argv: *mut *mut ::core::ffi::
     );
     xfree(s as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_schedule_semsg_multiline(
     fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
@@ -2658,7 +2636,6 @@ pub unsafe extern "C" fn msg_schedule_semsg_multiline(
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_trunc(
     mut s: *mut ::core::ffi::c_char,
     mut force: bool,
@@ -2674,7 +2651,6 @@ pub unsafe extern "C" fn msg_trunc(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_may_trunc(
     mut force: bool,
     mut s: *mut ::core::ffi::c_char,
@@ -2707,7 +2683,6 @@ pub unsafe extern "C" fn msg_may_trunc(
     }
     return s;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_progress(
     mut s: *mut ::core::ffi::c_char,
     mut id: *mut ::core::ffi::c_char,
@@ -2800,7 +2775,6 @@ pub unsafe extern "C" fn msg_progress(
     ui_flush();
     return s;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_msg_free(mut hl_msg: HlMessage) {
     let mut i: size_t = 0 as size_t;
     while i < hl_msg.size {
@@ -2865,7 +2839,6 @@ unsafe extern "C" fn msg_hist_add(
     msg_hist_add_multihl(msg_0, false_0 != 0, ::core::ptr::null_mut::<MessageData>());
 }
 static do_clear_hist_temp: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_progress(
     mut msg_id: Object,
     mut msg_0: HlMessage,
@@ -3073,7 +3046,6 @@ unsafe extern "C" fn msg_hist_free_msg(mut entry: *mut MessageHistoryEntry) {
     xfree((*entry).kind as *mut ::core::ffi::c_void);
     xfree(entry as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_hist_clear(mut keep: ::core::ffi::c_int) {
     while msg_hist_len.get() > keep
         || keep == 0 as ::core::ffi::c_int && !(*msg_hist_first.ptr()).is_null()
@@ -3082,7 +3054,6 @@ pub unsafe extern "C" fn msg_hist_clear(mut keep: ::core::ffi::c_int) {
         msg_hist_free_msg(msg_hist_first.get());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_hist_clear_temp() {
     while !(*msg_hist_temp.ptr()).is_null() {
         let mut next: *mut MessageHistoryEntry =
@@ -3093,7 +3064,6 @@ pub unsafe extern "C" fn msg_hist_clear_temp() {
         msg_hist_temp.set(next);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
     let mut messages_flags_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut messages_wait_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3214,7 +3184,6 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
     msg_hist_clear(msg_hist_max.get());
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
     if strcmp(
         (*eap).arg,
@@ -3460,7 +3429,6 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
         api_free_array(entries);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_end_prompt() {
     need_wait_return.set(false_0 != 0);
     emsg_on_display.set(false_0 != 0);
@@ -3469,7 +3437,6 @@ pub unsafe extern "C" fn msg_end_prompt() {
     msg_clr_eos();
     lines_left.set(-1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
     let mut c: ::core::ffi::c_int = 0;
     let mut had_got_int: ::core::ffi::c_int = 0;
@@ -3710,7 +3677,6 @@ unsafe extern "C" fn hit_return_msg(mut newline_sb: bool) {
     }
     p_more.set(save_p_more);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_keep_msg(
     mut s: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,
@@ -3727,12 +3693,10 @@ pub unsafe extern "C" fn set_keep_msg(
     keep_msg_more.set(false_0 != 0);
     keep_msg_hl_id.set(hl_id);
 }
-#[no_mangle]
 pub unsafe extern "C" fn messaging() -> bool {
     return !(p_lz.get() != 0 && char_avail() as ::core::ffi::c_int != 0 && !KeyTyped.get())
         && (p_ch.get() > 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
     let mut pn: ::core::ffi::c_int = 0;
     if global_busy.get() != 0 || !messaging() {
@@ -3786,7 +3750,6 @@ pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
     }
 }
 static redir_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_kind(mut msg_kind: *const ::core::ffi::c_char) {
     msg_ext_ui_flush();
     msg_ext_kind.set(msg_kind);
@@ -3796,17 +3759,14 @@ pub unsafe extern "C" fn msg_ext_set_kind(mut msg_kind: *const ::core::ffi::c_ch
         0 as ::core::ffi::c_int
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_append(mut append: bool) {
     msg_ext_ui_flush();
     msg_ext_append.set(append);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ext_set_trigger(mut trigger: *const ::core::ffi::c_char) {
     msg_ext_ui_flush();
     msg_ext_trigger.set(trigger);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_start() {
     let mut did_return: bool = false_0 != 0;
     msg_row.set(if msg_row.get() > cmdline_row.get() {
@@ -3872,16 +3832,13 @@ pub unsafe extern "C" fn msg_start() {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_starthere() {
     lines_left.set(cmdline_row.get());
     msg_didany.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_putchar(mut c: ::core::ffi::c_int) {
     msg_putchar_hl(c, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_putchar_hl(mut c: ::core::ffi::c_int, mut hl_id: ::core::ffi::c_int) {
     let mut buf: [::core::ffi::c_char; 7] = [0; 7];
     if c < 0 as ::core::ffi::c_int {
@@ -3909,7 +3866,6 @@ pub unsafe extern "C" fn msg_putchar_hl(mut c: ::core::ffi::c_int, mut hl_id: ::
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outnum(mut n: ::core::ffi::c_int) {
     let mut buf: [::core::ffi::c_char; 20] = [0; 20];
     snprintf(
@@ -3920,7 +3876,6 @@ pub unsafe extern "C" fn msg_outnum(mut n: ::core::ffi::c_int) {
     );
     msg_puts(&raw mut buf as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_home_replace(mut fname: *const ::core::ffi::c_char) {
     msg_home_replace_hl(fname, 0 as ::core::ffi::c_int);
 }
@@ -3933,7 +3888,6 @@ unsafe extern "C" fn msg_home_replace_hl(
     msg_outtrans(name, hl_id, false_0 != 0);
     xfree(name as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outtrans(
     mut str: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,
@@ -3941,7 +3895,6 @@ pub unsafe extern "C" fn msg_outtrans(
 ) -> ::core::ffi::c_int {
     return msg_outtrans_len(str, strlen(str) as ::core::ffi::c_int, hl_id, hist);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outtrans_one(
     mut p: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,
@@ -3963,7 +3916,6 @@ pub unsafe extern "C" fn msg_outtrans_one(
     );
     return p.offset(1 as ::core::ffi::c_int as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outtrans_len(
     mut msgstr: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -4048,7 +4000,6 @@ pub unsafe extern "C" fn msg_outtrans_len(
     got_int.set(got_int.get() as ::core::ffi::c_int | save_got_int != 0);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_make(mut arg: *const ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0;
     static str: GlobalCell<*const ::core::ffi::c_char> =
@@ -4078,7 +4029,6 @@ pub unsafe extern "C" fn msg_make(mut arg: *const ::core::ffi::c_char) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outtrans_special(
     mut strstart: *const ::core::ffi::c_char,
     mut from: bool,
@@ -4126,7 +4076,6 @@ pub unsafe extern "C" fn msg_outtrans_special(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn str2special_save(
     str: *const ::core::ffi::c_char,
     replace_spaces: bool,
@@ -4154,7 +4103,6 @@ pub unsafe extern "C" fn str2special_save(
     ga_append(&raw mut ga, NUL as uint8_t);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn str2special_arena(
     mut str: *const ::core::ffi::c_char,
     mut replace_spaces: bool,
@@ -4183,7 +4131,6 @@ pub unsafe extern "C" fn str2special_arena(
     *buf.offset(pos as isize) = NUL as ::core::ffi::c_char;
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn str2special(
     sp: *mut *const ::core::ffi::c_char,
     replace_spaces: bool,
@@ -4264,7 +4211,6 @@ pub unsafe extern "C" fn str2special(
     (*buf.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     return buf.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn str2specialbuf(
     mut sp: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,
@@ -4287,7 +4233,6 @@ pub unsafe extern "C" fn str2specialbuf(
     }
     *buf = NUL as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut list: bool) {
     let mut sc: schar_T = 0;
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4539,11 +4484,9 @@ pub unsafe extern "C" fn msg_prt_line(mut s: *const ::core::ffi::c_char, mut lis
     }
     msg_clr_eos();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_puts(mut s: *const ::core::ffi::c_char) {
     msg_puts_hl(s, 0 as ::core::ffi::c_int, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_puts_title(mut s: *const ::core::ffi::c_char) {
     s = s.offset(
         (ui_has(kUIMessages) as ::core::ffi::c_int != 0
@@ -4552,7 +4495,6 @@ pub unsafe extern "C" fn msg_puts_title(mut s: *const ::core::ffi::c_char) {
     );
     msg_puts_hl(s, HLF_T as ::core::ffi::c_int, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_outtrans_long(
     mut longstr: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,
@@ -4576,7 +4518,6 @@ pub unsafe extern "C" fn msg_outtrans_long(
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_puts_hl(
     s: *const ::core::ffi::c_char,
     hl_id: ::core::ffi::c_int,
@@ -4584,7 +4525,6 @@ pub unsafe extern "C" fn msg_puts_hl(
 ) {
     msg_puts_len(s, -1 as ptrdiff_t, hl_id, hist);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_puts_len(
     str: *const ::core::ffi::c_char,
     len: ptrdiff_t,
@@ -4963,14 +4903,12 @@ unsafe extern "C" fn msg_puts_display(
     }
     msg_check();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_line_flush() {
     if cmdmsg_rl.get() {
         grid_line_mirror((*msg_grid.ptr()).cols);
     }
     grid_line_flush_if_valid_row();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_cursor_goto(mut row: ::core::ffi::c_int, mut col: ::core::ffi::c_int) {
     if cmdmsg_rl.get() {
         col = Columns.get() - 1 as ::core::ffi::c_int - col;
@@ -4978,7 +4916,6 @@ pub unsafe extern "C" fn msg_cursor_goto(mut row: ::core::ffi::c_int, mut col: :
     let mut grid: *mut ScreenGrid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
     ui_grid_cursor_goto((*grid).handle, row, col);
 }
-#[no_mangle]
 pub unsafe extern "C" fn message_filtered(mut msg_0: *const ::core::ffi::c_char) -> bool {
     if (*cmdmod.ptr()).cmod_filter_regmatch.regprog.is_null() {
         return false_0 != 0;
@@ -4994,7 +4931,6 @@ pub unsafe extern "C" fn message_filtered(mut msg_0: *const ::core::ffi::c_char)
         !match_0 as ::core::ffi::c_int
     } != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_scrollsize() -> ::core::ffi::c_int {
     return msg_scrolled.get()
         + p_ch.get() as ::core::ffi::c_int
@@ -5004,13 +4940,11 @@ pub unsafe extern "C" fn msg_scrollsize() -> ::core::ffi::c_int {
             0 as ::core::ffi::c_int
         });
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_do_throttle() -> bool {
     return msg_use_grid() as ::core::ffi::c_int != 0
         && rdb_flags.get() & kOptRdbFlagNothrottle as ::core::ffi::c_int as ::core::ffi::c_uint
             == 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_scroll_up(mut may_throttle: bool, mut zerocmd: bool) {
     if may_throttle as ::core::ffi::c_int != 0 && msg_do_throttle() as ::core::ffi::c_int != 0 {
         (*msg_grid.ptr()).throttled = true_0 != 0;
@@ -5059,7 +4993,6 @@ pub unsafe extern "C" fn msg_scroll_up(mut may_throttle: bool, mut zerocmd: bool
         *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_scroll_flush() {
     if (*msg_grid.ptr()).throttled {
         (*msg_grid.ptr()).throttled = false_0 != 0;
@@ -5155,7 +5088,6 @@ pub unsafe extern "C" fn msg_scroll_flush() {
     msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
     msg_grid_pos_at_flush.set(msg_grid_pos.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_reset_scroll() {
     if ui_has(kUIMessages) {
         return;
@@ -5185,7 +5117,6 @@ pub unsafe extern "C" fn msg_reset_scroll() {
     msg_scrolled_at_flush.set(0 as ::core::ffi::c_int);
     msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ui_refresh() {
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).chars.is_null() {
         ui_call_grid_resize(
@@ -5196,7 +5127,6 @@ pub unsafe extern "C" fn msg_ui_refresh() {
         ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ui_flush() {
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
         && !(*msg_grid.ptr()).chars.is_null()
@@ -5297,13 +5227,11 @@ unsafe extern "C" fn store_sb_text(
     *sb_str = s;
     *sb_col = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_clear_sb_text() {
     msg_ext_ui_flush();
     do_clear_sb_text.set(SB_CLEAR_ALL);
     do_clear_hist_temp.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn sb_text_start_cmdline() {
     if do_clear_sb_text.get() as ::core::ffi::c_uint
         == SB_CLEAR_CMDLINE_BUSY as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5314,7 +5242,6 @@ pub unsafe extern "C" fn sb_text_start_cmdline() {
         do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn sb_text_restart_cmdline() {
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     if (*last_msgchunk.ptr()).is_null() || (*last_msgchunk.get()).sb_eol as ::core::ffi::c_int != 0
@@ -5332,11 +5259,9 @@ pub unsafe extern "C" fn sb_text_restart_cmdline() {
         tofree = tofree_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn sb_text_end_cmdline() {
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_DONE);
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_sb_text(mut all: bool) {
     let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
     let mut lastp: *mut *mut msgchunk_T = ::core::ptr::null_mut::<*mut msgchunk_T>();
@@ -5358,7 +5283,6 @@ pub unsafe extern "C" fn clear_sb_text(mut all: bool) {
         *lastp = mp;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn show_sb_text() {
     if ui_has(kUIMessages) {
         let mut ea: exarg_T = exarg {
@@ -5415,7 +5339,6 @@ unsafe extern "C" fn msg_sb_start(mut mps: *mut msgchunk_T) -> *mut msgchunk_T {
     }
     return mp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_sb_eol() {
     if !(*last_msgchunk.ptr()).is_null() {
         (*last_msgchunk.get()).sb_eol = true_0 as ::core::ffi::c_char;
@@ -5438,7 +5361,6 @@ unsafe extern "C" fn disp_sb_line(
     }
     return (*mp).sb_next;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_use_printf() -> ::core::ffi::c_int {
     return (!embedded_mode.get() && ui_active() == 0 && !ui_has(kUIMessages))
         as ::core::ffi::c_int;
@@ -5790,7 +5712,6 @@ unsafe extern "C" fn msg_moremsg(mut full: bool) {
     grid_line_cursor_goto(len);
     grid_line_flush();
 }
-#[no_mangle]
 pub unsafe extern "C" fn repeat_message() {
     if ui_has(kUIMessages) {
         return;
@@ -5817,13 +5738,11 @@ pub unsafe extern "C" fn repeat_message() {
         msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_clr_eos() {
     if msg_silent.get() == 0 as ::core::ffi::c_int {
         msg_clr_eos_force();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_clr_eos_force() {
     if ui_has(kUIMessages) {
         return;
@@ -5869,13 +5788,11 @@ pub unsafe extern "C" fn msg_clr_eos_force() {
         cmdline_was_last_drawn.set(false_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_clr_cmdline() {
     msg_row.set(cmdline_row.get());
     msg_col.set(0 as ::core::ffi::c_int);
     msg_clr_eos_force();
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_end() -> bool {
     if !exiting.get()
         && need_wait_return.get() as ::core::ffi::c_int != 0
@@ -5893,7 +5810,6 @@ unsafe extern "C" fn msg_ext_init_chunks() -> *mut Array {
     msg_col.set(0 as ::core::ffi::c_int);
     return tofree;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
         msg_ext_kind.set(::core::ptr::null::<::core::ffi::c_char>());
@@ -5967,7 +5883,6 @@ pub unsafe extern "C" fn msg_ext_ui_flush() {
         });
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_ext_flush_showmode() {
     static clear: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if ui_has(kUIMessages) as ::core::ffi::c_int != 0
@@ -5981,7 +5896,6 @@ pub unsafe extern "C" fn msg_ext_flush_showmode() {
         xfree(tofree as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_check() {
     if ui_has(kUIMessages) {
         return;
@@ -6084,7 +5998,6 @@ unsafe extern "C" fn redir_write(str: *const ::core::ffi::c_char, maxlen: ptrdif
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn redirecting() -> ::core::ffi::c_int {
     return (!(*redir_fd.ptr()).is_null()
         || *p_vfile.get() as ::core::ffi::c_int != NUL
@@ -6096,7 +6009,6 @@ static pre_verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(b"verbose\0".as_ptr() as *const ::core::ffi::c_char);
-#[no_mangle]
 pub unsafe extern "C" fn verbose_enter() {
     if *p_vfile.get() as ::core::ffi::c_int != NUL {
         (*msg_silent.ptr()) += 1;
@@ -6109,7 +6021,6 @@ pub unsafe extern "C" fn verbose_enter() {
     }
     msg_ext_skip_verbose.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn verbose_leave() {
     if *p_vfile.get() as ::core::ffi::c_int != NUL {
         (*msg_silent.ptr()) -= 1;
@@ -6122,21 +6033,18 @@ pub unsafe extern "C" fn verbose_leave() {
         pre_verbose_kind.set(::core::ptr::null::<::core::ffi::c_char>());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn verbose_enter_scroll() {
     verbose_enter();
     if *p_vfile.get() as ::core::ffi::c_int == NUL {
         msg_scroll.set(true_0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn verbose_leave_scroll() {
     verbose_leave();
     if *p_vfile.get() as ::core::ffi::c_int == NUL {
         cmdline_row.set(msg_row.get());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn verbose_stop() {
     if !(*verbose_fd.ptr()).is_null() {
         fclose(verbose_fd.get());
@@ -6144,7 +6052,6 @@ pub unsafe extern "C" fn verbose_stop() {
     }
     verbose_did_open.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn verbose_open() -> ::core::ffi::c_int {
     if (*verbose_fd.ptr()).is_null() && !verbose_did_open.get() {
         verbose_did_open.set(true_0 != 0);
@@ -6162,7 +6069,6 @@ pub unsafe extern "C" fn verbose_open() -> ::core::ffi::c_int {
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn give_warning(
     mut message: *const ::core::ffi::c_char,
     mut hl: bool,
@@ -6198,7 +6104,6 @@ pub unsafe extern "C" fn give_warning(
     (*no_wait_return.ptr()) -= 1;
     msg_hist_off.set(save_msg_hist_off);
 }
-#[no_mangle]
 pub unsafe extern "C" fn swmsg(
     mut hl: bool,
     fmt: *const ::core::ffi::c_char,
@@ -6214,7 +6119,6 @@ pub unsafe extern "C" fn swmsg(
     );
     give_warning(IObuff.ptr() as *mut ::core::ffi::c_char, hl, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_advance(mut col: ::core::ffi::c_int) {
     if msg_silent.get() != 0 as ::core::ffi::c_int {
         msg_col.set(col);
@@ -6229,7 +6133,6 @@ pub unsafe extern "C" fn msg_advance(mut col: ::core::ffi::c_int) {
         msg_putchar(' ' as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_dialog(
     mut _type_0: ::core::ffi::c_int,
     mut _title: *const ::core::ffi::c_char,
@@ -6518,7 +6421,6 @@ unsafe extern "C" fn display_confirm_msg() {
     }
     (*confirm_msg_used.ptr()) -= 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_dialog_yesno(
     mut type_0: ::core::ffi::c_int,
     mut title: *mut ::core::ffi::c_char,
@@ -6543,7 +6445,6 @@ pub unsafe extern "C" fn vim_dialog_yesno(
     }
     return VIM_NO as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_dialog_yesnocancel(
     mut type_0: ::core::ffi::c_int,
     mut title: *mut ::core::ffi::c_char,
@@ -6569,7 +6470,6 @@ pub unsafe extern "C" fn vim_dialog_yesnocancel(
     }
     return VIM_CANCEL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_dialog_yesnoallcancel(
     mut type_0: ::core::ffi::c_int,
     mut title: *mut ::core::ffi::c_char,
@@ -6599,7 +6499,6 @@ pub unsafe extern "C" fn vim_dialog_yesnoallcancel(
     }
     return VIM_CANCEL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_delay(mut ms: uint64_t, mut ignoreinput: bool) {
     if ui_has(kUIMessages) {
         return;
@@ -6624,7 +6523,6 @@ pub unsafe extern "C" fn msg_delay(mut ms: uint64_t, mut ignoreinput: bool) {
     ui_flush();
     os_delay(ms, ignoreinput);
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_check_for_delay(mut check_msg_scroll: bool) {
     if (emsg_on_display.get() as ::core::ffi::c_int != 0
         || check_msg_scroll as ::core::ffi::c_int != 0 && msg_scroll.get() != 0)

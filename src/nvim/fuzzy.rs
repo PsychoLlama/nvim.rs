@@ -180,7 +180,6 @@ unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     return (*l).lv_len;
 }
 pub const SCORE_SCALE: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn fuzzy_match(
     str: *mut ::core::ffi::c_char,
     pat_arg: *const ::core::ffi::c_char,
@@ -698,7 +697,6 @@ unsafe extern "C" fn do_fuzzymatch(
     );
     callback_free(&raw mut cb);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matchfuzzy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -706,7 +704,6 @@ pub unsafe extern "C" fn f_matchfuzzy(
 ) {
     do_fuzzymatch(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matchfuzzypos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -801,7 +798,6 @@ unsafe extern "C" fn fuzzy_match_func_sort(fm: *mut fuzmatch_str_T, sz: ::core::
         ),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn fuzzy_match_str(
     str: *mut ::core::ffi::c_char,
     pat: *const ::core::ffi::c_char,
@@ -827,7 +823,6 @@ pub unsafe extern "C" fn fuzzy_match_str(
     );
     return score;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fuzzy_match_str_with_pos(
     str: *mut ::core::ffi::c_char,
     pat: *const ::core::ffi::c_char,
@@ -871,7 +866,6 @@ pub unsafe extern "C" fn fuzzy_match_str_with_pos(
     }
     return match_positions_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fuzzy_match_str_in_line(
     mut ptr: *mut *mut ::core::ffi::c_char,
     mut pat: *mut ::core::ffi::c_char,
@@ -918,7 +912,6 @@ pub unsafe extern "C" fn fuzzy_match_str_in_line(
     }
     return found;
 }
-#[no_mangle]
 pub unsafe extern "C" fn search_for_fuzzy_match(
     mut buf: *mut buf_T,
     mut pos: *mut pos_T,
@@ -1003,7 +996,6 @@ pub unsafe extern "C" fn search_for_fuzzy_match(
     }
     return found_new_match;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fuzmatch_str_free(
     fuzmatch: *mut fuzmatch_str_T,
     mut count: ::core::ffi::c_int,
@@ -1018,7 +1010,6 @@ pub unsafe extern "C" fn fuzmatch_str_free(
     }
     xfree(fuzmatch as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn fuzzymatches_to_strmatches(
     fuzmatch: *mut fuzmatch_str_T,
     matches: *mut *mut *mut ::core::ffi::c_char,

@@ -479,7 +479,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-#[no_mangle]
 pub static kCtxAll: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
     kCtxRegs as ::core::ffi::c_int
         | kCtxJumps as ::core::ffi::c_int
@@ -493,7 +492,6 @@ static ctx_stack: GlobalCell<ContextVec> = GlobalCell::new(ContextVec {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Context>(),
 });
-#[no_mangle]
 pub unsafe extern "C" fn ctx_free_all() {
     let mut i: size_t = 0 as size_t;
     while i < (*ctx_stack.ptr()).size {
@@ -505,11 +503,9 @@ pub unsafe extern "C" fn ctx_free_all() {
     (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).capacity;
     (*ctx_stack.ptr()).items = ::core::ptr::null_mut::<Context>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_size() -> size_t {
     return (*ctx_stack.ptr()).size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_get(mut index: size_t) -> *mut Context {
     if index < (*ctx_stack.ptr()).size {
         return (*ctx_stack.ptr()).items.offset(
@@ -521,7 +517,6 @@ pub unsafe extern "C" fn ctx_get(mut index: size_t) -> *mut Context {
     }
     return ::core::ptr::null_mut::<Context>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_free(mut ctx: *mut Context) {
     api_free_string((*ctx).regs);
     api_free_string((*ctx).jumps);
@@ -529,7 +524,6 @@ pub unsafe extern "C" fn ctx_free(mut ctx: *mut Context) {
     api_free_string((*ctx).gvars);
     api_free_array((*ctx).funcs);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_int) {
     if ctx.is_null() {
         if (*ctx_stack.ptr()).size == (*ctx_stack.ptr()).capacity {
@@ -594,7 +588,6 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
         ctx_save_funcs(ctx, true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_restore(mut ctx: *mut Context, flags: ::core::ffi::c_int) -> bool {
     let mut free_ctx: bool = false_0 != 0;
     if ctx.is_null() {
@@ -797,7 +790,6 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
     tv_clear(&raw mut list_tv);
     return sbuf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Arena) -> Dict {
     '_c2rust_label: {
         if !ctx.is_null() {
@@ -868,7 +860,6 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     };
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctx_from_dict(
     mut dict: Dict,
     mut ctx: *mut Context,

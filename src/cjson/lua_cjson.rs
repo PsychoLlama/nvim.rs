@@ -2377,7 +2377,6 @@ unsafe extern "C" fn json_protect_conversion(mut l: *mut lua_State) -> ::core::f
         b"Memory allocation error in CJSON protected call\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_int {
     let mut reg: [luaL_Reg; 4] = [
         luaL_Reg {
@@ -2504,12 +2503,10 @@ unsafe extern "C" fn lua_cjson_safe_new(mut l: *mut lua_State) -> ::core::ffi::c
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn luaopen_cjson(mut l: *mut lua_State) -> ::core::ffi::c_int {
     lua_cjson_new(l);
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn luaopen_cjson_safe(mut l: *mut lua_State) -> ::core::ffi::c_int {
     lua_cjson_safe_new(l);
     return 1 as ::core::ffi::c_int;

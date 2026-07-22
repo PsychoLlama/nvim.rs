@@ -1370,11 +1370,9 @@ static current_next_flags: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static syn_time_on: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn syn_set_timeout(mut tm: *mut proftime_T) {
     syn_tm.set(tm);
 }
-#[no_mangle]
 pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
     let mut last_valid: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
     let mut last_min_valid: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
@@ -1881,7 +1879,6 @@ unsafe extern "C" fn syn_stack_free_block(mut block: *mut synblock_T) {
     (*block).b_sst_first = ::core::ptr::null_mut::<synstate_T>();
     (*block).b_sst_len = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_stack_free_all(mut block: *mut synblock_T) {
     syn_stack_free_block(block);
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
@@ -1979,7 +1976,6 @@ unsafe extern "C" fn syn_stack_alloc() {
         (*syn_block.get()).b_sst_len = len;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_stack_apply_changes(mut buf: *mut buf_T) {
     syn_stack_apply_changes_block(&raw mut (*buf).b_s, buf);
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
@@ -2331,7 +2327,6 @@ unsafe extern "C" fn syn_stack_equal(mut sp: *mut synstate_T) -> bool {
         false_0
     } != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syntax_end_parsing(mut wp: *mut win_T, mut lnum: linenr_T) {
     let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
     if syn_block.get() != (*wp).w_s {
@@ -2356,7 +2351,6 @@ unsafe extern "C" fn validate_current_state() {
         ::core::mem::size_of::<stateitem_T>() as ::core::ffi::c_int;
     ga_set_growsize(current_state.ptr(), 3 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn syntax_check_changed(mut lnum: linenr_T) -> bool {
     let mut retval: bool = true_0 != 0;
     let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
@@ -2406,7 +2400,6 @@ unsafe extern "C" fn syn_finish_line(syncing: bool) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_syntax_attr(
     col: colnr_T,
     can_spell: *mut bool,
@@ -4070,7 +4063,6 @@ unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut _syncing: ::co
     }
     redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn syntax_clear(mut block: *mut synblock_T) {
     (*block).b_syn_error = false_0 != 0;
     (*block).b_syn_slow = false_0 != 0;
@@ -4118,7 +4110,6 @@ pub unsafe extern "C" fn syntax_clear(mut block: *mut synblock_T) {
     invalidate_current_state();
     running_syn_inc_tag.set(0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_synblock(mut wp: *mut win_T) {
     if (*wp).w_s != &raw mut (*(*wp).w_buffer).b_s {
         syntax_clear((*wp).w_s);
@@ -4347,7 +4338,6 @@ unsafe extern "C" fn syn_cmd_onoff(mut eap: *mut exarg_T, mut name: *mut ::core:
         do_cmdline_cmd(&raw mut buf as *mut ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_maybe_enable() {
     if !did_syntax_onoff.get() {
         let mut ea: exarg_T = exarg_T {
@@ -7203,7 +7193,6 @@ static subcommands: GlobalCell<[subcommand; 19]> = GlobalCell::new([
         func: Some(syn_cmd_list as unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int) -> ()),
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut subcmd_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7261,7 +7250,6 @@ pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
         (*emsg_skip.ptr()) -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_ownsyntax(mut eap: *mut exarg_T) {
     if (*curwin.get()).w_s == &raw mut (*(*curwin.get()).w_buffer).b_s {
         (*curwin.get()).w_s =
@@ -7309,7 +7297,6 @@ pub unsafe extern "C" fn ex_ownsyntax(mut eap: *mut exarg_T) {
         xfree(old_value as *mut ::core::ffi::c_void);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn syntax_present(mut win: *mut win_T) -> bool {
     return (*(*win).w_s).b_syn_patterns.ga_len != 0 as ::core::ffi::c_int
         || (*(*win).w_s).b_syn_clusters.ga_len != 0 as ::core::ffi::c_int
@@ -7317,13 +7304,11 @@ pub unsafe extern "C" fn syntax_present(mut win: *mut win_T) -> bool {
         || (*(*win).w_s).b_keywtab_ic.ht_used > 0 as size_t;
 }
 static expand_what: GlobalCell<C2Rust_Unnamed_24> = GlobalCell::new(EXP_SUBCMD);
-#[no_mangle]
 pub unsafe extern "C" fn reset_expand_highlight() {
     include_none.set(0 as ::core::ffi::c_int);
     include_default.set(include_none.get());
     include_link.set(include_default.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_echohl_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -7332,7 +7317,6 @@ pub unsafe extern "C" fn set_context_in_echohl_cmd(
     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
     include_none.set(1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_syntax_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -7406,7 +7390,6 @@ pub unsafe extern "C" fn set_context_in_syntax_cmd(
         (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_syntax_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -7479,7 +7462,6 @@ pub unsafe extern "C" fn get_syntax_name(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_id(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -7504,14 +7486,12 @@ pub unsafe extern "C" fn syn_get_id(
         current_id.get()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_syntax_info(
     mut seqnrp: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     *seqnrp = current_seqnr.get();
     return current_flags.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_concealed_id(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -7532,11 +7512,9 @@ pub unsafe extern "C" fn syn_get_concealed_id(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_sub_char() -> ::core::ffi::c_int {
     return current_sub_char.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_stack_item(mut i: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if i >= (*current_state.ptr()).ga_len {
         invalidate_current_state();
@@ -7559,7 +7537,6 @@ unsafe extern "C" fn syn_cur_foldlevel() -> ::core::ffi::c_int {
     }
     return level;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_foldlevel(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -7599,7 +7576,6 @@ pub unsafe extern "C" fn syn_get_foldlevel(
     }
     return level;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_syntime(mut eap: *mut exarg_T) {
     if strcmp((*eap).arg, b"on\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
     {
@@ -7649,7 +7625,6 @@ unsafe extern "C" fn syntime_clear() {
         idx += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_syntime_arg(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,

@@ -261,7 +261,6 @@ pub unsafe extern "C" fn os_dirname(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_isrealdir(mut name: *const ::core::ffi::c_char) -> bool {
     let mut request: uv_fs_t = uv_fs_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -395,7 +394,6 @@ pub unsafe extern "C" fn os_nodetype(mut name: *const ::core::ffi::c_char) -> ::
     }
     return NODE_WRITABLE;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_exepath(
     mut buffer: *mut ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -629,7 +627,6 @@ pub unsafe extern "C" fn os_open(
     uv_fs_req_cleanup(&raw mut req);
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_fopen(
     mut path: *const ::core::ffi::c_char,
     mut flags: *const ::core::ffi::c_char,
@@ -702,7 +699,6 @@ pub unsafe extern "C" fn os_fopen(
     }
     return fdopen(fd, flags);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut e: ::core::ffi::c_int = 0;
     let mut fdflags: ::core::ffi::c_int = fcntl(fd, F_GETFD);
@@ -834,7 +830,6 @@ pub unsafe extern "C" fn os_dup(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_open_stdin_fd() -> ::core::ffi::c_int {
     let mut stdin_dup_fd: ::core::ffi::c_int = 0;
     if stdin_fd.get() > 0 as ::core::ffi::c_int {
@@ -1042,7 +1037,6 @@ pub unsafe extern "C" fn os_write(
     }
     return written_bytes as ptrdiff_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_copy(
     mut path: *const ::core::ffi::c_char,
     mut new_path: *const ::core::ffi::c_char,
@@ -1125,7 +1119,6 @@ pub unsafe extern "C" fn os_copy(
     uv_fs_req_cleanup(&raw mut req);
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_fsync(mut fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut r: ::core::ffi::c_int = 0;
     let mut req: uv_fs_t = uv_fs_t {
@@ -1406,7 +1399,6 @@ pub unsafe extern "C" fn os_setperm(
     uv_fs_req_cleanup(&raw mut req);
     return if r == kLibuvSuccess.get() { OK } else { FAIL };
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_copy_xattr(
     mut from_file: *const ::core::ffi::c_char,
     mut to_file: *const ::core::ffi::c_char,
@@ -1497,24 +1489,20 @@ pub unsafe extern "C" fn os_copy_xattr(
         emsg(gettext(errmsg));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_get_acl(mut _fname: *const ::core::ffi::c_char) -> vim_acl_T {
     let mut ret: vim_acl_T = NULL;
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_set_acl(mut _fname: *const ::core::ffi::c_char, mut aclent: vim_acl_T) {
     if aclent.is_null() {
         return;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_free_acl(mut aclent: vim_acl_T) {
     if aclent.is_null() {
         return;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_file_owned(mut fname: *const ::core::ffi::c_char) -> bool {
     let mut uid: uid_t = getuid();
     let mut finfo: FileInfo = FileInfo {
@@ -1555,7 +1543,6 @@ pub unsafe extern "C" fn os_file_owned(mut fname: *const ::core::ffi::c_char) ->
         && finfo.stat.st_uid == uid as uint64_t;
     return file_owned as ::core::ffi::c_int != 0 && link_owned as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_chown(
     mut path: *const ::core::ffi::c_char,
     mut owner: uv_uid_t,
@@ -1755,7 +1742,6 @@ pub unsafe extern "C" fn os_path_exists(mut path: *const ::core::ffi::c_char) ->
     };
     return os_stat(path, &raw mut statbuf) == kLibuvSuccess.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_file_settime(
     mut path: *const ::core::ffi::c_char,
     mut atime: ::core::ffi::c_double,
@@ -2217,7 +2203,6 @@ pub unsafe extern "C" fn os_mkdir_recurse(
     xfree(curdir as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_file_mkdir(
     mut fname: *mut ::core::ffi::c_char,
     mut mode: int32_t,
@@ -2255,7 +2240,6 @@ pub unsafe extern "C" fn os_file_mkdir(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_mkdtemp(
     mut templ: *const ::core::ffi::c_char,
     mut path: *mut ::core::ffi::c_char,
@@ -2414,7 +2398,6 @@ pub unsafe extern "C" fn os_rmdir(mut path: *const ::core::ffi::c_char) -> ::cor
     uv_fs_req_cleanup(&raw mut req);
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_scandir(
     mut dir: *mut Directory,
     mut path: *const ::core::ffi::c_char,
@@ -2431,7 +2414,6 @@ pub unsafe extern "C" fn os_scandir(
     }
     return r >= 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_scandir_next(mut dir: *mut Directory) -> *const ::core::ffi::c_char {
     let mut err: ::core::ffi::c_int =
         uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
@@ -2441,7 +2423,6 @@ pub unsafe extern "C" fn os_scandir_next(mut dir: *mut Directory) -> *const ::co
         ::core::ptr::null::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_closedir(mut dir: *mut Directory) {
     uv_fs_req_cleanup(&raw mut (*dir).request);
 }
@@ -2798,7 +2779,6 @@ pub unsafe extern "C" fn os_fileid_equal_fileinfo(
     return (*file_id).inode == (*file_info).stat.st_ino
         && (*file_id).device_id == (*file_info).stat.st_dev;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_realpath(
     mut name: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,

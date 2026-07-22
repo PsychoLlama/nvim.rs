@@ -199,7 +199,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as ::core::ffi::c_int,
     ga_data: NULL,
 };
-#[no_mangle]
 pub unsafe extern "C" fn f_rpcstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -342,7 +341,6 @@ pub unsafe extern "C" fn f_rpcstart(
         channel_create_event(chan, ::core::ptr::null::<::core::ffi::c_char>());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_rpcstop(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -378,7 +376,6 @@ pub unsafe extern "C" fn f_rpcstop(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_last_buffer_nr(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -394,7 +391,6 @@ pub unsafe extern "C" fn f_last_buffer_nr(
     }
     (*rettv).vval.v_number = n as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_termopen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

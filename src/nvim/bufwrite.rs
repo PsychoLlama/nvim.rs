@@ -1888,7 +1888,6 @@ unsafe extern "C" fn get_fileinfo(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_get_backup_name(
     mut fname: *mut ::core::ffi::c_char,
     mut dirp: *mut *mut ::core::ffi::c_char,
@@ -2268,7 +2267,6 @@ unsafe extern "C" fn buf_write_make_backup(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_write(
     mut buf: *mut buf_T,
     mut fname: *mut ::core::ffi::c_char,

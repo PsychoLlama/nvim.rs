@@ -121,7 +121,6 @@ pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
 pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new([KeySetLink {
     str: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     ptr_off: 0 as size_t,
@@ -129,7 +128,6 @@ pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new([KeySetLin
     opt_index: -1 as ::core::ffi::c_int,
     is_hlgroup: false_0 != 0,
 }]);
-#[no_mangle]
 pub unsafe extern "C" fn empty_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -149,7 +147,6 @@ pub unsafe extern "C" fn empty_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_empty_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -160,7 +157,6 @@ pub unsafe extern "C" fn KeyDict_empty_get_field(
     }
     return (empty_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static context_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"types\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -177,7 +173,6 @@ pub static context_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn context_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -200,7 +195,6 @@ pub unsafe extern "C" fn context_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_context_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -211,7 +205,6 @@ pub unsafe extern "C" fn KeyDict_context_get_field(
     }
     return (context_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"on_buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -285,7 +278,6 @@ pub static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]> = GlobalC
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn set_decoration_provider_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -338,7 +330,6 @@ pub unsafe extern "C" fn set_decoration_provider_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_set_decoration_provider_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -349,7 +340,6 @@ pub unsafe extern "C" fn KeyDict_set_decoration_provider_get_field(
     }
     return (set_decoration_provider_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static set_extmark_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -612,7 +602,6 @@ pub static set_extmark_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn set_extmark_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -764,7 +753,6 @@ pub unsafe extern "C" fn set_extmark_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_set_extmark_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -775,7 +763,6 @@ pub unsafe extern "C" fn KeyDict_set_extmark_get_field(
     }
     return (set_extmark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_extmark_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"details\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -799,7 +786,6 @@ pub static get_extmark_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_extmark_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -828,7 +814,6 @@ pub unsafe extern "C" fn get_extmark_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_extmark_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -839,7 +824,6 @@ pub unsafe extern "C" fn KeyDict_get_extmark_get_field(
     }
     return (get_extmark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_extmarks_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"type\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -884,7 +868,6 @@ pub static get_extmarks_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_extmarks_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -922,7 +905,6 @@ pub unsafe extern "C" fn get_extmarks_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_extmarks_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -933,7 +915,6 @@ pub unsafe extern "C" fn KeyDict_get_extmarks_get_field(
     }
     return (get_extmarks_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static keymap_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"desc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1007,7 +988,6 @@ pub static keymap_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn keymap_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1060,7 +1040,6 @@ pub unsafe extern "C" fn keymap_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_keymap_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1071,7 +1050,6 @@ pub unsafe extern "C" fn KeyDict_keymap_get_field(
     }
     return (keymap_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_commands_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"builtin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1088,7 +1066,6 @@ pub static get_commands_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_commands_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1111,7 +1088,6 @@ pub unsafe extern "C" fn get_commands_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_commands_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1122,7 +1098,6 @@ pub unsafe extern "C" fn KeyDict_get_commands_get_field(
     }
     return (get_commands_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static user_command_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
     KeySetLink {
         str: b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1216,7 +1191,6 @@ pub static user_command_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn user_command_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1281,7 +1255,6 @@ pub unsafe extern "C" fn user_command_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_user_command_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1292,7 +1265,6 @@ pub unsafe extern "C" fn KeyDict_user_command_get_field(
     }
     return (user_command_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static win_config_table: GlobalCell<[KeySetLink; 25]> = GlobalCell::new([
     KeySetLink {
         str: b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1471,7 +1443,6 @@ pub static win_config_table: GlobalCell<[KeySetLink; 25]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn win_config_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1578,7 +1549,6 @@ pub unsafe extern "C" fn win_config_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_win_config_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1589,7 +1559,6 @@ pub unsafe extern "C" fn KeyDict_win_config_get_field(
     }
     return (win_config_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static tabpage_config_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"after\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1606,7 +1575,6 @@ pub static tabpage_config_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn tabpage_config_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1629,7 +1597,6 @@ pub unsafe extern "C" fn tabpage_config_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_tabpage_config_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1640,7 +1607,6 @@ pub unsafe extern "C" fn KeyDict_tabpage_config_get_field(
     }
     return (tabpage_config_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static runtime_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"is_lua\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1664,7 +1630,6 @@ pub static runtime_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn runtime_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1690,7 +1655,6 @@ pub unsafe extern "C" fn runtime_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_runtime_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1701,7 +1665,6 @@ pub unsafe extern "C" fn KeyDict_runtime_get_field(
     }
     return (runtime_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static eval_statusline_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new([
     KeySetLink {
         str: b"winid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1761,7 +1724,6 @@ pub static eval_statusline_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new(
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn eval_statusline_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1808,7 +1770,6 @@ pub unsafe extern "C" fn eval_statusline_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_eval_statusline_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1819,7 +1780,6 @@ pub unsafe extern "C" fn KeyDict_eval_statusline_get_field(
     }
     return (eval_statusline_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static option_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1857,7 +1817,6 @@ pub static option_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn option_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1892,7 +1851,6 @@ pub unsafe extern "C" fn option_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_option_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1903,7 +1861,6 @@ pub unsafe extern "C" fn KeyDict_option_get_field(
     }
     return (option_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static highlight_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
     KeySetLink {
         str: b"bg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2158,7 +2115,6 @@ pub static highlight_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn highlight_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2336,7 +2292,6 @@ pub unsafe extern "C" fn highlight_hash(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_highlight_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2347,7 +2302,6 @@ pub unsafe extern "C" fn KeyDict_highlight_get_field(
     }
     return (highlight_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static highlight_cterm_table: GlobalCell<[KeySetLink; 17]> = GlobalCell::new([
     KeySetLink {
         str: b"dim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2469,7 +2423,6 @@ pub static highlight_cterm_table: GlobalCell<[KeySetLink; 17]> = GlobalCell::new
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn highlight_cterm_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2549,7 +2502,6 @@ pub unsafe extern "C" fn highlight_cterm_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_highlight_cterm_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2560,7 +2512,6 @@ pub unsafe extern "C" fn KeyDict_highlight_cterm_get_field(
     }
     return (highlight_cterm_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_highlight_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2598,7 +2549,6 @@ pub static get_highlight_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_highlight_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2633,7 +2583,6 @@ pub unsafe extern "C" fn get_highlight_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_highlight_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2644,7 +2593,6 @@ pub unsafe extern "C" fn KeyDict_get_highlight_get_field(
     }
     return (get_highlight_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_ns_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"winid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2661,7 +2609,6 @@ pub static get_ns_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_ns_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2684,7 +2631,6 @@ pub unsafe extern "C" fn get_ns_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_ns_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2695,7 +2641,6 @@ pub unsafe extern "C" fn KeyDict_get_ns_get_field(
     }
     return (get_ns_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static win_text_height_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"end_row\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2740,7 +2685,6 @@ pub static win_text_height_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new(
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn win_text_height_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2778,7 +2722,6 @@ pub unsafe extern "C" fn win_text_height_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_win_text_height_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2789,7 +2732,6 @@ pub unsafe extern "C" fn KeyDict_win_text_height_get_field(
     }
     return (win_text_height_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static clear_autocmds_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2834,7 +2776,6 @@ pub static clear_autocmds_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn clear_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2872,7 +2813,6 @@ pub unsafe extern "C" fn clear_autocmds_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_clear_autocmds_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2883,7 +2823,6 @@ pub unsafe extern "C" fn KeyDict_clear_autocmds_get_field(
     }
     return (clear_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static create_autocmd_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -2956,7 +2895,6 @@ pub static create_autocmd_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new(
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn create_autocmd_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3012,7 +2950,6 @@ pub unsafe extern "C" fn create_autocmd_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_create_autocmd_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3023,7 +2960,6 @@ pub unsafe extern "C" fn KeyDict_create_autocmd_get_field(
     }
     return (create_autocmd_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static exec_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3075,7 +3011,6 @@ pub static exec_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn exec_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3113,7 +3048,6 @@ pub unsafe extern "C" fn exec_autocmds_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_exec_autocmds_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3124,7 +3058,6 @@ pub unsafe extern "C" fn KeyDict_exec_autocmds_get_field(
     }
     return (exec_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static get_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3176,7 +3109,6 @@ pub static get_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_autocmds_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3217,7 +3149,6 @@ pub unsafe extern "C" fn get_autocmds_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_get_autocmds_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3228,7 +3159,6 @@ pub unsafe extern "C" fn KeyDict_get_autocmds_get_field(
     }
     return (get_autocmds_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static create_augroup_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3245,7 +3175,6 @@ pub static create_augroup_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn create_augroup_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3268,7 +3197,6 @@ pub unsafe extern "C" fn create_augroup_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_create_augroup_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3279,7 +3207,6 @@ pub unsafe extern "C" fn KeyDict_create_augroup_get_field(
     }
     return (create_augroup_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static cmd_table: GlobalCell<[KeySetLink; 12]> = GlobalCell::new([
     KeySetLink {
         str: b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3366,7 +3293,6 @@ pub static cmd_table: GlobalCell<[KeySetLink; 12]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn cmd_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3428,7 +3354,6 @@ pub unsafe extern "C" fn cmd_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_cmd_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3439,7 +3364,6 @@ pub unsafe extern "C" fn KeyDict_cmd_get_field(
     }
     return (cmd_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static cmd_magic_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3463,7 +3387,6 @@ pub static cmd_magic_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn cmd_magic_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3489,7 +3412,6 @@ pub unsafe extern "C" fn cmd_magic_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_cmd_magic_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3500,7 +3422,6 @@ pub unsafe extern "C" fn KeyDict_cmd_magic_get_field(
     }
     return (cmd_magic_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static cmd_mods_table: GlobalCell<[KeySetLink; 21]> = GlobalCell::new([
     KeySetLink {
         str: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3650,7 +3571,6 @@ pub static cmd_mods_table: GlobalCell<[KeySetLink; 21]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn cmd_mods_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3765,7 +3685,6 @@ pub unsafe extern "C" fn cmd_mods_hash(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_cmd_mods_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3776,7 +3695,6 @@ pub unsafe extern "C" fn KeyDict_cmd_mods_get_field(
     }
     return (cmd_mods_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static cmd_mods_filter_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"force\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3800,7 +3718,6 @@ pub static cmd_mods_filter_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new(
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn cmd_mods_filter_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3826,7 +3743,6 @@ pub unsafe extern "C" fn cmd_mods_filter_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_cmd_mods_filter_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3837,7 +3753,6 @@ pub unsafe extern "C" fn KeyDict_cmd_mods_filter_get_field(
     }
     return (cmd_mods_filter_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static cmd_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"output\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3854,7 +3769,6 @@ pub static cmd_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn cmd_opts_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3877,7 +3791,6 @@ pub unsafe extern "C" fn cmd_opts_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_cmd_opts_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3888,7 +3801,6 @@ pub unsafe extern "C" fn KeyDict_cmd_opts_get_field(
     }
     return (cmd_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static echo_opts_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3968,7 +3880,6 @@ pub static echo_opts_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn echo_opts_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4027,7 +3938,6 @@ pub unsafe extern "C" fn echo_opts_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_echo_opts_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4038,7 +3948,6 @@ pub unsafe extern "C" fn KeyDict_echo_opts_get_field(
     }
     return (echo_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static exec_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"output\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4055,7 +3964,6 @@ pub static exec_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn exec_opts_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4078,7 +3986,6 @@ pub unsafe extern "C" fn exec_opts_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_exec_opts_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4089,7 +3996,6 @@ pub unsafe extern "C" fn KeyDict_exec_opts_get_field(
     }
     return (exec_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static buf_attach_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new([
     KeySetLink {
         str: b"preview\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4148,7 +4054,6 @@ pub static buf_attach_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn buf_attach_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4195,7 +4100,6 @@ pub unsafe extern "C" fn buf_attach_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_buf_attach_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4206,7 +4110,6 @@ pub unsafe extern "C" fn KeyDict_buf_attach_get_field(
     }
     return (buf_attach_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static buf_delete_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"force\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4230,7 +4133,6 @@ pub static buf_delete_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn buf_delete_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4256,7 +4158,6 @@ pub unsafe extern "C" fn buf_delete_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_buf_delete_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4267,7 +4168,6 @@ pub unsafe extern "C" fn KeyDict_buf_delete_get_field(
     }
     return (buf_delete_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static open_term_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
     KeySetLink {
         str: b"on_input\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4291,7 +4191,6 @@ pub static open_term_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn open_term_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4317,7 +4216,6 @@ pub unsafe extern "C" fn open_term_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_open_term_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4328,7 +4226,6 @@ pub unsafe extern "C" fn KeyDict_open_term_get_field(
     }
     return (open_term_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static complete_set_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"info\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4345,7 +4242,6 @@ pub static complete_set_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn complete_set_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4368,7 +4264,6 @@ pub unsafe extern "C" fn complete_set_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_complete_set_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4379,7 +4274,6 @@ pub unsafe extern "C" fn KeyDict_complete_set_get_field(
     }
     return (complete_set_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static xdl_diff_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
     KeySetLink {
         str: b"ctxlen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4480,7 +4374,6 @@ pub static xdl_diff_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn xdl_diff_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4542,7 +4435,6 @@ pub unsafe extern "C" fn xdl_diff_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_xdl_diff_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4553,7 +4445,6 @@ pub unsafe extern "C" fn KeyDict_xdl_diff_get_field(
     }
     return (xdl_diff_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static redraw_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4633,7 +4524,6 @@ pub static redraw_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn redraw_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4692,7 +4582,6 @@ pub unsafe extern "C" fn redraw_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_redraw_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4703,7 +4592,6 @@ pub unsafe extern "C" fn KeyDict_redraw_get_field(
     }
     return (redraw_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static ns_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
     KeySetLink {
         str: b"wins\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4720,7 +4608,6 @@ pub static ns_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn ns_opts_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4743,7 +4630,6 @@ pub unsafe extern "C" fn ns_opts_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict_ns_opts_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4754,7 +4640,6 @@ pub unsafe extern "C" fn KeyDict_ns_opts_get_field(
     }
     return (ns_opts_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static _shada_search_pat_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new([
     KeySetLink {
         str: b"sb\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4834,7 +4719,6 @@ pub static _shada_search_pat_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::n
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn _shada_search_pat_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4887,7 +4771,6 @@ pub unsafe extern "C" fn _shada_search_pat_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict__shada_search_pat_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4898,7 +4781,6 @@ pub unsafe extern "C" fn KeyDict__shada_search_pat_get_field(
     }
     return (_shada_search_pat_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static _shada_mark_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
     KeySetLink {
         str: b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4936,7 +4818,6 @@ pub static _shada_mark_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new([
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn _shada_mark_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4953,7 +4834,6 @@ pub unsafe extern "C" fn _shada_mark_hash(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict__shada_mark_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4964,7 +4844,6 @@ pub unsafe extern "C" fn KeyDict__shada_mark_get_field(
     }
     return (_shada_mark_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static _shada_register_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new([
     KeySetLink {
         str: b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5009,7 +4888,6 @@ pub static _shada_register_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new(
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn _shada_register_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -5047,7 +4925,6 @@ pub unsafe extern "C" fn _shada_register_hash(
     }
     return low;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict__shada_register_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -5058,7 +4935,6 @@ pub unsafe extern "C" fn KeyDict__shada_register_get_field(
     }
     return (_shada_register_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub static _shada_buflist_item_table: GlobalCell<[KeySetLink; 4]> = GlobalCell::new([
     KeySetLink {
         str: b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5089,7 +4965,6 @@ pub static _shada_buflist_item_table: GlobalCell<[KeySetLink; 4]> = GlobalCell::
         is_hlgroup: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn _shada_buflist_item_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -5105,7 +4980,6 @@ pub unsafe extern "C" fn _shada_buflist_item_hash(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn KeyDict__shada_buflist_item_get_field(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -5116,7 +4990,6 @@ pub unsafe extern "C" fn KeyDict__shada_buflist_item_get_field(
     }
     return (_shada_buflist_item_table.ptr() as *mut KeySetLink).offset(hash as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_autocmds(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5233,7 +5106,6 @@ pub unsafe extern "C" fn handle_nvim_get_autocmds(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_create_autocmd(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5354,7 +5226,6 @@ pub unsafe extern "C" fn handle_nvim_create_autocmd(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_autocmd(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5401,7 +5272,6 @@ pub unsafe extern "C" fn handle_nvim_del_autocmd(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_clear_autocmds(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5501,7 +5371,6 @@ pub unsafe extern "C" fn handle_nvim_clear_autocmds(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_create_augroup(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5611,7 +5480,6 @@ pub unsafe extern "C" fn handle_nvim_create_augroup(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5658,7 +5526,6 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5708,7 +5575,6 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_exec_autocmds(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5814,7 +5680,6 @@ pub unsafe extern "C" fn handle_nvim_exec_autocmds(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_line_count(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -5887,7 +5752,6 @@ pub unsafe extern "C" fn handle_nvim_buf_line_count(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_attach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6045,7 +5909,6 @@ pub unsafe extern "C" fn handle_nvim_buf_attach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_detach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6118,7 +5981,6 @@ pub unsafe extern "C" fn handle_nvim_buf_detach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_lines(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6265,7 +6127,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_lines(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_lines(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6426,7 +6287,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_lines(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_text(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6591,7 +6451,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_text(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_text(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6794,7 +6653,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_text(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_offset(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6882,7 +6740,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_offset(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -6973,7 +6830,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_changedtick(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7046,7 +6902,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_changedtick(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7141,7 +6996,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7337,7 +7191,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_del_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7442,7 +7295,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7533,7 +7385,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7619,7 +7470,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7695,7 +7545,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7781,7 +7630,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_is_loaded(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7852,7 +7700,6 @@ pub unsafe extern "C" fn handle_nvim_buf_is_loaded(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_delete(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7981,7 +7828,6 @@ pub unsafe extern "C" fn handle_nvim_buf_delete(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8052,7 +7898,6 @@ pub unsafe extern "C" fn handle_nvim_buf_is_valid(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_del_mark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8143,7 +7988,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_mark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_mark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8318,7 +8162,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_mark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_mark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8413,7 +8256,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_mark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__buf_stats(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8490,7 +8332,6 @@ pub unsafe extern "C" fn handle_nvim__buf_stats(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_parse_cmd(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8656,7 +8497,6 @@ pub unsafe extern "C" fn handle_nvim_parse_cmd(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_cmd(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8841,7 +8681,6 @@ pub unsafe extern "C" fn handle_nvim_cmd(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_create_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -8982,7 +8821,6 @@ pub unsafe extern "C" fn handle_nvim_create_user_command(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9032,7 +8870,6 @@ pub unsafe extern "C" fn handle_nvim_del_user_command(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9216,7 +9053,6 @@ pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9302,7 +9138,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_commands(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9396,7 +9231,6 @@ pub unsafe extern "C" fn handle_nvim_get_commands(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_commands(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9521,7 +9355,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_commands(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_exec(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9611,7 +9444,6 @@ pub unsafe extern "C" fn handle_nvim_exec(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_command_output(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9670,7 +9502,6 @@ pub unsafe extern "C" fn handle_nvim_command_output(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_execute_lua(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9745,7 +9576,6 @@ pub unsafe extern "C" fn handle_nvim_execute_lua(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9818,7 +9648,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_number(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -9933,7 +9762,6 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10092,7 +9920,6 @@ pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_virtual_text(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10275,7 +10102,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_virtual_text(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_hl_by_id(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10363,7 +10189,6 @@ pub unsafe extern "C" fn handle_nvim_get_hl_by_id(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_hl_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10454,7 +10279,6 @@ pub unsafe extern "C" fn handle_nvim_get_hl_by_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_insert(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10557,7 +10381,6 @@ pub unsafe extern "C" fn handle_buffer_insert(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_get_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10648,7 +10471,6 @@ pub unsafe extern "C" fn handle_buffer_get_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_set_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10750,7 +10572,6 @@ pub unsafe extern "C" fn handle_buffer_set_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_del_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -10833,7 +10654,6 @@ pub unsafe extern "C" fn handle_buffer_del_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_get_line_slice(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11000,7 +10820,6 @@ pub unsafe extern "C" fn handle_buffer_get_line_slice(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_set_line_slice(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11179,7 +10998,6 @@ pub unsafe extern "C" fn handle_buffer_set_line_slice(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11275,7 +11093,6 @@ pub unsafe extern "C" fn handle_buffer_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_buffer_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11366,7 +11183,6 @@ pub unsafe extern "C" fn handle_buffer_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_window_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11462,7 +11278,6 @@ pub unsafe extern "C" fn handle_window_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_window_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11553,7 +11368,6 @@ pub unsafe extern "C" fn handle_window_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_tabpage_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11649,7 +11463,6 @@ pub unsafe extern "C" fn handle_tabpage_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_tabpage_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11740,7 +11553,6 @@ pub unsafe extern "C" fn handle_tabpage_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_vim_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11801,7 +11613,6 @@ pub unsafe extern "C" fn handle_vim_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_vim_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11857,7 +11668,6 @@ pub unsafe extern "C" fn handle_vim_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_option_info(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11917,7 +11727,6 @@ pub unsafe extern "C" fn handle_nvim_get_option_info(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -11972,7 +11781,6 @@ pub unsafe extern "C" fn handle_nvim_set_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12028,7 +11836,6 @@ pub unsafe extern "C" fn handle_nvim_get_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12119,7 +11926,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12210,7 +12016,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12301,7 +12106,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12392,7 +12196,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_call_atomic(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12453,7 +12256,6 @@ pub unsafe extern "C" fn handle_nvim_call_atomic(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_subscribe(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12502,7 +12304,6 @@ pub unsafe extern "C" fn handle_nvim_subscribe(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_unsubscribe(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12551,7 +12352,6 @@ pub unsafe extern "C" fn handle_nvim_unsubscribe(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_out_write(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12600,7 +12400,6 @@ pub unsafe extern "C" fn handle_nvim_out_write(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_err_write(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12649,7 +12448,6 @@ pub unsafe extern "C" fn handle_nvim_err_write(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_err_writeln(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12698,7 +12496,6 @@ pub unsafe extern "C" fn handle_nvim_err_writeln(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_notify(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12803,7 +12600,6 @@ pub unsafe extern "C" fn handle_nvim_notify(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_error_event(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12867,7 +12663,6 @@ pub unsafe extern "C" fn handle_nvim_error_event(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_term_event(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12922,7 +12717,6 @@ pub unsafe extern "C" fn handle_nvim_ui_term_event(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_create_namespace(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -12976,7 +12770,6 @@ pub unsafe extern "C" fn handle_nvim_create_namespace(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_namespaces(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13018,7 +12811,6 @@ pub unsafe extern "C" fn handle_nvim_get_namespaces(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_extmark_by_id(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13188,7 +12980,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_extmark_by_id(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_get_extmarks(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13351,7 +13142,6 @@ pub unsafe extern "C" fn handle_nvim_buf_get_extmarks(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13593,7 +13383,6 @@ pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13698,7 +13487,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13813,7 +13601,6 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -13945,7 +13732,6 @@ pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__ns_set(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14050,7 +13836,6 @@ pub unsafe extern "C" fn handle_nvim__ns_set(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__ns_get(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14124,7 +13909,6 @@ pub unsafe extern "C" fn handle_nvim__ns_get(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_option_value(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14243,7 +14027,6 @@ pub unsafe extern "C" fn handle_nvim_get_option_value(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_option_value(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14361,7 +14144,6 @@ pub unsafe extern "C" fn handle_nvim_set_option_value(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_all_options_info(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14405,7 +14187,6 @@ pub unsafe extern "C" fn handle_nvim_get_all_options_info(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_option_info2(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14528,7 +14309,6 @@ pub unsafe extern "C" fn handle_nvim_get_option_info2(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14605,7 +14385,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14696,7 +14475,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14787,7 +14565,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14873,7 +14650,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -14948,7 +14724,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15046,7 +14821,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15119,7 +14893,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15190,7 +14963,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_open_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15355,7 +15127,6 @@ pub unsafe extern "C" fn handle_nvim_open_tabpage(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_attach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15452,7 +15223,6 @@ pub unsafe extern "C" fn handle_nvim_ui_attach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_ui_attach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15547,7 +15317,6 @@ pub unsafe extern "C" fn handle_ui_attach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_set_focus(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15611,7 +15380,6 @@ pub unsafe extern "C" fn handle_nvim_ui_set_focus(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_detach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15645,7 +15413,6 @@ pub unsafe extern "C" fn handle_nvim_ui_detach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_try_resize(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15707,7 +15474,6 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15762,7 +15528,6 @@ pub unsafe extern "C" fn handle_nvim_ui_set_option(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15840,7 +15605,6 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -15887,7 +15651,6 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16015,7 +15778,6 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_ui_send(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16065,7 +15827,6 @@ pub unsafe extern "C" fn handle_nvim_ui_send(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_hl_id_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16119,7 +15880,6 @@ pub unsafe extern "C" fn handle_nvim_get_hl_id_by_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_hl(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16236,7 +15996,6 @@ pub unsafe extern "C" fn handle_nvim_get_hl(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_hl(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16423,7 +16182,6 @@ pub unsafe extern "C" fn handle_nvim_set_hl(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16516,7 +16274,6 @@ pub unsafe extern "C" fn handle_nvim_get_hl_ns(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16563,7 +16320,6 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16610,7 +16366,6 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_feedkeys(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16709,7 +16464,6 @@ pub unsafe extern "C" fn handle_nvim_feedkeys(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_input(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16763,7 +16517,6 @@ pub unsafe extern "C" fn handle_nvim_input(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_input_mouse(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -16898,7 +16651,6 @@ pub unsafe extern "C" fn handle_nvim_input_mouse(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_replace_termcodes(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17042,7 +16794,6 @@ pub unsafe extern "C" fn handle_nvim_replace_termcodes(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_exec_lua(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17117,7 +16868,6 @@ pub unsafe extern "C" fn handle_nvim_exec_lua(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__exec_lua_fast(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17192,7 +16942,6 @@ pub unsafe extern "C" fn handle_nvim__exec_lua_fast(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_strwidth(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17248,7 +16997,6 @@ pub unsafe extern "C" fn handle_nvim_strwidth(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_runtime_paths(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17292,7 +17040,6 @@ pub unsafe extern "C" fn handle_nvim_list_runtime_paths(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__runtime_inspect(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17334,7 +17081,6 @@ pub unsafe extern "C" fn handle_nvim__runtime_inspect(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_runtime_file(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17425,7 +17171,6 @@ pub unsafe extern "C" fn handle_nvim_get_runtime_file(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__get_lib_dir(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17466,7 +17211,6 @@ pub unsafe extern "C" fn handle_nvim__get_lib_dir(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__get_runtime(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17609,7 +17353,6 @@ pub unsafe extern "C" fn handle_nvim__get_runtime(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_current_dir(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17659,7 +17402,6 @@ pub unsafe extern "C" fn handle_nvim_set_current_dir(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_current_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17702,7 +17444,6 @@ pub unsafe extern "C" fn handle_nvim_get_current_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_current_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17762,7 +17503,6 @@ pub unsafe extern "C" fn handle_nvim_set_current_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_current_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17805,7 +17545,6 @@ pub unsafe extern "C" fn handle_nvim_del_current_line(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17861,7 +17600,6 @@ pub unsafe extern "C" fn handle_nvim_get_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17916,7 +17654,6 @@ pub unsafe extern "C" fn handle_nvim_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17966,7 +17703,6 @@ pub unsafe extern "C" fn handle_nvim_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_vvar(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18022,7 +17758,6 @@ pub unsafe extern "C" fn handle_nvim_get_vvar(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_vvar(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18077,7 +17812,6 @@ pub unsafe extern "C" fn handle_nvim_set_vvar(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_echo(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18244,7 +17978,6 @@ pub unsafe extern "C" fn handle_nvim_echo(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_bufs(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18286,7 +18019,6 @@ pub unsafe extern "C" fn handle_nvim_list_bufs(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_current_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18326,7 +18058,6 @@ pub unsafe extern "C" fn handle_nvim_get_current_buf(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_current_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18403,7 +18134,6 @@ pub unsafe extern "C" fn handle_nvim_set_current_buf(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_wins(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18445,7 +18175,6 @@ pub unsafe extern "C" fn handle_nvim_list_wins(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_current_win(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18485,7 +18214,6 @@ pub unsafe extern "C" fn handle_nvim_get_current_win(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_current_win(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18562,7 +18290,6 @@ pub unsafe extern "C" fn handle_nvim_set_current_win(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_create_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18662,7 +18389,6 @@ pub unsafe extern "C" fn handle_nvim_create_buf(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_open_term(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18798,7 +18524,6 @@ pub unsafe extern "C" fn handle_nvim_open_term(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_chan_send(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18863,7 +18588,6 @@ pub unsafe extern "C" fn handle_nvim_chan_send(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_tabpages(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18905,7 +18629,6 @@ pub unsafe extern "C" fn handle_nvim_list_tabpages(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18945,7 +18668,6 @@ pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19022,7 +18744,6 @@ pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_paste(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19136,7 +18857,6 @@ pub unsafe extern "C" fn handle_nvim_paste(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_put(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19278,7 +18998,6 @@ pub unsafe extern "C" fn handle_nvim_put(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_color_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19332,7 +19051,6 @@ pub unsafe extern "C" fn handle_nvim_get_color_by_name(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_color_map(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19374,7 +19092,6 @@ pub unsafe extern "C" fn handle_nvim_get_color_map(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_context(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19475,7 +19192,6 @@ pub unsafe extern "C" fn handle_nvim_get_context(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_load_context(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19547,7 +19263,6 @@ pub unsafe extern "C" fn handle_nvim_load_context(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_mode(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19589,7 +19304,6 @@ pub unsafe extern "C" fn handle_nvim_get_mode(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19647,7 +19361,6 @@ pub unsafe extern "C" fn handle_nvim_get_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19802,7 +19515,6 @@ pub unsafe extern "C" fn handle_nvim_set_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19870,7 +19582,6 @@ pub unsafe extern "C" fn handle_nvim_del_keymap(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_api_info(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19912,7 +19623,6 @@ pub unsafe extern "C" fn handle_nvim_get_api_info(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_set_client_info(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20076,7 +19786,6 @@ pub unsafe extern "C" fn handle_nvim_set_client_info(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__chan_set_detach(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20140,7 +19849,6 @@ pub unsafe extern "C" fn handle_nvim__chan_set_detach(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_chan_info(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20197,7 +19905,6 @@ pub unsafe extern "C" fn handle_nvim_get_chan_info(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_chans(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20239,7 +19946,6 @@ pub unsafe extern "C" fn handle_nvim_list_chans(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__id(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20282,7 +19988,6 @@ pub unsafe extern "C" fn handle_nvim__id(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__id_array(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20341,7 +20046,6 @@ pub unsafe extern "C" fn handle_nvim__id_array(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__id_dict(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20415,7 +20119,6 @@ pub unsafe extern "C" fn handle_nvim__id_dict(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__id_float(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20478,7 +20181,6 @@ pub unsafe extern "C" fn handle_nvim__id_float(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__stats(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20520,7 +20222,6 @@ pub unsafe extern "C" fn handle_nvim__stats(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_list_uis(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20562,7 +20263,6 @@ pub unsafe extern "C" fn handle_nvim_list_uis(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_proc_children(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20619,7 +20319,6 @@ pub unsafe extern "C" fn handle_nvim_get_proc_children(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_proc(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20672,7 +20371,6 @@ pub unsafe extern "C" fn handle_nvim_get_proc(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20826,7 +20524,6 @@ pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__inspect_cell(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20913,7 +20610,6 @@ pub unsafe extern "C" fn handle_nvim__inspect_cell(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__screenshot(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20962,7 +20658,6 @@ pub unsafe extern "C" fn handle_nvim__screenshot(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__invalidate_glyph_cache(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -20996,7 +20691,6 @@ pub unsafe extern "C" fn handle_nvim__invalidate_glyph_cache(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__unpack(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21052,7 +20746,6 @@ pub unsafe extern "C" fn handle_nvim__unpack(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_del_mark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21108,7 +20801,6 @@ pub unsafe extern "C" fn handle_nvim_del_mark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_get_mark(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21219,7 +20911,6 @@ pub unsafe extern "C" fn handle_nvim_get_mark(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_eval_statusline(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21342,7 +21033,6 @@ pub unsafe extern "C" fn handle_nvim_eval_statusline(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__complete_set(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21456,7 +21146,6 @@ pub unsafe extern "C" fn handle_nvim__complete_set(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim__redraw(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21556,7 +21245,6 @@ pub unsafe extern "C" fn handle_nvim__redraw(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_exec2(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21667,7 +21355,6 @@ pub unsafe extern "C" fn handle_nvim_exec2(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_command(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21717,7 +21404,6 @@ pub unsafe extern "C" fn handle_nvim_command(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_eval(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21773,7 +21459,6 @@ pub unsafe extern "C" fn handle_nvim_eval(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_call_function(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21848,7 +21533,6 @@ pub unsafe extern "C" fn handle_nvim_call_function(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_call_dict_function(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -21930,7 +21614,6 @@ pub unsafe extern "C" fn handle_nvim_call_dict_function(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_parse_expression(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22040,7 +21723,6 @@ pub unsafe extern "C" fn handle_nvim_parse_expression(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_open_win(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22259,7 +21941,6 @@ pub unsafe extern "C" fn handle_nvim_open_win(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_config(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22431,7 +22112,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_config(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_config(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22576,7 +22256,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_config(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22651,7 +22330,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_buf(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22761,7 +22439,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_buf(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_cursor(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22838,7 +22515,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_cursor(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_cursor(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22925,7 +22601,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_cursor(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_height(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22998,7 +22673,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_height(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_height(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23081,7 +22755,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_height(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_width(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23154,7 +22827,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_width(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_width(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23237,7 +22909,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_width(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23328,7 +22999,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23419,7 +23089,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23505,7 +23174,6 @@ pub unsafe extern "C" fn handle_nvim_win_del_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_position(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23582,7 +23250,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_position(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23657,7 +23324,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23730,7 +23396,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_number(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23801,7 +23466,6 @@ pub unsafe extern "C" fn handle_nvim_win_is_valid(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_hide(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23880,7 +23544,6 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_close(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -23987,7 +23650,6 @@ pub unsafe extern "C" fn handle_nvim_win_close(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -24070,7 +23732,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_nvim_win_text_height(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -24202,7 +23863,6 @@ pub unsafe extern "C" fn handle_nvim_win_text_height(
     }
     return ret;
 }
-#[no_mangle]
 pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; 280]> = GlobalCell::new([
     MsgpackRpcRequestHandler {
         name: b"redraw\0".as_ptr() as *const ::core::ffi::c_char,
@@ -26725,7 +26385,6 @@ pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; 280]> = Global
         ret_alloc: false_0 != 0,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn msgpack_rpc_get_handler_for_hash(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -27413,7 +27072,6 @@ pub unsafe extern "C" fn msgpack_rpc_get_handler_for_hash(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msgpack_rpc_get_handler_for(
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,

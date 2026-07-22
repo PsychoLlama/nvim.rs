@@ -4294,7 +4294,6 @@ unsafe extern "C" fn locstack_queue_delreq(mut qi: *mut qf_info_T) {
     (*q).next = qf_delq_head.get() as *mut qf_delq_S;
     qf_delq_head.set(q);
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_stack_get_bufnr() -> ::core::ffi::c_int {
     '_c2rust_label: {
         if !(*ql_info.ptr()).is_null() {
@@ -4502,7 +4501,6 @@ unsafe extern "C" fn qf_add_entry(
     }
     return QF_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
     '_c2rust_label: {
         if !(*ql_info.ptr()).is_null() {
@@ -4555,7 +4553,6 @@ unsafe extern "C" fn qf_resize_stack_base(mut qi: *mut qf_info_T, mut n: ::core:
     (*qi).qf_maxcount = n;
     qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_init_stack() {
     ql_info.set(qf_alloc_stack(
         QFLT_QUICKFIX,
@@ -5892,7 +5889,6 @@ unsafe extern "C" fn qf_list_entry(
     ga_append(gap, NUL as uint8_t);
     msg_prt_line((*gap).ga_data as *const ::core::ffi::c_char, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut all: ::core::ffi::c_int = (*eap).forceit;
@@ -6088,7 +6084,6 @@ unsafe extern "C" fn qf_msg(
         0 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -6133,7 +6128,6 @@ pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
     );
     qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_history(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = qf_cmd_get_stack(eap, false_0 != 0);
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
@@ -6328,7 +6322,6 @@ unsafe extern "C" fn qf_types(
     );
     return buf.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_view_result(mut split: bool) {
     let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
@@ -6380,7 +6373,6 @@ pub unsafe extern "C" fn qf_view_result(mut split: bool) {
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cwindow(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -6400,7 +6392,6 @@ pub unsafe extern "C" fn ex_cwindow(mut eap: *mut exarg_T) {
         ex_copen(eap);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cclose(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
@@ -6583,7 +6574,6 @@ unsafe extern "C" fn qf_set_title_var(mut qfl: *mut qf_list_T) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_copen(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -6642,7 +6632,6 @@ unsafe extern "C" fn qf_win_goto(mut win: *mut win_T, mut lnum: linenr_T) {
     curwin.set(old_curwin);
     curbuf.set((*curwin.get()).w_buffer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cbottom(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -6755,7 +6744,6 @@ unsafe extern "C" fn qf_find_buf(mut qi: *mut qf_info_T) -> *mut buf_T {
     }
     return ::core::ptr::null_mut::<buf_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_quickfixtextfunc(
     mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
@@ -7253,7 +7241,6 @@ unsafe extern "C" fn qf_jump_first(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn grep_internal(mut cmdidx: cmdidx_T) -> ::core::ffi::c_int {
     return ((cmdidx as ::core::ffi::c_int == CMD_grep as ::core::ffi::c_int
         || cmdidx as ::core::ffi::c_int == CMD_lgrep as ::core::ffi::c_int
@@ -7327,7 +7314,6 @@ unsafe extern "C" fn make_get_fullcmd(
     msg_outtrans(cmd, 0 as ::core::ffi::c_int, false_0 != 0);
     return cmd;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
     let mut save_qfid: ::core::ffi::c_uint = 0;
     let mut enc: *mut ::core::ffi::c_char =
@@ -7523,7 +7509,6 @@ unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
     }
     return name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_get_size(mut eap: *mut exarg_T) -> size_t {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
@@ -7532,7 +7517,6 @@ pub unsafe extern "C" fn qf_get_size(mut eap: *mut exarg_T) -> size_t {
     }
     return (*qf_get_curlist(qi)).qf_count as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_get_valid_size(mut eap: *mut exarg_T) -> size_t {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
@@ -7573,7 +7557,6 @@ pub unsafe extern "C" fn qf_get_valid_size(mut eap: *mut exarg_T) -> size_t {
     }
     return sz;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_get_cur_idx(mut eap: *mut exarg_T) -> size_t {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
@@ -7593,7 +7576,6 @@ pub unsafe extern "C" fn qf_get_cur_idx(mut eap: *mut exarg_T) -> size_t {
     };
     return (*qf_get_curlist(qi)).qf_index as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn qf_get_cur_valid_idx(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
@@ -7692,7 +7674,6 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
         1 as size_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -7758,7 +7739,6 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
     }
     qf_jump(qi, 0 as ::core::ffi::c_int, errornr, (*eap).forceit);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cnext(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
@@ -8024,7 +8004,6 @@ unsafe extern "C" fn qf_find_nth_adj_entry(
     }
     return errornr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int && (*eap).line2 <= 0 as linenr_T {
         emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
@@ -8118,7 +8097,6 @@ unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
         _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut qi: *mut qf_info_T = ql_info.get();
@@ -8725,7 +8703,6 @@ unsafe extern "C" fn vgr_process_files(
     xfree(dirname_start as *mut ::core::ffi::c_void);
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
     let mut redraw_for_dummy: bool = false;
     let mut first_match_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
@@ -10582,7 +10559,6 @@ unsafe extern "C" fn mark_quickfix_ctx(
     }
     return abort_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> bool {
     '_c2rust_label: {
         if !(*ql_info.ptr()).is_null() {
@@ -10705,7 +10681,6 @@ unsafe extern "C" fn cbuffer_process_args(
     *bufp = buf;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cbuffer(mut eap: *mut exarg_T) {
     let mut au_name: *mut ::core::ffi::c_char = cbuffer_get_auname((*eap).cmdidx);
     if !au_name.is_null()
@@ -10831,7 +10806,6 @@ unsafe extern "C" fn trigger_cexpr_autocmd(mut cmdidx: ::core::ffi::c_int) -> ::
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cexpr_core(
     mut eap: *const exarg_T,
     mut tv: *mut typval_T,
@@ -10893,7 +10867,6 @@ pub unsafe extern "C" fn cexpr_core(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_cexpr(mut eap: *mut exarg_T) {
     if trigger_cexpr_autocmd((*eap).cmdidx as ::core::ffi::c_int) == FAIL {
         return;
@@ -11055,7 +11028,6 @@ unsafe extern "C" fn hgr_search_in_rtp(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
@@ -11218,7 +11190,6 @@ unsafe extern "C" fn get_qf_loc_list(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getloclist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -11232,7 +11203,6 @@ pub unsafe extern "C" fn f_getloclist(
         rettv,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getqflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -11339,7 +11309,6 @@ unsafe extern "C" fn set_qf_ll_list(
     }
     (*recursive.ptr()) -= 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setloclist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -11352,7 +11321,6 @@ pub unsafe extern "C" fn f_setloclist(
         set_qf_ll_list(win, argvars.offset(1 as ::core::ffi::c_int as isize), rettv);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setqflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

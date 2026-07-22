@@ -244,7 +244,6 @@ unsafe extern "C" fn decor_provider_invoke(
     api_free_object(ret);
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_spell(
     mut wp: *mut win_T,
     mut start_row: ::core::ffi::c_int,
@@ -326,7 +325,6 @@ pub unsafe extern "C" fn decor_providers_invoke_spell(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
@@ -383,7 +381,6 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
     }
     return (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys > keys;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_start() {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
@@ -429,7 +426,6 @@ pub unsafe extern "C" fn decor_providers_start() {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
     '_c2rust_label: {
         if (*decor_state.ptr()).current_end == 0 as ::core::ffi::c_int
@@ -524,7 +520,6 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
@@ -585,7 +580,6 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
     }
     (*decor_state.ptr()).running_decor_provider = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_range(
     mut wp: *mut win_T,
     mut start_row: ::core::ffi::c_int,
@@ -705,7 +699,6 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
     }
     (*decor_state.ptr()).running_decor_provider = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
@@ -749,7 +742,6 @@ pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_providers_invoke_end() {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
@@ -786,7 +778,6 @@ pub unsafe extern "C" fn decor_providers_invoke_end() {
     }
     decor_check_to_be_deleted();
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_provider_invalidate_hl() {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {
@@ -798,7 +789,6 @@ pub unsafe extern "C" fn decor_provider_invalidate_hl() {
         hl_check_ns();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *mut DecorProvider {
     '_c2rust_label: {
         if ns_id > 0 as ::core::ffi::c_int {
@@ -871,7 +861,6 @@ pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *
     };
     return item;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_provider_clear(mut p: *mut DecorProvider) {
     if p.is_null() {
         return;
@@ -910,7 +899,6 @@ pub unsafe extern "C" fn decor_provider_clear(mut p: *mut DecorProvider) {
     }
     (*p).state = kDecorProviderDisabled;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_free_all_mem() {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_providers.ptr()).size {

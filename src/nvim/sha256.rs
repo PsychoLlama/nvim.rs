@@ -7,7 +7,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const SHA256_BUFFER_SIZE: ::core::ffi::c_int = 64 as ::core::ffi::c_int;
 pub const SHA256_SUM_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn sha256_start(mut ctx: *mut context_sha256_T) {
     (*ctx).total[0 as ::core::ffi::c_int as usize] = 0 as uint32_t;
     (*ctx).total[1 as ::core::ffi::c_int as usize] = 0 as uint32_t;
@@ -3017,7 +3016,6 @@ unsafe extern "C" fn sha256_process(mut ctx: *mut context_sha256_T, mut data: *c
     (*ctx).state[7 as ::core::ffi::c_int as usize] =
         (*ctx).state[7 as ::core::ffi::c_int as usize].wrapping_add(H);
 }
-#[no_mangle]
 pub unsafe extern "C" fn sha256_update(
     mut ctx: *mut context_sha256_T,
     mut input: *const uint8_t,
@@ -3133,7 +3131,6 @@ static sha256_padding: GlobalCell<[uint8_t; 64]> = GlobalCell::new([
     0 as uint8_t,
     0 as uint8_t,
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn sha256_finish(mut ctx: *mut context_sha256_T, mut digest: *mut uint8_t) {
     let mut high: uint32_t = (*ctx).total[0 as ::core::ffi::c_int as usize]
         >> 29 as ::core::ffi::c_int
@@ -3227,7 +3224,6 @@ pub unsafe extern "C" fn sha256_finish(mut ctx: *mut context_sha256_T, mut diges
         (*ctx).state[7 as ::core::ffi::c_int as usize] as uint8_t;
 }
 pub const SHA_STEP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn sha256_bytes(
     mut buf: *const uint8_t,
     mut buf_len: size_t,
@@ -3278,7 +3274,6 @@ static sha_self_test_vector: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalC
     b"cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0\0".as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn sha256_self_test() -> bool {
     let mut output: [::core::ffi::c_char; 65] = [0; 65];
     let mut ctx: context_sha256_T = context_sha256_T {

@@ -891,7 +891,6 @@ unsafe extern "C" fn get_buffcont(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_recorded() -> *mut ::core::ffi::c_char {
     let mut len: size_t = 0;
     let mut p: *mut ::core::ffi::c_char = get_buffcont(recordbuff.ptr(), true_0, &raw mut len);
@@ -911,7 +910,6 @@ pub unsafe extern "C" fn get_recorded() -> *mut ::core::ffi::c_char {
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_inserted() -> String_0 {
     let mut len: size_t = 0 as size_t;
     let mut str: *mut ::core::ffi::c_char = get_buffcont(redobuff.ptr(), false_0, &raw mut len);
@@ -1100,20 +1098,16 @@ unsafe extern "C" fn start_stuff() {
         (*readbuf2.ptr()).bh_create_newblock = true_0 != 0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuff_empty() -> bool {
     return (*readbuf1.ptr()).bh_first.b_next.is_null()
         && (*readbuf2.ptr()).bh_first.b_next.is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn readbuf1_empty() -> bool {
     return (*readbuf1.ptr()).bh_first.b_next.is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn typeahead_noflush(mut c: ::core::ffi::c_int) {
     typeahead_char.set(c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn flush_buffers(mut flush_typeahead: flush_buffers_T) {
     init_typebuf();
     start_stuff();
@@ -1155,14 +1149,12 @@ pub unsafe extern "C" fn flush_buffers(mut flush_typeahead: flush_buffers_T) {
         (*typebuf.ptr()).tb_change_cnt = 1 as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn beep_flush() {
     if emsg_silent.get() == 0 as ::core::ffi::c_int {
         flush_buffers(FLUSH_MINIMAL);
         vim_beep(kOptBoFlagError as ::core::ffi::c_int as ::core::ffi::c_uint);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ResetRedobuff() {
     if block_redo.get() {
         return;
@@ -1171,7 +1163,6 @@ pub unsafe extern "C" fn ResetRedobuff() {
     old_redobuff.set(redobuff.get());
     (*redobuff.ptr()).bh_first.b_next = ::core::ptr::null_mut::<buffblock>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn CancelRedo() {
     if block_redo.get() {
         return;
@@ -1182,7 +1173,6 @@ pub unsafe extern "C" fn CancelRedo() {
     start_stuff();
     while read_readbuffers(true_0 != 0) != NUL {}
 }
-#[no_mangle]
 pub unsafe extern "C" fn saveRedobuff(mut save_redo: *mut save_redo_T) {
     (*save_redo).sr_redobuff = redobuff.get();
     (*redobuff.ptr()).bh_first.b_next = ::core::ptr::null_mut::<buffblock>();
@@ -1197,20 +1187,17 @@ pub unsafe extern "C" fn saveRedobuff(mut save_redo: *mut save_redo_T) {
     add_buff(redobuff.ptr(), s, slen as ptrdiff_t);
     xfree(s as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn restoreRedobuff(mut save_redo: *mut save_redo_T) {
     free_buff(redobuff.ptr());
     redobuff.set((*save_redo).sr_redobuff);
     free_buff(old_redobuff.ptr());
     old_redobuff.set((*save_redo).sr_old_redobuff);
 }
-#[no_mangle]
 pub unsafe extern "C" fn AppendToRedobuff(mut s: *const ::core::ffi::c_char) {
     if !block_redo.get() {
         add_buff(redobuff.ptr(), s, -1 as ptrdiff_t);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn AppendToRedobuffLit(
     mut str: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -1267,7 +1254,6 @@ pub unsafe extern "C" fn AppendToRedobuffLit(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn AppendToRedobuffSpec(mut s: *const ::core::ffi::c_char) {
     if block_redo.get() {
         return;
@@ -1284,31 +1270,25 @@ pub unsafe extern "C" fn AppendToRedobuffSpec(mut s: *const ::core::ffi::c_char)
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn AppendCharToRedobuff(mut c: ::core::ffi::c_int) {
     if !block_redo.get() {
         add_char_buff(redobuff.ptr(), c);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn AppendNumberToRedobuff(mut n: ::core::ffi::c_int) {
     if !block_redo.get() {
         add_num_buff(redobuff.ptr(), n);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffReadbuff(mut s: *const ::core::ffi::c_char) {
     add_buff(readbuf1.ptr(), s, -1 as ptrdiff_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffRedoReadbuff(mut s: *const ::core::ffi::c_char) {
     add_buff(readbuf2.ptr(), s, -1 as ptrdiff_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffReadbuffLen(mut s: *const ::core::ffi::c_char, mut len: ptrdiff_t) {
     add_buff(readbuf1.ptr(), s, len);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffReadbuffSpec(mut s: *const ::core::ffi::c_char) {
     while *s as ::core::ffi::c_int != NUL {
         if *s as uint8_t as ::core::ffi::c_int == K_SPECIAL
@@ -1326,15 +1306,12 @@ pub unsafe extern "C" fn stuffReadbuffSpec(mut s: *const ::core::ffi::c_char) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffcharReadbuff(mut c: ::core::ffi::c_int) {
     add_char_buff(readbuf1.ptr(), c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffnumReadbuff(mut n: ::core::ffi::c_int) {
     add_num_buff(readbuf1.ptr(), n);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stuffescaped(mut arg: *const ::core::ffi::c_char, mut literally: bool) {
     while *arg as ::core::ffi::c_int != NUL {
         let start: *const ::core::ffi::c_char = arg;
@@ -1444,7 +1421,6 @@ unsafe extern "C" fn copy_redo(mut old_redo: bool) {
         add_char_buff(readbuf2.ptr(), c);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn start_redo(
     mut count: ::core::ffi::c_int,
     mut old_redo: bool,
@@ -1488,7 +1464,6 @@ pub unsafe extern "C" fn start_redo(
     copy_redo(old_redo);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn start_redo_ins() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = 0;
     if read_redo(true_0 != 0, false_0 != 0) == FAIL {
@@ -1512,7 +1487,6 @@ pub unsafe extern "C" fn start_redo_ins() -> ::core::ffi::c_int {
     block_redo.set(true_0 != 0);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stop_redo_ins() {
     block_redo.set(false_0 != 0);
 }
@@ -1528,12 +1502,10 @@ unsafe extern "C" fn init_typebuf() {
     (*typebuf.ptr()).tb_off = MAXMAPLEN as ::core::ffi::c_int + 4 as ::core::ffi::c_int;
     (*typebuf.ptr()).tb_change_cnt = 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn noremap_keys() -> bool {
     return KeyNoremap.get() & (RM_NONE as ::core::ffi::c_int | RM_SCRIPT as ::core::ffi::c_int)
         != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_typebuf(
     mut str: *mut ::core::ffi::c_char,
     mut noremap: ::core::ffi::c_int,
@@ -1695,7 +1667,6 @@ pub unsafe extern "C" fn ins_typebuf(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_char_typebuf(
     mut c: ::core::ffi::c_int,
     mut modifiers: ::core::ffi::c_int,
@@ -1732,21 +1703,17 @@ pub unsafe extern "C" fn ins_char_typebuf(
     }
     return len as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn typebuf_changed(mut tb_change_cnt: ::core::ffi::c_int) -> bool {
     return tb_change_cnt != 0 as ::core::ffi::c_int
         && ((*typebuf.ptr()).tb_change_cnt != tb_change_cnt
             || typebuf_was_filled.get() as ::core::ffi::c_int != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn typebuf_typed() -> ::core::ffi::c_int {
     return ((*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn typebuf_maplen() -> ::core::ffi::c_int {
     return (*typebuf.ptr()).tb_maplen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_typebuf(mut len: ::core::ffi::c_int, mut offset: ::core::ffi::c_int) {
     if len == 0 as ::core::ffi::c_int {
         return;
@@ -2063,7 +2030,6 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
     debug_did_msg.set(false_0 != 0);
     (*maptick.ptr()) += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn gotchars_ignore() {
     let mut nop_buf: [uint8_t; 3] = [
         K_SPECIAL as uint8_t,
@@ -2073,7 +2039,6 @@ pub unsafe extern "C" fn gotchars_ignore() {
     on_key_ignore_len.set((*on_key_ignore_len.ptr()).wrapping_add(3 as size_t));
     gotchars(&raw mut nop_buf as *mut uint8_t, 3 as size_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ungetchars(mut len: ::core::ffi::c_int) {
     if reg_recording.get() == 0 as ::core::ffi::c_int {
         return;
@@ -2081,7 +2046,6 @@ pub unsafe extern "C" fn ungetchars(mut len: ::core::ffi::c_int) {
     delete_buff_tail(recordbuff.ptr(), len);
     last_recorded_len.set((*last_recorded_len.ptr()).wrapping_sub(len as size_t));
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_sync_undo() {
     if (State.get() & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int) == 0
         || arrow_used.get() as ::core::ffi::c_int != 0)
@@ -2171,7 +2135,6 @@ unsafe extern "C" fn can_get_old_char() -> bool {
     return old_char.get() != -1 as ::core::ffi::c_int
         && (old_KeyStuffed.get() != 0 || stuff_empty() as ::core::ffi::c_int != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn save_typeahead(mut tp: *mut tasave_T) {
     (*tp).save_typebuf = typebuf.get();
     alloc_typebuf();
@@ -2184,7 +2147,6 @@ pub unsafe extern "C" fn save_typeahead(mut tp: *mut tasave_T) {
     (*tp).save_readbuf2 = readbuf2.get();
     (*readbuf2.ptr()).bh_first.b_next = ::core::ptr::null_mut::<buffblock>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_typeahead(mut tp: *mut tasave_T) {
     if (*tp).typebuf_valid {
         free_typebuf();
@@ -2197,7 +2159,6 @@ pub unsafe extern "C" fn restore_typeahead(mut tp: *mut tasave_T) {
     free_buff(readbuf2.ptr());
     readbuf2.set((*tp).save_readbuf2);
 }
-#[no_mangle]
 pub unsafe extern "C" fn openscript(mut name: *mut ::core::ffi::c_char, mut directly: bool) {
     if curscript.get() + 1 as ::core::ffi::c_int == NSCRIPT as ::core::ffi::c_int {
         emsg(gettext(&raw const e_nesting as *const ::core::ffi::c_char));
@@ -2304,7 +2265,6 @@ unsafe extern "C" fn closescript() {
     );
     (*curscript.ptr()) -= 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn open_scriptin(mut scriptin_name: *mut ::core::ffi::c_char) -> bool {
     '_c2rust_label: {
         if curscript.get() == -1 as ::core::ffi::c_int {
@@ -2346,11 +2306,9 @@ pub unsafe extern "C" fn open_scriptin(mut scriptin_name: *mut ::core::ffi::c_ch
     save_typebuf();
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn using_script() -> ::core::ffi::c_int {
     return (curscript.get() >= 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn before_blocking() {
     updatescript(0 as ::core::ffi::c_int);
     if may_garbage_collect.get() {
@@ -2377,7 +2335,6 @@ unsafe extern "C" fn updatescript(mut c: ::core::ffi::c_int) {
         count.set(0 as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn merge_modifiers(
     mut c_arg: ::core::ffi::c_int,
     mut modifiers: *mut ::core::ffi::c_int,
@@ -2457,7 +2414,6 @@ unsafe extern "C" fn add_byte_to_showcmd(mut byte: uint8_t) {
         add_to_showcmd(*c2rust_fresh8 as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = 0;
     let mut buf: [uint8_t; 22] = [0; 22];
@@ -2768,7 +2724,6 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn safe_vgetc() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = vgetc();
     if c == NUL {
@@ -2776,7 +2731,6 @@ pub unsafe extern "C" fn safe_vgetc() -> ::core::ffi::c_int {
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn plain_vgetc() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = 0;
     loop {
@@ -2794,14 +2748,12 @@ pub unsafe extern "C" fn plain_vgetc() -> ::core::ffi::c_int {
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vpeekc() -> ::core::ffi::c_int {
     if can_get_old_char() {
         return old_char.get();
     }
     return vgetorpeek(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vpeekc_any() -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = vpeekc();
     if c == NUL && (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
@@ -2809,7 +2761,6 @@ pub unsafe extern "C" fn vpeekc_any() -> ::core::ffi::c_int {
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn char_avail() -> bool {
     if test_disable_char_avail.get() {
         return false_0 != 0;
@@ -3054,7 +3005,6 @@ unsafe extern "C" fn getchar_common(
         (*rettv).vval.v_number = n;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3062,7 +3012,6 @@ pub unsafe extern "C" fn f_getchar(
 ) {
     getchar_common(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcharstr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3070,7 +3019,6 @@ pub unsafe extern "C" fn f_getcharstr(
 ) {
     getchar_common(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcharmod(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3661,7 +3609,6 @@ unsafe extern "C" fn handle_mapping(
     *keylenp = keylen;
     return map_result_nomatch as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vungetc(mut c: ::core::ffi::c_int) {
     old_char.set(c);
     old_mod_mask.set(mod_mask.get());
@@ -3670,7 +3617,6 @@ pub unsafe extern "C" fn vungetc(mut c: ::core::ffi::c_int) {
     old_mouse_col.set(mouse_col.get());
     old_KeyStuffed.set(KeyStuffed.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_end_reg_executing(mut advance: bool) {
     if reg_executing.get() != 0 as ::core::ffi::c_int
         && ((*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int
@@ -4249,7 +4195,6 @@ unsafe extern "C" fn inchar(
     }
     return fix_input_buffer(buf, len);
 }
-#[no_mangle]
 pub unsafe extern "C" fn fix_input_buffer(
     mut buf: *mut uint8_t,
     mut len: ::core::ffi::c_int,
@@ -4308,7 +4253,6 @@ pub unsafe extern "C" fn fix_input_buffer(
     *p = NUL as uint8_t;
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getcmdkeycmd(
     mut _promptc: ::core::ffi::c_int,
     mut _cookie: *mut ::core::ffi::c_void,
@@ -4422,7 +4366,6 @@ pub unsafe extern "C" fn getcmdkeycmd(
     }
     return line_ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_execute_lua(mut may_repeat: bool, mut discard: bool) -> bool {
     let mut line_ga: garray_T = garray_T {
         ga_len: 0,
@@ -4484,7 +4427,6 @@ pub unsafe extern "C" fn map_execute_lua(mut may_repeat: bool, mut discard: bool
     ga_clear(&raw mut line_ga);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn paste_store(
     channel_id: uint64_t,
     state: TriState,
@@ -4558,7 +4500,6 @@ pub unsafe extern "C" fn paste_store(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn paste_repeat(mut count: ::core::ffi::c_int) {
     let mut ga: garray_T = garray_T {
         ga_len: 0 as ::core::ffi::c_int,

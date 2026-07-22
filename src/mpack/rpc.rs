@@ -38,7 +38,6 @@ pub const MPACK_RPC_EARRAYL: C2Rust_Unnamed_3 = 8;
 pub const MPACK_RPC_EARRAY: C2Rust_Unnamed_3 = 7;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MPACK_RPC_MAX_REQUESTS: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_session_init(
     mut session: *mut mpack_rpc_session_t,
     mut capacity: mpack_uint32_t,
@@ -59,7 +58,6 @@ pub unsafe extern "C" fn mpack_rpc_session_init(
         ::core::mem::size_of::<mpack_rpc_slot_s>().wrapping_mul((*session).capacity as size_t),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_receive_tok(
     mut session: *mut mpack_rpc_session_t,
     mut tok: mpack_token_t,
@@ -140,7 +138,6 @@ pub unsafe extern "C" fn mpack_rpc_receive_tok(
     mpack_rpc_reset_hdr(&raw mut (*session).receive);
     return type_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_request_tok(
     mut session: *mut mpack_rpc_session_t,
     mut tok: *mut mpack_token_t,
@@ -204,7 +201,6 @@ pub unsafe extern "C" fn mpack_rpc_request_tok(
     mpack_rpc_reset_hdr(&raw mut (*session).send);
     return MPACK_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_reply_tok(
     mut session: *mut mpack_rpc_session_t,
     mut tok: *mut mpack_token_t,
@@ -246,7 +242,6 @@ pub unsafe extern "C" fn mpack_rpc_reply_tok(
     mpack_rpc_reset_hdr(&raw mut (*session).send);
     return MPACK_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_notify_tok(
     mut session: *mut mpack_rpc_session_t,
     mut tok: *mut mpack_token_t,
@@ -273,7 +268,6 @@ pub unsafe extern "C" fn mpack_rpc_notify_tok(
     mpack_rpc_reset_hdr(&raw mut (*session).send);
     return MPACK_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_receive(
     mut session: *mut mpack_rpc_session_t,
     mut buf: *mut *const ::core::ffi::c_char,
@@ -303,7 +297,6 @@ pub unsafe extern "C" fn mpack_rpc_receive(
     }
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_request(
     mut session: *mut mpack_rpc_session_t,
     mut buf: *mut *mut ::core::ffi::c_char,
@@ -335,7 +328,6 @@ pub unsafe extern "C" fn mpack_rpc_request(
     }
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_reply(
     mut session: *mut mpack_rpc_session_t,
     mut buf: *mut *mut ::core::ffi::c_char,
@@ -364,7 +356,6 @@ pub unsafe extern "C" fn mpack_rpc_reply(
     }
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_notify(
     mut session: *mut mpack_rpc_session_t,
     mut buf: *mut *mut ::core::ffi::c_char,
@@ -392,7 +383,6 @@ pub unsafe extern "C" fn mpack_rpc_notify(
     }
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_session_copy(
     mut dst: *mut mpack_rpc_session_t,
     mut src: *mut mpack_rpc_session_t,

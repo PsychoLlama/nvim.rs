@@ -1799,7 +1799,6 @@ static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_
     },
     values: ::core::ptr::null_mut::<String_0>(),
 });
-#[no_mangle]
 pub unsafe extern "C" fn autocmd_init() {
     deferred_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
@@ -2027,7 +2026,6 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
     let _ = *ptr__1;
     au_need_clean.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn aucmd_del_for_event_and_group(
     mut event: event_T,
     mut group: ::core::ffi::c_int,
@@ -2076,11 +2074,9 @@ unsafe extern "C" fn au_cleanup() {
     }
     au_need_clean.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn au_get_autocmds_for_event(mut event: event_T) -> *mut AutoCmdVec {
     return (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
     let mut apc: *mut AutoPatCmd = active_apc_list.get();
     while !apc.is_null() {
@@ -2116,7 +2112,6 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
     }
     au_cleanup();
 }
-#[no_mangle]
 pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     '_c2rust_label: {
         if strcasecmp(
@@ -2160,7 +2155,6 @@ pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::
     map_put_int_String(map_augroup_id_to_name.ptr(), next_id, name_val);
     return next_id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn augroup_del(
     mut name: *mut ::core::ffi::c_char,
     mut stupid_legacy_mode: bool,
@@ -2224,7 +2218,6 @@ pub unsafe extern "C" fn augroup_del(
     augroup_map_del(group, name);
     au_cleanup();
 }
-#[no_mangle]
 pub unsafe extern "C" fn augroup_find(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut existing_id: ::core::ffi::c_int =
         map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
@@ -2236,7 +2229,6 @@ pub unsafe extern "C" fn augroup_find(mut name: *const ::core::ffi::c_char) -> :
     }
     return AUGROUP_ERROR as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     '_c2rust_label: {
         if group != 0 as ::core::ffi::c_int {
@@ -2267,11 +2259,9 @@ pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::c
     }
     return get_deleted_augroup() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn augroup_exists(mut name: *const ::core::ffi::c_char) -> bool {
     return augroup_find(name) > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_group: bool) {
     if del_group {
         if *arg as ::core::ffi::c_int == NUL {
@@ -2329,7 +2319,6 @@ pub unsafe extern "C" fn is_aucmd_win(mut win: *mut win_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn event_name2nr(
     mut start: *const ::core::ffi::c_char,
     mut end: *mut *mut ::core::ffi::c_char,
@@ -2355,7 +2344,6 @@ pub unsafe extern "C" fn event_name2nr(
     return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
         as event_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
     let mut hash_idx: ::core::ffi::c_int = event_name2nr_hash(str.data, str.size);
     if hash_idx < 0 as ::core::ffi::c_int {
@@ -2364,7 +2352,6 @@ pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
     return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
         as event_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn event_nr2name(mut event: event_T) -> *const ::core::ffi::c_char {
     return if event as ::core::ffi::c_uint >= 0 as ::core::ffi::c_uint
         && (event as ::core::ffi::c_uint) < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2374,7 +2361,6 @@ pub unsafe extern "C" fn event_nr2name(mut event: event_T) -> *const ::core::ffi
         b"Unknown\0".as_ptr() as *const ::core::ffi::c_char
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn event_ignored(
     mut event: event_T,
     mut ei: *mut ::core::ffi::c_char,
@@ -2411,7 +2397,6 @@ pub unsafe extern "C" fn event_ignored(
     }
     return ignored;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut win: bool = ei != p_ei.get();
     while *ei != 0 {
@@ -2447,7 +2432,6 @@ pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::f
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn au_event_disable(
     mut what: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -2477,7 +2461,6 @@ pub unsafe extern "C" fn au_event_disable(
     xfree(new_ei as *mut ::core::ffi::c_void);
     return save_ei;
 }
-#[no_mangle]
 pub unsafe extern "C" fn au_event_restore(mut old_ei: *mut ::core::ffi::c_char) {
     if !old_ei.is_null() {
         set_option_direct(
@@ -2494,7 +2477,6 @@ pub unsafe extern "C" fn au_event_restore(mut old_ei: *mut ::core::ffi::c_char) 
         xfree(old_ei as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd(
     mut eap: *mut exarg_T,
     mut arg_in: *mut ::core::ffi::c_char,
@@ -2679,7 +2661,6 @@ pub unsafe extern "C" fn do_autocmd(
     }
     xfree(envpat as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_all_autocmd_events(
     mut pat: *const ::core::ffi::c_char,
     mut once: bool,
@@ -2696,7 +2677,6 @@ pub unsafe extern "C" fn do_all_autocmd_events(
         event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_event(
     mut event: event_T,
     mut pat: *const ::core::ffi::c_char,
@@ -2804,7 +2784,6 @@ pub unsafe extern "C" fn do_autocmd_event(
     au_cleanup();
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn autocmd_register(
     mut id: int64_t,
     mut event: event_T,
@@ -2995,7 +2974,6 @@ pub unsafe extern "C" fn autocmd_register(
     };
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aucmd_span_pattern(
     mut pat: *const ::core::ffi::c_char,
     mut start: *mut *const ::core::ffi::c_char,
@@ -3022,7 +3000,6 @@ pub unsafe extern "C" fn aucmd_span_pattern(
     *start = pat;
     return p.offset_from(pat) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_doautocmd(
     mut arg_start: *mut ::core::ffi::c_char,
     mut do_msg: bool,
@@ -3080,7 +3057,6 @@ pub unsafe extern "C" fn do_doautocmd(
         OK
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
     let mut retval: ::core::ffi::c_int = OK;
     let mut aco: aco_save_T = aco_save_T {
@@ -3135,7 +3111,6 @@ pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_nomodeline(mut argp: *mut *mut ::core::ffi::c_char) -> bool {
     if strncmp(
         *argp,
@@ -3377,7 +3352,6 @@ pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
         check_pos(curbuf.get(), VIsual.ptr());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn aucmd_defer(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -3531,7 +3505,6 @@ pub unsafe extern "C" fn apply_autocmds(
         ::core::ptr::null_mut::<Object>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn apply_autocmds_exarg(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -3551,7 +3524,6 @@ pub unsafe extern "C" fn apply_autocmds_exarg(
         ::core::ptr::null_mut::<Object>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn apply_autocmds_retval(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -3578,7 +3550,6 @@ pub unsafe extern "C" fn apply_autocmds_retval(
     }
     return did_cmd;
 }
-#[no_mangle]
 pub unsafe extern "C" fn has_event(mut event: event_T) -> bool {
     return (*autocmds.ptr())[event as ::core::ffi::c_int as usize].size != 0 as size_t;
 }
@@ -3591,7 +3562,6 @@ unsafe extern "C" fn has_cursorhold() -> bool {
         }) as event_T,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn trigger_cursorhold() -> bool {
     if !did_cursorhold.get()
         && has_cursorhold() as ::core::ffi::c_int != 0
@@ -4156,7 +4126,6 @@ pub unsafe extern "C" fn apply_autocmds_group(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
     let mut data: Dict = Dict {
         size: 0 as size_t,
@@ -4200,14 +4169,12 @@ pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
     );
     termresponse_changed.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn block_autocmds() {
     if !is_autocmd_blocked() {
         termresponse_changed.set(false_0 != 0);
     }
     (*autocmd_blocked.ptr()) += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn unblock_autocmds() {
     (*autocmd_blocked.ptr()) -= 1;
     if !is_autocmd_blocked()
@@ -4219,7 +4186,6 @@ pub unsafe extern "C" fn unblock_autocmds() {
         api_free_string(sequence);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_autocmd_blocked() -> bool {
     return autocmd_blocked.get() != 0 as ::core::ffi::c_int;
 }
@@ -4463,7 +4429,6 @@ unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPat
         return false_0 != 0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn getnextac(
     mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
@@ -4549,7 +4514,6 @@ pub unsafe extern "C" fn getnextac(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn has_autocmd(
     mut event: event_T,
     mut sfname: *mut ::core::ffi::c_char,
@@ -4589,14 +4553,12 @@ pub unsafe extern "C" fn has_autocmd(
     xfree(fname as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_get_augroup_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return augroup_name(idx + 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_autocmd(
     mut xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
@@ -4645,7 +4607,6 @@ pub unsafe extern "C" fn set_context_in_autocmd(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_get_event_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -4665,7 +4626,6 @@ pub unsafe extern "C" fn expand_get_event_name(
     }
     return (*event_names.ptr())[i as usize].name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_event_name_no_group(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -4689,13 +4649,11 @@ pub unsafe extern "C" fn get_event_name_no_group(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     return event_name2nr(event, &raw mut p) as ::core::ffi::c_uint
         != NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
-#[no_mangle]
 pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut event: event_T = EVENT_BUFADD;
@@ -4766,7 +4724,6 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     xfree(arg_save as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aupat_is_buflocal(
     mut pat: *const ::core::ffi::c_char,
     mut patlen: ::core::ffi::c_int,
@@ -4780,7 +4737,6 @@ pub unsafe extern "C" fn aupat_is_buflocal(
         && *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == '>' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aupat_get_buflocal_nr(
     mut pat: *const ::core::ffi::c_char,
     mut patlen: ::core::ffi::c_int,
@@ -4825,7 +4781,6 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
     mut dest: *mut ::core::ffi::c_char,
     mut pat: *const ::core::ffi::c_char,
@@ -4854,7 +4809,6 @@ pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
         buflocal_nr,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn autocmd_delete_event(
     mut group: ::core::ffi::c_int,
     mut event: event_T,
@@ -4870,7 +4824,6 @@ pub unsafe extern "C" fn autocmd_delete_event(
         group,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     '_c2rust_label: {
         if id > 0 as int64_t {
@@ -4901,7 +4854,6 @@ pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     }
     return success;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aucmd_handler_to_string(mut ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     if !(*ac).handler_cmd.is_null() {
         return xstrdup((*ac).handler_cmd);
@@ -5017,7 +4969,6 @@ unsafe extern "C" fn vimresume_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     );
     pending_vimresume.set(kFalse);
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
     if suspend as ::core::ffi::c_int != 0
         && pending_vimresume.get() as ::core::ffi::c_int == kFalse as ::core::ffi::c_int
@@ -5057,7 +5008,6 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: bool) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if starting.get() == NO_SCREEN {
@@ -5116,7 +5066,6 @@ pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: 
     restore_v_event(dict, &raw mut save_v_event);
     recursive.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
@@ -5143,7 +5092,6 @@ pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
     }
     recursive.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: bool) -> bool {
     static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if ft_recursive.get() > 0 as ::core::ffi::c_int && !force {

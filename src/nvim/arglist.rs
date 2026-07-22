@@ -807,7 +807,6 @@ unsafe extern "C" fn check_arglist_locked() -> ::core::ffi::c_int {
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_clear(mut al: *mut alist_T) {
     if check_arglist_locked() == FAIL {
         return;
@@ -823,7 +822,6 @@ pub unsafe extern "C" fn alist_clear(mut al: *mut alist_T) {
     }
     ga_clear(_gap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_init(mut al: *mut alist_T) {
     ga_init(
         &raw mut (*al).al_ga,
@@ -831,7 +829,6 @@ pub unsafe extern "C" fn alist_init(mut al: *mut alist_T) {
         5 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_unlink(mut al: *mut alist_T) {
     if al != global_alist.ptr() && {
         (*al).al_refcount -= 1;
@@ -841,7 +838,6 @@ pub unsafe extern "C" fn alist_unlink(mut al: *mut alist_T) {
         xfree(al as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_new() {
     (*curwin.get()).w_alist = xmalloc(::core::mem::size_of::<alist_T>()) as *mut alist_T;
     (*(*curwin.get()).w_alist).al_refcount = 1 as ::core::ffi::c_int;
@@ -849,7 +845,6 @@ pub unsafe extern "C" fn alist_new() {
     (*(*curwin.get()).w_alist).id = max_alist_id.get();
     alist_init((*curwin.get()).w_alist);
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_set(
     mut al: *mut alist_T,
     mut count: ::core::ffi::c_int,
@@ -896,7 +891,6 @@ pub unsafe extern "C" fn alist_set(
         arg_had_last.set(false_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_add(
     mut al: *mut alist_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -979,7 +973,6 @@ unsafe extern "C" fn get_arglist(
         str = do_one_arg(str);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_arglist_exp(
     mut str: *mut ::core::ffi::c_char,
     mut fcountp: *mut ::core::ffi::c_int,
@@ -1257,7 +1250,6 @@ unsafe extern "C" fn do_arglist(
     alist_check_arg_idx();
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_arglist(mut str: *mut ::core::ffi::c_char) {
     do_arglist(
         str,
@@ -1266,7 +1258,6 @@ pub unsafe extern "C" fn set_arglist(mut str: *mut ::core::ffi::c_char) {
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn editing_arg_idx(mut win: *mut win_T) -> bool {
     return !((*win).w_arg_idx >= (*(*win).w_alist).al_ga.ga_len
         || (*(*win).w_buffer).handle
@@ -1286,7 +1277,6 @@ pub unsafe extern "C" fn editing_arg_idx(mut win: *mut win_T) -> bool {
                     & kEqualFiles as ::core::ffi::c_int as ::core::ffi::c_uint
                     == 0));
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_arg_idx(mut win: *mut win_T) {
     if (*(*win).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int && !editing_arg_idx(win) {
         (*win).w_arg_idx_invalid = true_0;
@@ -1326,7 +1316,6 @@ pub unsafe extern "C" fn check_arg_idx(mut win: *mut win_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_args as ::core::ffi::c_int {
         if check_arglist_locked() == FAIL {
@@ -1396,7 +1385,6 @@ pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_previous(mut eap: *mut exarg_T) {
     if (*curwin.get()).w_arg_idx - (*eap).line2 as ::core::ffi::c_int
         >= (*(*curwin.get()).w_alist).al_ga.ga_len
@@ -1412,18 +1400,15 @@ pub unsafe extern "C" fn ex_previous(mut eap: *mut exarg_T) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_rewind(mut eap: *mut exarg_T) {
     do_argfile(eap, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_last(mut eap: *mut exarg_T) {
     do_argfile(
         eap,
         (*(*curwin.get()).w_alist).al_ga.ga_len - 1 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_argument(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0;
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
@@ -1433,7 +1418,6 @@ pub unsafe extern "C" fn ex_argument(mut eap: *mut exarg_T) {
     }
     do_argfile(eap, i);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi::c_int) {
     let mut is_split_cmd: bool = *(*eap).cmd as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
     let mut old_arg_idx: ::core::ffi::c_int = (*curwin.get()).w_arg_idx;
@@ -1532,7 +1516,6 @@ pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: ::core::ffi
         setmark('\'' as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
     if buf_hide(curbuf.get()) as ::core::ffi::c_int != 0
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_snext as ::core::ffi::c_int
@@ -1565,7 +1548,6 @@ pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*(*curwin.get()).w_alist).al_ga.ga_len {
@@ -1615,7 +1597,6 @@ pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_argedit(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = if (*eap).addr_count != 0 {
         (*eap).line2 as ::core::ffi::c_int
@@ -1637,7 +1618,6 @@ pub unsafe extern "C" fn ex_argedit(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_argadd(mut eap: *mut exarg_T) {
     do_arglist(
         (*eap).arg,
@@ -1651,7 +1631,6 @@ pub unsafe extern "C" fn ex_argadd(mut eap: *mut exarg_T) {
     );
     maketitle();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
     if check_arglist_locked() == FAIL {
         return;
@@ -1719,7 +1698,6 @@ pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
     }
     maketitle();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_arglist_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1731,7 +1709,6 @@ pub unsafe extern "C" fn get_arglist_name(
         ((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T).offset(idx as isize),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn alist_name(mut aep: *mut aentry_T) -> *mut ::core::ffi::c_char {
     let mut bp: *mut buf_T = buflist_findnr((*aep).ae_fnum);
     if bp.is_null() || (*bp).b_fname.is_null() {
@@ -2086,7 +2063,6 @@ unsafe extern "C" fn do_arg_all(
     (*autocmd_no_leave.ptr()) -= 1;
     xfree(aall.opened as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_all(mut eap: *mut exarg_T) {
     if (*eap).addr_count == 0 as ::core::ffi::c_int {
         (*eap).line2 = 9999 as ::core::ffi::c_int as linenr_T;
@@ -2098,7 +2074,6 @@ pub unsafe extern "C" fn ex_all(mut eap: *mut exarg_T) {
             as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn arg_all() -> *mut ::core::ffi::c_char {
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     loop {
@@ -2143,7 +2118,6 @@ pub unsafe extern "C" fn arg_all() -> *mut ::core::ffi::c_char {
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_argc(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2168,7 +2142,6 @@ pub unsafe extern "C" fn f_argc(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_argidx(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2176,7 +2149,6 @@ pub unsafe extern "C" fn f_argidx(
 ) {
     (*rettv).vval.v_number = (*curwin.get()).w_arg_idx as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_arglistid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2209,7 +2181,6 @@ unsafe extern "C" fn get_arglist_as_rettv(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_argv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

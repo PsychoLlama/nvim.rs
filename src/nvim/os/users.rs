@@ -156,7 +156,6 @@ unsafe extern "C" fn init_users() {
     lazy_init_done.set(true_0 != 0);
     os_get_usernames(ga_users.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_users(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -167,7 +166,6 @@ pub unsafe extern "C" fn get_users(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_user(mut name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_int = strlen(name) as ::core::ffi::c_int;
     let mut result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

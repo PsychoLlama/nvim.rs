@@ -7722,7 +7722,6 @@ pub const DG_START_HIRAGANA: ::core::ffi::c_int = 0x3041 as ::core::ffi::c_int;
 pub const DG_START_KATAKANA: ::core::ffi::c_int = 0x30a1 as ::core::ffi::c_int;
 pub const DG_START_BOPOMOFO: ::core::ffi::c_int = 0x3105 as ::core::ffi::c_int;
 pub const DG_START_OTHER3: ::core::ffi::c_int = 0x3220 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn do_digraph(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     static backspaced: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static lastchar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -7740,7 +7739,6 @@ pub unsafe extern "C" fn do_digraph(mut c: ::core::ffi::c_int) -> ::core::ffi::c
     lastchar.set(c);
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_digraph_for_char(
     mut val_arg: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -7774,7 +7772,6 @@ pub unsafe extern "C" fn get_digraph_for_char(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_digraph(mut cmdline: bool) -> ::core::ffi::c_int {
     (*no_mapping.ptr()) += 1;
     (*allow_keys.ptr()) += 1;
@@ -7849,7 +7846,6 @@ unsafe extern "C" fn getexactdigraph(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn digraph_get(
     mut char1: ::core::ffi::c_int,
     mut char2: ::core::ffi::c_int,
@@ -7886,7 +7882,6 @@ unsafe extern "C" fn registerdigraph(
     (*dp).char2 = char2 as uint8_t;
     (*dp).result = n as result_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_digraph_chars_valid(
     mut char1: ::core::ffi::c_int,
     mut char2: ::core::ffi::c_int,
@@ -7912,7 +7907,6 @@ pub unsafe extern "C" fn check_digraph_chars_valid(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn putdigraph(mut str: *mut ::core::ffi::c_char) {
     while *str as ::core::ffi::c_int != NUL {
         str = skipwhite(str);
@@ -7947,7 +7941,6 @@ unsafe extern "C" fn digraph_header(mut msg: *const ::core::ffi::c_char) {
     msg_outtrans(msg, HLF_CM as ::core::ffi::c_int, false_0 != 0);
     msg_putchar('\n' as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
     let mut previous: result_T = 0 as result_T;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
@@ -8005,7 +7998,6 @@ unsafe extern "C" fn digraph_getlist_appendpair(mut dp: *const digr_T, mut l: *m
     *p = NUL as ::core::ffi::c_char;
     tv_list_append_string(l2, &raw mut buf as *mut ::core::ffi::c_char, -1 as ssize_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *mut typval_T) {
     tv_list_alloc_ret(
         rettv,
@@ -8305,7 +8297,6 @@ unsafe extern "C" fn digraph_set_common(
     registerdigraph(char1, char2, n);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_digraph_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8338,7 +8329,6 @@ pub unsafe extern "C" fn f_digraph_get(
         NUL as ::core::ffi::c_char;
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_digraph_getlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8358,7 +8348,6 @@ pub unsafe extern "C" fn f_digraph_getlist(
     }
     digraph_getlist_common(flag_list_all, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_digraph_set(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8374,7 +8363,6 @@ pub unsafe extern "C" fn f_digraph_set(
     }
     (*rettv).vval.v_bool = kBoolVarTrue;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_digraph_setlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8439,7 +8427,6 @@ pub unsafe extern "C" fn f_digraph_setlist(
     }
     (*rettv).vval.v_bool = kBoolVarTrue;
 }
-#[no_mangle]
 pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
     (*curbuf.get()).b_kmap_state =
         ((*curbuf.get()).b_kmap_state as ::core::ffi::c_int & !KEYMAP_INIT) as int16_t;
@@ -8475,7 +8462,6 @@ pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
     let mut buf: [::core::ffi::c_char; 211] = [0; 211];
     let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
@@ -8570,7 +8556,6 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
     status_redraw_curbuf();
 }
 pub const KMAP_LLEN: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn keymap_ga_clear(mut kmap_ga: *mut garray_T) {
     let mut kp: *mut kmap_T = (*kmap_ga).ga_data as *mut kmap_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -8611,7 +8596,6 @@ unsafe extern "C" fn keymap_unload() {
         ((*curbuf.get()).b_kmap_state as ::core::ffi::c_int & !KEYMAP_LOADED) as int16_t;
     status_redraw_curbuf();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_keymap_str(
     mut wp: *mut win_T,
     mut fmt: *mut ::core::ffi::c_char,

@@ -512,7 +512,6 @@ pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
 pub unsafe extern "C" fn unpacker_teardown(mut p: *mut Unpacker) {
     arena_mem_free(arena_finish(&raw mut (*p).arena));
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
     let mut array_length: size_t = 0;
     let mut type_0: uint32_t = 0;
@@ -810,7 +809,6 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
     let mut tok: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
@@ -1166,7 +1164,6 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
     (*p).read_size = size;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_string(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -1199,7 +1196,6 @@ pub unsafe extern "C" fn unpack_string(
         size: tok.length as size_t,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_array(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -1220,7 +1216,6 @@ pub unsafe extern "C" fn unpack_array(
     }
     return tok.length as ssize_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_integer(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -1239,7 +1234,6 @@ pub unsafe extern "C" fn unpack_integer(
     }
     return unpack_uint_or_sint(tok, res);
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_uint_or_sint(
     mut tok: mpack_token_t,
     mut res: *mut Integer,
@@ -1258,7 +1252,6 @@ pub unsafe extern "C" fn unpack_uint_or_sint(
     return false_0 != 0;
 }
 unsafe extern "C" fn parse_nop(mut _parser: *mut mpack_parser_t, mut _node: *mut mpack_node_t) {}
-#[no_mangle]
 pub unsafe extern "C" fn unpack_skip(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -1308,7 +1301,6 @@ pub unsafe extern "C" fn unpack_skip(
         Some(parse_nop as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn push_additional_data(
     mut ad: *mut AdditionalDataBuilder,
     mut data: *const ::core::ffi::c_char,
@@ -1405,7 +1397,6 @@ pub unsafe extern "C" fn push_additional_data(
         (*ad).size = (*ad).size.wrapping_add(size);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn unpack_keydict(
     mut retval: *mut ::core::ffi::c_void,
     mut hashy: FieldHashfn,

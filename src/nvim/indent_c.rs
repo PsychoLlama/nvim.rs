@@ -179,7 +179,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
 unsafe extern "C" fn ind_find_start_comment() -> *mut pos_T {
     return find_start_comment((*curbuf.get()).b_ind_maxcomment);
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_start_comment(mut ind_maxcomment: ::core::ffi::c_int) -> *mut pos_T {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut cur_maxcomment: int64_t = ind_maxcomment as int64_t;
@@ -348,7 +347,6 @@ unsafe extern "C" fn skip_string(mut p: *const ::core::ffi::c_char) -> *const ::
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_pos_in_string(
     mut line: *const ::core::ffi::c_char,
     mut col: colnr_T,
@@ -361,7 +359,6 @@ pub unsafe extern "C" fn is_pos_in_string(
     }
     return !(p.offset_from(line) as colnr_T <= col) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) -> bool {
     let mut retval: bool = false_0 != 0;
     let mut cinw_len: size_t = strlen((*curbuf.get()).b_p_cinw).wrapping_add(1 as size_t);
@@ -390,7 +387,6 @@ pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) ->
     xfree(cinw_buf as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cindent_on() -> bool {
     return p_paste.get() == 0
         && ((*curbuf.get()).b_p_cin != 0
@@ -1954,7 +1950,6 @@ unsafe extern "C" fn find_last_paren(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut l: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2160,7 +2155,6 @@ pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
     let mut cur_curpos: pos_T = pos_T {
         lnum: 0,
@@ -4109,7 +4103,6 @@ unsafe extern "C" fn find_match(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn in_cinkeys(
     mut keytyped: ::core::ffi::c_int,
     mut when: ::core::ffi::c_int,
@@ -4408,7 +4401,6 @@ pub unsafe extern "C" fn in_cinkeys(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_c_expr_indent() {
     if *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL {
         fixthisline(Some(
@@ -4420,7 +4412,6 @@ pub unsafe extern "C" fn do_c_expr_indent() {
         ));
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_cindent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

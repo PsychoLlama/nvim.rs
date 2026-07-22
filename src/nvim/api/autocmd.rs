@@ -883,7 +883,6 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static next_autocmd_id: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_autocmds(
     mut opts: *mut KeyDict_get_autocmds,
     mut arena: *mut Arena,
@@ -1817,7 +1816,6 @@ pub unsafe extern "C" fn nvim_get_autocmds(
     }
     return arena_take_arraybuilder(arena, &raw mut autocmd_list);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_create_autocmd(
     mut channel_id: uint64_t,
     mut event: Object,
@@ -2066,7 +2064,6 @@ pub unsafe extern "C" fn nvim_create_autocmd(
     }
     return autocmd_id as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) {
     if !(id > 0 as Integer) {
         api_err_invalid(
@@ -2086,7 +2083,6 @@ pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) 
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_clear_autocmds(
     mut opts: *mut KeyDict_clear_autocmds,
     mut arena: *mut Arena,
@@ -2201,7 +2197,6 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_create_augroup(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -2238,7 +2233,6 @@ pub unsafe extern "C" fn nvim_create_augroup(
     current_sctx.set(save_current_sctx);
     return augroup as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_del_augroup_by_id(mut id: Integer, mut err: *mut Error) {
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -2258,7 +2252,6 @@ pub unsafe extern "C" fn nvim_del_augroup_by_id(mut id: Integer, mut err: *mut E
     augroup_del(name, false);
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *mut Error) {
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -2273,7 +2266,6 @@ pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *
     augroup_del(name.data, false);
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_exec_autocmds(
     mut event: Object,
     mut opts: *mut KeyDict_exec_autocmds,

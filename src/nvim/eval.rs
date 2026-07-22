@@ -2128,13 +2128,11 @@ static e_cannot_use_partial_here: GlobalCell<[::core::ffi::c_char; 33]> = Global
 static namespace_char: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"abglstvw\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
-#[no_mangle]
 pub static eval_lavars_used: GlobalCell<*mut bool> =
     GlobalCell::new(::core::ptr::null_mut::<bool>());
 static echo_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 static timers: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(MAP_INIT);
-#[no_mangle]
 pub unsafe extern "C" fn get_v_event(mut sve: *mut save_v_event_T) -> *mut dict_T {
     let mut v_event: *mut dict_T = get_vim_var_dict(VV_EVENT);
     if (*v_event).dv_hashtab.ht_used > 0 as size_t {
@@ -2146,7 +2144,6 @@ pub unsafe extern "C" fn get_v_event(mut sve: *mut save_v_event_T) -> *mut dict_
     }
     return v_event;
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_v_event(mut v_event: *mut dict_T, mut sve: *mut save_v_event_T) {
     tv_dict_free_contents(v_event);
     if (*sve).sve_did_save {
@@ -2155,7 +2152,6 @@ pub unsafe extern "C" fn restore_v_event(mut v_event: *mut dict_T, mut sve: *mut
         hash_init(&raw mut (*v_event).dv_hashtab);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn num_divide(mut n1: varnumber_T, mut n2: varnumber_T) -> varnumber_T {
     let mut result: varnumber_T = 0;
     if n2 == 0 as varnumber_T {
@@ -2173,7 +2169,6 @@ pub unsafe extern "C" fn num_divide(mut n1: varnumber_T, mut n2: varnumber_T) ->
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn num_modulus(mut n1: varnumber_T, mut n2: varnumber_T) -> varnumber_T {
     return if n2 == 0 as varnumber_T {
         0 as varnumber_T
@@ -2181,12 +2176,10 @@ pub unsafe extern "C" fn num_modulus(mut n1: varnumber_T, mut n2: varnumber_T) -
         n1 % n2
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_init() {
     evalvars_init();
     func_init();
 }
-#[no_mangle]
 pub unsafe extern "C" fn fill_evalarg_from_eap(
     mut evalarg: *mut evalarg_T,
     mut eap: *mut exarg_T,
@@ -2210,7 +2203,6 @@ pub unsafe extern "C" fn fill_evalarg_from_eap(
         (*evalarg).eval_cookie = (*eap).cookie;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_bool(
     mut arg: *mut ::core::ffi::c_char,
     mut error: *mut bool,
@@ -2284,7 +2276,6 @@ unsafe extern "C" fn eval1_emsg(
     clear_evalarg(&raw mut evalarg, eap);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_expr_valid_arg(tv: *const typval_T) -> bool {
     return (*tv).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2380,7 +2371,6 @@ unsafe extern "C" fn eval_expr_string(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_expr_typval(
     mut expr: *const typval_T,
     mut want_func: bool,
@@ -2401,7 +2391,6 @@ pub unsafe extern "C" fn eval_expr_typval(
     }
     return eval_expr_string(expr, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_expr_to_bool(
     mut expr: *const typval_T,
     mut error: *mut bool,
@@ -2431,7 +2420,6 @@ pub unsafe extern "C" fn eval_expr_to_bool(
     tv_clear(&raw mut rettv);
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_string_skip(
     mut arg: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
@@ -2465,7 +2453,6 @@ pub unsafe extern "C" fn eval_to_string_skip(
     clear_evalarg(&raw mut evalarg, eap);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_expr(
     mut pp: *mut *mut ::core::ffi::c_char,
     evalarg: *mut evalarg_T,
@@ -2532,7 +2519,6 @@ unsafe extern "C" fn typval2string(
     }
     return xstrdup(tv_get_string(tv));
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_string_eap(
     mut arg: *mut ::core::ffi::c_char,
     join_list: bool,
@@ -2576,7 +2562,6 @@ pub unsafe extern "C" fn eval_to_string_eap(
     clear_evalarg(&raw mut evalarg, ::core::ptr::null_mut::<exarg_T>());
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_string(
     mut arg: *mut ::core::ffi::c_char,
     join_list: bool,
@@ -2589,7 +2574,6 @@ pub unsafe extern "C" fn eval_to_string(
         use_simple_function,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_string_safe(
     mut arg: *mut ::core::ffi::c_char,
     use_sandbox: bool,
@@ -2613,7 +2597,6 @@ pub unsafe extern "C" fn eval_to_string_safe(
     restore_funccal();
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_to_number(
     mut expr: *mut ::core::ffi::c_char,
     use_simple_function: bool,
@@ -2642,14 +2625,12 @@ pub unsafe extern "C" fn eval_to_number(
     (*emsg_off.ptr()) -= 1;
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_expr(
     mut arg: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
 ) -> *mut typval_T {
     return eval_expr_ext(arg, eap, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_expr_ext(
     mut arg: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
@@ -2679,7 +2660,6 @@ pub unsafe extern "C" fn eval_expr_ext(
     clear_evalarg(&raw mut evalarg, eap);
     return tv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_vim_function(
     mut func: *const ::core::ffi::c_char,
     mut argc: ::core::ffi::c_int,
@@ -2730,7 +2710,6 @@ pub unsafe extern "C" fn call_vim_function(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_func_retstr(
     func: *const ::core::ffi::c_char,
     mut argc: ::core::ffi::c_int,
@@ -2748,7 +2727,6 @@ pub unsafe extern "C" fn call_func_retstr(
     tv_clear(&raw mut rettv);
     return retval as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_func_retlist(
     mut func: *const ::core::ffi::c_char,
     mut argc: ::core::ffi::c_int,
@@ -2769,7 +2747,6 @@ pub unsafe extern "C" fn call_func_retlist(
     }
     return rettv.vval.v_list as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_foldexpr(
     mut wp: *mut win_T,
     mut cp: *mut ::core::ffi::c_int,
@@ -2833,7 +2810,6 @@ pub unsafe extern "C" fn eval_foldexpr(
     current_sctx.set(saved_sctx);
     return retval as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_foldtext(mut wp: *mut win_T) -> Object {
     let use_sandbox: bool =
         was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL as ::core::ffi::c_int) != 0;
@@ -3329,7 +3305,6 @@ unsafe extern "C" fn get_lval_subscript(
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_lval(
     name: *mut ::core::ffi::c_char,
     rettv: *mut typval_T,
@@ -3432,12 +3407,10 @@ pub unsafe extern "C" fn get_lval(
     (*lp).ll_name_len = p.offset_from((*lp).ll_name) as size_t;
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_lval(mut lp: *mut lval_T) {
     xfree((*lp).ll_exp_name as *mut ::core::ffi::c_void);
     xfree((*lp).ll_newkey as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_var_lval(
     mut lp: *mut lval_T,
     mut endp: *mut ::core::ffi::c_char,
@@ -3672,7 +3645,6 @@ pub unsafe extern "C" fn set_var_lval(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_for_line(
     mut arg: *const ::core::ffi::c_char,
     mut errp: *mut bool,
@@ -3768,7 +3740,6 @@ pub unsafe extern "C" fn eval_for_line(
     }
     return fi as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn next_for_item(
     mut fi_void: *mut ::core::ffi::c_void,
     mut arg: *mut ::core::ffi::c_char,
@@ -3842,7 +3813,6 @@ pub unsafe extern "C" fn next_for_item(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     ) == OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_for_info(mut fi_void: *mut ::core::ffi::c_void) {
     let mut fi: *mut forinfo_T = fi_void as *mut forinfo_T;
     if fi.is_null() {
@@ -3858,7 +3828,6 @@ pub unsafe extern "C" fn free_for_info(mut fi_void: *mut ::core::ffi::c_void) {
     }
     xfree(fi as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_for_expression(
     mut xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
@@ -4017,7 +3986,6 @@ pub unsafe extern "C" fn set_context_for_expression(
     }
     (*xp).xp_pattern = arg;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pattern_match(
     mut pat: *const ::core::ffi::c_char,
     mut text: *const ::core::ffi::c_char,
@@ -4092,7 +4060,6 @@ unsafe extern "C" fn eval_func(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_evalarg(mut evalarg: *mut evalarg_T, mut eap: *mut exarg_T) {
     if evalarg.is_null() {
         return;
@@ -4156,7 +4123,6 @@ pub unsafe extern "C" fn eval0(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_call_simple_func(
     mut arg: *const ::core::ffi::c_char,
     mut rettv: *mut typval_T,
@@ -4207,7 +4173,6 @@ unsafe extern "C" fn eval0_simple_funccal(
     }
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval1(
     mut arg: *mut *mut ::core::ffi::c_char,
     mut rettv: *mut typval_T,
@@ -4653,7 +4618,6 @@ unsafe extern "C" fn eval_addlist(
     *tv1 = var3;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn grow_string_tv(
     mut tv1: *mut typval_T,
     mut s2: *const ::core::ffi::c_char,
@@ -5666,7 +5630,6 @@ unsafe extern "C" fn check_can_index(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_slice(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5839,7 +5802,6 @@ unsafe extern "C" fn eval_index_inner(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_option(
     arg: *mut *const ::core::ffi::c_char,
     rettv: *mut typval_T,
@@ -6386,7 +6348,6 @@ unsafe extern "C" fn eval_lit_string(
     *arg = p.offset(off as isize);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_interp_string(
     mut arg: *mut *mut ::core::ffi::c_char,
     mut rettv: *mut typval_T,
@@ -6446,7 +6407,6 @@ pub unsafe extern "C" fn eval_interp_string(
     (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn partial_name(mut pt: *mut partial_T) -> *mut ::core::ffi::c_char {
     if !pt.is_null() {
         if !(*pt).pt_name.is_null() {
@@ -6474,7 +6434,6 @@ unsafe extern "C" fn partial_free(mut pt: *mut partial_T) {
     }
     xfree(pt as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn partial_unref(mut pt: *mut partial_T) {
     if pt.is_null() {
         return;
@@ -6546,7 +6505,6 @@ unsafe extern "C" fn eval_list(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn func_equal(
     mut tv1: *mut typval_T,
     mut tv2: *mut typval_T,
@@ -6630,14 +6588,12 @@ pub unsafe extern "C" fn func_equal(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_copyID() -> ::core::ffi::c_int {
     static current_copyID: GlobalCell<::core::ffi::c_int> =
         GlobalCell::new(0 as ::core::ffi::c_int);
     (*current_copyID.ptr()) += COPYID_INC;
     return current_copyID.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn garbage_collect(mut testing: bool) -> bool {
     let mut abort_0: bool = false_0 != 0;
     if !testing {
@@ -6942,7 +6898,6 @@ unsafe extern "C" fn free_unref_items(mut copyID: ::core::ffi::c_int) -> ::core:
     tv_in_free_unref_items.set(false_0 != 0);
     return did_free as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_ht(
     mut ht: *mut hashtab_T,
     mut copyID: ::core::ffi::c_int,
@@ -6985,7 +6940,6 @@ pub unsafe extern "C" fn set_ref_in_ht(
     }
     return abort_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_list_items(
     mut l: *mut list_T,
     mut copyID: ::core::ffi::c_int,
@@ -7102,7 +7056,6 @@ unsafe extern "C" fn set_ref_in_item_partial(
     }
     return abort_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_item(
     mut tv: *mut typval_T,
     mut copyID: ::core::ffi::c_int,
@@ -7316,7 +7269,6 @@ unsafe extern "C" fn eval_lit_dict(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn string2float(
     text: *const ::core::ffi::c_char,
     ret_value: *mut float_T,
@@ -7385,7 +7337,6 @@ unsafe extern "C" fn eval_env_var(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tv_to_argv(
     mut cmd_tv: *mut typval_T,
     mut cmd: *mut *const ::core::ffi::c_char,
@@ -7588,7 +7539,6 @@ unsafe extern "C" fn get_system_output_as_rettv(
         (*rettv).vval.v_string = res;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_system(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7596,7 +7546,6 @@ pub unsafe extern "C" fn f_system(
 ) {
     get_system_output_as_rettv(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_systemlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -7604,7 +7553,6 @@ pub unsafe extern "C" fn f_systemlist(
 ) {
     get_system_output_as_rettv(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_from_typval(
     callback: *mut Callback,
     arg: *const typval_T,
@@ -7675,11 +7623,9 @@ pub unsafe extern "C" fn callback_from_typval(
     return true_0 != 0;
 }
 static callback_depth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn get_callback_depth() -> ::core::ffi::c_int {
     return callback_depth.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn callback_call(
     callback: *mut Callback,
     argcount_in: ::core::ffi::c_int,
@@ -7759,7 +7705,6 @@ pub unsafe extern "C" fn callback_call(
     (*callback_depth.ptr()) -= 1;
     return ret != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_callback(
     mut callback: *mut Callback,
     mut copyID: ::core::ffi::c_int,
@@ -7805,11 +7750,9 @@ unsafe extern "C" fn set_ref_in_callback_reader(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_timer_by_nr(mut xx: varnumber_T) -> *mut timer_T {
     return map_get_uint64_t_ptr_t(timers.ptr(), xx as uint64_t) as *mut timer_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_timer_info(mut rettv: *mut typval_T, mut timer: *mut timer_T) {
     let mut list: *mut list_T = (*rettv).vval.v_list;
     let mut dict: *mut dict_T = tv_dict_alloc();
@@ -7850,7 +7793,6 @@ pub unsafe extern "C" fn add_timer_info(mut rettv: *mut typval_T, mut timer: *mu
     }
     callback_put(&raw mut (*timer).callback, &raw mut (*di).di_tv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_timer_info_all(mut rettv: *mut typval_T) {
     tv_list_alloc_ret(rettv, (*timers.ptr()).set.h.size as ptrdiff_t);
     let mut timer: *mut timer_T = ::core::ptr::null_mut::<timer_T>();
@@ -7864,7 +7806,6 @@ pub unsafe extern "C" fn add_timer_info_all(mut rettv: *mut typval_T) {
         __i = __i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn timer_due_cb(
     mut _tw: *mut TimeWatcher,
     mut data: *mut ::core::ffi::c_void,
@@ -7933,7 +7874,6 @@ pub unsafe extern "C" fn timer_due_cb(
     }
     timer_decref(timer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn timer_start(
     timeout: int64_t,
     repeat_count: ::core::ffi::c_int,
@@ -7968,7 +7908,6 @@ pub unsafe extern "C" fn timer_start(
     map_put_uint64_t_ptr_t(timers.ptr(), (*timer).timer_id as uint64_t, timer as ptr_t);
     return (*timer).timer_id as uint64_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn timer_stop(mut timer: *mut timer_T) {
     if (*timer).stopped {
         return;
@@ -8000,7 +7939,6 @@ unsafe extern "C" fn timer_decref(mut timer: *mut timer_T) {
         xfree(timer as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn timer_stop_all() {
     let mut timer: *mut timer_T = ::core::ptr::null_mut::<timer_T>();
     let mut __i: uint32_t = 0;
@@ -8011,11 +7949,9 @@ pub unsafe extern "C" fn timer_stop_all() {
         __i = __i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn timer_teardown() {
     timer_stop_all();
 }
-#[no_mangle]
 pub unsafe extern "C" fn save_tv_as_string(
     mut tv: *mut typval_T,
     len: *mut ptrdiff_t,
@@ -8168,7 +8104,6 @@ pub unsafe extern "C" fn save_tv_as_string(
     *len = end_0.offset_from(ret_1) as ptrdiff_t;
     return ret_1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_byteidx_to_charidx(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
@@ -8199,7 +8134,6 @@ pub unsafe extern "C" fn buf_byteidx_to_charidx(
     }
     return count - 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_charidx_to_byteidx(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
@@ -8221,7 +8155,6 @@ pub unsafe extern "C" fn buf_charidx_to_byteidx(
     }
     return t.offset_from(str) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var2fpos(
     tv: *const typval_T,
     dollar_lnum: bool,
@@ -8378,7 +8311,6 @@ pub unsafe extern "C" fn var2fpos(
     }
     return ::core::ptr::null_mut::<pos_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn list2fpos(
     mut arg: *mut typval_T,
     mut posp: *mut pos_T,
@@ -8470,7 +8402,6 @@ pub unsafe extern "C" fn list2fpos(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_env_len(
     mut arg: *mut *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -8486,7 +8417,6 @@ pub unsafe extern "C" fn get_env_len(
     *arg = p;
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_id_len(arg: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut len: ::core::ffi::c_int = 0;
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
@@ -8511,7 +8441,6 @@ pub unsafe extern "C" fn get_id_len(arg: *mut *const ::core::ffi::c_char) -> ::c
     *arg = skipwhite(p);
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_name_len(
     arg: *mut *const ::core::ffi::c_char,
     mut alias: *mut *mut ::core::ffi::c_char,
@@ -8576,7 +8505,6 @@ pub unsafe extern "C" fn get_name_len(
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_name_end(
     mut arg: *const ::core::ffi::c_char,
     mut expr_start: *mut *const ::core::ffi::c_char,
@@ -8731,7 +8659,6 @@ unsafe extern "C" fn make_expanded_name(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_isnamec(mut c: ::core::ffi::c_int) -> bool {
     return c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -8742,7 +8669,6 @@ pub unsafe extern "C" fn eval_isnamec(mut c: ::core::ffi::c_int) -> bool {
         || c == ':' as ::core::ffi::c_int
         || c == AUTOLOAD_CHAR;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_isnamec1(mut c: ::core::ffi::c_int) -> bool {
     return c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -8750,7 +8676,6 @@ pub unsafe extern "C" fn eval_isnamec1(mut c: ::core::ffi::c_int) -> bool {
             && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
         || c == '_' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_isdictc(mut c: ::core::ffi::c_int) -> bool {
     return c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -8759,7 +8684,6 @@ pub unsafe extern "C" fn eval_isdictc(mut c: ::core::ffi::c_int) -> bool {
         || ascii_isdigit(c) as ::core::ffi::c_int != 0
         || c == '_' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_argv_var(
     mut argv: *mut *mut ::core::ffi::c_char,
     mut argc: ::core::ffi::c_int,
@@ -8778,7 +8702,6 @@ pub unsafe extern "C" fn set_argv_var(
     }
     set_vim_var_list(VV_ARGV, l);
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_luafunc(mut partial: *mut partial_T) -> bool {
     return partial == get_vim_var_partial(VV_LUA);
 }
@@ -8787,7 +8710,6 @@ unsafe extern "C" fn tv_is_luafunc(mut tv: *mut typval_T) -> bool {
         == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
         && is_luafunc((*tv).vval.v_partial) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_luafunc_name(
     mut p: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -8805,7 +8727,6 @@ pub unsafe extern "C" fn skip_luafunc_name(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_luafunc_name(
     str: *const ::core::ffi::c_char,
     paren: bool,
@@ -8822,7 +8743,6 @@ pub unsafe extern "C" fn check_luafunc_name(
     }
     return p.offset_from(str) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn char_from_string(
     mut str: *const ::core::ffi::c_char,
     mut index: varnumber_T,
@@ -8882,7 +8802,6 @@ unsafe extern "C" fn char_idx2byte(
     }
     return nbyte as ssize_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn string_slice(
     mut str: *const ::core::ffi::c_char,
     mut first: varnumber_T,
@@ -8914,7 +8833,6 @@ pub unsafe extern "C" fn string_slice(
         (end_byte - start_byte) as size_t,
     ) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_subscript(
     arg: *mut *const ::core::ffi::c_char,
     mut rettv: *mut typval_T,
@@ -9024,7 +8942,6 @@ pub unsafe extern "C" fn handle_subscript(
     tv_dict_unref(selfdict);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
     if (*rettv).v_type as ::core::ffi::c_uint
         == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -9035,7 +8952,6 @@ pub unsafe extern "C" fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_
     }
     make_partial(selfdict, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_item_copy(
     conv: *const vimconv_T,
     from: *mut typval_T,
@@ -9122,7 +9038,6 @@ pub unsafe extern "C" fn var_item_copy(
     (*recurse.ptr()) -= 1;
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut rettv: typval_T = typval_T {
@@ -9225,15 +9140,12 @@ pub unsafe extern "C" fn ex_echo(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_echohl(mut eap: *mut exarg_T) {
     echo_hl_id.set(syn_name2id((*eap).arg));
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_echo_hl_id() -> ::core::ffi::c_int {
     return echo_hl_id.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut rettv: typval_T = typval_T {
@@ -9333,7 +9245,6 @@ pub unsafe extern "C" fn ex_execute(mut eap: *mut exarg_T) {
     }
     (*eap).nextcmd = check_nextcmd(arg);
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_option_var_end(
     arg: *mut *const ::core::ffi::c_char,
     opt_idxp: *mut OptIndex,
@@ -9360,7 +9271,6 @@ pub unsafe extern "C" fn find_option_var_end(
     *arg = if end.is_null() { *arg } else { p };
     return end;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_flavour(mut varname: *mut ::core::ffi::c_char) -> var_flavour_T {
     let mut p: *mut ::core::ffi::c_char = varname;
     if *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -9381,7 +9291,6 @@ pub unsafe extern "C" fn var_flavour(mut varname: *mut ::core::ffi::c_char) -> v
     }
     return VAR_FLAVOUR_DEFAULT;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_set_global(name: *const ::core::ffi::c_char, mut vartv: typval_T) {
     let mut funccall_entry: funccal_entry_T = funccal_entry_T {
         top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -9391,7 +9300,6 @@ pub unsafe extern "C" fn var_set_global(name: *const ::core::ffi::c_char, mut va
     set_var(name, strlen(name), &raw mut vartv, false_0 != 0);
     restore_funccal();
 }
-#[no_mangle]
 pub unsafe extern "C" fn last_set_msg(mut script_ctx: sctx_T) {
     if script_ctx.sc_sid == 0 as ::core::ffi::c_int {
         return;
@@ -9417,7 +9325,6 @@ pub unsafe extern "C" fn last_set_msg(mut script_ctx: sctx_T) {
     }
     verbose_leave();
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_string_sub(
     mut str: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -9563,7 +9470,6 @@ pub unsafe extern "C" fn do_string_sub(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn common_job_callbacks(
     mut vopts: *mut dict_T,
     mut on_stdout: *mut CallbackReader,
@@ -9622,7 +9528,6 @@ pub unsafe extern "C" fn common_job_callbacks(
     callback_free(on_exit);
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_job(mut id: uint64_t, mut show_error: bool) -> *mut Channel {
     let mut data: *mut Channel = find_channel(id);
     if data.is_null()
@@ -9646,7 +9551,6 @@ pub unsafe extern "C" fn find_job(mut id: uint64_t, mut show_error: bool) -> *mu
     }
     return data;
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_host_eval(
     mut name: *mut ::core::ffi::c_char,
     mut argvars: *mut typval_T,
@@ -9676,7 +9580,6 @@ pub unsafe extern "C" fn script_host_eval(
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_call_provider(
     mut provider: *mut ::core::ffi::c_char,
     mut method: *mut ::core::ffi::c_char,
@@ -9777,7 +9680,6 @@ pub unsafe extern "C" fn eval_call_provider(
     }
     return rettv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_has_provider(
     mut feat: *const ::core::ffi::c_char,
     mut throw_if_fast: bool,
@@ -9908,7 +9810,6 @@ pub unsafe extern "C" fn eval_has_provider(
     }
     return ok;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_fmt_source_name_line(
     mut buf: *mut ::core::ffi::c_char,
     mut bufsize: size_t,
@@ -9933,7 +9834,6 @@ pub unsafe extern "C" fn eval_fmt_source_name_line(
         snprintf(buf, bufsize, b"?\0".as_ptr() as *const ::core::ffi::c_char);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn prompt_get_input(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
     if !bt_prompt(buf) {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -9956,7 +9856,6 @@ pub unsafe extern "C" fn prompt_get_input(mut buf: *mut buf_T) -> *mut ::core::f
     }
     return full_text;
 }
-#[no_mangle]
 pub unsafe extern "C" fn prompt_invoke_callback() {
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
@@ -10004,7 +9903,6 @@ pub unsafe extern "C" fn prompt_invoke_callback() {
     (*curbuf.get()).b_prompt_start.mark.lnum = (*curbuf.get()).b_ml.ml_line_count;
     (*curbuf.get()).b_prompt_append_new_line = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn invoke_prompt_interrupt() -> bool {
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
@@ -10032,7 +9930,6 @@ pub unsafe extern "C" fn invoke_prompt_interrupt() -> bool {
     tv_clear(&raw mut rettv);
     return ret != FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn typval_compare(
     mut typ1: *mut typval_T,
     mut typ2: *mut typval_T,
@@ -10333,7 +10230,6 @@ pub unsafe extern "C" fn typval_compare(
     (*typ1).vval.v_number = n1;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn typval_tostring(
     mut arg: *mut typval_T,
     mut quotes: bool,

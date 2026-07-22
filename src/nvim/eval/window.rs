@@ -152,7 +152,6 @@ static e_cannot_resize_window_in_another_tab_page: GlobalCell<[::core::ffi::c_ch
             *b"E1308: Cannot resize a window in another tab page\0",
         )
     });
-#[no_mangle]
 pub unsafe extern "C" fn win_has_winnr(mut wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
     return wp
         == (if tp == curtab.get() {
@@ -225,7 +224,6 @@ unsafe extern "C" fn win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T)
 pub unsafe extern "C" fn win_id2wp(mut id: ::core::ffi::c_int) -> *mut win_T {
     return win_id2wp_tp(id, ::core::ptr::null_mut::<*mut tabpage_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_id2wp_tp(
     mut id: ::core::ffi::c_int,
     mut tpp: *mut *mut tabpage_T,
@@ -272,7 +270,6 @@ unsafe extern "C" fn win_id2win(mut argvars: *mut typval_T) -> ::core::ffi::c_in
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_findbuf(mut argvars: *mut typval_T, mut list: *mut list_T) {
     let mut bufnr: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
@@ -292,7 +289,6 @@ pub unsafe extern "C" fn win_findbuf(mut argvars: *mut typval_T, mut list: *mut 
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_win_by_nr(
     mut vp: *mut typval_T,
     mut tp: *mut tabpage_T,
@@ -337,7 +333,6 @@ pub unsafe extern "C" fn find_win_by_nr_or_id(mut vp: *mut typval_T) -> *mut win
     }
     return find_win_by_nr(vp, ::core::ptr::null_mut::<tabpage_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_tabwin(mut wvp: *mut typval_T, mut tvp: *mut typval_T) -> *mut win_T {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
@@ -652,7 +647,6 @@ unsafe extern "C" fn get_tabpage_info(
     );
     return dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_gettabinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -694,7 +688,6 @@ pub unsafe extern "C" fn f_gettabinfo(
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getwininfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -746,7 +739,6 @@ pub unsafe extern "C" fn f_getwininfo(
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getwinpos(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -756,7 +748,6 @@ pub unsafe extern "C" fn f_getwinpos(
     tv_list_append_number((*rettv).vval.v_list, -1 as varnumber_T);
     tv_list_append_number((*rettv).vval.v_list, -1 as varnumber_T);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getwinposx(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -764,7 +755,6 @@ pub unsafe extern "C" fn f_getwinposx(
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getwinposy(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -772,7 +762,6 @@ pub unsafe extern "C" fn f_getwinposy(
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_tabpagenr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -809,7 +798,6 @@ pub unsafe extern "C" fn f_tabpagenr(
     }
     (*rettv).vval.v_number = nr as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_tabpagewinnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -826,7 +814,6 @@ pub unsafe extern "C" fn f_tabpagewinnr(
     }
     (*rettv).vval.v_number = nr as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_execute_before(
     mut args: *mut win_execute_T,
     mut wp: *mut win_T,
@@ -874,7 +861,6 @@ pub unsafe extern "C" fn win_execute_before(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_execute_after(mut args: *mut win_execute_T) {
     restore_win_noblock(&raw mut (*args).switchwin, true_0 != 0);
     if (*args).apply_acd {
@@ -898,7 +884,6 @@ pub unsafe extern "C" fn win_execute_after(mut args: *mut win_execute_T) {
         check_pos(curbuf.get(), VIsual.ptr());
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_execute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -935,7 +920,6 @@ pub unsafe extern "C" fn f_win_execute(
     }
     win_execute_after(&raw mut win_execute_args);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_findbuf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -944,7 +928,6 @@ pub unsafe extern "C" fn f_win_findbuf(
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     win_findbuf(argvars, (*rettv).vval.v_list);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_getid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -952,7 +935,6 @@ pub unsafe extern "C" fn f_win_getid(
 ) {
     (*rettv).vval.v_number = win_getid(argvars) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_gotoid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -989,7 +971,6 @@ pub unsafe extern "C" fn f_win_gotoid(
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_id2tabwin(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -997,7 +978,6 @@ pub unsafe extern "C" fn f_win_id2tabwin(
 ) {
     win_id2tabwin(argvars, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_id2win(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1005,7 +985,6 @@ pub unsafe extern "C" fn f_win_id2win(
 ) {
     (*rettv).vval.v_number = win_id2win(argvars) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_move_separator(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1028,7 +1007,6 @@ pub unsafe extern "C" fn f_win_move_separator(
     win_drag_vsep_line(wp, offset);
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_move_statusline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1052,7 +1030,6 @@ pub unsafe extern "C" fn f_win_move_statusline(
     win_drag_status_line(wp, offset);
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_screenpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1077,7 +1054,6 @@ pub unsafe extern "C" fn f_win_screenpos(
         }) as varnumber_T,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_splitmove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1151,7 +1127,6 @@ pub unsafe extern "C" fn f_win_splitmove(
         win_goto(oldwin);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_win_gettype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1185,7 +1160,6 @@ pub unsafe extern "C" fn f_win_gettype(
         });
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcmdwintype(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1199,7 +1173,6 @@ pub unsafe extern "C" fn f_getcmdwintype(
         .v_string
         .offset(0 as ::core::ffi::c_int as isize) = cmdwin_type.get() as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winbufnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1212,7 +1185,6 @@ pub unsafe extern "C" fn f_winbufnr(
         (*rettv).vval.v_number = (*(*wp).w_buffer).handle as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_wincol(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1221,7 +1193,6 @@ pub unsafe extern "C" fn f_wincol(
     validate_cursor(curwin.get());
     (*rettv).vval.v_number = ((*curwin.get()).w_wcol + 1 as ::core::ffi::c_int) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winheight(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1234,7 +1205,6 @@ pub unsafe extern "C" fn f_winheight(
         (*rettv).vval.v_number = (*wp).w_view_height as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winlayout(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1256,7 +1226,6 @@ pub unsafe extern "C" fn f_winlayout(
     }
     get_framelayout((*tp).tp_topframe, (*rettv).vval.v_list, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winline(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1265,7 +1234,6 @@ pub unsafe extern "C" fn f_winline(
     validate_cursor(curwin.get());
     (*rettv).vval.v_number = ((*curwin.get()).w_wrow + 1 as ::core::ffi::c_int) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1276,7 +1244,6 @@ pub unsafe extern "C" fn f_winnr(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winrestcmd(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1339,7 +1306,6 @@ pub unsafe extern "C" fn f_winrestcmd(
     (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
     (*rettv).v_type = VAR_STRING;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winrestview(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -1432,7 +1398,6 @@ pub unsafe extern "C" fn f_winrestview(
     }
     check_topfill(curwin.get(), true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winsaveview(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1490,7 +1455,6 @@ pub unsafe extern "C" fn f_winsaveview(
         (*curwin.get()).w_skipcol as varnumber_T,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_winwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1503,7 +1467,6 @@ pub unsafe extern "C" fn f_winwidth(
         (*rettv).vval.v_number = (*wp).w_view_width as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn switch_win(
     mut switchwin: *mut switchwin_T,
     mut win: *mut win_T,
@@ -1513,7 +1476,6 @@ pub unsafe extern "C" fn switch_win(
     block_autocmds();
     return switch_win_noblock(switchwin, win, tp, no_display);
 }
-#[no_mangle]
 pub unsafe extern "C" fn switch_win_noblock(
     mut switchwin: *mut switchwin_T,
     mut win: *mut win_T,
@@ -1548,12 +1510,10 @@ pub unsafe extern "C" fn switch_win_noblock(
     curbuf.set((*curwin.get()).w_buffer);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_win(mut switchwin: *mut switchwin_T, mut no_display: bool) {
     restore_win_noblock(switchwin, no_display);
     unblock_autocmds();
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_win_noblock(
     mut switchwin: *mut switchwin_T,
     mut no_display: bool,

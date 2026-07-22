@@ -407,7 +407,6 @@ static e_error_while_writing_str: GlobalCell<[::core::ffi::c_char; 29]> = Global
         *b"E80: Error while writing: %s\0",
     )
 });
-#[no_mangle]
 pub unsafe extern "C" fn modify_fname(
     mut src: *mut ::core::ffi::c_char,
     mut tilde_file: bool,
@@ -757,7 +756,6 @@ pub unsafe extern "C" fn modify_fname(
     }
     return valid;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_chdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -818,7 +816,6 @@ pub unsafe extern "C" fn f_chdir(
         let _ = *ptr_;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_delete(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -871,7 +868,6 @@ pub unsafe extern "C" fn f_delete(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_executable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -886,7 +882,6 @@ pub unsafe extern "C" fn f_executable(
         true_0 != 0,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_exepath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -904,7 +899,6 @@ pub unsafe extern "C" fn f_exepath(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = path;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_filecopy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -961,7 +955,6 @@ pub unsafe extern "C" fn f_filecopy(
         ) == OK) as ::core::ffi::c_int as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_filereadable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -974,7 +967,6 @@ pub unsafe extern "C" fn f_filereadable(
         && os_file_is_readable(p) as ::core::ffi::c_int != 0)
         as ::core::ffi::c_int as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_filewritable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1094,7 +1086,6 @@ unsafe extern "C" fn findfilendir(
         (*rettv).vval.v_string = fresult;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_finddir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1102,7 +1093,6 @@ pub unsafe extern "C" fn f_finddir(
 ) {
     findfilendir(argvars, rettv, FINDFILE_DIR as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_findfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1110,7 +1100,6 @@ pub unsafe extern "C" fn f_findfile(
 ) {
     findfilendir(argvars, rettv, FINDFILE_FILE as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_fnamemodify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1150,7 +1139,6 @@ pub unsafe extern "C" fn f_fnamemodify(
     }
     xfree(fbuf as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcwd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1287,7 +1275,6 @@ pub unsafe extern "C" fn f_getcwd(
     (*rettv).vval.v_string = xstrdup(cwd);
     xfree(cwd as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getfperm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1312,7 +1299,6 @@ pub unsafe extern "C" fn f_getfperm(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = perm;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getfsize(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1367,7 +1353,6 @@ pub unsafe extern "C" fn f_getfsize(
         (*rettv).vval.v_number = -1 as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getftime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1413,7 +1398,6 @@ pub unsafe extern "C" fn f_getftime(
         (*rettv).vval.v_number = -1 as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getftype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1479,7 +1463,6 @@ pub unsafe extern "C" fn f_getftype(
     }
     (*rettv).vval.v_string = type_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_glob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1591,7 +1574,6 @@ pub unsafe extern "C" fn f_glob(
         (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_globpath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1679,7 +1661,6 @@ pub unsafe extern "C" fn f_globpath(
         (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_glob2regpat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1699,7 +1680,6 @@ pub unsafe extern "C" fn f_glob2regpat(
         )
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_haslocaldir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1815,7 +1795,6 @@ pub unsafe extern "C" fn f_haslocaldir(
         2 | _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_isabsolutepath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1825,7 +1804,6 @@ pub unsafe extern "C" fn f_isabsolutepath(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     )) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_isdirectory(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1835,7 +1813,6 @@ pub unsafe extern "C" fn f_isdirectory(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     )) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_mkdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1942,7 +1919,6 @@ pub unsafe extern "C" fn f_mkdir(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_pathshorten(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2021,7 +1997,6 @@ unsafe extern "C" fn readdir_checkitem(
     restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_readdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2454,7 +2429,6 @@ unsafe extern "C" fn read_file_or_blob(
     xfree(prev as *mut ::core::ffi::c_void);
     fclose(fd);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_readblob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2462,7 +2436,6 @@ pub unsafe extern "C" fn f_readblob(
 ) {
     read_file_or_blob(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_readfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2470,7 +2443,6 @@ pub unsafe extern "C" fn f_readfile(
 ) {
     read_file_or_blob(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_rename(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2489,7 +2461,6 @@ pub unsafe extern "C" fn f_rename(
         ) as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_resolve(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2677,7 +2648,6 @@ pub unsafe extern "C" fn f_resolve(
     xfree(buf as *mut ::core::ffi::c_void);
     simplify_filename((*rettv).vval.v_string);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_simplify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2689,7 +2659,6 @@ pub unsafe extern "C" fn f_simplify(
     simplify_filename((*rettv).vval.v_string);
     (*rettv).v_type = VAR_STRING;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_tempname(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2813,7 +2782,6 @@ unsafe extern "C" fn write_string(
 ) -> bool {
     return write_data(fp, data, strlen(data));
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_writefile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3010,7 +2978,6 @@ pub unsafe extern "C" fn f_writefile(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_browse(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3019,7 +2986,6 @@ pub unsafe extern "C" fn f_browse(
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*rettv).v_type = VAR_STRING;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_browsedir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

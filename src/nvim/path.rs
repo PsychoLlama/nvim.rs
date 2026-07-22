@@ -401,15 +401,12 @@ pub unsafe extern "C" fn path_next_component(
     }
     return fname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_head_length() -> ::core::ffi::c_int {
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_path_head(mut path: *const ::core::ffi::c_char) -> bool {
     return vim_ispathsep(*path as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_past_head(
     mut path: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -419,19 +416,15 @@ pub unsafe extern "C" fn get_past_head(
     }
     return retval as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_ispathsep(mut c: ::core::ffi::c_int) -> bool {
     return c == '/' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_ispathsep_nocolon(mut c: ::core::ffi::c_int) -> bool {
     return vim_ispathsep(c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_ispathlistsep(mut c: ::core::ffi::c_int) -> bool {
     return c == ':' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shorten_dir_len(
     mut str: *mut ::core::ffi::c_char,
     mut trim_len: ::core::ffi::c_int,
@@ -482,11 +475,9 @@ pub unsafe extern "C" fn shorten_dir_len(
         s = s.offset(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn shorten_dir(mut str: *mut ::core::ffi::c_char) {
     shorten_dir_len(str, 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn dir_of_file_exists(mut fname: *mut ::core::ffi::c_char) -> bool {
     let mut p: *mut ::core::ffi::c_char = path_tail_with_sep(fname);
     if p == fname {
@@ -498,14 +489,12 @@ pub unsafe extern "C" fn dir_of_file_exists(mut fname: *mut ::core::ffi::c_char)
     *p = c;
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_fnamecmp(
     mut fname1: *const ::core::ffi::c_char,
     mut fname2: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     return mb_strcmp_ic(p_fic.get() != 0, fname1, fname2);
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_fnamencmp(
     fname1: *const ::core::ffi::c_char,
     fname2: *const ::core::ffi::c_char,
@@ -545,7 +534,6 @@ unsafe extern "C" fn do_concat_fnames(
     }
     return fname1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn concat_fnames(
     mut fname1: *const ::core::ffi::c_char,
     mut fname2: *const ::core::ffi::c_char,
@@ -562,7 +550,6 @@ pub unsafe extern "C" fn concat_fnames(
     );
     return do_concat_fnames(dest, len1, fname2, len2, sep);
 }
-#[no_mangle]
 pub unsafe extern "C" fn concat_fnames_realloc(
     mut fname1: *mut ::core::ffi::c_char,
     mut fname2: *const ::core::ffi::c_char,
@@ -581,7 +568,6 @@ pub unsafe extern "C" fn concat_fnames_realloc(
         sep,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_pathsep(mut p: *mut ::core::ffi::c_char) -> bool {
     let len: size_t = strlen(p);
     if *p as ::core::ffi::c_int != NUL && after_pathsep(p, p.offset(len as isize)) == 0 {
@@ -597,7 +583,6 @@ pub unsafe extern "C" fn add_pathsep(mut p: *mut ::core::ffi::c_char) -> bool {
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn FullName_save(
     mut fname: *const ::core::ffi::c_char,
     mut force: bool,
@@ -612,7 +597,6 @@ pub unsafe extern "C" fn FullName_save(
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn save_abs_path(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -621,7 +605,6 @@ pub unsafe extern "C" fn save_abs_path(
     }
     return xstrdup(name);
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_has_wildcard(mut p: *const ::core::ffi::c_char) -> bool {
     while *p != 0 {
         if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -654,7 +637,6 @@ unsafe extern "C" fn pstrcmp(
         -1 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_has_exp_wildcard(mut p: *const ::core::ffi::c_char) -> bool {
     while *p as ::core::ffi::c_int != NUL {
         if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -1403,7 +1385,6 @@ unsafe extern "C" fn uniquefy_paths(
         ga_remove_duplicate_strings(gap);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn gettail_dir(
     fname: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -1544,7 +1525,6 @@ unsafe extern "C" fn has_special_wildchar(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn gen_expand_wildcards(
     mut num_pat: ::core::ffi::c_int,
     mut pat: *mut *mut ::core::ffi::c_char,
@@ -1713,7 +1693,6 @@ pub unsafe extern "C" fn gen_expand_wildcards(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn FreeWild(
     mut count: ::core::ffi::c_int,
     mut files: *mut *mut ::core::ffi::c_char,
@@ -1801,7 +1780,6 @@ unsafe extern "C" fn expand_backtick(
     xfree(buffer as *mut ::core::ffi::c_void);
     return cnt;
 }
-#[no_mangle]
 pub unsafe extern "C" fn addfile(
     mut gap: *mut garray_T,
     mut f: *mut ::core::ffi::c_char,
@@ -1878,7 +1856,6 @@ pub unsafe extern "C" fn addfile(
     *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset((*gap).ga_len as isize) = p;
     (*gap).ga_len += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn simplify_filename(mut filename: *mut ::core::ffi::c_char) -> size_t {
     let mut components: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut stripping_disabled: bool = false_0 != 0;
@@ -2128,7 +2105,6 @@ pub unsafe extern "C" fn simplify_filename(mut filename: *mut ::core::ffi::c_cha
     }
     return p_end.offset_from(filename) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_has_drive_letter(
     mut p: *const ::core::ffi::c_char,
     mut path_len: size_t,
@@ -2157,7 +2133,6 @@ pub unsafe extern "C" fn path_has_drive_letter(
                     == '#' as ::core::ffi::c_int) as ::core::ffi::c_int
                 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn path_is_url(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if strncmp(
         p,
@@ -2229,7 +2204,6 @@ pub unsafe extern "C" fn path_with_extension(
         extension,
     ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isAbsName(mut name: *const ::core::ffi::c_char) -> bool {
     return path_with_url(name) != 0 as ::core::ffi::c_int
         || path_is_absolute(name) as ::core::ffi::c_int != 0;
@@ -2259,7 +2233,6 @@ pub unsafe extern "C" fn vim_FullName(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fix_fname(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -2459,7 +2432,6 @@ pub unsafe extern "C" fn path_fix_case(mut name: *mut ::core::ffi::c_char) {
     }
     os_closedir(&raw mut dir);
 }
-#[no_mangle]
 pub unsafe extern "C" fn after_pathsep(
     mut b: *const ::core::ffi::c_char,
     mut p: *const ::core::ffi::c_char,
@@ -2471,7 +2443,6 @@ pub unsafe extern "C" fn after_pathsep(
         && utf_head_off(b, p.offset(-(1 as ::core::ffi::c_int as isize)))
             == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn same_directory(
     mut f1: *mut ::core::ffi::c_char,
     mut f2: *mut ::core::ffi::c_char,
@@ -2497,7 +2468,6 @@ pub unsafe extern "C" fn same_directory(
             t1.offset_from(&raw mut ffname as *mut ::core::ffi::c_char) as ::core::ffi::c_int,
         ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pathcmp(
     mut p: *const ::core::ffi::c_char,
     mut q: *const ::core::ffi::c_char,
@@ -2619,7 +2589,6 @@ pub unsafe extern "C" fn path_shorten_fname(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_wildcards_eval(
     mut pat: *mut *mut ::core::ffi::c_char,
     mut num_file: *mut ::core::ffi::c_int,
@@ -2682,7 +2651,6 @@ pub unsafe extern "C" fn expand_wildcards_eval(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_wildcards(
     mut num_pat: ::core::ffi::c_int,
     mut pat: *mut *mut ::core::ffi::c_char,
@@ -2792,7 +2760,6 @@ pub unsafe extern "C" fn expand_wildcards(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_suffix(mut fname: *mut ::core::ffi::c_char) -> bool {
     let mut suf_buf: [::core::ffi::c_char; 30] = [0; 30];
     let mut fnamelen: size_t = strlen(fname);

@@ -1097,7 +1097,6 @@ unsafe extern "C" fn parse_map_cmd(
     }
     return args;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_parse_cmd(
     mut str: String_0,
     mut _opts: *mut KeyDict_empty,
@@ -1753,7 +1752,6 @@ pub unsafe extern "C" fn nvim_parse_cmd(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_cmd(
     mut channel_id: uint64_t,
     mut cmd: *mut KeyDict_cmd,
@@ -4022,7 +4020,6 @@ unsafe extern "C" fn build_cmdline_str(
         (*eap).argc = 0 as size_t;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_create_user_command(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -4032,11 +4029,9 @@ pub unsafe extern "C" fn nvim_create_user_command(
 ) {
     create_user_command(channel_id, name, cmd, opts, 0 as ::core::ffi::c_int, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_del_user_command(mut name: String_0, mut err: *mut Error) {
     nvim_buf_del_user_command(-1 as Buffer, name, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_create_user_command(
     mut channel_id: uint64_t,
     mut buf: Buffer,
@@ -4061,7 +4056,6 @@ pub unsafe extern "C" fn nvim_buf_create_user_command(
     );
     curbuf.set(save_curbuf);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_del_user_command(
     mut buf: Buffer,
     mut name: String_0,
@@ -4101,7 +4095,6 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
         name.data,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn create_user_command(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -4523,7 +4516,6 @@ pub unsafe extern "C" fn create_user_command(
     }
     xfree(compl_arg as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_commands(
     mut opts: *mut KeyDict_get_commands,
     mut arena: *mut Arena,
@@ -4531,7 +4523,6 @@ pub unsafe extern "C" fn nvim_get_commands(
 ) -> Dict {
     return nvim_buf_get_commands(-1 as Buffer, opts, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_buf_get_commands(
     mut buf: Buffer,
     mut opts: *mut KeyDict_get_commands,

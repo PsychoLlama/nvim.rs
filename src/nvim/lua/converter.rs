@@ -397,7 +397,6 @@ unsafe extern "C" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_typval(
     mut lstate: *mut lua_State,
     mut ret_tv: *mut typval_T,
@@ -1320,7 +1319,6 @@ pub unsafe extern "C" fn nlua_pop_typval(
 }
 static typval_conv_special: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = true_0;
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_typval(
     mut lstate: *mut lua_State,
     tv: *mut typval_T,
@@ -1387,7 +1385,6 @@ unsafe extern "C" fn nlua_create_typed_table(
     nlua_push_type(lstate, type_0);
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_String(
     mut lstate: *mut lua_State,
     s: String_0,
@@ -1403,7 +1400,6 @@ pub unsafe extern "C" fn nlua_push_String(
         s.size,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Integer(
     mut lstate: *mut lua_State,
     n: Integer,
@@ -1411,7 +1407,6 @@ pub unsafe extern "C" fn nlua_push_Integer(
 ) {
     lua_pushnumber(lstate, n as lua_Number);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Float(
     mut lstate: *mut lua_State,
     f: Float,
@@ -1426,7 +1421,6 @@ pub unsafe extern "C" fn nlua_push_Float(
         lua_pushnumber(lstate, f);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Boolean(
     mut lstate: *mut lua_State,
     b: Boolean,
@@ -1434,7 +1428,6 @@ pub unsafe extern "C" fn nlua_push_Boolean(
 ) {
     lua_pushboolean(lstate, b as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Dict(
     mut lstate: *mut lua_State,
     dict: Dict,
@@ -1461,7 +1454,6 @@ pub unsafe extern "C" fn nlua_push_Dict(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Array(
     mut lstate: *mut lua_State,
     array: Array,
@@ -1483,7 +1475,6 @@ pub unsafe extern "C" fn nlua_push_Array(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_handle(
     mut lstate: *mut lua_State,
     item: handle_T,
@@ -1491,7 +1482,6 @@ pub unsafe extern "C" fn nlua_push_handle(
 ) {
     lua_pushnumber(lstate, item as lua_Number);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_Object(
     mut lstate: *mut lua_State,
     mut obj: *mut Object,
@@ -1542,7 +1532,6 @@ pub unsafe extern "C" fn nlua_push_Object(
         _ => {}
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_String(
     mut lstate: *mut lua_State,
     mut arena: *mut Arena,
@@ -1582,7 +1571,6 @@ pub unsafe extern "C" fn nlua_pop_String(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Integer(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
@@ -1612,7 +1600,6 @@ pub unsafe extern "C" fn nlua_pop_Integer(
     }
     return n as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Boolean(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
@@ -1622,7 +1609,6 @@ pub unsafe extern "C" fn nlua_pop_Boolean(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Boolean_strict(
     mut lstate: *mut lua_State,
     mut err: *mut Error,
@@ -1701,7 +1687,6 @@ unsafe extern "C" fn nlua_check_type(
     }
     return table_props;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Float(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
@@ -1759,7 +1744,6 @@ unsafe extern "C" fn nlua_pop_Array_unchecked(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Array(
     mut lstate: *mut lua_State,
     mut arena: *mut Arena,
@@ -1825,7 +1809,6 @@ unsafe extern "C" fn nlua_pop_Dict_unchecked(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Dict(
     mut lstate: *mut lua_State,
     mut ref_0: bool,
@@ -1845,7 +1828,6 @@ pub unsafe extern "C" fn nlua_pop_Dict(
     }
     return nlua_pop_Dict_unchecked(lstate, table_props, ref_0, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Object(
     lstate: *mut lua_State,
     mut ref_0: bool,
@@ -2561,7 +2543,6 @@ pub unsafe extern "C" fn nlua_pop_Object(
     };
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_LuaRef(
     lstate: *mut lua_State,
     mut _arena: *mut Arena,
@@ -2571,7 +2552,6 @@ pub unsafe extern "C" fn nlua_pop_LuaRef(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_handle(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
@@ -2591,7 +2571,6 @@ pub unsafe extern "C" fn nlua_pop_handle(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_init_types(lstate: *mut lua_State) {
     lua_pushlstring(
         lstate,
@@ -2657,7 +2636,6 @@ pub unsafe extern "C" fn nlua_init_types(lstate: *mut lua_State) {
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_pop_keydict(
     mut L: *mut lua_State,
     mut retval: *mut ::core::ffi::c_void,
@@ -2746,7 +2724,6 @@ pub unsafe extern "C" fn nlua_pop_keydict(
     }
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_keydict(
     mut L: *mut lua_State,
     mut value: *mut ::core::ffi::c_void,
@@ -2796,7 +2773,6 @@ pub unsafe extern "C" fn nlua_push_keydict(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub static _typval_encode_lua_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]

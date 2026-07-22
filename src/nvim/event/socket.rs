@@ -260,7 +260,6 @@ pub const AF_UNSPEC: ::core::ffi::c_int = PF_UNSPEC;
 pub const AF_INET: ::core::ffi::c_int = PF_INET;
 pub const AI_NUMERICSERV: ::core::ffi::c_int = 0x400 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn socket_address_tcp_host_end(
     mut address: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -291,7 +290,6 @@ pub unsafe extern "C" fn socket_address_tcp_host_end(
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn socket_watcher_init(
     mut loop_0: *mut Loop,
     mut watcher: *mut SocketWatcher,
@@ -538,7 +536,6 @@ unsafe extern "C" fn early_server_close_cb(mut handle: *mut uv_handle_t) {
     let mut closed: *mut bool = (*handle).data as *mut bool;
     *closed = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn socket_watcher_start(
     mut watcher: *mut SocketWatcher,
     mut backlog: ::core::ffi::c_int,
@@ -725,7 +722,6 @@ pub unsafe extern "C" fn socket_watcher_start(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn socket_watcher_accept(
     mut watcher: *mut SocketWatcher,
     mut stream: *mut RStream,
@@ -758,7 +754,6 @@ pub unsafe extern "C" fn socket_watcher_accept(
     );
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn socket_watcher_close(
     mut watcher: *mut SocketWatcher,
     mut cb: socket_close_cb,
@@ -823,7 +818,6 @@ unsafe extern "C" fn connect_cb(mut req: *mut uv_connect_t, mut status: ::core::
         stream_may_close((*handle).data as *mut Stream);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn socket_connect(
     mut loop_0: *mut Loop,
     mut stream: *mut RStream,

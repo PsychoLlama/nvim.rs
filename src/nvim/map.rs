@@ -151,7 +151,6 @@ unsafe extern "C" fn equal_ColorKey(mut ae1: ColorKey, mut ae2: ColorKey) -> boo
     ) == 0 as ::core::ffi::c_int;
 }
 pub const UPPER_FILL: ::core::ffi::c_double = 0.77f64;
-#[no_mangle]
 pub unsafe extern "C" fn mh_realloc(mut h: *mut MapHash, mut n_min_buckets: uint32_t) {
     xfree((*h).hash as *mut ::core::ffi::c_void);
     let mut n_buckets: uint32_t = if n_min_buckets < 16 as uint32_t {
@@ -172,7 +171,6 @@ pub unsafe extern "C" fn mh_realloc(mut h: *mut MapHash, mut n_min_buckets: uint
     (*h).n_buckets = n_buckets;
     (*h).upper_bound = ((*h).n_buckets as ::core::ffi::c_double * UPPER_FILL + 0.5f64) as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_clear(mut h: *mut MapHash) {
     if !(*h).hash.is_null() {
         memset(
@@ -185,7 +183,6 @@ pub unsafe extern "C" fn mh_clear(mut h: *mut MapHash) {
         (*h).n_keys = 0 as uint32_t;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pmap_del2(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: *const ::core::ffi::c_char,
@@ -195,7 +192,6 @@ pub unsafe extern "C" fn pmap_del2(
     xfree(key_alloc as *mut ::core::ffi::c_void);
     xfree(val as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_int(
     mut set: *mut Set_int,
     mut key: ::core::ffi::c_int,
@@ -235,7 +231,6 @@ pub unsafe extern "C" fn mh_find_bucket_int(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_int(
     mut set: *mut Set_int,
     mut key: ::core::ffi::c_int,
@@ -250,7 +245,6 @@ pub unsafe extern "C" fn mh_get_int(
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_int(mut set: *mut Set_int) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -265,7 +259,6 @@ pub unsafe extern "C" fn mh_rehash_int(mut set: *mut Set_int) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_int(
     mut set: *mut Set_int,
     mut key: ::core::ffi::c_int,
@@ -323,7 +316,6 @@ pub unsafe extern "C" fn mh_put_int(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_int(
     mut set: *mut Set_int,
     mut key: *mut ::core::ffi::c_int,
@@ -352,7 +344,6 @@ pub unsafe extern "C" fn mh_delete_int(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_cstr_t(
     mut set: *mut Set_cstr_t,
     mut key: cstr_t,
@@ -394,7 +385,6 @@ pub unsafe extern "C" fn mh_find_bucket_cstr_t(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -406,7 +396,6 @@ pub unsafe extern "C" fn mh_get_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_cstr_t(mut set: *mut Set_cstr_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -421,7 +410,6 @@ pub unsafe extern "C" fn mh_rehash_cstr_t(mut set: *mut Set_cstr_t) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_cstr_t(
     mut set: *mut Set_cstr_t,
     mut key: cstr_t,
@@ -481,7 +469,6 @@ pub unsafe extern "C" fn mh_put_cstr_t(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_cstr_t(
     mut set: *mut Set_cstr_t,
     mut key: *mut cstr_t,
@@ -510,7 +497,6 @@ pub unsafe extern "C" fn mh_delete_cstr_t(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_ptr_t(
     mut set: *mut Set_ptr_t,
     mut key: ptr_t,
@@ -554,7 +540,6 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -566,7 +551,6 @@ pub unsafe extern "C" fn mh_get_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_ptr_t(mut set: *mut Set_ptr_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -581,7 +565,6 @@ pub unsafe extern "C" fn mh_rehash_ptr_t(mut set: *mut Set_ptr_t) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_ptr_t(
     mut set: *mut Set_ptr_t,
     mut key: ptr_t,
@@ -640,7 +623,6 @@ pub unsafe extern "C" fn mh_put_ptr_t(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_ptr_t(mut set: *mut Set_ptr_t, mut key: *mut ptr_t) -> uint32_t {
     if (*set).h.size == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -666,7 +648,6 @@ pub unsafe extern "C" fn mh_delete_ptr_t(mut set: *mut Set_ptr_t, mut key: *mut 
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_uint64_t(
     mut set: *mut Set_uint64_t,
     mut key: uint64_t,
@@ -707,7 +688,6 @@ pub unsafe extern "C" fn mh_find_bucket_uint64_t(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_uint64_t(
     mut set: *mut Set_uint64_t,
     mut key: uint64_t,
@@ -722,7 +702,6 @@ pub unsafe extern "C" fn mh_get_uint64_t(
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_uint64_t(mut set: *mut Set_uint64_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -737,7 +716,6 @@ pub unsafe extern "C" fn mh_rehash_uint64_t(mut set: *mut Set_uint64_t) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_uint64_t(
     mut set: *mut Set_uint64_t,
     mut key: uint64_t,
@@ -794,7 +772,6 @@ pub unsafe extern "C" fn mh_put_uint64_t(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_uint64_t(
     mut set: *mut Set_uint64_t,
     mut key: *mut uint64_t,
@@ -823,7 +800,6 @@ pub unsafe extern "C" fn mh_delete_uint64_t(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_int64_t(
     mut set: *mut Set_int64_t,
     mut key: int64_t,
@@ -865,7 +841,6 @@ pub unsafe extern "C" fn mh_find_bucket_int64_t(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_int64_t(mut set: *mut Set_int64_t, mut key: int64_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -877,7 +852,6 @@ pub unsafe extern "C" fn mh_get_int64_t(mut set: *mut Set_int64_t, mut key: int6
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_int64_t(mut set: *mut Set_int64_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -892,7 +866,6 @@ pub unsafe extern "C" fn mh_rehash_int64_t(mut set: *mut Set_int64_t) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_int64_t(
     mut set: *mut Set_int64_t,
     mut key: int64_t,
@@ -949,7 +922,6 @@ pub unsafe extern "C" fn mh_put_int64_t(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_int64_t(
     mut set: *mut Set_int64_t,
     mut key: *mut int64_t,
@@ -978,7 +950,6 @@ pub unsafe extern "C" fn mh_delete_int64_t(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_uint32_t(
     mut set: *mut Set_uint32_t,
     mut key: uint32_t,
@@ -1018,7 +989,6 @@ pub unsafe extern "C" fn mh_find_bucket_uint32_t(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_uint32_t(
     mut set: *mut Set_uint32_t,
     mut key: uint32_t,
@@ -1033,7 +1003,6 @@ pub unsafe extern "C" fn mh_get_uint32_t(
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_uint32_t(mut set: *mut Set_uint32_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -1048,7 +1017,6 @@ pub unsafe extern "C" fn mh_rehash_uint32_t(mut set: *mut Set_uint32_t) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_uint32_t(
     mut set: *mut Set_uint32_t,
     mut key: uint32_t,
@@ -1105,7 +1073,6 @@ pub unsafe extern "C" fn mh_put_uint32_t(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_uint32_t(
     mut set: *mut Set_uint32_t,
     mut key: *mut uint32_t,
@@ -1134,7 +1101,6 @@ pub unsafe extern "C" fn mh_delete_uint32_t(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_String(
     mut set: *mut Set_String,
     mut key: String_0,
@@ -1175,7 +1141,6 @@ pub unsafe extern "C" fn mh_find_bucket_String(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_String(mut set: *mut Set_String, mut key: String_0) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -1187,7 +1152,6 @@ pub unsafe extern "C" fn mh_get_String(mut set: *mut Set_String, mut key: String
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_String(mut set: *mut Set_String) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -1202,7 +1166,6 @@ pub unsafe extern "C" fn mh_rehash_String(mut set: *mut Set_String) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_String(
     mut set: *mut Set_String,
     mut key: String_0,
@@ -1259,7 +1222,6 @@ pub unsafe extern "C" fn mh_put_String(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_String(
     mut set: *mut Set_String,
     mut key: *mut String_0,
@@ -1288,7 +1250,6 @@ pub unsafe extern "C" fn mh_delete_String(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_HlEntry(
     mut set: *mut Set_HlEntry,
     mut key: HlEntry,
@@ -1329,7 +1290,6 @@ pub unsafe extern "C" fn mh_find_bucket_HlEntry(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_HlEntry(mut set: *mut Set_HlEntry, mut key: HlEntry) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -1341,7 +1301,6 @@ pub unsafe extern "C" fn mh_get_HlEntry(mut set: *mut Set_HlEntry, mut key: HlEn
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_HlEntry(mut set: *mut Set_HlEntry) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -1356,7 +1315,6 @@ pub unsafe extern "C" fn mh_rehash_HlEntry(mut set: *mut Set_HlEntry) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_HlEntry(
     mut set: *mut Set_HlEntry,
     mut key: HlEntry,
@@ -1413,7 +1371,6 @@ pub unsafe extern "C" fn mh_put_HlEntry(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_HlEntry(
     mut set: *mut Set_HlEntry,
     mut key: *mut HlEntry,
@@ -1442,7 +1399,6 @@ pub unsafe extern "C" fn mh_delete_HlEntry(
     }
     return MH_TOMBSTONE as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_ColorKey(
     mut set: *mut Set_ColorKey,
     mut key: ColorKey,
@@ -1483,7 +1439,6 @@ pub unsafe extern "C" fn mh_find_bucket_ColorKey(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_ColorKey(
     mut set: *mut Set_ColorKey,
     mut key: ColorKey,
@@ -1498,7 +1453,6 @@ pub unsafe extern "C" fn mh_get_ColorKey(
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_ColorKey(mut set: *mut Set_ColorKey) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -1513,7 +1467,6 @@ pub unsafe extern "C" fn mh_rehash_ColorKey(mut set: *mut Set_ColorKey) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_ColorKey(
     mut set: *mut Set_ColorKey,
     mut key: ColorKey,
@@ -1570,7 +1523,6 @@ pub unsafe extern "C" fn mh_put_ColorKey(
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_delete_ColorKey(
     mut set: *mut Set_ColorKey,
     mut key: *mut ColorKey,
@@ -1601,7 +1553,6 @@ pub unsafe extern "C" fn mh_delete_ColorKey(
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_int_int(
     mut map: *mut Map_int_int,
     mut key: ::core::ffi::c_int,
@@ -1616,7 +1567,6 @@ pub unsafe extern "C" fn map_ref_int_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_int_int(
     mut map: *mut Map_int_int,
     mut key: ::core::ffi::c_int,
@@ -1646,7 +1596,6 @@ pub unsafe extern "C" fn map_put_ref_int_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_int_int(
     mut map: *mut Map_int_int,
     mut key: ::core::ffi::c_int,
@@ -1666,7 +1615,6 @@ pub unsafe extern "C" fn map_del_int_int(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
@@ -1681,7 +1629,6 @@ pub unsafe extern "C" fn map_ref_int_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
@@ -1711,7 +1658,6 @@ pub unsafe extern "C" fn map_put_ref_int_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
@@ -1731,7 +1677,6 @@ pub unsafe extern "C" fn map_del_int_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_cstr_t_ptr_t(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: cstr_t,
@@ -1746,7 +1691,6 @@ pub unsafe extern "C" fn map_ref_cstr_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_cstr_t_ptr_t(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: cstr_t,
@@ -1776,7 +1720,6 @@ pub unsafe extern "C" fn map_put_ref_cstr_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_cstr_t_ptr_t(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: cstr_t,
@@ -1796,7 +1739,6 @@ pub unsafe extern "C" fn map_del_cstr_t_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_cstr_t_int(
     mut map: *mut Map_cstr_t_int,
     mut key: cstr_t,
@@ -1811,7 +1753,6 @@ pub unsafe extern "C" fn map_ref_cstr_t_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_cstr_t_int(
     mut map: *mut Map_cstr_t_int,
     mut key: cstr_t,
@@ -1841,7 +1782,6 @@ pub unsafe extern "C" fn map_put_ref_cstr_t_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_cstr_t_int(
     mut map: *mut Map_cstr_t_int,
     mut key: cstr_t,
@@ -1861,7 +1801,6 @@ pub unsafe extern "C" fn map_del_cstr_t_int(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_ptr_t_ptr_t(
     mut map: *mut Map_ptr_t_ptr_t,
     mut key: ptr_t,
@@ -1876,7 +1815,6 @@ pub unsafe extern "C" fn map_ref_ptr_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_ptr_t_ptr_t(
     mut map: *mut Map_ptr_t_ptr_t,
     mut key: ptr_t,
@@ -1906,7 +1844,6 @@ pub unsafe extern "C" fn map_put_ref_ptr_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_ptr_t_ptr_t(
     mut map: *mut Map_ptr_t_ptr_t,
     mut key: ptr_t,
@@ -1926,7 +1863,6 @@ pub unsafe extern "C" fn map_del_ptr_t_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint32_t_ptr_t(
     mut map: *mut Map_uint32_t_ptr_t,
     mut key: uint32_t,
@@ -1941,7 +1877,6 @@ pub unsafe extern "C" fn map_ref_uint32_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint32_t_ptr_t(
     mut map: *mut Map_uint32_t_ptr_t,
     mut key: uint32_t,
@@ -1971,7 +1906,6 @@ pub unsafe extern "C" fn map_put_ref_uint32_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint32_t_ptr_t(
     mut map: *mut Map_uint32_t_ptr_t,
     mut key: uint32_t,
@@ -1991,7 +1925,6 @@ pub unsafe extern "C" fn map_del_uint32_t_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint64_t_ptr_t(
     mut map: *mut Map_uint64_t_ptr_t,
     mut key: uint64_t,
@@ -2006,7 +1939,6 @@ pub unsafe extern "C" fn map_ref_uint64_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint64_t_ptr_t(
     mut map: *mut Map_uint64_t_ptr_t,
     mut key: uint64_t,
@@ -2036,7 +1968,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint64_t_ptr_t(
     mut map: *mut Map_uint64_t_ptr_t,
     mut key: uint64_t,
@@ -2056,7 +1987,6 @@ pub unsafe extern "C" fn map_del_uint64_t_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint64_t_ssize_t(
     mut map: *mut Map_uint64_t_ssize_t,
     mut key: uint64_t,
@@ -2071,7 +2001,6 @@ pub unsafe extern "C" fn map_ref_uint64_t_ssize_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint64_t_ssize_t(
     mut map: *mut Map_uint64_t_ssize_t,
     mut key: uint64_t,
@@ -2101,7 +2030,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_ssize_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint64_t_ssize_t(
     mut map: *mut Map_uint64_t_ssize_t,
     mut key: uint64_t,
@@ -2121,7 +2049,6 @@ pub unsafe extern "C" fn map_del_uint64_t_ssize_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint64_t_uint64_t(
     mut map: *mut Map_uint64_t_uint64_t,
     mut key: uint64_t,
@@ -2136,7 +2063,6 @@ pub unsafe extern "C" fn map_ref_uint64_t_uint64_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint64_t_uint64_t(
     mut map: *mut Map_uint64_t_uint64_t,
     mut key: uint64_t,
@@ -2166,7 +2092,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_uint64_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint64_t_uint64_t(
     mut map: *mut Map_uint64_t_uint64_t,
     mut key: uint64_t,
@@ -2186,7 +2111,6 @@ pub unsafe extern "C" fn map_del_uint64_t_uint64_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint64_t_int(
     mut map: *mut Map_uint64_t_int,
     mut key: uint64_t,
@@ -2201,7 +2125,6 @@ pub unsafe extern "C" fn map_ref_uint64_t_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint64_t_int(
     mut map: *mut Map_uint64_t_int,
     mut key: uint64_t,
@@ -2231,7 +2154,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint64_t_int(
     mut map: *mut Map_uint64_t_int,
     mut key: uint64_t,
@@ -2251,7 +2173,6 @@ pub unsafe extern "C" fn map_del_uint64_t_int(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_int64_t_int64_t(
     mut map: *mut Map_int64_t_int64_t,
     mut key: int64_t,
@@ -2266,7 +2187,6 @@ pub unsafe extern "C" fn map_ref_int64_t_int64_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_int64_t_int64_t(
     mut map: *mut Map_int64_t_int64_t,
     mut key: int64_t,
@@ -2296,7 +2216,6 @@ pub unsafe extern "C" fn map_put_ref_int64_t_int64_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_int64_t_int64_t(
     mut map: *mut Map_int64_t_int64_t,
     mut key: int64_t,
@@ -2316,7 +2235,6 @@ pub unsafe extern "C" fn map_del_int64_t_int64_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_int64_t_ptr_t(
     mut map: *mut Map_int64_t_ptr_t,
     mut key: int64_t,
@@ -2331,7 +2249,6 @@ pub unsafe extern "C" fn map_ref_int64_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_int64_t_ptr_t(
     mut map: *mut Map_int64_t_ptr_t,
     mut key: int64_t,
@@ -2361,7 +2278,6 @@ pub unsafe extern "C" fn map_put_ref_int64_t_ptr_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_int64_t_ptr_t(
     mut map: *mut Map_int64_t_ptr_t,
     mut key: int64_t,
@@ -2381,7 +2297,6 @@ pub unsafe extern "C" fn map_del_int64_t_ptr_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint32_t_uint32_t(
     mut map: *mut Map_uint32_t_uint32_t,
     mut key: uint32_t,
@@ -2396,7 +2311,6 @@ pub unsafe extern "C" fn map_ref_uint32_t_uint32_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint32_t_uint32_t(
     mut map: *mut Map_uint32_t_uint32_t,
     mut key: uint32_t,
@@ -2426,7 +2340,6 @@ pub unsafe extern "C" fn map_put_ref_uint32_t_uint32_t(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint32_t_uint32_t(
     mut map: *mut Map_uint32_t_uint32_t,
     mut key: uint32_t,
@@ -2446,7 +2359,6 @@ pub unsafe extern "C" fn map_del_uint32_t_uint32_t(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
@@ -2461,7 +2373,6 @@ pub unsafe extern "C" fn map_ref_String_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
@@ -2491,7 +2402,6 @@ pub unsafe extern "C" fn map_put_ref_String_int(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
@@ -2511,7 +2421,6 @@ pub unsafe extern "C" fn map_del_String_int(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
@@ -2526,7 +2435,6 @@ pub unsafe extern "C" fn map_ref_int_String(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
@@ -2556,7 +2464,6 @@ pub unsafe extern "C" fn map_put_ref_int_String(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
@@ -2576,7 +2483,6 @@ pub unsafe extern "C" fn map_del_int_String(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_ColorKey_ColorItem(
     mut map: *mut Map_ColorKey_ColorItem,
     mut key: ColorKey,
@@ -2591,7 +2497,6 @@ pub unsafe extern "C" fn map_ref_ColorKey_ColorItem(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_ColorKey_ColorItem(
     mut map: *mut Map_ColorKey_ColorItem,
     mut key: ColorKey,
@@ -2621,7 +2526,6 @@ pub unsafe extern "C" fn map_put_ref_ColorKey_ColorItem(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_ColorKey_ColorItem(
     mut map: *mut Map_ColorKey_ColorItem,
     mut key: ColorKey,
@@ -2641,7 +2545,6 @@ pub unsafe extern "C" fn map_del_ColorKey_ColorItem(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_ref_uint64_t_MTDamagePair(
     mut map: *mut Map_uint64_t_MTDamagePair,
     mut key: uint64_t,
@@ -2656,7 +2559,6 @@ pub unsafe extern "C" fn map_ref_uint64_t_MTDamagePair(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_put_ref_uint64_t_MTDamagePair(
     mut map: *mut Map_uint64_t_MTDamagePair,
     mut key: uint64_t,
@@ -2686,7 +2588,6 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_MTDamagePair(
     }
     return (*map).values.offset(k as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn map_del_uint64_t_MTDamagePair(
     mut map: *mut Map_uint64_t_MTDamagePair,
     mut key: uint64_t,

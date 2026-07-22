@@ -1694,7 +1694,6 @@ unsafe extern "C" fn pum_border_width() -> ::core::ffi::c_int {
         2 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_display(
     mut array: *mut pumitem_T,
     mut size: ::core::ffi::c_int,
@@ -2105,7 +2104,6 @@ unsafe extern "C" fn pum_user_attr_combine(
         attr
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_redraw() {
     let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut attr_scroll: ::core::ffi::c_int =
@@ -2843,7 +2841,6 @@ unsafe extern "C" fn pum_adjust_info_position(
     win_config_float(wp, (*wp).w_config);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_set_info(
     mut selected: ::core::ffi::c_int,
     mut info: *mut ::core::ffi::c_char,
@@ -3156,7 +3153,6 @@ unsafe extern "C" fn pum_set_selected(
     }
     return resized;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_undisplay(mut immediate: bool) {
     pum_is_visible.set(false_0 != 0);
     pum_array.set(::core::ptr::null_mut::<pumitem_T>());
@@ -3165,7 +3161,6 @@ pub unsafe extern "C" fn pum_undisplay(mut immediate: bool) {
         pum_check_clear();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_check_clear() {
     if !pum_is_visible.get() && pum_is_drawn.get() as ::core::ffi::c_int != 0 {
         if pum_external.get() {
@@ -3186,27 +3181,21 @@ pub unsafe extern "C" fn pum_check_clear() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_clear() {
     pum_first.set(0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_visible() -> bool {
     return pum_is_visible.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_drawn() -> bool {
     return pum_visible() as ::core::ffi::c_int != 0 && !pum_external.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_invalidate() {
     pum_invalid.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_recompose() {
     ui_comp_compose_grid(pum_grid.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_ext_select_item(
     mut item: ::core::ffi::c_int,
     mut insert: bool,
@@ -3220,7 +3209,6 @@ pub unsafe extern "C" fn pum_ext_select_item(
     (*pum_want.ptr()).insert = insert;
     (*pum_want.ptr()).finish = finish;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_get_height() -> ::core::ffi::c_int {
     if pum_external.get() {
         let mut ui_pum_height: ::core::ffi::c_int = ui_pum_get_height();
@@ -3230,7 +3218,6 @@ pub unsafe extern "C" fn pum_get_height() -> ::core::ffi::c_int {
     }
     return pum_height.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
     if !pum_visible() {
         return;
@@ -3481,7 +3468,6 @@ unsafe extern "C" fn pum_execute_menu(mut menu: *mut vimmenu_T, mut mode: ::core
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
     pum_undisplay(true_0 != 0);
     pum_size.set(0 as ::core::ffi::c_int);
@@ -3644,7 +3630,6 @@ pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_make_popup(
     mut path_name: *const ::core::ffi::c_char,
     mut use_mouse_pos: ::core::ffi::c_int,
@@ -3672,7 +3657,6 @@ pub unsafe extern "C" fn pum_make_popup(
         pum_show_popupmenu(menu);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_ui_flush() {
     if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
         && pum_is_drawn.get() as ::core::ffi::c_int != 0

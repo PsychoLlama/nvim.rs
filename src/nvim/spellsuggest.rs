@@ -593,7 +593,6 @@ unsafe extern "C" fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::co
 }
 static sps_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(SPS_BEST as ::core::ffi::c_int);
 static sps_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(9999 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     sps_flags.set(0 as ::core::ffi::c_int);
@@ -676,7 +675,6 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
     let mut need_cap: ::core::ffi::c_int = 0;
     let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -1076,7 +1074,6 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
     }
     (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_suggest_list(
     mut gap: *mut garray_T,
     mut word: *mut ::core::ffi::c_char,

@@ -1231,7 +1231,6 @@ unsafe extern "C" fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> 
     }
     return wop_flags.get() & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_fuzzy_complete(fuzzystr: *const ::core::ffi::c_char) -> bool {
     return wop_flags.get() & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && *fuzzystr as ::core::ffi::c_int != NUL;
@@ -1350,7 +1349,6 @@ unsafe extern "C" fn ExpandEscape(
         wildescape(xp, str, numfiles, files);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn nextwild(
     mut xp: *mut expand_T,
     mut type_0: ::core::ffi::c_int,
@@ -1601,7 +1599,6 @@ unsafe extern "C" fn cmdline_pum_create(
         ));
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_display(mut changed_array: bool) {
     pum_display(
         compl_match_array.get(),
@@ -1611,11 +1608,9 @@ pub unsafe extern "C" fn cmdline_pum_display(mut changed_array: bool) {
         compl_startcol.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_active() -> bool {
     return pum_visible() as ::core::ffi::c_int != 0 && !(*compl_match_array.ptr()).is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_remove(mut defer_redraw: bool) {
     pum_undisplay(!defer_redraw);
     let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -1625,12 +1620,10 @@ pub unsafe extern "C" fn cmdline_pum_remove(mut defer_redraw: bool) {
     let _ = *ptr_;
     compl_match_arraysize.set(0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_cleanup(mut cclp: *mut CmdlineInfo) {
     cmdline_pum_remove(false_0 != 0);
     wildmenu_cleanup(cclp);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_compl_pattern() -> *mut ::core::ffi::c_char {
     let mut xp: *mut expand_T = (*get_cmdline_info()).xpc;
     return if xp.is_null() {
@@ -1639,7 +1632,6 @@ pub unsafe extern "C" fn cmdline_compl_pattern() -> *mut ::core::ffi::c_char {
         (*xp).xp_orig
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdline_compl_is_fuzzy() -> bool {
     let mut xp: *mut expand_T = (*get_cmdline_info()).xpc;
     return !xp.is_null() && cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0;
@@ -2148,7 +2140,6 @@ unsafe extern "C" fn find_longest_match(
         len,
     ) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandOne(
     mut xp: *mut expand_T,
     mut str: *mut ::core::ffi::c_char,
@@ -2290,7 +2281,6 @@ pub unsafe extern "C" fn ExpandOne(
     }
     return ss;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandInit(mut xp: *mut expand_T) {
     memset(
         xp as *mut ::core::ffi::c_void,
@@ -2301,7 +2291,6 @@ pub unsafe extern "C" fn ExpandInit(mut xp: *mut expand_T) {
     (*xp).xp_prefix = XP_PREFIX_NONE;
     (*xp).xp_numfiles = -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandCleanup(mut xp: *mut expand_T) {
     if (*xp).xp_numfiles >= 0 as ::core::ffi::c_int {
         FreeWild((*xp).xp_numfiles, (*xp).xp_files);
@@ -2313,7 +2302,6 @@ pub unsafe extern "C" fn ExpandCleanup(mut xp: *mut expand_T) {
     *ptr_ = NULL;
     let _ = *ptr_;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_cmdline_orig() {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         cmdline_orig.ptr() as *mut *mut ::core::ffi::c_void;
@@ -2423,7 +2411,6 @@ unsafe extern "C" fn showmatches_oneline(
         msg_putchar('\n' as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn showmatches(
     mut xp: *mut expand_T,
     mut display_wildmenu: bool,
@@ -2614,7 +2601,6 @@ unsafe extern "C" fn expand_showtail(mut xp: *mut expand_T) -> bool {
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn addstar(
     mut fname: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -2764,7 +2750,6 @@ pub unsafe extern "C" fn addstar(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_expand_context(mut xp: *mut expand_T) {
     let ccline: *mut CmdlineInfo = get_cmdline_info();
     if ((*ccline).cmdfirstc == '/' as ::core::ffi::c_int
@@ -3905,7 +3890,6 @@ unsafe extern "C" fn set_one_cmd_context(
     }
     return set_context_by_cmdname(cmd, ea.cmdidx, xp, arg, ea.argt, context, forceit);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_cmd_context(
     mut xp: *mut expand_T,
     mut str: *mut ::core::ffi::c_char,
@@ -3945,7 +3929,6 @@ pub unsafe extern "C" fn set_cmd_context(
     (*xp).xp_col = col;
     *str.offset(col as isize) = old_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_cmdline(
     mut xp: *mut expand_T,
     mut str: *const ::core::ffi::c_char,
@@ -4992,7 +4975,6 @@ unsafe extern "C" fn ExpandFromContext(
     xfree(tofree as *mut ::core::ffi::c_void);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandGeneric(
     pat: *const ::core::ffi::c_char,
     mut xp: *mut expand_T,
@@ -5585,7 +5567,6 @@ unsafe extern "C" fn ExpandUserLua(
     process_user_list(retlist, matches, numMatches);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn globpath(
     mut path: *mut ::core::ffi::c_char,
     mut file: *mut ::core::ffi::c_char,
@@ -5695,7 +5676,6 @@ pub unsafe extern "C" fn globpath(
     }
     xfree(buf as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn wildmenu_translate_key(
     mut cclp: *mut CmdlineInfo,
     mut key: ::core::ffi::c_int,
@@ -5950,7 +5930,6 @@ unsafe extern "C" fn wildmenu_process_key_filenames(
     }
     return key;
 }
-#[no_mangle]
 pub unsafe extern "C" fn wildmenu_process_key(
     mut cclp: *mut CmdlineInfo,
     mut key: ::core::ffi::c_int,
@@ -5967,7 +5946,6 @@ pub unsafe extern "C" fn wildmenu_process_key(
     }
     return key;
 }
-#[no_mangle]
 pub unsafe extern "C" fn wildmenu_cleanup(mut cclp: *mut CmdlineInfo) {
     if p_wmnu.get() == 0 || wild_menu_showing.get() == 0 as ::core::ffi::c_int {
         return;
@@ -6000,7 +5978,6 @@ pub unsafe extern "C" fn wildmenu_cleanup(mut cclp: *mut CmdlineInfo) {
         RedrawingDisabled.set(old_RedrawingDisabled);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcompletion(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -6207,7 +6184,6 @@ pub unsafe extern "C" fn f_getcompletion(
     xfree(pat as *mut ::core::ffi::c_void);
     ExpandCleanup(&raw mut xpc);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcompletiontype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -6261,7 +6237,6 @@ pub unsafe extern "C" fn f_getcompletiontype(
     (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg);
     ExpandCleanup(&raw mut xpc);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_cmdcomplete_info(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,

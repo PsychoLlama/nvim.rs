@@ -434,20 +434,17 @@ static foldstartmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 static foldendmarker: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn copyFoldingState(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
     (*wp_to).w_fold_manual = (*wp_from).w_fold_manual;
     (*wp_to).w_foldinvalid = (*wp_from).w_foldinvalid;
     cloneFoldGrowArray(&raw mut (*wp_from).w_folds, &raw mut (*wp_to).w_folds);
 }
-#[no_mangle]
 pub unsafe extern "C" fn hasAnyFolding(mut win: *mut win_T) -> ::core::ffi::c_int {
     return ((*(*win).w_buffer).terminal.is_null()
         && (*win).w_onebuf_opt.wo_fen != 0
         && (!foldmethodIsManual(win) || !((*win).w_folds.ga_len <= 0 as ::core::ffi::c_int)))
         as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hasFolding(
     mut win: *mut win_T,
     mut lnum: linenr_T,
@@ -463,7 +460,6 @@ pub unsafe extern "C" fn hasFolding(
         ::core::ptr::null_mut::<foldinfo_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn hasFoldingWin(
     win: *mut win_T,
     lnum: linenr_T,
@@ -571,11 +567,9 @@ unsafe extern "C" fn foldLevel(mut lnum: linenr_T) -> ::core::ffi::c_int {
     }
     return foldLevelWin(curwin.get(), lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn lineFolded(win: *mut win_T, lnum: linenr_T) -> bool {
     return fold_info(win, lnum).fi_lines != 0 as linenr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fold_info(mut win: *mut win_T, mut lnum: linenr_T) -> foldinfo_T {
     let mut info: foldinfo_T = foldinfo_T {
         fi_lnum: 0,
@@ -598,7 +592,6 @@ pub unsafe extern "C" fn fold_info(mut win: *mut win_T, mut lnum: linenr_T) -> f
     }
     return info;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsManual(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -611,7 +604,6 @@ pub unsafe extern "C" fn foldmethodIsManual(mut wp: *mut win_T) -> bool {
             .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'u' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsIndent(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -619,7 +611,6 @@ pub unsafe extern "C" fn foldmethodIsIndent(mut wp: *mut win_T) -> bool {
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'i' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsExpr(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -632,7 +623,6 @@ pub unsafe extern "C" fn foldmethodIsExpr(mut wp: *mut win_T) -> bool {
             .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'x' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsMarker(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -645,7 +635,6 @@ pub unsafe extern "C" fn foldmethodIsMarker(mut wp: *mut win_T) -> bool {
             .offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'r' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsSyntax(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -653,7 +642,6 @@ pub unsafe extern "C" fn foldmethodIsSyntax(mut wp: *mut win_T) -> bool {
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 's' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldmethodIsDiff(mut wp: *mut win_T) -> bool {
     return *(*wp)
         .w_onebuf_opt
@@ -661,11 +649,9 @@ pub unsafe extern "C" fn foldmethodIsDiff(mut wp: *mut win_T) -> bool {
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'd' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn closeFold(mut pos: pos_T, mut count: ::core::ffi::c_int) {
     setFoldRepeat(pos, count, false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn closeFoldRecurse(mut pos: pos_T) {
     setManualFold(
         pos,
@@ -674,7 +660,6 @@ pub unsafe extern "C" fn closeFoldRecurse(mut pos: pos_T) {
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn opFoldRange(
     mut firstpos: pos_T,
     mut lastpos: pos_T,
@@ -720,11 +705,9 @@ pub unsafe extern "C" fn opFoldRange(
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn openFold(mut pos: pos_T, mut count: ::core::ffi::c_int) {
     setFoldRepeat(pos, count, true_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn openFoldRecurse(mut pos: pos_T) {
     setManualFold(
         pos,
@@ -733,7 +716,6 @@ pub unsafe extern "C" fn openFoldRecurse(mut pos: pos_T) {
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldOpenCursor() {
     checkupdate(curwin.get());
     if hasAnyFolding(curwin.get()) != 0 {
@@ -751,7 +733,6 @@ pub unsafe extern "C" fn foldOpenCursor() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn newFoldLevel() {
     newFoldLevelWin(curwin.get());
     if foldmethodIsDiff(curwin.get()) as ::core::ffi::c_int != 0
@@ -788,7 +769,6 @@ unsafe extern "C" fn newFoldLevelWin(mut wp: *mut win_T) {
     }
     changed_window_setting(wp);
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldCheckClose() {
     if *p_fcl.get() as ::core::ffi::c_int == NUL {
         return;
@@ -834,7 +814,6 @@ unsafe extern "C" fn checkCloseRec(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldManualAllowed(mut create: bool) -> ::core::ffi::c_int {
     if foldmethodIsManual(curwin.get()) as ::core::ffi::c_int != 0
         || foldmethodIsMarker(curwin.get()) as ::core::ffi::c_int != 0
@@ -854,7 +833,6 @@ pub unsafe extern "C" fn foldManualAllowed(mut create: bool) -> ::core::ffi::c_i
     }
     return false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     let mut use_level: bool = false_0 != 0;
     let mut closed: bool = false_0 != 0;
@@ -980,7 +958,6 @@ pub unsafe extern "C" fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut en
     (*fp_0).fd_small = kNone;
     changed_window_setting(wp);
 }
-#[no_mangle]
 pub unsafe extern "C" fn deleteFold(
     wp: *mut win_T,
     start: linenr_T,
@@ -1072,12 +1049,10 @@ pub unsafe extern "C" fn deleteFold(
         buf_updates_send_changes((*wp).w_buffer, first_lnum, num_changed, num_changed);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn clearFolding(mut win: *mut win_T) {
     deleteFoldRecurse((*win).w_buffer, &raw mut (*win).w_folds);
     (*win).w_foldinvalid = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldUpdate(mut wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
     if disable_fold_update.get() != 0
         || State.get() & MODE_INSERT as ::core::ffi::c_int != 0 && !foldmethodIsIndent(wp)
@@ -1111,7 +1086,6 @@ pub unsafe extern "C" fn foldUpdate(mut wp: *mut win_T, mut top: linenr_T, mut b
         got_int.set(got_int.get() as ::core::ffi::c_int | save_got_int != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldUpdateAfterInsert() {
     if foldmethodIsManual(curwin.get()) as ::core::ffi::c_int != 0
         || foldmethodIsSyntax(curwin.get()) as ::core::ffi::c_int != 0
@@ -1127,7 +1101,6 @@ pub unsafe extern "C" fn foldUpdateAll(mut win: *mut win_T) {
     (*win).w_foldinvalid = true_0 != 0;
     redraw_later(win, UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldMoveTo(
     updown: bool,
     dir: ::core::ffi::c_int,
@@ -1232,7 +1205,6 @@ pub unsafe extern "C" fn foldMoveTo(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldInitWin(mut new_win: *mut win_T) {
     ga_init(
         &raw mut (*new_win).w_folds,
@@ -1240,7 +1212,6 @@ pub unsafe extern "C" fn foldInitWin(mut new_win: *mut win_T) {
         10 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_wl_entry(
     mut win: *mut win_T,
     mut lnum: linenr_T,
@@ -1259,7 +1230,6 @@ pub unsafe extern "C" fn find_wl_entry(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldAdjustVisual() {
     if !VIsual_active.get() || hasAnyFolding(curwin.get()) == 0 {
         return;
@@ -1297,7 +1267,6 @@ pub unsafe extern "C" fn foldAdjustVisual() {
     }
     mb_adjust_cursor();
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldAdjustCursor(mut wp: *mut win_T) {
     hasFolding(
         wp,
@@ -1306,7 +1275,6 @@ pub unsafe extern "C" fn foldAdjustCursor(mut wp: *mut win_T) {
         ::core::ptr::null_mut::<linenr_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn cloneFoldGrowArray(mut from: *mut garray_T, mut to: *mut garray_T) {
     ga_init(to, (*from).ga_itemsize, (*from).ga_growsize);
     if (*from).ga_len <= 0 as ::core::ffi::c_int {
@@ -1577,7 +1545,6 @@ unsafe extern "C" fn deleteFoldEntry(
         (*gap).ga_len += moved - 1 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn deleteFoldRecurse(mut bp: *mut buf_T, mut gap: *mut garray_T) {
     let mut _gap: *mut garray_T = gap;
     if !(*_gap).ga_data.is_null() {
@@ -1590,7 +1557,6 @@ pub unsafe extern "C" fn deleteFoldRecurse(mut bp: *mut buf_T, mut gap: *mut gar
     }
     ga_clear(_gap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldMarkAdjust(
     mut wp: *mut win_T,
     mut line1: linenr_T,
@@ -1709,7 +1675,6 @@ unsafe extern "C" fn foldMarkAdjustRecurse(
         fp = fp.offset(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn getDeepestNesting(mut wp: *mut win_T) -> ::core::ffi::c_int {
     checkupdate(wp);
     return getDeepestNestingRecurse(&raw mut (*wp).w_folds);
@@ -1995,7 +1960,6 @@ unsafe extern "C" fn foldDelMarker(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_foldtext(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -2951,7 +2915,6 @@ unsafe extern "C" fn truncate_fold(wp: *mut win_T, mut fp: *mut fold_T, mut end:
     );
     (*fp).fd_len = end - (*fp).fd_top;
 }
-#[no_mangle]
 pub unsafe extern "C" fn foldMoveRange(
     wp: *mut win_T,
     mut gap: *mut garray_T,
@@ -3307,7 +3270,6 @@ unsafe extern "C" fn foldlevelSyntax(mut flp: *mut fline_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> ::core::ffi::c_int {
     if foldmethodIsManual(wp) {
         if put_line(
@@ -3462,7 +3424,6 @@ unsafe extern "C" fn foldclosed_both(
     }
     (*rettv).vval.v_number = -1 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foldclosed(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3470,7 +3431,6 @@ pub unsafe extern "C" fn f_foldclosed(
 ) {
     foldclosed_both(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foldclosedend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3478,7 +3438,6 @@ pub unsafe extern "C" fn f_foldclosedend(
 ) {
     foldclosed_both(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foldlevel(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3489,7 +3448,6 @@ pub unsafe extern "C" fn f_foldlevel(
         (*rettv).vval.v_number = foldLevel(lnum) as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foldtext(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3545,7 +3503,6 @@ pub unsafe extern "C" fn f_foldtext(
         (*rettv).vval.v_string = r;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foldtextresult(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

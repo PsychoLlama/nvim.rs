@@ -1979,7 +1979,6 @@ static e_non_numeric_argument_to_z: GlobalCell<[::core::ffi::c_char; 33]> =
             *b"E144: Non-numeric argument to :z\0",
         )
     });
-#[no_mangle]
 pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
     let mut data: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
     let mut len: size_t = utfc_ptr2len(data) as size_t;
@@ -2126,7 +2125,6 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
     }
     msg_end();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_align(mut eap: *mut exarg_T) {
     let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut new_indent: ::core::ffi::c_int = 0;
@@ -2344,7 +2342,6 @@ unsafe extern "C" fn sort_compare(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_sort(mut eap: *mut exarg_T) {
     let mut old_count: bcount_t = 0;
     let mut new_count: bcount_t = 0;
@@ -2689,7 +2686,6 @@ pub unsafe extern "C" fn ex_sort(mut eap: *mut exarg_T) {
         emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_uniq(mut eap: *mut exarg_T) {
     let mut match_continue: bool = false;
     let mut next_is_unmatch: bool = false;
@@ -2924,7 +2920,6 @@ pub unsafe extern "C" fn ex_uniq(mut eap: *mut exarg_T) {
         emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_move(
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -3163,7 +3158,6 @@ pub unsafe extern "C" fn do_move(
     );
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, mut n: linenr_T) {
     let mut count: linenr_T = line2 - line1 + 1 as linenr_T;
     if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
@@ -3208,7 +3202,6 @@ unsafe extern "C" fn prevcmd_is_set() -> ::core::ffi::c_int {
     }
     return true_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_bang(
     mut addr_count: ::core::ffi::c_int,
     mut eap: *mut exarg_T,
@@ -3580,7 +3573,6 @@ unsafe extern "C" fn do_filter(
     xfree(itmp as *mut ::core::ffi::c_void);
     xfree(otmp as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_shell(
     mut cmd: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -3621,7 +3613,6 @@ pub unsafe extern "C" fn do_shell(
         curbuf.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn make_filter_cmd(
     mut cmd: *mut ::core::ffi::c_char,
     mut itmp: *mut ::core::ffi::c_char,
@@ -3734,7 +3725,6 @@ pub unsafe extern "C" fn make_filter_cmd(
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn append_redir(
     buf: *mut ::core::ffi::c_char,
     buflen: size_t,
@@ -3781,7 +3771,6 @@ pub unsafe extern "C" fn append_redir(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn print_line_no_prefix(
     mut lnum: linenr_T,
     mut use_number: bool,
@@ -3805,7 +3794,6 @@ pub unsafe extern "C" fn print_line_no_prefix(
     msg_prt_line(ml_get(lnum), list);
 }
 static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn print_line(
     mut lnum: linenr_T,
     mut use_number: bool,
@@ -3834,7 +3822,6 @@ pub unsafe extern "C" fn print_line(
     }
     info_message.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rename_buffer(
     mut new_fname: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -3895,7 +3882,6 @@ pub unsafe extern "C" fn rename_buffer(
     do_autochdir();
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_file(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int
         && (*(*eap).arg as ::core::ffi::c_int != NUL
@@ -3915,7 +3901,6 @@ pub unsafe extern "C" fn ex_file(mut eap: *mut exarg_T) {
         fileinfo(false_0, false_0, (*eap).forceit != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_update(mut eap: *mut exarg_T) {
     if curbufIsChanged() as ::core::ffi::c_int != 0
         || !bt_nofilename(curbuf.get())
@@ -3925,7 +3910,6 @@ pub unsafe extern "C" fn ex_update(mut eap: *mut exarg_T) {
         do_write(eap);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_write(mut eap: *mut exarg_T) {
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_saveas as ::core::ffi::c_int {
         (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
@@ -3963,7 +3947,6 @@ unsafe extern "C" fn handle_mkdir_p_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_write(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     let mut other: bool = false;
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4155,7 +4138,6 @@ pub unsafe extern "C" fn do_write(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     xfree(free_fname as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_overwrite(
     mut eap: *mut exarg_T,
     mut buf: *mut buf_T,
@@ -4265,7 +4247,6 @@ pub unsafe extern "C" fn check_overwrite(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_wnext(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0;
     if *(*eap).cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -4281,7 +4262,6 @@ pub unsafe extern "C" fn ex_wnext(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_wqall(mut eap: *mut exarg_T) {
     let mut error: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut save_forceit: ::core::ffi::c_int = (*eap).forceit;
@@ -4418,7 +4398,6 @@ unsafe extern "C" fn check_readonly(
     }
     return false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getfile(
     mut fnum: ::core::ffi::c_int,
     mut ffname_arg: *mut ::core::ffi::c_char,
@@ -4508,7 +4487,6 @@ pub unsafe extern "C" fn getfile(
     xfree(free_me as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_swapcommand(
     mut command: *mut ::core::ffi::c_char,
     mut newlnum: linenr_T,
@@ -5178,7 +5156,6 @@ unsafe extern "C" fn delbuf_msg(mut name: *mut ::core::ffi::c_char) {
     (*au_new_curbuf.ptr()).br_buf_free_count = 0 as ::core::ffi::c_int;
 }
 static append_indent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn ex_append(mut eap: *mut exarg_T) {
     let mut theline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_undo: bool = false_0 != 0;
@@ -5333,7 +5310,6 @@ pub unsafe extern "C" fn ex_append(mut eap: *mut exarg_T) {
     need_wait_return.set(false_0 != 0);
     ex_no_reprint.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_change(mut eap: *mut exarg_T) {
     let mut lnum: linenr_T = 0;
     if (*eap).line2 >= (*eap).line1
@@ -5365,7 +5341,6 @@ pub unsafe extern "C" fn ex_change(mut eap: *mut exarg_T) {
     (*eap).line2 = (*eap).line1;
     ex_append(eap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_z(mut eap: *mut exarg_T) {
     let mut bigness: int64_t = 0;
     let mut minus: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5517,7 +5492,6 @@ pub unsafe extern "C" fn ex_z(mut eap: *mut exarg_T) {
     }
     ex_no_reprint.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_secure() -> bool {
     if secure.get() != 0 {
         secure.set(2 as ::core::ffi::c_int);
@@ -5536,11 +5510,9 @@ static old_sub: GlobalCell<SubReplacementString> = GlobalCell::new(SubReplacemen
     additional_data: ::core::ptr::null_mut::<AdditionalData>(),
 });
 static global_need_beginline: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
     *ret_sub = old_sub.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn sub_set_replacement(mut sub: SubReplacementString) {
     xfree((*old_sub.ptr()).sub as *mut ::core::ffi::c_void);
     if sub.additional_data != (*old_sub.ptr()).additional_data {
@@ -6999,7 +6971,6 @@ unsafe extern "C" fn do_sub(
     preview_lines.subresults.items = ::core::ptr::null_mut::<SubResult>();
     return retv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_sub_msg(mut count_only: bool) -> bool {
     if (sub_nsubs.get() as OptInt > p_report.get()
         && (KeyTyped.get() as ::core::ffi::c_int != 0
@@ -7085,7 +7056,6 @@ unsafe extern "C" fn global_exe_one(cmd: *mut ::core::ffi::c_char, lnum: linenr_
         do_cmdline(cmd, None, NULL_0, DOCMD_NOWAIT as ::core::ffi::c_int);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_global(mut eap: *mut exarg_T) {
     let mut lnum: linenr_T = 0;
     let mut type_0: ::core::ffi::c_int = 0;
@@ -7250,7 +7220,6 @@ pub unsafe extern "C" fn ex_global(mut eap: *mut exarg_T) {
     }
     vim_regfree(regmatch.regprog);
 }
-#[no_mangle]
 pub unsafe extern "C" fn global_exe(mut cmd: *mut ::core::ffi::c_char) {
     let mut old_lcount: linenr_T = 0;
     let mut old_buf: *mut buf_T = curbuf.get();
@@ -7290,7 +7259,6 @@ pub unsafe extern "C" fn global_exe(mut cmd: *mut ::core::ffi::c_char) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 {
         return false_0 != 0;
@@ -7542,11 +7510,9 @@ unsafe extern "C" fn show_sub(
         1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_substitute(mut eap: *mut exarg_T) {
     do_sub(eap, profile_zero(), 0 as ::core::ffi::c_int, 0 as handle_T);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_substitute_preview(
     mut eap: *mut exarg_T,
     mut cmdpreview_ns: ::core::ffi::c_int,
@@ -7571,7 +7537,6 @@ pub unsafe extern "C" fn ex_substitute_preview(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_vimgrep_pat(
     mut p: *mut ::core::ffi::c_char,
     mut s: *mut *mut ::core::ffi::c_char,
@@ -7618,7 +7583,6 @@ pub unsafe extern "C" fn skip_vimgrep_pat(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_oldfiles(mut eap: *mut exarg_T) {
     let mut l: *mut list_T = get_vim_var_list(VV_OLDFILES);
     let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

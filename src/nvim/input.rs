@@ -303,7 +303,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let save_State: ::core::ffi::c_int = State.get();
     (*no_wait_return.ptr()) += 1;
@@ -336,7 +335,6 @@ pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::f
     xfree(prompt as *mut ::core::ffi::c_void);
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::ffi::c_int {
     let mut buf: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
     let mut buflen: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
@@ -429,7 +427,6 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
     mapped_ctrl_c.set(save_mapped_ctrl_c);
     return merge_modifiers(n, mod_mask.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn prompt_for_input(
     mut prompt: *mut ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,

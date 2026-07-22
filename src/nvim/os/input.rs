@@ -530,7 +530,6 @@ static blocking: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static cursorhold_time: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static cursorhold_tb_change_cnt: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn input_start() {
     if !(*read_stream.ptr()).s.closed {
         return;
@@ -552,7 +551,6 @@ pub unsafe extern "C" fn input_start() {
         NULL,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_stop() {
     if (*read_stream.ptr()).s.closed {
         return;
@@ -614,7 +612,6 @@ unsafe extern "C" fn reset_cursorhold_wait(mut tb_change_cnt: ::core::ffi::c_int
     cursorhold_time.set(0 as ::core::ffi::c_int);
     cursorhold_tb_change_cnt.set(tb_change_cnt);
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_get(
     mut buf: *mut uint8_t,
     mut maxlen: ::core::ffi::c_int,
@@ -758,7 +755,6 @@ pub unsafe extern "C" fn input_get(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_char_avail() -> bool {
     return inbuf_poll(
         0 as ::core::ffi::c_int,
@@ -766,7 +762,6 @@ pub unsafe extern "C" fn os_char_avail() -> bool {
     ) as ::core::ffi::c_int
         == kTrue as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_breakcheck() {
     if got_int.get() {
         return;
@@ -775,7 +770,6 @@ pub unsafe extern "C" fn os_breakcheck() {
 }
 pub const BREAKCHECK_SKIP: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 static breakcheck_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn line_breakcheck() {
     (*breakcheck_count.ptr()) += 1;
     if breakcheck_count.get() >= BREAKCHECK_SKIP {
@@ -783,7 +777,6 @@ pub unsafe extern "C" fn line_breakcheck() {
         os_breakcheck();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn fast_breakcheck() {
     (*breakcheck_count.ptr()) += 1;
     if breakcheck_count.get() >= BREAKCHECK_SKIP * 10 as ::core::ffi::c_int {
@@ -791,7 +784,6 @@ pub unsafe extern "C" fn fast_breakcheck() {
         os_breakcheck();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn veryfast_breakcheck() {
     (*breakcheck_count.ptr()) += 1;
     if breakcheck_count.get() >= BREAKCHECK_SKIP * 100 as ::core::ffi::c_int {
@@ -799,12 +791,10 @@ pub unsafe extern "C" fn veryfast_breakcheck() {
         os_breakcheck();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_isatty(mut fd: ::core::ffi::c_int) -> bool {
     return uv_guess_handle(fd as uv_file) as ::core::ffi::c_uint
         == UV_TTY as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_available() -> size_t {
     return (*input_write_pos.ptr()).offset_from(input_read_pos.get()) as size_t;
 }
@@ -813,7 +803,6 @@ unsafe extern "C" fn input_space() -> size_t {
         .offset(INPUT_BUFFER_SIZE as isize)
         .offset_from(input_write_pos.get()) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char, mut size: size_t) {
     if input_read_pos.get() > input_buffer.ptr() as *mut ::core::ffi::c_char {
         let mut available: size_t = input_available();
@@ -838,7 +827,6 @@ pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char,
     );
     input_write_pos.set((*input_write_pos.ptr()).offset(to_write as isize));
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_enqueue(mut chan_id: uint64_t, mut keys: String_0) -> size_t {
     current_ui.set(chan_id);
     let mut ptr: *const ::core::ffi::c_char = keys.data;
@@ -1066,7 +1054,6 @@ unsafe extern "C" fn handle_mouse_event(
     }
     return bufsize;
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_enqueue_mouse(
     mut code: ::core::ffi::c_int,
     mut modifier: uint8_t,
@@ -1102,7 +1089,6 @@ pub unsafe extern "C" fn input_enqueue_mouse(
         written,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn input_blocking() -> bool {
     return blocking.get();
 }
@@ -1260,7 +1246,6 @@ unsafe extern "C" fn push_event_key(
     }
     return buf_idx;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_input_ready(mut events: *mut MultiQueue) -> bool {
     return typebuf_was_filled.get() as ::core::ffi::c_int != 0
         || input_available() != 0

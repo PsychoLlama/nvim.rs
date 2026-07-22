@@ -162,7 +162,6 @@ unsafe extern "C" fn mpack_map(mut buf: *mut *mut ::core::ffi::c_char, mut len: 
 unsafe extern "C" fn mpack_remaining(mut packer: *mut PackerBuffer) -> size_t {
     return (*packer).endptr.offset_from((*packer).ptr) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_check_buffer(mut packer: *mut PackerBuffer) {
     if mpack_remaining(packer) < (2 as ::core::ffi::c_int * MPACK_ITEM_SIZE) as size_t {
         (*packer).packer_flush.expect("non-null function pointer")(packer);
@@ -180,7 +179,6 @@ unsafe extern "C" fn mpack_w8(
         i -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_uint64(mut ptr: *mut *mut ::core::ffi::c_char, mut i: uint64_t) {
     if i > 0xfffffff as uint64_t {
         let c2rust_fresh18 = *ptr;
@@ -191,7 +189,6 @@ pub unsafe extern "C" fn mpack_uint64(mut ptr: *mut *mut ::core::ffi::c_char, mu
         mpack_uint(ptr, i as uint32_t);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_integer(mut ptr: *mut *mut ::core::ffi::c_char, mut i: Integer) {
     if i >= 0 as Integer {
         mpack_uint64(ptr, i as uint64_t);
@@ -223,7 +220,6 @@ pub unsafe extern "C" fn mpack_integer(mut ptr: *mut *mut ::core::ffi::c_char, m
         *c2rust_fresh25 = i as ::core::ffi::c_char;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_float8(
     mut ptr: *mut *mut ::core::ffi::c_char,
     mut i: ::core::ffi::c_double,
@@ -233,7 +229,6 @@ pub unsafe extern "C" fn mpack_float8(
     *c2rust_fresh26 = 0xcb as ::core::ffi::c_int as ::core::ffi::c_char;
     mpack_w8(ptr, &raw mut i as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_str(mut str: String_0, mut packer: *mut PackerBuffer) {
     let len: size_t = str.size;
     if len < 32 as size_t {
@@ -262,7 +257,6 @@ pub unsafe extern "C" fn mpack_str(mut str: String_0, mut packer: *mut PackerBuf
     }
     mpack_raw(str.data, len, packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_bin(mut str: String_0, mut packer: *mut PackerBuffer) {
     let len: size_t = str.size;
     if len < 0xff as size_t {
@@ -287,7 +281,6 @@ pub unsafe extern "C" fn mpack_bin(mut str: String_0, mut packer: *mut PackerBuf
     }
     mpack_raw(str.data, len, packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_raw(
     mut data: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -314,7 +307,6 @@ pub unsafe extern "C" fn mpack_raw(
     }
     mpack_check_buffer(packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_ext(
     mut buf: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -351,7 +343,6 @@ pub unsafe extern "C" fn mpack_ext(
     *c2rust_fresh41 = type_0 as ::core::ffi::c_char;
     mpack_raw(buf, len, packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_handle(
     mut type_0: ObjectType,
     mut handle: handle_T,
@@ -403,11 +394,9 @@ pub unsafe extern "C" fn mpack_handle(
         (*packer).ptr = (*packer).ptr.offset(packsize as isize);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_object(mut obj: *mut Object, mut packer: *mut PackerBuffer) {
     mpack_object_inner(obj, ::core::ptr::null_mut::<Object>(), 0 as size_t, packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_object_array(mut arr: Array, mut packer: *mut PackerBuffer) {
     mpack_array(&raw mut (*packer).ptr, arr.size as uint32_t);
     if arr.size > 0 as size_t {
@@ -427,7 +416,6 @@ pub unsafe extern "C" fn mpack_object_array(mut arr: Array, mut packer: *mut Pac
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_object_inner(
     mut current: *mut Object,
     mut container: *mut Object,
@@ -656,7 +644,6 @@ pub unsafe extern "C" fn mpack_object_inner(
         let _ = *ptr_;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn packer_string_buffer() -> PackerBuffer {
     let initial_size: size_t = 64 as size_t;
     let mut alloc: *mut ::core::ffi::c_char = xmalloc(initial_size) as *mut ::core::ffi::c_char;
@@ -678,7 +665,6 @@ unsafe extern "C" fn flush_string_buffer(mut buffer: *mut PackerBuffer) {
     (*buffer).ptr = (*buffer).startptr.offset(len as isize);
     (*buffer).endptr = (*buffer).startptr.offset(new_capacity as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn packer_take_string(mut buffer: *mut PackerBuffer) -> String_0 {
     return String_0 {
         data: (*buffer).startptr,

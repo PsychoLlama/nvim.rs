@@ -896,7 +896,6 @@ pub unsafe extern "C" fn termkey_interpret_csi(
     }
     return parse_csi(tk, 0 as size_t, &raw mut dummy, params, nparams, cmd);
 }
-#[no_mangle]
 pub unsafe extern "C" fn termkey_interpret_csi_param(
     mut param: TermKeyCsiParam,
     mut paramp: *mut ::core::ffi::c_int,
@@ -1343,7 +1342,6 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
     keyinfo_initialised.set(1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn new_driver_csi(
     mut tk: *mut TermKey,
     mut _term: *mut TerminfoEntry,
@@ -1359,7 +1357,6 @@ pub unsafe extern "C" fn new_driver_csi(
     (*csi).saved_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     return csi as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_driver_csi(mut info: *mut ::core::ffi::c_void) {
     let mut csi: *mut TermKeyCsi = info as *mut TermKeyCsi;
     if !(*csi).saved_string.is_null() {
@@ -1620,7 +1617,6 @@ unsafe extern "C" fn peekkey_ctrlstring(
     (*key).modifiers = 0 as ::core::ffi::c_int;
     return TERMKEY_RES_KEY;
 }
-#[no_mangle]
 pub unsafe extern "C" fn peekkey_csi(
     mut tk: *mut TermKey,
     mut info: *mut ::core::ffi::c_void,

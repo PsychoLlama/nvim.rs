@@ -1654,7 +1654,6 @@ unsafe extern "C" fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_i
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_load_file(
     mut fname: *mut ::core::ffi::c_char,
     mut lang: *mut ::core::ffi::c_char,
@@ -1969,7 +1968,6 @@ unsafe extern "C" fn tree_count_words(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn suggest_load_files() {
     let mut c: ::core::ffi::c_int = 0;
     let mut timestamp: time_t = 0;
@@ -3072,7 +3070,6 @@ static compress_start: GlobalCell<::core::ffi::c_int> =
 static compress_inc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(100 as ::core::ffi::c_int);
 static compress_added: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(500000 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = p_msm.get();
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
@@ -7168,7 +7165,6 @@ unsafe extern "C" fn put_node(
     }
     return newindex;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_mkspell(mut eap: *mut exarg_T) {
     let mut fcount: ::core::ffi::c_int = 0;
     let mut fnames: *mut *mut ::core::ffi::c_char =
@@ -8034,7 +8030,6 @@ unsafe extern "C" fn spell_message(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_spell(mut eap: *mut exarg_T) {
     spell_add_word(
         (*eap).arg,
@@ -8054,7 +8049,6 @@ pub unsafe extern "C" fn ex_spell(mut eap: *mut exarg_T) {
         (*eap).cmdidx as ::core::ffi::c_int == CMD_spellundo as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn spell_add_word(
     mut word: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,

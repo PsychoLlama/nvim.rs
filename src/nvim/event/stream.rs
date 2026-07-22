@@ -67,7 +67,6 @@ pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn stream_set_blocking(
     mut fd: ::core::ffi::c_int,
     mut blocking: bool,
@@ -308,7 +307,6 @@ pub unsafe extern "C" fn stream_set_blocking(
     uv_loop_close(&raw mut loop_0);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stream_init(
     mut loop_0: *mut Loop,
     mut stream: *mut Stream,
@@ -381,7 +379,6 @@ pub unsafe extern "C" fn stream_init(
     (*stream).closed = false_0 != 0;
     (*stream).events = ::core::ptr::null_mut::<MultiQueue>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn stream_may_close(mut stream: *mut Stream) {
     if (*stream).closed {
         return;
@@ -400,7 +397,6 @@ pub unsafe extern "C" fn stream_may_close(mut stream: *mut Stream) {
         stream_close_handle(stream);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn stream_close_handle(mut stream: *mut Stream) {
     let mut handle: *mut uv_handle_t = ::core::ptr::null_mut::<uv_handle_t>();
     if !(*stream).uvstream.is_null() {

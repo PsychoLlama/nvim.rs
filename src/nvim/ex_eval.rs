@@ -978,28 +978,23 @@ unsafe extern "C" fn discard_pending_return(mut p: *mut typval_T) {
     tv_free(p);
 }
 static cause_abort: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn aborting() -> bool {
     return did_emsg.get() != 0 && force_abort.get() as ::core::ffi::c_int != 0
         || got_int.get() as ::core::ffi::c_int != 0
         || did_throw.get() as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn update_force_abort() {
     if cause_abort.get() {
         force_abort.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn should_abort(mut retcode: ::core::ffi::c_int) -> bool {
     return retcode == FAIL && trylevel.get() != 0 as ::core::ffi::c_int && emsg_silent.get() == 0
         || aborting() as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn aborted_in_try() -> bool {
     return force_abort.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cause_errthrow(
     mut mesg: *const ::core::ffi::c_char,
     mut multiline: bool,
@@ -1102,12 +1097,10 @@ unsafe extern "C" fn free_msglist(mut l: *mut msglist_T) {
         messages = next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_global_msglist() {
     free_msglist(*msg_list.get());
     *msg_list.get() = ::core::ptr::null_mut::<msglist_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_errthrow(
     mut cstack: *mut cstack_T,
     mut cmdname: *mut ::core::ffi::c_char,
@@ -1133,7 +1126,6 @@ pub unsafe extern "C" fn do_errthrow(
     }
     *msg_list.get() = ::core::ptr::null_mut::<msglist_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_intthrow(mut cstack: *mut cstack_T) -> bool {
     if !got_int.get() || trylevel.get() == 0 as ::core::ffi::c_int && !did_throw.get() {
         return false_0 != 0;
@@ -1156,7 +1148,6 @@ pub unsafe extern "C" fn do_intthrow(mut cstack: *mut cstack_T) -> bool {
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_exception_string(
     mut value: *mut ::core::ffi::c_void,
     mut type_0: except_type_T,
@@ -1415,7 +1406,6 @@ unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished
     tv_list_unref((*excp).stacktrace);
     xfree(excp as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn discard_current_exception() {
     if !(*current_exception.ptr()).is_null() {
         discard_exception(current_exception.get(), false_0 != 0);
@@ -1543,7 +1533,6 @@ unsafe extern "C" fn finish_exception(mut excp: *mut except_T) {
     }
     discard_exception(excp, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn exception_state_save(mut estate: *mut exception_state_T) {
     (*estate).estate_current_exception = current_exception.get();
     (*estate).estate_did_throw = did_throw.get();
@@ -1551,7 +1540,6 @@ pub unsafe extern "C" fn exception_state_save(mut estate: *mut exception_state_T
     (*estate).estate_trylevel = trylevel.get();
     (*estate).estate_did_emsg = did_emsg.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn exception_state_restore(mut estate: *mut exception_state_T) {
     if did_throw.get() {
         handle_did_throw();
@@ -1562,7 +1550,6 @@ pub unsafe extern "C" fn exception_state_restore(mut estate: *mut exception_stat
     trylevel.set((*estate).estate_trylevel);
     did_emsg.set((*estate).estate_did_emsg);
 }
-#[no_mangle]
 pub unsafe extern "C" fn exception_state_clear() {
     current_exception.set(::core::ptr::null_mut::<except_T>());
     did_throw.set(false_0 != 0);
@@ -1659,7 +1646,6 @@ unsafe extern "C" fn report_pending(
         xfree(mesg as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn report_make_pending(
     mut pending: ::core::ffi::c_int,
     mut value: *mut ::core::ffi::c_void,
@@ -1702,7 +1688,6 @@ unsafe extern "C" fn report_discard_pending(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_eval(mut eap: *mut exarg_T) {
     let mut tv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
@@ -1721,7 +1706,6 @@ pub unsafe extern "C" fn ex_eval(mut eap: *mut exarg_T) {
     }
     clear_evalarg(&raw mut evalarg, eap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
@@ -1749,7 +1733,6 @@ pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
     did_endif.set(true_0 != 0);
     if (*(*eap).cstack).cs_idx < 0 as ::core::ffi::c_int
@@ -1772,7 +1755,6 @@ pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
         (*(*eap).cstack).cs_idx -= 1;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     let mut skip: bool = did_emsg.get() != 0
@@ -1852,7 +1834,6 @@ pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
         (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ELSE as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
     let mut error: bool = false;
     let cstack: *mut cstack_T = (*eap).cstack;
@@ -1920,7 +1901,6 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_looplevel <= 0 as ::core::ffi::c_int
@@ -1964,7 +1944,6 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_looplevel <= 0 as ::core::ffi::c_int
@@ -1990,7 +1969,6 @@ pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
@@ -2061,7 +2039,6 @@ pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
         (*cstack).cs_lflags |= CSL_HAD_ENDLOOP as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_throw(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2087,7 +2064,6 @@ pub unsafe extern "C" fn ex_throw(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
     let mut inactivate_try: bool = false_0 != 0;
     let mut idx: ::core::ffi::c_int = cleanup_conditionals(
@@ -2109,7 +2085,6 @@ pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
     }
     did_throw.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
@@ -2143,7 +2118,6 @@ pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut give_up: bool = false_0 != 0;
@@ -2278,7 +2252,6 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
         (*eap).nextcmd = find_nextcmd(end);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut pending: ::core::ffi::c_int = CSTP_NONE as ::core::ffi::c_int;
@@ -2382,7 +2355,6 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         (*cstack).cs_lflags |= CSL_HAD_FINA as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut rethrow: bool = false_0 != 0;
@@ -2506,7 +2478,6 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
         do_throw(cstack);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
     let mut pending: ::core::ffi::c_int = CSTP_NONE as ::core::ffi::c_int;
     if did_emsg.get() != 0
@@ -2557,7 +2528,6 @@ pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
         (*csp).exception = ::core::ptr::null_mut::<except_T>();
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn leave_cleanup(mut csp: *mut cleanup_T) {
     let mut pending: ::core::ffi::c_int = (*csp).pending;
     if pending == CSTP_NONE as ::core::ffi::c_int {
@@ -2598,7 +2568,6 @@ pub unsafe extern "C" fn leave_cleanup(mut csp: *mut cleanup_T) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn cleanup_conditionals(
     mut cstack: *mut cstack_T,
     mut searched_cond: ::core::ffi::c_int,
@@ -2712,7 +2681,6 @@ unsafe extern "C" fn get_end_emsg(mut cstack: *mut cstack_T) -> *mut ::core::ffi
     }
     return gettext(&raw const e_endif as *const ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rewind_conditionals(
     mut cstack: *mut cstack_T,
     mut idx: ::core::ffi::c_int,
@@ -2729,14 +2697,12 @@ pub unsafe extern "C" fn rewind_conditionals(
         (*cstack).cs_idx -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_endfunction(mut _eap: *mut exarg_T) {
     semsg(
         gettext(&raw const e_str_not_inside_function as *const ::core::ffi::c_char),
         b":endfunction\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn has_loop_cmd(mut p: *mut ::core::ffi::c_char) -> bool {
     loop {
         while *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int

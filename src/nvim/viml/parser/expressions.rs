@@ -1430,7 +1430,6 @@ static eltkn_opt_scope_tab: GlobalCell<[*const ::core::ffi::c_char; 109]> = Glob
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"Local\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn viml_pexpr_repr_token(
     pstate: *const ParserState,
     token: LexExprToken,
@@ -1684,7 +1683,6 @@ unsafe extern "C" fn intchar2str(ch: ::core::ffi::c_int) -> *const ::core::ffi::
     }
     return buf.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub static node_maxchildren: GlobalCell<[uint8_t; 39]> = GlobalCell::new([
     0 as uint8_t,
     2 as uint8_t,

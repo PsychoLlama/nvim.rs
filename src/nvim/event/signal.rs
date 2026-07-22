@@ -60,7 +60,6 @@ pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn signal_watcher_init(
     mut loop_0: *mut Loop,
     mut watcher: *mut SignalWatcher,
@@ -72,7 +71,6 @@ pub unsafe extern "C" fn signal_watcher_init(
     (*watcher).cb = None;
     (*watcher).events = (*loop_0).fast_events;
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_watcher_start(
     mut watcher: *mut SignalWatcher,
     mut cb: signal_cb,
@@ -85,11 +83,9 @@ pub unsafe extern "C" fn signal_watcher_start(
         signum,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_watcher_stop(mut watcher: *mut SignalWatcher) {
     uv_signal_stop(&raw mut (*watcher).uv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_watcher_close(
     mut watcher: *mut SignalWatcher,
     mut cb: signal_close_cb,

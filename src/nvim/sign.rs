@@ -1442,7 +1442,6 @@ unsafe extern "C" fn buf_delete_signs(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_has_signs(mut buf: *const buf_T) -> bool {
     return buf_meta_total(buf, kMTMetaSignHL).wrapping_add(buf_meta_total(buf, kMTMetaSignText))
         != 0;
@@ -1610,7 +1609,6 @@ unsafe extern "C" fn sign_cmd_idx(
     *end_cmd = save;
     return idx;
 }
-#[no_mangle]
 pub unsafe extern "C" fn describe_sign_text(
     mut buf: *mut ::core::ffi::c_char,
     mut sign_text: *mut schar_T,
@@ -1628,7 +1626,6 @@ pub unsafe extern "C" fn describe_sign_text(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_sign_text(
     mut sp: *mut sign_T,
     mut sign_text: *mut schar_T,
@@ -2302,7 +2299,6 @@ unsafe extern "C" fn parse_sign_cmd_args(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_sign(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut p: *mut ::core::ffi::c_char = skiptowhite(arg);
@@ -2487,7 +2483,6 @@ unsafe extern "C" fn sign_get_placed_info_dict(mut mark: MTKey) -> *mut dict_T {
     );
     return d;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_buffer_signs(mut buf: *mut buf_T) -> *mut list_T {
     let l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
@@ -2650,7 +2645,6 @@ unsafe extern "C" fn sign_get_placed(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_signs() {
     let mut name: cstr_t = ::core::ptr::null::<::core::ffi::c_char>();
     let mut names: C2Rust_Unnamed_26 = C2Rust_Unnamed_26 {
@@ -2718,7 +2712,6 @@ unsafe extern "C" fn get_nth_sign_group_name(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_sign_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -2773,7 +2766,6 @@ pub unsafe extern "C" fn get_sign_name(
         _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_sign_cmd(
     mut xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
@@ -2993,7 +2985,6 @@ unsafe extern "C" fn sign_define_multiple(mut l: *mut list_T, mut retlist: *mut 
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_define(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3035,7 +3026,6 @@ pub unsafe extern "C" fn f_sign_define(
     };
     (*rettv).vval.v_number = sign_define_from_dict(name, d) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_getdefined(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3063,7 +3053,6 @@ pub unsafe extern "C" fn f_sign_getdefined(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_getplaced(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3133,7 +3122,6 @@ pub unsafe extern "C" fn f_sign_getplaced(
     }
     sign_get_placed(buf, lnum, sign_id, group, (*rettv).vval.v_list);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_jump(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3283,7 +3271,6 @@ unsafe extern "C" fn sign_place_from_dict(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_place(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3309,7 +3296,6 @@ pub unsafe extern "C" fn f_sign_place(
         dict,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_placelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3363,7 +3349,6 @@ unsafe extern "C" fn sign_undefine_multiple(mut l: *mut list_T, mut retlist: *mu
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_undefine(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3450,7 +3435,6 @@ unsafe extern "C" fn sign_unplace_from_dict(
     }
     return sign_unplace(buf, id, group, 0 as linenr_T) - 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_unplace(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3474,7 +3458,6 @@ pub unsafe extern "C" fn f_sign_unplace(
         sign_unplace_from_dict(argvars.offset(0 as ::core::ffi::c_int as isize), dict)
             as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_sign_unplacelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

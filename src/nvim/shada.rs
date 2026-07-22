@@ -4928,7 +4928,6 @@ unsafe extern "C" fn shada_write(
     xfree(wms as *mut ::core::ffi::c_void);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_write_file(
     file: *const ::core::ffi::c_char,
     mut nomerge: bool,
@@ -5281,14 +5280,12 @@ pub unsafe extern "C" fn shada_write_file(
     xfree(fname as *mut ::core::ffi::c_void);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_read_marks() -> ::core::ffi::c_int {
     return shada_read_file(
         ::core::ptr::null::<::core::ffi::c_char>(),
         kShaDaWantMarks as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_read_everything(
     fname: *const ::core::ffi::c_char,
     forceit: bool,
@@ -6469,7 +6466,6 @@ unsafe extern "C" fn shada_init_jumps(
     }
     return jumps_size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_encode_regs() -> String_0 {
     let wms: *mut WriteMergerState =
         xcalloc(1 as size_t, ::core::mem::size_of::<WriteMergerState>()) as *mut WriteMergerState;
@@ -6502,7 +6498,6 @@ pub unsafe extern "C" fn shada_encode_regs() -> String_0 {
     xfree(wms as *mut ::core::ffi::c_void);
     return packer_take_string(&raw mut packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_encode_jumps() -> String_0 {
     let mut removable_bufs: Set_ptr_t = Set_ptr_t {
         h: MAPHASH_INIT,
@@ -6537,7 +6532,6 @@ pub unsafe extern "C" fn shada_encode_jumps() -> String_0 {
     }
     return packer_take_string(&raw mut packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
     let mut removable_bufs: Set_ptr_t = Set_ptr_t {
         h: MAPHASH_INIT,
@@ -6554,7 +6548,6 @@ pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
     xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
     return packer_take_string(&raw mut packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
     let mut packer: PackerBuffer = packer_string_buffer();
     let mut var_iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
@@ -6618,7 +6611,6 @@ pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
     }
     return packer_take_string(&raw mut packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn shada_read_string(mut string: String_0, flags: ::core::ffi::c_int) {
     if string.size == 0 as size_t {
         return;
@@ -6637,7 +6629,6 @@ pub unsafe extern "C" fn shada_read_string(mut string: String_0, flags: ::core::
     shada_read(&raw mut sd_reader, flags);
     close_file(&raw mut sd_reader);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_shada_parameter(mut type_0: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = find_shada_parameter(type_0);
     if !p.is_null() && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
@@ -6645,7 +6636,6 @@ pub unsafe extern "C" fn get_shada_parameter(mut type_0: ::core::ffi::c_int) -> 
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_shada_parameter(
     mut type_0: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -6666,7 +6656,6 @@ pub unsafe extern "C" fn find_shada_parameter(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_marks_read() {
     if !(*curbuf.get()).b_marks_read
         && get_shada_parameter('\'' as ::core::ffi::c_int) > 0 as ::core::ffi::c_int

@@ -213,7 +213,6 @@ pub const ENV_LISTEN: [::core::ffi::c_char; 20] = unsafe {
     ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"NVIM_LISTEN_ADDRESS\0")
 };
 static watchers: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-#[no_mangle]
 pub unsafe extern "C" fn server_init(mut listen_addr: *const ::core::ffi::c_char) -> bool {
     let mut ok: bool = true_0 != 0;
     let mut must_free: bool = false_0 != 0;
@@ -298,7 +297,6 @@ unsafe extern "C" fn set_vservername(mut srvs: *mut garray_T) {
     };
     set_vim_var_string(VV_SEND_SERVER, default_server, -1 as ptrdiff_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_teardown() {
     let mut _gap: *mut garray_T = watchers.ptr();
     if !(*_gap).ga_data.is_null() {
@@ -312,7 +310,6 @@ pub unsafe extern "C" fn server_teardown() {
     }
     ga_clear(_gap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_address_new(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -349,7 +346,6 @@ pub unsafe extern "C" fn server_address_new(
     }
     return xstrdup(&raw mut fmt as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_owns_pipe_address(mut address: *const ::core::ffi::c_char) -> bool {
     let mut result: bool = false_0 != 0;
     let mut path: *mut ::core::ffi::c_char = fix_fname(address);
@@ -369,7 +365,6 @@ pub unsafe extern "C" fn server_owns_pipe_address(mut address: *const ::core::ff
     xfree(path as *mut ::core::ffi::c_void);
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_start(mut addr: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if addr.is_null() || *addr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
@@ -483,7 +478,6 @@ pub unsafe extern "C" fn server_start(mut addr: *const ::core::ffi::c_char) -> :
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_stop(
     mut endpoint: *const ::core::ffi::c_char,
     mut keep_vservername: bool,
@@ -545,7 +539,6 @@ pub unsafe extern "C" fn server_stop(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn server_address_list(
     mut size: *mut size_t,
 ) -> *mut *mut ::core::ffi::c_char {

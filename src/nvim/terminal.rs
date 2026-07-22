@@ -3232,12 +3232,10 @@ static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermS
     pm: None,
     sos: None,
 });
-#[no_mangle]
 pub unsafe extern "C" fn terminal_init() {
     time_watcher_init(main_loop.ptr(), refresh_timer.ptr(), NULL_0);
     (*refresh_timer.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminal_teardown() {
     time_watcher_stop(refresh_timer.ptr());
     multiqueue_free((*refresh_timer.ptr()).events);
@@ -3835,7 +3833,6 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
     free_string_option((*s).save_w_p_culopt);
     (*s).save_curwin_handle = 0 as ::core::ffi::c_int as handle_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminal_enter() -> bool {
     let mut buf: *mut buf_T = curbuf.get();
     '_c2rust_label: {
@@ -4349,7 +4346,6 @@ pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mu
     }
     (*term).streamed_paste = streamed;
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminal_paste(
     mut count: ::core::ffi::c_int,
     mut y_array: *mut String_0,
@@ -5869,7 +5865,6 @@ unsafe extern "C" fn invalidate_terminal(
         refresh_pending.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminal_check_refresh() {
     multiqueue_process_events((*refresh_timer.ptr()).events);
 }

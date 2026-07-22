@@ -432,19 +432,15 @@ pub const RUNTIME_DIRNAME: [::core::ffi::c_char; 8] =
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub static default_vim_dir: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
-#[no_mangle]
 pub static default_vimruntime_dir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
-#[no_mangle]
 pub static default_lib_dir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_ptr()
         as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
-#[no_mangle]
 pub unsafe extern "C" fn env_init() {
     nvim_testing.set(os_env_exists(
         b"NVIM_TEST\0".as_ptr() as *const ::core::ffi::c_char,
@@ -686,7 +682,6 @@ pub unsafe extern "C" fn os_unsetenv(mut name: *const ::core::ffi::c_char) -> ::
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_get_fullenv_size() -> size_t {
     let mut len: size_t = 0 as size_t;
     extern "C" {
@@ -698,7 +693,6 @@ pub unsafe extern "C" fn os_get_fullenv_size() -> size_t {
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_free_fullenv(mut env: *mut *mut ::core::ffi::c_char) {
     if env.is_null() {
         return;
@@ -713,7 +707,6 @@ pub unsafe extern "C" fn os_free_fullenv(mut env: *mut *mut ::core::ffi::c_char)
     }
     xfree(env as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_copy_fullenv(
     mut env: *mut *mut ::core::ffi::c_char,
     mut env_size: size_t,
@@ -783,7 +776,6 @@ pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::cor
 pub unsafe extern "C" fn os_get_pid() -> int64_t {
     return getpid() as int64_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_hint_priority() {}
 #[no_mangle]
 pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char, mut size: size_t) {
@@ -807,7 +799,6 @@ pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char,
 }
 static homedir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
     if (*homedir.ptr()).is_null() {
         emsg(b"os_homedir failed: homedir not initialized\0".as_ptr() as *const ::core::ffi::c_char);
@@ -815,7 +806,6 @@ pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
     }
     return homedir.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_homedir() {
     xfree(homedir.get() as *mut ::core::ffi::c_void);
     homedir.set(::core::ptr::null_mut::<::core::ffi::c_char>());
@@ -872,13 +862,11 @@ unsafe extern "C" fn os_uv_homedir() -> *mut ::core::ffi::c_char {
     (*homedir_buf.ptr())[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_env_save(
     mut src: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return expand_env_save_opt(src, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_env_save_opt(
     mut src: *mut ::core::ffi::c_char,
     mut one: bool,
@@ -894,7 +882,6 @@ pub unsafe extern "C" fn expand_env_save_opt(
     );
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_env(
     mut src: *mut ::core::ffi::c_char,
     mut dst: *mut ::core::ffi::c_char,
@@ -1214,7 +1201,6 @@ unsafe extern "C" fn remove_tail(
     }
     return pend;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_env_iter(
     delim: ::core::ffi::c_char,
     val: *const ::core::ffi::c_char,
@@ -1235,7 +1221,6 @@ pub unsafe extern "C" fn vim_env_iter(
     *len = dirend.offset_from(varval) as size_t;
     return dirend.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_env_iter_rev(
     delim: ::core::ffi::c_char,
     val: *const ::core::ffi::c_char,
@@ -1262,7 +1247,6 @@ pub unsafe extern "C" fn vim_env_iter_rev(
     *len = varend.offset_from(colon) as size_t;
     return colon.offset(-(1 as ::core::ffi::c_int as isize)) as *const ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_get_prefix_from_exepath(mut exe_name: *mut ::core::ffi::c_char) {
     xstrlcpy(
         exe_name,
@@ -1274,7 +1258,6 @@ pub unsafe extern "C" fn vim_get_prefix_from_exepath(mut exe_name: *mut ::core::
     path_end = path_tail(exe_name);
     *path_end = NUL as ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_getenv(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1417,7 +1400,6 @@ pub unsafe extern "C" fn vim_getenv(
     }
     return vim_path;
 }
-#[no_mangle]
 pub unsafe extern "C" fn home_replace(
     buf: *const buf_T,
     mut src: *const ::core::ffi::c_char,
@@ -1565,7 +1547,6 @@ pub unsafe extern "C" fn home_replace(
     }
     return dst_p.offset_from(dst) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn home_replace_save(
     mut buf: *mut buf_T,
     mut src: *const ::core::ffi::c_char,
@@ -1578,7 +1559,6 @@ pub unsafe extern "C" fn home_replace_save(
     home_replace(buf, src, dst, len, true_0 != 0);
     return dst;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_env_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1693,7 +1673,6 @@ pub unsafe extern "C" fn os_shell_is_cmdexe(mut sh: *const ::core::ffi::c_char) 
         path_tail(sh),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_unsetenv_ext(mut var: *const ::core::ffi::c_char) {
     os_unsetenv(var);
     if strcasecmp(
@@ -1710,7 +1689,6 @@ pub unsafe extern "C" fn vim_unsetenv_ext(mut var: *const ::core::ffi::c_char) {
         didset_vimruntime.set(false_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_setenv_ext(
     mut name: *const ::core::ffi::c_char,
     mut val: *const ::core::ffi::c_char,

@@ -762,7 +762,6 @@ unsafe extern "C" fn do_popup(
     got_click.set(false_0 != 0);
     return jump_flags;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_mouse(
     mut oap: *mut oparg_T,
     mut c: ::core::ffi::c_int,
@@ -1488,7 +1487,6 @@ pub unsafe extern "C" fn do_mouse(
     }
     return moved;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
     let mut old_curwin: *mut win_T = curwin.get();
     undisplay_dollar();
@@ -1521,7 +1519,6 @@ pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
     }
     redraw_statuslines();
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
     let mut shift_or_ctrl: bool = mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
     if (*cap).arg == MSCR_UP as ::core::ffi::c_int || (*cap).arg == MSCR_DOWN as ::core::ffi::c_int
@@ -1570,7 +1567,6 @@ pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
         do_mousescroll_horiz(leftcol);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
     let mut cap: cmdarg_T = cmdarg_T {
         oap: ::core::ptr::null_mut::<oparg_T>(),
@@ -1683,7 +1679,6 @@ pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
         set_can_cindent(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn is_mouse_key(mut c: ::core::ffi::c_int) -> bool {
     return c
         == -(253 as ::core::ffi::c_int
@@ -1736,11 +1731,9 @@ unsafe extern "C" fn mouse_model_popup() -> bool {
         == 'p' as ::core::ffi::c_int;
 }
 static dragwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
 pub unsafe extern "C" fn reset_dragwin() {
     dragwin.set(::core::ptr::null_mut::<win_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn jump_to_mouse(
     mut flags: ::core::ffi::c_int,
     mut inclusive: *mut bool,
@@ -2124,7 +2117,6 @@ unsafe extern "C" fn do_mousescroll_horiz(mut leftcol: colnr_T) -> bool {
     }
     return set_leftcol(leftcol);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nv_mousescroll(mut cap: *mut cmdarg_T) {
     let old_curwin: *mut win_T = curwin.get();
     if mouse_row.get() >= 0 as ::core::ffi::c_int && mouse_col.get() >= 0 as ::core::ffi::c_int {
@@ -2147,7 +2139,6 @@ pub unsafe extern "C" fn nv_mousescroll(mut cap: *mut cmdarg_T) {
     curwin.set(old_curwin);
     curbuf.set((*curwin.get()).w_buffer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nv_mouse(mut cap: *mut cmdarg_T) {
     do_mouse(
         (*cap).oap,
@@ -2157,7 +2148,6 @@ pub unsafe extern "C" fn nv_mouse(mut cap: *mut cmdarg_T) {
         false,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn mouse_comp_pos(
     mut win: *mut win_T,
     mut rowp: *mut ::core::ffi::c_int,
@@ -2301,7 +2291,6 @@ pub unsafe extern "C" fn mouse_find_win_inner(
     }
     return ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn mouse_find_win_outer(
     mut gridp: *mut ::core::ffi::c_int,
     mut rowp: *mut ::core::ffi::c_int,
@@ -2371,7 +2360,6 @@ unsafe extern "C" fn mouse_find_grid_win(
     }
     return ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn vcol2col(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -2416,7 +2404,6 @@ pub unsafe extern "C" fn vcol2col(
     }
     return ci.ptr.offset_from(line) as colnr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn setmouse() {
     ui_cursor_shape();
     ui_check_mouse();
@@ -2512,7 +2499,6 @@ unsafe extern "C" fn mouse_check_grid(
         *flagsp |= MOUSE_FOLD_CLOSE as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getmousepos(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,

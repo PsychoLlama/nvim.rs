@@ -807,7 +807,6 @@ unsafe extern "C" fn filter_map(
     restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
     (*did_emsg.ptr()) |= save_did_emsg;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_filter(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -815,7 +814,6 @@ pub unsafe extern "C" fn f_filter(
 ) {
     filter_map(argvars, rettv, FILTERMAP_FILTER);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_map(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -823,7 +821,6 @@ pub unsafe extern "C" fn f_map(
 ) {
     filter_map(argvars, rettv, FILTERMAP_MAP);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_mapnew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -831,7 +828,6 @@ pub unsafe extern "C" fn f_mapnew(
 ) {
     filter_map(argvars, rettv, FILTERMAP_MAPNEW);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_foreach(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -839,7 +835,6 @@ pub unsafe extern "C" fn f_foreach(
 ) {
     filter_map(argvars, rettv, FILTERMAP_FOREACH);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_add(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -976,7 +971,6 @@ unsafe extern "C" fn count_dict(
     }
     return n;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_count(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1269,7 +1263,6 @@ unsafe extern "C" fn extend(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_extend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1279,7 +1272,6 @@ pub unsafe extern "C" fn f_extend(
         b"extend() argument\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_extendnew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1290,7 +1282,6 @@ pub unsafe extern "C" fn f_extendnew(
         as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_insert(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1406,7 +1397,6 @@ pub unsafe extern "C" fn f_insert(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_remove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1433,7 +1423,6 @@ pub unsafe extern "C" fn f_remove(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_reverse(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

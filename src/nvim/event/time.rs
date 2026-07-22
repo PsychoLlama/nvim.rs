@@ -59,7 +59,6 @@ pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-#[no_mangle]
 pub unsafe extern "C" fn time_watcher_init(
     mut loop_0: *mut Loop,
     mut watcher: *mut TimeWatcher,
@@ -71,7 +70,6 @@ pub unsafe extern "C" fn time_watcher_init(
     (*watcher).events = (*loop_0).fast_events;
     (*watcher).blockable = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_watcher_start(
     mut watcher: *mut TimeWatcher,
     mut cb: time_cb,
@@ -86,11 +84,9 @@ pub unsafe extern "C" fn time_watcher_start(
         repeat,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_watcher_stop(mut watcher: *mut TimeWatcher) {
     uv_timer_stop(&raw mut (*watcher).uv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_watcher_close(mut watcher: *mut TimeWatcher, mut cb: time_cb) {
     (*watcher).close_cb = cb;
     uv_close(

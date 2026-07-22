@@ -548,7 +548,6 @@ pub const KV_INITIAL_VALUE: C2Rust_Unnamed_16 = C2Rust_Unnamed_16 {
 };
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn win_new_float(
     mut wp: *mut win_T,
     mut last: bool,
@@ -722,7 +721,6 @@ pub unsafe extern "C" fn win_new_float(
     redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
     return wp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
     (*wp).w_onebuf_opt.wo_nu = false_0;
     (*wp).w_onebuf_opt.wo_rnu = false_0;
@@ -791,17 +789,14 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_border_height(mut wp: *mut win_T) -> ::core::ffi::c_int {
     return (*wp).w_border_adj[0 as ::core::ffi::c_int as usize]
         + (*wp).w_border_adj[2 as ::core::ffi::c_int as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_border_width(mut wp: *mut win_T) -> ::core::ffi::c_int {
     return (*wp).w_border_adj[1 as ::core::ffi::c_int as usize]
         + (*wp).w_border_adj[3 as ::core::ffi::c_int as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinConfig) {
     let mut show_stl: bool = *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
         && (p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt);
@@ -965,7 +960,6 @@ unsafe extern "C" fn float_zindex_cmp(
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi::c_int) {
     let mut float_win_arr: C2Rust_Unnamed_16 = KV_INITIAL_VALUE;
     let mut wp: *mut win_T = lastwin.get();
@@ -1023,7 +1017,6 @@ pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi
     float_win_arr.size = float_win_arr.capacity;
     float_win_arr.items = ::core::ptr::null_mut::<*mut win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_check_anchored_floats(mut win: *mut win_T) {
     let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
@@ -1036,7 +1029,6 @@ pub unsafe extern "C" fn win_check_anchored_floats(mut win: *mut win_T) {
         wp = (*wp).w_prev;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_update_statusline() {
     let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
@@ -1049,7 +1041,6 @@ pub unsafe extern "C" fn win_float_update_statusline() {
         wp = (*wp).w_prev;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_anchor_laststatus() {
     let mut win: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
@@ -1065,7 +1056,6 @@ pub unsafe extern "C" fn win_float_anchor_laststatus() {
         win = (*win).w_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_reconfig_floats() {
     let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
@@ -1073,7 +1063,6 @@ pub unsafe extern "C" fn win_reconfig_floats() {
         wp = (*wp).w_prev;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_valid(mut win: *const win_T) -> bool {
     if win.is_null() {
         return false_0 != 0;
@@ -1091,7 +1080,6 @@ pub unsafe extern "C" fn win_float_valid(mut win: *const win_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_find_preview() -> *mut win_T {
     let mut wp: *mut win_T = lastwin.get();
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
@@ -1102,7 +1090,6 @@ pub unsafe extern "C" fn win_float_find_preview() -> *mut win_T {
     }
     return ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_find_altwin(
     mut win: *const win_T,
     mut tp: *const tabpage_T,
@@ -1158,7 +1145,6 @@ unsafe extern "C" fn handle_error_and_cleanup(
     unblock_autocmds();
     return ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_float_create_preview(
     mut enter: bool,
     mut new_buf: bool,

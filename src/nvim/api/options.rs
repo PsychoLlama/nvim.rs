@@ -985,7 +985,6 @@ unsafe extern "C" fn wipe_ft_buf(mut buf: *mut buf_T) {
     }
     unblock_autocmds();
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_option_value(
     mut name: String_0,
     mut opts: *mut KeyDict_option,
@@ -1082,7 +1081,6 @@ pub unsafe extern "C" fn nvim_get_option_value(
         data: C2Rust_Unnamed { boolean: false },
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_set_option_value(
     mut channel_id: uint64_t,
     mut name: String_0,
@@ -1129,14 +1127,12 @@ pub unsafe extern "C" fn nvim_set_option_value(
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
     current_sctx.set(save_current_sctx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_all_options_info(
     mut arena: *mut Arena,
     mut _err: *mut Error,
 ) -> Dict {
     return get_all_vimoptions(arena);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_get_option_info2(
     mut name: String_0,
     mut opts: *mut KeyDict_option,

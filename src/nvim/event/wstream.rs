@@ -191,7 +191,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 39] = unsafe {
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXMEM: ::core::ffi::c_int =
     1024 as ::core::ffi::c_int * 1024 as ::core::ffi::c_int * 2000 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn wstream_init_fd(
     mut loop_0: *mut Loop,
     mut stream: *mut Stream,
@@ -201,7 +200,6 @@ pub unsafe extern "C" fn wstream_init_fd(
     stream_init(loop_0, stream, fd, ::core::ptr::null_mut::<uv_stream_t>());
     wstream_init(stream, maxmem);
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_init_stream(
     mut stream: *mut Stream,
     mut uvstream: *mut uv_stream_t,
@@ -215,7 +213,6 @@ pub unsafe extern "C" fn wstream_init_stream(
     );
     wstream_init(stream, maxmem);
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_init(mut stream: *mut Stream, mut maxmem: size_t) {
     (*stream).maxmem = if maxmem != 0 {
         maxmem
@@ -223,7 +220,6 @@ pub unsafe extern "C" fn wstream_init(mut stream: *mut Stream, mut maxmem: size_
         DEFAULT_MAXMEM as size_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_set_write_cb(
     mut stream: *mut Stream,
     mut cb: stream_write_cb,
@@ -232,7 +228,6 @@ pub unsafe extern "C" fn wstream_set_write_cb(
     (*stream).write_cb = cb;
     (*stream).cb_data = data;
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_write(
     mut stream: *mut Stream,
     mut buffer: *mut WBuffer,
@@ -416,7 +411,6 @@ pub unsafe extern "C" fn wstream_write(
     };
     return err;
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_new_buffer(
     mut data: *mut ::core::ffi::c_char,
     mut size: size_t,
@@ -451,7 +445,6 @@ unsafe extern "C" fn write_cb(mut req: *mut uv_write_t, mut status: ::core::ffi:
     }
     xfree(data as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn wstream_release_wbuffer(mut buffer: *mut WBuffer) {
     (*buffer).refcount = (*buffer).refcount.wrapping_sub(1);
     if (*buffer).refcount == 0 {

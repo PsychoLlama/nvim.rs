@@ -1055,9 +1055,7 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
 static highlight_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-#[no_mangle]
 pub static highlight_arena: GlobalCell<Arena> = GlobalCell::new(ARENA_EMPTY);
-#[no_mangle]
 pub static highlight_unames: GlobalCell<Map_cstr_t_int> = GlobalCell::new(MAP_INIT);
 static hl_name_table: GlobalCell<[*mut ::core::ffi::c_char; 18]> = GlobalCell::new([
     b"bold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -1886,21 +1884,17 @@ pub static highlight_init_cmdline: GlobalCell<[*const ::core::ffi::c_char; 141]>
             as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
     ]);
-#[no_mangle]
 pub unsafe extern "C" fn highlight_num_groups() -> ::core::ffi::c_int {
     return (*highlight_ga.ptr()).ga_len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_group_name(
     mut id: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(id as isize)).sg_name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_link_id(mut id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(id as isize)).sg_link;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_init_cmdline_highlight(mut reset: bool, mut init: bool) {
     let mut i: size_t = 0 as size_t;
     while !(*highlight_init_cmdline.ptr())[i as usize].is_null() {
@@ -1908,7 +1902,6 @@ pub unsafe extern "C" fn syn_init_cmdline_highlight(mut reset: bool, mut init: b
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
     static had_both: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     let mut p: *mut ::core::ffi::c_char =
@@ -1946,7 +1939,6 @@ pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
     }
     syn_init_cmdline_highlight(false_0 != 0, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn load_colors(mut name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if recursive.get() {
@@ -2163,7 +2155,6 @@ unsafe extern "C" fn lookup_color(
     }
     return color;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_hl_group(
     mut id: ::core::ffi::c_int,
     mut attrs: HlAttrs,
@@ -2366,7 +2357,6 @@ unsafe extern "C" fn set_gui_color(
     }
     return *color != old_color || *color_idx != old_idx;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_highlight(
     mut line: *const ::core::ffi::c_char,
     forceit: bool,
@@ -3270,7 +3260,6 @@ pub unsafe extern "C" fn do_highlight(
         need_highlight_changed.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_cterm_colors() {
     normal_fg.set(-1 as ::core::ffi::c_int as RgbValue);
     normal_bg.set(-1 as ::core::ffi::c_int as RgbValue);
@@ -3558,7 +3547,6 @@ unsafe extern "C" fn hlgroup2dict(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ns_get_hl_defs(
     mut ns_id: NS,
     mut opts: *mut KeyDict_get_highlight,
@@ -3739,7 +3727,6 @@ unsafe extern "C" fn highlight_list_arg(
     }
     return didh;
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_has_attr(
     id: ::core::ffi::c_int,
     flag: ::core::ffi::c_int,
@@ -3773,7 +3760,6 @@ pub unsafe extern "C" fn highlight_has_attr(
         };
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_color(
     id: ::core::ffi::c_int,
     what: *const ::core::ffi::c_char,
@@ -3985,7 +3971,6 @@ pub unsafe extern "C" fn highlight_color(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_list_header(
     did_header: bool,
     outlen: ::core::ffi::c_int,
@@ -4079,7 +4064,6 @@ unsafe extern "C" fn set_hl_attr(mut idx: ::core::ffi::c_int) {
         ui_mode_info_set();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_name2id(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '@' as ::core::ffi::c_int
@@ -4088,7 +4072,6 @@ pub unsafe extern "C" fn syn_name2id(mut name: *const ::core::ffi::c_char) -> ::
     }
     return syn_name2id_len(name, strlen(name));
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_name2id_len(
     mut name: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4104,7 +4087,6 @@ pub unsafe extern "C" fn syn_name2id_len(
         &raw mut name_u as *mut ::core::ffi::c_char as cstr_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_name2attr(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut id: ::core::ffi::c_int = syn_name2id(name);
     if id != 0 as ::core::ffi::c_int {
@@ -4112,13 +4094,11 @@ pub unsafe extern "C" fn syn_name2attr(mut name: *const ::core::ffi::c_char) -> 
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_exists(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     return (syn_name2id(name) > 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_id2name(mut id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
         return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
@@ -4127,7 +4107,6 @@ pub unsafe extern "C" fn syn_id2name(mut id: ::core::ffi::c_int) -> *mut ::core:
         .offset((id - 1 as ::core::ffi::c_int) as isize))
     .sg_name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_check_group(
     mut name: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -4221,12 +4200,10 @@ unsafe extern "C" fn syn_add_group(
     map_put_cstr_t_int(highlight_unames.ptr(), (*hlgp).sg_name_u as cstr_t, id);
     return id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_id2attr(mut hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut optional: bool = false_0 != 0;
     return syn_ns_id2attr(-1 as ::core::ffi::c_int, hl_id, &raw mut optional);
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_ns_id2attr(
     mut ns_id: ::core::ffi::c_int,
     mut hl_id: ::core::ffi::c_int,
@@ -4246,13 +4223,11 @@ pub unsafe extern "C" fn syn_ns_id2attr(
     }
     return (*sgp).sg_attr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_get_final_id(mut hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut ns_id: ::core::ffi::c_int = (*curwin.get()).w_ns_hl_active;
     syn_ns_get_final_id(&raw mut ns_id, &raw mut hl_id);
     return hl_id;
 }
-#[no_mangle]
 pub unsafe extern "C" fn syn_ns_get_final_id(
     mut ns_id: *mut ::core::ffi::c_int,
     mut hl_idp: *mut ::core::ffi::c_int,
@@ -4295,7 +4270,6 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
     *hl_idp = hl_id;
     return used;
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_attr_set_all() {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while idx < (*highlight_ga.ptr()).ga_len {
@@ -4386,7 +4360,6 @@ unsafe extern "C" fn combine_stl_hlt(
     set_hl_attr(hlcnt + i);
     *table.offset(i as isize) = syn_id2attr(hlcnt + i + 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn highlight_changed() {
     let mut userhl: [::core::ffi::c_char; 30] = [0; 30];
     let mut id_S: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -4473,7 +4446,6 @@ pub unsafe extern "C" fn highlight_changed() {
     (*highlight_ga.ptr()).ga_len = hlcnt;
     decor_provider_invalidate_hl();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_highlight_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -4569,14 +4541,12 @@ unsafe extern "C" fn highlight_list_two(mut cnt: ::core::ffi::c_int, mut id: ::c
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_highlight_name(
     xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return get_highlight_name_ext(xp, idx, true_0 != 0) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_highlight_name_ext(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -4616,7 +4586,6 @@ pub unsafe extern "C" fn get_highlight_name_ext(
     }
     return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_name;
 }
-#[no_mangle]
 pub static color_name_table: GlobalCell<[color_name_table_T; 708]> = GlobalCell::new([
     color_name_table_T {
         name: b"AliceBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -8925,7 +8894,6 @@ pub static color_name_table: GlobalCell<[color_name_table_T; 708]> = GlobalCell:
         color: 0 as RgbValue,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn name_to_color(
     mut name: *const ::core::ffi::c_char,
     mut idx: *mut ::core::ffi::c_int,
@@ -9014,7 +8982,6 @@ pub unsafe extern "C" fn name_to_color(
     *idx = kColorIdxNone as ::core::ffi::c_int;
     return -1 as RgbValue;
 }
-#[no_mangle]
 pub unsafe extern "C" fn coloridx_to_name(
     mut idx: ::core::ffi::c_int,
     mut val: ::core::ffi::c_int,
@@ -9041,7 +9008,6 @@ pub unsafe extern "C" fn coloridx_to_name(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn name_to_ctermcolor(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {

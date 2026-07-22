@@ -4397,21 +4397,17 @@ unsafe extern "C" fn log_path_init() {
         let _ = *ptr__0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_init() {
     uv_mutex_init_recursive(mutex.ptr());
     log_path_init();
     did_log_init.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_lock() {
     uv_mutex_lock(mutex.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_unlock() {
     uv_mutex_unlock(mutex.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn logmsg(
     mut log_level: ::core::ffi::c_int,
     mut context: *const ::core::ffi::c_char,
@@ -4470,7 +4466,6 @@ pub unsafe extern "C" fn logmsg(
     log_unlock();
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_uv_handles(mut loop_0: *mut ::core::ffi::c_void) {
     let mut l: *mut uv_loop_t = loop_0 as *mut uv_loop_t;
     log_lock();
@@ -4481,7 +4476,6 @@ pub unsafe extern "C" fn log_uv_handles(mut loop_0: *mut ::core::ffi::c_void) {
     }
     log_unlock();
 }
-#[no_mangle]
 pub unsafe extern "C" fn open_log_file() -> *mut FILE {
     *__errno_location() = 0 as ::core::ffi::c_int;
     if (*log_file_path.ptr())[0 as ::core::ffi::c_int as usize] != 0 {
@@ -4506,7 +4500,6 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
     );
     return stderr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_callstack_to_file(
     mut log_file: *mut FILE,
     func_name: *const ::core::ffi::c_char,
@@ -8712,7 +8705,6 @@ pub unsafe extern "C" fn log_callstack_to_file(
         fclose(log_file);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn log_callstack(
     func_name: *const ::core::ffi::c_char,
     line_num: ::core::ffi::c_int,

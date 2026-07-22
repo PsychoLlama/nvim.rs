@@ -24,7 +24,6 @@ unsafe extern "C" fn die(mut fmt: *const ::core::ffi::c_char, mut c2rust_args: .
     fprintf(stderr, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     abort();
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
     let mut size: size_t = 0;
     if len == 0 {
@@ -50,7 +49,6 @@ pub unsafe extern "C" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
     }
     strbuf_ensure_null(s);
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_new(mut len: size_t) -> *mut strbuf_t {
     let mut s: *mut strbuf_t = ::core::ptr::null_mut::<strbuf_t>();
     s = malloc(::core::mem::size_of::<strbuf_t>()) as *mut strbuf_t;
@@ -75,7 +73,6 @@ unsafe extern "C" fn debug_stats(mut s: *mut strbuf_t) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_free(mut s: *mut strbuf_t) {
     debug_stats(s);
     if !(*s).buf.is_null() {
@@ -86,7 +83,6 @@ pub unsafe extern "C" fn strbuf_free(mut s: *mut strbuf_t) {
         free(s as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_free_to_string(
     mut s: *mut strbuf_t,
     mut len: *mut size_t,
@@ -135,7 +131,6 @@ unsafe extern "C" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -
     }
     return newsize;
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
     let mut newsize: size_t = 0;
     newsize = calculate_new_size(s, len);
@@ -158,7 +153,6 @@ pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
     }
     (*s).reallocs += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn strbuf_append_string(
     mut s: *mut strbuf_t,
     mut str: *const ::core::ffi::c_char,

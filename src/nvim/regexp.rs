@@ -1840,7 +1840,6 @@ unsafe extern "C" fn skip_anyof(mut p: *mut ::core::ffi::c_char) -> *mut ::core:
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_regexp(
     mut startp: *mut ::core::ffi::c_char,
     mut delim: ::core::ffi::c_int,
@@ -1855,7 +1854,6 @@ pub unsafe extern "C" fn skip_regexp(
         ::core::ptr::null_mut::<magic_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_regexp_err(
     mut startp: *mut ::core::ffi::c_char,
     mut delim: ::core::ffi::c_int,
@@ -1874,7 +1872,6 @@ pub unsafe extern "C" fn skip_regexp_err(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_regexp_ex(
     mut startp: *mut ::core::ffi::c_char,
     mut dirc: ::core::ffi::c_int,
@@ -2430,14 +2427,12 @@ unsafe extern "C" fn make_extmatch() -> *mut reg_extmatch_T {
     (*em).refcnt = 1 as int16_t;
     return em;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ref_extmatch(mut em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
     if !em.is_null() {
         (*em).refcnt += 1;
     }
     return em;
 }
-#[no_mangle]
 pub unsafe extern "C" fn unref_extmatch(mut em: *mut reg_extmatch_T) {
     let mut i: ::core::ffi::c_int = 0;
     if !em.is_null() && {
@@ -3152,7 +3147,6 @@ unsafe extern "C" fn do_upper(mut d: *mut ::core::ffi::c_int, mut c: ::core::ffi
 unsafe extern "C" fn do_lower(mut d: *mut ::core::ffi::c_int, mut c: ::core::ffi::c_int) {
     *d = mb_tolower(c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn regtilde(
     mut source: *mut ::core::ffi::c_char,
     mut magic: ::core::ffi::c_int,
@@ -4044,7 +4038,6 @@ unsafe extern "C" fn reg_getline_submatch_len(mut lnum: linenr_T) -> colnr_T {
     );
     return length;
 }
-#[no_mangle]
 pub unsafe extern "C" fn reg_submatch(mut no: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4133,7 +4126,6 @@ pub unsafe extern "C" fn reg_submatch(mut no: ::core::ffi::c_int) -> *mut ::core
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn reg_submatch_list(mut no: ::core::ffi::c_int) -> *mut list_T {
     if !can_f_submatch.get() || no < 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<list_T>();
@@ -7044,7 +7036,6 @@ unsafe extern "C" fn bt_regcomp(
     (*r).engine = bt_regengine.ptr();
     return r as *mut regprog_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_regcomp_had_eol() -> ::core::ffi::c_int {
     return had_eol.get();
 }

@@ -1725,7 +1725,6 @@ static mpack_functions: SharedCell<[luaL_Reg; 6]> = SharedCell::new([
         func: None,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     luaL_newmetatable(L, UNPACKER_META_NAME.as_ptr());
     lua_pushvalue(L, -1 as ::core::ffi::c_int);

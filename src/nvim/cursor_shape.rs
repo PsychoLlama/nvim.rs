@@ -80,7 +80,6 @@ pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static e_digit_expected: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E548: Digit expected\0")
 });
-#[no_mangle]
 pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
     cursorentry_T {
         full_name: b"normal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -328,7 +327,6 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         used_for: SHAPE_CURSOR as ::core::ffi::c_char,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
     let mut all: Array = arena_array(arena, SHAPE_IDX_COUNT as ::core::ffi::c_int as size_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -516,7 +514,6 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
     }
     return all;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_shape_opt(
     mut what: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
@@ -756,7 +753,6 @@ pub unsafe extern "C" fn parse_shape_opt(
     ui_mode_info_set();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursor_is_block_during_visual(mut exclusive: bool) -> bool {
     let mut mode_idx: ::core::ffi::c_int = if exclusive as ::core::ffi::c_int != 0 {
         SHAPE_IDX_VE as ::core::ffi::c_int
@@ -767,7 +763,6 @@ pub unsafe extern "C" fn cursor_is_block_during_visual(mut exclusive: bool) -> b
         == (*shape_table.ptr())[mode_idx as usize].shape as ::core::ffi::c_uint
         && 0 as ::core::ffi::c_int == (*shape_table.ptr())[mode_idx as usize].blinkon;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursor_mode_str2int(
     mut mode: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -791,7 +786,6 @@ pub unsafe extern "C" fn cursor_mode_str2int(
     );
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int) -> bool {
     if *p_guicursor.get() as ::core::ffi::c_int == NUL {
         return false_0 != 0;
@@ -807,7 +801,6 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int)
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
     if State.get() == MODE_SHOWMATCH as ::core::ffi::c_int {
         return SHAPE_IDX_SM as ::core::ffi::c_int;

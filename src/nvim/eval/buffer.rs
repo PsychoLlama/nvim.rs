@@ -165,7 +165,6 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_buffer(mut avar: *mut typval_T) -> *mut buf_T {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     if (*avar).v_type as ::core::ffi::c_uint
@@ -371,7 +370,6 @@ unsafe extern "C" fn set_buffer_lines(
         change_other_buffer_restore(&raw mut cob);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_append(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -411,7 +409,6 @@ unsafe extern "C" fn buf_set_append_line(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_appendbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -419,7 +416,6 @@ pub unsafe extern "C" fn f_appendbufline(
 ) {
     buf_set_append_line(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_prompt_appendbuf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -514,7 +510,6 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -531,7 +526,6 @@ pub unsafe extern "C" fn f_bufadd(
         0 as ::core::ffi::c_int,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufexists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -540,7 +534,6 @@ pub unsafe extern "C" fn f_bufexists(
     (*rettv).vval.v_number = !find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize))
         .is_null() as ::core::ffi::c_int as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_buflisted(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -551,7 +544,6 @@ pub unsafe extern "C" fn f_buflisted(
     (*rettv).vval.v_number =
         (!buf.is_null() && (*buf).b_p_bl != 0) as ::core::ffi::c_int as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufload(
     mut argvars: *mut typval_T,
     mut _unused: *mut typval_T,
@@ -565,7 +557,6 @@ pub unsafe extern "C" fn f_bufload(
         buf_ensure_loaded(buf);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufloaded(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -576,7 +567,6 @@ pub unsafe extern "C" fn f_bufloaded(
     (*rettv).vval.v_number =
         (!buf.is_null() && !(*buf).b_ml.ml_mfp.is_null()) as ::core::ffi::c_int as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufname(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -596,7 +586,6 @@ pub unsafe extern "C" fn f_bufname(
         (*rettv).vval.v_string = xstrdup((*buf).b_fname);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -682,7 +671,6 @@ unsafe extern "C" fn buf_win_common(
         -1 as ::core::ffi::c_int
     }) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufwinid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -690,7 +678,6 @@ pub unsafe extern "C" fn f_bufwinid(
 ) {
     buf_win_common(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_bufwinnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -698,7 +685,6 @@ pub unsafe extern "C" fn f_bufwinnr(
 ) {
     buf_win_common(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_deletebufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -913,7 +899,6 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
     );
     return dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getbufinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1053,7 +1038,6 @@ unsafe extern "C" fn getbufline(
     };
     get_buffer_lines(buf, lnum, end, retlist, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1061,7 +1045,6 @@ pub unsafe extern "C" fn f_getbufline(
 ) {
     getbufline(argvars, rettv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getbufoneline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1069,7 +1052,6 @@ pub unsafe extern "C" fn f_getbufoneline(
 ) {
     getbufline(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1089,7 +1071,6 @@ pub unsafe extern "C" fn f_getline(
     }
     get_buffer_lines(curbuf.get(), lnum, end, retlist, rettv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1097,7 +1078,6 @@ pub unsafe extern "C" fn f_setbufline(
 ) {
     buf_set_append_line(argvars, rettv, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1115,7 +1095,6 @@ pub unsafe extern "C" fn f_setline(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn switch_buffer(mut save_curbuf: *mut bufref_T, mut buf: *mut buf_T) {
     block_autocmds();
     set_bufref(save_curbuf, curbuf.get());
@@ -1124,7 +1103,6 @@ pub unsafe extern "C" fn switch_buffer(mut save_curbuf: *mut bufref_T, mut buf: 
     (*curwin.get()).w_buffer = buf;
     (*curbuf.get()).b_nwindows += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_buffer(mut save_curbuf: *mut bufref_T) {
     unblock_autocmds();
     if bufref_valid(save_curbuf) {
@@ -1134,7 +1112,6 @@ pub unsafe extern "C" fn restore_buffer(mut save_curbuf: *mut bufref_T) {
         (*curbuf.get()).b_nwindows += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_prompt_setcallback(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -1162,7 +1139,6 @@ pub unsafe extern "C" fn f_prompt_setcallback(
     callback_free(&raw mut (*buf).b_prompt_callback);
     (*buf).b_prompt_callback = prompt_callback;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_prompt_setinterrupt(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -1190,7 +1166,6 @@ pub unsafe extern "C" fn f_prompt_setinterrupt(
     callback_free(&raw mut (*buf).b_prompt_interrupt);
     (*buf).b_prompt_interrupt = interrupt_callback;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_prompt_setprompt(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,

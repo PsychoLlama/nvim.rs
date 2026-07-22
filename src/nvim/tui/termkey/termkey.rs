@@ -158,7 +158,6 @@ pub struct modnames {
     pub ctrl: *const ::core::ffi::c_char,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub static termkey_driver_ti: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
     name: b"terminfo\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
@@ -185,7 +184,6 @@ pub static termkey_driver_ti: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKe
             ) -> TermKeyResult,
     ),
 });
-#[no_mangle]
 pub static termkey_driver_csi: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
     name: b"CSI\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
@@ -759,7 +757,6 @@ pub unsafe extern "C" fn termkey_new_abstract(
         return tk;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     xfree((*tk).buffer as *mut ::core::ffi::c_void);
     (*tk).buffer = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
@@ -787,7 +784,6 @@ pub unsafe extern "C" fn termkey_destroy(mut tk: *mut TermKey) {
     }
     termkey_free(tk);
 }
-#[no_mangle]
 pub unsafe extern "C" fn termkey_hook_terminfo_getstr(
     mut tk: *mut TermKey,
     mut hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
@@ -927,7 +923,6 @@ unsafe extern "C" fn eat_bytes(mut tk: *mut TermKey, mut count: size_t) {
     (*tk).buffstart = (*tk).buffstart.wrapping_add(count);
     (*tk).buffcount = (*tk).buffcount.wrapping_sub(count);
 }
-#[no_mangle]
 pub unsafe extern "C" fn fill_utf8(
     mut codepoint: ::core::ffi::c_int,
     mut str: *mut ::core::ffi::c_char,
@@ -1339,7 +1334,6 @@ pub unsafe extern "C" fn termkey_push_bytes(
     (*tk).buffcount = (*tk).buffcount.wrapping_add(len);
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn termkey_register_keyname(
     mut tk: *mut TermKey,
     mut sym: TermKeySym,

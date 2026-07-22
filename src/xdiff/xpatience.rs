@@ -447,7 +447,6 @@ unsafe extern "C" fn patience_diff(
     xfree(map.entries as *mut ::core::ffi::c_void);
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_do_patience_diff(
     mut file1: *mut mmfile_t,
     mut file2: *mut mmfile_t,

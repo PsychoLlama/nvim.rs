@@ -50,7 +50,6 @@ const EMPTY_ITEM: hashitem_T = hashitem_T {
 /// Sentinel for a removed item: `hi_key` equal to this *address* marks a
 /// tombstone. Exported because other modules (and the unit suite, via
 /// `_hash_key_removed`) compare against it. Never written through.
-#[no_mangle]
 pub static hash_removed: c_char = 0;
 
 fn removed_sentinel() -> *mut c_char {
@@ -294,7 +293,6 @@ pub unsafe extern "C" fn hash_lookup(
     unreachable!("probe sequence always finds an empty slot");
 }
 
-#[no_mangle]
 pub extern "C" fn hash_debug_results() {}
 
 #[no_mangle]
@@ -412,7 +410,6 @@ pub unsafe extern "C" fn hash_hash(key: *const c_char) -> hash_T {
     hash_bytes(CStr::from_ptr(key).to_bytes())
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
     hash_bytes_len(slice::from_raw_parts(key as *const u8, len))
 }

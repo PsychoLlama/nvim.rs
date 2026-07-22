@@ -97,7 +97,6 @@ pub const CAR: ::core::ffi::c_int = 13;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[no_mangle]
 pub static _typval_encode_msgpack_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
@@ -1135,7 +1134,6 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_vim_to_msgpack(
     packer: *mut PackerBuffer,
     top_tv: *mut typval_T,
@@ -1638,7 +1636,6 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
     }
     return FAIL;
 }
-#[no_mangle]
 pub static _typval_encode_echo_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
@@ -3190,7 +3187,6 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_vim_to_echo(
     gap: *mut garray_T,
     top_tv: *mut typval_T,
@@ -3794,7 +3790,6 @@ pub unsafe extern "C" fn encode_vim_to_echo(
     }
     return FAIL;
 }
-#[no_mangle]
 pub static _typval_encode_string_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
@@ -5940,7 +5935,6 @@ unsafe extern "C" fn encode_vim_to_string(
     }
     return FAIL;
 }
-#[no_mangle]
 pub static _typval_encode_json_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
@@ -7769,15 +7763,12 @@ pub const SURROGATE_HI_END: ::core::ffi::c_int = 0xdbff as ::core::ffi::c_int;
 pub const SURROGATE_LO_START: ::core::ffi::c_int = 0xdc00 as ::core::ffi::c_int;
 pub const SURROGATE_LO_END: ::core::ffi::c_int = 0xdfff as ::core::ffi::c_int;
 pub const SURROGATE_FIRST_CHAR: ::core::ffi::c_int = 0x10000 as ::core::ffi::c_int;
-#[no_mangle]
 pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
     b"v:false\0".as_ptr() as *const ::core::ffi::c_char,
     b"v:true\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
     GlobalCell::new([b"v:null\0".as_ptr() as *const ::core::ffi::c_char]);
-#[no_mangle]
 pub unsafe extern "C" fn encode_blob_write(
     data: *mut ::core::ffi::c_void,
     buf: *const ::core::ffi::c_char,
@@ -8034,7 +8025,6 @@ unsafe extern "C" fn conv_error(
     ga_clear(&raw mut msg_ga);
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_vim_list_to_buf(
     list: *const list_T,
     ret_len: *mut size_t,
@@ -8086,7 +8076,6 @@ pub unsafe extern "C" fn encode_vim_list_to_buf(
     *ret_buf = buf;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_read_from_list(
     state: *mut ListReaderState,
     buf: *mut ::core::ffi::c_char,
@@ -8509,7 +8498,6 @@ unsafe extern "C" fn convert_to_json_string(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
     if (*tv).v_type as ::core::ffi::c_uint
         == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -8568,7 +8556,6 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_tv2string(
     mut tv: *mut typval_T,
     mut len: *mut size_t,
@@ -8609,7 +8596,6 @@ pub unsafe extern "C" fn encode_tv2string(
     ga_append(&raw mut ga, NUL as uint8_t);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_tv2echo(
     mut tv: *mut typval_T,
     mut len: *mut size_t,
@@ -8659,7 +8645,6 @@ pub unsafe extern "C" fn encode_tv2echo(
     ga_append(&raw mut ga, NUL as uint8_t);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn encode_tv2json(
     mut tv: *mut typval_T,
     mut len: *mut size_t,
@@ -8692,7 +8677,6 @@ pub unsafe extern "C" fn encode_tv2json(
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS_0: ::core::ffi::c_int = true_0;
-#[no_mangle]
 pub unsafe extern "C" fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
     return ListReaderState {
         list: list,

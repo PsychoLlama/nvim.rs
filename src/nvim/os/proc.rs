@@ -99,7 +99,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn os_proc_tree_kill(
     mut pid: ::core::ffi::c_int,
     mut sig: ::core::ffi::c_int,
@@ -134,7 +133,6 @@ pub unsafe extern "C" fn os_proc_tree_kill(
     );
     return uv_kill(-pid, sig) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_proc_children(
     mut ppid: ::core::ffi::c_int,
     mut proc_list: *mut *mut ::core::ffi::c_int,
@@ -438,7 +436,6 @@ pub unsafe extern "C" fn os_proc_children(
     *proc_list = temp;
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_proc_running(mut pid: ::core::ffi::c_int) -> bool {
     let mut err: ::core::ffi::c_int = uv_kill(pid, 0 as ::core::ffi::c_int);
     if err == 0 as ::core::ffi::c_int {

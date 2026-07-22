@@ -7,15 +7,12 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 52] = unsafe {
     )
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_init(mut grid: *mut UGrid) {
     (*grid).cells = ::core::ptr::null_mut::<*mut UCell>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_free(mut grid: *mut UGrid) {
     destroy_cells(grid);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_resize(
     mut grid: *mut UGrid,
     mut width: ::core::ffi::c_int,
@@ -33,7 +30,6 @@ pub unsafe extern "C" fn ugrid_resize(
     (*grid).width = width;
     (*grid).height = height;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_clear(mut grid: *mut UGrid) {
     clear_region(
         grid,
@@ -44,7 +40,6 @@ pub unsafe extern "C" fn ugrid_clear(mut grid: *mut UGrid) {
         0 as sattr_T,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_clear_chunk(
     mut grid: *mut UGrid,
     mut row: ::core::ffi::c_int,
@@ -54,7 +49,6 @@ pub unsafe extern "C" fn ugrid_clear_chunk(
 ) {
     clear_region(grid, row, row, col, endcol - 1 as ::core::ffi::c_int, attr);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_goto(
     mut grid: *mut UGrid,
     mut row: ::core::ffi::c_int,
@@ -63,7 +57,6 @@ pub unsafe extern "C" fn ugrid_goto(
     (*grid).row = row;
     (*grid).col = col;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ugrid_scroll(
     mut grid: *mut UGrid,
     mut top: ::core::ffi::c_int,

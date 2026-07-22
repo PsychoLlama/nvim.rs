@@ -608,7 +608,6 @@ pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
     return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ffi::c_int) {
     static w_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
         b"W10: Warning: Changing a readonly file\0".as_ptr() as *const ::core::ffi::c_char,
@@ -680,7 +679,6 @@ pub unsafe extern "C" fn changed(mut buf: *mut buf_T) {
     buf_inc_changedtick(buf);
     highlight_match.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn changed_internal(mut buf: *mut buf_T) {
     (*buf).b_changed = true_0;
     (*buf).b_changed_invalid = true_0 != 0;
@@ -743,7 +741,6 @@ unsafe extern "C" fn changed_lines_invalidate_win(
         i_0 += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn changed_lines_invalidate_buf(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
@@ -975,7 +972,6 @@ unsafe extern "C" fn changed_common(
         (*last_cursormoved.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn changed_bytes(mut lnum: linenr_T, mut col: colnr_T) {
     changed_lines_redraw_buf(curbuf.get(), lnum, lnum + 1 as linenr_T, 0 as linenr_T);
     changed_common(curbuf.get(), lnum, col, lnum + 1 as linenr_T, 0 as linenr_T);
@@ -1009,7 +1005,6 @@ pub unsafe extern "C" fn changed_bytes(mut lnum: linenr_T, mut col: colnr_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn inserted_bytes(
     mut lnum: linenr_T,
     mut start_col: colnr_T,
@@ -1043,11 +1038,9 @@ pub unsafe extern "C" fn appended_lines_buf(
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn appended_lines(mut lnum: linenr_T, mut count: linenr_T) {
     appended_lines_buf(curbuf.get(), lnum, count);
 }
-#[no_mangle]
 pub unsafe extern "C" fn appended_lines_mark(mut lnum: linenr_T, mut count: ::core::ffi::c_int) {
     mark_adjust(
         lnum + 1 as linenr_T,
@@ -1073,11 +1066,9 @@ pub unsafe extern "C" fn deleted_lines_buf(
 ) {
     changed_lines(buf, lnum, 0 as colnr_T, lnum + count, -count, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn deleted_lines(mut lnum: linenr_T, mut count: linenr_T) {
     deleted_lines_buf(curbuf.get(), lnum, count);
 }
-#[no_mangle]
 pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::core::ffi::c_int) {
     let mut made_empty: bool =
         count > 0 as ::core::ffi::c_int && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0;
@@ -1110,7 +1101,6 @@ pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::cor
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn changed_lines_redraw_buf(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
@@ -1196,7 +1186,6 @@ pub unsafe extern "C" fn changed_lines(
         buf_updates_send_changes(buf, lnum, num_added, num_removed);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn unchanged(
     mut buf: *mut buf_T,
     mut ff: bool,
@@ -1220,7 +1209,6 @@ pub unsafe extern "C" fn unchanged(
         buf_inc_changedtick(buf);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn save_file_ff(mut buf: *mut buf_T) {
     (*buf).b_start_ffc = *(*buf).b_p_ff as ::core::ffi::c_uchar as ::core::ffi::c_int;
     (*buf).b_start_eof = (*buf).b_p_eof;
@@ -1233,7 +1221,6 @@ pub unsafe extern "C" fn save_file_ff(mut buf: *mut buf_T) {
         (*buf).b_start_fenc = xstrdup((*buf).b_p_fenc);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_ff_differs(mut buf: *mut buf_T, mut ignore_empty: bool) -> bool {
     if (*buf).b_flags & BF_NEVERLOADED != 0 {
         return false_0 != 0;
@@ -1261,11 +1248,9 @@ pub unsafe extern "C" fn file_ff_differs(mut buf: *mut buf_T, mut ignore_empty: 
     }
     return strcmp((*buf).b_start_fenc, (*buf).b_p_fenc) != 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_bytes(mut p: *mut ::core::ffi::c_char) {
     ins_bytes_len(p, strlen(p));
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_bytes_len(mut p: *mut ::core::ffi::c_char, mut len: size_t) {
     let mut n: size_t = 0;
     let mut i: size_t = 0 as size_t;
@@ -1278,7 +1263,6 @@ pub unsafe extern "C" fn ins_bytes_len(mut p: *mut ::core::ffi::c_char, mut len:
         i = i.wrapping_add(n);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_char(mut c: ::core::ffi::c_int) {
     let mut buf: [::core::ffi::c_char; 7] = [0; 7];
     let mut n: size_t = utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char) as size_t;
@@ -1287,7 +1271,6 @@ pub unsafe extern "C" fn ins_char(mut c: ::core::ffi::c_int) {
     }
     ins_char_bytes(&raw mut buf as *mut ::core::ffi::c_char, n);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut charlen: size_t) {
     if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
         && (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
@@ -1387,7 +1370,6 @@ pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut c
         (*curwin.get()).w_cursor.col += charlen as colnr_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size_t) {
     let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
     if virtual_active(curwin.get()) as ::core::ffi::c_int != 0
@@ -1442,7 +1424,6 @@ pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size
     );
     (*curwin.get()).w_cursor.col += slen as colnr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_char(mut fixpos: bool) -> ::core::ffi::c_int {
     mb_adjust_cursor();
     if *get_cursor_pos_ptr() as ::core::ffi::c_int == NUL {
@@ -1450,7 +1431,6 @@ pub unsafe extern "C" fn del_char(mut fixpos: bool) -> ::core::ffi::c_int {
     }
     return del_chars(1 as ::core::ffi::c_int, fixpos as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_chars(
     mut count: ::core::ffi::c_int,
     mut fixpos: ::core::ffi::c_int,
@@ -1466,7 +1446,6 @@ pub unsafe extern "C" fn del_chars(
     }
     return del_bytes(bytes as colnr_T, fixpos != 0, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_bytes(
     mut count: colnr_T,
     mut fixpos_arg: bool,
@@ -1565,7 +1544,6 @@ pub unsafe extern "C" fn del_bytes(
     );
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn open_line(
     mut dir: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
@@ -2579,7 +2557,6 @@ pub unsafe extern "C" fn open_line(
     (*cmdmod.ptr()).cmod_flags = old_cmod_flags;
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn truncate_line(mut fixpos: ::core::ffi::c_int) {
     let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut col: colnr_T = (*curwin.get()).w_cursor.col;
@@ -2601,7 +2578,6 @@ pub unsafe extern "C" fn truncate_line(mut fixpos: ::core::ffi::c_int) {
         (*curwin.get()).w_cursor.col -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_lines(mut nlines: linenr_T, mut undo: bool) {
     let mut n: ::core::ffi::c_int = 0;
     let mut first: linenr_T = (*curwin.get()).w_cursor.lnum;
@@ -2626,7 +2602,6 @@ pub unsafe extern "C" fn del_lines(mut nlines: linenr_T, mut undo: bool) {
     check_cursor_lnum(curwin.get());
     deleted_lines_mark(first, n);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_leader_len(
     mut line: *mut ::core::ffi::c_char,
     mut flags: *mut *mut ::core::ffi::c_char,
@@ -2758,7 +2733,6 @@ pub unsafe extern "C" fn get_leader_len(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_last_leader_offset(
     mut line: *mut ::core::ffi::c_char,
     mut flags: *mut *mut ::core::ffi::c_char,

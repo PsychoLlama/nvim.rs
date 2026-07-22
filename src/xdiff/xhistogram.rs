@@ -582,7 +582,6 @@ unsafe extern "C" fn histogram_diff(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_do_histogram_diff(
     mut file1: *mut mmfile_t,
     mut file2: *mut mmfile_t,

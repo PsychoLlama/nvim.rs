@@ -1628,7 +1628,6 @@ static cpt_sources_index: GlobalCell<::core::ffi::c_int> =
 static compl_match_array: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
 static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn ins_ctrl_x() {
     if !ctrl_x_mode_cmdline() {
         if compl_cont_status.get() & CONT_N_ADDS != 0 {
@@ -1647,96 +1646,74 @@ pub unsafe extern "C" fn ins_ctrl_x() {
     }
     may_trigger_modechanged();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_none() -> bool {
     return ctrl_x_mode.get() == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_normal() -> bool {
     return ctrl_x_mode.get() == CTRL_X_NORMAL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_scroll() -> bool {
     return ctrl_x_mode.get() == CTRL_X_SCROLL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_whole_line() -> bool {
     return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_files() -> bool {
     return ctrl_x_mode.get() == CTRL_X_FILES as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_tags() -> bool {
     return ctrl_x_mode.get() == CTRL_X_TAGS as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_path_patterns() -> bool {
     return ctrl_x_mode.get() == CTRL_X_PATH_PATTERNS as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_path_defines() -> bool {
     return ctrl_x_mode.get() == CTRL_X_PATH_DEFINES as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_dictionary() -> bool {
     return ctrl_x_mode.get() == CTRL_X_DICTIONARY as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_thesaurus() -> bool {
     return ctrl_x_mode.get() == CTRL_X_THESAURUS as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_cmdline() -> bool {
     return ctrl_x_mode.get() == CTRL_X_CMDLINE as ::core::ffi::c_int
         || ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_function() -> bool {
     return ctrl_x_mode.get() == CTRL_X_FUNCTION as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_omni() -> bool {
     return ctrl_x_mode.get() == CTRL_X_OMNI as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_spell() -> bool {
     return ctrl_x_mode.get() == CTRL_X_SPELL as ::core::ffi::c_int;
 }
 unsafe extern "C" fn ctrl_x_mode_eval() -> bool {
     return ctrl_x_mode.get() == CTRL_X_EVAL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_line_or_eval() -> bool {
     return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE as ::core::ffi::c_int
         || ctrl_x_mode.get() == CTRL_X_EVAL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_register() -> bool {
     return ctrl_x_mode.get() == CTRL_X_REGISTER as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_not_default() -> bool {
     return ctrl_x_mode.get() != CTRL_X_NORMAL as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ctrl_x_mode_not_defined_yet() -> bool {
     return ctrl_x_mode.get() == CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn compl_status_adding() -> bool {
     return compl_cont_status.get() & CONT_ADDING != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn compl_status_sol() -> bool {
     return compl_cont_status.get() & CONT_SOL != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn compl_status_local() -> bool {
     return compl_cont_status.get() & CONT_LOCAL != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn compl_status_clear() {
     compl_cont_status.set(0 as ::core::ffi::c_int);
 }
@@ -1749,7 +1726,6 @@ unsafe extern "C" fn compl_shows_dir_forward() -> bool {
 unsafe extern "C" fn compl_shows_dir_backward() -> bool {
     return compl_shows_dir.get() as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_compl_option(mut dict_opt: bool) -> bool {
     if if dict_opt as ::core::ffi::c_int != 0 {
         (*(*curbuf.get()).b_p_dict as ::core::ffi::c_int == NUL
@@ -1778,7 +1754,6 @@ pub unsafe extern "C" fn check_compl_option(mut dict_opt: bool) -> bool {
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_is_ctrl_x_key(mut c: ::core::ffi::c_int) -> bool {
     if c == Ctrl_R && ctrl_x_mode.get() != CTRL_X_REGISTER as ::core::ffi::c_int {
         return true_0 != 0;
@@ -1900,7 +1875,6 @@ unsafe extern "C" fn do_autocmd_completedone(
     ins_apply_autocmds(EVENT_COMPLETEDONE);
     restore_v_event(v_event, &raw mut save_v_event);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_accept_char(mut c: ::core::ffi::c_int) -> bool {
     if compl_autocomplete.get() as ::core::ffi::c_int != 0
         && compl_from_nonkeyword.get() as ::core::ffi::c_int != 0
@@ -2046,7 +2020,6 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
     *p_3 = NUL as ::core::ffi::c_char;
     return IObuff.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_add_infercase(
     mut str_arg: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -2123,11 +2096,9 @@ unsafe extern "C" fn is_nearest_active() -> bool {
         || get_cot_flags() & kOptCotFlagNearest as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
         && !cot_fuzzy();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_is_match_selected() -> bool {
     return !(*compl_shown_match.ptr()).is_null() && !is_first_match(compl_shown_match.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_preinsert_longest() -> bool {
     return compl_autocomplete.get() as ::core::ffi::c_int != 0
         && get_cot_flags()
@@ -2342,7 +2313,6 @@ unsafe extern "C" fn ins_compl_insert_bytes(
     ins_bytes_len(p, len as size_t);
     compl_ins_end_col.set((*curwin.get()).w_cursor.col);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_leader() -> *mut ::core::ffi::c_char {
     return if !(*compl_leader.ptr()).data.is_null() {
         (*compl_leader.ptr()).data
@@ -2357,7 +2327,6 @@ unsafe extern "C" fn ins_compl_leader_len() -> size_t {
         (*compl_orig_text.ptr()).size
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_col_range_attr(
     mut lnum: linenr_T,
     mut col: ::core::ffi::c_int,
@@ -2403,7 +2372,6 @@ unsafe extern "C" fn ins_compl_has_multiple() -> bool {
     )
     .is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_lnum_in_range(mut lnum: linenr_T) -> bool {
     if !ins_compl_has_multiple() {
         return false_0 != 0;
@@ -2499,19 +2467,16 @@ unsafe extern "C" fn ins_compl_make_cyclic() -> ::core::ffi::c_int {
     (*compl_first_match.get()).cp_prev = match_0;
     return count;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_has_shown_match() -> bool {
     return (*compl_shown_match.ptr()).is_null()
         || compl_shown_match.get() != (*compl_shown_match.get()).cp_next;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_long_shown_match() -> bool {
     return !(*compl_shown_match.ptr()).is_null()
         && !(*compl_shown_match.get()).cp_str.data.is_null()
         && (*compl_shown_match.get()).cp_str.size as colnr_T
             > (*curwin.get()).w_cursor.col - compl_col.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cot_flags() -> ::core::ffi::c_uint {
     return if (*curbuf.get()).b_cot_flags != 0 as ::core::ffi::c_uint {
         (*curbuf.get()).b_cot_flags
@@ -2530,7 +2495,6 @@ unsafe extern "C" fn ins_compl_del_pum() {
     *ptr_ = NULL;
     let _ = *ptr_;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pum_wanted() -> bool {
     return get_cot_flags()
         & (kOptCotFlagMenu as ::core::ffi::c_int | kOptCotFlagMenuone as ::core::ffi::c_int)
@@ -3071,7 +3035,6 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
     }
     return cur;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_show_pum() {
     if !pum_wanted() || !pum_enough_matches() {
         return;
@@ -3126,7 +3089,6 @@ pub unsafe extern "C" fn ins_compl_show_pum() {
         trigger_complete_changed_event(cur);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn compl_match_curr_select(mut selected: ::core::ffi::c_int) -> bool {
     if selected < 0 as ::core::ffi::c_int {
         return false_0 != 0;
@@ -3461,7 +3423,6 @@ unsafe extern "C" fn ins_compl_files(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_word_start(
     mut ptr: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -3473,7 +3434,6 @@ pub unsafe extern "C" fn find_word_start(
     }
     return ptr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_word_end(
     mut ptr: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -3488,7 +3448,6 @@ pub unsafe extern "C" fn find_word_end(
     }
     return ptr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_line_end(
     mut ptr: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -3547,7 +3506,6 @@ unsafe extern "C" fn ins_compl_free() {
     compl_shown_match.set(::core::ptr::null_mut::<compl_T>());
     compl_old_match.set(::core::ptr::null_mut::<compl_T>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_clear() {
     compl_cont_status.set(0 as ::core::ffi::c_int);
     compl_started.set(false_0 != 0);
@@ -3586,42 +3544,33 @@ pub unsafe extern "C" fn ins_compl_clear() {
     compl_num_bests.set(0 as ::core::ffi::c_int);
     set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_active() -> bool {
     return compl_started.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_win_active(mut wp: *mut win_T) -> bool {
     return ins_compl_active() as ::core::ffi::c_int != 0
         && wp == compl_curr_win.get()
         && (*wp).w_buffer == compl_curr_buf.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_used_match() -> bool {
     return compl_used_match.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_init_get_longest() {
     compl_get_longest.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_interrupted() -> bool {
     return compl_interrupted.get() as ::core::ffi::c_int != 0
         || compl_time_slice_expired.get() as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_enter_selects() -> bool {
     return compl_enter_selects.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_col() -> colnr_T {
     return compl_col.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_len() -> ::core::ffi::c_int {
     return compl_length.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_has_preinsert() -> bool {
     let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
     if compl_autocomplete.get() as ::core::ffi::c_int != 0 && p_ic.get() != 0 && p_inf.get() == 0 {
@@ -3643,14 +3592,12 @@ pub unsafe extern "C" fn ins_compl_has_preinsert() -> bool {
             as ::core::ffi::c_int
     } != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_preinsert_effect() -> bool {
     if !ins_compl_has_preinsert() && !ins_compl_preinsert_longest() {
         return false_0 != 0;
     }
     return (*curwin.get()).w_cursor.col < compl_ins_end_col.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_bs() -> ::core::ffi::c_int {
     if ins_compl_preinsert_effect() {
         ins_compl_delete(false_0 != 0);
@@ -3709,7 +3656,6 @@ unsafe extern "C" fn ins_compl_need_restart() -> bool {
     return compl_was_interrupted.get() as ::core::ffi::c_int != 0
         || ins_compl_refresh_always() as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_has_autocomplete() -> bool {
     return if (*curbuf.get()).b_p_ac >= 0 as ::core::ffi::c_int {
         (*curbuf.get()).b_p_ac
@@ -3816,7 +3762,6 @@ unsafe extern "C" fn get_compl_len() -> ::core::ffi::c_int {
         off
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_addleader(mut c: ::core::ffi::c_int) {
     let mut cc: ::core::ffi::c_int = 0;
     if ins_compl_preinsert_effect() {
@@ -3886,7 +3831,6 @@ unsafe extern "C" fn ins_compl_set_original_text(
         (*(*compl_first_match.get()).cp_prev).cp_str = cbuf_to_string(str, len);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_addfrommatch() {
     let mut len: ::core::ffi::c_int = (*curwin.get()).w_cursor.col - compl_col.get();
     '_c2rust_label: {
@@ -4154,11 +4098,9 @@ unsafe extern "C" fn ins_compl_stop(
     xfree(word as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_cancel() -> bool {
     return ins_compl_stop(' ' as ::core::ffi::c_int, ctrl_x_mode.get(), true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
     let mut retval: bool = false_0 != 0;
     let prev_mode: ::core::ffi::c_int = ctrl_x_mode.get();
@@ -4393,7 +4335,6 @@ unsafe extern "C" fn copy_global_to_buflocal_cb(
         callback_copy(bufcb, globcb);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_completefunc(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
@@ -4413,11 +4354,9 @@ pub unsafe extern "C" fn did_set_completefunc(
         ::core::ptr::null::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_buflocal_cfu_callback(mut buf: *mut buf_T) {
     copy_global_to_buflocal_cb(cfu_cb.ptr(), &raw mut (*buf).b_cfu_cb);
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_omnifunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut retval: ::core::ffi::c_int = 0;
@@ -4435,11 +4374,9 @@ pub unsafe extern "C" fn did_set_omnifunc(mut args: *mut optset_T) -> *const ::c
         ::core::ptr::null::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_buflocal_ofu_callback(mut buf: *mut buf_T) {
     copy_global_to_buflocal_cb(ofu_cb.ptr(), &raw mut (*buf).b_ofu_cb);
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_cpt_callbacks(
     mut callbacks: *mut *mut Callback,
     mut count: ::core::ffi::c_int,
@@ -4479,7 +4416,6 @@ unsafe extern "C" fn copy_cpt_callbacks(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_buflocal_cpt_callbacks(mut buf: *mut buf_T) {
     if buf.is_null() || cpt_cb_count.get() == 0 as ::core::ffi::c_int {
         return;
@@ -4491,7 +4427,6 @@ pub unsafe extern "C" fn set_buflocal_cpt_callbacks(mut buf: *mut buf_T) {
         cpt_cb_count.get(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_cpt_callbacks(mut args: *mut optset_T) -> ::core::ffi::c_int {
     let mut local: bool =
         (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
@@ -4560,7 +4495,6 @@ pub unsafe extern "C" fn set_cpt_callbacks(mut args: *mut optset_T) -> ::core::f
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_thesaurusfunc(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
@@ -4580,7 +4514,6 @@ pub unsafe extern "C" fn did_set_thesaurusfunc(
         ::core::ptr::null::<::core::ffi::c_char>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_cpt_callbacks(
     mut callbacks: *mut Callback,
     mut count: ::core::ffi::c_int,
@@ -4604,7 +4537,6 @@ pub unsafe extern "C" fn set_ref_in_cpt_callbacks(
     }
     return abort;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_insexpand_funcs(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort: bool = set_ref_in_callback(
         cfu_cb.ptr(),
@@ -5034,7 +4966,6 @@ unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: *mut list_T
     may_trigger_modechanged();
     ui_flush();
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_complete(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -5069,7 +5000,6 @@ pub unsafe extern "C" fn f_complete(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_complete_add(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5081,7 +5011,6 @@ pub unsafe extern "C" fn f_complete_add(
         false_0 != 0,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_complete_check(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5402,7 +5331,6 @@ pub const CI_WHAT_COMPLETED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const CI_WHAT_MATCHES: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const CI_WHAT_PREINSERTED_TEXT: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const CI_WHAT_ALL: ::core::ffi::c_int = 0xff as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn f_complete_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -6896,7 +6824,6 @@ unsafe extern "C" fn ins_compl_update_shown_match() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_delete(mut new_leader: bool) {
     let mut orig_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if new_leader {
@@ -7112,7 +7039,6 @@ unsafe extern "C" fn find_common_prefix(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_insert(mut move_cursor: bool, mut insert_prefix: bool) {
     let mut compl_len: ::core::ffi::c_int = get_compl_len();
     let mut preinsert: bool = ins_compl_has_preinsert();
@@ -7466,7 +7392,6 @@ unsafe extern "C" fn check_elapsed_time() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_check_keys(
     mut frequency: ::core::ffi::c_int,
     mut in_compl_func: bool,
@@ -8295,7 +8220,6 @@ unsafe extern "C" fn ins_compl_show_statusmsg() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_complete(
     mut c: ::core::ffi::c_int,
     mut enable_pum: bool,
@@ -8403,7 +8327,6 @@ pub unsafe extern "C" fn ins_complete(
     compl_interrupted.set(false_0 != 0);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_compl_enable_autocomplete() {
     compl_autocomplete.set(true_0 != 0);
     compl_get_longest.set(false_0 != 0);
@@ -8726,7 +8649,6 @@ unsafe extern "C" fn cpt_compl_refresh() {
     xfree(cpt as *mut ::core::ffi::c_void);
     compl_matches.set(ins_compl_make_cyclic());
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_preinserted(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,

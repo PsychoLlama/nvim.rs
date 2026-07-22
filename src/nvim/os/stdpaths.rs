@@ -50,7 +50,6 @@ static xdg_defaults: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::n
     b"/etc/xdg/\0".as_ptr() as *const ::core::ffi::c_char,
     b"/usr/local/share/:/usr/share/\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::c_char {
     let mut env_val: *const ::core::ffi::c_char =
         os_getenv_noalloc(b"NVIM_APPNAME\0".as_ptr() as *const ::core::ffi::c_char);
@@ -77,7 +76,6 @@ pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::
     }
     return NameBuff.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn appname_is_valid() -> bool {
     let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
     if path_is_absolute(appname) as ::core::ffi::c_int != 0
@@ -172,7 +170,6 @@ unsafe extern "C" fn xdg_remove_duplicate(
     xfree(ret as *mut ::core::ffi::c_void);
     return result.items;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char {
     let env: *const ::core::ffi::c_char = (*xdg_env_vars.ptr())[idx as usize];
     let fallback: *const ::core::ffi::c_char = (*xdg_defaults.ptr())[idx as usize];
@@ -208,7 +205,6 @@ pub unsafe extern "C" fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::f
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_char {
     let mut dir: *mut ::core::ffi::c_char = stdpaths_get_xdg_var(idx);
     let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
@@ -238,25 +234,21 @@ pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_ch
     }
     return dir;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stdpaths_user_cache_subpath(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return concat_fnames_realloc(get_xdg_home(kXDGCacheHome), fname, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stdpaths_user_conf_subpath(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stdpaths_user_data_subpath(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return concat_fnames_realloc(get_xdg_home(kXDGDataHome), fname, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stdpaths_user_state_subpath(
     mut fname: *const ::core::ffi::c_char,
     trailing_pathseps: size_t,

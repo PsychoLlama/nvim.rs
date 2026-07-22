@@ -148,7 +148,6 @@ pub unsafe extern "C" fn vterm_new(
     };
     return vterm_build(&raw const c2rust_lvalue);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_build(mut builder: *const VTermBuilder) -> *mut VTerm {
     let mut allocator: *const VTermAllocatorFunctions = if !(*builder).allocator.is_null() {
         (*builder).allocator
@@ -184,7 +183,6 @@ pub unsafe extern "C" fn vterm_build(mut builder: *const VTermBuilder) -> *mut V
     (*vt).tmpbuffer = vterm_allocator_malloc(vt, (*vt).tmpbuffer_len) as *mut ::core::ffi::c_char;
     return vt;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_free(mut vt: *mut VTerm) {
     if !(*vt).screen.is_null() {
         vterm_screen_free((*vt).screen);
@@ -196,7 +194,6 @@ pub unsafe extern "C" fn vterm_free(mut vt: *mut VTerm) {
     vterm_allocator_free(vt, (*vt).tmpbuffer as *mut ::core::ffi::c_void);
     vterm_allocator_free(vt, vt as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_allocator_malloc(
     mut vt: *mut VTerm,
     mut size: size_t,
@@ -208,7 +205,6 @@ pub unsafe extern "C" fn vterm_allocator_malloc(
     )
     .expect("non-null function pointer")(size, (*vt).allocdata);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_allocator_free(
     mut vt: *mut VTerm,
     mut ptr: *mut ::core::ffi::c_void,
@@ -216,7 +212,6 @@ pub unsafe extern "C" fn vterm_allocator_free(
     Some((*(*vt).allocator).free.expect("non-null function pointer"))
         .expect("non-null function pointer")(ptr, (*vt).allocdata);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_get_size(
     mut vt: *const VTerm,
     mut rowsp: *mut ::core::ffi::c_int,
@@ -264,7 +259,6 @@ pub unsafe extern "C" fn vterm_output_set_callback(
     (*vt).outfunc = func;
     (*vt).outdata = user;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_push_output_bytes(
     mut vt: *mut VTerm,
     mut bytes: *const ::core::ffi::c_char,
@@ -284,7 +278,6 @@ pub unsafe extern "C" fn vterm_push_output_bytes(
     );
     (*vt).outbuffer_cur = (*vt).outbuffer_cur.wrapping_add(len);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_push_output_sprintf(
     mut vt: *mut VTerm,
     mut format: *const ::core::ffi::c_char,
@@ -300,7 +293,6 @@ pub unsafe extern "C" fn vterm_push_output_sprintf(
     ) as size_t;
     vterm_push_output_bytes(vt, (*vt).tmpbuffer, len);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_push_output_sprintf_ctrl(
     mut vt: *mut VTerm,
     mut ctrl: uint8_t,
@@ -339,7 +331,6 @@ pub unsafe extern "C" fn vterm_push_output_sprintf_ctrl(
     }
     vterm_push_output_bytes(vt, (*vt).tmpbuffer, cur);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_push_output_sprintf_str(
     mut vt: *mut VTerm,
     mut ctrl: uint8_t,
@@ -395,7 +386,6 @@ pub unsafe extern "C" fn vterm_push_output_sprintf_str(
     }
     vterm_push_output_bytes(vt, (*vt).tmpbuffer, cur);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_get_attr_type(mut attr: VTermAttr) -> VTermValueType {
     match attr as ::core::ffi::c_uint {
         1 => return VTERM_VALUETYPE_BOOL,
@@ -418,7 +408,6 @@ pub unsafe extern "C" fn vterm_get_attr_type(mut attr: VTermAttr) -> VTermValueT
     }
     return 0 as VTermValueType;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_scroll_rect(
     mut rect: VTermRect,
     mut downward: ::core::ffi::c_int,

@@ -656,7 +656,6 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
     (*ti).root = compress_trie((*ti).root as *mut trie_node) as *mut trie_node;
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn new_driver_ti(
     mut tk: *mut TermKey,
     mut term: *mut TerminfoEntry,
@@ -669,7 +668,6 @@ pub unsafe extern "C" fn new_driver_ti(
     (*ti).ti = term;
     return ti as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn start_driver_ti(
     mut tk: *mut TermKey,
     mut info: *mut ::core::ffi::c_void,
@@ -732,7 +730,6 @@ pub unsafe extern "C" fn start_driver_ti(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stop_driver_ti(
     mut tk: *mut TermKey,
     mut info: *mut ::core::ffi::c_void,
@@ -791,7 +788,6 @@ pub unsafe extern "C" fn stop_driver_ti(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_driver_ti(mut info: *mut ::core::ffi::c_void) {
     let mut ti: *mut TermKeyTI = info as *mut TermKeyTI;
     free_trie((*ti).root as *mut trie_node);
@@ -803,7 +799,6 @@ pub unsafe extern "C" fn free_driver_ti(mut info: *mut ::core::ffi::c_void) {
     }
     xfree(ti as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn peekkey_ti(
     mut tk: *mut TermKey,
     mut info: *mut ::core::ffi::c_void,

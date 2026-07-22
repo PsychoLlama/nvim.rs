@@ -496,7 +496,6 @@ unsafe extern "C" fn log_notify(
         name,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_init() {
     ch_before_blocking_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
@@ -556,7 +555,6 @@ unsafe extern "C" fn find_rpc_channel(mut id: uint64_t) -> *mut Channel {
     }
     return chan;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_send_event(
     mut id: uint64_t,
     mut name: *const ::core::ffi::c_char,
@@ -585,7 +583,6 @@ pub unsafe extern "C" fn rpc_send_event(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_send_call(
     mut id: uint64_t,
     mut method_name: *const ::core::ffi::c_char,
@@ -1108,7 +1105,6 @@ unsafe extern "C" fn request_event(mut argv: *mut *mut ::core::ffi::c_void) {
     xfree(e as *mut ::core::ffi::c_void);
     api_clear_error(&raw mut error);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_write_raw(mut id: uint64_t, mut buffer: *mut WBuffer) -> bool {
     let mut channel: *mut Channel = find_rpc_channel(id);
     if channel.is_null() {
@@ -1439,7 +1435,6 @@ unsafe extern "C" fn serialize_request(
     mpack_object_array(args, &raw mut packer);
     packer_buffer_finish_channels(&raw mut packer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn serialize_response(
     mut channel: *mut Channel,
     mut handler: MsgpackRpcRequestHandler,
@@ -1590,7 +1585,6 @@ unsafe extern "C" fn channel_flush_callback(mut packer: *mut PackerBuffer) {
         packer,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
     let mut chan: *mut Channel = find_rpc_channel(id);
     if chan.is_null() {
@@ -1624,7 +1618,6 @@ pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
     }
     channel_info_changed(chan, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rpc_client_info(mut chan: *mut Channel) -> Dict {
     return copy_dict((*chan).rpc.info, ::core::ptr::null_mut::<Arena>());
 }

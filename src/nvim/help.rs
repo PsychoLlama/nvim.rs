@@ -1409,7 +1409,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 57] = unsafe {
     )
 };
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut helpfd: *mut FILE = ::core::ptr::null_mut::<FILE>();
@@ -1653,7 +1652,6 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
     xfree(tag as *mut ::core::ffi::c_void);
     xfree(allocated_arg as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_helpclose(mut eap: *mut exarg_T) {
     let mut win: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
@@ -1668,7 +1666,6 @@ pub unsafe extern "C" fn ex_helpclose(mut eap: *mut exarg_T) {
         win = (*win).w_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_help_lang(
     mut arg: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1700,7 +1697,6 @@ pub unsafe extern "C" fn check_help_lang(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn help_heuristic(
     mut matched_string: *mut ::core::ffi::c_char,
     mut offset: ::core::ffi::c_int,
@@ -1785,7 +1781,6 @@ unsafe extern "C" fn help_compare(
         *(s2 as *mut *mut ::core::ffi::c_char),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_help_tags(
     mut arg: *const ::core::ffi::c_char,
     mut num_matches: *mut ::core::ffi::c_int,
@@ -1892,7 +1887,6 @@ pub unsafe extern "C" fn find_help_tags(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cleanup_help_tags(
     mut num_file: ::core::ffi::c_int,
     mut file: *mut *mut ::core::ffi::c_char,
@@ -1968,7 +1962,6 @@ pub unsafe extern "C" fn cleanup_help_tags(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn prepare_help_buffer() {
     (*curbuf.get()).b_help = true_0 != 0;
     set_option_direct(
@@ -2036,7 +2029,6 @@ pub unsafe extern "C" fn prepare_help_buffer() {
     (*curwin.get()).w_onebuf_opt.wo_spell = false_0;
     set_buflisted(false_0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_local_additions() {
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
@@ -2069,11 +2061,9 @@ pub unsafe extern "C" fn get_local_additions() {
     api_free_object(res);
     api_clear_error(&raw mut err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_exusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help ex-cmd-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_viusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help normal-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
@@ -2653,7 +2643,6 @@ unsafe extern "C" fn helptags_cb(
     }
     return num_fnames > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_helptags(mut eap: *mut exarg_T) {
     let mut xpc: expand_T = expand_T {
         xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),

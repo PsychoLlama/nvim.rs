@@ -588,7 +588,6 @@ pub const ADDR_LINES: cmd_addr_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn nlua_read_secure(
     mut path: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -718,7 +717,6 @@ unsafe extern "C" fn nlua_trust(
     lua_settop(lstate, top);
     return success;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_trust(mut eap: *mut exarg_T) {
     let p: *const ::core::ffi::c_char = skiptowhite((*eap).arg);
     let mut arg1: *mut ::core::ffi::c_char = xmemdupz(

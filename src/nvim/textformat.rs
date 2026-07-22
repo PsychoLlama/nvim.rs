@@ -821,14 +821,12 @@ pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
 static did_add_space: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn has_format_option(mut x: ::core::ffi::c_int) -> bool {
     if p_paste.get() != 0 {
         return false_0 != 0;
     }
     return !vim_strchr((*curbuf.get()).b_p_fo, x).is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn internal_format(
     mut textwidth: ::core::ffi::c_int,
     mut second_indent: ::core::ffi::c_int,
@@ -1379,7 +1377,6 @@ unsafe extern "C" fn paragraph_start(mut lnum: linenr_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) {
     if !has_format_option(FO_AUTO) {
         return;
@@ -1475,7 +1472,6 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
     }
     check_cursor(curwin.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
     if !did_add_space.get() {
         return;
@@ -1500,7 +1496,6 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
     let mut textwidth: ::core::ffi::c_int = (*curbuf.get()).b_p_tw as ::core::ffi::c_int;
     if textwidth == 0 as ::core::ffi::c_int && (*curbuf.get()).b_p_wm != 0 {
@@ -1530,7 +1525,6 @@ pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
     }
     return textwidth;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool) {
     let mut old_line_count: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
     (*curwin.get()).w_cursor = (*oap).cursor_start;
@@ -1588,7 +1582,6 @@ pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool)
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_formatexpr(mut oap: *mut oparg_T) {
     if (*oap).is_VIsual {
         redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
@@ -1602,7 +1595,6 @@ pub unsafe extern "C" fn op_formatexpr(mut oap: *mut oparg_T) {
         op_format(oap, false_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn fex_format(
     mut lnum: linenr_T,
     mut count: ::core::ffi::c_long,
@@ -1636,7 +1628,6 @@ pub unsafe extern "C" fn fex_format(
     current_sctx.set(save_sctx);
     return r;
 }
-#[no_mangle]
 pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: bool) {
     let mut is_not_par: bool = false;
     let mut next_is_not_par: bool = false;

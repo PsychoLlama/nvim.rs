@@ -1433,7 +1433,6 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
 pub const TABSTOP_MAX: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_set(
     mut var: *mut ::core::ffi::c_char,
     mut array: *mut *mut colnr_T,
@@ -1519,7 +1518,6 @@ pub unsafe extern "C" fn tabstop_set(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_padding(
     mut col: colnr_T,
     mut ts_arg: OptInt,
@@ -1554,7 +1552,6 @@ pub unsafe extern "C" fn tabstop_padding(
     }
     return padding;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_at(
     mut col: colnr_T,
     mut ts: OptInt,
@@ -1594,7 +1591,6 @@ pub unsafe extern "C" fn tabstop_at(
     }
     return tab_size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_start(
     mut col: colnr_T,
     mut ts: ::core::ffi::c_int,
@@ -1618,7 +1614,6 @@ pub unsafe extern "C" fn tabstop_start(
         tabcol as ::core::ffi::c_int % *vts.offset(tabcount as isize) as ::core::ffi::c_int;
     return col - (col - excess as colnr_T) % *vts.offset(tabcount as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_fromto(
     mut start_col: colnr_T,
     mut end_col: colnr_T,
@@ -1711,7 +1706,6 @@ unsafe extern "C" fn tabstop_eq(mut ts1: *const colnr_T, mut ts2: *const colnr_T
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_copy(
     mut oldts: *const ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_int {
@@ -1730,7 +1724,6 @@ pub unsafe extern "C" fn tabstop_copy(
     }
     return newts;
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_count(mut ts: *mut colnr_T) -> ::core::ffi::c_int {
     return if !ts.is_null() {
         *ts.offset(0 as ::core::ffi::c_int as isize)
@@ -1738,7 +1731,6 @@ pub unsafe extern "C" fn tabstop_count(mut ts: *mut colnr_T) -> ::core::ffi::c_i
         0 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn tabstop_first(mut ts: *mut colnr_T) -> ::core::ffi::c_int {
     return if !ts.is_null() {
         *ts.offset(1 as ::core::ffi::c_int as isize)
@@ -1746,7 +1738,6 @@ pub unsafe extern "C" fn tabstop_first(mut ts: *mut colnr_T) -> ::core::ffi::c_i
         8 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_sw_value(mut buf: *mut buf_T) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = get_sw_value_col(buf, 0 as colnr_T, false_0 != 0);
     return result;
@@ -1762,7 +1753,6 @@ unsafe extern "C" fn get_sw_value_pos(
     (*curwin.get()).w_cursor = save_cursor;
     return sw_value;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_sw_value_indent(
     mut buf: *mut buf_T,
     mut left: bool,
@@ -1771,7 +1761,6 @@ pub unsafe extern "C" fn get_sw_value_indent(
     pos.col = getwhitecols_curline() as colnr_T;
     return get_sw_value_pos(buf, &raw mut pos, left);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_sw_value_col(
     mut buf: *mut buf_T,
     mut col: colnr_T,
@@ -1792,7 +1781,6 @@ pub unsafe extern "C" fn get_sts_value() -> ::core::ffi::c_int {
     };
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_indent() -> ::core::ffi::c_int {
     return indent_size_ts(
         get_cursor_line_ptr(),
@@ -1800,7 +1788,6 @@ pub unsafe extern "C" fn get_indent() -> ::core::ffi::c_int {
         (*curbuf.get()).b_p_vts_array,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_indent_lnum(mut lnum: linenr_T) -> ::core::ffi::c_int {
     return indent_size_ts(
         ml_get(lnum),
@@ -1808,14 +1795,12 @@ pub unsafe extern "C" fn get_indent_lnum(mut lnum: linenr_T) -> ::core::ffi::c_i
         (*curbuf.get()).b_p_vts_array,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_indent_buf(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
 ) -> ::core::ffi::c_int {
     return indent_size_ts(ml_get_buf(buf, lnum), (*buf).b_p_ts, (*buf).b_p_vts_array);
 }
-#[no_mangle]
 pub unsafe extern "C" fn indent_size_no_ts(
     mut ptr: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -1897,7 +1882,6 @@ pub unsafe extern "C" fn indent_size_ts(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_indent(
     mut size: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
@@ -2184,7 +2168,6 @@ pub unsafe extern "C" fn set_indent(
     (*curwin.get()).w_cursor.col = ind_len as colnr_T;
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c_int {
     let mut col: colnr_T = 0;
     let mut pos: pos_T = pos_T {
@@ -2241,7 +2224,6 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
     );
     return col;
 }
-#[no_mangle]
 pub unsafe extern "C" fn briopt_check(
     mut briopt: *mut ::core::ffi::c_char,
     mut wp: *mut win_T,
@@ -2328,7 +2310,6 @@ pub unsafe extern "C" fn briopt_check(
     (*wp).w_briopt_vcol = bri_vcol;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_breakindent_win(
     mut wp: *mut win_T,
     mut line: *mut ::core::ffi::c_char,
@@ -2459,7 +2440,6 @@ pub unsafe extern "C" fn get_breakindent_win(
     }
     return bri;
 }
-#[no_mangle]
 pub unsafe extern "C" fn inindent(mut extra: ::core::ffi::c_int) -> bool {
     let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut col: colnr_T = 0;
@@ -2474,7 +2454,6 @@ pub unsafe extern "C" fn inindent(mut extra: ::core::ffi::c_int) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut first_changed: linenr_T = 0 as linenr_T;
@@ -2589,7 +2568,6 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
         (*curbuf.get()).b_op_end = (*oap).end;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn preprocs_left() -> bool {
     return (*curbuf.get()).b_p_si != 0 && (*curbuf.get()).b_p_cin == 0
         || (*curbuf.get()).b_p_cin != 0
@@ -2601,14 +2579,12 @@ pub unsafe extern "C" fn preprocs_left() -> bool {
                 != 0
             && (*curbuf.get()).b_ind_hash_comment == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn may_do_si() -> bool {
     return (*curbuf.get()).b_p_si != 0
         && (*curbuf.get()).b_p_cin == 0
         && *(*curbuf.get()).b_p_inde as ::core::ffi::c_int == NUL
         && p_paste.get() == 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     if (did_si.get() as ::core::ffi::c_int != 0 || can_si_back.get() as ::core::ffi::c_int != 0)
@@ -2706,7 +2682,6 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
         (*curwin.get()).w_cursor.col
     });
 }
-#[no_mangle]
 pub unsafe extern "C" fn change_indent(
     mut type_0: ::core::ffi::c_int,
     mut amount: ::core::ffi::c_int,
@@ -2897,7 +2872,6 @@ pub unsafe extern "C" fn change_indent(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_indent(
     mut size: ::core::ffi::c_int,
     mut src: *mut ::core::ffi::c_char,
@@ -3027,7 +3001,6 @@ unsafe extern "C" fn emsg_text_too_long() {
         got_int.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
     let mut got_tab: bool = false_0 != 0;
     let mut num_spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3255,7 +3228,6 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
     coladvance(curwin.get(), (*curwin.get()).w_curswant);
     u_clearline(curbuf.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
     let mut use_sandbox: bool = was_set_insecurely(
         curwin.get(),
@@ -3301,7 +3273,6 @@ pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
     }
     return indent;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut paren: pos_T = pos_T {
@@ -3569,7 +3540,6 @@ unsafe extern "C" fn lisp_match(mut p: *mut ::core::ffi::c_char) -> ::core::ffi:
     }
     return false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fixthisline(mut get_the_indent: IndentGetter) {
     let mut amount: ::core::ffi::c_int = get_the_indent.expect("non-null function pointer")();
     if amount < 0 as ::core::ffi::c_int {
@@ -3585,7 +3555,6 @@ pub unsafe extern "C" fn fixthisline(mut get_the_indent: IndentGetter) {
         did_ai.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn use_indentexpr_for_lisp() -> bool {
     return (*curbuf.get()).b_p_lisp != 0
         && *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL
@@ -3594,7 +3563,6 @@ pub unsafe extern "C" fn use_indentexpr_for_lisp() -> bool {
             b"expr:1\0".as_ptr() as *const ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fix_indent() {
     if p_paste.get() != 0 {
         return;
@@ -3611,7 +3579,6 @@ pub unsafe extern "C" fn fix_indent() {
         do_c_expr_indent();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_indent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -3624,7 +3591,6 @@ pub unsafe extern "C" fn f_indent(
         (*rettv).vval.v_number = -1 as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_lispindent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,

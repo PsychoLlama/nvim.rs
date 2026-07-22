@@ -71,7 +71,6 @@ static base64_functions: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
         func: None,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn luaopen_base64(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     luaL_register(

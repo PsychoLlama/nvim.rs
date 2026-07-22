@@ -834,7 +834,6 @@ pub const STRING_INIT: String_0 = String_0 {
 };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn nvim_exec2(
     mut channel_id: uint64_t,
     mut src: String_0,
@@ -871,7 +870,6 @@ pub unsafe extern "C" fn nvim_exec2(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn exec_impl(
     mut channel_id: uint64_t,
     mut src: String_0,
@@ -953,7 +951,6 @@ pub unsafe extern "C" fn exec_impl(
     }
     return STRING_INIT;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_command(mut cmd: String_0, mut err: *mut Error) {
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -968,7 +965,6 @@ pub unsafe extern "C" fn nvim_command(mut cmd: String_0, mut err: *mut Error) {
     do_cmdline_cmd(cmd.data);
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_eval(
     mut expr: String_0,
     mut arena: *mut Arena,
@@ -1108,7 +1104,6 @@ unsafe extern "C" fn _call_function(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_call_function(
     mut fn_0: String_0,
     mut args: Array,
@@ -1117,7 +1112,6 @@ pub unsafe extern "C" fn nvim_call_function(
 ) -> Object {
     return _call_function(fn_0, args, ::core::ptr::null_mut::<dict_T>(), arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_call_dict_function(
     mut dict: Object,
     mut fn_0: String_0,
@@ -1249,7 +1243,6 @@ pub unsafe extern "C" fn nvim_call_dict_function(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_parse_expression(
     mut expr: String_0,
     mut flags: String_0,

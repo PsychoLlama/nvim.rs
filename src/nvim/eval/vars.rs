@@ -4916,7 +4916,6 @@ static msgpack_type_names: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalC
     b"map\0".as_ptr() as *const ::core::ffi::c_char,
     b"ext\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
 pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> = GlobalCell::new([
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
@@ -4927,7 +4926,6 @@ pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> = GlobalCell:
     ::core::ptr::null::<list_T>(),
     ::core::ptr::null::<list_T>(),
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn evalvars_init() {
     init_var_dict(get_globvar_dict(), globvars_var.ptr(), VAR_DEF_SCOPE);
     init_var_dict(vimvardict.ptr(), vimvars_var.ptr(), VAR_SCOPE);
@@ -5084,7 +5082,6 @@ pub unsafe extern "C" fn evalvars_init() {
     set_vim_var_partial(VV_LUA, vvlua_partial);
     set_reg_var(0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn garbage_collect_globvars(
     mut copyID: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -5094,7 +5091,6 @@ pub unsafe extern "C" fn garbage_collect_globvars(
         ::core::ptr::null_mut::<*mut list_stack_T>(),
     ) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn garbage_collect_vimvars(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_ht(
         &raw mut (*vimvardict.ptr()).dv_hashtab,
@@ -5102,7 +5098,6 @@ pub unsafe extern "C" fn garbage_collect_vimvars(mut copyID: ::core::ffi::c_int)
         ::core::ptr::null_mut::<*mut list_stack_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn garbage_collect_scriptvars(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort_0: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -5122,7 +5117,6 @@ pub unsafe extern "C" fn garbage_collect_scriptvars(mut copyID: ::core::ffi::c_i
     }
     return abort_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_internal_string_var(
     mut name: *const ::core::ffi::c_char,
     mut value: *mut ::core::ffi::c_char,
@@ -5134,7 +5128,6 @@ pub unsafe extern "C" fn set_internal_string_var(
     };
     set_var(name, strlen(name), &raw mut tv, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_charconvert(
     enc_from: *const ::core::ffi::c_char,
     enc_to: *const ::core::ffi::c_char,
@@ -5186,7 +5179,6 @@ pub unsafe extern "C" fn eval_charconvert(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_diff(
     origfile: *const ::core::ffi::c_char,
     newfile: *const ::core::ffi::c_char,
@@ -5220,7 +5212,6 @@ pub unsafe extern "C" fn eval_diff(
     );
     current_sctx.set(saved_sctx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_patch(
     origfile: *const ::core::ffi::c_char,
     difffile: *const ::core::ffi::c_char,
@@ -5254,7 +5245,6 @@ pub unsafe extern "C" fn eval_patch(
     );
     current_sctx.set(saved_sctx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_spell_expr(
     mut badword: *mut ::core::ffi::c_char,
     mut expr: *mut ::core::ffi::c_char,
@@ -5302,7 +5292,6 @@ pub unsafe extern "C" fn eval_spell_expr(
     current_sctx.set(saved_sctx);
     return list;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_spellword(
     list: *mut list_T,
     mut ret_word: *mut *const ::core::ffi::c_char,
@@ -5324,7 +5313,6 @@ pub unsafe extern "C" fn get_spellword(
         ::core::ptr::null_mut::<bool>(),
     ) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
     *save_tv = (*vimvars.ptr())[idx as usize].vv_di.di_tv;
     (*vimvars.ptr())[idx as usize].vv_di.di_tv.vval.v_string =
@@ -5340,7 +5328,6 @@ pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
     (*vimvars.ptr())[idx as usize].vv_di.di_tv = *save_tv;
     if (*vimvars.ptr())[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
@@ -5387,7 +5374,6 @@ unsafe extern "C" fn list_script_vars(mut first: *mut ::core::ffi::c_int) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_one_expr_in_str(
     mut p: *mut ::core::ffi::c_char,
     mut gap: *mut garray_T,
@@ -5483,7 +5469,6 @@ unsafe extern "C" fn eval_all_expr_in_str(
     ga_append(&raw mut ga, NUL as uint8_t);
     return ga.ga_data as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn heredoc_get(
     mut eap: *mut exarg_T,
     mut cmd: *mut ::core::ffi::c_char,
@@ -5691,7 +5676,6 @@ pub unsafe extern "C" fn heredoc_get(
     }
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_let(mut eap: *mut exarg_T) {
     let is_const: bool = (*eap).cmdidx as ::core::ffi::c_int == CMD_const as ::core::ffi::c_int;
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
@@ -5826,7 +5810,6 @@ pub unsafe extern "C" fn ex_let(mut eap: *mut exarg_T) {
         tv_clear(&raw mut rettv);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_let_vars(
     mut arg_start: *mut ::core::ffi::c_char,
     mut tv: *mut typval_T,
@@ -5929,7 +5912,6 @@ pub unsafe extern "C" fn ex_let_vars(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_var_list(
     mut arg: *const ::core::ffi::c_char,
     mut var_count: *mut ::core::ffi::c_int,
@@ -6002,7 +5984,6 @@ unsafe extern "C" fn skip_var_one(
         FNE_INCL_BR | FNE_CHECK_START,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn list_hashtable_vars(
     mut ht: *mut hashtab_T,
     mut prefix: *const ::core::ffi::c_char,
@@ -6592,7 +6573,6 @@ unsafe extern "C" fn ex_let_one(
     }
     return arg_end;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_unlet(mut eap: *mut exarg_T) {
     ex_unletlock(
         eap,
@@ -6614,7 +6594,6 @@ pub unsafe extern "C" fn ex_unlet(mut eap: *mut exarg_T) {
         ),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_lockvar(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut deep: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -6858,7 +6837,6 @@ unsafe extern "C" fn tv_list_unlet_range(
     }
     tv_list_remove_items(l, li_first, li_last);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_unlet(
     name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -7014,7 +6992,6 @@ unsafe extern "C" fn do_lock_var(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn del_menutrans_vars() {
     hash_lock(&raw mut (*globvardict.ptr()).dv_hashtab);
     let hiht_: *mut hashtab_T = &raw mut (*globvardict.ptr()).dv_hashtab;
@@ -7038,54 +7015,43 @@ pub unsafe extern "C" fn del_menutrans_vars() {
     }
     hash_unlock(&raw mut (*globvardict.ptr()).dv_hashtab);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_globvar_dict() -> *mut dict_T {
     return globvardict.ptr();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_globvar_ht() -> *mut hashtab_T {
     return &raw mut (*globvardict.ptr()).dv_hashtab;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vimvar_dict() -> *mut dict_T {
     return vimvardict.ptr();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
     let mut tv_out: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv_out);
     tv_copy(tv, tv_out);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_name(idx: VimVarIndex) -> *mut ::core::ffi::c_char {
     return (*vimvars.ptr())[idx as usize].vv_name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
     return &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
         .vv_di
         .di_tv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     return (*tv).vval.v_number;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     return (*tv).vval.v_list;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_dict(idx: VimVarIndex) -> *mut dict_T {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     return (*tv).vval.v_dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char {
     return tv_get_string(get_vim_var_tv(idx)) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     return (*tv).vval.v_partial;
@@ -7093,7 +7059,6 @@ pub unsafe extern "C" fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T
 static varnamebuf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-#[no_mangle]
 pub unsafe extern "C" fn cat_prefix_varname(
     mut prefix: ::core::ffi::c_int,
     mut name: *const ::core::ffi::c_char,
@@ -7113,7 +7078,6 @@ pub unsafe extern "C" fn cat_prefix_varname(
     );
     return varnamebuf.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_var_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -7229,32 +7193,27 @@ pub unsafe extern "C" fn get_user_var_name(
     varnamebuflen.set(0 as size_t);
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_type(idx: VimVarIndex, type_0: VarType) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     (*tv).v_type = type_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv);
     (*tv).vval.v_number = val;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_bool(idx: VimVarIndex, val: BoolVarValue) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv);
     (*tv).v_type = VAR_BOOL;
     (*tv).vval.v_bool = val;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_special(idx: VimVarIndex, val: SpecialVarValue) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv);
     (*tv).v_type = VAR_SPECIAL;
     (*tv).vval.v_special = val;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_char(mut c: ::core::ffi::c_int) {
     let mut buf: [::core::ffi::c_char; 7] = [0; 7];
     let mut buflen: ::core::ffi::c_int =
@@ -7266,7 +7225,6 @@ pub unsafe extern "C" fn set_vim_var_char(mut c: ::core::ffi::c_int) {
         buflen as ptrdiff_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_string(
     idx: VimVarIndex,
     val: *const ::core::ffi::c_char,
@@ -7283,7 +7241,6 @@ pub unsafe extern "C" fn set_vim_var_string(
         (*tv).vval.v_string = xstrndup(val, len as size_t);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv);
@@ -7293,7 +7250,6 @@ pub unsafe extern "C" fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
         tv_list_ref(val);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     tv_clear(tv);
@@ -7305,12 +7261,10 @@ pub unsafe extern "C" fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
     (*val).dv_refcount += 1;
     tv_dict_set_keys_readonly(val);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vim_var_partial(idx: VimVarIndex, mut val: *mut partial_T) {
     let mut tv: *mut typval_T = get_vim_var_tv(idx);
     (*tv).vval.v_partial = val;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_reg_var(mut c: ::core::ffi::c_int) {
     let mut regname: [::core::ffi::c_char; 2] = [0; 2];
     if c == 0 as ::core::ffi::c_int || c == ' ' as ::core::ffi::c_int {
@@ -7330,7 +7284,6 @@ pub unsafe extern "C" fn set_reg_var(mut c: ::core::ffi::c_int) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn v_exception(
     mut oldval: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -7341,7 +7294,6 @@ pub unsafe extern "C" fn v_exception(
     (*tv).vval.v_string = oldval;
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_cmdarg(
     mut eap: *mut exarg_T,
     mut oldarg: *mut ::core::ffi::c_char,
@@ -7512,7 +7464,6 @@ pub unsafe extern "C" fn set_cmdarg(
     (*tv).vval.v_string = oldarg;
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn v_throwpoint(
     mut oldval: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -7523,7 +7474,6 @@ pub unsafe extern "C" fn v_throwpoint(
     (*tv).vval.v_string = oldval;
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_vcount(
     mut count: int64_t,
     mut count1: int64_t,
@@ -7535,7 +7485,6 @@ pub unsafe extern "C" fn set_vcount(
     (*get_vim_var_tv(VV_COUNT)).vval.v_number = count as varnumber_T;
     (*get_vim_var_tv(VV_COUNT1)).vval.v_number = count1 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eval_variable(
     mut name: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -7573,7 +7522,6 @@ pub unsafe extern "C" fn eval_variable(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_vars(mut name: *const ::core::ffi::c_char, mut len: size_t) {
     if (*eval_lavars_used.ptr()).is_null() {
         return;
@@ -7586,7 +7534,6 @@ pub unsafe extern "C" fn check_vars(mut name: *const ::core::ffi::c_char, mut le
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_var(
     name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -7617,7 +7564,6 @@ pub unsafe extern "C" fn find_var(
         (no_autoload != 0 || !htp.is_null()) as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_var_in_ht(
     ht: *mut hashtab_T,
     mut htname: ::core::ffi::c_int,
@@ -7756,7 +7702,6 @@ unsafe extern "C" fn find_var_ht_dict(
         ::core::ptr::null_mut::<hashtab_T>()
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_var_ht(
     mut name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -7765,7 +7710,6 @@ pub unsafe extern "C" fn find_var_ht(
     let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     return find_var_ht_dict(name, name_len, varname, &raw mut d);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_var_value(
     name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -7781,7 +7725,6 @@ pub unsafe extern "C" fn get_var_value(
     }
     return tv_get_string(&raw mut (*v).di_tv) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn new_script_vars(mut id: scid_T) {
     let mut sv: *mut scriptvar_T =
         xcalloc(1 as size_t, ::core::mem::size_of::<scriptvar_T>()) as *mut scriptvar_T;
@@ -7790,7 +7733,6 @@ pub unsafe extern "C" fn new_script_vars(mut id: scid_T) {
         .offset((id as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize))
     .sn_vars = sv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_var_dict(
     mut dict: *mut dict_T,
     mut dict_var: *mut ScopeDictDictItem,
@@ -7810,16 +7752,13 @@ pub unsafe extern "C" fn init_var_dict(
         .offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     QUEUE_INIT(&raw mut (*dict).watchers);
 }
-#[no_mangle]
 pub unsafe extern "C" fn unref_var_dict(mut dict: *mut dict_T) {
     (*dict).dv_refcount -= DO_NOT_FREE_CNT as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     tv_dict_unref(dict);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vars_clear(mut ht: *mut hashtab_T) {
     vars_clear_ext(ht, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vars_clear_ext(mut ht: *mut hashtab_T, mut free_val: bool) {
     let mut todo: ::core::ffi::c_int = 0;
     let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
@@ -7927,7 +7866,6 @@ unsafe extern "C" fn list_one_var_a(
         *first = false_0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn before_set_vvar(
     varname: *const ::core::ffi::c_char,
     di: *mut dictitem_T,
@@ -8020,7 +7958,6 @@ pub unsafe extern "C" fn before_set_vvar(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_var(
     mut name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -8029,7 +7966,6 @@ pub unsafe extern "C" fn set_var(
 ) {
     set_var_const(name, name_len, tv, copy, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_var_const(
     mut name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -8168,7 +8104,6 @@ pub unsafe extern "C" fn set_var_const(
         tv_item_lock(&raw mut (*di).di_tv, DICT_MAXNEST, true_0 != 0, true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_check_ro(
     flags: ::core::ffi::c_int,
     mut name: *const ::core::ffi::c_char,
@@ -8194,7 +8129,6 @@ pub unsafe extern "C" fn var_check_ro(
     semsg(gettext(error_message), name_len as ::core::ffi::c_int, name);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_check_lock(
     flags: ::core::ffi::c_int,
     mut name: *const ::core::ffi::c_char,
@@ -8216,7 +8150,6 @@ pub unsafe extern "C" fn var_check_lock(
     );
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_check_fixed(
     flags: ::core::ffi::c_int,
     mut name: *const ::core::ffi::c_char,
@@ -8238,7 +8171,6 @@ pub unsafe extern "C" fn var_check_fixed(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_wrong_func_name(
     name: *const ::core::ffi::c_char,
     new_var: bool,
@@ -8295,7 +8227,6 @@ pub unsafe extern "C" fn var_wrong_func_name(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn valid_varname(mut varname: *const ::core::ffi::c_char) -> bool {
     let mut p: *const ::core::ffi::c_char = varname;
     while *p as ::core::ffi::c_int != NUL {
@@ -8544,7 +8475,6 @@ unsafe extern "C" fn tv_to_optval(
     }
     return value;
 }
-#[no_mangle]
 pub unsafe extern "C" fn optval_as_tv(mut value: OptVal, mut numbool: bool) -> typval_T {
     let mut rettv: typval_T = typval_T {
         v_type: VAR_SPECIAL,
@@ -8657,7 +8587,6 @@ unsafe extern "C" fn setwinvar(mut argvars: *mut typval_T, mut off: ::core::ffi:
         restore_win(&raw mut switchwin, true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_v_option_vars() {
     set_vim_var_string(
         VV_OPTION_NEW,
@@ -8690,7 +8619,6 @@ pub unsafe extern "C" fn reset_v_option_vars() {
         -1 as ptrdiff_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn assert_error(mut gap: *mut garray_T) {
     let mut tv: *mut typval_T = get_vim_var_tv(VV_ERRORS);
     if (*tv).v_type as ::core::ffi::c_uint != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -8704,7 +8632,6 @@ pub unsafe extern "C" fn assert_error(mut gap: *mut garray_T) {
         (*gap).ga_len as ssize_t,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_exists(mut var: *const ::core::ffi::c_char) -> bool {
     let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut n: bool = false_0 != 0;
@@ -8758,7 +8685,6 @@ static redir_endp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static redir_varname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn var_redir_start(
     mut name: *mut ::core::ffi::c_char,
     mut append: bool,
@@ -8839,7 +8765,6 @@ pub unsafe extern "C" fn var_redir_start(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_redir_str(
     mut value: *const ::core::ffi::c_char,
     mut value_len: ::core::ffi::c_int,
@@ -8862,7 +8787,6 @@ pub unsafe extern "C" fn var_redir_str(
     );
     (*redir_ga.ptr()).ga_len += len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn var_redir_stop() {
     if !(*redir_lval.ptr()).is_null() {
         if !(*redir_endp.ptr()).is_null() {
@@ -8911,7 +8835,6 @@ pub unsafe extern "C" fn var_redir_stop() {
     *ptr__1 = NULL;
     let _ = *ptr__1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_gettabvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8941,7 +8864,6 @@ pub unsafe extern "C" fn f_gettabvar(
         ::core::ptr::null_mut::<buf_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_gettabwinvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8949,7 +8871,6 @@ pub unsafe extern "C" fn f_gettabwinvar(
 ) {
     getwinvar(argvars, rettv, 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getwinvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8957,7 +8878,6 @@ pub unsafe extern "C" fn f_getwinvar(
 ) {
     getwinvar(argvars, rettv, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getbufvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -8976,7 +8896,6 @@ pub unsafe extern "C" fn f_getbufvar(
         buf,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_settabvar(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -9025,7 +8944,6 @@ pub unsafe extern "C" fn f_settabvar(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_settabwinvar(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -9033,7 +8951,6 @@ pub unsafe extern "C" fn f_settabwinvar(
 ) {
     setwinvar(argvars, 1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setwinvar(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -9041,7 +8958,6 @@ pub unsafe extern "C" fn f_setwinvar(
 ) {
     setwinvar(argvars, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setbufvar(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,

@@ -1056,7 +1056,6 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn setmark(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut view: fmarkv_T = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
     return setmark_pos(
@@ -1066,16 +1065,13 @@ pub unsafe extern "C" fn setmark(mut c: ::core::ffi::c_int) -> ::core::ffi::c_in
         &raw mut view,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_fmark(mut fm: fmark_T) {
     xfree(fm.additional_data as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_xfmark(mut fm: xfmark_T) {
     xfree(fm.fname as *mut ::core::ffi::c_void);
     free_fmark(fm.fmark);
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
     free_fmark(*fm);
     *fm = fmark_T {
@@ -1166,7 +1162,6 @@ unsafe extern "C" fn do_markset_autocmd(
         &raw mut c2rust_lvalue,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn setmark_pos(
     mut c: ::core::ffi::c_int,
     mut pos: *mut pos_T,
@@ -1282,7 +1277,6 @@ pub unsafe extern "C" fn setmark_pos(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_jumplist_forget_file(
     mut wp: *mut win_T,
     mut fnum: ::core::ffi::c_int,
@@ -1308,7 +1302,6 @@ pub unsafe extern "C" fn mark_jumplist_forget_file(
         i -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: ::core::ffi::c_int) {
     mark_jumplist_forget_file(wp, fnum);
     let mut i: ::core::ffi::c_int = (*wp).w_tagstacklen - 1 as ::core::ffi::c_int;
@@ -1332,7 +1325,6 @@ pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: ::core::
         i -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn setpcmark() {
     let mut fm: *mut xfmark_T = ::core::ptr::null_mut::<xfmark_T>();
     if global_busy.get() != 0
@@ -1377,7 +1369,6 @@ pub unsafe extern "C" fn setpcmark() {
     (*fmarkp__).view = view;
     (*fmarkp__).additional_data = ::core::ptr::null_mut::<AdditionalData>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn checkpcmark() {
     if (*curwin.get()).w_prev_pcmark.lnum != 0 as linenr_T
         && (equalpos((*curwin.get()).w_pcmark, (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0
@@ -1387,7 +1378,6 @@ pub unsafe extern "C" fn checkpcmark() {
     }
     (*curwin.get()).w_prev_pcmark.lnum = 0 as ::core::ffi::c_int as linenr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_jumplist(
     mut win: *mut win_T,
     mut count: ::core::ffi::c_int,
@@ -1429,7 +1419,6 @@ pub unsafe extern "C" fn get_jumplist(
     }
     return &raw mut (*jmp).fmark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_changelist(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
@@ -1500,7 +1489,6 @@ pub unsafe extern "C" fn mark_get(
     }
     return fm;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_get_global(
     mut resolve: bool,
     mut name: ::core::ffi::c_int,
@@ -1528,7 +1516,6 @@ pub unsafe extern "C" fn mark_get_global(
     }
     return mark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_get_local(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
@@ -1568,7 +1555,6 @@ pub unsafe extern "C" fn mark_get_local(
     }
     return mark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_get_motion(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
@@ -1641,7 +1627,6 @@ pub unsafe extern "C" fn mark_get_motion(
     listcmd_busy.set(slcb);
     return mark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_get_visual(
     mut buf: *mut buf_T,
     mut name: ::core::ffi::c_int,
@@ -1670,7 +1655,6 @@ pub unsafe extern "C" fn mark_get_visual(
     }
     return mark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn pos_to_mark(
     mut buf: *mut buf_T,
     mut fmp: *mut fmark_T,
@@ -1715,7 +1699,6 @@ unsafe extern "C" fn switch_to_mark_buf(
     }
     return 0 as MarkMoveRes;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMoveRes {
     let mut prev_pos: pos_T = pos_T {
         lnum: 0,
@@ -1822,7 +1805,6 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
     }
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
     if !fm.is_null() && (*fm).view.topline_offset >= 0 as linenr_T {
         let mut topline: linenr_T = (*fm).mark.lnum - (*fm).view.topline_offset;
@@ -1844,14 +1826,12 @@ pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) -> fmarkv_T {
     return fmarkv_T {
         topline_offset: pos.lnum - (*wp).w_topline,
         skipcol: (*wp).w_skipcol,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn getnextmark(
     mut startpos: *mut pos_T,
     mut dir: ::core::ffi::c_int,
@@ -1929,7 +1909,6 @@ unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
         0 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn fmarks_check_names(mut buf: *mut buf_T) {
     let mut name: *mut ::core::ffi::c_char = (*buf).b_ffname;
     if (*buf).b_ffname.is_null() {
@@ -1979,7 +1958,6 @@ unsafe extern "C" fn fmarks_check_one(
         let _ = *ptr_;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_check(
     mut fm: *mut fmark_T,
     mut errormsg: *mut *const ::core::ffi::c_char,
@@ -1998,7 +1976,6 @@ pub unsafe extern "C" fn mark_check(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_check_line_bounds(
     mut buf: *mut buf_T,
     mut fm: *mut fmark_T,
@@ -2010,7 +1987,6 @@ pub unsafe extern "C" fn mark_check_line_bounds(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
     let mut i: size_t = 0 as size_t;
     while i < NMARKS as size_t {
@@ -2036,7 +2012,6 @@ pub unsafe extern "C" fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
     }
     (*buf).b_changelistlen = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fm_getname(
     mut fmark: *mut fmark_T,
     mut lead_len: ::core::ffi::c_int,
@@ -2081,7 +2056,6 @@ unsafe extern "C" fn mark_line(
     *p = NUL as ::core::ffi::c_char;
     return s;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2286,7 +2260,6 @@ unsafe extern "C" fn show_one_mark(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
     let mut from: ::core::ffi::c_int = 0;
     let mut to: ::core::ffi::c_int = 0;
@@ -2484,7 +2457,6 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
     cleanup_jumplist(curwin.get(), true_0 != 0);
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
@@ -2555,13 +2527,11 @@ pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
         msg_puts(b"\n>\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_clearjumps(mut _eap: *mut exarg_T) {
     free_jumplist(curwin.get());
     (*curwin.get()).w_jumplistlen = 0 as ::core::ffi::c_int;
     (*curwin.get()).w_jumplistidx = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_puts_title(gettext(
@@ -2612,7 +2582,6 @@ pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
         msg_puts(b"\n>\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_adjust(
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -2631,7 +2600,6 @@ pub unsafe extern "C" fn mark_adjust(
         op,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_adjust_nofold(
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -3046,7 +3014,6 @@ pub unsafe extern "C" fn mark_adjust_buf(
         i_4 = i_4.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_col_adjust(
     mut lnum: linenr_T,
     mut mincol: colnr_T,
@@ -3514,7 +3481,6 @@ pub unsafe extern "C" fn mark_col_adjust(
         win = (*win).w_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: bool) {
     let mut i: ::core::ffi::c_int = 0;
     if loadfiles {
@@ -3584,7 +3550,6 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*from).w_jumplistlen {
@@ -3597,7 +3562,6 @@ pub unsafe extern "C" fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T)
     (*to).w_jumplistlen = (*from).w_jumplistlen;
     (*to).w_jumplistidx = (*from).w_jumplistidx;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_jumplist_iter(
     iter: *const ::core::ffi::c_void,
     win: *const win_T,
@@ -3637,7 +3601,6 @@ pub unsafe extern "C" fn mark_jumplist_iter(
     }
     return iter_mark.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_global_iter(
     iter: *const ::core::ffi::c_void,
     name: *mut ::core::ffi::c_char,
@@ -3739,7 +3702,6 @@ unsafe extern "C" fn next_buffer_mark(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_buffer_iter(
     iter: *const ::core::ffi::c_void,
     buf: *const buf_T,
@@ -3782,7 +3744,6 @@ pub unsafe extern "C" fn mark_buffer_iter(
     *fm = *iter_mark;
     return iter_mark as *const ::core::ffi::c_void;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_set_global(
     name: ::core::ffi::c_char,
     fm: xfmark_T,
@@ -3802,7 +3763,6 @@ pub unsafe extern "C" fn mark_set_global(
     *fm_tgt = fm;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_set_local(
     name: ::core::ffi::c_char,
     buf: *mut buf_T,
@@ -3835,7 +3795,6 @@ pub unsafe extern "C" fn mark_set_local(
     *fm_tgt = fm;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_jumplist(mut wp: *mut win_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*wp).w_jumplistlen {
@@ -3844,7 +3803,6 @@ pub unsafe extern "C" fn free_jumplist(mut wp: *mut win_T) {
     }
     (*wp).w_jumplistlen = 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_last_cursor(mut win: *mut win_T) {
     if !(*win).w_buffer.is_null() {
         let fmarkp___: *mut fmark_T = &raw mut (*(*win).w_buffer).b_last_cursor;
@@ -3860,7 +3818,6 @@ pub unsafe extern "C" fn set_last_cursor(mut win: *mut win_T) {
         (*fmarkp__).additional_data = ::core::ptr::null_mut::<AdditionalData>();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mark_mb_adjustpos(mut buf: *mut buf_T, mut lp: *mut pos_T) {
     if (*lp).col > 0 as ::core::ffi::c_int || (*lp).coladd > 1 as ::core::ffi::c_int {
         let p: *const ::core::ffi::c_char = ml_get_buf(buf, (*lp).lnum);
@@ -3926,7 +3883,6 @@ unsafe extern "C" fn add_mark(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut list_T) {
     let mut mname: [::core::ffi::c_char; 3] =
         ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"' \0");
@@ -4000,11 +3956,9 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_raw_global_mark(mut name: ::core::ffi::c_char) -> xfmark_T {
     return (*namedfm.ptr())[mark_global_index(name) as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
     let mut mname: [::core::ffi::c_char; 3] =
         ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"' \0");

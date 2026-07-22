@@ -1323,7 +1323,6 @@ unsafe extern "C" fn screen_new(mut vt: *mut VTerm) -> *mut VTermScreen {
     );
     return screen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_screen_free(mut screen: *mut VTermScreen) {
     vterm_allocator_free(
         (*screen).vt,
@@ -1439,7 +1438,6 @@ pub unsafe extern "C" fn vterm_screen_enable_reflow(
 ) {
     (*screen).set_reflow(reflow as ::core::ffi::c_uint as ::core::ffi::c_uint);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_screen_set_reflow(mut screen: *mut VTermScreen, mut reflow: bool) {
     vterm_screen_enable_reflow(screen, reflow);
 }
@@ -1464,7 +1462,6 @@ pub unsafe extern "C" fn vterm_screen_set_callbacks(
     (*screen).callbacks = callbacks;
     (*screen).cbdata = user;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_screen_set_unrecognised_fallbacks(
     mut screen: *mut VTermScreen,
     mut fallbacks: *const VTermStateFallbacks,
@@ -1472,7 +1469,6 @@ pub unsafe extern "C" fn vterm_screen_set_unrecognised_fallbacks(
 ) {
     vterm_state_set_unrecognised_fallbacks((*screen).state, fallbacks, user);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_screen_flush_damage(mut screen: *mut VTermScreen) {
     if (*screen).pending_scrollrect.start_row != -1 as ::core::ffi::c_int {
         vterm_scroll_rect(
@@ -1511,7 +1507,6 @@ pub unsafe extern "C" fn vterm_screen_flush_damage(mut screen: *mut VTermScreen)
         (*screen).damaged.start_row = -1 as ::core::ffi::c_int;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_screen_set_damage_merge(
     mut screen: *mut VTermScreen,
     mut size: VTermDamageSize,
@@ -1526,7 +1521,6 @@ pub unsafe extern "C" fn vterm_screen_convert_color_to_rgb(
 ) {
     vterm_state_convert_color_to_rgb((*screen).state, col);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rect_expand(mut dst: *mut VTermRect, mut src: *mut VTermRect) {
     if (*dst).start_row > (*src).start_row {
         (*dst).start_row = (*src).start_row;
@@ -1541,7 +1535,6 @@ pub unsafe extern "C" fn rect_expand(mut dst: *mut VTermRect, mut src: *mut VTer
         (*dst).end_col = (*src).end_col;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn rect_clip(mut dst: *mut VTermRect, mut bounds: *mut VTermRect) {
     if (*dst).start_row < (*bounds).start_row {
         (*dst).start_row = (*bounds).start_row;
@@ -1562,7 +1555,6 @@ pub unsafe extern "C" fn rect_clip(mut dst: *mut VTermRect, mut bounds: *mut VTe
         (*dst).end_col = (*dst).start_col;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn rect_equal(
     mut a: *mut VTermRect,
     mut b: *mut VTermRect,
@@ -1572,7 +1564,6 @@ pub unsafe extern "C" fn rect_equal(
         && (*a).end_row == (*b).end_row
         && (*a).end_col == (*b).end_col) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rect_contains(
     mut big: *mut VTermRect,
     mut small: *mut VTermRect,
@@ -1591,7 +1582,6 @@ pub unsafe extern "C" fn rect_contains(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rect_intersects(
     mut a: *mut VTermRect,
     mut b: *mut VTermRect,

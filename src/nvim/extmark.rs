@@ -149,7 +149,6 @@ pub const MAP_INIT: Map_uint32_t_uint32_t = Map_uint32_t_uint32_t {
     set: SET_INIT,
     values: ::core::ptr::null_mut::<uint32_t>(),
 };
-#[no_mangle]
 pub unsafe extern "C" fn extmark_set(
     mut buf: *mut buf_T,
     mut ns_id: uint32_t,
@@ -492,7 +491,6 @@ unsafe extern "C" fn extmark_setraw(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_del_id(
     mut buf: *mut buf_T,
     mut ns_id: uint32_t,
@@ -523,7 +521,6 @@ pub unsafe extern "C" fn extmark_del_id(
     }
     return key.id > 0 as uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_del(
     mut buf: *mut buf_T,
     mut itr: *mut MarkTreeIter,
@@ -597,7 +594,6 @@ pub unsafe extern "C" fn extmark_del(
     }
     decor_state_invalidate(buf);
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_clear(
     mut buf: *mut buf_T,
     mut ns_id: uint32_t,
@@ -702,7 +698,6 @@ pub unsafe extern "C" fn extmark_clear(
     }
     return marks_cleared_any;
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_get(
     mut buf: *mut buf_T,
     mut ns_id: uint32_t,
@@ -835,7 +830,6 @@ unsafe extern "C" fn push_mark(
     (*array).size = (*array).size.wrapping_add(1);
     *(*array).items.offset(c2rust_fresh0 as isize) = mark;
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_from_id(
     mut buf: *mut buf_T,
     mut ns_id: uint32_t,
@@ -870,7 +864,6 @@ pub unsafe extern "C" fn extmark_from_id(
     );
     return mtpair_from(mark, end);
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
     let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
         pos: MTPos {
@@ -932,7 +925,6 @@ pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
     let _ = *ptr_;
     *(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t) = MAP_INIT;
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_splice_delete(
     mut buf: *mut buf_T,
     mut l_row: ::core::ffi::c_int,
@@ -1086,7 +1078,6 @@ pub unsafe extern "C" fn extmark_splice_delete(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mut undo: bool) {
     if undo_info.type_0 as ::core::ffi::c_uint
         == kExtmarkSplice as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -1169,7 +1160,6 @@ pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mu
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_adjust(
     mut buf: *mut buf_T,
     mut line1: linenr_T,
@@ -1271,7 +1261,6 @@ pub unsafe extern "C" fn extmark_splice(
         undo,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_splice_impl(
     mut buf: *mut buf_T,
     mut start_row: ::core::ffi::c_int,
@@ -1442,7 +1431,6 @@ pub unsafe extern "C" fn extmark_splice_impl(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_splice_cols(
     mut buf: *mut buf_T,
     mut start_row: ::core::ffi::c_int,
@@ -1464,7 +1452,6 @@ pub unsafe extern "C" fn extmark_splice_cols(
         undo,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn extmark_move_region(
     mut buf: *mut buf_T,
     mut start_row: ::core::ffi::c_int,

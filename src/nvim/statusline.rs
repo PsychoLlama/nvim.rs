@@ -866,7 +866,6 @@ unsafe extern "C" fn win_hl_attr(
     .offset(hlf as isize);
 }
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
     static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
@@ -907,7 +906,6 @@ pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
     }
     busy.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
     if !buf_spname(buf).is_null() {
         xstrlcpy(
@@ -926,7 +924,6 @@ pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
     }
     trans_characters(NameBuff.ptr() as *mut ::core::ffi::c_char, MAXPATHL);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stl_connected(mut wp: *mut win_T) -> bool {
     let mut fr: *mut frame_T = (*wp).w_frame;
     while !(*fr).fr_parent.is_null() {
@@ -941,7 +938,6 @@ pub unsafe extern "C" fn stl_connected(mut wp: *mut win_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stl_clear_click_defs(
     click_defs: *mut StlClickDefinition,
     click_defs_size: size_t,
@@ -964,7 +960,6 @@ pub unsafe extern "C" fn stl_clear_click_defs(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn stl_alloc_click_defs(
     mut cdp: *mut StlClickDefinition,
     mut width: ::core::ffi::c_int,
@@ -978,7 +973,6 @@ pub unsafe extern "C" fn stl_alloc_click_defs(
     }
     return cdp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn stl_fill_click_defs(
     mut click_defs: *mut StlClickDefinition,
     mut click_recs: *mut StlClickRecord,
@@ -1425,7 +1419,6 @@ unsafe extern "C" fn win_redr_custom(
     }
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -1441,7 +1434,6 @@ pub unsafe extern "C" fn win_redr_winbar(mut wp: *mut win_T) {
     }
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn redraw_ruler() {
     static did_ruler_col: GlobalCell<::core::ffi::c_int> =
         GlobalCell::new(-1 as ::core::ffi::c_int);
@@ -1668,7 +1660,6 @@ pub unsafe extern "C" fn redraw_ruler() {
     };
 }
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn fillchar_status(mut group: *mut hlf_T, mut wp: *mut win_T) -> schar_T {
     if wp == curwin.get() {
         *group = HLF_S;
@@ -1678,7 +1669,6 @@ pub unsafe extern "C" fn fillchar_status(mut group: *mut hlf_T, mut wp: *mut win
         return (*wp).w_p_fcs_chars.stlnc;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn redraw_custom_statusline(mut wp: *mut win_T) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -1799,7 +1789,6 @@ unsafe extern "C" fn ui_ext_tabline_update() {
     );
     arena_mem_free(arena_finish(&raw mut arena));
 }
-#[no_mangle]
 pub unsafe extern "C" fn draw_tabline() {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut attr_nosel: ::core::ffi::c_int =
@@ -2019,7 +2008,6 @@ pub unsafe extern "C" fn draw_tabline() {
     }
     redraw_tabline.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn build_statuscol_str(
     mut wp: *mut win_T,
     mut lnum: linenr_T,

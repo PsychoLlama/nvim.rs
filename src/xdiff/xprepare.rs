@@ -324,7 +324,6 @@ unsafe extern "C" fn xdl_free_ctx(mut xdf: *mut xdfile_t) {
     xfree((*xdf).recs as *mut ::core::ffi::c_void);
     xdl_cha_free(&raw mut (*xdf).rcha);
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_prepare_env(
     mut mf1: *mut mmfile_t,
     mut mf2: *mut mmfile_t,
@@ -420,7 +419,6 @@ pub unsafe extern "C" fn xdl_prepare_env(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn xdl_free_env(mut xe: *mut xdfenv_t) {
     xdl_free_ctx(&raw mut (*xe).xdf2);
     xdl_free_ctx(&raw mut (*xe).xdf1);

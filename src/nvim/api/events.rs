@@ -132,7 +132,6 @@ pub const VV_COUNT: VimVarIndex = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn nvim_error_event(
     mut channel_id: uint64_t,
     mut _type_0: Integer,
@@ -153,7 +152,6 @@ pub unsafe extern "C" fn nvim_error_event(
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_ui_term_event(
     mut _channel_id: uint64_t,
     mut event: String_0,

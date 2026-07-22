@@ -345,7 +345,6 @@ static regex_meta: GlobalCell<[luaL_Reg; 5]> = GlobalCell::new([
         func: None,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn nlua_str_utfindex(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
     let mut s1: *const ::core::ffi::c_char =
@@ -431,7 +430,6 @@ unsafe extern "C" fn nlua_str_utf_end(lstate: *mut lua_State) -> ::core::ffi::c_
     lua_pushinteger(lstate, tail_off as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_str_byteindex(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
     let mut s1: *const ::core::ffi::c_char =
@@ -453,7 +451,6 @@ pub unsafe extern "C" fn nlua_str_byteindex(lstate: *mut lua_State) -> ::core::f
     lua_pushinteger(lstate, byteidx as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_regex(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
@@ -556,7 +553,6 @@ unsafe extern "C" fn nlua_get_var_scope(mut lstate: *mut lua_State) -> *mut dict
     }
     return dict;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_setvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut dict: *mut dict_T = nlua_get_var_scope(lstate);
     let mut key: String_0 = String_0 {
@@ -654,7 +650,6 @@ pub unsafe extern "C" fn nlua_setvar(mut lstate: *mut lua_State) -> ::core::ffi:
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_getvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut dict: *mut dict_T = nlua_get_var_scope(lstate);
     let mut len: size_t = 0;
@@ -1099,7 +1094,6 @@ unsafe extern "C" fn nlua_state_add_internal(lstate: *mut lua_State) {
         b"_with_c\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_state_add_stdlib(lstate: *mut lua_State, mut is_thread: bool) {
     if !is_thread {
         lua_pushcclosure(
@@ -1281,7 +1275,6 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(lstate: *mut lua_State, mut is_th
         b"json\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_push_errstr(
     mut L: *mut lua_State,
     mut fmt: *const ::core::ffi::c_char,

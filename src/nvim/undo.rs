@@ -891,7 +891,6 @@ static u_newcount: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static u_oldcount: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static undo_undoes: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static lastmark: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn u_save_cursor() -> ::core::ffi::c_int {
     let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut top: linenr_T = if cur > 0 as linenr_T {
@@ -902,11 +901,9 @@ pub unsafe extern "C" fn u_save_cursor() -> ::core::ffi::c_int {
     let mut bot: linenr_T = cur + 1 as linenr_T;
     return u_save(top, bot);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_save(mut top: linenr_T, mut bot: linenr_T) -> ::core::ffi::c_int {
     return u_save_buf(curbuf.get(), top, bot);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_save_buf(
     mut buf: *mut buf_T,
     mut top: linenr_T,
@@ -920,7 +917,6 @@ pub unsafe extern "C" fn u_save_buf(
     }
     return u_savecommon(buf, top, bot, 0 as linenr_T, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
         curbuf.get(),
@@ -930,7 +926,6 @@ pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> ::core::ffi::c_int {
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
         curbuf.get(),
@@ -940,7 +935,6 @@ pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> ::core::ffi::c_int {
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
         curbuf.get(),
@@ -954,7 +948,6 @@ pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> 
         false_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
     if (*buf).b_p_ma == 0 {
         emsg(gettext(
@@ -990,7 +983,6 @@ unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_savecommon(
     mut buf: *mut buf_T,
     mut top: linenr_T,
@@ -2169,7 +2161,6 @@ pub unsafe extern "C" fn u_write_undo(
         xfree(file_name as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_read_undo(
     mut name: *mut ::core::ffi::c_char,
     mut hash: *const uint8_t,
@@ -2836,7 +2827,6 @@ unsafe extern "C" fn undo_read_string(
     }
     return ptr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_undo(mut count: ::core::ffi::c_int) {
     if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
         u_sync(true_0 != 0);
@@ -2849,14 +2839,12 @@ pub unsafe extern "C" fn u_undo(mut count: ::core::ffi::c_int) {
     }
     u_doit(count, false_0 != 0, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_redo(mut count: ::core::ffi::c_int) {
     if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
         undo_undoes.set(false_0 != 0);
     }
     u_doit(count, false_0 != 0, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_undo_and_forget(
     mut count: ::core::ffi::c_int,
     mut do_buf_event: bool,
@@ -2968,7 +2956,6 @@ unsafe extern "C" fn u_doit(
     }
     u_undo_end(undo_undoes.get(), false_0 != 0, quiet);
 }
-#[no_mangle]
 pub unsafe extern "C" fn undo_time(
     mut step: ::core::ffi::c_int,
     mut sec: bool,
@@ -3655,7 +3642,6 @@ unsafe extern "C" fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quie
         &raw mut msgbuf as *mut ::core::ffi::c_char,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn undo_fmt_time(
     mut buf: *mut ::core::ffi::c_char,
     mut buflen: size_t,
@@ -3713,7 +3699,6 @@ pub unsafe extern "C" fn undo_fmt_time(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_sync(mut force: bool) {
     if (*curbuf.get()).b_u_synced as ::core::ffi::c_int != 0
         || !force && no_u_sync.get() > 0 as ::core::ffi::c_int
@@ -3727,7 +3712,6 @@ pub unsafe extern "C" fn u_sync(mut force: bool) {
         (*curbuf.get()).b_u_curhead = ::core::ptr::null_mut::<u_header_T>();
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
     let mut changes: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     (*lastmark.ptr()) += 1;
@@ -3839,7 +3823,6 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
         ga_clear_strings(&raw mut ga);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
     if (*curbuf.get()).b_u_newhead.is_null() {
         return;
@@ -3858,12 +3841,10 @@ pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
     }
     (*curbuf.get()).b_u_synced = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_unchanged(mut buf: *mut buf_T) {
     u_unch_branch((*buf).b_u_oldhead);
     (*buf).b_did_warn = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_find_first_changed() {
     let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_newhead;
     if !(*curbuf.get()).b_u_curhead.is_null() || uhp.is_null() {
@@ -3892,7 +3873,6 @@ pub unsafe extern "C" fn u_find_first_changed() {
         (*uhp).uh_cursor.lnum = lnum;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_update_save_nr(mut buf: *mut buf_T) {
     (*buf).b_u_save_nr_last += 1;
     (*buf).b_u_save_nr_cur = (*buf).b_u_save_nr_last;
@@ -4031,7 +4011,6 @@ unsafe extern "C" fn u_freeentry(mut uep: *mut u_entry_T, mut n: ::core::ffi::c_
     xfree((*uep).ue_array as *mut ::core::ffi::c_void);
     xfree(uep as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_clearall(mut buf: *mut buf_T) {
     (*buf).b_u_curhead = ::core::ptr::null_mut::<u_header_T>();
     (*buf).b_u_oldhead = (*buf).b_u_curhead;
@@ -4041,7 +4020,6 @@ pub unsafe extern "C" fn u_clearall(mut buf: *mut buf_T) {
     (*buf).b_u_line_ptr = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*buf).b_u_line_lnum = 0 as ::core::ffi::c_int as linenr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
     while !(*buf).b_u_oldhead.is_null() {
         let mut previous_oldhead: *mut u_header_T = (*buf).b_u_oldhead;
@@ -4086,7 +4064,6 @@ unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr_T) {
     }
     (*buf).b_u_line_ptr = u_save_line_buf(buf, lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
     if (*buf).b_u_line_ptr.is_null() {
         return;
@@ -4098,7 +4075,6 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
     let _ = *ptr_;
     (*buf).b_u_line_lnum = 0 as ::core::ffi::c_int as linenr_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_undoline() {
     if (*curbuf.get()).b_u_line_ptr.is_null()
         || (*curbuf.get()).b_u_line_lnum > (*curbuf.get()).b_ml.ml_line_count
@@ -4150,7 +4126,6 @@ unsafe extern "C" fn u_save_line_buf(
 ) -> *mut ::core::ffi::c_char {
     return xstrdup(ml_get_buf(buf, lnum));
 }
-#[no_mangle]
 pub unsafe extern "C" fn bufIsChanged(mut buf: *mut buf_T) -> bool {
     return if bt_prompt(buf) as ::core::ffi::c_int != 0 {
         (*buf).b_modified_was_set as ::core::ffi::c_int
@@ -4161,7 +4136,6 @@ pub unsafe extern "C" fn bufIsChanged(mut buf: *mut buf_T) -> bool {
             as ::core::ffi::c_int
     } != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn anyBufIsChanged() -> bool {
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
@@ -4172,7 +4146,6 @@ pub unsafe extern "C" fn anyBufIsChanged() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn curbufIsChanged() -> bool {
     return bufIsChanged(curbuf.get());
 }
@@ -4230,7 +4203,6 @@ unsafe extern "C" fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
     }
     return list;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_undofile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4249,7 +4221,6 @@ pub unsafe extern "C" fn f_undofile(
         xfree(ffname as *mut ::core::ffi::c_void);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_undotree(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4311,7 +4282,6 @@ pub unsafe extern "C" fn f_undotree(
         u_eval_tree(buf, (*buf).b_u_oldhead),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
     let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
     if !(*buf).b_u_curhead.is_null() {

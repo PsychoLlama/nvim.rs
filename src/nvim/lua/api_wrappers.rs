@@ -15615,7 +15615,6 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_createtable(lstate, 0 as ::core::ffi::c_int, 181 as ::core::ffi::c_int);
     lua_pushcclosure(

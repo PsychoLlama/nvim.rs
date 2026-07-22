@@ -560,7 +560,6 @@ unsafe extern "C" fn typval_encode_dict_end(edata: *mut EncodedData) {
         }
     };
 }
-#[no_mangle]
 pub static _typval_encode_object_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
@@ -4366,7 +4365,6 @@ pub unsafe extern "C" fn vim_to_object(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn object_to_vim(
     mut obj: Object,
     mut tv: *mut typval_T,
@@ -4374,7 +4372,6 @@ pub unsafe extern "C" fn object_to_vim(
 ) {
     object_to_vim_take_luaref(&raw mut obj, tv, false_0 != 0, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn object_to_vim_take_luaref(
     mut obj: *mut Object,
     mut tv: *mut typval_T,

@@ -1064,7 +1064,6 @@ pub static utf8len_tab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     1 as uint8_t,
     1 as uint8_t,
 ]);
-#[no_mangle]
 pub static utf8len_tab_zero: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     1 as uint8_t,
     1 as uint8_t,
@@ -1933,7 +1932,6 @@ unsafe extern "C" fn enc_canon_search(mut name: *const ::core::ffi::c_char) -> :
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn enc_canon_props(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -1962,7 +1960,6 @@ pub unsafe extern "C" fn enc_canon_props(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bomb_size() -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*curbuf.get()).b_p_bomb != 0 && (*curbuf.get()).b_p_bin == 0 {
@@ -1996,7 +1993,6 @@ pub unsafe extern "C" fn bomb_size() -> ::core::ffi::c_int {
     }
     return n;
 }
-#[no_mangle]
 pub unsafe extern "C" fn remove_bom(mut s: *mut ::core::ffi::c_char) {
     let mut p: *mut ::core::ffi::c_char = s;
     loop {
@@ -2019,11 +2015,9 @@ pub unsafe extern "C" fn remove_bom(mut s: *mut ::core::ffi::c_char) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_get_class(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return mb_get_class_tab(p, &raw mut (*curbuf.get()).b_chartab as *mut uint64_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_get_class_tab(
     mut p: *const ::core::ffi::c_char,
     chartab: *const uint64_t,
@@ -2055,7 +2049,6 @@ unsafe extern "C" fn prop_is_emojilike(mut prop: *const utf8proc_property_t) -> 
         || (*prop).boundclass() as ::core::ffi::c_int
             == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c < 0x80 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
@@ -2100,7 +2093,6 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *const uint8_t = p_in as *const uint8_t;
     if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
@@ -2192,7 +2184,6 @@ pub unsafe extern "C" fn utf_ptr2CharInfo_impl(mut p: *const uint8_t, len: uintp
     }
     return code_point.wrapping_add(corr) as int32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_ptr2cells_len(
     mut p: *const ::core::ffi::c_char,
     mut size: ::core::ffi::c_int,
@@ -2230,7 +2221,6 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_string2cells(mut str: *const ::core::ffi::c_char) -> size_t {
     let mut clen: size_t = 0 as size_t;
     let mut p: *const ::core::ffi::c_char = str;
@@ -2240,7 +2230,6 @@ pub unsafe extern "C" fn mb_string2cells(mut str: *const ::core::ffi::c_char) ->
     }
     return clen;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_string2cells_len(
     mut str: *const ::core::ffi::c_char,
     mut size: size_t,
@@ -2413,7 +2402,6 @@ unsafe extern "C" fn utf_safe_read_char_adv(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_ptr2char_adv(
     pp: *mut *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -2421,7 +2409,6 @@ pub unsafe extern "C" fn mb_ptr2char_adv(
     *pp = (*pp).offset(utfc_ptr2len(*pp) as isize);
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_cptr2char_adv(
     mut pp: *mut *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -2429,12 +2416,10 @@ pub unsafe extern "C" fn mb_cptr2char_adv(
     *pp = (*pp).offset(utf_ptr2len(*pp) as isize);
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_iscomposing_first(mut c: ::core::ffi::c_int) -> bool {
     return c >= 128 as ::core::ffi::c_int
         && !utf8proc_grapheme_break(' ' as utf8proc_int32_t, c as utf8proc_int32_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_composinglike(
     mut p1: *const ::core::ffi::c_char,
     mut p2: *const ::core::ffi::c_char,
@@ -2454,7 +2439,6 @@ pub unsafe extern "C" fn utf_composinglike(
     }
     return crate::src::nvim::arabic::arabic_combine(first, second);
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_iscomposing(
     mut c1: ::core::ffi::c_int,
     mut c2: ::core::ffi::c_int,
@@ -2482,7 +2466,6 @@ pub unsafe extern "C" fn utfc_ptr2schar(
     }
     return schar_from_buf_first(p, len, first_compose);
 }
-#[no_mangle]
 pub unsafe extern "C" fn utfc_ptrlen2schar(
     mut p: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -2545,11 +2528,9 @@ pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_byte2len(mut b: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*utf8len_tab.ptr())[b as usize] as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_ptr2len_len(
     mut p: *const ::core::ffi::c_char,
     mut size: ::core::ffi::c_int,
@@ -2608,7 +2589,6 @@ pub unsafe extern "C" fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::
         len += utf_ptr2len(p.offset(len as isize));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn utfc_ptr2len_len(
     mut p: *const ::core::ffi::c_char,
     mut size: ::core::ffi::c_int,
@@ -2655,7 +2635,6 @@ pub unsafe extern "C" fn utfc_ptr2len_len(
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c < 0x80 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
@@ -2751,7 +2730,6 @@ pub unsafe extern "C" fn utf_char2bytes(
         return 6 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_iscomposing_legacy(mut c: ::core::ffi::c_int) -> bool {
     let mut prop: *const utf8proc_property_t = utf8proc_get_property(c as utf8proc_int32_t);
     return (*prop).category as ::core::ffi::c_int == UTF8PROC_CATEGORY_MN as ::core::ffi::c_int
@@ -2806,7 +2784,6 @@ unsafe extern "C" fn intable(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_printable(mut c: ::core::ffi::c_int) -> bool {
     static nonprint: GlobalCell<[interval; 9]> = GlobalCell::new([
         interval {
@@ -2858,11 +2835,9 @@ pub unsafe extern "C" fn utf_printable(mut c: ::core::ffi::c_int) -> bool {
         c,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_class(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return utf_class_tab(c, &raw mut (*curbuf.get()).b_chartab as *mut uint64_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_class_tab(
     c: ::core::ffi::c_int,
     chartab: *const uint64_t,
@@ -3262,7 +3237,6 @@ pub unsafe extern "C" fn utf_class_tab(
     }
     return 2 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_ambiguous_width(mut p: *const ::core::ffi::c_char) -> bool {
     if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
@@ -3311,7 +3285,6 @@ pub unsafe extern "C" fn utf_fold(mut a: ::core::ffi::c_int) -> ::core::ffi::c_i
         a
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_toupper(mut a: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if a < 128 as ::core::ffi::c_int
         && cmp_flags.get() & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
@@ -3330,11 +3303,9 @@ pub unsafe extern "C" fn mb_toupper(mut a: ::core::ffi::c_int) -> ::core::ffi::c
     }
     return utf8proc_toupper(a as utf8proc_int32_t) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_islower(mut a: ::core::ffi::c_int) -> bool {
     return mb_toupper(a) != a;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_tolower(mut a: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if a < 128 as ::core::ffi::c_int
         && cmp_flags.get() & kOptCmpFlagKeepascii as ::core::ffi::c_int as ::core::ffi::c_uint != 0
@@ -3353,15 +3324,12 @@ pub unsafe extern "C" fn mb_tolower(mut a: ::core::ffi::c_int) -> ::core::ffi::c
     }
     return utf8proc_tolower(a as utf8proc_int32_t) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_isupper(mut a: ::core::ffi::c_int) -> bool {
     return mb_tolower(a) != a;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_isalpha(mut a: ::core::ffi::c_int) -> bool {
     return mb_islower(a) as ::core::ffi::c_int != 0 || mb_isupper(a) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_strnicmp(
     mut s1: *const ::core::ffi::c_char,
     mut s2: *const ::core::ffi::c_char,
@@ -3432,7 +3400,6 @@ pub unsafe extern "C" fn utf_strnicmp(
         1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_utflen(
     mut s: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3462,7 +3429,6 @@ pub unsafe extern "C" fn mb_utflen(
     *codepoints = (*codepoints).wrapping_add(count);
     *codeunits = (*codeunits).wrapping_add(count.wrapping_add(extra));
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_utf_index_to_bytes(
     mut s: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -3496,7 +3462,6 @@ pub unsafe extern "C" fn mb_utf_index_to_bytes(
     }
     return -1 as ssize_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_strnicmp(
     mut s1: *const ::core::ffi::c_char,
     mut s2: *const ::core::ffi::c_char,
@@ -3504,14 +3469,12 @@ pub unsafe extern "C" fn mb_strnicmp(
 ) -> ::core::ffi::c_int {
     return utf_strnicmp(s1, s2, nn, nn);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_stricmp(
     mut s1: *const ::core::ffi::c_char,
     mut s2: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     return mb_strnicmp(s1, s2, MAXCOL as ::core::ffi::c_int as size_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn show_utf8() {
     let mut line: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
     let mut len: ::core::ffi::c_int = utfc_ptr2len(line);
@@ -3672,7 +3635,6 @@ pub unsafe extern "C" fn utf_head_off(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
     let mut prev_code: int32_t = cur.chr.value;
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
@@ -3724,7 +3686,6 @@ pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_eat_space(mut cc: ::core::ffi::c_int) -> bool {
     return cc >= 0x2000 as ::core::ffi::c_int && cc <= 0x206f as ::core::ffi::c_int
         || cc >= 0x2e00 as ::core::ffi::c_int && cc <= 0x2e7f as ::core::ffi::c_int
@@ -3734,7 +3695,6 @@ pub unsafe extern "C" fn utf_eat_space(mut cc: ::core::ffi::c_int) -> bool {
         || cc >= 0xff3b as ::core::ffi::c_int && cc <= 0xff40 as ::core::ffi::c_int
         || cc >= 0xff5b as ::core::ffi::c_int && cc <= 0xff65 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_allow_break_before(mut cc: ::core::ffi::c_int) -> bool {
     static BOL_prohibition_punct: GlobalCell<[::core::ffi::c_int; 43]> = GlobalCell::new([
         '!' as ::core::ffi::c_int,
@@ -3802,7 +3762,6 @@ pub unsafe extern "C" fn utf_allow_break_before(mut cc: ::core::ffi::c_int) -> b
     }
     return cc != (*BOL_prohibition_punct.ptr())[first as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_allow_break_after(mut cc: ::core::ffi::c_int) -> bool {
     static EOL_prohibition_punct: GlobalCell<[::core::ffi::c_int; 19]> = GlobalCell::new([
         '(' as ::core::ffi::c_int,
@@ -3846,7 +3805,6 @@ pub unsafe extern "C" fn utf_allow_break_after(mut cc: ::core::ffi::c_int) -> bo
     }
     return cc != (*EOL_prohibition_punct.ptr())[first as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_allow_break(
     mut cc: ::core::ffi::c_int,
     mut ncc: ::core::ffi::c_int,
@@ -3857,7 +3815,6 @@ pub unsafe extern "C" fn utf_allow_break(
     return utf_allow_break_after(cc) as ::core::ffi::c_int != 0
         && utf_allow_break_before(ncc) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_copy_char(
     fp: *mut *const ::core::ffi::c_char,
     tp: *mut *mut ::core::ffi::c_char,
@@ -3871,7 +3828,6 @@ pub unsafe extern "C" fn mb_copy_char(
     *tp = (*tp).offset(l as isize);
     *fp = (*fp).offset(l as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_off_next(
     mut base: *const ::core::ffi::c_char,
     mut p: *const ::core::ffi::c_char,
@@ -3949,14 +3905,12 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
         end_off: max_end_off as int8_t,
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_cp_bounds(
     mut base: *const ::core::ffi::c_char,
     mut p_in: *const ::core::ffi::c_char,
 ) -> CharBoundsOff {
     return utf_cp_bounds_len(base, p_in, INT_MAX);
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_find_illegal() {
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut vimconv: vimconv_T = vimconv_T {
@@ -4025,7 +3979,6 @@ pub unsafe extern "C" fn utf_find_illegal() {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn utf_valid_string(
     mut s: *const ::core::ffi::c_char,
     mut end: *const ::core::ffi::c_char,
@@ -4062,11 +4015,9 @@ pub unsafe extern "C" fn utf_valid_string(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_adjust_cursor() {
     mark_mb_adjustpos(curbuf.get(), &raw mut (*curwin.get()).w_cursor);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_check_adjust_col(mut win_: *mut ::core::ffi::c_void) {
     let mut win: *mut win_T = win_ as *mut win_T;
     let mut oldcol: colnr_T = (*win).w_cursor.col;
@@ -4093,7 +4044,6 @@ pub unsafe extern "C" fn mb_check_adjust_col(mut win_: *mut ::core::ffi::c_void)
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_prevptr(
     mut line: *mut ::core::ffi::c_char,
     mut p: *mut ::core::ffi::c_char,
@@ -4106,7 +4056,6 @@ pub unsafe extern "C" fn mb_prevptr(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_charlen(mut str: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = str;
     let mut count: ::core::ffi::c_int = 0;
@@ -4120,7 +4069,6 @@ pub unsafe extern "C" fn mb_charlen(mut str: *const ::core::ffi::c_char) -> ::co
     }
     return count;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_charlen_len(
     mut str: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -4134,7 +4082,6 @@ pub unsafe extern "C" fn mb_charlen_len(
     }
     return count;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_unescape(
     pp: *mut *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -4178,7 +4125,6 @@ pub unsafe extern "C" fn mb_unescape(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn enc_skip(mut p: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     if strncmp(
         p,
@@ -4198,7 +4144,6 @@ pub unsafe extern "C" fn enc_skip(mut p: *mut ::core::ffi::c_char) -> *mut ::cor
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn enc_canonize(
     mut enc: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -4309,7 +4254,6 @@ unsafe extern "C" fn enc_alias_search(mut name: *const ::core::ffi::c_char) -> :
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn enc_locale() -> *mut ::core::ffi::c_char {
     let mut i: ::core::ffi::c_int = 0;
     let mut buf: [::core::ffi::c_char; 50] = [0; 50];
@@ -4454,7 +4398,6 @@ pub unsafe extern "C" fn enc_locale() -> *mut ::core::ffi::c_char {
     }
     return enc_canonize(&raw mut buf as *mut ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn my_iconv_open(
     mut to: *mut ::core::ffi::c_char,
     mut from: *mut ::core::ffi::c_char,
@@ -4581,7 +4524,6 @@ unsafe extern "C" fn iconv_string(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_iconv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -4634,7 +4576,6 @@ pub unsafe extern "C" fn convert_setup(
 ) -> ::core::ffi::c_int {
     return convert_setup_ext(vcp, from, true_0 != 0, to, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn convert_setup_ext(
     mut vcp: *mut vimconv_T,
     mut from: *mut ::core::ffi::c_char,
@@ -4715,7 +4656,6 @@ pub unsafe extern "C" fn convert_setup_ext(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn string_convert(
     vcp: *const vimconv_T,
     mut ptr: *mut ::core::ffi::c_char,
@@ -4723,7 +4663,6 @@ pub unsafe extern "C" fn string_convert(
 ) -> *mut ::core::ffi::c_char {
     return string_convert_ext(vcp, ptr, lenp, ::core::ptr::null_mut::<size_t>());
 }
-#[no_mangle]
 pub unsafe extern "C" fn string_convert_ext(
     vcp: *const vimconv_T,
     mut ptr: *mut ::core::ffi::c_char,
@@ -4952,7 +4891,6 @@ unsafe extern "C" fn tv_nr_compare(
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setcellwidths(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -5122,7 +5060,6 @@ pub unsafe extern "C" fn f_setcellwidths(
     changed_window_setting_all();
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getcellwidths(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5142,7 +5079,6 @@ pub unsafe extern "C" fn f_getcellwidths(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_charclass(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -5162,7 +5098,6 @@ pub unsafe extern "C" fn f_charclass(
             .v_string,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_encoding_name(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -5180,7 +5115,6 @@ pub unsafe extern "C" fn get_encoding_name(
     }
     return (*enc_canon_table.ptr())[idx as usize].name as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mb_strcmp_ic(
     mut ic: bool,
     mut s1: *const ::core::ffi::c_char,

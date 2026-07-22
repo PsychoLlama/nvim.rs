@@ -708,7 +708,6 @@ static mouse_table: GlobalCell<[mousetable; 18]> = GlobalCell::new([
         is_drag: false,
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn name_to_mod_mask(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     c = if c < 'a' as ::core::ffi::c_int || c > 'z' as ::core::ffi::c_int {
         c
@@ -726,7 +725,6 @@ pub unsafe extern "C" fn name_to_mod_mask(mut c: ::core::ffi::c_int) -> ::core::
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn simplify_key(
     key: ::core::ffi::c_int,
     mut modifiers: *mut ::core::ffi::c_int,
@@ -762,7 +760,6 @@ pub unsafe extern "C" fn simplify_key(
     }
     return key;
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_x_keys(key: ::core::ffi::c_int) -> ::core::ffi::c_int {
     match key {
         -16893 => return K_UP,
@@ -797,7 +794,6 @@ pub unsafe extern "C" fn handle_x_keys(key: ::core::ffi::c_int) -> ::core::ffi::
     }
     return key;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_special_key_name(
     mut c: ::core::ffi::c_int,
     mut modifiers: ::core::ffi::c_int,
@@ -926,7 +922,6 @@ pub unsafe extern "C" fn get_special_key_name(
     (*string.ptr())[idx as usize] = NUL as ::core::ffi::c_char;
     return string.ptr() as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn trans_special(
     srcp: *mut *const ::core::ffi::c_char,
     src_len: size_t,
@@ -943,7 +938,6 @@ pub unsafe extern "C" fn trans_special(
     }
     return special_to_buf(key, modifiers, escape_ks, dst);
 }
-#[no_mangle]
 pub unsafe extern "C" fn special_to_buf(
     mut key: ::core::ffi::c_int,
     mut modifiers: ::core::ffi::c_int,
@@ -1255,7 +1249,6 @@ unsafe extern "C" fn extract_modifiers(
     *modp = modifiers;
     return key;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_special_key_in_table(
     mut c: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -1277,7 +1270,6 @@ pub unsafe extern "C" fn find_special_key_in_table(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_special_key_code(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -1304,7 +1296,6 @@ pub unsafe extern "C" fn get_special_key_code(
         0 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_mouse_button(
     mut code: ::core::ffi::c_int,
     mut is_click: *mut bool,
@@ -1321,7 +1312,6 @@ pub unsafe extern "C" fn get_mouse_button(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn replace_termcodes(
     from: *const ::core::ffi::c_char,
     from_len: size_t,
@@ -1519,7 +1509,6 @@ pub unsafe extern "C" fn replace_termcodes(
     }
     return *bufp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_char2buf(
     mut c: ::core::ffi::c_int,
     mut s: *mut ::core::ffi::c_char,
@@ -1548,7 +1537,6 @@ pub unsafe extern "C" fn add_char2buf(
     }
     return s;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsave_escape_ks(
     mut p: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1587,7 +1575,6 @@ pub unsafe extern "C" fn vim_strsave_escape_ks(
     *d = NUL as ::core::ffi::c_char;
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_unescape_ks(mut p: *mut ::core::ffi::c_char) {
     let mut s: *mut uint8_t = p as *mut uint8_t;
     let mut d: *mut uint8_t = p as *mut uint8_t;

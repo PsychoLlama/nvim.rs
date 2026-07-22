@@ -678,7 +678,6 @@ static spwr: GlobalCell<SignalWatcher> = GlobalCell::new(SignalWatcher {
     events: ::core::ptr::null_mut::<MultiQueue>(),
 });
 static rejecting_deadly: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
 pub unsafe extern "C" fn signal_init() {
     let mut mask: sigset_t = sigset_t { __val: [0; 16] };
     sigemptyset(&raw mut mask);
@@ -709,7 +708,6 @@ pub unsafe extern "C" fn signal_init() {
     signal_watcher_init(main_loop.ptr(), swinch.ptr(), NULL);
     signal_start();
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_teardown() {
     signal_stop();
     signal_watcher_close(spipe.ptr(), None);
@@ -722,7 +720,6 @@ pub unsafe extern "C" fn signal_teardown() {
     signal_watcher_close(susr1.ptr(), None);
     signal_watcher_close(swinch.ptr(), None);
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_start() {
     signal_watcher_start(
         spipe.ptr(),
@@ -833,7 +830,6 @@ pub unsafe extern "C" fn signal_start() {
         SIGWINCH,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_stop() {
     signal_watcher_stop(spipe.ptr());
     signal_watcher_stop(shup.ptr());
@@ -845,11 +841,9 @@ pub unsafe extern "C" fn signal_stop() {
     signal_watcher_stop(susr1.ptr());
     signal_watcher_stop(swinch.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_reject_deadly() {
     rejecting_deadly.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn signal_accept_deadly() {
     rejecting_deadly.set(false_0 != 0);
 }

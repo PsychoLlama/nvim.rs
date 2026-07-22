@@ -507,7 +507,6 @@ unsafe extern "C" fn have_dollars(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_expand_wildcards(
     mut num_pat: ::core::ffi::c_int,
     mut pat: *mut *mut ::core::ffi::c_char,
@@ -1099,7 +1098,6 @@ pub unsafe extern "C" fn shell_build_argv(
     };
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shell_free_argv(mut argv: *mut *mut ::core::ffi::c_char) {
     let mut p: *mut *mut ::core::ffi::c_char = argv;
     if p.is_null() {
@@ -1144,7 +1142,6 @@ pub unsafe extern "C" fn shell_argv_to_str(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn os_call_shell(
     mut cmd: *mut ::core::ffi::c_char,
     mut opts: ::core::ffi::c_int,
@@ -1207,7 +1204,6 @@ pub unsafe extern "C" fn os_call_shell(
     signal_accept_deadly();
     return exitcode;
 }
-#[no_mangle]
 pub unsafe extern "C" fn call_shell(
     mut cmd: *mut ::core::ffi::c_char,
     mut opts: ::core::ffi::c_int,
@@ -1243,7 +1239,6 @@ pub unsafe extern "C" fn call_shell(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_cmd_output(
     mut cmd: *mut ::core::ffi::c_char,
     mut infile: *mut ::core::ffi::c_char,

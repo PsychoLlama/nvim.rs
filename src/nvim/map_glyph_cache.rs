@@ -14,7 +14,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
     )
 };
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-#[no_mangle]
 pub unsafe extern "C" fn mh_find_bucket_glyph(
     mut set: *mut Set_glyph,
     mut key: String_0,
@@ -57,7 +56,6 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
     }
     return site;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_get_glyph(mut set: *mut Set_glyph, mut key: String_0) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
@@ -69,7 +67,6 @@ pub unsafe extern "C" fn mh_get_glyph(mut set: *mut Set_glyph, mut key: String_0
         MH_TOMBSTONE as uint32_t
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
@@ -89,7 +86,6 @@ pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mh_put_glyph(
     mut set: *mut Set_glyph,
     mut key: String_0,

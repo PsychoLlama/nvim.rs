@@ -34,7 +34,6 @@ unsafe extern "C" fn _memcpy_free(
     let _ = *ptr_;
     return dest;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parser_simple_get_line(
     mut cookie: *mut ::core::ffi::c_void,
     mut ret_pline: *mut ParserLine,
@@ -43,7 +42,6 @@ pub unsafe extern "C" fn parser_simple_get_line(
     *ret_pline = **plines_p;
     *plines_p = (*plines_p).offset(1);
 }
-#[no_mangle]
 pub unsafe extern "C" fn viml_parser_get_remaining_line(
     pstate: *mut ParserState,
     ret_pline: *mut ParserLine,
@@ -178,7 +176,6 @@ unsafe extern "C" fn viml_preader_get_line(
     *(*preader).lines.items.offset(c2rust_fresh0 as isize) = pline;
     *ret_pline = pline;
 }
-#[no_mangle]
 pub unsafe extern "C" fn viml_parser_destroy(pstate: *mut ParserState) {
     let mut i: size_t = 0 as size_t;
     while i < (*pstate).reader.lines.size {

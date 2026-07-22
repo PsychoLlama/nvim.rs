@@ -816,7 +816,6 @@ unsafe extern "C" fn tui_query_kitty_keyboard(mut tui: *mut TUIData) {
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn tui_set_key_encoding(mut tui: *mut TUIData) {
     match (*tui).input.key_encoding as ::core::ffi::c_uint {
         1 => {
@@ -3205,7 +3204,6 @@ pub unsafe extern "C" fn tui_set_size(
     (*tui).height = height;
     ui_client_set_size(width, height);
 }
-#[no_mangle]
 pub unsafe extern "C" fn tui_guess_size(mut tui: *mut TUIData) {
     let mut val: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut advance: ::core::ffi::c_int = 0;
@@ -3284,7 +3282,6 @@ unsafe extern "C" fn out_len(mut tui: *mut TUIData, mut str: *const ::core::ffi:
         out(tui, str, strlen(str));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn out_printf(
     mut tui: *mut TUIData,
     mut limit: size_t,

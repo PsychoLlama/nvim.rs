@@ -162,7 +162,6 @@ pub unsafe extern "C" fn multiqueue_put_event(mut self_0: *mut MultiQueue, mut e
             .expect("non-null function pointer")((*self_0).parent, (*(*self_0).parent).data);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn multiqueue_move_events(
     mut dest: *mut MultiQueue,
     mut src: *mut MultiQueue,
@@ -172,7 +171,6 @@ pub unsafe extern "C" fn multiqueue_move_events(
         multiqueue_put_event(dest, event);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn multiqueue_process_events(mut self_0: *mut MultiQueue) {
     '_c2rust_label: {
         if !self_0.is_null() {
@@ -195,7 +193,6 @@ pub unsafe extern "C" fn multiqueue_process_events(mut self_0: *mut MultiQueue) 
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn multiqueue_purge_events(mut self_0: *mut MultiQueue) {
     '_c2rust_label: {
         if !self_0.is_null() {
@@ -213,7 +210,6 @@ pub unsafe extern "C" fn multiqueue_purge_events(mut self_0: *mut MultiQueue) {
         multiqueue_remove(self_0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn multiqueue_empty(mut self_0: *mut MultiQueue) -> bool {
     '_c2rust_label: {
         if !self_0.is_null() {
@@ -228,7 +224,6 @@ pub unsafe extern "C" fn multiqueue_empty(mut self_0: *mut MultiQueue) -> bool {
     };
     return QUEUE_EMPTY(&raw mut (*self_0).headtail) != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn multiqueue_replace_parent(
     mut self_0: *mut MultiQueue,
     mut new_parent: *mut MultiQueue,
@@ -356,7 +351,6 @@ unsafe extern "C" fn multiqueue_node_data(mut q: *mut QUEUE) -> *mut MultiQueueI
     return (q as *mut ::core::ffi::c_char).offset(-(104 as ::core::ffi::c_ulong as isize))
         as *mut MultiQueueItem;
 }
-#[no_mangle]
 pub unsafe extern "C" fn event_create_oneshot(mut ev: Event, mut num: ::core::ffi::c_int) -> Event {
     let mut data: *mut MulticastEvent =
         xmalloc(::core::mem::size_of::<MulticastEvent>()) as *mut MulticastEvent;

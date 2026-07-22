@@ -1104,7 +1104,6 @@ unsafe extern "C" fn match_delete(
     redraw_later(wp, rtype);
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_matches(mut wp: *mut win_T) {
     while !(*wp).w_match_head.is_null() {
         let mut m: *mut matchitem_T = (*(*wp).w_match_head).mit_next;
@@ -1123,7 +1122,6 @@ unsafe extern "C" fn get_match(mut wp: *mut win_T, mut id: ::core::ffi::c_int) -
     }
     return cur;
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_search_hl(mut wp: *mut win_T, mut search_hl: *mut match_T) {
     let mut cur: *mut matchitem_T = (*wp).w_match_head;
     while !cur.is_null() {
@@ -1302,7 +1300,6 @@ unsafe extern "C" fn next_search_hl(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn prepare_search_hl(
     mut wp: *mut win_T,
     mut search_hl: *mut match_T,
@@ -1390,7 +1387,6 @@ unsafe extern "C" fn check_cur_search_hl(mut wp: *mut win_T, mut shl: *mut match
         (*shl).has_cursor = false_0 != 0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn prepare_search_hl_line(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1469,7 +1465,6 @@ pub unsafe extern "C" fn prepare_search_hl_line(
     }
     return area_highlighting;
 }
-#[no_mangle]
 pub unsafe extern "C" fn update_search_hl(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
@@ -1604,7 +1599,6 @@ pub unsafe extern "C" fn update_search_hl(
     }
     return search_attr;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_prevcol_hl_flag(
     mut wp: *mut win_T,
     mut search_hl: *mut match_T,
@@ -1639,7 +1633,6 @@ pub unsafe extern "C" fn get_prevcol_hl_flag(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_search_match_hl(
     mut wp: *mut win_T,
     mut search_hl: *mut match_T,
@@ -1702,7 +1695,6 @@ unsafe extern "C" fn matchadd_dict_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_clearmatches(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -1713,7 +1705,6 @@ pub unsafe extern "C" fn f_clearmatches(
         clear_matches(win);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getmatches(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1817,7 +1808,6 @@ pub unsafe extern "C" fn f_getmatches(
         cur = (*cur).mit_next;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_setmatches(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2014,7 +2004,6 @@ pub unsafe extern "C" fn f_setmatches(
         (*rettv).vval.v_number = 0 as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matchadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2087,7 +2076,6 @@ pub unsafe extern "C" fn f_matchadd(
         conceal_char,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matchaddpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2171,7 +2159,6 @@ pub unsafe extern "C" fn f_matchaddpos(
         conceal_char,
     ) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matcharg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2210,7 +2197,6 @@ pub unsafe extern "C" fn f_matcharg(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_matchdelete(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -2227,7 +2213,6 @@ pub unsafe extern "C" fn f_matchdelete(
         ) as varnumber_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_match(mut eap: *mut exarg_T) {
     let mut g: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();

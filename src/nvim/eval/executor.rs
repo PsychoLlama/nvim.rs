@@ -238,7 +238,6 @@ unsafe extern "C" fn tv_op_float(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn eexe_mod_op(
     tv1: *mut typval_T,
     tv2: *const typval_T,

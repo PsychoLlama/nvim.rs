@@ -1150,7 +1150,6 @@ unsafe extern "C" fn draw_col_fill(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn use_cursor_line_highlight(mut wp: *mut win_T, mut lnum: linenr_T) -> bool {
     return (*wp).w_onebuf_opt.wo_cul != 0
         && lnum == (*wp).w_cursorline
@@ -1199,7 +1198,6 @@ unsafe extern "C" fn foldcolumn_sep_char(
         return '>' as ::core::ffi::c_int as schar_T;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn fill_foldcolumn(
     mut wp: *mut win_T,
     mut foldinfo: foldinfo_T,
@@ -1964,7 +1962,6 @@ unsafe extern "C" fn get_rightmost_vcol(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_line(
     mut wp: *mut win_T,
     mut lnum: linenr_T,

@@ -163,11 +163,9 @@ pub const CT_CELL_MASK: ::core::ffi::c_int = 0x7 as ::core::ffi::c_int;
 pub const CT_PRINT_CHAR: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const CT_ID_CHAR: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const CT_FNAME_CHAR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn init_chartab() -> ::core::ffi::c_int {
     return buf_init_chartab(curbuf.get(), true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_init_chartab(
     mut buf: *mut buf_T,
     mut global: bool,
@@ -250,7 +248,6 @@ pub unsafe extern "C" fn buf_init_chartab(
     chartab_initialized.set(true_0 != 0);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_isopt(mut var: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     return parse_isopt(var, ::core::ptr::null_mut::<buf_T>(), true_0 != 0);
 }
@@ -400,7 +397,6 @@ unsafe extern "C" fn parse_isopt(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn trans_characters(
     mut buf: *mut ::core::ffi::c_char,
     mut bufsize: ::core::ffi::c_int,
@@ -437,7 +433,6 @@ pub unsafe extern "C" fn trans_characters(
         buf = buf.offset(trs_len as isize);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn transstr_len(s: *const ::core::ffi::c_char, mut untab: bool) -> size_t {
     let mut p: *const ::core::ffi::c_char = s;
     let mut len: size_t = 0 as size_t;
@@ -478,7 +473,6 @@ pub unsafe extern "C" fn transstr_len(s: *const ::core::ffi::c_char, mut untab: 
     }
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn transstr_buf(
     s: *const ::core::ffi::c_char,
     slen: ssize_t,
@@ -566,7 +560,6 @@ pub unsafe extern "C" fn transstr_buf(
     };
     return buf_p.offset_from(buf) as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn transstr(
     s: *const ::core::ffi::c_char,
     mut untab: bool,
@@ -576,7 +569,6 @@ pub unsafe extern "C" fn transstr(
     transstr_buf(s, -1 as ssize_t, buf, len, untab);
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn kv_transstr(
     mut str: *mut StringBuilder,
     s: *const ::core::ffi::c_char,
@@ -611,7 +603,6 @@ pub unsafe extern "C" fn kv_transstr(
     (*str).size = (*str).size.wrapping_add(len);
     return len;
 }
-#[no_mangle]
 pub unsafe extern "C" fn str_foldcase(
     mut str: *mut ::core::ffi::c_char,
     mut orglen: ::core::ffi::c_int,
@@ -732,11 +723,9 @@ pub unsafe extern "C" fn str_foldcase(
     return buf;
 }
 static transchar_charbuf: GlobalCell<[uint8_t; 11]> = GlobalCell::new([0; 11]);
-#[no_mangle]
 pub unsafe extern "C" fn transchar(mut c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     return transchar_buf(curbuf.get(), c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn transchar_buf(
     mut buf: *const buf_T,
     mut c: ::core::ffi::c_int,
@@ -776,11 +765,9 @@ pub unsafe extern "C" fn transchar_buf(
     }
     return transchar_charbuf.ptr() as *mut uint8_t as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn transchar_byte(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     return transchar_byte_buf(curbuf.get(), c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn transchar_byte_buf(
     mut buf: *const buf_T,
     c: ::core::ffi::c_int,
@@ -795,7 +782,6 @@ pub unsafe extern "C" fn transchar_byte_buf(
     }
     return transchar_buf(buf, c);
 }
-#[no_mangle]
 pub unsafe extern "C" fn transchar_nonprint(
     mut buf: *const buf_T,
     mut charbuf: *mut ::core::ffi::c_char,
@@ -829,7 +815,6 @@ pub unsafe extern "C" fn transchar_nonprint(
         *charbuf.offset(2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn transchar_hex(
     buf: *mut ::core::ffi::c_char,
     c: ::core::ffi::c_int,
@@ -871,7 +856,6 @@ pub unsafe extern "C" fn transchar_hex(
     *buf.offset(i as isize) = NUL as ::core::ffi::c_char;
     return i;
 }
-#[no_mangle]
 pub unsafe extern "C" fn rl_mirror_ascii(
     mut str: *mut ::core::ffi::c_char,
     mut end: *mut ::core::ffi::c_char,
@@ -900,14 +884,12 @@ unsafe extern "C" fn nr2hex(mut n: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
         .wrapping_sub(10 as ::core::ffi::c_uint)
         .wrapping_add('a' as ::core::ffi::c_uint);
 }
-#[no_mangle]
 pub unsafe extern "C" fn byte2cells(mut b: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if b >= 0x80 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     return (*g_chartab.ptr())[b as usize] as ::core::ffi::c_int & CT_CELL_MASK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c < 0 as ::core::ffi::c_int {
         return char2cells(if c == K_SPECIAL {
@@ -926,7 +908,6 @@ pub unsafe extern "C" fn char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c
     return (*g_chartab.ptr())[(c & 0xff as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
         & CT_CELL_MASK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = p_in as *mut uint8_t;
     if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
@@ -934,11 +915,9 @@ pub unsafe extern "C" fn ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::co
     }
     return (*g_chartab.ptr())[*p as usize] as ::core::ffi::c_int & CT_CELL_MASK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_strsize(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return vim_strnsize(s, MAXCOL as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_strnsize(
     mut s: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -966,7 +945,6 @@ pub unsafe extern "C" fn vim_strnsize(
     }
     return size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isIDc(mut c: ::core::ffi::c_int) -> bool {
     return c > 0 as ::core::ffi::c_int
         && c < 0x100 as ::core::ffi::c_int
@@ -976,7 +954,6 @@ pub unsafe extern "C" fn vim_isIDc(mut c: ::core::ffi::c_int) -> bool {
 pub unsafe extern "C" fn vim_iswordc(c: ::core::ffi::c_int) -> bool {
     return vim_iswordc_buf(c, curbuf.get());
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_iswordc_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> bool {
     return if c >= 0x100 as ::core::ffi::c_int {
         (utf_class_tab(c, chartab) >= 2 as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -1004,13 +981,11 @@ pub unsafe extern "C" fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mu
     }
     return vim_iswordc_buf(c, buf);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isfilec(mut c: ::core::ffi::c_int) -> bool {
     return c >= 0x100 as ::core::ffi::c_int
         || c > 0 as ::core::ffi::c_int
             && (*g_chartab.ptr())[c as usize] as ::core::ffi::c_int & CT_FNAME_CHAR != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_is_fname_char(mut c: ::core::ffi::c_int) -> bool {
     return vim_isfilec(c) as ::core::ffi::c_int != 0
         || c == ',' as ::core::ffi::c_int
@@ -1018,7 +993,6 @@ pub unsafe extern "C" fn vim_is_fname_char(mut c: ::core::ffi::c_int) -> bool {
         || c == '@' as ::core::ffi::c_int
         || c == ':' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isfilec_or_wc(mut c: ::core::ffi::c_int) -> bool {
     let mut buf: [::core::ffi::c_char; 2] = [0; 2];
     buf[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
@@ -1027,7 +1001,6 @@ pub unsafe extern "C" fn vim_isfilec_or_wc(mut c: ::core::ffi::c_int) -> bool {
         || c == ']' as ::core::ffi::c_int
         || path_has_wildcard(&raw mut buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isprintc(mut c: ::core::ffi::c_int) -> bool {
     if c >= 0x100 as ::core::ffi::c_int {
         return utf_printable(c);
@@ -1035,14 +1008,12 @@ pub unsafe extern "C" fn vim_isprintc(mut c: ::core::ffi::c_int) -> bool {
     return c > 0 as ::core::ffi::c_int
         && (*g_chartab.ptr())[c as usize] as ::core::ffi::c_int & CT_PRINT_CHAR != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skipwhite(mut p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     while ascii_iswhite(*p as ::core::ffi::c_int) {
         p = p.offset(1);
     }
     return p as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skipwhite_len(
     mut p: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -1053,15 +1024,12 @@ pub unsafe extern "C" fn skipwhite_len(
     }
     return p as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getwhitecols_curline() -> intptr_t {
     return getwhitecols(get_cursor_line_ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn getwhitecols(mut p: *const ::core::ffi::c_char) -> intptr_t {
     return skipwhite(p).offset_from(p) as intptr_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skipdigits(mut q: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *const ::core::ffi::c_char = q;
     while ascii_isdigit(*p as ::core::ffi::c_int) {
@@ -1069,7 +1037,6 @@ pub unsafe extern "C" fn skipdigits(mut q: *const ::core::ffi::c_char) -> *mut :
     }
     return p as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skipbin(mut q: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
     let mut p: *const ::core::ffi::c_char = q;
     while ascii_isbdigit(*p as ::core::ffi::c_int) {
@@ -1077,7 +1044,6 @@ pub unsafe extern "C" fn skipbin(mut q: *const ::core::ffi::c_char) -> *const ::
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiphex(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while ascii_isxdigit(*p as ::core::ffi::c_int) {
@@ -1085,7 +1051,6 @@ pub unsafe extern "C" fn skiphex(mut q: *mut ::core::ffi::c_char) -> *mut ::core
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiptodigit(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while *p as ::core::ffi::c_int != NUL && !ascii_isdigit(*p as ::core::ffi::c_int) {
@@ -1093,7 +1058,6 @@ pub unsafe extern "C" fn skiptodigit(mut q: *mut ::core::ffi::c_char) -> *mut ::
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiptobin(
     mut q: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -1103,7 +1067,6 @@ pub unsafe extern "C" fn skiptobin(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiptohex(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while *p as ::core::ffi::c_int != NUL && !ascii_isxdigit(*p as ::core::ffi::c_int) {
@@ -1111,7 +1074,6 @@ pub unsafe extern "C" fn skiptohex(mut q: *mut ::core::ffi::c_char) -> *mut ::co
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiptowhite(
     mut p: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1123,7 +1085,6 @@ pub unsafe extern "C" fn skiptowhite(
     }
     return p as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skiptowhite_esc(
     mut p: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1141,13 +1102,11 @@ pub unsafe extern "C" fn skiptowhite_esc(
     }
     return p as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_to_newline(
     p: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     return xstrchrnul(p, NL as ::core::ffi::c_char);
 }
-#[no_mangle]
 pub unsafe extern "C" fn try_getdigits(
     mut pp: *mut *mut ::core::ffi::c_char,
     mut nr: *mut intmax_t,
@@ -1161,7 +1120,6 @@ pub unsafe extern "C" fn try_getdigits(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getdigits(
     mut pp: *mut *mut ::core::ffi::c_char,
     mut strict: bool,
@@ -1174,7 +1132,6 @@ pub unsafe extern "C" fn getdigits(
     }
     return if ok != 0 { number } else { def };
 }
-#[no_mangle]
 pub unsafe extern "C" fn getdigits_int(
     mut pp: *mut *mut ::core::ffi::c_char,
     mut strict: bool,
@@ -1202,7 +1159,6 @@ pub unsafe extern "C" fn getdigits_int(
     }
     return number as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getdigits_long(
     mut pp: *mut *mut ::core::ffi::c_char,
     mut strict: bool,
@@ -1211,7 +1167,6 @@ pub unsafe extern "C" fn getdigits_long(
     let mut number: intmax_t = getdigits(pp, strict, def as intmax_t);
     return number as ::core::ffi::c_long;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getdigits_int32(
     mut pp: *mut *mut ::core::ffi::c_char,
     mut strict: bool,
@@ -1239,7 +1194,6 @@ pub unsafe extern "C" fn getdigits_int32(
     }
     return number as int32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_isblankline(mut lbuf: *mut ::core::ffi::c_char) -> bool {
     let mut p: *mut ::core::ffi::c_char = skipwhite(lbuf);
     return *p as ::core::ffi::c_int == NUL
@@ -1669,7 +1623,6 @@ pub unsafe extern "C" fn vim_str2nr(
         *unptr = un;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn hex2nr(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int {
         return c - 'a' as ::core::ffi::c_int + 10 as ::core::ffi::c_int;
@@ -1679,7 +1632,6 @@ pub unsafe extern "C" fn hex2nr(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int
     }
     return c - '0' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn hexhex2nr(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if !ascii_isxdigit(*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
         || !ascii_isxdigit(*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
@@ -1690,13 +1642,11 @@ pub unsafe extern "C" fn hexhex2nr(mut p: *const ::core::ffi::c_char) -> ::core:
         << 4 as ::core::ffi::c_int)
         + hex2nr(*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn rem_backslash(mut str: *const ::core::ffi::c_char) -> bool {
     return *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '\\' as ::core::ffi::c_int
         && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn backslash_halve(mut p: *mut ::core::ffi::c_char) {
     while *p as ::core::ffi::c_int != 0 && !rem_backslash(p) {
         p = p.offset(1);
@@ -1725,7 +1675,6 @@ pub unsafe extern "C" fn backslash_halve(mut p: *mut ::core::ffi::c_char) {
         *dst = NUL as ::core::ffi::c_char;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn backslash_halve_save(
     mut p: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {

@@ -1817,7 +1817,6 @@ static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
 pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
     .wrapping_div(0xff as uint64_t)
     .wrapping_mul(0x80 as uint64_t);
-#[no_mangle]
 pub unsafe extern "C" fn filemess(
     mut buf: *mut buf_T,
     mut name: *mut ::core::ffi::c_char,
@@ -1874,7 +1873,6 @@ pub unsafe extern "C" fn filemess(
     msg_clr_eos();
     msg_scrolled_ign.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn readfile(
     mut fname: *mut ::core::ffi::c_char,
     mut sfname: *mut ::core::ffi::c_char,
@@ -3989,7 +3987,6 @@ unsafe extern "C" fn readfile_linenr(
     }
     return lnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn prep_exarg(mut eap: *mut exarg_T, mut buf: *const buf_T) {
     let cmd_len: size_t = (15 as size_t).wrapping_add(strlen((*buf).b_p_fenc));
     (*eap).cmd = xmalloc(cmd_len) as *mut ::core::ffi::c_char;
@@ -4010,7 +4007,6 @@ pub unsafe extern "C" fn prep_exarg(mut eap: *mut exarg_T, mut buf: *const buf_T
     (*eap).read_edit = false_0;
     (*eap).forceit = false_0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_file_options(mut set_options: bool, mut eap: *mut exarg_T) {
     if set_options {
         if !eap.is_null() && (*eap).force_ff != 0 as ::core::ffi::c_int {
@@ -4032,7 +4028,6 @@ pub unsafe extern "C" fn set_file_options(mut set_options: bool, mut eap: *mut e
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_forced_fenc(mut eap: *mut exarg_T) {
     if (*eap).force_enc == 0 as ::core::ffi::c_int {
         return;
@@ -4129,7 +4124,6 @@ unsafe extern "C" fn readfile_charconvert(
     }
     return tmpname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_rw_fname(
     mut fname: *mut ::core::ffi::c_char,
     mut sfname: *mut ::core::ffi::c_char,
@@ -4193,7 +4187,6 @@ pub unsafe extern "C" fn set_rw_fname(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_quoted_fname(
     ret_buf: *mut ::core::ffi::c_char,
     buf_len: size_t,
@@ -4217,7 +4210,6 @@ pub unsafe extern "C" fn add_quoted_fname(
         buf_len,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_add_fileformat(mut eol_type: ::core::ffi::c_int) -> bool {
     if eol_type == EOL_DOS {
         xstrlcat(
@@ -4237,7 +4229,6 @@ pub unsafe extern "C" fn msg_add_fileformat(mut eol_type: ::core::ffi::c_int) ->
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn msg_add_lines(
     mut insert_space: ::core::ffi::c_int,
     mut lnum: linenr_T,
@@ -4285,7 +4276,6 @@ pub unsafe extern "C" fn msg_add_lines(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn time_differs(
     mut file_info: *const FileInfo,
     mut mtime: int64_t,
@@ -4295,7 +4285,6 @@ pub unsafe extern "C" fn time_differs(
         || (*file_info).stat.st_mtim.tv_sec as int64_t - mtime > 1 as int64_t
         || mtime - (*file_info).stat.st_mtim.tv_sec as int64_t > 1 as int64_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn need_conversion(mut fenc: *const ::core::ffi::c_char) -> bool {
     let mut same_encoding: bool = false;
     let mut fenc_flags: ::core::ffi::c_int = 0;
@@ -4312,7 +4301,6 @@ pub unsafe extern "C" fn need_conversion(mut fenc: *const ::core::ffi::c_char) -
     }
     return !(fenc_flags == FIO_UTF8 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_fio_flags(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *name as ::core::ffi::c_int == NUL {
         name = p_enc.get();
@@ -4448,7 +4436,6 @@ pub unsafe extern "C" fn shorten_buf_fname(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn shorten_fnames(mut force: ::core::ffi::c_int) {
     let mut dirname: [::core::ffi::c_char; 4096] = [0; 4096];
     os_dirname(
@@ -4464,7 +4451,6 @@ pub unsafe extern "C" fn shorten_fnames(mut force: ::core::ffi::c_int) {
     status_redraw_all();
     redraw_tabline.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn modname(
     mut fname: *const ::core::ffi::c_char,
     mut ext: *const ::core::ffi::c_char,
@@ -4545,7 +4531,6 @@ pub unsafe extern "C" fn modname(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_fgets(
     mut buf: *mut ::core::ffi::c_char,
     mut size: ::core::ffi::c_int,
@@ -4602,7 +4587,6 @@ pub unsafe extern "C" fn vim_fgets(
     }
     return retval.is_null();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get2c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     let n: ::core::ffi::c_int = getc(fd);
     if n == EOF {
@@ -4614,7 +4598,6 @@ pub unsafe extern "C" fn get2c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     }
     return (n << 8 as ::core::ffi::c_int) + c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get3c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_int = getc(fd);
     if n == EOF {
@@ -4631,7 +4614,6 @@ pub unsafe extern "C" fn get3c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     }
     return (n << 8 as ::core::ffi::c_int) + c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get4c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_uint = 0;
     let mut c: ::core::ffi::c_int = getc(fd);
@@ -4656,7 +4638,6 @@ pub unsafe extern "C" fn get4c(mut fd: *mut FILE) -> ::core::ffi::c_int {
     n = (n << 8 as ::core::ffi::c_int).wrapping_add(c as ::core::ffi::c_uint);
     return n as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get8ctime(mut fd: *mut FILE) -> time_t {
     let mut n: time_t = 0 as time_t;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4670,7 +4651,6 @@ pub unsafe extern "C" fn get8ctime(mut fd: *mut FILE) -> time_t {
     }
     return n;
 }
-#[no_mangle]
 pub unsafe extern "C" fn read_string(
     mut fd: *mut FILE,
     mut cnt: size_t,
@@ -4688,7 +4668,6 @@ pub unsafe extern "C" fn read_string(
     }
     return str;
 }
-#[no_mangle]
 pub unsafe extern "C" fn put_bytes(
     mut fd: *mut FILE,
     mut number: uintmax_t,
@@ -4719,7 +4698,6 @@ pub unsafe extern "C" fn put_bytes(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn put_time(mut fd: *mut FILE, mut time_: time_t) -> ::core::ffi::c_int {
     let mut buf: [uint8_t; 8] = [0; 8];
     time_to_bytes(time_, &raw mut buf as *mut uint8_t);
@@ -4779,7 +4757,6 @@ unsafe extern "C" fn rename_with_tmp(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_rename(
     mut from: *const ::core::ffi::c_char,
     mut to: *const ::core::ffi::c_char,
@@ -4880,7 +4857,6 @@ pub unsafe extern "C" fn vim_rename(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_copyfile(
     mut from: *const ::core::ffi::c_char,
     mut to: *const ::core::ffi::c_char,
@@ -4952,7 +4928,6 @@ pub unsafe extern "C" fn vim_copyfile(
     return OK;
 }
 static already_warned: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-#[no_mangle]
 pub unsafe extern "C" fn check_timestamps(mut focus: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if no_check_timestamps.get() > 0 as ::core::ffi::c_int {
         return false_0;
@@ -5037,7 +5012,6 @@ unsafe extern "C" fn move_lines(
     curbuf.set(tbuf);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5366,7 +5340,6 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_reload(
     mut buf: *mut buf_T,
     mut orig_mode: ::core::ffi::c_int,
@@ -5564,14 +5537,12 @@ pub unsafe extern "C" fn buf_reload(
     do_modelines(0 as ::core::ffi::c_int);
     aucmd_restbuf(&raw mut aco);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_store_file_info(mut buf: *mut buf_T, mut file_info: *mut FileInfo) {
     (*buf).b_mtime = (*file_info).stat.st_mtim.tv_sec as int64_t;
     (*buf).b_mtime_ns = (*file_info).stat.st_mtim.tv_nsec as int64_t;
     (*buf).b_orig_size = os_fileinfo_size(file_info);
     (*buf).b_orig_mode = (*file_info).stat.st_mode as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn write_lnum_adjust(mut offset: linenr_T) {
     if (*curbuf.get()).b_no_eol_lnum != 0 as linenr_T {
         (*curbuf.get()).b_no_eol_lnum += offset;
@@ -5579,7 +5550,6 @@ pub unsafe extern "C" fn write_lnum_adjust(mut offset: linenr_T) {
 }
 static vim_tempdir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub static vim_tempdir_dp: GlobalCell<*mut DIR> = GlobalCell::new(::core::ptr::null_mut::<DIR>());
 unsafe extern "C" fn vim_mktempdir() {
     static temp_dirs: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new(TEMP_DIR_NAMES);
@@ -5843,7 +5813,6 @@ unsafe extern "C" fn vim_mktempdir() {
     }
     umask(umask_save as __mode_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn readdir_core(
     mut gap: *mut garray_T,
     mut path: *const ::core::ffi::c_char,
@@ -5972,7 +5941,6 @@ pub unsafe extern "C" fn readdir_core(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn delete_recursive(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -6137,7 +6105,6 @@ pub unsafe extern "C" fn vim_tempname() -> *mut ::core::ffi::c_char {
         itmplen as size_t,
     ) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_file_pat(
     mut pattern: *mut ::core::ffi::c_char,
     mut prog: *mut *mut regprog_T,
@@ -6178,7 +6145,6 @@ pub unsafe extern "C" fn match_file_pat(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn match_file_list(
     mut list: *mut ::core::ffi::c_char,
     mut sfname: *mut ::core::ffi::c_char,
@@ -6430,7 +6396,6 @@ pub unsafe extern "C" fn file_pat_to_reg_pat(
     }
     return reg_pat;
 }
-#[no_mangle]
 pub unsafe extern "C" fn read_eintr(
     mut fd: ::core::ffi::c_int,
     mut buf: *mut ::core::ffi::c_void,
@@ -6445,7 +6410,6 @@ pub unsafe extern "C" fn read_eintr(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn write_eintr(
     mut fd: ::core::ffi::c_int,
     mut buf: *mut ::core::ffi::c_void,

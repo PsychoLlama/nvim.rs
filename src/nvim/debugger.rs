@@ -1105,7 +1105,6 @@ static debug_oldval: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static debug_newval: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
     let mut save_State: ::core::ffi::c_int = State.get();
@@ -1563,7 +1562,6 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_debug(mut eap: *mut exarg_T) {
     let mut debug_break_level_save: ::core::ffi::c_int = debug_break_level.get();
     debug_break_level.set(9999 as ::core::ffi::c_int);
@@ -1576,7 +1574,6 @@ static debug_breakpoint_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
 static debug_skipped: GlobalCell<bool> = GlobalCell::new(false);
 static debug_skipped_name: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn dbg_check_breakpoint(mut eap: *mut exarg_T) {
     debug_skipped.set(false_0 != 0);
     if !(*debug_breakpoint_name.ptr()).is_null() {
@@ -1625,7 +1622,6 @@ pub unsafe extern "C" fn dbg_check_breakpoint(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn dbg_check_skipped(mut eap: *mut exarg_T) -> bool {
     if !debug_skipped.get() {
         return false_0 != 0;
@@ -1776,7 +1772,6 @@ unsafe extern "C" fn dbg_parsearg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
     let mut gap: *mut garray_T = dbg_breakp.ptr();
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_profile as ::core::ffi::c_int {
@@ -1824,7 +1819,6 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_debuggreedy(mut eap: *mut exarg_T) {
     if (*eap).addr_count == 0 as ::core::ffi::c_int || (*eap).line2 != 0 as linenr_T {
         debug_greedy.set(true_0 != 0);
@@ -1845,7 +1839,6 @@ unsafe extern "C" fn update_has_expr_breakpoint() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
     let mut todel: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut del_all: bool = false_0 != 0;
@@ -1932,7 +1925,6 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
         update_has_expr_breakpoint();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
     if (*dbg_breakp.ptr()).ga_len <= 0 as ::core::ffi::c_int {
         msg(
@@ -1981,7 +1973,6 @@ pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn dbg_find_breakpoint(
     mut file: bool,
     mut fname: *mut ::core::ffi::c_char,
@@ -1995,7 +1986,6 @@ pub unsafe extern "C" fn dbg_find_breakpoint(
         ::core::ptr::null_mut::<bool>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn has_profiling(
     mut file: bool,
     mut fname: *mut ::core::ffi::c_char,
@@ -2105,7 +2095,6 @@ unsafe extern "C" fn debuggy_find(
     }
     return lnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn dbg_breakpoint(mut name: *mut ::core::ffi::c_char, mut lnum: linenr_T) {
     debug_breakpoint_name.set(name);
     debug_breakpoint_lnum.set(lnum);

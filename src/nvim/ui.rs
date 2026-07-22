@@ -786,7 +786,6 @@ static pending_mode_info_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0
 static pending_mode_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static cursor_grid_handle: GlobalCell<handle_T> = GlobalCell::new(DEFAULT_GRID_HANDLE);
 static ui_event_cbs: GlobalCell<Map_uint32_t_ptr_t> = GlobalCell::new(MAP_INIT);
-#[no_mangle]
 pub static ui_cb_ext: GlobalCell<[bool; 10]> = GlobalCell::new([false; 10]);
 static has_mouse: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static pending_has_mouse: GlobalCell<::core::ffi::c_int> =
@@ -824,13 +823,11 @@ unsafe extern "C" fn ui_log(mut funname: *const ::core::ffi::c_char) {
         uilog_last_event.set(funname);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_init() {
     (*default_grid.ptr()).handle = 1 as ::core::ffi::c_int as handle_T;
     (*msg_grid_adj.ptr()).target = default_grid.ptr();
     ui_comp_init();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_rgb_attached() -> bool {
     if p_tgc.get() != 0 {
         return true_0 != 0;
@@ -846,7 +843,6 @@ pub unsafe extern "C" fn ui_rgb_attached() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_gui_attached() -> bool {
     let mut i: size_t = 0 as size_t;
     while i < ui_count.get() {
@@ -859,7 +855,6 @@ pub unsafe extern "C" fn ui_gui_attached() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_override() -> bool {
     let mut i: size_t = 0 as size_t;
     while i < ui_count.get() {
@@ -870,11 +865,9 @@ pub unsafe extern "C" fn ui_override() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_active() -> size_t {
     return ui_count.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_refresh() {
     if ui_client_channel_id.get() != 0 {
         abort();
@@ -981,7 +974,6 @@ pub unsafe extern "C" fn ui_refresh() {
     ui_cursor_shape();
     pending_has_mouse.set(-1 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_pum_get_height() -> ::core::ffi::c_int {
     let mut pum_height: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: size_t = 0 as size_t;
@@ -1002,7 +994,6 @@ pub unsafe extern "C" fn ui_pum_get_height() -> ::core::ffi::c_int {
     }
     return pum_height;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_pum_get_pos(
     mut pwidth: *mut ::core::ffi::c_double,
     mut pheight: *mut ::core::ffi::c_double,
@@ -1026,7 +1017,6 @@ pub unsafe extern "C" fn ui_pum_get_pos(
 unsafe extern "C" fn ui_refresh_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     ui_refresh();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_schedule_refresh() {
     multiqueue_put_event(
         resize_events.get(),
@@ -1049,7 +1039,6 @@ pub unsafe extern "C" fn ui_schedule_refresh() {
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_default_colors_set() {
     pending_default_colors.set(true_0 != 0);
     if starting.get() == 0 as ::core::ffi::c_int {
@@ -1068,7 +1057,6 @@ unsafe extern "C" fn ui_may_set_default_colors() {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_busy_start() {
     let c2rust_fresh0 = busy.get();
     busy.set(busy.get() + 1);
@@ -1076,14 +1064,12 @@ pub unsafe extern "C" fn ui_busy_start() {
         ui_call_busy_start();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_busy_stop() {
     (*busy.ptr()) -= 1;
     if busy.get() == 0 {
         ui_call_busy_stop();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_beep(mut val: ::core::ffi::c_uint) {
     called_vim_beep.set(true_0 != 0);
     if emsg_silent.get() != 0 as ::core::ffi::c_int
@@ -1119,7 +1105,6 @@ pub unsafe extern "C" fn vim_beep(mut val: ::core::ffi::c_uint) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_uienter_all() {
     let mut i: size_t = 0 as size_t;
     while i < ui_count.get() {
@@ -1127,11 +1112,9 @@ pub unsafe extern "C" fn do_autocmd_uienter_all() {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_can_attach_more() -> bool {
     return ui_count.get() < MAX_UI_COUNT as size_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_attach_impl(mut ui: *mut RemoteUI, mut chanid: uint64_t) {
     if ui_count.get() >= MAX_UI_COUNT as size_t {
         abort();
@@ -1172,7 +1155,6 @@ pub unsafe extern "C" fn ui_attach_impl(mut ui: *mut RemoteUI, mut chanid: uint6
     ui_refresh();
     do_autocmd_uienter(chanid, true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_detach_impl(mut ui: *mut RemoteUI, mut chanid: uint64_t) {
     if ui_count.get() > MAX_UI_COUNT as size_t {
         abort();
@@ -1206,7 +1188,6 @@ pub unsafe extern "C" fn ui_detach_impl(mut ui: *mut RemoteUI, mut chanid: uint6
     }
     do_autocmd_uienter(chanid, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_set_ext_option(
     mut ui: *mut RemoteUI,
     mut ext: UIExtension,
@@ -1236,7 +1217,6 @@ pub unsafe extern "C" fn ui_set_ext_option(
         ui_default_colors_set();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_line(
     mut grid: *mut ScreenGrid,
     mut row: ::core::ffi::c_int,
@@ -1299,14 +1279,12 @@ pub unsafe extern "C" fn ui_line(
         pending_cursor_update.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_cursor_goto(
     mut new_row: ::core::ffi::c_int,
     mut new_col: ::core::ffi::c_int,
 ) {
     ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_grid_cursor_goto(
     mut grid_handle: handle_T,
     mut new_row: ::core::ffi::c_int,
@@ -1323,25 +1301,20 @@ pub unsafe extern "C" fn ui_grid_cursor_goto(
     cursor_grid_handle.set(grid_handle);
     pending_cursor_update.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_check_cursor_grid(mut grid_handle: handle_T) {
     if cursor_grid_handle.get() == grid_handle {
         pending_cursor_update.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_mode_info_set() {
     pending_mode_info_update.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_current_row() -> ::core::ffi::c_int {
     return cursor_row.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_current_col() -> ::core::ffi::c_int {
     return cursor_col.get();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_flush() {
     '_c2rust_label: {
         if ui_client_channel_id.get() == 0 {
@@ -1425,7 +1398,6 @@ pub unsafe extern "C" fn ui_flush() {
         os_sleep(llabs(p_wd.get() as ::core::ffi::c_longlong) as uint64_t);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_check_mouse() {
     has_mouse.set(false_0 != 0);
     if *p_mouse.get() as ::core::ffi::c_int == NUL {
@@ -1450,7 +1422,6 @@ pub unsafe extern "C" fn ui_check_mouse() {
         has_mouse.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_mouse_has(mut mode: ::core::ffi::c_int) -> bool {
     let mut p: *mut ::core::ffi::c_char = p_mouse.get();
     while *p != 0 {
@@ -1475,7 +1446,6 @@ pub unsafe extern "C" fn ui_mouse_has(mut mode: ::core::ffi::c_int) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_cursor_shape_no_check_conceal() {
     if !full_screen.get() {
         return;
@@ -1486,7 +1456,6 @@ pub unsafe extern "C" fn ui_cursor_shape_no_check_conceal() {
         pending_mode_update.set(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_cursor_shape() {
     ui_cursor_shape_no_check_conceal();
     conceal_check_cursor_line();
@@ -1507,11 +1476,9 @@ unsafe extern "C" fn ui_cursor_is_behind_floatwin() -> bool {
     let mut top_grid: *mut ScreenGrid = ui_comp_get_grid_at_coord(crow, ccol);
     return top_grid != &raw mut (*curwin.get()).w_grid_alloc && top_grid != default_grid.ptr();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_has(mut ext: UIExtension) -> bool {
     return (*ui_ext.ptr())[ext as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
     let mut all_uis: Array = arena_array(arena, ui_count.get());
     let mut i: size_t = 0 as size_t;
@@ -1669,7 +1636,6 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
     }
     return all_uis;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_grid_resize(
     mut grid_handle: handle_T,
     mut width: ::core::ffi::c_int,
@@ -1746,7 +1712,6 @@ unsafe extern "C" fn ui_attach_error(
         msg_0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_event(mut name: *mut ::core::ffi::c_char, mut args: Array) {
     let mut fast: bool = strcmp(name, b"msg_show\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int;
@@ -1864,7 +1829,6 @@ unsafe extern "C" fn free_ui_event_callback(mut event_cb: *mut UIEventCallback) 
     api_free_luaref((*event_cb).cb);
     xfree(event_cb as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_add_cb(
     mut ns_id: uint32_t,
     mut cb: LuaRef,
@@ -1899,7 +1863,6 @@ pub unsafe extern "C" fn ui_add_cb(
     ui_cb_update_ext();
     ui_refresh();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_remove_cb(mut ns_id: uint32_t, mut checkerr: bool) {
     let mut item: *mut UIEventCallback =
         map_get_uint32_t_ptr_t(ui_event_cbs.ptr(), ns_id) as *mut UIEventCallback;
@@ -1930,7 +1893,6 @@ pub unsafe extern "C" fn ui_remove_cb(mut ns_id: uint32_t, mut checkerr: bool) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_mode_info_set(mut enabled: Boolean, mut cursor_styles: Array) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -1944,7 +1906,6 @@ pub unsafe extern "C" fn ui_call_mode_info_set(mut enabled: Boolean, mut cursor_
         ui_log(b"mode_info_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_update_menu() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -1958,7 +1919,6 @@ pub unsafe extern "C" fn ui_call_update_menu() {
         ui_log(b"update_menu\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_busy_start() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -1972,7 +1932,6 @@ pub unsafe extern "C" fn ui_call_busy_start() {
         ui_log(b"busy_start\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_busy_stop() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -1986,7 +1945,6 @@ pub unsafe extern "C" fn ui_call_busy_stop() {
         ui_log(b"busy_stop\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_mouse_on() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2000,7 +1958,6 @@ pub unsafe extern "C" fn ui_call_mouse_on() {
         ui_log(b"mouse_on\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_mouse_off() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2014,7 +1971,6 @@ pub unsafe extern "C" fn ui_call_mouse_off() {
         ui_log(b"mouse_off\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_mode_change(mut mode: String_0, mut mode_idx: Integer) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2028,7 +1984,6 @@ pub unsafe extern "C" fn ui_call_mode_change(mut mode: String_0, mut mode_idx: I
         ui_log(b"mode_change\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_bell() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2042,7 +1997,6 @@ pub unsafe extern "C" fn ui_call_bell() {
         ui_log(b"bell\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_visual_bell() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2056,7 +2010,6 @@ pub unsafe extern "C" fn ui_call_visual_bell() {
         ui_log(b"visual_bell\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_flush() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2070,7 +2023,6 @@ pub unsafe extern "C" fn ui_call_flush() {
         ui_log(b"flush\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_restart(mut listen_addr: String_0) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2098,7 +2050,6 @@ pub unsafe extern "C" fn ui_call_restart(mut listen_addr: String_0) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_suspend() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2112,7 +2063,6 @@ pub unsafe extern "C" fn ui_call_suspend() {
         ui_log(b"suspend\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_set_title(mut title: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2126,7 +2076,6 @@ pub unsafe extern "C" fn ui_call_set_title(mut title: String_0) {
         ui_log(b"set_title\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_set_icon(mut icon: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2140,7 +2089,6 @@ pub unsafe extern "C" fn ui_call_set_icon(mut icon: String_0) {
         ui_log(b"set_icon\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_screenshot(mut path: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2154,7 +2102,6 @@ pub unsafe extern "C" fn ui_call_screenshot(mut path: String_0) {
         ui_log(b"screenshot\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_option_set(mut name: String_0, mut value: Object) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2168,7 +2115,6 @@ pub unsafe extern "C" fn ui_call_option_set(mut name: String_0, mut value: Objec
         ui_log(b"option_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_chdir(mut path: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2182,7 +2128,6 @@ pub unsafe extern "C" fn ui_call_chdir(mut path: String_0) {
         ui_log(b"chdir\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_stop() {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2196,7 +2141,6 @@ pub unsafe extern "C" fn ui_call_stop() {
         ui_log(b"stop\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_ui_send(mut content: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2210,7 +2154,6 @@ pub unsafe extern "C" fn ui_call_ui_send(mut content: String_0) {
         ui_log(b"ui_send\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_update_fg(mut fg: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2236,7 +2179,6 @@ pub unsafe extern "C" fn ui_call_update_fg(mut fg: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_update_bg(mut bg: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2262,7 +2204,6 @@ pub unsafe extern "C" fn ui_call_update_bg(mut bg: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_update_sp(mut sp: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2288,7 +2229,6 @@ pub unsafe extern "C" fn ui_call_update_sp(mut sp: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_resize(mut width: Integer, mut height: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2320,7 +2260,6 @@ pub unsafe extern "C" fn ui_call_resize(mut width: Integer, mut height: Integer)
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_clear() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2333,7 +2272,6 @@ pub unsafe extern "C" fn ui_call_clear() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_eol_clear() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2346,7 +2284,6 @@ pub unsafe extern "C" fn ui_call_eol_clear() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cursor_goto(mut row: Integer, mut col: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2378,7 +2315,6 @@ pub unsafe extern "C" fn ui_call_cursor_goto(mut row: Integer, mut col: Integer)
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_put(mut str: String_0) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2404,7 +2340,6 @@ pub unsafe extern "C" fn ui_call_put(mut str: String_0) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_set_scroll_region(
     mut top: Integer,
     mut bot: Integer,
@@ -2453,7 +2388,6 @@ pub unsafe extern "C" fn ui_call_set_scroll_region(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_scroll(mut count: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2479,7 +2413,6 @@ pub unsafe extern "C" fn ui_call_scroll(mut count: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_default_colors_set(
     mut rgb_fg: Integer,
     mut rgb_bg: Integer,
@@ -2499,7 +2432,6 @@ pub unsafe extern "C" fn ui_call_default_colors_set(
         ui_log(b"default_colors_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_hl_attr_define(
     mut id: Integer,
     mut rgb_attrs: HlAttrs,
@@ -2518,7 +2450,6 @@ pub unsafe extern "C" fn ui_call_hl_attr_define(
         ui_log(b"hl_attr_define\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_hl_group_set(mut name: String_0, mut id: Integer) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2532,7 +2463,6 @@ pub unsafe extern "C" fn ui_call_hl_group_set(mut name: String_0, mut id: Intege
         ui_log(b"hl_group_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_resize(
     mut grid: Integer,
     mut width: Integer,
@@ -2553,7 +2483,6 @@ pub unsafe extern "C" fn ui_call_grid_resize(
         ui_log(b"grid_resize\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_composed_call_grid_resize(
     mut grid: Integer,
     mut width: Integer,
@@ -2573,7 +2502,6 @@ pub unsafe extern "C" fn ui_composed_call_grid_resize(
         ui_log(b"grid_resize\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_clear(mut grid: Integer) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2587,7 +2515,6 @@ pub unsafe extern "C" fn ui_call_grid_clear(mut grid: Integer) {
         ui_log(b"grid_clear\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_cursor_goto(
     mut grid: Integer,
     mut row: Integer,
@@ -2608,7 +2535,6 @@ pub unsafe extern "C" fn ui_call_grid_cursor_goto(
         ui_log(b"grid_cursor_goto\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_composed_call_grid_cursor_goto(
     mut grid: Integer,
     mut row: Integer,
@@ -2628,7 +2554,6 @@ pub unsafe extern "C" fn ui_composed_call_grid_cursor_goto(
         ui_log(b"grid_cursor_goto\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_line(
     mut grid: Integer,
     mut row: Integer,
@@ -2684,7 +2609,6 @@ pub unsafe extern "C" fn ui_call_grid_line(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_scroll(
     mut grid: Integer,
     mut top: Integer,
@@ -2709,7 +2633,6 @@ pub unsafe extern "C" fn ui_call_grid_scroll(
         ui_log(b"grid_scroll\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_composed_call_grid_scroll(
     mut grid: Integer,
     mut top: Integer,
@@ -2733,7 +2656,6 @@ pub unsafe extern "C" fn ui_composed_call_grid_scroll(
         ui_log(b"grid_scroll\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_grid_destroy(mut grid: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -2759,7 +2681,6 @@ pub unsafe extern "C" fn ui_call_grid_destroy(mut grid: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_raw_line(
     mut grid: Integer,
     mut row: Integer,
@@ -2790,7 +2711,6 @@ pub unsafe extern "C" fn ui_call_raw_line(
         ui_log(b"raw_line\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_composed_call_raw_line(
     mut grid: Integer,
     mut row: Integer,
@@ -2818,7 +2738,6 @@ pub unsafe extern "C" fn ui_composed_call_raw_line(
         ui_log(b"raw_line\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_pos(
     mut grid: Integer,
     mut win: Window,
@@ -2883,7 +2802,6 @@ pub unsafe extern "C" fn ui_call_win_pos(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_float_pos(
     mut grid: Integer,
     mut win: Window,
@@ -2995,7 +2913,6 @@ pub unsafe extern "C" fn ui_call_win_float_pos(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_external_pos(mut grid: Integer, mut win: Window) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3029,7 +2946,6 @@ pub unsafe extern "C" fn ui_call_win_external_pos(mut grid: Integer, mut win: Wi
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_hide(mut grid: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3055,7 +2971,6 @@ pub unsafe extern "C" fn ui_call_win_hide(mut grid: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_close(mut grid: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3081,7 +2996,6 @@ pub unsafe extern "C" fn ui_call_win_close(mut grid: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_set_pos(
     mut grid: Integer,
     mut row: Integer,
@@ -3105,7 +3019,6 @@ pub unsafe extern "C" fn ui_call_msg_set_pos(
         ui_log(b"msg_set_pos\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_composed_call_msg_set_pos(
     mut grid: Integer,
     mut row: Integer,
@@ -3128,7 +3041,6 @@ pub unsafe extern "C" fn ui_composed_call_msg_set_pos(
         ui_log(b"msg_set_pos\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_viewport(
     mut grid: Integer,
     mut win: Window,
@@ -3161,7 +3073,6 @@ pub unsafe extern "C" fn ui_call_win_viewport(
         ui_log(b"win_viewport\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_viewport_margins(
     mut grid: Integer,
     mut win: Window,
@@ -3182,7 +3093,6 @@ pub unsafe extern "C" fn ui_call_win_viewport_margins(
         ui_log(b"win_viewport_margins\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_win_extmark(
     mut grid: Integer,
     mut win: Window,
@@ -3247,7 +3157,6 @@ pub unsafe extern "C" fn ui_call_win_extmark(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_popupmenu_show(
     mut items: Array,
     mut selected: Integer,
@@ -3303,7 +3212,6 @@ pub unsafe extern "C" fn ui_call_popupmenu_show(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_popupmenu_hide() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3316,7 +3224,6 @@ pub unsafe extern "C" fn ui_call_popupmenu_hide() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_popupmenu_select(mut selected: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3342,7 +3249,6 @@ pub unsafe extern "C" fn ui_call_popupmenu_select(mut selected: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_tabline_update(
     mut current: Tabpage,
     mut tabs: Array,
@@ -3395,7 +3301,6 @@ pub unsafe extern "C" fn ui_call_tabline_update(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_show(
     mut content: Array,
     mut pos: Integer,
@@ -3465,7 +3370,6 @@ pub unsafe extern "C" fn ui_call_cmdline_show(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_pos(mut pos: Integer, mut level: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3497,7 +3401,6 @@ pub unsafe extern "C" fn ui_call_cmdline_pos(mut pos: Integer, mut level: Intege
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_special_char(
     mut c: String_0,
     mut shift: Boolean,
@@ -3540,7 +3443,6 @@ pub unsafe extern "C" fn ui_call_cmdline_special_char(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_hide(mut level: Integer, mut abort_0: Boolean) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3572,7 +3474,6 @@ pub unsafe extern "C" fn ui_call_cmdline_hide(mut level: Integer, mut abort_0: B
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_block_show(mut lines: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3598,7 +3499,6 @@ pub unsafe extern "C" fn ui_call_cmdline_block_show(mut lines: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_block_append(mut lines: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3625,7 +3525,6 @@ pub unsafe extern "C" fn ui_call_cmdline_block_append(mut lines: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_cmdline_block_hide() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3638,7 +3537,6 @@ pub unsafe extern "C" fn ui_call_cmdline_block_hide() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_wildmenu_show(mut items: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3664,7 +3562,6 @@ pub unsafe extern "C" fn ui_call_wildmenu_show(mut items: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_wildmenu_select(mut selected: Integer) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3690,7 +3587,6 @@ pub unsafe extern "C" fn ui_call_wildmenu_select(mut selected: Integer) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_wildmenu_hide() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3703,7 +3599,6 @@ pub unsafe extern "C" fn ui_call_wildmenu_hide() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_show(
     mut kind: String_0,
     mut content: Array,
@@ -3772,7 +3667,6 @@ pub unsafe extern "C" fn ui_call_msg_show(
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_clear() {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3785,7 +3679,6 @@ pub unsafe extern "C" fn ui_call_msg_clear() {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_showcmd(mut content: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3811,7 +3704,6 @@ pub unsafe extern "C" fn ui_call_msg_showcmd(mut content: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_showmode(mut content: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3837,7 +3729,6 @@ pub unsafe extern "C" fn ui_call_msg_showmode(mut content: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_ruler(mut content: Array) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3863,7 +3754,6 @@ pub unsafe extern "C" fn ui_call_msg_ruler(mut content: Array) {
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_msg_history_show(mut entries: Array, mut prev_cmd: Boolean) {
     static entered: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
     if entered.get() {
@@ -3895,7 +3785,6 @@ pub unsafe extern "C" fn ui_call_msg_history_show(mut entries: Array, mut prev_c
     );
     entered.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_call_error_exit(mut status: Integer) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;

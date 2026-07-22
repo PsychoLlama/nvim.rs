@@ -73,7 +73,6 @@ unsafe fn do_outofmem_msg(size: usize) {
     );
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn try_malloc(size: usize) -> *mut c_void {
     let allocated_size = size.max(1);
     let mut ret = (*mem_malloc.ptr()).expect("non-null function pointer")(allocated_size);
@@ -84,7 +83,6 @@ pub unsafe extern "C" fn try_malloc(size: usize) -> *mut c_void {
     ret
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn verbose_try_malloc(size: usize) -> *mut c_void {
     let ret = try_malloc(size);
     if ret.is_null() {
@@ -129,7 +127,6 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     ret
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void {
     let allocated_size = size.max(1);
     let mut ret = (*mem_realloc.ptr()).expect("non-null function pointer")(ptr, allocated_size);
@@ -143,7 +140,6 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     ret
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn xmallocz(size: usize) -> *mut c_void {
     let total_size = size.wrapping_add(1);
     if total_size < size {
@@ -166,7 +162,6 @@ pub unsafe extern "C" fn xmemdupz(data: *const c_void, len: usize) -> *mut c_voi
     ret
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize) -> *mut c_void {
     if len != 0 {
         slice::from_raw_parts_mut(dst as *mut u8, len)
@@ -200,7 +195,6 @@ fn count_byte(s: &[u8], c: u8) -> usize {
 
 /// Like `strchr`, but absent characters yield the terminator instead of
 /// NULL.
-#[no_mangle]
 pub unsafe extern "C" fn xstrchrnul(str: *const c_char, c: c_char) -> *mut c_char {
     let bytes = CStr::from_ptr(str).to_bytes();
     str.add(find_or_end(bytes, c as u8)) as *mut c_char
@@ -208,13 +202,11 @@ pub unsafe extern "C" fn xstrchrnul(str: *const c_char, c: c_char) -> *mut c_cha
 
 /// Like `memchr`, but absent characters yield `addr + size` instead of
 /// NULL.
-#[no_mangle]
 pub unsafe extern "C" fn xmemscan(addr: *const c_void, c: c_char, size: usize) -> *mut c_void {
     let hay = slice::from_raw_parts(addr as *const u8, size);
     (addr as *mut u8).add(find_or_end(hay, c as u8)) as *mut c_void
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
     assert!(c != 0, "c != NUL");
     let len = CStr::from_ptr(str).to_bytes().len();
@@ -225,7 +217,6 @@ pub unsafe extern "C" fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
     );
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len: usize) {
     if len != 0 {
         replace_bytes(
@@ -236,13 +227,11 @@ pub unsafe extern "C" fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len:
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn strcnt(str: *const c_char, c: c_char) -> usize {
     assert!(c != 0, "c != 0");
     count_byte(CStr::from_ptr(str).to_bytes(), c as u8)
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn memcnt(data: *const c_void, c: c_char, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -261,7 +250,6 @@ unsafe fn strnlen(s: *const c_char, maxlen: usize) -> usize {
 
 /// `strcpy` returning a pointer to the written terminator rather than
 /// `dst`.
-#[no_mangle]
 pub unsafe extern "C" fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
     let bytes = CStr::from_ptr(src).to_bytes_with_nul();
     slice::from_raw_parts_mut(dst as *mut u8, bytes.len()).copy_from_slice(bytes);
@@ -270,7 +258,6 @@ pub unsafe extern "C" fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c
 
 /// `stpncpy`: copy at most `maxlen` bytes, zero-filling any remainder, and
 /// return where the terminator went (or `dst + maxlen` if none fit).
-#[no_mangle]
 pub unsafe extern "C" fn xstpncpy(
     dst: *mut c_char,
     src: *const c_char,
@@ -289,7 +276,6 @@ pub unsafe extern "C" fn xstpncpy(
 
 /// BSD `strlcpy`: bounded copy that always terminates (when `dsize > 0`)
 /// and returns the untruncated source length.
-#[no_mangle]
 pub unsafe extern "C" fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     let slen = CStr::from_ptr(src).to_bytes().len();
     if dsize != 0 {
@@ -336,7 +322,6 @@ pub unsafe extern "C" fn xstrdup(str: *const c_char) -> *mut c_char {
 }
 
 /// `xstrdup` that maps NULL to an allocated empty string.
-#[no_mangle]
 pub unsafe extern "C" fn xstrdupnul(str: *const c_char) -> *mut c_char {
     if str.is_null() {
         return xmallocz(0) as *mut c_char;
@@ -345,7 +330,6 @@ pub unsafe extern "C" fn xstrdupnul(str: *const c_char) -> *mut c_char {
 }
 
 /// `memrchr`: last occurrence of `c` in the first `len` bytes, or NULL.
-#[no_mangle]
 pub unsafe extern "C" fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut c_void {
     if len == 0 {
         return ptr::null_mut();
@@ -359,7 +343,6 @@ pub unsafe extern "C" fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut
 
 /// `strndup`: duplicate at most `len` bytes (stopping at a terminator),
 /// always NUL-terminating the copy.
-#[no_mangle]
 pub unsafe extern "C" fn xstrndup(str: *const c_char, len: usize) -> *mut c_char {
     xmemdupz(str as *const c_void, strnlen(str, len)) as *mut c_char
 }
@@ -381,7 +364,6 @@ fn eq_upto(a: &[u8], b: &[u8], n: usize) -> bool {
 }
 
 /// `strcmp` equality where NULL only equals NULL.
-#[no_mangle]
 pub unsafe extern "C" fn strequal(a: *const c_char, b: *const c_char) -> bool {
     if a.is_null() || b.is_null() {
         return a.is_null() && b.is_null();
@@ -390,7 +372,6 @@ pub unsafe extern "C" fn strequal(a: *const c_char, b: *const c_char) -> bool {
 }
 
 /// `strncmp` equality where NULL only equals NULL.
-#[no_mangle]
 pub unsafe extern "C" fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
     if a.is_null() || b.is_null() {
         return a.is_null() && b.is_null();
@@ -403,7 +384,6 @@ pub unsafe extern "C" fn strnequal(a: *const c_char, b: *const c_char, n: usize)
 }
 
 /// Big-endian encoding of a timestamp, as shada writes it.
-#[no_mangle]
 pub unsafe extern "C" fn time_to_bytes(time_: c_long, buf: *mut u8) {
     slice::from_raw_parts_mut(buf, 8).copy_from_slice(&(time_ as u64).to_be_bytes());
 }
@@ -561,7 +541,6 @@ pub unsafe extern "C" fn arena_finish(arena: *mut Arena) -> ArenaMem {
     res
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn alloc_block() -> *mut c_void {
     if arena_reuse_blk_count.get() > 0 {
         let retval = arena_reuse_blk.get() as *mut c_void;
@@ -649,7 +628,6 @@ pub unsafe extern "C" fn arena_alloc(arena: *mut Arena, size: usize, align: bool
     mem as *mut c_void
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn free_block(block: *mut c_void) {
     if arena_reuse_blk_count.get() < REUSE_MAX {
         let reuse_blk = block as *mut consumed_blk;
@@ -661,7 +639,6 @@ pub unsafe extern "C" fn free_block(block: *mut c_void) {
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_mem_free(mem: ArenaMem) {
     let mut b = mem;
     // The first block may be reused; the rest of the chain is freed.

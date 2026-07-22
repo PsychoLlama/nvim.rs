@@ -1008,7 +1008,6 @@ unsafe extern "C" fn assert_beeps(
     emsg_on_display.set(false_0 != 0);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_beeps(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1016,7 +1015,6 @@ pub unsafe extern "C" fn f_assert_beeps(
 ) {
     (*rettv).vval.v_number = assert_beeps(argvars, false_0 != 0) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_nobeep(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1024,7 +1022,6 @@ pub unsafe extern "C" fn f_assert_nobeep(
 ) {
     (*rettv).vval.v_number = assert_beeps(argvars, true_0 != 0) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_equal(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1208,7 +1205,6 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_equalfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1216,7 +1212,6 @@ pub unsafe extern "C" fn f_assert_equalfile(
 ) {
     (*rettv).vval.v_number = assert_equalfile(argvars) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_notequal(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1224,7 +1219,6 @@ pub unsafe extern "C" fn f_assert_notequal(
 ) {
     (*rettv).vval.v_number = assert_equal_common(argvars, ASSERT_NOTEQUAL) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_exception(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1264,7 +1258,6 @@ pub unsafe extern "C" fn f_assert_exception(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_fails(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1507,7 +1500,6 @@ pub unsafe extern "C" fn f_assert_fails(
         emsg(gettext(wrong_arg_msg));
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_false(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1604,7 +1596,6 @@ unsafe extern "C" fn assert_inrange(mut argvars: *mut typval_T) -> ::core::ffi::
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_inrange(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1619,7 +1610,6 @@ pub unsafe extern "C" fn f_assert_inrange(
     }
     (*rettv).vval.v_number = assert_inrange(argvars) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_match(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1627,7 +1617,6 @@ pub unsafe extern "C" fn f_assert_match(
 ) {
     (*rettv).vval.v_number = assert_match_common(argvars, ASSERT_MATCH) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_notmatch(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1635,7 +1624,6 @@ pub unsafe extern "C" fn f_assert_notmatch(
 ) {
     (*rettv).vval.v_number = assert_match_common(argvars, ASSERT_NOTMATCH) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_report(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1657,7 +1645,6 @@ pub unsafe extern "C" fn f_assert_report(
     ga_clear(&raw mut ga);
     (*rettv).vval.v_number = 1 as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_assert_true(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1665,7 +1652,6 @@ pub unsafe extern "C" fn f_assert_true(
 ) {
     (*rettv).vval.v_number = assert_bool(argvars, true_0 != 0) as varnumber_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_test_garbagecollect_now(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
@@ -1680,7 +1666,6 @@ pub unsafe extern "C" fn f_test_garbagecollect_now(
         garbage_collect(true_0 != 0);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_test_write_list_log(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,

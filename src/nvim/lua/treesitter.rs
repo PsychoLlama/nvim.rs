@@ -2921,9 +2921,7 @@ unsafe extern "C" fn tslua_get_minimum_language_version(
     lua_pushnumber(L, TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as lua_Number);
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nlua_treesitter_free() {}
-#[no_mangle]
 pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     tslua_init(lstate);
     lua_pushcclosure(

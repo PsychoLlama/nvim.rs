@@ -382,7 +382,6 @@ unsafe extern "C" fn set_pen_col_ansi(
     vterm_color_indexed(colp, col as uint8_t);
     setpenattr_col(state, attr, *colp);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_newpen(mut state: *mut VTermState) {
     vterm_color_rgb(
         &raw mut (*state).default_fg,
@@ -410,7 +409,6 @@ pub unsafe extern "C" fn vterm_state_newpen(mut state: *mut VTermState) {
         col += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_resetpen(mut state: *mut VTermState) {
     (*state)
         .pen
@@ -467,7 +465,6 @@ pub unsafe extern "C" fn vterm_state_resetpen(mut state: *mut VTermState) {
     (*state).pen.uri = 0 as ::core::ffi::c_int;
     setpenattr_int(state, VTERM_ATTR_URI, 0 as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_savepen(
     mut state: *mut VTermState,
     mut save: ::core::ffi::c_int,
@@ -541,7 +538,6 @@ pub unsafe extern "C" fn vterm_state_savepen(
         setpenattr_int(state, VTERM_ATTR_URI, (*state).pen.uri);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_set_default_colors(
     mut state: *mut VTermState,
     mut default_fg: *const VTermColor,
@@ -562,7 +558,6 @@ pub unsafe extern "C" fn vterm_state_set_default_colors(
             as uint8_t;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_set_palette_color(
     mut state: *mut VTermState,
     mut index: ::core::ffi::c_int,
@@ -572,7 +567,6 @@ pub unsafe extern "C" fn vterm_state_set_palette_color(
         (*state).colors[index as usize] = *col;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_convert_color_to_rgb(
     mut state: *const VTermState,
     mut col: *mut VTermColor,
@@ -585,7 +579,6 @@ pub unsafe extern "C" fn vterm_state_convert_color_to_rgb(
     (*col).type_0 = ((*col).type_0 as ::core::ffi::c_int
         & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int) as uint8_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_setpen(
     mut state: *mut VTermState,
     mut args: *const ::core::ffi::c_long,
@@ -1017,7 +1010,6 @@ unsafe extern "C" fn vterm_state_getpen_color(
     }
     return argi;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_getpen(
     mut state: *mut VTermState,
     mut args: *mut ::core::ffi::c_long,
@@ -1114,7 +1106,6 @@ pub unsafe extern "C" fn vterm_state_getpen(
     }
     return argi;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vterm_state_set_penattr(
     mut state: *mut VTermState,
     mut attr: VTermAttr,

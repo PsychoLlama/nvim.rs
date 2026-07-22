@@ -1632,7 +1632,6 @@ pub const SID_WINLAYOUT: ::core::ffi::c_int = -7;
 pub const SID_LUA: ::core::ffi::c_int = -8;
 pub const SID_API_CLIENT: ::core::ffi::c_int = -9;
 pub const SID_STR: ::core::ffi::c_int = -10;
-#[no_mangle]
 pub static exestack: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
@@ -1640,7 +1639,6 @@ pub static exestack: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_growsize: 50 as ::core::ffi::c_int,
     ga_data: NULL_0,
 });
-#[no_mangle]
 pub static script_items: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
@@ -1657,7 +1655,6 @@ static ga_loaded: GlobalCell<garray_T> = GlobalCell::new(garray_T {
 });
 static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn estack_init() {
     ga_grow(exestack.ptr(), 10 as ::core::ffi::c_int);
     let mut entry: *mut estack_T =
@@ -1668,7 +1665,6 @@ pub unsafe extern "C" fn estack_init() {
     (*entry).es_info.ufunc = ::core::ptr::null_mut::<ufunc_T>();
     (*exestack.ptr()).ga_len += 1;
 }
-#[no_mangle]
 pub unsafe extern "C" fn estack_push(
     mut type_0: etype_T,
     mut name: *mut ::core::ffi::c_char,
@@ -1684,7 +1680,6 @@ pub unsafe extern "C" fn estack_push(
     (*exestack.ptr()).ga_len += 1;
     return entry;
 }
-#[no_mangle]
 pub unsafe extern "C" fn estack_push_ufunc(mut ufunc: *mut ufunc_T, mut lnum: linenr_T) {
     let mut entry: *mut estack_T = estack_push(
         ETYPE_UFUNC,
@@ -1699,13 +1694,11 @@ pub unsafe extern "C" fn estack_push_ufunc(mut ufunc: *mut ufunc_T, mut lnum: li
         (*entry).es_info.ufunc = ufunc;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn estack_pop() {
     if (*exestack.ptr()).ga_len > 1 as ::core::ffi::c_int {
         (*exestack.ptr()).ga_len -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn estack_sfile(mut which: estack_arg_T) -> *mut ::core::ffi::c_char {
     let mut entry: *const estack_T = ((*exestack.ptr()).ga_data as *mut estack_T)
         .offset((*exestack.ptr()).ga_len as isize)
@@ -1887,7 +1880,6 @@ unsafe extern "C" fn stacktrace_push_item(
     );
     tv_list_append_tv(l, &raw mut tv);
 }
-#[no_mangle]
 pub unsafe extern "C" fn stacktrace_create() -> *mut list_T {
     let l: *mut list_T = tv_list_alloc((*exestack.ptr()).ga_len as ptrdiff_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1946,7 +1938,6 @@ pub unsafe extern "C" fn stacktrace_create() -> *mut list_T {
     }
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getstacktrace(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1984,7 +1975,6 @@ static runtime_search_path_mutex: GlobalCell<uv_mutex_t> = GlobalCell::new(pthre
         },
     },
 });
-#[no_mangle]
 pub unsafe extern "C" fn runtime_init() {
     uv_mutex_init(runtime_search_path_mutex.ptr());
 }
@@ -2036,7 +2026,6 @@ unsafe extern "C" fn get_runtime_cmd_flags(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_runtime(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut flags: ::core::ffi::c_int = if (*eap).forceit != 0 {
@@ -2060,7 +2049,6 @@ pub unsafe extern "C" fn ex_runtime(mut eap: *mut exarg_T) {
     source_runtime(arg, flags);
 }
 static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_runtime_cmd(
     mut xp: *mut expand_T,
     mut arg: *const ::core::ffi::c_char,
@@ -2168,7 +2156,6 @@ unsafe extern "C" fn source_callback(
     }
     return did_one;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_in_path(
     mut path: *const ::core::ffi::c_char,
     mut prefix: *const ::core::ffi::c_char,
@@ -2524,7 +2511,6 @@ unsafe extern "C" fn do_in_cached_path(
         FAIL
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
     let mut path: RuntimeSearchPath = runtime_search_path.get();
     let mut rv: Array = arena_array(arena, path.size);
@@ -2600,7 +2586,6 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn runtime_get_named(
     mut lua: bool,
     mut pat: Array,
@@ -2622,7 +2607,6 @@ pub unsafe extern "C" fn runtime_get_named(
     runtime_search_path_unref(path, &raw mut ref_0);
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn runtime_get_named_thread(
     mut lua: bool,
     mut pat: Array,
@@ -2710,7 +2694,6 @@ unsafe extern "C" fn runtime_get_named_common(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_in_path_and_pp(
     mut path: *mut ::core::ffi::c_char,
     mut name: *mut ::core::ffi::c_char,
@@ -3108,7 +3091,6 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
     rtp_used = SET_INIT;
     return search_path;
 }
-#[no_mangle]
 pub unsafe extern "C" fn did_set_runtimepackpath(
     mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
@@ -3127,7 +3109,6 @@ unsafe extern "C" fn runtime_search_path_free(mut path: RuntimeSearchPath) {
     path.size = path.capacity;
     path.items = ::core::ptr::null_mut::<SearchPathItem>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn runtime_search_path_validate() {
     if !nlua_is_deferred_safe() {
         return;
@@ -3143,7 +3124,6 @@ pub unsafe extern "C" fn runtime_search_path_validate() {
         update_runtime_search_path_thread(true_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn update_runtime_search_path_thread(mut force: bool) {
     if !force
         && !(runtime_search_path_valid.get() as ::core::ffi::c_int != 0
@@ -3157,7 +3137,6 @@ pub unsafe extern "C" fn update_runtime_search_path_thread(mut force: bool) {
     uv_mutex_unlock(runtime_search_path_mutex.ptr());
     runtime_search_path_valid_thread.set(true_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_in_runtimepath(
     mut name: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -3185,7 +3164,6 @@ pub unsafe extern "C" fn do_in_runtimepath(
     }
     return success;
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_runtime(
     mut name: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -3205,7 +3183,6 @@ pub unsafe extern "C" fn source_runtime(
         NULL_0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_runtime_vim_lua(
     mut name: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -3225,7 +3202,6 @@ pub unsafe extern "C" fn source_runtime_vim_lua(
         NULL_0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_in_path_vim_lua(
     mut path: *mut ::core::ffi::c_char,
     mut name: *mut ::core::ffi::c_char,
@@ -3727,7 +3703,6 @@ unsafe extern "C" fn add_opt_pack_plugins(
     add_pack_plugins(true_0 != 0, num_fnames, fnames, all, cookie);
     return num_fnames > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_pack_start_dirs() {
     do_in_path(
         p_pp.get(),
@@ -3806,7 +3781,6 @@ unsafe extern "C" fn add_pack_start_dir(
     }
     return num_fnames > 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn load_start_packages() {
     did_source_packages.set(true_0 != 0);
     do_in_path(
@@ -3843,14 +3817,12 @@ pub unsafe extern "C" fn load_start_packages() {
     );
     update_runtime_search_path_thread(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_packloadall(mut eap: *mut exarg_T) {
     if !did_source_packages.get() || (*eap).forceit != 0 {
         add_pack_start_dirs();
         load_start_packages();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn load_plugins() {
     if p_lpl.get() != 0 {
         let mut rtp_copy: *mut ::core::ffi::c_char = p_rtp.get();
@@ -3893,7 +3865,6 @@ pub unsafe extern "C" fn load_plugins() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_packadd(mut eap: *mut exarg_T) {
     static plugpat: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"pack/*/%s/%s\0")
@@ -4187,7 +4158,6 @@ unsafe extern "C" fn ExpandRTDir_int(
     }
     ga_remove_duplicate_strings(gap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandRTDir(
     mut pat: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -4217,7 +4187,6 @@ pub unsafe extern "C" fn ExpandRTDir(
     *num_file = ga.ga_len;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_runtime_cmd(
     mut pat: *mut ::core::ffi::c_char,
     mut numMatches: *mut ::core::ffi::c_int,
@@ -4282,7 +4251,6 @@ pub unsafe extern "C" fn expand_runtime_cmd(
     *numMatches = ga.ga_len;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandPackAddDir(
     mut pat: *mut ::core::ffi::c_char,
     mut num_file: *mut ::core::ffi::c_int,
@@ -4589,7 +4557,6 @@ unsafe extern "C" fn add_dir(
     *c2rust_fresh21 = ',' as ::core::ffi::c_char;
     return dest;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_lib_dir() -> *mut ::core::ffi::c_char {
     if strlen(default_lib_dir.get()) != 0 as size_t
         && os_isdir(default_lib_dir.get()) as ::core::ffi::c_int != 0
@@ -4608,7 +4575,6 @@ pub unsafe extern "C" fn get_lib_dir() -> *mut ::core::ffi::c_char {
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core::ffi::c_char {
     let mut rtp_cur: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut rtp_size: size_t = 0 as size_t;
@@ -4880,11 +4846,9 @@ unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *m
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_source(mut eap: *mut exarg_T) {
     cmd_source((*eap).arg, eap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_options(mut _eap: *mut exarg_T) {
     let mut buf: [::core::ffi::c_char; 500] = [0; 500];
     let mut multi_mods: bool = false;
@@ -4904,17 +4868,14 @@ pub unsafe extern "C" fn ex_options(mut _eap: *mut exarg_T) {
         ::core::ptr::null_mut::<exarg_T>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_breakpoint(mut cookie: *mut ::core::ffi::c_void) -> *mut linenr_T {
     return &raw mut (*(cookie as *mut source_cookie_T)).breakpoint;
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_dbg_tick(
     mut cookie: *mut ::core::ffi::c_void,
 ) -> *mut ::core::ffi::c_int {
     return &raw mut (*(cookie as *mut source_cookie_T)).dbg_tick;
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_level(mut cookie: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     return (*(cookie as *mut source_cookie_T)).level;
 }
@@ -4965,7 +4926,6 @@ unsafe extern "C" fn concat_continued_line(
     );
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn new_script_item(
     name: *mut ::core::ffi::c_char,
     sid_out: *mut scid_T,
@@ -5066,7 +5026,6 @@ unsafe extern "C" fn do_source_str_init(
     (*sp).buf_lnum = 0 as ::core::ffi::c_int;
     (*sp).source_from_buf_or_str = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, mut ex_lua: bool) {
     do_source_ext(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5078,7 +5037,6 @@ pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, mut ex_lua: bool
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_source_str(
     mut str: *const ::core::ffi::c_char,
     mut traceback_name: *mut ::core::ffi::c_char,
@@ -5672,7 +5630,6 @@ unsafe extern "C" fn do_source_ext(
     xfree(fname_exp as *mut ::core::ffi::c_void);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_source(
     mut fname: *mut ::core::ffi::c_char,
     mut check_other: bool,
@@ -5689,7 +5646,6 @@ pub unsafe extern "C" fn do_source(
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_is_lua(mut sid: scid_T) -> bool {
     if sid == SID_LUA {
         return true_0 != 0;
@@ -5701,7 +5657,6 @@ pub unsafe extern "C" fn script_is_lua(mut sid: scid_T) -> bool {
         .offset((sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize))
     .sn_lua;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_script_by_name(
     mut name: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -5728,7 +5683,6 @@ pub unsafe extern "C" fn find_script_by_name(
     }
     return -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int || *(*eap).arg as ::core::ffi::c_int != NUL {
         if (*eap).addr_count > 0 as ::core::ffi::c_int
@@ -5792,7 +5746,6 @@ pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_scriptname(
     mut script_ctx: sctx_T,
     mut should_free: *mut bool,
@@ -5857,11 +5810,9 @@ pub unsafe extern "C" fn get_scriptname(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_autoload_scriptnames() {
     ga_clear_strings(ga_loaded.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_sourced_lnum(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,
@@ -5909,7 +5860,6 @@ unsafe extern "C" fn get_script_local_funcs(mut sid: scid_T) -> *mut list_T {
     }
     return l;
 }
-#[no_mangle]
 pub unsafe extern "C" fn f_getscriptinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -6039,7 +5989,6 @@ pub unsafe extern "C" fn f_getscriptinfo(
     vim_regfree(regmatch.regprog);
     xfree(pat as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn getsourceline(
     mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
@@ -6246,7 +6195,6 @@ unsafe extern "C" fn get_one_sourceline(mut sp: *mut source_cookie_T) -> *mut ::
     xfree(ga.ga_data);
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn sourcing_a_script(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     return getline_equal(
         (*eap).ea_getline,
@@ -6262,7 +6210,6 @@ pub unsafe extern "C" fn sourcing_a_script(mut eap: *mut exarg_T) -> ::core::ffi
         ),
     ) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_scriptencoding(mut eap: *mut exarg_T) {
     if sourcing_a_script(eap) == 0 {
         emsg(gettext(
@@ -6283,7 +6230,6 @@ pub unsafe extern "C" fn ex_scriptencoding(mut eap: *mut exarg_T) {
         xfree(name as *mut ::core::ffi::c_void);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_finish(mut eap: *mut exarg_T) {
     if sourcing_a_script(eap) != 0 {
         do_finish(eap, false_0 != 0);
@@ -6294,7 +6240,6 @@ pub unsafe extern "C" fn ex_finish(mut eap: *mut exarg_T) {
         ));
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_finish(mut eap: *mut exarg_T, mut reanimate: bool) {
     if reanimate {
         (*(getline_cookie((*eap).ea_getline, (*eap).cookie) as *mut source_cookie_T)).finished =
@@ -6311,7 +6256,6 @@ pub unsafe extern "C" fn do_finish(mut eap: *mut exarg_T, mut reanimate: bool) {
             true_0 != 0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn source_finished(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,
@@ -6334,7 +6278,6 @@ pub unsafe extern "C" fn source_finished(
             as ::core::ffi::c_int
             != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn autoload_name(
     name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -6375,7 +6318,6 @@ pub unsafe extern "C" fn autoload_name(
     );
     return scriptname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn script_autoload(
     name: *const ::core::ffi::c_char,
     name_len: size_t,

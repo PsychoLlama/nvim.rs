@@ -19,13 +19,11 @@ pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
 pub const MPACK_MAX_TOKEN_LEN: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn mpack_tokbuf_init(mut tokbuf: *mut mpack_tokbuf_t) {
     (*tokbuf).ppos = 0 as size_t;
     (*tokbuf).plen = 0 as size_t;
     (*tokbuf).passthrough = 0 as mpack_uint32_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_read(
     mut tokbuf: *mut mpack_tokbuf_t,
     mut buf: *mut *const ::core::ffi::c_char,
@@ -140,7 +138,6 @@ pub unsafe extern "C" fn mpack_read(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_write(
     mut tokbuf: *mut mpack_tokbuf_t,
     mut buf: *mut *mut ::core::ffi::c_char,
@@ -249,7 +246,6 @@ pub unsafe extern "C" fn mpack_write(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mpack_rtoken(
     mut buf: *mut *const ::core::ffi::c_char,
     mut buflen: *mut size_t,

@@ -153,7 +153,6 @@ pub const KEYSET_OPTIDX_win_text_height__start_row: ::core::ffi::c_int = 3 as ::
 pub const KEYSET_OPTIDX_win_text_height__max_height: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_win_text_height__start_vcol: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_buf(mut win: Window, mut err: *mut Error) -> Buffer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
@@ -161,7 +160,6 @@ pub unsafe extern "C" fn nvim_win_get_buf(mut win: Window, mut err: *mut Error) 
     }
     return (*(*w).w_buffer).handle as Buffer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
@@ -179,7 +177,6 @@ pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut 
     }
     win_set_buf(w, b, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_cursor(
     mut win: Window,
     mut arena: *mut Arena,
@@ -208,7 +205,6 @@ pub unsafe extern "C" fn nvim_win_get_cursor(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
@@ -277,7 +273,6 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     redraw_later(w, UPD_VALID as ::core::ffi::c_int);
     (*w).w_redr_status = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Error) -> Integer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
@@ -285,7 +280,6 @@ pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Erro
     }
     return (*w).w_height as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_height(
     mut win: Window,
     mut height: Integer,
@@ -308,7 +302,6 @@ pub unsafe extern "C" fn nvim_win_set_height(
     win_setheight_win(height as ::core::ffi::c_int, w);
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_width(mut win: Window, mut err: *mut Error) -> Integer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
@@ -316,7 +309,6 @@ pub unsafe extern "C" fn nvim_win_get_width(mut win: Window, mut err: *mut Error
     }
     return (*w).w_width as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_width(
     mut win: Window,
     mut width: Integer,
@@ -339,7 +331,6 @@ pub unsafe extern "C" fn nvim_win_set_width(
     win_setwidth_win(width as ::core::ffi::c_int, w);
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_var(
     mut win: Window,
     mut name: String_0,
@@ -355,7 +346,6 @@ pub unsafe extern "C" fn nvim_win_get_var(
     }
     return dict_get_value((*w).w_vars, name, arena, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_var(
     mut win: Window,
     mut name: String_0,
@@ -376,7 +366,6 @@ pub unsafe extern "C" fn nvim_win_set_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_del_var(
     mut win: Window,
     mut name: String_0,
@@ -399,7 +388,6 @@ pub unsafe extern "C" fn nvim_win_del_var(
         err,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_position(
     mut win: Window,
     mut arena: *mut Arena,
@@ -428,7 +416,6 @@ pub unsafe extern "C" fn nvim_win_get_position(
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_tabpage(mut win: Window, mut err: *mut Error) -> Tabpage {
     let mut rv: Tabpage = 0 as Tabpage;
     let mut w: *mut win_T = find_window_by_handle(win, err);
@@ -437,7 +424,6 @@ pub unsafe extern "C" fn nvim_win_get_tabpage(mut win: Window, mut err: *mut Err
     }
     return rv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_get_number(mut win: Window, mut err: *mut Error) -> Integer {
     let mut rv: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut w: *mut win_T = find_window_by_handle(win, err);
@@ -448,7 +434,6 @@ pub unsafe extern "C" fn nvim_win_get_number(mut win: Window, mut err: *mut Erro
     win_get_tabwin((*w).handle, &raw mut tabnr, &raw mut rv);
     return rv as Integer;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_is_valid(mut win: Window) -> Boolean {
     let mut stub: Error = Error {
         type_0: kErrorTypeNone,
@@ -458,7 +443,6 @@ pub unsafe extern "C" fn nvim_win_is_valid(mut win: Window) -> Boolean {
     api_clear_error(&raw mut stub);
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() || !can_close_in_cmdwin(w, err) {
@@ -486,7 +470,6 @@ pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
     }
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() || !can_close_in_cmdwin(w, err) {
@@ -514,7 +497,6 @@ pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut
     );
     try_leave(&raw mut tstate, err);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_call(
     mut win: Window,
     mut fun: LuaRef,
@@ -579,7 +561,6 @@ pub unsafe extern "C" fn nvim_win_call(
     try_leave(&raw mut tstate, err);
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_set_hl_ns(
     mut win: Window,
     mut ns_id: Integer,
@@ -603,7 +584,6 @@ pub unsafe extern "C" fn nvim_win_set_hl_ns(
     (*w).w_hl_needs_update = true_0;
     redraw_later(w, UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn nvim_win_text_height(
     mut win: Window,
     mut opts: *mut KeyDict_win_text_height,

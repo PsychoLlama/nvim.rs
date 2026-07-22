@@ -605,7 +605,6 @@ pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn terminfo_is_term_family(
     mut term: *const ::core::ffi::c_char,
     mut family: *const ::core::ffi::c_char,
@@ -626,11 +625,9 @@ pub unsafe extern "C" fn terminfo_is_term_family(
             || '-' as ::core::ffi::c_int == *term.offset(flen as isize) as ::core::ffi::c_int
             || '.' as ::core::ffi::c_int == *term.offset(flen as isize) as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminfo_is_bsd_console(mut _term: *const ::core::ffi::c_char) -> bool {
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminfo_from_builtin(
     mut term: *const ::core::ffi::c_char,
     mut termname: *mut *mut ::core::ffi::c_char,
@@ -711,7 +708,6 @@ pub unsafe extern "C" fn terminfo_from_builtin(
         return ansi_terminfo.ptr() as *const _;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminfo_from_database(
     mut ti: *mut TerminfoEntry,
     mut termname: *mut ::core::ffi::c_char,
@@ -986,7 +982,6 @@ unsafe extern "C" fn fmt(mut val: bool) -> *const ::core::ffi::c_char {
         b"false\0".as_ptr() as *const ::core::ffi::c_char
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn terminfo_info_msg(
     mut ti: *const TerminfoEntry,
     mut termname: *const ::core::ffi::c_char,

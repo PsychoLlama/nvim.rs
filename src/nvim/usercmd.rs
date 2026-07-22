@@ -1099,7 +1099,6 @@ pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core:
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-#[no_mangle]
 pub static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
@@ -1245,7 +1244,6 @@ static addr_type_complete: GlobalCell<[C2Rust_Unnamed_20; 9]> = GlobalCell::new(
         shortname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn find_ucmd(
     mut eap: *mut exarg_T,
     mut p: *mut ::core::ffi::c_char,
@@ -1344,7 +1342,6 @@ pub unsafe extern "C" fn find_ucmd(
     }
     return p;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_user_cmd(
     mut xp: *mut expand_T,
     mut arg_in: *const ::core::ffi::c_char,
@@ -1404,7 +1401,6 @@ pub unsafe extern "C" fn set_context_in_user_cmd(
     }
     return skipwhite(p);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_context_in_user_cmdarg(
     mut cmd: *const ::core::ffi::c_char,
     mut arg: *const ::core::ffi::c_char,
@@ -1451,7 +1447,6 @@ pub unsafe extern "C" fn set_context_in_user_cmdarg(
     (*xp).xp_context = context;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn expand_user_command_name(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -1460,7 +1455,6 @@ pub unsafe extern "C" fn expand_user_command_name(
         idx - CMD_SIZE as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_commands(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1488,7 +1482,6 @@ pub unsafe extern "C" fn get_user_commands(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_command_name(
     mut idx: ::core::ffi::c_int,
     mut cmdidx: ::core::ffi::c_int,
@@ -1504,14 +1497,12 @@ pub unsafe extern "C" fn get_user_command_name(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_addr_type(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return (*addr_type_complete.ptr())[idx as usize].name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_flags(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1541,7 +1532,6 @@ pub unsafe extern "C" fn get_user_cmd_flags(
     }
     return (*user_cmd_flags.ptr())[idx as usize];
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_nargs(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1581,7 +1571,6 @@ unsafe extern "C" fn get_command_complete(mut arg: ::core::ffi::c_int) -> *mut :
     }
     return (*command_complete.ptr())[arg as usize] as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_complete(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -1603,7 +1592,6 @@ pub unsafe extern "C" fn get_user_cmd_complete(
     }
     return cmd_compl;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdcomplete_type_to_str(
     mut expand: ::core::ffi::c_int,
     mut compl_arg: *const ::core::ffi::c_char,
@@ -1630,7 +1618,6 @@ pub unsafe extern "C" fn cmdcomplete_type_to_str(
     }
     return xstrdup(cmd_compl);
 }
-#[no_mangle]
 pub unsafe extern "C" fn cmdcomplete_str_to_type(
     mut complete_str: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -1953,7 +1940,6 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_addr_type_arg(
     mut value: *mut ::core::ffi::c_char,
     mut vallen: ::core::ffi::c_int,
@@ -2000,7 +1986,6 @@ pub unsafe extern "C" fn parse_addr_type_arg(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn parse_compl_arg(
     mut value: *const ::core::ffi::c_char,
     mut vallen: ::core::ffi::c_int,
@@ -2349,7 +2334,6 @@ unsafe extern "C" fn uc_scan_attr(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_validate_name(
     mut name: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -2372,7 +2356,6 @@ pub unsafe extern "C" fn uc_validate_name(
     }
     return name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_add_command(
     mut name: *mut ::core::ffi::c_char,
     mut name_len: size_t,
@@ -2519,7 +2502,6 @@ pub unsafe extern "C" fn uc_add_command(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut name_len: size_t = 0;
@@ -2611,14 +2593,12 @@ pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
     }
     xfree(compl_arg as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_comclear(mut _eap: *mut exarg_T) {
     uc_clear(ucmds.ptr());
     if !(*curbuf.ptr()).is_null() {
         uc_clear(&raw mut (*curbuf.get()).b_ucmds);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_ucmd(mut cmd: *mut ucmd_T) {
     xfree((*cmd).uc_name as *mut ::core::ffi::c_void);
     xfree((*cmd).uc_rep as *mut ::core::ffi::c_void);
@@ -2636,7 +2616,6 @@ pub unsafe extern "C" fn free_ucmd(mut cmd: *mut ucmd_T) {
         (*cmd).uc_preview_luaref = LUA_NOREF as LuaRef;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_clear(mut gap: *mut garray_T) {
     let mut _gap: *mut garray_T = gap;
     if !(*_gap).ga_data.is_null() {
@@ -2649,7 +2628,6 @@ pub unsafe extern "C" fn uc_clear(mut gap: *mut garray_T) {
     }
     ga_clear(_gap);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_delcommand(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut cmd: *mut ucmd_T = ::core::ptr::null_mut::<ucmd_T>();
@@ -2709,7 +2687,6 @@ pub unsafe extern "C" fn ex_delcommand(mut eap: *mut exarg_T) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_split_args_iter(
     mut arg: *const ::core::ffi::c_char,
     mut arglen: size_t,
@@ -2761,7 +2738,6 @@ pub unsafe extern "C" fn uc_split_args_iter(
     *len = l;
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_nargs_upper_bound(
     mut arg: *const ::core::ffi::c_char,
     mut arglen: size_t,
@@ -2973,7 +2949,6 @@ unsafe extern "C" fn add_cmd_modifier(
     *multi_mods = true_0 != 0;
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn add_win_cmd_modifiers(
     mut buf: *mut ::core::ffi::c_char,
     mut cmod: *const cmdmod_T,
@@ -3047,7 +3022,6 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn uc_mods(
     mut buf: *mut ::core::ffi::c_char,
     mut cmod: *const cmdmod_T,
@@ -3472,7 +3446,6 @@ unsafe extern "C" fn uc_check_code(
     }
     return result;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::core::ffi::c_int {
     let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut split_len: size_t = 0 as size_t;
@@ -3621,7 +3594,6 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
     xfree(split_buf as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Arena) -> Dict {
     let mut gap: *mut garray_T = if buf.is_null() {
         ucmds.ptr()

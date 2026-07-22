@@ -211,7 +211,6 @@ pub const KV_INITIAL_VALUE: C2Rust_Unnamed_15 = C2Rust_Unnamed_15 {
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 static composed_uis: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub static layers: GlobalCell<C2Rust_Unnamed_15> = GlobalCell::new(KV_INITIAL_VALUE);
 static bufsize: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 static linebuf: GlobalCell<*mut schar_T> = GlobalCell::new(::core::ptr::null_mut::<schar_T>());
@@ -229,7 +228,6 @@ static dbghl_normal: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static dbghl_clear: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static dbghl_composed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static dbghl_recompose: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_init() {
     if (*layers.ptr()).size == (*layers.ptr()).capacity {
         (*layers.ptr()).capacity = if (*layers.ptr()).capacity != 0 {
@@ -249,7 +247,6 @@ pub unsafe extern "C" fn ui_comp_init() {
     *c2rust_lvalue_ptr = default_grid.ptr();
     curgrid.set(default_grid.ptr());
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_syn_init() {
     dbghl_normal.set(syn_check_group(
         b"RedrawDebugNormal\0".as_ptr() as *const ::core::ffi::c_char,
@@ -268,12 +265,10 @@ pub unsafe extern "C" fn ui_comp_syn_init() {
         ::core::mem::size_of::<[::core::ffi::c_char; 21]>().wrapping_sub(1 as size_t),
     ));
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_attach(mut ui: *mut RemoteUI) {
     (*composed_uis.ptr()) += 1;
     (*ui).composed = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
     (*composed_uis.ptr()) -= 1;
     if composed_uis.get() == 0 as ::core::ffi::c_int {
@@ -291,12 +286,10 @@ pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
     }
     (*ui).composed = false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_should_draw() -> bool {
     return composed_uis.get() != 0 as ::core::ffi::c_int
         && valid_screen.get() as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise: bool) {
     let mut size: size_t = (*layers.ptr()).size;
     let mut layer: *mut ScreenGrid = *(*layers.ptr()).items.offset(layer_idx as isize);
@@ -337,7 +330,6 @@ pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise:
     (*layer).comp_index = layer_idx;
     (*layer).pending_comp_index_update = true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_put_grid(
     mut grid: *mut ScreenGrid,
     mut row: ::core::ffi::c_int,
@@ -477,7 +469,6 @@ pub unsafe extern "C" fn ui_comp_put_grid(
     }
     return moved;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
     '_c2rust_label: {
         if grid != default_grid.ptr() {
@@ -510,7 +501,6 @@ pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
     (*grid).pending_comp_index_update = true_0 != 0;
     ui_comp_compose_grid(grid);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_set_grid(mut handle: handle_T) -> bool {
     if (*curgrid.get()).handle == handle {
         return true_0 != 0;
@@ -531,7 +521,6 @@ pub unsafe extern "C" fn ui_comp_set_grid(mut handle: handle_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_raise_grid(mut grid: *mut ScreenGrid, mut new_index: size_t) {
     let mut old_index: size_t = (*grid).comp_index;
     let mut i: size_t = old_index;
@@ -577,7 +566,6 @@ pub unsafe extern "C" fn ui_comp_raise_grid(mut grid: *mut ScreenGrid, mut new_i
         i_0 = i_0.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
     mut grid_handle: Integer,
     mut r: Integer,
@@ -604,7 +592,6 @@ pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
     }
     ui_composed_call_grid_cursor_goto(1 as Integer, cursor_row as Integer, cursor_col as Integer);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_mouse_focus(
     mut row: ::core::ffi::c_int,
     mut col: ::core::ffi::c_int,
@@ -643,7 +630,6 @@ pub unsafe extern "C" fn ui_comp_mouse_focus(
     }
     return ::core::ptr::null_mut::<ScreenGrid>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_get_grid_at_coord(
     mut row: ::core::ffi::c_int,
     mut col: ::core::ffi::c_int,
@@ -1050,7 +1036,6 @@ unsafe extern "C" fn compose_area(
         r += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_compose_grid(mut grid: *mut ScreenGrid) {
     if ui_comp_should_draw() {
         compose_area(
@@ -1061,7 +1046,6 @@ pub unsafe extern "C" fn ui_comp_compose_grid(mut grid: *mut ScreenGrid) {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_raw_line(
     mut grid: Integer,
     mut row: Integer,
@@ -1188,7 +1172,6 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_set_screen_valid(mut valid: bool) -> bool {
     let mut old_val: bool = valid_screen.get();
     valid_screen.set(valid);
@@ -1197,7 +1180,6 @@ pub unsafe extern "C" fn ui_comp_set_screen_valid(mut valid: bool) -> bool {
     }
     return old_val;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_msg_set_pos(
     mut _grid: Integer,
     mut row: Integer,
@@ -1318,7 +1300,6 @@ unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool 
         }) as size_t,
     ) > (*curgrid.get()).comp_index.wrapping_add(1 as size_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_grid_scroll(
     mut grid: Integer,
     mut top: Integer,
@@ -1378,7 +1359,6 @@ pub unsafe extern "C" fn ui_comp_grid_scroll(
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ui_comp_grid_resize(
     mut grid: Integer,
     mut width: Integer,

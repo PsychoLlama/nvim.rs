@@ -162,7 +162,6 @@ unsafe extern "C" fn count_n_matched_chars(
     }
     return matched_chars;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fastforward_buf_to_lnum(mut s: mmfile_t, mut lnum: linenr_T) -> mmfile_t {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while (i as linenr_T) < lnum - 1 as linenr_T {
@@ -360,7 +359,6 @@ unsafe extern "C" fn populate_tensor(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn linematch_nbuffers(
     mut diff_blk: *mut *const mmfile_t,
     mut diff_len: *const ::core::ffi::c_int,

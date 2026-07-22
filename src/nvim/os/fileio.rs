@@ -295,7 +295,6 @@ pub unsafe extern "C" fn file_open_fd(
     (*ret_fp).bytes_read = 0 as uint64_t;
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_open_stdin(mut fp: *mut FileDescriptor) -> ::core::ffi::c_int {
     let mut error: ::core::ffi::c_int = file_open_fd(
         fp,
@@ -315,7 +314,6 @@ pub unsafe extern "C" fn file_open_stdin(mut fp: *mut FileDescriptor) -> ::core:
     }
     return error;
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_open_buffer(
     mut ret_fp: *mut FileDescriptor,
     mut data: *mut ::core::ffi::c_char,
@@ -482,7 +480,6 @@ pub unsafe extern "C" fn file_read(
         as uint64_t;
     return size.wrapping_sub(read_remaining) as ptrdiff_t;
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_try_read_buffered(
     fp: *mut FileDescriptor,
     size: size_t,

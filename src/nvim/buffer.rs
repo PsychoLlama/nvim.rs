@@ -1699,7 +1699,6 @@ unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut wi
     (*win).w_locked = win_was_locked;
     window_layout_unlock();
 }
-#[no_mangle]
 pub unsafe extern "C" fn calc_percentage(
     mut part: int64_t,
     mut whole: int64_t,
@@ -1710,7 +1709,6 @@ pub unsafe extern "C" fn calc_percentage(
         (part * 100 as int64_t / whole) as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_highest_fnum() -> ::core::ffi::c_int {
     return top_file_num.get() - 1 as ::core::ffi::c_int;
 }
@@ -1772,7 +1770,6 @@ unsafe extern "C" fn read_buffer(
     }
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_ensure_loaded(mut buf: *mut buf_T) -> bool {
     if !(*buf).b_ml.ml_mfp.is_null() {
         return true_0 != 0;
@@ -1801,7 +1798,6 @@ pub unsafe extern "C" fn buf_ensure_loaded(mut buf: *mut buf_T) -> bool {
     aucmd_restbuf(&raw mut aco);
     return status != FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn open_buffer(
     mut read_stdin: bool,
     mut eap: *mut exarg_T,
@@ -2074,7 +2070,6 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
     }
     return can_unload;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_close_terminal(mut buf: *mut buf_T) {
     '_c2rust_label: {
         if !(*buf).terminal.is_null() {
@@ -2341,7 +2336,6 @@ pub unsafe extern "C" fn close_buffer(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_clear_file(mut buf: *mut buf_T) {
     (*buf).b_ml.ml_line_count = 1 as ::core::ffi::c_int as linenr_T;
     unchanged(buf, true_0 != 0, true_0 != 0);
@@ -2354,7 +2348,6 @@ pub unsafe extern "C" fn buf_clear_file(mut buf: *mut buf_T) {
     (*buf).b_ml.ml_mfp = ::core::ptr::null_mut::<memfile_T>();
     (*buf).b_ml.ml_flags = ML_EMPTY;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_clear() {
     let mut line_count: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
     extmark_free_all(curbuf.get());
@@ -2363,7 +2356,6 @@ pub unsafe extern "C" fn buf_clear() {
     }
     deleted_lines_mark(1 as linenr_T, line_count as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_freeall(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) {
     let mut is_curbuf: bool = buf == curbuf.get();
     let mut is_curwin: ::core::ffi::c_int =
@@ -2599,7 +2591,6 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
     let _ = *ptr_;
     buf_free_callbacks(buf);
 }
-#[no_mangle]
 pub unsafe extern "C" fn goto_buffer(
     mut eap: *mut exarg_T,
     mut start: ::core::ffi::c_int,
@@ -2660,7 +2651,6 @@ pub unsafe extern "C" fn goto_buffer(
         handle_swap_exists(&raw mut old_curbuf);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn handle_swap_exists(mut old_curbuf: *mut bufref_T) {
     let mut cs: cleanup_T = cleanup_T {
         pending: 0,
@@ -2710,7 +2700,6 @@ pub unsafe extern "C" fn handle_swap_exists(mut old_curbuf: *mut bufref_T) {
     }
     swap_exists_action.set(SEA_NONE);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_bufdel(
     mut command: ::core::ffi::c_int,
     mut arg: *mut ::core::ffi::c_char,
@@ -3369,7 +3358,6 @@ unsafe extern "C" fn do_buffer_ext(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_buffer(
     mut action: ::core::ffi::c_int,
     mut start: ::core::ffi::c_int,
@@ -3389,7 +3377,6 @@ pub unsafe extern "C" fn do_buffer(
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_curbuf(
     mut buf: *mut buf_T,
     mut action: ::core::ffi::c_int,
@@ -3584,7 +3571,6 @@ unsafe extern "C" fn enter_buffer(mut buf: *mut buf_T) {
     }
     redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autochdir() {
     if p_acd.get() != 0 {
         if starting.get() == 0 as ::core::ffi::c_int
@@ -3598,7 +3584,6 @@ pub unsafe extern "C" fn do_autochdir() {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn no_write_message_buf(mut buf: *mut buf_T) {
     if !(*buf).terminal.is_null()
         && channel_job_running((*buf).b_p_channel as uint64_t) as ::core::ffi::c_int != 0
@@ -3616,7 +3601,6 @@ pub unsafe extern "C" fn no_write_message_buf(mut buf: *mut buf_T) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn no_write_message() {
     if !(*curbuf.get()).terminal.is_null()
         && channel_job_running((*curbuf.get()).b_p_channel as uint64_t) as ::core::ffi::c_int != 0
@@ -3631,7 +3615,6 @@ pub unsafe extern "C" fn no_write_message() {
         ));
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn no_write_message_nobang(buf: *const buf_T) {
     if !(*buf).terminal.is_null()
         && channel_job_running((*buf).b_p_channel as uint64_t) as ::core::ffi::c_int != 0
@@ -3939,7 +3922,6 @@ pub unsafe extern "C" fn buflist_new(
     (*buf).b_prompt_append_new_line = true_0 != 0;
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn curbuf_reusable() -> bool {
     return !(*curbuf.ptr()).is_null()
         && (*curbuf.get()).b_ffname.is_null()
@@ -3950,7 +3932,6 @@ pub unsafe extern "C" fn curbuf_reusable() -> bool {
         && !bt_quickfix(curbuf.get())
         && !curbufIsChanged();
 }
-#[no_mangle]
 pub unsafe extern "C" fn free_buf_options(mut buf: *mut buf_T, mut free_p_ff: bool) {
     if free_p_ff {
         clear_string_option(&raw mut (*buf).b_p_fenc);
@@ -4042,7 +4023,6 @@ pub unsafe extern "C" fn free_buf_options(mut buf: *mut buf_T, mut free_p_ff: bo
     clear_string_option(&raw mut (*buf).b_p_bkc);
     clear_string_option(&raw mut (*buf).b_p_menc);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_getfile(
     mut n: ::core::ffi::c_int,
     mut lnum: linenr_T,
@@ -4164,7 +4144,6 @@ pub unsafe extern "C" fn buflist_findname_exp(mut fname: *mut ::core::ffi::c_cha
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_findname(mut ffname: *mut ::core::ffi::c_char) -> *mut buf_T {
     let mut file_id: FileID = FileID {
         inode: 0,
@@ -4341,7 +4320,6 @@ unsafe extern "C" fn buf_time_compare(
         1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn ExpandBufnames(
     mut pat: *mut ::core::ffi::c_char,
     mut num_file: *mut ::core::ffi::c_int,
@@ -4563,7 +4541,6 @@ pub unsafe extern "C" fn buflist_findnr(mut nr: ::core::ffi::c_int) -> *mut buf_
     }
     return map_get_int_ptr_t(buffer_handles.ptr(), nr) as *mut buf_T;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_nr2name(
     mut n: ::core::ffi::c_int,
     mut fullname: ::core::ffi::c_int,
@@ -4586,7 +4563,6 @@ pub unsafe extern "C" fn buflist_nr2name(
         },
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_setfpos(
     buf: *mut buf_T,
     win: *mut win_T,
@@ -4735,7 +4711,6 @@ unsafe extern "C" fn find_wininfo(
     }
     return ::core::ptr::null_mut::<WinInfo>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_winopts(mut buf: *mut buf_T) {
     clear_winopt(&raw mut (*curwin.get()).w_onebuf_opt);
     clearFolding(curwin.get());
@@ -4789,7 +4764,6 @@ pub unsafe extern "C" fn get_winopts(mut buf: *mut buf_T) {
     }
     didset_window_options(curwin.get(), false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T {
     static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
@@ -4812,11 +4786,9 @@ pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T 
         &raw mut (*wip).wi_mark
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_findlnum(mut buf: *mut buf_T) -> linenr_T {
     return (*buflist_findfmark(buf)).mark.lnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_list(mut eap: *mut exarg_T) {
     let mut buf: *mut buf_T = firstbuf.get();
     let mut buflist: garray_T = garray_T {
@@ -5017,7 +4989,6 @@ pub unsafe extern "C" fn buflist_list(mut eap: *mut exarg_T) {
         ga_clear(&raw mut buflist);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_name_nr(
     mut fnum: ::core::ffi::c_int,
     mut fname: *mut *mut ::core::ffi::c_char,
@@ -5123,7 +5094,6 @@ pub unsafe extern "C" fn setfname(
     buf_name_changed(buf);
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_set_name(
     mut fnum: ::core::ffi::c_int,
     mut name: *mut ::core::ffi::c_char,
@@ -5141,7 +5111,6 @@ pub unsafe extern "C" fn buf_set_name(
     fname_expand(buf, &raw mut (*buf).b_ffname, &raw mut (*buf).b_sfname);
     (*buf).b_fname = (*buf).b_sfname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_name_changed(mut buf: *mut buf_T) {
     if !(*buf).b_ml.ml_mfp.is_null() {
         ml_setname(buf);
@@ -5154,7 +5123,6 @@ pub unsafe extern "C" fn buf_name_changed(mut buf: *mut buf_T) {
     fmarks_check_names(buf);
     ml_timestamp(buf);
 }
-#[no_mangle]
 pub unsafe extern "C" fn setaltfname(
     mut ffname: *mut ::core::ffi::c_char,
     mut sfname: *mut ::core::ffi::c_char,
@@ -5169,7 +5137,6 @@ pub unsafe extern "C" fn setaltfname(
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn getaltfname(mut errmsg: bool) -> *mut ::core::ffi::c_char {
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut dummy: linenr_T = 0;
@@ -5181,7 +5148,6 @@ pub unsafe extern "C" fn getaltfname(mut errmsg: bool) -> *mut ::core::ffi::c_ch
     }
     return fname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_add(
     mut fname: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -5197,7 +5163,6 @@ pub unsafe extern "C" fn buflist_add(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buflist_altfpos(mut win: *mut win_T) {
     buflist_setfpos(
         curbuf.get(),
@@ -5207,7 +5172,6 @@ pub unsafe extern "C" fn buflist_altfpos(mut win: *mut win_T) {
         true_0 != 0,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn otherfile(mut ffname: *mut ::core::ffi::c_char) -> bool {
     return otherfile_buf(
         curbuf.get(),
@@ -5247,7 +5211,6 @@ unsafe extern "C" fn otherfile_buf(
     }
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_set_file_id(mut buf: *mut buf_T) {
     let mut file_id: FileID = FileID {
         inode: 0,
@@ -5266,7 +5229,6 @@ unsafe extern "C" fn buf_same_file_id(mut buf: *mut buf_T, mut file_id: *mut Fil
     return (*buf).file_id_valid as ::core::ffi::c_int != 0
         && os_fileid_equal(&raw mut (*buf).file_id, file_id) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fileinfo(
     mut fullname: ::core::ffi::c_int,
     mut shorthelp: ::core::ffi::c_int,
@@ -5427,7 +5389,6 @@ pub unsafe extern "C" fn fileinfo(
     }
     xfree(buffer as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn col_print(
     mut buf: *mut ::core::ffi::c_char,
     mut buflen: size_t,
@@ -5454,7 +5415,6 @@ static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static lasticon: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
 pub unsafe extern "C" fn maketitle() {
     let mut title_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut icon_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5590,12 +5550,10 @@ unsafe extern "C" fn value_change(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn resettitle() {
     ui_call_set_icon(cstr_as_string(lasticon.get()));
     ui_call_set_title(cstr_as_string(lasttitle.get()));
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_rel_pos(
     mut wp: *mut win_T,
     mut buf: *mut ::core::ffi::c_char,
@@ -5649,7 +5607,6 @@ pub unsafe extern "C" fn get_rel_pos(
         &raw mut tmp as *mut ::core::ffi::c_char,
     ) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn append_arg_number(
     mut wp: *mut win_T,
     mut buf: *mut ::core::ffi::c_char,
@@ -5671,7 +5628,6 @@ pub unsafe extern "C" fn append_arg_number(
         (*(*curwin.get()).w_alist).al_ga.ga_len,
     ) as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fname_expand(
     mut _buf: *mut buf_T,
     mut ffname: *mut *mut ::core::ffi::c_char,
@@ -5685,13 +5641,11 @@ pub unsafe extern "C" fn fname_expand(
     }
     *ffname = fix_fname(*ffname);
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_prompt(mut buf: *mut buf_T) -> bool {
     return !buf.is_null()
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'p' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_buffer_all(mut eap: *mut exarg_T) {
     let mut wpnext: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut split_ret: ::core::ffi::c_int = OK;
@@ -5885,7 +5839,6 @@ pub unsafe extern "C" fn ex_buffer_all(mut eap: *mut exarg_T) {
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_modelines(mut flags: ::core::ffi::c_int) {
     let mut lnum: linenr_T = 0;
     let mut nmlines: ::core::ffi::c_int = 0;
@@ -6133,13 +6086,11 @@ pub unsafe extern "C" fn bt_quickfix(buf: *const buf_T) -> bool {
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'q' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_terminal(buf: *const buf_T) -> bool {
     return !buf.is_null()
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 't' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_nofilename(buf: *const buf_T) -> bool {
     return !buf.is_null()
         && (*(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -6165,7 +6116,6 @@ unsafe extern "C" fn bt_nofileread(buf: *const buf_T) -> bool {
             || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == 'p' as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_nofile(buf: *const buf_T) -> bool {
     return !buf.is_null()
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -6173,7 +6123,6 @@ pub unsafe extern "C" fn bt_nofile(buf: *const buf_T) -> bool {
         && *(*buf).b_p_bt.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'f' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_dontwrite(buf: *const buf_T) -> bool {
     return !buf.is_null()
         && (*(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -6182,7 +6131,6 @@ pub unsafe extern "C" fn bt_dontwrite(buf: *const buf_T) -> bool {
             || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == 'p' as ::core::ffi::c_int);
 }
-#[no_mangle]
 pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
     if bt_dontwrite(buf) {
         emsg(gettext(
@@ -6192,7 +6140,6 @@ pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_hide(buf: *const buf_T) -> bool {
     match *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
         117 | 119 | 100 => return false_0 != 0,
@@ -6201,7 +6148,6 @@ pub unsafe extern "C" fn buf_hide(buf: *const buf_T) -> bool {
     }
     return p_hid.get() != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_spname(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
     if bt_quickfix(buf) {
         if (*buf).handle == qf_stack_get_bufnr() {
@@ -6226,14 +6172,12 @@ pub unsafe extern "C" fn buf_spname(mut buf: *mut buf_T) -> *mut ::core::ffi::c_
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_get_fname(mut buf: *const buf_T) -> *mut ::core::ffi::c_char {
     if (*buf).b_fname.is_null() {
         return gettext(b"[No Name]\0".as_ptr() as *const ::core::ffi::c_char);
     }
     return (*buf).b_fname;
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_buflisted(mut on: ::core::ffi::c_int) {
     if on == (*curbuf.get()).b_p_bl {
         return;
@@ -6257,7 +6201,6 @@ pub unsafe extern "C" fn set_buflisted(mut on: ::core::ffi::c_int) {
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_contents_changed(mut buf: *mut buf_T) -> bool {
     let mut differ: bool = true_0 != 0;
     let mut newbuf: *mut buf_T = buflist_new(
@@ -6372,7 +6315,6 @@ pub unsafe extern "C" fn wipe_buffer(mut buf: *mut buf_T, mut aucmd: bool) {
         unblock_autocmds();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_open_scratch(
     mut bufnr: handle_T,
     mut bufname: *mut ::core::ffi::c_char,
@@ -6453,16 +6395,13 @@ pub unsafe extern "C" fn buf_open_scratch(
     (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_is_empty(mut buf: *mut buf_T) -> bool {
     return (*buf).b_ml.ml_line_count == 1 as linenr_T
         && *ml_get_buf(buf, 1 as linenr_T) as ::core::ffi::c_int == NUL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_inc_changedtick(buf: *mut buf_T) {
     buf_set_changedtick(buf, buf_get_changedtick(buf) + 1 as varnumber_T);
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
     let mut old_val: typval_T = (*buf).changedtick_di.di_tv;
     let changedtick_di: *mut dictitem_T = tv_dict_find(
@@ -6552,7 +6491,6 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
         (*buf).b_locked -= 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn read_buffer_into(
     mut buf: *mut buf_T,
     mut start: linenr_T,

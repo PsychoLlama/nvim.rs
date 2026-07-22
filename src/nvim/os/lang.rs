@@ -754,7 +754,6 @@ unsafe extern "C" fn is_valid_mess_lang(mut lang: *const ::core::ffi::c_char) ->
                 && *lang.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
                     <= 'z' as ::core::ffi::c_uint);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_mess_lang() -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     p = get_locale_val(LC_MESSAGES);
@@ -767,7 +766,6 @@ pub unsafe extern "C" fn get_mess_lang() -> *mut ::core::ffi::c_char {
 unsafe extern "C" fn get_mess_env() -> *mut ::core::ffi::c_char {
     return get_locale_val(LC_MESSAGES);
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_lang_var() {
     let mut loc: *const ::core::ffi::c_char = get_locale_val(LC_CTYPE);
     set_vim_var_string(VV_CTYPE, loc, -1 as ptrdiff_t);
@@ -778,7 +776,6 @@ pub unsafe extern "C" fn set_lang_var() {
     loc = get_locale_val(LC_COLLATE);
     set_vim_var_string(VV_COLLATE, loc, -1 as ptrdiff_t);
 }
-#[no_mangle]
 pub unsafe extern "C" fn init_locale() {
     setlocale(LC_ALL, b"\0".as_ptr() as *const ::core::ffi::c_char);
     setlocale(LC_NUMERIC, b"C\0".as_ptr() as *const ::core::ffi::c_char);
@@ -4909,7 +4906,6 @@ pub unsafe extern "C" fn init_locale() {
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
     let mut loc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut what: ::core::ffi::c_int = LC_ALL;
@@ -5081,7 +5077,6 @@ unsafe extern "C" fn init_locales() {
     did_init_locales.set(true_0 != 0);
     locales.set(find_locales());
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_lang_arg(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -5104,7 +5099,6 @@ pub unsafe extern "C" fn get_lang_arg(
     }
     return *(*locales.ptr()).offset((idx - 4 as ::core::ffi::c_int) as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_locales(
     mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
@@ -5115,7 +5109,6 @@ pub unsafe extern "C" fn get_locales(
     }
     return *(*locales.ptr()).offset(idx as isize);
 }
-#[no_mangle]
 pub unsafe extern "C" fn lang_init() {}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

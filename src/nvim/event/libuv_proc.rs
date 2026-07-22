@@ -132,7 +132,6 @@ unsafe extern "C" fn libuv_proc_stdio(
     *to_close.offset(idx as isize) = child_fd;
     uv_pipe_open(parent_pipe, parent_fd as uv_file);
 }
-#[no_mangle]
 pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core::ffi::c_int {
     let mut proc: *mut Proc = uvproc as *mut Proc;
     (*uvproc).uvopts.file = proc_get_exepath(proc);
@@ -243,7 +242,6 @@ pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core:
     }
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn libuv_proc_close(mut uvproc: *mut LibuvProc) {
     uv_close(
         &raw mut (*uvproc).uv as *mut uv_handle_t,
@@ -275,7 +273,6 @@ unsafe extern "C" fn exit_cb(
     };
     (*proc).internal_exit_cb.expect("non-null function pointer")(proc);
 }
-#[no_mangle]
 pub unsafe extern "C" fn libuv_proc_init(
     mut loop_0: *mut Loop,
     mut data: *mut ::core::ffi::c_void,

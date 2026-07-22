@@ -978,7 +978,6 @@ static e_path_too_long_for_completion: GlobalCell<[::core::ffi::c_char; 35]> =
             *b"E854: Path too long for completion\0",
         )
     });
-#[no_mangle]
 pub unsafe extern "C" fn vim_findfile_init(
     mut path: *mut ::core::ffi::c_char,
     mut filename: *mut ::core::ffi::c_char,
@@ -1454,7 +1453,6 @@ pub unsafe extern "C" fn vim_findfile_init(
     vim_findfile_cleanup(search_ctx as *mut ::core::ffi::c_void);
     return NULL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_findfile_stopdir(
     mut buf: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -1524,7 +1522,6 @@ pub unsafe extern "C" fn vim_findfile_stopdir(
     }
     return buf;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_findfile_cleanup(mut ctx: *mut ::core::ffi::c_void) {
     if ctx.is_null() {
         return;
@@ -1533,7 +1530,6 @@ pub unsafe extern "C" fn vim_findfile_cleanup(mut ctx: *mut ::core::ffi::c_void)
     ff_clear(ctx as *mut ff_search_ctx_T);
     xfree(ctx);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_findfile(
     mut search_ctx_arg: *mut ::core::ffi::c_void,
 ) -> *mut ::core::ffi::c_char {
@@ -2402,7 +2398,6 @@ unsafe extern "C" fn ff_path_in_stoplist(
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_file_in_path(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -2429,7 +2424,6 @@ pub unsafe extern "C" fn find_file_in_path(
         search_ctx,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_directory_in_path(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -2451,7 +2445,6 @@ pub unsafe extern "C" fn find_directory_in_path(
         search_ctx,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_file_in_path_option(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -2730,7 +2723,6 @@ pub unsafe extern "C" fn find_file_in_path_option(
     }
     return file_name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn grab_file_name(
     mut count: ::core::ffi::c_int,
     mut file_lnum: *mut linenr_T,
@@ -2773,7 +2765,6 @@ pub unsafe extern "C" fn grab_file_name(
     }
     return file_name_at_cursor(options | FNAME_HYP as ::core::ffi::c_int, count, file_lnum);
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_name_at_cursor(
     mut options: ::core::ffi::c_int,
     mut count: ::core::ffi::c_int,
@@ -2788,7 +2779,6 @@ pub unsafe extern "C" fn file_name_at_cursor(
         file_lnum,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn file_name_in_line(
     mut line: *mut ::core::ffi::c_char,
     mut col: ::core::ffi::c_int,
@@ -2946,7 +2936,6 @@ unsafe extern "C" fn eval_includeexpr(
     current_sctx.set(save_sctx);
     return res;
 }
-#[no_mangle]
 pub unsafe extern "C" fn find_file_name_in_path(
     mut ptr: *mut ::core::ffi::c_char,
     mut len: size_t,
@@ -3056,7 +3045,6 @@ pub unsafe extern "C" fn find_file_name_in_path(
     xfree(tofree as *mut ::core::ffi::c_void);
     return file_name;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_autocmd_dirchanged(
     mut new_dir: *mut ::core::ffi::c_char,
     mut scope: CdScope,
@@ -3169,7 +3157,6 @@ pub unsafe extern "C" fn do_autocmd_dirchanged(
     restore_v_event(dict, &raw mut save_v_event);
     recursive.set(false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_chdirfile(
     mut fname: *mut ::core::ffi::c_char,
     mut cause: CdCause,
@@ -3217,7 +3204,6 @@ pub unsafe extern "C" fn vim_chdirfile(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn vim_chdir(mut new_dir: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut file_to_find: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut search_ctx: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();

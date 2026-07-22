@@ -21,7 +21,6 @@ pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[no_mangle]
 pub unsafe extern "C" fn api_err_invalid(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
@@ -86,7 +85,6 @@ pub unsafe extern "C" fn api_err_invalid(
         );
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_err_exp(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
@@ -122,7 +120,6 @@ pub unsafe extern "C" fn api_err_exp(
         actual,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_err_required(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
@@ -140,7 +137,6 @@ pub unsafe extern "C" fn api_err_required(
         name,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn api_err_conflict(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
@@ -160,7 +156,6 @@ pub unsafe extern "C" fn api_err_conflict(
         name2,
     );
 }
-#[no_mangle]
 pub unsafe extern "C" fn check_string_array(
     mut arr: Array,
     mut name: *mut ::core::ffi::c_char,

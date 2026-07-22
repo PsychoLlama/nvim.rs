@@ -1087,7 +1087,6 @@ static opchars: GlobalCell<[[::core::ffi::c_char; 3]; 30]> = GlobalCell::new([
         OPF_CHANGE as ::core::ffi::c_char,
     ],
 ]);
-#[no_mangle]
 pub unsafe extern "C" fn get_op_type(
     mut char1: ::core::ffi::c_int,
     mut char2: ::core::ffi::c_int,
@@ -1131,27 +1130,22 @@ pub unsafe extern "C" fn get_op_type(
     }
     return i;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_on_lines(mut op: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*opchars.ptr())[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         & OPF_LINES;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_is_change(mut op: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*opchars.ptr())[op as usize][2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         & OPF_CHANGE;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_op_char(mut optype: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*opchars.ptr())[optype as usize][0 as ::core::ffi::c_int as usize]
         as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn get_extra_op_char(mut optype: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*opchars.ptr())[optype as usize][1 as ::core::ffi::c_int as usize]
         as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_shift(
     mut oap: *mut oparg_T,
     mut curs_top: bool,
@@ -1357,7 +1351,6 @@ unsafe extern "C" fn get_new_vts_indent(
     }
     return indent;
 }
-#[no_mangle]
 pub unsafe extern "C" fn shift_line(
     mut left: bool,
     mut round: bool,
@@ -1855,7 +1848,6 @@ unsafe extern "C" fn block_insert(
         );
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int {
     let mut lnum: linenr_T = 0;
     let mut bd: block_def = block_def {
@@ -2545,7 +2537,6 @@ unsafe extern "C" fn op_replace(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
     let mut bd: block_def = block_def {
         startspaces: 0,
@@ -2679,7 +2670,6 @@ unsafe extern "C" fn swapchars(
     }
     return did_change;
 }
-#[no_mangle]
 pub unsafe extern "C" fn swapchar(mut op_type: ::core::ffi::c_int, mut pos: *mut pos_T) -> bool {
     let c: ::core::ffi::c_int = gchar_pos(pos);
     if c >= 0x80 as ::core::ffi::c_int && op_type == OP_ROT13 as ::core::ffi::c_int {
@@ -2721,7 +2711,6 @@ pub unsafe extern "C" fn swapchar(mut op_type: ::core::ffi::c_int, mut pos: *mut
     }
     return false_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ffi::c_int) {
     let mut pre_textlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut ind_pre_col: colnr_T = 0 as colnr_T;
@@ -2938,7 +2927,6 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_change(mut oap: *mut oparg_T) -> ::core::ffi::c_int {
     let mut pre_textlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut pre_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3087,7 +3075,6 @@ pub unsafe extern "C" fn op_change(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
     auto_format(false_0 != 0, true_0 != 0);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn adjust_cursor_eol() {
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(curwin.get());
     let adj_cursor: bool = (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
@@ -3115,7 +3102,6 @@ pub unsafe extern "C" fn adjust_cursor_eol() {
             + 1 as ::core::ffi::c_int) as colnr_T;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn skip_comment(
     mut line: *mut ::core::ffi::c_char,
     mut process: bool,
@@ -3163,7 +3149,6 @@ pub unsafe extern "C" fn skip_comment(
     }
     return line;
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_join(
     mut count: size_t,
     mut insert_space: bool,
@@ -3391,7 +3376,6 @@ pub unsafe extern "C" fn do_join(
     }
     return ret;
 }
-#[no_mangle]
 pub unsafe extern "C" fn reset_lbr() -> bool {
     if (*curwin.get()).w_onebuf_opt.wo_lbr == 0 {
         return false_0 != 0;
@@ -3400,7 +3384,6 @@ pub unsafe extern "C" fn reset_lbr() -> bool {
     (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
     return true_0 != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn restore_lbr(mut lbr_saved: bool) {
     if (*curwin.get()).w_onebuf_opt.wo_lbr != 0 || !lbr_saved {
         return;
@@ -3408,7 +3391,6 @@ pub unsafe extern "C" fn restore_lbr(mut lbr_saved: bool) {
     (*curwin.get()).w_onebuf_opt.wo_lbr = true_0;
     (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
 }
-#[no_mangle]
 pub unsafe extern "C" fn block_prep(
     mut oap: *mut oparg_T,
     mut bdp: *mut block_def,
@@ -3558,7 +3540,6 @@ pub unsafe extern "C" fn block_prep(
     (*bdp).textstart = pstart;
     restore_lbr(lbr_saved);
 }
-#[no_mangle]
 pub unsafe extern "C" fn charwise_block_prep(
     mut start: pos_T,
     mut end: pos_T,
@@ -3644,7 +3625,6 @@ pub unsafe extern "C" fn charwise_block_prep(
         p
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn op_addsub(mut oap: *mut oparg_T, mut Prenum1: linenr_T, mut g_cmd: bool) {
     let mut bd: block_def = block_def {
         startspaces: 0,
@@ -3780,7 +3760,6 @@ pub unsafe extern "C" fn op_addsub(mut oap: *mut oparg_T, mut Prenum1: linenr_T,
         }
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_addsub(
     mut op_type: ::core::ffi::c_int,
     mut pos: *mut pos_T,
@@ -4370,7 +4349,6 @@ pub unsafe extern "C" fn do_addsub(
     }
     return did_change;
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_oparg(mut oap: *mut oparg_T) {
     memset(
         oap as *mut ::core::ffi::c_void,
@@ -4413,7 +4391,6 @@ unsafe extern "C" fn line_count_info(
     *cc += chars;
     return i;
 }
-#[no_mangle]
 pub unsafe extern "C" fn cursor_pos_info(mut dict: *mut dict_T) {
     let mut buf1: [::core::ffi::c_char; 50] = [0; 50];
     let mut buf2: [::core::ffi::c_char; 40] = [0; 40];
@@ -4890,7 +4867,6 @@ static opfunc_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     },
     type_0: kCallbackNone,
 });
-#[no_mangle]
 pub unsafe extern "C" fn did_set_operatorfunc(
     mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
@@ -4899,7 +4875,6 @@ pub unsafe extern "C" fn did_set_operatorfunc(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn set_ref_in_opfunc(mut copyID: ::core::ffi::c_int) -> bool {
     return set_ref_in_callback(
         opfunc_cb.ptr(),
@@ -5043,7 +5018,6 @@ unsafe extern "C" fn is_ex_cmdchar(mut cap: *mut cmdarg_T) -> bool {
             == -(253 as ::core::ffi::c_int
                 + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 }
-#[no_mangle]
 pub unsafe extern "C" fn do_pending_operator(
     mut cap: *mut cmdarg_T,
     mut old_col: ::core::ffi::c_int,

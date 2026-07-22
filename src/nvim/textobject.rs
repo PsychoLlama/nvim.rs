@@ -159,7 +159,6 @@ unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
 }
 pub const CPO_ENDOFSENT: ::core::ffi::c_int = 'J' as ::core::ffi::c_int;
 pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
-#[no_mangle]
 pub unsafe extern "C" fn findsent(
     mut dir: Direction,
     mut count: ::core::ffi::c_int,
@@ -333,7 +332,6 @@ pub unsafe extern "C" fn findsent(
     (*curwin.get()).w_cursor = pos;
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn findpar(
     mut pincl: *mut bool,
     mut dir: ::core::ffi::c_int,
@@ -451,7 +449,6 @@ unsafe extern "C" fn inmacro(
     }
     return *macro_0.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn startPS(
     mut lnum: linenr_T,
     mut para: ::core::ffi::c_int,
@@ -489,7 +486,6 @@ unsafe extern "C" fn cls() -> ::core::ffi::c_int {
     }
     return c;
 }
-#[no_mangle]
 pub unsafe extern "C" fn fwd_word(
     mut count: ::core::ffi::c_int,
     mut bigword: bool,
@@ -554,7 +550,6 @@ pub unsafe extern "C" fn fwd_word(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bck_word(
     mut count: ::core::ffi::c_int,
     mut bigword: bool,
@@ -603,7 +598,6 @@ pub unsafe extern "C" fn bck_word(
     adjust_skipcol();
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn end_word(
     mut count: ::core::ffi::c_int,
     mut bigword: bool,
@@ -664,7 +658,6 @@ pub unsafe extern "C" fn end_word(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn bckend_word(
     mut count: ::core::ffi::c_int,
     mut bigword: bool,
@@ -767,7 +760,6 @@ unsafe extern "C" fn findsent_forward(mut count: ::core::ffi::c_int, mut at_star
         at_start_sent = !at_start_sent;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_word(
     mut oap: *mut oparg_T,
     mut count: ::core::ffi::c_int,
@@ -896,7 +888,6 @@ pub unsafe extern "C" fn current_word(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_sent(
     mut oap: *mut oparg_T,
     mut count: ::core::ffi::c_int,
@@ -1045,7 +1036,6 @@ pub unsafe extern "C" fn current_sent(
     }
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_block(
     mut oap: *mut oparg_T,
     mut count: ::core::ffi::c_int,
@@ -1246,7 +1236,6 @@ unsafe extern "C" fn in_html_tag(mut end_tag: bool) -> bool {
     }
     return lc != '/' as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_tagblock(
     mut oap: *mut oparg_T,
     mut count_arg: ::core::ffi::c_int,
@@ -1463,7 +1452,6 @@ pub unsafe extern "C" fn current_tagblock(
     p_ws.set(save_p_ws as ::core::ffi::c_int);
     return retval;
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_par(
     mut oap: *mut oparg_T,
     mut count: ::core::ffi::c_int,
@@ -1703,7 +1691,6 @@ unsafe extern "C" fn find_prev_quote(
     }
     return col_start;
 }
-#[no_mangle]
 pub unsafe extern "C" fn current_quote(
     mut oap: *mut oparg_T,
     mut count: ::core::ffi::c_int,

@@ -248,14 +248,10 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
     return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
 }
-#[no_mangle]
 pub static decor_freelist: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
-#[no_mangle]
 pub static to_free_virt: GlobalCell<*mut DecorVirtText> =
     GlobalCell::new(::core::ptr::null_mut::<DecorVirtText>());
-#[no_mangle]
 pub static to_free_sh: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
-#[no_mangle]
 pub unsafe extern "C" fn bufhl_add_hl_pos_offset(
     mut buf: *mut buf_T,
     mut src_id: ::core::ffi::c_int,
@@ -317,7 +313,6 @@ pub unsafe extern "C" fn bufhl_add_hl_pos_offset(
         lnum += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw(
     mut buf: *mut buf_T,
     mut row1: ::core::ffi::c_int,
@@ -363,7 +358,6 @@ pub unsafe extern "C" fn decor_redraw(
         decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl));
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_sh(
     mut buf: *mut buf_T,
     mut row1: ::core::ffi::c_int,
@@ -404,7 +398,6 @@ pub unsafe extern "C" fn decor_redraw_sh(
         redraw_buf_line_later(buf, row1 as linenr_T + 1 as linenr_T, false_0 != 0);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t {
     if decor_freelist.get() != UINT32_MAX as uint32_t {
         let mut pos: uint32_t = decor_freelist.get();
@@ -437,7 +430,6 @@ pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t 
         return pos_0;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_put_vt(
     mut vt: DecorVirtText,
     mut next: *mut DecorVirtText,
@@ -448,7 +440,6 @@ pub unsafe extern "C" fn decor_put_vt(
     (*decor_alloc).next = next;
     return decor_alloc;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_sh_from_inline(
     mut item: DecorHighlightInline,
 ) -> DecorSignHighlight {
@@ -479,7 +470,6 @@ pub unsafe extern "C" fn decor_sh_from_inline(
     };
     return conv;
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_put_decor(
     mut buf: *mut buf_T,
     mut decor: DecorInline,
@@ -523,7 +513,6 @@ unsafe extern "C" fn may_force_numberwidth_recompute(mut buf: *mut buf_T, mut un
     }
 }
 static sign_add_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
 pub unsafe extern "C" fn buf_put_decor_sh(
     mut buf: *mut buf_T,
     mut sh: *mut DecorSignHighlight,
@@ -540,7 +529,6 @@ pub unsafe extern "C" fn buf_put_decor_sh(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_decor_remove(
     mut buf: *mut buf_T,
     mut row1: ::core::ffi::c_int,
@@ -567,7 +555,6 @@ pub unsafe extern "C" fn buf_decor_remove(
         decor_free(decor);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn buf_remove_decor_sh(
     mut buf: *mut buf_T,
     mut row1: ::core::ffi::c_int,
@@ -586,7 +573,6 @@ pub unsafe extern "C" fn buf_remove_decor_sh(
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
     if !decor.ext {
         return;
@@ -655,13 +641,11 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
         }
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_state_invalidate(mut buf: *mut buf_T) {
     if !(*decor_state.ptr()).win.is_null() && (*(*decor_state.ptr()).win).w_buffer == buf {
         (*decor_state.ptr()).itr_valid = false_0 != 0;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_check_to_be_deleted() {
     '_c2rust_label: {
         if !(*decor_state.ptr()).running_decor_provider {
@@ -679,7 +663,6 @@ pub unsafe extern "C" fn decor_check_to_be_deleted() {
     to_free_sh.set(DECOR_ID_INVALID as uint32_t);
     (*decor_state.ptr()).win = ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_state_free(mut state: *mut DecorState) {
     xfree((*state).slots.items as *mut ::core::ffi::c_void);
     (*state).slots.capacity = 0 as size_t;
@@ -690,7 +673,6 @@ pub unsafe extern "C" fn decor_state_free(mut state: *mut DecorState) {
     (*state).ranges_i.size = (*state).ranges_i.capacity;
     (*state).ranges_i.items = ::core::ptr::null_mut::<::core::ffi::c_int>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_virttext(mut text: *mut VirtText) {
     let mut i: size_t = 0 as size_t;
     while i < (*text).size {
@@ -707,7 +689,6 @@ pub unsafe extern "C" fn clear_virttext(mut text: *mut VirtText) {
         items: ::core::ptr::null_mut::<VirtTextChunk>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn clear_virtlines(mut lines: *mut VirtLines) {
     let mut i: size_t = 0 as size_t;
     while i < (*lines).size {
@@ -724,7 +705,6 @@ pub unsafe extern "C" fn clear_virtlines(mut lines: *mut VirtLines) {
         items: ::core::ptr::null_mut::<virt_line>(),
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_check_invalid_glyphs() {
     let mut i: size_t = 0 as size_t;
     while i < (*decor_items.ptr()).size {
@@ -748,7 +728,6 @@ pub unsafe extern "C" fn decor_check_invalid_glyphs() {
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn next_virt_text_chunk(
     mut vt: VirtText,
     mut pos: *mut size_t,
@@ -772,7 +751,6 @@ pub unsafe extern "C" fn next_virt_text_chunk(
     }
     return text;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_find_virttext(
     mut buf: *mut buf_T,
     mut row: ::core::ffi::c_int,
@@ -821,7 +799,6 @@ pub unsafe extern "C" fn decor_find_virttext(
     }
     return ::core::ptr::null_mut::<DecorVirtText>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_reset(
     mut wp: *mut win_T,
     mut state: *mut DecorState,
@@ -859,12 +836,10 @@ pub unsafe extern "C" fn decor_redraw_reset(
     (*state).new_range_ordering = 0 as ::core::ffi::c_int;
     return (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys != 0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_virt_pos(mut decor: *const DecorRange) -> bool {
     return (*decor).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int
         || (*decor).kind as ::core::ffi::c_int == kDecorKindUIWatched as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_virt_pos_kind(mut decor: *const DecorRange) -> VirtTextPos {
     if (*decor).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int {
         return (*(*decor).data.vt).pos;
@@ -874,7 +849,6 @@ pub unsafe extern "C" fn decor_virt_pos_kind(mut decor: *const DecorRange) -> Vi
     }
     return kVPosEndOfLine;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_start(
     mut wp: *mut win_T,
     mut top_row: ::core::ffi::c_int,
@@ -953,7 +927,6 @@ unsafe extern "C" fn decor_state_pack(mut state: *mut DecorState) {
     (*state).ranges_i.size = count as size_t;
     (*state).future_begin = fut_beg;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
@@ -975,7 +948,6 @@ pub unsafe extern "C" fn decor_redraw_line(
     (*state).col_last = -1 as ::core::ffi::c_int;
     (*state).eol_col = -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_has_more_decorations(
     mut state: *mut DecorState,
     mut row: ::core::ffi::c_int,
@@ -1109,7 +1081,6 @@ unsafe extern "C" fn decor_range_insert(mut state: *mut DecorState, mut range: *
     );
     *item = index;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_range_add_virt(
     mut state: *mut DecorState,
     mut start_row: ::core::ffi::c_int,
@@ -1140,7 +1111,6 @@ pub unsafe extern "C" fn decor_range_add_virt(
     };
     decor_range_insert(state, &raw mut range);
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_range_add_sh(
     mut state: *mut DecorState,
     mut start_row: ::core::ffi::c_int,
@@ -1198,7 +1168,6 @@ pub unsafe extern "C" fn decor_range_add_sh(
         decor_range_insert(state, &raw mut range);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_init_draw_col(
     mut win_col: ::core::ffi::c_int,
     mut hidden: bool,
@@ -1230,7 +1199,6 @@ pub unsafe extern "C" fn decor_init_draw_col(
         (*item).draw_col = -1 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_recheck_draw_col(
     mut win_col: ::core::ffi::c_int,
     mut hidden: bool,
@@ -1249,7 +1217,6 @@ pub unsafe extern "C" fn decor_recheck_draw_col(
         i += 1;
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_col_impl(
     mut wp: *mut win_T,
     mut col: ::core::ffi::c_int,
@@ -1456,7 +1423,6 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
     return attr;
 }
 static conceal_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, 0, 0, 0, kMTFilterSelect]);
-#[no_mangle]
 pub unsafe extern "C" fn decor_conceal_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
@@ -1544,11 +1510,9 @@ pub unsafe extern "C" fn decor_conceal_line(
     }
     return decor_providers_invoke_conceal_line(wp, row);
 }
-#[no_mangle]
 pub unsafe extern "C" fn win_lines_concealed(mut wp: *mut win_T) -> bool {
     return hasAnyFolding(wp) != 0 || (*wp).w_onebuf_opt.wo_cole >= 2 as OptInt;
 }
-#[no_mangle]
 pub unsafe extern "C" fn sign_item_cmp(
     mut p1: *const ::core::ffi::c_void,
     mut p2: *const ::core::ffi::c_void,
@@ -1582,7 +1546,6 @@ pub unsafe extern "C" fn sign_item_cmp(
 }
 static sign_filter: GlobalCell<[uint32_t; 5]> =
     GlobalCell::new([0, 0, kMTFilterSelect, kMTFilterSelect, 0]);
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_signs(
     mut wp: *mut win_T,
     mut buf: *mut buf_T,
@@ -1765,7 +1728,6 @@ pub unsafe extern "C" fn decor_redraw_signs(
         signs.items = ::core::ptr::null_mut::<SignItem>();
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSignHighlight {
     if !decor.ext {
         return ::core::ptr::null_mut::<DecorSignHighlight>();
@@ -1783,7 +1745,6 @@ pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSi
     }
 }
 static signtext_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, 0, 0, kMTFilterSelect, 0]);
-#[no_mangle]
 pub unsafe extern "C" fn buf_signcols_count_range(
     mut buf: *mut buf_T,
     mut row1: ::core::ffi::c_int,
@@ -1941,11 +1902,9 @@ pub unsafe extern "C" fn buf_signcols_count_range(
     }
     xfree(count as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_end(mut state: *mut DecorState) {
     (*state).win = ::core::ptr::null_mut::<win_T>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_redraw_eol(
     mut wp: *mut win_T,
     mut state: *mut DecorState,
@@ -1983,7 +1942,6 @@ pub unsafe extern "C" fn decor_redraw_eol(
     return has_virt_pos;
 }
 static lines_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, kMTFilterSelect, 0, 0, 0]);
-#[no_mangle]
 pub unsafe extern "C" fn decor_virt_lines(
     mut wp: *mut win_T,
     mut start_row: ::core::ffi::c_int,
@@ -2139,7 +2097,6 @@ pub unsafe extern "C" fn decor_virt_lines(
     }
     return virt_lines;
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_to_dict_legacy(
     mut dict: *mut Dict,
     mut decor: DecorInline,
@@ -2532,7 +2489,6 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         };
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
     if decor.ext {
         let mut type_flags: uint16_t = kExtmarkNone as ::core::ffi::c_int as uint16_t;
@@ -2567,7 +2523,6 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
         }) as uint16_t;
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn hl_group_name(mut hl_id: ::core::ffi::c_int, mut hl_name: bool) -> Object {
     if hl_name {
         return object {

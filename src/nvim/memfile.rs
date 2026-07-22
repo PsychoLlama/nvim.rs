@@ -233,7 +233,6 @@ pub const MEMFILE_PAGE_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 static e_block_was_not_locked: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E293: Block was not locked\0")
 });
-#[no_mangle]
 pub unsafe extern "C" fn mf_open(
     mut fname: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -334,7 +333,6 @@ pub unsafe extern "C" fn mf_open(
     (*mfp).mf_infile_count = (*mfp).mf_blocknr_max;
     return mfp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_open_file(
     mut mfp: *mut memfile_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -345,7 +343,6 @@ pub unsafe extern "C" fn mf_open_file(
     }
     return FAIL;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_close(mut mfp: *mut memfile_T, mut del_file: bool) {
     if mfp.is_null() {
         return;
@@ -388,7 +385,6 @@ pub unsafe extern "C" fn mf_close(mut mfp: *mut memfile_T, mut del_file: bool) {
     mf_free_fnames(mfp);
     xfree(mfp as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_close_file(mut buf: *mut buf_T, mut getlines: bool) {
     let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
     if mfp.is_null() || (*mfp).mf_fd < 0 as ::core::ffi::c_int {
@@ -412,14 +408,12 @@ pub unsafe extern "C" fn mf_close_file(mut buf: *mut buf_T, mut getlines: bool) 
         mf_free_fnames(mfp);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_new_page_size(
     mut mfp: *mut memfile_T,
     mut new_size: ::core::ffi::c_uint,
 ) {
     (*mfp).mf_page_size = new_size;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_new(
     mut mfp: *mut memfile_T,
     mut negative: bool,
@@ -466,7 +460,6 @@ pub unsafe extern "C" fn mf_new(
     );
     return hp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_get(
     mut mfp: *mut memfile_T,
     mut nr: blocknr_T,
@@ -509,7 +502,6 @@ pub unsafe extern "C" fn mf_get(
     );
     return hp;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_put(
     mut mfp: *mut memfile_T,
     mut hp: *mut bhdr_T,
@@ -536,7 +528,6 @@ pub unsafe extern "C" fn mf_put(
         mf_trans_add(mfp, hp);
     }
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_free(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) {
     xfree((*hp).bh_data);
     map_del_int64_t_ptr_t(
@@ -551,7 +542,6 @@ pub unsafe extern "C" fn mf_free(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) {
         mf_ins_free(mfp, hp);
     };
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_sync(
     mut mfp: *mut memfile_T,
     mut flags: ::core::ffi::c_int,
@@ -605,7 +595,6 @@ pub unsafe extern "C" fn mf_sync(
     got_int.set(got_int.get() as ::core::ffi::c_int | got_int_save != 0);
     return status;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_set_dirty(mut mfp: *mut memfile_T) {
     let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
     let mut __i: uint32_t = 0;
@@ -619,7 +608,6 @@ pub unsafe extern "C" fn mf_set_dirty(mut mfp: *mut memfile_T) {
     }
     (*mfp).mf_dirty = MF_DIRTY_YES;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_release_all() -> bool {
     let mut retval: bool = false_0 != 0;
     let mut buf: *mut buf_T = firstbuf.get();
@@ -837,7 +825,6 @@ unsafe extern "C" fn mf_trans_add(
     );
     return OK;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_trans_del(mut mfp: *mut memfile_T, mut old_nr: blocknr_T) -> blocknr_T {
     let mut num: *mut blocknr_T = map_ref_int64_t_int64_t(
         &raw mut (*mfp).mf_trans,
@@ -856,7 +843,6 @@ pub unsafe extern "C" fn mf_trans_del(mut mfp: *mut memfile_T, mut old_nr: block
     );
     return new_bnum;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_free_fnames(mut mfp: *mut memfile_T) {
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         &raw mut (*mfp).mf_fname as *mut *mut ::core::ffi::c_void;
@@ -869,7 +855,6 @@ pub unsafe extern "C" fn mf_free_fnames(mut mfp: *mut memfile_T) {
     *ptr__0 = NULL_0;
     let _ = *ptr__0;
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_set_fnames(
     mut mfp: *mut memfile_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -877,7 +862,6 @@ pub unsafe extern "C" fn mf_set_fnames(
     (*mfp).mf_fname = fname;
     (*mfp).mf_ffname = FullName_save((*mfp).mf_fname, false_0 != 0);
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_fullname(mut mfp: *mut memfile_T) {
     if mfp.is_null() || (*mfp).mf_fname.is_null() || (*mfp).mf_ffname.is_null() {
         return;
@@ -886,7 +870,6 @@ pub unsafe extern "C" fn mf_fullname(mut mfp: *mut memfile_T) {
     (*mfp).mf_fname = (*mfp).mf_ffname;
     (*mfp).mf_ffname = ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
 pub unsafe extern "C" fn mf_need_trans(mut mfp: *mut memfile_T) -> bool {
     return !(*mfp).mf_fname.is_null() && (*mfp).mf_neg_count > 0 as blocknr_T;
 }
