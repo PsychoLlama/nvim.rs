@@ -1,11 +1,15 @@
 name: Release
 
-# Manual, Linux-only CalVer releases. The version is the build date plus the
-# short commit sha, e.g. `2026.07.18-a1b2c3d4e`.
+# Linux-only CalVer releases, triggered by pushing a CalVer-shaped tag. The
+# tag is the version — build date plus short commit sha, e.g.
+# `2026.07.18-a1b2c3d4e` — and is created locally with scripts/tag-release.sh.
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "20[0-9][0-9].[0-9][0-9].[0-9][0-9]-*"
 
-# Needed to push the tag and publish the GitHub Release.
+# Needed to publish the GitHub Release. The tag already exists (it is the
+# trigger); this job creates a Release pointing at it, never a new tag.
 permissions:
   contents: write
 
@@ -25,7 +29,7 @@ jobs:
         with:
           use-flakehub: false
       # Same key as ci.yml on purpose: the crate downloads are profile-agnostic,
-      # so a release dispatch inherits whatever the last push already fetched.
+      # so a release run inherits whatever the last push already fetched.
       - name: Cache cargo registry
         uses: actions/cache@v6
         with:
@@ -49,14 +53,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-target-release-
 
-      # `2000.01.15-<short-sha>`. Date is UTC build date; the sha pins the exact
-      # source. Both the tag and the tarball name derive from this.
+      # The version is the pushed tag verbatim (`2000.01.15-<short-sha>`):
+      # scripts/tag-release.sh already baked the UTC date and the pinned sha
+      # into it. The tarball name derives from this.
       - name: Compute version
         id: version
         run: |
-          version="$(date -u +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+          version='${{ github.ref_name }}'
           echo "version=$version" >>"$GITHUB_OUTPUT"
           echo "Release version: $version"
+
+      # Enter the devshell once for its side effect — realising the flake's
+      # store paths — as its own step, so that download time is attributed here
+      # and doesn't inflate the packaging step's timing in the CI summary.
+      - name: Hydrate the nix store
+        run: 'true'
 
       # Cargo release build, then assemble the relocatable tarball under
       # target/dist (bin/ + runtime + tree-sitter parsers).
@@ -67,18 +78,21 @@ jobs:
           just package "$version"
           echo "tarball=target/dist/nvim-$version-x86_64-linux.tar.gz" >>"$GITHUB_OUTPUT"
 
-      # Create the tag at this commit and publish the Release with the tarball.
-      # Runs in the runner's plain shell (not the devshell) for the preinstalled
-      # gh CLI. Fails loudly if the tag already exists (e.g. re-dispatched on the
-      # same commit) rather than clobbering a published release.
+      # Publish the Release against the tag that triggered this run, attaching
+      # the tarball. Runs in the runner's plain shell (not the devshell) for the
+      # preinstalled gh CLI. `gh release create` reuses the existing tag rather
+      # than creating one, and fails loudly if a Release for it already exists
+      # rather than clobbering a published one. The notes are the annotated
+      # tag's body verbatim — scripts/tag-release.sh puts this release's
+      # CHANGELOG.md section there.
       - name: Publish GitHub Release
         shell: bash -euo pipefail {0}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version='${{ steps.version.outputs.version }}'
+          git tag --list --format='%(contents:body)' "$version" > "$RUNNER_TEMP/notes.md"
           gh release create "$version" \
-            --target "$GITHUB_SHA" \
             --title "$version" \
-            --notes "Automated release built from \`$GITHUB_SHA\` (Linux, x86_64)." \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             '${{ steps.package.outputs.tarball }}'
