@@ -2,12 +2,12 @@
 //!
 //! This is an in-tree port of the subset of unibilium 2.1.2 that nvim used:
 //! `unibi_from_term` (locate and parse the description for a terminal name)
-//! plus the read-only capability getters. Copyright 2008-2013 Lukas Mai;
-//! unibilium is LGPL-3.0-or-later, and this port stays under that license.
+//! plus the read-only capability getters. Copyright 2008, 2010-2013, 2015
+//! Lukas Mai and the unibilium contributors; unibilium is LGPL-3.0-or-later,
+//! and this port stays under that license (text: licenses/LGPL-3.0.txt).
 //!
 //! Behavior matches the C byte for byte, quirks included, because which
-//! description gets loaded (and whether loading fails, falling back to the
-//! builtin entries) is user-visible:
+//! description gets loaded (or whether loading fails) is user-visible:
 //!
 //! - At most 4096 bytes of a description file are read; larger entries fail
 //!   to parse and nvim falls back to its builtin terminfo.

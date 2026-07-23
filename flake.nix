@@ -90,6 +90,9 @@
                 ./lib.rs
                 ./src
                 ./runtime
+                # postInstall installs the license texts next to the binary.
+                ./LICENSE.txt
+                ./licenses
                 # postInstall generates runtime files (syntax tables) with it.
                 ./scripts/gen.sh
               ];

@@ -46,6 +46,11 @@ rustPlatform.buildRustPackage {
     mkdir -p $out/lib/nvim
     cp -r ${nvim-deps}/lib/nvim/parser $out/lib/nvim/parser
 
+    # License texts must travel with the binary: the LGPL'd xdiff/unibilium
+    # ports are compiled in, and the (L)GPL requires conveying their texts.
+    mkdir -p $out/share/doc/nvim
+    cp -r LICENSE.txt licenses $out/share/doc/nvim/
+
     # Generate the vimscript syntax tables into the installed runtime, as
     # upstream releases ship them. The source runtime deliberately omits
     # generated.vim (the test suites' default runtime must not carry it), so
@@ -70,7 +75,14 @@ rustPlatform.buildRustPackage {
   meta = {
     description = "Neovim v0.12.4, transpiled to Rust with c2rust";
     homepage = "https://github.com/PsychoLlama/nvim.rs";
-    license = lib.licenses.asl20;
+    # Apache-2.0 overall, Vim-license contributions, and the in-tree LGPL
+    # ports (xdiff: LGPL-2.1+, unibilium: LGPL-3.0+). See LICENSE.txt.
+    license = with lib.licenses; [
+      asl20
+      vim
+      lgpl21Plus
+      lgpl3Plus
+    ];
     mainProgram = "nvim";
     platforms = lib.platforms.linux;
   };

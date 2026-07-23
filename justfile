@@ -28,6 +28,10 @@ package version: build-release
   cp target/release/nvim "$stage/bin/nvim"
   cp -r runtime "$stage/share/nvim/runtime"
   cp -r "$NVIM_DEPS_PREFIX/lib/nvim/parser" "$stage/lib/nvim/parser"
+  # License texts must travel with the binary: the LGPL'd xdiff/unibilium
+  # ports are compiled in, and the (L)GPL requires conveying their texts.
+  mkdir -p "$stage/share/doc/nvim"
+  cp -r LICENSE.txt licenses "$stage/share/doc/nvim/"
   # Generate the vimscript syntax tables into the staged runtime, as upstream
   # releases ship them. The source runtime deliberately omits generated.vim
   # (the test suites' default runtime must not carry it), so it only exists
