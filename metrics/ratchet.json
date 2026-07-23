@@ -115,7 +115,7 @@
     "src/nvim/mark.rs": {"lines": 4006, "no_mangle": 2, "unsafe": 59},
     "src/nvim/marktree.rs": {"lines": 5668, "no_mangle": 20, "unsafe": 94},
     "src/nvim/match.rs": {"lines": 2304, "unsafe": 28},
-    "src/nvim/mbyte.rs": {"lines": 5203, "no_mangle": 11, "unsafe": 101},
+    "src/nvim/mbyte.rs": {"lines": 5067, "no_mangle": 11, "unsafe": 101},
     "src/nvim/memfile.rs": {"unsafe": 29},
     "src/nvim/memline.rs": {"lines": 7177, "no_mangle": 6, "unsafe": 88},
     "src/nvim/memory.rs": {"no_mangle": 17, "unsafe": 45},

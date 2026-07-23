@@ -55,27 +55,14 @@ pub use crate::src::nvim::types::{
     vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
     xp_prefix_T, QUEUE,
 };
-use ::c2rust_bitfields;
+use crate::src::nvim::utf8proc::{
+    utf8proc_decompose_char, utf8proc_get_property, utf8proc_grapheme_break,
+    utf8proc_grapheme_break_stateful, utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
+    UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
+    UTF8PROC_BOUNDCLASS_OTHER, UTF8PROC_BOUNDCLASS_PREPEND, UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR,
+    UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN,
+};
 extern "C" {
-    fn utf8proc_get_property(codepoint: utf8proc_int32_t) -> *const utf8proc_property_t;
-    fn utf8proc_decompose_char(
-        codepoint: utf8proc_int32_t,
-        dst: *mut utf8proc_int32_t,
-        bufsize: utf8proc_ssize_t,
-        options: utf8proc_option_t,
-        last_boundclass: *mut ::core::ffi::c_int,
-    ) -> utf8proc_ssize_t;
-    fn utf8proc_grapheme_break_stateful(
-        codepoint1: utf8proc_int32_t,
-        codepoint2: utf8proc_int32_t,
-        state: *mut utf8proc_int32_t,
-    ) -> utf8proc_bool;
-    fn utf8proc_grapheme_break(
-        codepoint1: utf8proc_int32_t,
-        codepoint2: utf8proc_int32_t,
-    ) -> utf8proc_bool;
-    fn utf8proc_tolower(c: utf8proc_int32_t) -> utf8proc_int32_t;
-    fn utf8proc_toupper(c: utf8proc_int32_t) -> utf8proc_int32_t;
     fn towlower(__wc: wint_t) -> wint_t;
     fn towupper(__wc: wint_t) -> wint_t;
     fn nl_langinfo(__item: nl_item) -> *mut ::core::ffi::c_char;
@@ -93,119 +80,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub type utf8proc_int16_t = int16_t;
-pub type utf8proc_uint16_t = uint16_t;
-pub type utf8proc_ssize_t = ptrdiff_t;
-pub type utf8proc_bool = bool;
-pub type utf8proc_option_t = ::core::ffi::c_uint;
-pub const UTF8PROC_STRIPNA: utf8proc_option_t = 16384;
-pub const UTF8PROC_STRIPMARK: utf8proc_option_t = 8192;
-pub const UTF8PROC_LUMP: utf8proc_option_t = 4096;
-pub const UTF8PROC_CHARBOUND: utf8proc_option_t = 2048;
-pub const UTF8PROC_CASEFOLD: utf8proc_option_t = 1024;
-pub const UTF8PROC_STRIPCC: utf8proc_option_t = 512;
-pub const UTF8PROC_NLF2LF: utf8proc_option_t = 384;
-pub const UTF8PROC_NLF2PS: utf8proc_option_t = 256;
-pub const UTF8PROC_NLF2LS: utf8proc_option_t = 128;
-pub const UTF8PROC_REJECTNA: utf8proc_option_t = 64;
-pub const UTF8PROC_IGNORE: utf8proc_option_t = 32;
-pub const UTF8PROC_DECOMPOSE: utf8proc_option_t = 16;
-pub const UTF8PROC_COMPOSE: utf8proc_option_t = 8;
-pub const UTF8PROC_COMPAT: utf8proc_option_t = 4;
-pub const UTF8PROC_STABLE: utf8proc_option_t = 2;
-pub const UTF8PROC_NULLTERM: utf8proc_option_t = 1;
-pub type utf8proc_propval_t = utf8proc_int16_t;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
-#[repr(C)]
-pub struct utf8proc_property_struct {
-    pub category: utf8proc_propval_t,
-    pub combining_class: utf8proc_propval_t,
-    pub bidi_class: utf8proc_propval_t,
-    pub decomp_type: utf8proc_propval_t,
-    pub decomp_seqindex: utf8proc_uint16_t,
-    pub casefold_seqindex: utf8proc_uint16_t,
-    pub uppercase_seqindex: utf8proc_uint16_t,
-    pub lowercase_seqindex: utf8proc_uint16_t,
-    pub titlecase_seqindex: utf8proc_uint16_t,
-    #[bitfield(name = "comb_index", ty = "utf8proc_uint16_t", bits = "0..=9")]
-    #[bitfield(name = "comb_length", ty = "utf8proc_uint16_t", bits = "10..=14")]
-    #[bitfield(name = "comb_issecond", ty = "utf8proc_uint16_t", bits = "15..=15")]
-    #[bitfield(name = "bidi_mirrored", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    #[bitfield(name = "comp_exclusion", ty = "::core::ffi::c_uint", bits = "17..=17")]
-    #[bitfield(name = "ignorable", ty = "::core::ffi::c_uint", bits = "18..=18")]
-    #[bitfield(
-        name = "control_boundary",
-        ty = "::core::ffi::c_uint",
-        bits = "19..=19"
-    )]
-    #[bitfield(name = "charwidth", ty = "::core::ffi::c_uint", bits = "20..=21")]
-    #[bitfield(name = "ambiguous_width", ty = "::core::ffi::c_uint", bits = "22..=22")]
-    #[bitfield(name = "pad", ty = "::core::ffi::c_uint", bits = "23..=23")]
-    #[bitfield(name = "boundclass", ty = "::core::ffi::c_uint", bits = "24..=29")]
-    #[bitfield(
-        name = "indic_conjunct_break",
-        ty = "::core::ffi::c_uint",
-        bits = "30..=31"
-    )]
-    pub comb_index_comb_length_comb_issecond_bidi_mirrored_comp_exclusion_ignorable_control_boundary_charwidth_ambiguous_width_pad_boundclass_indic_conjunct_break:
-        [u8; 4],
-    #[bitfield(padding)]
-    pub c2rust_padding: [u8; 2],
-}
-pub type utf8proc_property_t = utf8proc_property_struct;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const UTF8PROC_CATEGORY_CO: C2Rust_Unnamed_0 = 29;
-pub const UTF8PROC_CATEGORY_CS: C2Rust_Unnamed_0 = 28;
-pub const UTF8PROC_CATEGORY_CF: C2Rust_Unnamed_0 = 27;
-pub const UTF8PROC_CATEGORY_CC: C2Rust_Unnamed_0 = 26;
-pub const UTF8PROC_CATEGORY_ZP: C2Rust_Unnamed_0 = 25;
-pub const UTF8PROC_CATEGORY_ZL: C2Rust_Unnamed_0 = 24;
-pub const UTF8PROC_CATEGORY_ZS: C2Rust_Unnamed_0 = 23;
-pub const UTF8PROC_CATEGORY_SO: C2Rust_Unnamed_0 = 22;
-pub const UTF8PROC_CATEGORY_SK: C2Rust_Unnamed_0 = 21;
-pub const UTF8PROC_CATEGORY_SC: C2Rust_Unnamed_0 = 20;
-pub const UTF8PROC_CATEGORY_SM: C2Rust_Unnamed_0 = 19;
-pub const UTF8PROC_CATEGORY_PO: C2Rust_Unnamed_0 = 18;
-pub const UTF8PROC_CATEGORY_PF: C2Rust_Unnamed_0 = 17;
-pub const UTF8PROC_CATEGORY_PI: C2Rust_Unnamed_0 = 16;
-pub const UTF8PROC_CATEGORY_PE: C2Rust_Unnamed_0 = 15;
-pub const UTF8PROC_CATEGORY_PS: C2Rust_Unnamed_0 = 14;
-pub const UTF8PROC_CATEGORY_PD: C2Rust_Unnamed_0 = 13;
-pub const UTF8PROC_CATEGORY_PC: C2Rust_Unnamed_0 = 12;
-pub const UTF8PROC_CATEGORY_NO: C2Rust_Unnamed_0 = 11;
-pub const UTF8PROC_CATEGORY_NL: C2Rust_Unnamed_0 = 10;
-pub const UTF8PROC_CATEGORY_ND: C2Rust_Unnamed_0 = 9;
-pub const UTF8PROC_CATEGORY_ME: C2Rust_Unnamed_0 = 8;
-pub const UTF8PROC_CATEGORY_MC: C2Rust_Unnamed_0 = 7;
-pub const UTF8PROC_CATEGORY_MN: C2Rust_Unnamed_0 = 6;
-pub const UTF8PROC_CATEGORY_LO: C2Rust_Unnamed_0 = 5;
-pub const UTF8PROC_CATEGORY_LM: C2Rust_Unnamed_0 = 4;
-pub const UTF8PROC_CATEGORY_LT: C2Rust_Unnamed_0 = 3;
-pub const UTF8PROC_CATEGORY_LL: C2Rust_Unnamed_0 = 2;
-pub const UTF8PROC_CATEGORY_LU: C2Rust_Unnamed_0 = 1;
-pub const UTF8PROC_CATEGORY_CN: C2Rust_Unnamed_0 = 0;
-pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
-pub const UTF8PROC_BOUNDCLASS_E_ZWG: C2Rust_Unnamed_1 = 20;
-pub const UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC: C2Rust_Unnamed_1 = 19;
-pub const UTF8PROC_BOUNDCLASS_E_BASE_GAZ: C2Rust_Unnamed_1 = 18;
-pub const UTF8PROC_BOUNDCLASS_GLUE_AFTER_ZWJ: C2Rust_Unnamed_1 = 17;
-pub const UTF8PROC_BOUNDCLASS_E_MODIFIER: C2Rust_Unnamed_1 = 16;
-pub const UTF8PROC_BOUNDCLASS_E_BASE: C2Rust_Unnamed_1 = 15;
-pub const UTF8PROC_BOUNDCLASS_ZWJ: C2Rust_Unnamed_1 = 14;
-pub const UTF8PROC_BOUNDCLASS_PREPEND: C2Rust_Unnamed_1 = 13;
-pub const UTF8PROC_BOUNDCLASS_SPACINGMARK: C2Rust_Unnamed_1 = 12;
-pub const UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR: C2Rust_Unnamed_1 = 11;
-pub const UTF8PROC_BOUNDCLASS_LVT: C2Rust_Unnamed_1 = 10;
-pub const UTF8PROC_BOUNDCLASS_LV: C2Rust_Unnamed_1 = 9;
-pub const UTF8PROC_BOUNDCLASS_T: C2Rust_Unnamed_1 = 8;
-pub const UTF8PROC_BOUNDCLASS_V: C2Rust_Unnamed_1 = 7;
-pub const UTF8PROC_BOUNDCLASS_L: C2Rust_Unnamed_1 = 6;
-pub const UTF8PROC_BOUNDCLASS_EXTEND: C2Rust_Unnamed_1 = 5;
-pub const UTF8PROC_BOUNDCLASS_CONTROL: C2Rust_Unnamed_1 = 4;
-pub const UTF8PROC_BOUNDCLASS_LF: C2Rust_Unnamed_1 = 3;
-pub const UTF8PROC_BOUNDCLASS_CR: C2Rust_Unnamed_1 = 2;
-pub const UTF8PROC_BOUNDCLASS_OTHER: C2Rust_Unnamed_1 = 1;
-pub const UTF8PROC_BOUNDCLASS_START: C2Rust_Unnamed_1 = 0;
 pub type wint_t = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_2 = 2147483647;
@@ -2044,9 +1918,9 @@ pub unsafe extern "C" fn mb_get_class_tab(
     return utf_class_tab(utf_ptr2char(p), chartab);
 }
 unsafe extern "C" fn prop_is_emojilike(mut prop: *const utf8proc_property_t) -> bool {
-    return (*prop).boundclass() as ::core::ffi::c_int
+    return (*prop).boundclass as ::core::ffi::c_int
         == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC as ::core::ffi::c_int
-        || (*prop).boundclass() as ::core::ffi::c_int
+        || (*prop).boundclass as ::core::ffi::c_int
             == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
@@ -2076,17 +1950,15 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
         return n;
     }
     let mut prop: *const utf8proc_property_t = utf8proc_get_property(c as utf8proc_int32_t);
-    if (*prop).charwidth() as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
+    if (*prop).charwidth as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
         return 2 as ::core::ffi::c_int;
     }
-    if *p_ambw.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
-        && (*prop).ambiguous_width() as ::core::ffi::c_int != 0
-    {
+    if *p_ambw.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int && (*prop).ambiguous_width {
         return 2 as ::core::ffi::c_int;
     }
     if p_emoji.get() != 0
         && c >= 0x1f000 as ::core::ffi::c_int
-        && (*prop).ambiguous_width() == 0
+        && !(*prop).ambiguous_width
         && prop_is_emojilike(prop) as ::core::ffi::c_int != 0
     {
         return 2 as ::core::ffi::c_int;
@@ -2433,7 +2305,7 @@ pub unsafe extern "C" fn utf_composinglike(
     if !utf8proc_grapheme_break_stateful(
         first as utf8proc_int32_t,
         second as utf8proc_int32_t,
-        state as *mut utf8proc_int32_t,
+        state.as_mut(),
     ) {
         return true_0 != 0;
     }
@@ -2447,7 +2319,7 @@ pub unsafe extern "C" fn utf_iscomposing(
     return !utf8proc_grapheme_break_stateful(
         c1 as utf8proc_int32_t,
         c2 as utf8proc_int32_t,
-        state as *mut utf8proc_int32_t,
+        state.as_mut(),
     ) || crate::src::nvim::arabic::arabic_combine(c1, c2) as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
@@ -3247,9 +3119,7 @@ pub unsafe extern "C" fn utf_ambiguous_width(mut p: *const ::core::ffi::c_char) 
     if info.value >= 0x80 as int32_t {
         let mut prop: *const utf8proc_property_t =
             utf8proc_get_property(info.value as utf8proc_int32_t);
-        if (*prop).ambiguous_width() as ::core::ffi::c_int != 0
-            || prop_is_emojilike(prop) as ::core::ffi::c_int != 0
-        {
+        if (*prop).ambiguous_width || prop_is_emojilike(prop) as ::core::ffi::c_int != 0 {
             return true_0 != 0;
         }
     }
@@ -3272,14 +3142,8 @@ pub unsafe extern "C" fn utf_fold(mut a: ::core::ffi::c_int) -> ::core::ffi::c_i
         return a;
     }
     let mut result: [utf8proc_int32_t; 1] = [0; 1];
-    let mut res: utf8proc_ssize_t = utf8proc_decompose_char(
-        a as utf8proc_int32_t,
-        &raw mut result as *mut utf8proc_int32_t,
-        1 as utf8proc_ssize_t,
-        UTF8PROC_CASEFOLD,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    );
-    return if res == 1 as utf8proc_ssize_t {
+    let res = utf8proc_decompose_char(a as utf8proc_int32_t, &mut result, UTF8PROC_CASEFOLD, None);
+    return if res == 1 {
         result[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
     } else {
         a
@@ -3573,7 +3437,7 @@ pub unsafe extern "C" fn utf_head_off(
     }
     let safe_end: *const uint8_t = start.offset(last_len as ::core::ffi::c_int as isize);
     let mut cur_bc: ::core::ffi::c_int =
-        (*utf8proc_get_property(cur_code as utf8proc_int32_t)).boundclass() as ::core::ffi::c_int;
+        (*utf8proc_get_property(cur_code as utf8proc_int32_t)).boundclass as ::core::ffi::c_int;
     if always_break(cur_bc) as ::core::ffi::c_int != 0 || start == base {
         return p.offset_from(start) as ::core::ffi::c_int;
     }
@@ -3599,7 +3463,7 @@ pub unsafe extern "C" fn utf_head_off(
             break;
         } else {
             let mut prev_bc: ::core::ffi::c_int =
-                (*utf8proc_get_property(prev_code as utf8proc_int32_t)).boundclass()
+                (*utf8proc_get_property(prev_code as utf8proc_int32_t)).boundclass
                     as ::core::ffi::c_int;
             if always_break_two(prev_bc, cur_bc) as ::core::ffi::c_int != 0
                 && !crate::src::nvim::arabic::arabic_combine(
