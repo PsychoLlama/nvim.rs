@@ -77,13 +77,16 @@ rustPlatform.buildRustPackage {
     homepage = "https://github.com/PsychoLlama/nvim.rs";
     # Apache-2.0 overall, Vim-license contributions, and the in-tree ports
     # (xdiff: LGPL-2.1+ except xhistogram under the Eclipse Distribution
-    # License v1.0 = 3-clause BSD; unibilium: LGPL-3.0+). See LICENSE.txt.
+    # License v1.0 = 3-clause BSD; unibilium: LGPL-3.0+; utf8proc: MIT with
+    # Unicode-license data tables). See LICENSE.txt.
     license = with lib.licenses; [
       asl20
       vim
       lgpl21Plus
       lgpl3Plus
       bsd3
+      mit
+      unicode-dfs-2015
     ];
     mainProgram = "nvim";
     platforms = lib.platforms.linux;

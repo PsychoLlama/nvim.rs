@@ -208,6 +208,9 @@ The externally maintained libraries used by Neovim are:
     xhistogram.rs: Eclipse Distribution License v1.0 (3-clause BSD),
     with the full notice retained in that file
   - unibilium (ported to Rust as src/nvim/tui/unibi.rs): LGPL v3 or later
+  - utf8proc (ported to Rust as src/nvim/utf8proc/): MIT license, with
+    Unicode-derived data tables under the Unicode, Inc. license; both
+    notices are reproduced in licenses/utf8proc-LICENSE.md
 
 The GNU license texts for the in-tree LGPL ports are included in the
 licenses/ directory: LGPL-2.1.txt for xdiff, and LGPL-3.0.txt (which

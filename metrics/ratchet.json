@@ -208,6 +208,7 @@
     "src/nvim/ui_compositor.rs": {"lines": 1390, "unsafe": 24},
     "src/nvim/undo.rs": {"lines": 4307, "no_mangle": 4, "unsafe": 78},
     "src/nvim/usercmd.rs": {"lines": 3917, "unsafe": 43},
+    "src/nvim/utf8proc/tables.rs": {"lines": 12410},
     "src/nvim/version.rs": {"lines": 2024, "unsafe": 17},
     "src/nvim/viml/parser/expressions.rs": {"lines": 11686, "no_mangle": 7, "unsafe": 21},
     "src/nvim/viml/parser/parser.rs": {"unsafe": 5},
