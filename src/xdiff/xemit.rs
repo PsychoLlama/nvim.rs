@@ -1,3 +1,18 @@
+//! Rust port of LibXDiff's xemit.c, as vendored by neovim v0.12.4.
+//!
+//! LibXDiff by Davide Libenzi ( File Differential Library )
+//! Copyright (C) 2003 Davide Libenzi <davidel@xmailserver.org>
+//!
+//! This library is free software; you can redistribute it and/or modify it
+//! under the terms of the GNU Lesser General Public License as published by
+//! the Free Software Foundation; either version 2.1 of the License, or (at
+//! your option) any later version (text: licenses/LGPL-2.1.txt).
+//!
+//! This library is distributed in the hope that it will be useful, but
+//! WITHOUT ANY WARRANTY; without even the implied warranty of
+//! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
+//! General Public License for more details.
+
 use crate::src::nvim::os::libc::strlen;
 pub use crate::src::nvim::types::{
     chanode_t, chastore_t, find_func_t, mmbuffer_t, s_chanode, s_chastore, s_mmbuffer, s_xdchange,

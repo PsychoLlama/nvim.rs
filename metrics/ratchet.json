@@ -221,7 +221,7 @@
     "src/nvim/vterm/vterm.rs": {"no_mangle": 4, "unsafe": 21},
     "src/nvim/window.rs": {"lines": 10285, "no_mangle": 5, "unsafe": 196},
     "src/nvim/winfloat.rs": {"lines": 1248, "unsafe": 16},
-    "src/xdiff/xdiffi.rs": {"lines": 1146, "unsafe": 24},
+    "src/xdiff/xdiffi.rs": {"lines": 1161, "unsafe": 24},
     "src/xdiff/xemit.rs": {"unsafe": 4},
     "src/xdiff/xhistogram.rs": {"unsafe": 8},
     "src/xdiff/xpatience.rs": {"unsafe": 10},

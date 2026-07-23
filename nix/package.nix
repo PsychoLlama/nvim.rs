@@ -75,13 +75,15 @@ rustPlatform.buildRustPackage {
   meta = {
     description = "Neovim v0.12.4, transpiled to Rust with c2rust";
     homepage = "https://github.com/PsychoLlama/nvim.rs";
-    # Apache-2.0 overall, Vim-license contributions, and the in-tree LGPL
-    # ports (xdiff: LGPL-2.1+, unibilium: LGPL-3.0+). See LICENSE.txt.
+    # Apache-2.0 overall, Vim-license contributions, and the in-tree ports
+    # (xdiff: LGPL-2.1+ except xhistogram under the Eclipse Distribution
+    # License v1.0 = 3-clause BSD; unibilium: LGPL-3.0+). See LICENSE.txt.
     license = with lib.licenses; [
       asl20
       vim
       lgpl21Plus
       lgpl3Plus
+      bsd3
     ];
     mainProgram = "nvim";
     platforms = lib.platforms.linux;

@@ -204,7 +204,9 @@ The externally maintained libraries used by Neovim are:
   - lua-inspect: MIT license
   - lua-lpeg: MIT license
   - tree-sitter: MIT license
-  - xdiff (ported to Rust as src/xdiff/): LGPL v2.1 or later
+  - xdiff (ported to Rust as src/xdiff/): LGPL v2.1 or later, except
+    xhistogram.rs: Eclipse Distribution License v1.0 (3-clause BSD),
+    with the full notice retained in that file
   - unibilium (ported to Rust as src/nvim/tui/unibi.rs): LGPL v3 or later
 
 The GNU license texts for the in-tree LGPL ports are included in the
