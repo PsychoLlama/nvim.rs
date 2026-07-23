@@ -11,5 +11,6 @@ mod digraph;
 mod garray;
 mod keycodes;
 mod memory;
+mod profile;
 mod sha256;
 mod strings;

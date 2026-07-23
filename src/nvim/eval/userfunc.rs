@@ -2819,7 +2819,7 @@ pub unsafe extern "C" fn call_user_func(
         (*fp).uf_tm_children = profile_zero();
     }
     if do_profiling_yes {
-        script_prof_save(&raw mut wait_start);
+        wait_start = script_prof_save();
     }
     let save_current_sctx: sctx_T = current_sctx.get();
     current_sctx.set((*fp).uf_script_ctx);
@@ -2936,7 +2936,7 @@ pub unsafe extern "C" fn call_user_func(
     estack_pop();
     current_sctx.set(save_current_sctx);
     if do_profiling_yes {
-        script_prof_restore(&raw mut wait_start);
+        script_prof_restore(wait_start);
     }
     if using_sandbox {
         (*sandbox.ptr()) -= 1;

@@ -3918,7 +3918,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     );
                                     save_current_sctx = current_sctx.get();
                                     if do_profiling.get() == PROF_YES {
-                                        prof_child_enter(&raw mut wait_time);
+                                        wait_time = prof_child_enter();
                                     }
                                     funccal_entry = funccal_entry_T {
                                         top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -4052,7 +4052,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     current_sctx.set(save_current_sctx);
                                     restore_funccal();
                                     if do_profiling.get() == PROF_YES {
-                                        prof_child_exit(&raw mut wait_time);
+                                        prof_child_exit(wait_time);
                                     }
                                     KeyTyped.set(save_KeyTyped);
                                     xfree(fname as *mut ::core::ffi::c_void);

@@ -148,7 +148,7 @@
     "src/nvim/path.rs": {"lines": 3020, "no_mangle": 15, "unsafe": 68},
     "src/nvim/plines.rs": {"lines": 1429, "no_mangle": 4, "unsafe": 42},
     "src/nvim/popupmenu.rs": {"lines": 3685, "unsafe": 33},
-    "src/nvim/profile.rs": {"lines": 2084, "no_mangle": 13, "unsafe": 51},
+    "src/nvim/profile.rs": {"unsafe": 35},
     "src/nvim/quickfix.rs": {"lines": 11362, "no_mangle": 8, "unsafe": 252},
     "src/nvim/regexp.rs": {"lines": 24970, "no_mangle": 9, "unsafe": 215},
     "src/nvim/register.rs": {"lines": 4901, "no_mangle": 2, "unsafe": 61},

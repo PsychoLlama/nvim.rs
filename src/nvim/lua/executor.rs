@@ -2480,7 +2480,7 @@ unsafe extern "C" fn nlua_require(lstate: *mut lua_State) -> ::core::ffi::c_int 
     }
     let mut rel_time: proftime_T = 0;
     let mut start_time: proftime_T = 0;
-    time_push(&raw mut rel_time, &raw mut start_time);
+    (rel_time, start_time) = time_push();
     let mut status: ::core::ffi::c_int = lua_pcall(
         lstate,
         1 as ::core::ffi::c_int,

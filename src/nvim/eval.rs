@@ -7487,7 +7487,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
         xfree(cmdstr as *mut ::core::ffi::c_void);
     }
     if profiling {
-        prof_child_enter(&raw mut wait_time);
+        wait_time = prof_child_enter();
     }
     let mut nread: size_t = 0 as size_t;
     let mut res: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7499,7 +7499,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
         &raw mut nread,
     );
     if profiling {
-        prof_child_exit(&raw mut wait_time);
+        prof_child_exit(wait_time);
     }
     xfree(input as *mut ::core::ffi::c_void);
     set_vim_var_nr(VV_SHELL_ERROR, status as varnumber_T);

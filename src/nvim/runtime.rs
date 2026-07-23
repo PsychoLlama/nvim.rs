@@ -5313,11 +5313,11 @@ unsafe extern "C" fn do_source_ext(
                 start_time = 0;
                 l_time_fd = time_fd.get();
                 if !l_time_fd.is_null() {
-                    time_push(&raw mut rel_time, &raw mut start_time);
+                    (rel_time, start_time) = time_push();
                 }
                 l_do_profiling = do_profiling.get();
                 if l_do_profiling == PROF_YES {
-                    prof_child_enter(&raw mut wait_start);
+                    wait_start = prof_child_enter();
                 }
                 funccalp_entry = funccal_entry_T {
                     top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -5596,7 +5596,7 @@ unsafe extern "C" fn do_source_ext(
                 current_sctx.set(save_current_sctx);
                 restore_funccal();
                 if l_do_profiling == PROF_YES {
-                    prof_child_exit(&raw mut wait_start);
+                    prof_child_exit(wait_start);
                 }
                 if !cookie.fp.is_null() {
                     fclose(cookie.fp);

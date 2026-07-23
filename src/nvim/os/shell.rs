@@ -1222,7 +1222,7 @@ pub unsafe extern "C" fn call_shell(
         verbose_leave();
     }
     if do_profiling.get() == PROF_YES {
-        prof_child_enter(&raw mut wait_time);
+        wait_time = prof_child_enter();
     }
     if *p_sh.get() as ::core::ffi::c_int == NUL {
         emsg(gettext(
@@ -1235,7 +1235,7 @@ pub unsafe extern "C" fn call_shell(
     }
     set_vim_var_nr(VV_SHELL_ERROR, retval as varnumber_T);
     if do_profiling.get() == PROF_YES {
-        prof_child_exit(&raw mut wait_time);
+        prof_child_exit(wait_time);
     }
     return retval;
 }
