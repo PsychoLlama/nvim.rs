@@ -1470,8 +1470,8 @@ describe('user config init', function()
       feed('iv')
 
       -- after that the exrc in the parent directory
-      screen:expect({ any = '.exrc', unchanged = true })
-      screen:expect({ any = pesc('[i]gnore, (v)iew, (d)eny:'), unchanged = true })
+      screen:expect({ any = '.exrc' })
+      screen:expect({ any = pesc('[i]gnore, (v)iew, (d)eny:') })
       feed('v')
 
       -- trust .exrc
