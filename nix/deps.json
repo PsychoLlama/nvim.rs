@@ -21,10 +21,6 @@
     "url": "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz",
     "sha256": "4b155d67d2246c1ffa7ad7bc466c1ea899bbc40fef0257cc9c03cecbaed4352a"
   },
-  "UTF8PROC": {
-    "url": "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz",
-    "sha256": "abfed50b6d4da51345713661370290f4f4747263ee73dc90356299dfc7990c78"
-  },
   "TREESITTER": {
     "url": "https://github.com/tree-sitter/tree-sitter/archive/v0.26.7.tar.gz",
     "sha256": "4343107ad1097a35e106092b79e5dd87027142c6fba5e4486b1d1d44d5499f84"

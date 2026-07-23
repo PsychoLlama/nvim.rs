@@ -12,8 +12,8 @@ resolution:
 - External symbols (not in the ledger) from libc/system, LuaJIT/luv/lpeg,
   and libuv are consolidated into one shared declaration each under
   src/nvim/os/libc.rs, src/nvim/lua/ffi.rs, and src/nvim/event/libuv.rs.
-- Everything else stays put: single-library externals (tree-sitter,
-  unibilium, utf8proc), function-local extern blocks (`#[link_name]`
+- Everything else stays put: single-library externals (tree-sitter),
+  function-local extern blocks (`#[link_name]`
   shims), extern `type` items, and any declaration whose signature — on
   either the declaring or the defining side — mentions a module-local
   type (the phase-5a blacklist residue: terminal, quickfix, regexp, tui,
@@ -283,10 +283,6 @@ def lib_of(name):
         return "uv"
     if name.startswith("ts_"):
         return "treesitter"
-    if name.startswith("utf8proc_"):
-        return "utf8proc"
-    if name.startswith("unibi_"):
-        return "unibilium"
     return "system"
 
 
