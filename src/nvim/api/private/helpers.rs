@@ -18,7 +18,10 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
-use crate::src::nvim::memory::{memchrsub, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrndup};
+use crate::src::nvim::memory::{
+    arena_alloc, arena_finish, arena_memdupz, memchrsub, xfree, xmalloc, xmemdupz, xrealloc,
+    xstrdup, xstrndup, ARENA_EMPTY,
+};
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen, strnlen, vsnprintf};
@@ -57,15 +60,6 @@ pub use crate::src::nvim::types::{
     undo_object, va_list, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -226,11 +220,6 @@ pub const ET_USER: except_type_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,

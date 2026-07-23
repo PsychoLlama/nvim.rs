@@ -33,7 +33,8 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::{utf_ptr2cells, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{
-    arena_mem_free, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrlcpy,
+    arena_finish, arena_mem_free, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrlcpy,
+    ARENA_EMPTY,
 };
 use crate::src::nvim::message::msg_clr_eos;
 use crate::src::nvim::option::{
@@ -84,9 +85,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::ui::{ui_call_msg_ruler, ui_call_tabline_update, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{global_stl_height, lastwin_nofloating, tabline_height};
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
@@ -827,11 +825,6 @@ pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {

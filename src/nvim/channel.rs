@@ -35,7 +35,10 @@ use crate::src::nvim::main::{
     embedded_mode, exiting, headless_mode, main_loop, ui_client_channel_id, IObuff,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
-use crate::src::nvim::memory::{arena_mem_free, xcalloc, xfree, xmemdup, xrealloc, xstrdup};
+use crate::src::nvim::memory::{
+    arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemdup, xrealloc, xstrdup,
+    ARENA_EMPTY,
+};
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::channel::rpc_init;
 use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
@@ -110,8 +113,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
 extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn rpc_start(channel: *mut Channel);
     fn rpc_close(channel: *mut Channel);
     fn rpc_free(channel: *mut Channel);
@@ -409,11 +410,6 @@ pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi
 pub const F_DUPFD_CLOEXEC: ::core::ffi::c_int = 1030 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

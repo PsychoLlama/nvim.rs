@@ -62,7 +62,9 @@ use crate::src::nvim::mapping::{keymap_array, modify_keymap};
 use crate::src::nvim::mark::mark_get_global;
 use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memline::ml_open;
-use crate::src::nvim::memory::{memchrsub, strequal, xfree, xmalloc, xrealloc};
+use crate::src::nvim::memory::{
+    arena_alloc, arena_strdup, memchrsub, strequal, xfree, xmalloc, xrealloc,
+};
 use crate::src::nvim::message::{
     do_autocmd_progress, hl_msg_free, msg_id_exists, msg_multihl, verbose_enter, verbose_leave,
     verbose_stop,
@@ -163,9 +165,6 @@ use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
 extern "C" {
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
-        -> *mut ::core::ffi::c_char;
     fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel;
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);

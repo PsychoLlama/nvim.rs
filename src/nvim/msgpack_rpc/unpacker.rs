@@ -8,7 +8,9 @@ use crate::src::nvim::api::private::helpers::api_set_error;
 
 use crate::src::nvim::grid::schar_from_buf;
 use crate::src::nvim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
-use crate::src::nvim::memory::{arena_mem_free, xrealloc, xstrdup};
+use crate::src::nvim::memory::{
+    arena_alloc, arena_finish, arena_mem_free, xrealloc, xstrdup, ARENA_EMPTY,
+};
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy};
 use crate::src::nvim::strings::arena_printf;
 pub use crate::src::nvim::types::{
@@ -25,10 +27,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::ui_client::{
     handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,
 };
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
 pub const MPACK_EOF: C2Rust_Unnamed = 1;
@@ -92,11 +90,6 @@ pub type C2Rust_Unnamed_3 = ::core::ffi::c_int;
 pub const MPACK_NOMEM: C2Rust_Unnamed_3 = 3;
 pub const MPACK_EXCEPTION: C2Rust_Unnamed_3 = -1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,

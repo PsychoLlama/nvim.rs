@@ -16,7 +16,8 @@ use crate::src::nvim::mbyte::{
     utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
-    xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan, xrealloc, xstrchrnul, xstrlcpy,
+    arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan,
+    xrealloc, xstrchrnul, xstrlcpy,
 };
 use crate::src::nvim::message::{emsg, semsg, siemsg};
 use crate::src::nvim::option::{csh_like_shell, fish_like_shell};
@@ -39,10 +40,6 @@ pub use crate::src::nvim::types::{
 use core::ffi::{c_char, c_int, CStr};
 use core::ptr;
 use core::slice;
-extern "C" {
-    fn arena_alloc_block(arena: *mut Arena);
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-}
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

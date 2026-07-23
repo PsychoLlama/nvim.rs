@@ -15,7 +15,9 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mbyte::utf_ambiguous_width;
-use crate::src::nvim::memory::{alloc_block, arena_mem_free, free_block, strequal, xcalloc, xfree};
+use crate::src::nvim::memory::{
+    alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree, ARENA_EMPTY,
+};
 use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
 use crate::src::nvim::msgpack_rpc::packer::mpack_object_array;
 use crate::src::nvim::option::set_tty_option;
@@ -61,9 +63,6 @@ use crate::src::nvim::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
     ui_refresh, ui_set_ext_option,
 };
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -175,11 +174,6 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {

@@ -81,7 +81,8 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::{decl, incl, ml_append, ml_replace};
 use crate::src::nvim::memory::{
-    arena_mem_free, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
+    arena_alloc, arena_finish, arena_mem_free, xfree, xmalloc, xmallocz, xmemdupz, xrealloc,
+    xstrdup, ARENA_EMPTY,
 };
 use crate::src::nvim::message::{
     emsg, msg, msg_check, msg_clr_eos, msg_cursor_goto, msg_grid_validate, msg_outtrans_len,
@@ -192,8 +193,6 @@ use crate::src::nvim::window::{
     win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
@@ -2046,11 +2045,6 @@ static prev_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

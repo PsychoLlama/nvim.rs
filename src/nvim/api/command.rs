@@ -20,7 +20,7 @@ use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
 use crate::src::nvim::mbyte::mb_islower;
-use crate::src::nvim::memory::{xcalloc, xfree, xrealloc};
+use crate::src::nvim::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
 use crate::src::nvim::os::libc::{
     __assert_fail, memcpy, memmove, memset, snprintf, strcmp, strlen, strncmp, strtol,
 };
@@ -66,12 +66,6 @@ use crate::src::nvim::usercmd::{
     uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
 };
 extern "C" {
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

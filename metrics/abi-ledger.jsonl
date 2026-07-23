@@ -5,12 +5,6 @@
 {"symbol":"appended_lines_buf","kind":"fn","file":"src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"apply_autocmds","kind":"fn","file":"src/nvim/autocmd.rs","class":"internal","refs":[]}
 {"symbol":"apply_autocmds_group","kind":"fn","file":"src/nvim/autocmd.rs","class":"internal","refs":[]}
-{"symbol":"arena_alloc","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"arena_alloc_block","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"arena_allocz","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"arena_finish","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"arena_memdupz","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"arena_strdup","kind":"fn","file":"src/nvim/memory.rs","class":"internal","refs":[]}
 {"symbol":"aucmd_prepbuf","kind":"fn","file":"src/nvim/autocmd.rs","class":"internal","refs":[]}
 {"symbol":"aucmd_restbuf","kind":"fn","file":"src/nvim/autocmd.rs","class":"internal","refs":[]}
 {"symbol":"aucmd_win_vec","kind":"static","file":"src/nvim/main.rs","class":"internal","refs":[]}

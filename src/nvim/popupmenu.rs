@@ -33,7 +33,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup,
+    arena_finish, arena_mem_free, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup, ARENA_EMPTY,
 };
 use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
 use crate::src::nvim::message::emsg;
@@ -93,7 +93,6 @@ use crate::src::nvim::winfloat::{
     win_config_float, win_float_create_preview, win_float_find_preview,
 };
 extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
     static pum_want: GlobalCell<C2Rust_Unnamed_24>;
 }
 pub const kTrue: TriState = 1;
@@ -1380,11 +1379,6 @@ pub struct C2Rust_Unnamed_24 {
     pub finish: bool,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

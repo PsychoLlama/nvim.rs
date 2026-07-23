@@ -34,7 +34,9 @@ use crate::src::nvim::main::{
     ui_event_ns_id, ui_ext_names, ui_refresh_cmdheight, updating_screen, State, VIsual_active,
 };
 use crate::src::nvim::map::{map_del_uint32_t_ptr_t, map_put_ref_uint32_t_ptr_t, mh_get_uint32_t};
-use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree};
+use crate::src::nvim::memory::{
+    arena_finish, arena_mem_free, strequal, xcalloc, xfree, ARENA_EMPTY,
+};
 use crate::src::nvim::message::{
     msg, msg_ext_ui_flush, msg_schedule_semsg, msg_schedule_semsg_multiline, msg_scroll_flush,
     msg_source, msg_ui_refresh,
@@ -84,9 +86,6 @@ use crate::src::nvim::ui_compositor::{
 };
 use crate::src::nvim::window::{win_set_inner_size, win_ui_flush};
 use crate::src::nvim::winfloat::win_config_float;
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
@@ -715,11 +714,6 @@ pub struct UIEventCallback {
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

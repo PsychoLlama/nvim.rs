@@ -57,8 +57,8 @@ use crate::src::nvim::mbyte::{
     utfc_ptr2len_len,
 };
 use crate::src::nvim::memory::{
-    strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xmemrchr, xrealloc, xstrdup, xstrlcat,
-    xstrlcpy,
+    arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xmemrchr, xrealloc,
+    xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::src::nvim::mouse::{jump_to_mouse, setmouse};
 use crate::src::nvim::option::{p_vfile, shortmess};
@@ -134,7 +134,6 @@ use crate::src::nvim::ui::{
 };
 use crate::src::nvim::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 extern "C" {
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;

@@ -46,7 +46,8 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc,
+    arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc,
+    ARENA_EMPTY,
 };
 use crate::src::nvim::message::{emsg, iemsg, internal_error, semsg, semsg_multiline};
 use crate::src::nvim::mouse::{is_mouse_key, mouse_comp_pos, mouse_find_win_inner};
@@ -118,9 +119,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -544,11 +542,6 @@ pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {

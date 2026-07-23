@@ -53,7 +53,8 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
+    arena_finish, arena_mem_free, strequal, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc,
+    xstrdup, ARENA_EMPTY,
 };
 use crate::src::nvim::message::{emsg, msg_multihl, msg_putchar, semsg_multiline};
 use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
@@ -143,7 +144,6 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn uv_thread_self() -> uv_thread_t;
     fn uv_thread_equal(t1: *const uv_thread_t, t2: *const uv_thread_t) -> ::core::ffi::c_int;
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn luv_set_callback(L: *mut lua_State, pcall: luv_CFpcall);
     fn luv_set_thread(L: *mut lua_State, pcall: luv_CFpcall);
     fn luv_set_cthread(L: *mut lua_State, cpcall: luv_CFcpcall);
@@ -955,11 +955,6 @@ pub const LUA_TTABLE: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const LUA_TFUNCTION: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const LUA_REFNIL: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const LUVF_CALLBACK_NOEXIT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,

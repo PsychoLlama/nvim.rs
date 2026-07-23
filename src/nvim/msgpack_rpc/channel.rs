@@ -25,7 +25,8 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::memory::{
-    alloc_block, arena_mem_free, free_block, strequal, xcalloc, xfree, xmalloc, xrealloc,
+    alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree, xmalloc,
+    xrealloc, ARENA_EMPTY,
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{
@@ -74,7 +75,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
 extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);
     fn channel_info_changed(chan: *mut Channel, new_chan: bool);
@@ -374,11 +374,6 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]

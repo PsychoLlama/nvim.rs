@@ -34,7 +34,8 @@ use crate::src::nvim::mbyte::{
     mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
-    arena_mem_free, xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup, xstrlcpy,
+    arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmalloc, xmemcpyz, xrealloc,
+    xstrdup, xstrlcpy, ARENA_EMPTY,
 };
 use crate::src::nvim::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
@@ -87,8 +88,6 @@ pub use crate::src::nvim::types::{
     QUEUE, _IO_FILE,
 };
 extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub const kErrorTypeValidation: ErrorType = 1;
@@ -1595,11 +1594,6 @@ pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,

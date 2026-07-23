@@ -5,7 +5,7 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{cmdpreview, curbuf, curwin, textlock};
 use crate::src::nvim::memline::ml_flush_deleted_bytes;
-use crate::src::nvim::memory::{arena_mem_free, xfree, xrealloc};
+use crate::src::nvim::memory::{arena_finish, arena_mem_free, xfree, xrealloc, ARENA_EMPTY};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
@@ -38,9 +38,6 @@ pub use crate::src::nvim::types::{
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -115,11 +112,6 @@ pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

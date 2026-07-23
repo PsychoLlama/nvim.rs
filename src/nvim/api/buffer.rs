@@ -24,7 +24,9 @@ use crate::src::nvim::memline::{
     ml_append_buf, ml_delete_buf, ml_find_line_or_offset, ml_get_buf, ml_get_buf_len,
     ml_replace_buf,
 };
-use crate::src::nvim::memory::{memchrsub, strchrsub, xfree, xmemdupz};
+use crate::src::nvim::memory::{
+    arena_alloc, arena_allocz, arena_memdupz, memchrsub, strchrsub, xfree, xmemdupz,
+};
 use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
 use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
@@ -64,15 +66,6 @@ pub use crate::src::nvim::types::{
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
 };
 use crate::src::nvim::undo::u_save_buf;
-extern "C" {
-    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
-    fn arena_allocz(arena: *mut Arena, size: size_t) -> *mut ::core::ffi::c_char;
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

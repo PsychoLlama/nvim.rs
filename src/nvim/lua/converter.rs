@@ -22,7 +22,7 @@ use crate::src::nvim::lua::ffi::{
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
 use crate::src::nvim::main::nlua_global_refs;
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::memory::{arena_memdupz, xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset, strlen};
 pub use crate::src::nvim::types::{
@@ -40,13 +40,6 @@ pub use crate::src::nvim::types::{
     MessagePackType, Object, ObjectType, OptKeySet, OptionalKeys, ScopeDictDictItem, ScopeType,
     SpecialVarValue, String_0, Tabpage, VarLockStatus, VarType, Window, QUEUE,
 };
-extern "C" {
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -22,7 +22,9 @@ use crate::src::nvim::main::{
     updating_screen, Columns,
 };
 use crate::src::nvim::map::{map_put_ref_cstr_t_int, mh_get_cstr_t};
-use crate::src::nvim::memory::{xfree, xmalloc, xmemrchr, xstrdup, xstrlcat};
+use crate::src::nvim::memory::{
+    arena_memdupz, xfree, xmalloc, xmemrchr, xstrdup, xstrlcat, ARENA_EMPTY,
+};
 use crate::src::nvim::message::{
     emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
     msg_puts_hl, msg_source, semsg,
@@ -73,13 +75,6 @@ use crate::src::nvim::ui::{
     ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,
     ui_rgb_attached,
 };
-extern "C" {
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
@@ -959,11 +954,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 45] = unsafe {
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const KV_INITIAL_VALUE: Dict = Dict {
     size: 0 as size_t,
     capacity: 0 as size_t,

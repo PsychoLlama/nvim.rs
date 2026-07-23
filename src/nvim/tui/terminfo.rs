@@ -1,16 +1,12 @@
 use crate::src::nvim::charset::kv_transstr;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::memory::{strequal, xrealloc};
+use crate::src::nvim::memory::{arena_strdup, strequal, xrealloc};
 use crate::src::nvim::os::libc::{__ctype_b_loc, memcmp, memset, snprintf, strlen};
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::unibi;
 pub use crate::src::nvim::types::{
     size_t, ssize_t, Arena, StringBuilder, String_0, TerminfoEntry, TPVAR,
 };
-extern "C" {
-    fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
-        -> *mut ::core::ffi::c_char;
-}
 pub type unibi_boolean = ::core::ffi::c_uint;
 pub const unibi_back_color_erase: unibi_boolean = 29;
 pub type unibi_numeric = ::core::ffi::c_uint;

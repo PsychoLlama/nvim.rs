@@ -186,8 +186,8 @@ use crate::src::nvim::memline::{
     ml_open, recover_names, swapfile_dict,
 };
 use crate::src::nvim::memory::{
-    alloc_block, arena_mem_free, free_block, strequal, strnequal, xcalloc, xfree, xmalloc,
-    xmallocz, xmemdup, xmemdupz, xstrdup,
+    alloc_block, arena_finish, arena_mem_free, free_block, strequal, strnequal, xcalloc, xfree,
+    xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, ARENA_EMPTY,
 };
 use crate::src::nvim::menu::{f_menu_info, get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
@@ -355,7 +355,6 @@ extern "C" {
         flags: ::core::ffi::c_uint,
         cb: uv_random_cb,
     ) -> ::core::ffi::c_int;
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn get_client_info(
         chan: *mut Channel,
         key: *const ::core::ffi::c_char,
@@ -2241,11 +2240,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_1: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {

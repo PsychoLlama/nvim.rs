@@ -20,7 +20,8 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::mh_put_cstr_t;
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xcalloc, xfree, xrealloc, xstrdup, xstrlcpy,
+    arena_finish, arena_mem_free, arena_memdupz, arena_strdup, strequal, xcalloc, xfree, xrealloc,
+    xstrdup, xstrlcpy, ARENA_EMPTY,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::env::{os_env_exists, os_getenv, os_getenv_noalloc};
@@ -81,14 +82,6 @@ extern "C" {
         width: *mut ::core::ffi::c_int,
         height: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_memdupz(
-        arena: *mut Arena,
-        buf: *const ::core::ffi::c_char,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
-    fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
-        -> *mut ::core::ffi::c_char;
     fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut TerminfoEntry);
     fn tinput_destroy(input: *mut TermInput);
     fn tinput_start(input: *mut TermInput);
@@ -528,11 +521,6 @@ pub const kTermModeNotRecognized: TermModeState = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,

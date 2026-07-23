@@ -23,7 +23,9 @@ use crate::src::nvim::map::{
     map_put_ref_ColorKey_ColorItem, map_put_ref_int_ptr_t, map_put_ref_uint64_t_int, mh_clear,
     mh_get_ColorKey, mh_get_int, mh_get_uint64_t, mh_put_HlEntry, mh_put_cstr_t,
 };
-use crate::src::nvim::memory::{arena_mem_free, xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{
+    arena_finish, arena_mem_free, xfree, xmalloc, xstrdup, ARENA_EMPTY,
+};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::check_blending;
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strcasecmp, strlen};
@@ -63,9 +65,6 @@ pub use crate::src::nvim::types::{
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, NS, QUEUE,
 };
 use crate::src::nvim::ui::ui_call_hl_attr_define;
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -278,11 +277,6 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const KEYSET_OPTIDX_highlight__bg: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_highlight__fg: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_highlight__sp: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

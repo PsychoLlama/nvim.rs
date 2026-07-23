@@ -104,7 +104,7 @@ use crate::src::nvim::lua::ffi::{
     lua_pushstring, lua_setfield,
 };
 use crate::src::nvim::main::{e_fast_api_disabled, e_textlock, textlock};
-use crate::src::nvim::memory::arena_mem_free;
+use crate::src::nvim::memory::{arena_finish, arena_mem_free, ARENA_EMPTY};
 pub use crate::src::nvim::types::{
     consumed_blk, handle_T, int64_t, key_value_pair, lua_CFunction, lua_State, object,
     object_data as C2Rust_Unnamed, size_t, uint64_t, Arena, ArenaMem, Array, Boolean, Buffer, Dict,
@@ -119,9 +119,6 @@ pub use crate::src::nvim::types::{
     KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeySetLink, KeyValuePair,
     LuaRef, Object, ObjectType, OptionalKeys, String_0, Tabpage, Window,
 };
-extern "C" {
-    fn arena_finish(arena: *mut Arena) -> ArenaMem;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -140,11 +137,6 @@ pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const kNluaPushFreeRefs: C2Rust_Unnamed_0 = 2;
 pub const kNluaPushSpecial: C2Rust_Unnamed_0 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_EMPTY: Arena = Arena {
-    cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    pos: 0 as size_t,
-    size: 0 as size_t,
-};
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()
         .wrapping_mul(8 as usize)

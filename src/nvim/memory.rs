@@ -14,7 +14,7 @@
 //! allocation may end there.
 
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
-pub use crate::src::nvim::types::{consumed_blk, ArenaMem};
+pub use crate::src::nvim::types::{consumed_blk, Arena, ArenaMem};
 use core::ffi::{c_char, c_int, c_long, c_void, CStr};
 use core::ptr;
 use core::slice;
@@ -25,14 +25,6 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memfile::mf_release_all;
 use crate::src::nvim::message::{clear_sb_text, semsg};
 use crate::src::nvim::os::libc::{calloc, free, gettext, malloc, realloc};
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Arena {
-    pub cur_blk: *mut c_char,
-    pub pos: usize,
-    pub size: usize,
-}
 
 pub type MemMalloc = Option<unsafe extern "C" fn(usize) -> *mut c_void>;
 pub type MemFree = Option<unsafe extern "C" fn(*mut c_void)>;
@@ -507,7 +499,6 @@ unsafe fn arena_free_reuse_blks() {
 
 /// Detach the arena's chain of consumed blocks for a later
 /// `arena_mem_free`, leaving the arena empty.
-#[no_mangle]
 pub unsafe extern "C" fn arena_finish(arena: *mut Arena) -> ArenaMem {
     let res = (*arena).cur_blk as *mut consumed_blk;
     *arena = ARENA_EMPTY;
@@ -526,7 +517,6 @@ pub unsafe extern "C" fn alloc_block() -> *mut c_void {
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_alloc_block(arena: *mut Arena) {
     let prev_blk = (*arena).cur_blk as *mut consumed_blk;
     (*arena).cur_blk = alloc_block() as *mut c_char;
@@ -558,7 +548,6 @@ fn is_oversize(size: usize) -> bool {
     size > (ARENA_BLOCK_SIZE - core::mem::size_of::<consumed_blk>()) / 2
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void {
     if arena.is_null() {
         return xmalloc(size);
@@ -627,14 +616,12 @@ pub unsafe extern "C" fn arena_mem_free(mem: ArenaMem) {
     }
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_allocz(arena: *mut Arena, size: usize) -> *mut c_char {
     let mem = arena_alloc(arena, size.wrapping_add(1), false) as *mut c_char;
     *mem.add(size) = 0;
     mem
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_memdupz(
     arena: *mut Arena,
     buf: *const c_char,
@@ -648,7 +635,6 @@ pub unsafe extern "C" fn arena_memdupz(
     mem
 }
 
-#[no_mangle]
 pub unsafe extern "C" fn arena_strdup(arena: *mut Arena, str: *const c_char) -> *mut c_char {
     arena_memdupz(arena, str, CStr::from_ptr(str).to_bytes().len())
 }
