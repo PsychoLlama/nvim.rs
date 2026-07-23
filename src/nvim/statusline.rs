@@ -8,7 +8,7 @@ use crate::src::nvim::buffer::{
 use crate::src::nvim::charset::{
     getdigits_int, ptr2cells, skipdigits, trans_characters, transstr_buf, vim_strnsize, vim_strsize,
 };
-use crate::src::nvim::digraph::get_keymap_str;
+use crate::src::nvim::digraph::keymap_str;
 use crate::src::nvim::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::src::nvim::drawscreen::{compute_foldcolumn, redrawing};
 use crate::src::nvim::eval::vars::{
@@ -2966,8 +2966,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                         }
                                         97 => {
                                             fillable = false_0 != 0;
-                                            buf_tmp[0 as ::core::ffi::c_int as usize] =
-                                                NUL as ::core::ffi::c_char;
+                                            buf_tmp[0] = NUL as ::core::ffi::c_char;
                                             if append_arg_number(
                                                 wp,
                                                 &raw mut buf_tmp as *mut ::core::ffi::c_char,
@@ -2980,15 +2979,16 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                         }
                                         107 => {
                                             fillable = false_0 != 0;
-                                            if get_keymap_str(
-                                                wp,
-                                                b"<%s>\0".as_ptr() as *const ::core::ffi::c_char
-                                                    as *mut ::core::ffi::c_char,
-                                                &raw mut buf_tmp as *mut ::core::ffi::c_char,
-                                                TMPLEN,
-                                            ) > 0 as ::core::ffi::c_int
-                                            {
-                                                str = &raw mut buf_tmp as *mut ::core::ffi::c_char;
+                                            if let Some(keymap_name) = keymap_str(wp) {
+                                                let plen = vim_snprintf(
+                                                    buf_tmp.as_mut_ptr(),
+                                                    TMPLEN as size_t,
+                                                    b"<%s>\0".as_ptr() as *const _,
+                                                    keymap_name.as_ptr(),
+                                                );
+                                                if plen > 0 && plen <= TMPLEN - 1 {
+                                                    str = buf_tmp.as_mut_ptr();
+                                                }
                                             }
                                             break 's_1848;
                                         }

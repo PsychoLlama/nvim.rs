@@ -12534,7 +12534,7 @@ unsafe extern "C" fn ex_setfiletype(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn ex_digraphs(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int != NUL {
-        putdigraph((*eap).arg);
+        putdigraph(::core::ffi::CStr::from_ptr((*eap).arg).to_bytes());
     } else {
         listdigraphs((*eap).forceit != 0);
     };

@@ -11,7 +11,7 @@ use crate::src::nvim::decoration_provider::{
     decor_providers_start,
 };
 use crate::src::nvim::diff::diff_redraw;
-use crate::src::nvim::digraph::get_keymap_str;
+use crate::src::nvim::digraph::keymap_str;
 use crate::src::nvim::drawline::win_line;
 use crate::src::nvim::eval::vars::set_vim_var_nr;
 use crate::src::nvim::ex_getln::{
@@ -74,7 +74,7 @@ use crate::src::nvim::statusline::{
     draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
     win_redr_winbar,
 };
-use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,
@@ -1509,19 +1509,17 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
                             hl_id,
                             false_0 != 0,
                         );
-                    } else if get_keymap_str(
-                        curwin.get(),
-                        b" (%s)\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        NameBuff.ptr() as *mut ::core::ffi::c_char,
-                        MAXPATHL,
-                    ) > 0 as ::core::ffi::c_int
-                    {
-                        msg_puts_hl(
-                            NameBuff.ptr() as *mut ::core::ffi::c_char,
-                            hl_id,
-                            false_0 != 0,
+                    } else if let Some(keymap_name) = keymap_str(curwin.get()) {
+                        let buf = NameBuff.ptr() as *mut ::core::ffi::c_char;
+                        let plen = vim_snprintf(
+                            buf,
+                            MAXPATHL as size_t,
+                            b" (%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                            keymap_name.as_ptr(),
                         );
+                        if plen > 0 && plen <= MAXPATHL - 1 {
+                            msg_puts_hl(buf, hl_id, false_0 != 0);
+                        }
                     }
                 }
                 if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 && p_paste.get() != 0 {

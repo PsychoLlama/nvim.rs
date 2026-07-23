@@ -2020,8 +2020,8 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
         }
         let mut buf2: [::core::ffi::c_char; 20] = [0; 20];
         buf2[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        let mut dig: *mut ::core::ffi::c_char = get_digraph_for_char(cval);
-        if !dig.is_null() {
+        let dig = get_digraph_for_char(cval);
+        if let Some(dig) = &dig {
             vim_snprintf(
                 IObuff.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
@@ -2033,7 +2033,7 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
                 cval,
                 cval,
                 cval,
-                dig,
+                dig.as_ptr(),
             );
         } else {
             vim_snprintf(
@@ -2078,8 +2078,8 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
             c,
             (IObuff.ptr() as *mut ::core::ffi::c_char).offset(iobuff_len as isize),
         ) as size_t);
-        let mut dig_0: *mut ::core::ffi::c_char = get_digraph_for_char(c);
-        if !dig_0.is_null() {
+        let dig_0 = get_digraph_for_char(c);
+        if let Some(dig_0) = &dig_0 {
             vim_snprintf(
                 (IObuff.ptr() as *mut ::core::ffi::c_char).offset(iobuff_len as isize),
                 ::core::mem::size_of::<[::core::ffi::c_char; 1025]>().wrapping_sub(iobuff_len),
@@ -2095,7 +2095,7 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
                 c,
                 c,
                 c,
-                dig_0,
+                dig_0.as_ptr(),
             );
         } else {
             vim_snprintf(
