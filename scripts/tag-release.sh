@@ -45,7 +45,10 @@ if [[ -z "$notes" ]]; then
   exit 1
 fi
 
-git tag --annotate --message "Release $version
+# --cleanup=verbatim so Markdown headings survive: the default `strip` mode
+# treats lines beginning with `#` (like `### Changed`) as comments and deletes
+# them, silently mangling the release notes.
+git tag --annotate --cleanup=verbatim --message "Release $version
 
 $notes" "$version"
 
