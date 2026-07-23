@@ -53,7 +53,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::time::{os_localtime_r, os_time};
 use crate::src::nvim::path::{concat_fnames, path_tail, vim_ispathsep, FullName_save};
-use crate::src::nvim::sha256::{sha256_finish, sha256_start, sha256_update};
+use crate::src::nvim::sha256::{Sha256, SHA256_SUM_SIZE};
 use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_snprintf_add, vim_strchr};
@@ -71,7 +71,7 @@ pub use crate::src::nvim::types::{
     VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
     WinSplit, WinStyle, Window, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t,
     __off64_t, __off_t, __time_t, __uid_t, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T,
-    buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, context_sha256_T, cstack_T,
+    buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
     eslist_T, eslist_elem, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_11,
@@ -1212,23 +1212,15 @@ static e_not_open: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsaf
 });
 #[no_mangle]
 pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
-    let mut ctx: context_sha256_T = context_sha256_T {
-        total: [0; 2],
-        state: [0; 8],
-        buffer: [0; 64],
-    };
-    sha256_start(&raw mut ctx);
+    let mut ctx = Sha256::new();
     let mut lnum: linenr_T = 1 as linenr_T;
     while lnum <= (*buf).b_ml.ml_line_count {
         let mut p: *mut ::core::ffi::c_char = ml_get_buf(buf, lnum);
-        sha256_update(
-            &raw mut ctx,
-            p as *mut uint8_t,
-            strlen(p).wrapping_add(1 as size_t),
-        );
+        // Include the terminating NUL as a line separator.
+        ctx.update(::core::slice::from_raw_parts(p as *const u8, strlen(p) + 1));
         lnum += 1;
     }
-    sha256_finish(&raw mut ctx, hash as *mut uint8_t);
+    ::core::slice::from_raw_parts_mut(hash, SHA256_SUM_SIZE).copy_from_slice(&ctx.finish());
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_get_undo_file_name(

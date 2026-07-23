@@ -70,7 +70,7 @@ use crate::src::nvim::path::{
     path_shorten_fname, path_tail, path_with_url, vim_FullName, vim_ispathsep,
 };
 use crate::src::nvim::r#move::update_topline;
-use crate::src::nvim::sha256::{sha256_finish, sha256_start, sha256_update};
+use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
@@ -88,7 +88,7 @@ pub use crate::src::nvim::types::{
     _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, aco_save_T,
     alist_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
-    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, context_sha256_T, cstack_T,
+    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_22, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
     eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_9, file_buffer_b_wininfo as C2Rust_Unnamed_17,
@@ -1916,11 +1916,7 @@ pub unsafe extern "C" fn readfile(
     let mut p: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
     let mut filesize: off_T = 0 as off_T;
     let mut skip_read: bool = false_0 != 0;
-    let mut sha_ctx: context_sha256_T = context_sha256_T {
-        total: [0; 2],
-        state: [0; 8],
-        buffer: [0; 64],
-    };
+    let mut sha_ctx = Sha256::new();
     let mut read_undo_file: bool = false_0 != 0;
     let mut split: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut linecnt: linenr_T = 0;
@@ -2607,7 +2603,7 @@ pub unsafe extern "C" fn readfile(
                             && !read_stdin
                             && !read_buffer;
                         if read_undo_file {
-                            sha256_start(&raw mut sha_ctx);
+                            sha_ctx = Sha256::new();
                         }
                     }
                     's_1469: loop {
@@ -3435,11 +3431,10 @@ pub unsafe extern "C" fn readfile(
                                                 break;
                                             } else {
                                                 if read_undo_file {
-                                                    sha256_update(
-                                                        &raw mut sha_ctx,
-                                                        line_start as *mut uint8_t,
-                                                        len as size_t,
-                                                    );
+                                                    sha_ctx.update(::core::slice::from_raw_parts(
+                                                        line_start as *const u8,
+                                                        len as usize,
+                                                    ));
                                                 }
                                                 lnum += 1;
                                                 read_count -= 1;
@@ -3541,11 +3536,10 @@ pub unsafe extern "C" fn readfile(
                                                 break;
                                             } else {
                                                 if read_undo_file {
-                                                    sha256_update(
-                                                        &raw mut sha_ctx,
-                                                        line_start as *mut uint8_t,
-                                                        len as size_t,
-                                                    );
+                                                    sha_ctx.update(::core::slice::from_raw_parts(
+                                                        line_start as *const u8,
+                                                        len as usize,
+                                                    ));
                                                 }
                                                 lnum += 1;
                                                 read_count -= 1;
@@ -3607,11 +3601,10 @@ pub unsafe extern "C" fn readfile(
                         error = true_0 != 0;
                     } else {
                         if read_undo_file {
-                            sha256_update(
-                                &raw mut sha_ctx,
-                                line_start as *mut uint8_t,
-                                len as size_t,
-                            );
+                            sha_ctx.update(::core::slice::from_raw_parts(
+                                line_start as *const u8,
+                                len as usize,
+                            ));
                         }
                         lnum += 1;
                         read_no_eol_lnum = lnum;
@@ -3891,8 +3884,7 @@ pub unsafe extern "C" fn readfile(
                     u_find_first_changed();
                 }
                 if read_undo_file {
-                    let mut hash: [uint8_t; 32] = [0; 32];
-                    sha256_finish(&raw mut sha_ctx, &raw mut hash as *mut uint8_t);
+                    let mut hash: [uint8_t; 32] = sha_ctx.finish();
                     u_read_undo(
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         &raw mut hash as *mut uint8_t,

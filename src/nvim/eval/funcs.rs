@@ -245,7 +245,7 @@ use crate::src::nvim::search::{
     f_searchcount, last_csearch, last_csearch_forward, last_csearch_until, searchit,
     set_csearch_direction, set_csearch_until, set_last_csearch,
 };
-use crate::src::nvim::sha256::sha256_bytes;
+use crate::src::nvim::sha256::hex_digest;
 use crate::src::nvim::sign::{
     f_sign_define, f_sign_getdefined, f_sign_getplaced, f_sign_jump, f_sign_place,
     f_sign_placelist, f_sign_undefine, f_sign_unplace, f_sign_unplacelist,
@@ -11980,40 +11980,28 @@ unsafe extern "C" fn f_sha256(
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
-    (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+    let hash = if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let mut blob: *mut blob_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
+        let blob: *mut blob_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
             .v_blob;
-        let mut p: *const uint8_t = if !blob.is_null() {
-            (*blob).bv_ga.ga_data as *mut uint8_t
+        let bytes: &[u8] = if !blob.is_null() && !(*blob).bv_ga.ga_data.is_null() {
+            ::core::slice::from_raw_parts(
+                (*blob).bv_ga.ga_data as *const u8,
+                (*blob).bv_ga.ga_len as usize,
+            )
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut uint8_t
+            &[]
         };
-        let mut len: ::core::ffi::c_int = if !blob.is_null() {
-            (*blob).bv_ga.ga_len
-        } else {
-            0 as ::core::ffi::c_int
-        };
-        (*rettv).vval.v_string = xstrdup(sha256_bytes(
-            p,
-            len as size_t,
-            ::core::ptr::null::<uint8_t>(),
-            0 as size_t,
-        ));
+        hex_digest(bytes)
     } else {
-        let mut p_0: *const ::core::ffi::c_char =
+        let p: *const ::core::ffi::c_char =
             tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut hash: *const ::core::ffi::c_char = sha256_bytes(
-            p_0 as *const uint8_t,
-            strlen(p_0),
-            ::core::ptr::null::<uint8_t>(),
-            0 as size_t,
-        );
-        (*rettv).vval.v_string = xstrdup(hash);
+        hex_digest(::core::slice::from_raw_parts(p as *const u8, strlen(p)))
     };
+    (*rettv).vval.v_string = xmemdupz(hash.as_ptr() as *const ::core::ffi::c_void, hash.len())
+        as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn f_shellescape(
     mut argvars: *mut typval_T,

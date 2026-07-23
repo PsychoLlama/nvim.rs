@@ -9,4 +9,5 @@ mod charset;
 mod garray;
 mod keycodes;
 mod memory;
+mod sha256;
 mod strings;

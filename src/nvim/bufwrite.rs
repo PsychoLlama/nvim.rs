@@ -37,7 +37,7 @@ use crate::src::nvim::os::libc::{
     snprintf, strlen,
 };
 use crate::src::nvim::path::{after_pathsep, path_fnamecmp, path_tail};
-use crate::src::nvim::sha256::{sha256_finish, sha256_start, sha256_update};
+use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 pub use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
@@ -51,11 +51,10 @@ pub use crate::src::nvim::types::{
     Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
     WinInfo, WinSplit, WinStyle, Window, __gid_t, __off_t, __time_t, __uid_t, aco_save_T, alist_T,
     auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T,
-    cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, context_sha256_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_14, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
-    event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
-    file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_14,
+    dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem, event_T, exarg, exarg_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, gid_t, handle_T,
     hash_T, hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T,
@@ -2300,11 +2299,7 @@ pub unsafe extern "C" fn buf_write(
     let mut prev_got_int: bool = got_int.get();
     let mut whole: bool = start == 1 as linenr_T && end == (*buf).b_ml.ml_line_count;
     let mut write_undo_file: bool = false_0 != 0;
-    let mut sha_ctx: context_sha256_T = context_sha256_T {
-        total: [0; 2],
-        state: [0; 8],
-        buffer: [0; 64],
-    };
+    let mut sha_ctx = Sha256::new();
     let mut bkc: ::core::ffi::c_uint = get_bkc_flags(buf);
     if fname.is_null() || *fname as ::core::ffi::c_int == NUL {
         return FAIL;
@@ -2806,7 +2801,7 @@ pub unsafe extern "C" fn buf_write(
                             && reset_changed as ::core::ffi::c_int != 0
                             && !checking_conversion;
                         if write_undo_file {
-                            sha256_start(&raw mut sha_ctx);
+                            sha_ctx = Sha256::new();
                         }
                         write_info.bw_len = 0 as ::core::ffi::c_int;
                         write_info.bw_flags = wb_flags;
@@ -2817,13 +2812,12 @@ pub unsafe extern "C" fn buf_write(
                             let mut ptr: *mut ::core::ffi::c_char =
                                 ml_get_buf(buf, lnum).offset(-(1 as ::core::ffi::c_int as isize));
                             if write_undo_file {
-                                sha256_update(
-                                    &raw mut sha_ctx,
-                                    (ptr as *mut uint8_t).offset(1 as ::core::ffi::c_int as isize),
-                                    strlen(ptr.offset(1 as ::core::ffi::c_int as isize))
-                                        .wrapping_add(1 as size_t)
-                                        as uint32_t as size_t,
-                                );
+                                let line = ptr.offset(1 as ::core::ffi::c_int as isize);
+                                // Include the terminating NUL as a line separator.
+                                sha_ctx.update(::core::slice::from_raw_parts(
+                                    line as *const u8,
+                                    strlen(line) + 1,
+                                ));
                             }
                             let mut c: ::core::ffi::c_char = 0;
                             loop {
@@ -3392,8 +3386,7 @@ pub unsafe extern "C" fn buf_write(
     }
     msg_scroll.set(msg_save);
     if retval == OK && write_undo_file as ::core::ffi::c_int != 0 {
-        let mut hash: [uint8_t; 32] = [0; 32];
-        sha256_finish(&raw mut sha_ctx, &raw mut hash as *mut uint8_t);
+        let mut hash: [uint8_t; 32] = sha_ctx.finish();
         u_write_undo(
             ::core::ptr::null::<::core::ffi::c_char>(),
             false_0 != 0,
