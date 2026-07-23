@@ -6,6 +6,7 @@
 mod support;
 
 mod charset;
+mod cmdhist;
 mod garray;
 mod keycodes;
 mod memory;

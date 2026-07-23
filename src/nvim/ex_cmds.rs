@@ -5581,10 +5581,9 @@ unsafe extern "C" fn sub_joining_lines(
             }
             add_to_history(
                 HIST_SEARCH as ::core::ffi::c_int,
-                pat,
-                patlen,
+                ::core::slice::from_raw_parts(pat as *const u8, patlen as usize),
                 true_0 != 0,
-                NUL,
+                NUL as u8,
             );
         }
         return true_0 != 0;

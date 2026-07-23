@@ -8,7 +8,9 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::buffer::{
     bt_quickfix, bt_terminal, buflist_findnr, buflist_new, buflist_setfpos,
 };
-use crate::src::nvim::cmdhist::{clr_history, hist_get_array, hist_iter};
+use crate::src::nvim::cmdhist::{
+    hist_shada_replace, hist_shada_take, hist_shada_view, HistShadaEntry,
+};
 use crate::src::nvim::eval::decode::{decode_string, unpack_typval};
 use crate::src::nvim::eval::encode::encode_vim_to_msgpack;
 use crate::src::nvim::eval::typval::{
@@ -94,12 +96,12 @@ pub use crate::src::nvim::types::{
     file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_2,
     file_buffer_update_channels as C2Rust_Unnamed_3, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_8, funccall_T, garray_T, gid_t, handle_T,
-    hash_T, hashitem_T, hashtab_T, histentry_T, ht_stack_S, ht_stack_T, infoptr_T, int16_t,
-    int32_t, int64_t, key_value_pair, lcs_chars_T, linenr_T, list_T, list_stack_S, list_stack_T,
-    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T, mapblock,
-    mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s,
-    mtnode_s, object, object_data as C2Rust_Unnamed_1, packer_buffer_t, partial_S, partial_T,
-    pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
+    hash_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T, infoptr_T, int16_t, int32_t, int64_t,
+    key_value_pair, lcs_chars_T, linenr_T, list_T, list_stack_S, list_stack_T, listitem_S,
+    listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T, mapblock, mapblock_T,
+    match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s,
+    object, object_data as C2Rust_Unnamed_1, packer_buffer_t, partial_S, partial_T, pos_T,
+    pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
     regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t, syn_state,
     syn_state_sst_union as C2Rust_Unnamed_6, syn_time_T, synblock_T, synstate_T, tabpage_S,
     tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
@@ -606,8 +608,13 @@ pub struct HistoryMergerState {
     pub hmll: HMLList,
     pub do_merge: bool,
     pub reading: bool,
-    pub iter: *const ::core::ffi::c_void,
-    pub last_hist_entry: ShadaEntry,
+    /// Snapshot of neovim's own history (oldest first), taken at
+    /// [`hms_init`] time and drained by [`hms_insert`] /
+    /// [`hms_insert_whole_neovim_history`]. Boxed slice owned by this
+    /// struct; freed in [`hms_dealloc`].
+    pub pending: *mut ShadaEntry,
+    pub pending_len: size_t,
+    pub pending_pos: size_t,
     pub history_type: uint8_t,
 }
 #[derive(Copy, Clone)]
@@ -1449,77 +1456,46 @@ unsafe extern "C" fn shada_read_file(
     close_file(&raw mut sd_reader);
     return OK;
 }
-unsafe extern "C" fn shada_hist_iter(
-    iter: *const ::core::ffi::c_void,
-    history_type: uint8_t,
-    zero: bool,
-    hist: *mut ShadaEntry,
-) -> *const ::core::ffi::c_void {
-    let mut hist_he: histentry_T = histentry_T {
-        hisnum: 0,
-        hisstr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        hisstrlen: 0,
-        timestamp: 0,
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    };
-    let ret: *const ::core::ffi::c_void = hist_iter(iter, history_type, zero, &raw mut hist_he);
-    if hist_he.hisstr.is_null() {
-        *hist = ShadaEntry {
-            type_0: kSDItemMissing,
-            can_free_entry: false,
-            timestamp: 0,
-            data: C2Rust_Unnamed_22 {
-                header: Dict {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut::<KeyValuePair>(),
-                },
-            },
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-        };
+/// Snapshot neovim's own history of `hms_p`'s type into `pending`, oldest
+/// first. When reading (merge-back), the entries are moved out of the
+/// history rings and owned here; when writing, they are borrowed
+/// (`can_free_entry` is false and no free path touches them).
+unsafe extern "C" fn hms_load_pending(hms_p: *mut HistoryMergerState) {
+    let history_type = (*hms_p).history_type;
+    let entries = if (*hms_p).reading {
+        hist_shada_take(history_type as ::core::ffi::c_int)
     } else {
-        *hist = ShadaEntry {
+        hist_shada_view(history_type as ::core::ffi::c_int)
+    };
+    let pending: Box<[ShadaEntry]> = entries
+        .into_iter()
+        .map(|he| ShadaEntry {
             type_0: kSDItemHistoryEntry,
-            can_free_entry: zero,
-            timestamp: hist_he.timestamp,
+            can_free_entry: (*hms_p).reading,
+            timestamp: he.timestamp,
             data: C2Rust_Unnamed_22 {
                 history_item: history_item {
                     histtype: history_type,
-                    string: hist_he.hisstr,
-                    sep: (if history_type as ::core::ffi::c_int == HIST_SEARCH as ::core::ffi::c_int
-                    {
-                        *hist_he
-                            .hisstr
-                            .offset(hist_he.hisstrlen.wrapping_add(1 as size_t) as isize)
-                            as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as ::core::ffi::c_char,
+                    string: he.text,
+                    sep: he.sep,
                 },
             },
-            additional_data: hist_he.additional_data,
-        };
-    }
-    return ret;
+            additional_data: he.additional_data,
+        })
+        .collect();
+    (*hms_p).pending_len = pending.len() as size_t;
+    (*hms_p).pending_pos = 0 as size_t;
+    (*hms_p).pending = Box::into_raw(pending) as *mut ShadaEntry;
 }
 unsafe extern "C" fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntry, do_iter: bool) {
     if do_iter {
-        while (*hms_p).last_hist_entry.type_0 as ::core::ffi::c_int
-            != kSDItemMissing as ::core::ffi::c_int
-            && (*hms_p).last_hist_entry.timestamp < entry.timestamp
-        {
-            hms_insert(hms_p, (*hms_p).last_hist_entry, false_0 != 0);
-            if (*hms_p).iter.is_null() {
-                (*hms_p).last_hist_entry.type_0 = kSDItemMissing;
+        while (*hms_p).pending_pos < (*hms_p).pending_len {
+            let next: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
+            if next.timestamp >= entry.timestamp {
                 break;
-            } else {
-                (*hms_p).iter = shada_hist_iter(
-                    (*hms_p).iter,
-                    (*hms_p).history_type,
-                    (*hms_p).reading,
-                    &raw mut (*hms_p).last_hist_entry,
-                );
             }
+            (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
+            hms_insert(hms_p, next, false_0 != 0);
         }
     }
     let hmll: *mut HMLList = &raw mut (*hms_p).hmll;
@@ -1563,55 +1539,54 @@ unsafe extern "C" fn hms_init(
     hmll_init(&raw mut (*hms_p).hmll, num_elements);
     (*hms_p).do_merge = do_merge;
     (*hms_p).reading = reading;
-    (*hms_p).iter = shada_hist_iter(
-        ::core::ptr::null::<::core::ffi::c_void>(),
-        history_type,
-        (*hms_p).reading,
-        &raw mut (*hms_p).last_hist_entry,
-    );
     (*hms_p).history_type = history_type;
+    hms_load_pending(hms_p);
 }
 #[inline]
 unsafe extern "C" fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
-    while (*hms_p).last_hist_entry.type_0 as ::core::ffi::c_int
-        != kSDItemMissing as ::core::ffi::c_int
-    {
-        hms_insert(hms_p, (*hms_p).last_hist_entry, false_0 != 0);
-        if (*hms_p).iter.is_null() {
-            break;
-        }
-        (*hms_p).iter = shada_hist_iter(
-            (*hms_p).iter,
-            (*hms_p).history_type,
-            (*hms_p).reading,
-            &raw mut (*hms_p).last_hist_entry,
-        );
+    while (*hms_p).pending_pos < (*hms_p).pending_len {
+        let next: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
+        (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
+        hms_insert(hms_p, next, false_0 != 0);
     }
 }
+/// Hand the merged entries in the HMLL back to cmdhist, oldest first.
+/// String and additional-data ownership transfers to cmdhist; the HMLL
+/// scaffolding is still deallocated by [`hms_dealloc`] afterwards (which
+/// never frees entry payloads).
 #[inline]
-unsafe extern "C" fn hms_to_he_array(
-    hms_p: *const HistoryMergerState,
-    hist_array: *mut histentry_T,
-    new_hisidx: *mut ::core::ffi::c_int,
-    new_hisnum: *mut ::core::ffi::c_int,
-) {
-    let mut hist: *mut histentry_T = hist_array;
+unsafe extern "C" fn hms_to_history(hms_p: *const HistoryMergerState) {
+    let mut merged: Vec<HistShadaEntry> = Vec::new();
     let mut cur_entry: *mut HMLListEntry = (*hms_p).hmll.first as *mut HMLListEntry;
     while !cur_entry.is_null() {
-        (*hist).timestamp = (*cur_entry).data.timestamp;
-        (*hist).hisnum =
-            hist.offset_from(hist_array) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-        (*hist).hisstr = (*cur_entry).data.data.history_item.string;
-        (*hist).hisstrlen = strlen((*cur_entry).data.data.history_item.string);
-        (*hist).additional_data = (*cur_entry).data.additional_data;
-        hist = hist.offset(1);
+        merged.push(HistShadaEntry {
+            text: (*cur_entry).data.data.history_item.string,
+            sep: (*cur_entry).data.data.history_item.sep,
+            timestamp: (*cur_entry).data.timestamp,
+            additional_data: (*cur_entry).data.additional_data,
+        });
         cur_entry = (*cur_entry).next as *mut HMLListEntry;
     }
-    *new_hisnum = hist.offset_from(hist_array) as ::core::ffi::c_int;
-    *new_hisidx = *new_hisnum - 1 as ::core::ffi::c_int;
+    hist_shada_replace((*hms_p).history_type as ::core::ffi::c_int, merged);
 }
 #[inline]
 unsafe extern "C" fn hms_dealloc(hms_p: *mut HistoryMergerState) {
+    // Free whatever part of the neovim-history snapshot was never merged
+    // (only owned on the reading path; `shada_free_shada_entry` checks
+    // `can_free_entry` itself).
+    while (*hms_p).pending_pos < (*hms_p).pending_len {
+        let mut entry: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
+        shada_free_shada_entry(&raw mut entry);
+        (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
+    }
+    if !(*hms_p).pending.is_null() {
+        drop(Box::from_raw(core::ptr::slice_from_raw_parts_mut(
+            (*hms_p).pending,
+            (*hms_p).pending_len as usize,
+        )));
+        (*hms_p).pending = ::core::ptr::null_mut::<ShadaEntry>();
+        (*hms_p).pending_len = 0 as size_t;
+    }
     hmll_dealloc(&raw mut (*hms_p).hmll);
 }
 unsafe extern "C" fn var_shada_iter(
@@ -1813,20 +1788,9 @@ unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::f
         },
         do_merge: false,
         reading: false,
-        iter: ::core::ptr::null::<::core::ffi::c_void>(),
-        last_hist_entry: ShadaEntry {
-            type_0: kSDItemMissing,
-            can_free_entry: false,
-            timestamp: 0,
-            data: C2Rust_Unnamed_22 {
-                header: Dict {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut::<KeyValuePair>(),
-                },
-            },
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-        },
+        pending: ::core::ptr::null_mut::<ShadaEntry>(),
+        pending_len: 0,
+        pending_pos: 0,
         history_type: 0,
     }; 5];
     if srni_flags & kSDReadHistory as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
@@ -2317,21 +2281,7 @@ unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::f
             hms_insert_whole_neovim_history(
                 (&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize),
             );
-            clr_history(i_3);
-            let mut new_hisidx: *mut ::core::ffi::c_int =
-                ::core::ptr::null_mut::<::core::ffi::c_int>();
-            let mut new_hisnum: *mut ::core::ffi::c_int =
-                ::core::ptr::null_mut::<::core::ffi::c_int>();
-            let mut hist: *mut histentry_T =
-                hist_get_array(i_3 as uint8_t, &raw mut new_hisidx, &raw mut new_hisnum);
-            if !hist.is_null() {
-                hms_to_he_array(
-                    (&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize),
-                    hist,
-                    new_hisidx,
-                    new_hisnum,
-                );
-            }
+            hms_to_history((&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize));
             hms_dealloc((&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize));
             i_3 += 1;
         }

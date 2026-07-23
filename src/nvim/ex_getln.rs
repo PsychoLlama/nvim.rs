@@ -19,7 +19,7 @@ use crate::src::nvim::cmdexpand::{
     wildmenu_translate_key, ExpandCleanup, ExpandInit, ExpandOne,
 };
 use crate::src::nvim::cmdhist::{
-    add_to_history, get_hisidx, get_hislen, get_histentry, hist_char2type, init_history,
+    add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_ref, init_history,
 };
 use crate::src::nvim::cursor::{
     coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr,
@@ -162,7 +162,7 @@ pub use crate::src::nvim::types::{
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, histentry_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, key_extra,
+    hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, key_extra,
     key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
     listwatch_T, llpos_T, lpos_T, magic_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T,
     memfile_T, memline_T, mfdirty_T, msglist, msglist_T, mtnode_inner_s, mtnode_s, object,
@@ -3366,13 +3366,15 @@ unsafe extern "C" fn command_line_enter(
             {
                 add_to_history(
                     (*s).histype,
-                    (*ccline.ptr()).cmdbuff,
-                    (*ccline.ptr()).cmdlen as size_t,
+                    ::core::slice::from_raw_parts(
+                        (*ccline.ptr()).cmdbuff as *const u8,
+                        (*ccline.ptr()).cmdlen as usize,
+                    ),
                     true_0 != 0,
                     if (*s).histype == HIST_SEARCH as ::core::ffi::c_int {
-                        (*s).firstc
+                        (*s).firstc as u8
                     } else {
-                        NUL
+                        NUL as u8
                     },
                 );
                 if (*s).firstc == ':' as ::core::ffi::c_int {
@@ -4494,18 +4496,18 @@ unsafe extern "C" fn command_line_next_histidx(mut s: *mut CommandLineState, mut
     loop {
         if !next_match {
             if (*s).hiscnt == get_hislen() {
-                (*s).hiscnt = *get_hisidx((*s).histype);
+                (*s).hiscnt = get_hisidx((*s).histype);
             } else if (*s).hiscnt == 0 as ::core::ffi::c_int
-                && *get_hisidx((*s).histype) != get_hislen() - 1 as ::core::ffi::c_int
+                && get_hisidx((*s).histype) != get_hislen() - 1 as ::core::ffi::c_int
             {
                 (*s).hiscnt = get_hislen() - 1 as ::core::ffi::c_int;
-            } else if (*s).hiscnt != *get_hisidx((*s).histype) + 1 as ::core::ffi::c_int {
+            } else if (*s).hiscnt != get_hisidx((*s).histype) + 1 as ::core::ffi::c_int {
                 (*s).hiscnt -= 1;
             } else {
                 (*s).hiscnt = (*s).save_hiscnt;
                 break;
             }
-        } else if (*s).hiscnt == *get_hisidx((*s).histype) {
+        } else if (*s).hiscnt == get_hisidx((*s).histype) {
             (*s).hiscnt = get_hislen();
             break;
         } else {
@@ -4518,22 +4520,21 @@ unsafe extern "C" fn command_line_next_histidx(mut s: *mut CommandLineState, mut
                 (*s).hiscnt += 1;
             }
         }
-        if (*s).hiscnt < 0 as ::core::ffi::c_int
-            || (*get_histentry((*s).histype).offset((*s).hiscnt as isize))
-                .hisstr
-                .is_null()
-        {
-            (*s).hiscnt = (*s).save_hiscnt;
-            break;
-        } else if (*s).c != K_UP && (*s).c != K_DOWN
-            || (*s).hiscnt == (*s).save_hiscnt
-            || strncmp(
-                (*get_histentry((*s).histype).offset((*s).hiscnt as isize)).hisstr,
-                (*s).lookfor,
-                (*s).lookforlen as size_t,
-            ) == 0 as ::core::ffi::c_int
-        {
-            break;
+        let entry = hist_entry_ref((*s).histype, (*s).hiscnt);
+        match entry {
+            None => {
+                (*s).hiscnt = (*s).save_hiscnt;
+                break;
+            }
+            Some(entry) => {
+                if (*s).c != K_UP && (*s).c != K_DOWN
+                    || (*s).hiscnt == (*s).save_hiscnt
+                    || strncmp(entry.text, (*s).lookfor, (*s).lookforlen as size_t)
+                        == 0 as ::core::ffi::c_int
+                {
+                    break;
+                }
+            }
         }
     }
 }
@@ -4564,19 +4565,21 @@ unsafe extern "C" fn command_line_browse_history(
         let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut plen: ::core::ffi::c_int = 0;
         let mut old_firstc: ::core::ffi::c_int = 0;
+        let mut hist_sep: ::core::ffi::c_int = NUL;
         dealloc_cmdbuff();
         (*s).xpc.xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
         if (*s).hiscnt == get_hislen() {
             p = (*s).lookfor;
             plen = (*s).lookforlen;
         } else {
-            p = (*get_histentry((*s).histype).offset((*s).hiscnt as isize)).hisstr;
-            plen = (*get_histentry((*s).histype).offset((*s).hiscnt as isize)).hisstrlen
-                as ::core::ffi::c_int;
+            let entry =
+                hist_entry_ref((*s).histype, (*s).hiscnt).expect("browsed slot is occupied");
+            p = entry.text as *mut ::core::ffi::c_char;
+            plen = entry.len as ::core::ffi::c_int;
+            hist_sep = entry.sep as ::core::ffi::c_int;
         }
         if (*s).histype == HIST_SEARCH as ::core::ffi::c_int && p != (*s).lookfor && {
-            old_firstc = *p.offset((plen + 1 as ::core::ffi::c_int) as isize) as uint8_t
-                as ::core::ffi::c_int;
+            old_firstc = hist_sep;
             old_firstc != (*s).firstc
         } {
             let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -8321,7 +8324,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     (*curbuf.get()).b_p_tw = 0 as OptInt;
     init_history();
     if get_hislen() > 0 as ::core::ffi::c_int && histtype != HIST_INVALID as ::core::ffi::c_int {
-        i = *get_hisidx(histtype);
+        i = get_hisidx(histtype);
         if i >= 0 as ::core::ffi::c_int {
             let mut lnum: linenr_T = 0 as linenr_T;
             loop {
@@ -8329,20 +8332,17 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                 if i == get_hislen() {
                     i = 0 as ::core::ffi::c_int;
                 }
-                if !(*get_histentry(histtype).offset(i as isize))
-                    .hisstr
-                    .is_null()
-                {
+                if let Some(entry) = hist_entry_ref(histtype, i) {
                     let c2rust_fresh31 = lnum;
                     lnum = lnum + 1;
                     ml_append(
                         c2rust_fresh31,
-                        (*get_histentry(histtype).offset(i as isize)).hisstr,
+                        entry.text as *mut ::core::ffi::c_char,
                         0 as colnr_T,
                         false_0 != 0,
                     );
                 }
-                if i == *get_hisidx(histtype) {
+                if i == get_hisidx(histtype) {
                     break;
                 }
             }

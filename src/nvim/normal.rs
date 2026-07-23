@@ -6672,10 +6672,9 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         init_history();
         add_to_history(
             HIST_SEARCH as ::core::ffi::c_int,
-            buf,
-            buflen,
+            ::core::slice::from_raw_parts(buf as *const u8, buflen as usize),
             true_0 != 0,
-            NUL,
+            NUL as u8,
         );
         normal_search(
             cap,
