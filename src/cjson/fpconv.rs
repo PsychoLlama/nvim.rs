@@ -12,7 +12,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 36] = unsafe {
 };
 static locale_decimal_point: SharedCell<::core::ffi::c_char> =
     SharedCell::new('.' as ::core::ffi::c_char);
-unsafe extern "C" fn fpconv_update_locale() {
+unsafe extern "C-unwind" fn fpconv_update_locale() {
     let mut buf: [::core::ffi::c_char; 8] = [0; 8];
     snprintf(
         &raw mut buf as *mut ::core::ffi::c_char,
@@ -34,7 +34,9 @@ unsafe extern "C" fn fpconv_update_locale() {
     locale_decimal_point.set(buf[1 as ::core::ffi::c_int as usize]);
 }
 #[inline]
-unsafe extern "C" fn valid_number_character(mut ch: ::core::ffi::c_char) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn valid_number_character(
+    mut ch: ::core::ffi::c_char,
+) -> ::core::ffi::c_int {
     let mut lower_ch: ::core::ffi::c_char = 0;
     if '0' as ::core::ffi::c_int <= ch as ::core::ffi::c_int
         && ch as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
@@ -55,14 +57,16 @@ unsafe extern "C" fn valid_number_character(mut ch: ::core::ffi::c_char) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn strtod_buffer_size(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn strtod_buffer_size(
+    mut s: *const ::core::ffi::c_char,
+) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = s;
     while valid_number_character(*p) != 0 {
         p = p.offset(1);
     }
     return p.offset_from(s) as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn fpconv_strtod(
+pub unsafe extern "C-unwind" fn fpconv_strtod(
     mut nptr: *const ::core::ffi::c_char,
     mut endptr: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_double {
@@ -109,7 +113,7 @@ pub unsafe extern "C" fn fpconv_strtod(
     }
     return value;
 }
-unsafe extern "C" fn set_number_format(
+unsafe extern "C-unwind" fn set_number_format(
     mut fmt: *mut ::core::ffi::c_char,
     mut precision: ::core::ffi::c_int,
 ) {
@@ -146,7 +150,7 @@ unsafe extern "C" fn set_number_format(
     *fmt.offset(c2rust_fresh4 as isize) = 'g' as ::core::ffi::c_char;
     *fmt.offset(i as isize) = 0 as ::core::ffi::c_char;
 }
-pub unsafe extern "C" fn fpconv_g_fmt(
+pub unsafe extern "C-unwind" fn fpconv_g_fmt(
     mut str: *mut ::core::ffi::c_char,
     mut num: ::core::ffi::c_double,
     mut precision: ::core::ffi::c_int,
@@ -188,7 +192,7 @@ pub unsafe extern "C" fn fpconv_g_fmt(
     }
     return len;
 }
-pub unsafe extern "C" fn fpconv_init() {
+pub unsafe extern "C-unwind" fn fpconv_init() {
     fpconv_update_locale();
 }
 pub const FPCONV_G_FMT_BUFSIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;

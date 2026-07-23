@@ -1767,7 +1767,7 @@ unsafe extern "C" fn positive_integer_to_special_typval(
         tv_list_append_number(list, (val & 0x7fffffff as uint64_t) as varnumber_T);
     };
 }
-unsafe extern "C" fn typval_parse_enter(
+unsafe extern "C-unwind" fn typval_parse_enter(
     mut parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -1921,7 +1921,7 @@ pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_
         i = i.wrapping_add(1);
     }
 }
-unsafe extern "C" fn typval_parse_exit(
+unsafe extern "C-unwind" fn typval_parse_exit(
     mut _parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -2100,10 +2100,11 @@ pub unsafe extern "C" fn mpack_parse_typval(
         size,
         Some(
             typval_parse_enter
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
         Some(
-            typval_parse_exit as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+            typval_parse_exit
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
     );
 }

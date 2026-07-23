@@ -143,7 +143,9 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-unsafe extern "C" fn nlua_api_nvim_get_autocmds(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_autocmds(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -270,7 +272,7 @@ unsafe extern "C" fn nlua_api_nvim_get_autocmds(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_autocmd(
+unsafe extern "C-unwind" fn nlua_api_nvim_create_autocmd(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Object = Object {
@@ -419,7 +421,9 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_autocmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_del_autocmd(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -477,7 +481,7 @@ unsafe extern "C" fn nlua_api_nvim_del_autocmd(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_clear_autocmds(
+unsafe extern "C-unwind" fn nlua_api_nvim_clear_autocmds(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -582,7 +586,7 @@ unsafe extern "C" fn nlua_api_nvim_clear_autocmds(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_augroup(
+unsafe extern "C-unwind" fn nlua_api_nvim_create_augroup(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -678,7 +682,7 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_augroup_by_id(
+unsafe extern "C-unwind" fn nlua_api_nvim_del_augroup_by_id(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
@@ -738,7 +742,7 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_id(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
+unsafe extern "C-unwind" fn nlua_api_nvim_del_augroup_by_name(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -802,7 +806,9 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec_autocmds(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_exec_autocmds(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Object = Object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -918,7 +924,7 @@ unsafe extern "C" fn nlua_api_nvim_exec_autocmds(mut lstate: *mut lua_State) -> 
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_line_count(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_line_count(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -984,7 +990,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_attach(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_attach(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -1095,7 +1103,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_lines(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_lines(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg4: Boolean = false;
     let mut arg3: Integer = 0;
     let mut arg2: Integer = 0;
@@ -1197,7 +1207,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_lines(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg5: Array = Array {
         size: 0,
         capacity: 0,
@@ -1310,7 +1322,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> 
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_text(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg6: Array = Array {
         size: 0,
         capacity: 0,
@@ -1433,7 +1447,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> :
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_text(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg5: Integer = 0;
     let mut arg4: Integer = 0;
     let mut arg3: Integer = 0;
@@ -1568,7 +1584,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_offset(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
@@ -1643,7 +1659,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -1722,7 +1740,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_var(mut lstate: *mut lua_State) -> ::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_changedtick(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -1788,7 +1806,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_keymap(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -1870,7 +1888,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_keymap(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: String_0 = String_0 {
@@ -2017,7 +2035,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_keymap(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: String_0 = String_0 {
@@ -2097,7 +2115,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg3: Object = Object {
@@ -2177,7 +2197,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_var(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -2246,7 +2268,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_var(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_name(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_name(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
@@ -2313,7 +2337,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_name(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_name(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -2382,7 +2408,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_name(mut lstate: *mut lua_State) -> :
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_is_loaded(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -2446,7 +2474,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_delete(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_delete(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: KeyDict_buf_delete = KeyDict_buf_delete {
@@ -2544,7 +2574,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_delete(mut lstate: *mut lua_State) -> ::c
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_is_valid(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_is_valid(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -2608,7 +2640,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_mark(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -2684,7 +2718,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_mark(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg4: Integer = 0;
     let mut arg3: Integer = 0;
     let mut arg2: String_0 = String_0 {
@@ -2803,7 +2839,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_mark(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -2883,7 +2921,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_call(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_call(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
         type_0: kObjectTypeNil,
@@ -2959,7 +2999,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__buf_stats(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__buf_stats(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -3027,7 +3069,9 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_parse_cmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_parse_cmd(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -3153,7 +3197,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -3350,7 +3394,7 @@ unsafe extern "C" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ff
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_user_command(
+unsafe extern "C-unwind" fn nlua_api_nvim_create_user_command(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -3520,7 +3564,7 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_user_command(
+unsafe extern "C-unwind" fn nlua_api_nvim_del_user_command(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -3584,7 +3628,7 @@ unsafe extern "C" fn nlua_api_nvim_del_user_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_create_user_command(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -3762,7 +3806,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_user_command(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -3833,7 +3877,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_commands(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_commands(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -3914,7 +3960,7 @@ unsafe extern "C" fn nlua_api_nvim_get_commands(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_commands(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -4005,7 +4051,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -4085,7 +4131,7 @@ unsafe extern "C" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::f
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_command_output(
+unsafe extern "C-unwind" fn nlua_api_nvim_command_output(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -4159,7 +4205,7 @@ unsafe extern "C" fn nlua_api_nvim_command_output(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_number(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_number(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -4226,7 +4272,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_number(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_clear_highlight(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: Integer = 0;
@@ -4308,7 +4354,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_add_highlight(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg6: Integer = 0;
@@ -4425,7 +4471,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_virtual_text(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: Array = Array {
@@ -4547,7 +4593,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_id(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -4623,7 +4671,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_name(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
@@ -4704,7 +4752,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_option_info(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_option_info(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -4778,7 +4826,9 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_option(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_option(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -4851,7 +4901,9 @@ unsafe extern "C" fn nlua_api_nvim_set_option(mut lstate: *mut lua_State) -> ::c
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_option(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_option(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -4923,7 +4975,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_option(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_option(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -5005,7 +5057,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_option(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_option(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_option(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -5087,7 +5139,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_option(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_option(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_option(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -5169,7 +5221,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_option(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_option(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_option(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -5251,7 +5303,9 @@ unsafe extern "C" fn nlua_api_nvim_win_set_option(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_out_write(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_out_write(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -5312,7 +5366,9 @@ unsafe extern "C" fn nlua_api_nvim_out_write(mut lstate: *mut lua_State) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_err_write(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_err_write(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -5373,7 +5429,9 @@ unsafe extern "C" fn nlua_api_nvim_err_write(mut lstate: *mut lua_State) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_err_writeln(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_err_writeln(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -5434,7 +5492,7 @@ unsafe extern "C" fn nlua_api_nvim_err_writeln(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -5524,7 +5582,7 @@ unsafe extern "C" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core:
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_namespace(
+unsafe extern "C-unwind" fn nlua_api_nvim_create_namespace(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -5594,7 +5652,7 @@ unsafe extern "C" fn nlua_api_nvim_create_namespace(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_namespaces(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_namespaces(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -5658,7 +5716,7 @@ unsafe extern "C" fn nlua_api_nvim_get_namespaces(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmark_by_id(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
@@ -5778,7 +5836,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmarks(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -5927,7 +5985,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_extmark(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: Integer = 0;
@@ -6181,7 +6239,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_extmark(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
@@ -6262,7 +6320,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
+unsafe extern "C-unwind" fn nlua_api_nvim_buf_clear_namespace(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: Integer = 0;
@@ -6344,7 +6402,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_decoration_provider(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
@@ -6446,7 +6504,7 @@ unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
+unsafe extern "C-unwind" fn nlua_api_nvim__buf_debug_extmarks(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Boolean = false;
@@ -6531,7 +6589,9 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__ns_set(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__ns_set(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: KeyDict_ns_opts = KeyDict_ns_opts {
@@ -6623,7 +6683,9 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__ns_get(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__ns_get(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: KeyDict_ns_opts = KeyDict_ns_opts {
@@ -6695,7 +6757,7 @@ unsafe extern "C" fn nlua_api_nvim__ns_get(mut lstate: *mut lua_State) -> ::core
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_option_value(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_option_value(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -6813,7 +6875,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_option_value(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_option_value(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -6937,7 +6999,7 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_all_options_info(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_all_options_info(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -7001,7 +7063,7 @@ unsafe extern "C" fn nlua_api_nvim_get_all_options_info(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_option_info2(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_option_info2(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -7118,7 +7180,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info2(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_list_wins(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -7189,7 +7251,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_var(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -7270,7 +7332,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_set_var(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_var(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -7352,7 +7414,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_del_var(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_del_var(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
@@ -7423,7 +7485,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_del_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_win(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -7490,7 +7552,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_set_win(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_win(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Window = 0;
@@ -7557,7 +7619,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_win(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_number(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -7624,7 +7686,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
+unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_is_valid(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -7691,7 +7753,9 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_tabpage(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_open_tabpage(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -7801,7 +7865,9 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_ui_send(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_ui_send(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -7863,7 +7929,7 @@ unsafe extern "C" fn nlua_api_nvim_ui_send(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_id_by_name(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -7933,7 +7999,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -8039,7 +8105,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(mut lstate: *mut lua_State) -> ::core:
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -8263,7 +8329,9 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(mut lstate: *mut lua_State) -> ::core:
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_ns(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
     let mut arg1: KeyDict_get_ns = KeyDict_get_ns {
@@ -8346,7 +8414,9 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_ns(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_hl_ns(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -8405,7 +8475,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns(mut lstate: *mut lua_State) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_hl_ns_fast(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
@@ -8459,7 +8529,9 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_feedkeys(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_feedkeys(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg3: Boolean = false;
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -8538,7 +8610,7 @@ unsafe extern "C" fn nlua_api_nvim_feedkeys(mut lstate: *mut lua_State) -> ::cor
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_input(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_input(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -8599,7 +8671,9 @@ unsafe extern "C" fn nlua_api_nvim_input(mut lstate: *mut lua_State) -> ::core::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_input_mouse(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_input_mouse(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg6: Integer = 0;
     let mut arg5: Integer = 0;
     let mut arg4: Integer = 0;
@@ -8697,7 +8771,7 @@ unsafe extern "C" fn nlua_api_nvim_input_mouse(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
+unsafe extern "C-unwind" fn nlua_api_nvim_replace_termcodes(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg4: Boolean = false;
@@ -8793,7 +8867,9 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_strwidth(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_strwidth(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -8861,7 +8937,7 @@ unsafe extern "C" fn nlua_api_nvim_strwidth(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_runtime_paths(
+unsafe extern "C-unwind" fn nlua_api_nvim_list_runtime_paths(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -8925,7 +9001,7 @@ unsafe extern "C" fn nlua_api_nvim_list_runtime_paths(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__runtime_inspect(
+unsafe extern "C-unwind" fn nlua_api_nvim__runtime_inspect(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -8989,7 +9065,7 @@ unsafe extern "C" fn nlua_api_nvim__runtime_inspect(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_runtime_file(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
@@ -9063,7 +9139,9 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__get_lib_dir(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__get_lib_dir(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -9125,7 +9203,9 @@ unsafe extern "C" fn nlua_api_nvim__get_lib_dir(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__get_runtime(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__get_runtime(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Array = Array {
         size: 0,
@@ -9225,7 +9305,7 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_current_dir(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_current_dir(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -9288,7 +9368,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_dir(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_current_line(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_current_line(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -9351,7 +9431,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_line(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_current_line(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_current_line(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -9425,7 +9505,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_current_line(
+unsafe extern "C-unwind" fn nlua_api_nvim_del_current_line(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -9489,7 +9569,9 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -9560,7 +9642,9 @@ unsafe extern "C" fn nlua_api_nvim_get_var(mut lstate: *mut lua_State) -> ::core
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -9633,7 +9717,9 @@ unsafe extern "C" fn nlua_api_nvim_set_var(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_del_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -9695,7 +9781,9 @@ unsafe extern "C" fn nlua_api_nvim_del_var(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_vvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_vvar(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -9766,7 +9854,9 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_vvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_vvar(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -9839,7 +9929,7 @@ unsafe extern "C" fn nlua_api_nvim_set_vvar(mut lstate: *mut lua_State) -> ::cor
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Array = Array {
         size: 0,
@@ -10000,7 +10090,9 @@ unsafe extern "C" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::f
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_bufs(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_list_bufs(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -10062,7 +10154,7 @@ unsafe extern "C" fn nlua_api_nvim_list_bufs(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_current_buf(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_current_buf(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -10122,7 +10214,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_buf(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_current_buf(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_current_buf(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
@@ -10192,7 +10284,9 @@ unsafe extern "C" fn nlua_api_nvim_set_current_buf(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_wins(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_list_wins(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -10254,7 +10348,7 @@ unsafe extern "C" fn nlua_api_nvim_list_wins(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_current_win(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_current_win(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -10314,7 +10408,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_win(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_current_win(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_current_win(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -10384,7 +10478,9 @@ unsafe extern "C" fn nlua_api_nvim_set_current_win(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_create_buf(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Boolean = false;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -10457,7 +10553,9 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_open_term(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
@@ -10563,7 +10661,9 @@ unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_chan_send(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_chan_send(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -10632,7 +10732,9 @@ unsafe extern "C" fn nlua_api_nvim_chan_send(mut lstate: *mut lua_State) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_tabpages(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_list_tabpages(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -10694,7 +10796,7 @@ unsafe extern "C" fn nlua_api_nvim_list_tabpages(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_current_tabpage(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_current_tabpage(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -10754,7 +10856,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_tabpage(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
+unsafe extern "C-unwind" fn nlua_api_nvim_set_current_tabpage(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Tabpage = 0;
@@ -10824,7 +10926,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
     let mut arg2: Boolean = false;
     let mut arg1: String_0 = String_0 {
@@ -10924,7 +11026,7 @@ unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg4: Boolean = false;
     let mut arg3: Boolean = false;
     let mut arg2: String_0 = String_0 {
@@ -11022,7 +11124,7 @@ unsafe extern "C" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ff
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_color_by_name(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -11092,7 +11194,9 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_color_map(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_color_map(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -11154,7 +11258,9 @@ unsafe extern "C" fn nlua_api_nvim_get_color_map(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_context(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_context(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -11249,7 +11355,9 @@ unsafe extern "C" fn nlua_api_nvim_get_context(mut lstate: *mut lua_State) -> ::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_load_context(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_load_context(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -11321,7 +11429,9 @@ unsafe extern "C" fn nlua_api_nvim_load_context(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_mode(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_mode(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -11376,7 +11486,9 @@ unsafe extern "C" fn nlua_api_nvim_get_mode(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_keymap(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11448,7 +11560,9 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_set_keymap(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg3: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11584,7 +11698,9 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(mut lstate: *mut lua_State) -> ::c
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_del_keymap(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11655,7 +11771,9 @@ unsafe extern "C" fn nlua_api_nvim_del_keymap(mut lstate: *mut lua_State) -> ::c
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_chan_info(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_chan_info(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -11724,7 +11842,9 @@ unsafe extern "C" fn nlua_api_nvim_get_chan_info(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_chans(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_list_chans(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -11786,7 +11906,7 @@ unsafe extern "C" fn nlua_api_nvim_list_chans(mut lstate: *mut lua_State) -> ::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__id(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Object = Object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -11857,7 +11977,9 @@ unsafe extern "C" fn nlua_api_nvim__id(mut lstate: *mut lua_State) -> ::core::ff
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_array(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__id_array(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Array = Array {
         size: 0,
         capacity: 0,
@@ -11929,7 +12051,9 @@ unsafe extern "C" fn nlua_api_nvim__id_array(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_dict(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__id_dict(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -12001,7 +12125,9 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_float(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__id_float(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Float = 0.;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Float = 0.;
@@ -12065,7 +12191,7 @@ unsafe extern "C" fn nlua_api_nvim__id_float(mut lstate: *mut lua_State) -> ::co
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__stats(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__stats(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -12127,7 +12253,9 @@ unsafe extern "C" fn nlua_api_nvim__stats(mut lstate: *mut lua_State) -> ::core:
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_uis(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_list_uis(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -12189,7 +12317,7 @@ unsafe extern "C" fn nlua_api_nvim_list_uis(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_proc_children(
+unsafe extern "C-unwind" fn nlua_api_nvim_get_proc_children(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
@@ -12259,7 +12387,9 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_proc(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_proc(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
@@ -12326,7 +12456,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
+unsafe extern "C-unwind" fn nlua_api_nvim_select_popupmenu_item(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Boolean = false;
@@ -12422,7 +12552,9 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__inspect_cell(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__inspect_cell(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
     let mut arg2: Integer = 0;
     let mut arg1: Integer = 0;
@@ -12505,7 +12637,9 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__screenshot(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__screenshot(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -12560,7 +12694,7 @@ unsafe extern "C" fn nlua_api_nvim__screenshot(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__invalidate_glyph_cache(
+unsafe extern "C-unwind" fn nlua_api_nvim__invalidate_glyph_cache(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -12614,7 +12748,9 @@ unsafe extern "C" fn nlua_api_nvim__invalidate_glyph_cache(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__unpack(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__unpack(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -12677,7 +12813,9 @@ unsafe extern "C" fn nlua_api_nvim__unpack(mut lstate: *mut lua_State) -> ::core
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_del_mark(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -12745,7 +12883,9 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_get_mark(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -12839,7 +12979,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_eval_statusline(
+unsafe extern "C-unwind" fn nlua_api_nvim_eval_statusline(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
@@ -12950,7 +13090,9 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__complete_set(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__complete_set(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -13051,7 +13193,9 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__redraw(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim__redraw(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg1: KeyDict_redraw = KeyDict_redraw {
         is_set__redraw_: 0,
@@ -13154,7 +13298,7 @@ unsafe extern "C" fn nlua_api_nvim__redraw(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec2(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_exec2(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13246,7 +13390,9 @@ unsafe extern "C" fn nlua_api_nvim_exec2(mut lstate: *mut lua_State) -> ::core::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_command(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_command(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13307,7 +13453,7 @@ unsafe extern "C" fn nlua_api_nvim_command(mut lstate: *mut lua_State) -> ::core
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_eval(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_eval(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13378,7 +13524,9 @@ unsafe extern "C" fn nlua_api_nvim_eval(mut lstate: *mut lua_State) -> ::core::f
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_call_function(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_call_function(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Array = Array {
         size: 0,
         capacity: 0,
@@ -13461,7 +13609,7 @@ unsafe extern "C" fn nlua_api_nvim_call_function(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_call_dict_function(
+unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Array = Array {
@@ -13557,7 +13705,7 @@ unsafe extern "C" fn nlua_api_nvim_call_dict_function(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_parse_expression(
+unsafe extern "C-unwind" fn nlua_api_nvim_parse_expression(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg3: Boolean = false;
@@ -13641,7 +13789,9 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_open_win(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -13860,7 +14010,7 @@ unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_config(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_config(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -14054,7 +14204,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_config(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_config(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_config(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -14177,7 +14327,9 @@ unsafe extern "C" fn nlua_api_nvim_win_get_config(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_buf(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Buffer = 0;
@@ -14241,7 +14393,9 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(mut lstate: *mut lua_State) -> ::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_buf(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Buffer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -14317,7 +14471,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_cursor(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -14387,7 +14541,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_cursor(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_cursor(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Array = Array {
@@ -14458,7 +14612,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_cursor(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_height(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_height(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -14524,7 +14678,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_height(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_height(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_height(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
@@ -14592,7 +14746,9 @@ unsafe extern "C" fn nlua_api_nvim_win_set_height(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_width(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_width(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
@@ -14656,7 +14812,9 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(mut lstate: *mut lua_State) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_width(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_width(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -14722,7 +14880,9 @@ unsafe extern "C" fn nlua_api_nvim_win_set_width(mut lstate: *mut lua_State) -> 
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14801,7 +14961,9 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(mut lstate: *mut lua_State) -> ::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg3: Object = Object {
@@ -14881,7 +15043,9 @@ unsafe extern "C" fn nlua_api_nvim_win_set_var(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_del_var(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14950,7 +15114,7 @@ unsafe extern "C" fn nlua_api_nvim_win_del_var(mut lstate: *mut lua_State) -> ::
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_position(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_position(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -15020,7 +15184,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_position(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_tabpage(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -15086,7 +15250,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_number(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_get_number(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -15152,7 +15316,9 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_is_valid(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_is_valid(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -15216,7 +15382,9 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(mut lstate: *mut lua_State) -> :
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_hide(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_hide(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -15285,7 +15453,9 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(mut lstate: *mut lua_State) -> ::cor
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_close(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_close(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -15361,7 +15531,9 @@ unsafe extern "C" fn nlua_api_nvim_win_close(mut lstate: *mut lua_State) -> ::co
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_call(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_call(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
         type_0: kObjectTypeNil,
@@ -15437,7 +15609,9 @@ unsafe extern "C" fn nlua_api_nvim_win_call(mut lstate: *mut lua_State) -> ::cor
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn nlua_api_nvim_win_set_hl_ns(
+    mut lstate: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -15503,7 +15677,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(mut lstate: *mut lua_State) -> 
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_text_height(
+unsafe extern "C-unwind" fn nlua_api_nvim_win_text_height(
     mut lstate: *mut lua_State,
 ) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
@@ -15607,13 +15781,13 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
     }
     return 1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
+pub unsafe extern "C-unwind" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_createtable(lstate, 0 as ::core::ffi::c_int, 181 as ::core::ffi::c_int);
     lua_pushcclosure(
         lstate,
         Some(
             nlua_api_nvim_get_autocmds
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15626,7 +15800,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_create_autocmd
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15638,7 +15812,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_del_autocmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_del_autocmd
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15651,7 +15826,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_clear_autocmds
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15664,7 +15839,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_create_augroup
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15677,7 +15852,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_del_augroup_by_id
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15690,7 +15865,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_del_augroup_by_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15703,7 +15878,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_exec_autocmds
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15716,7 +15891,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_line_count
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15728,7 +15903,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_attach as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_attach
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15741,7 +15917,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_lines
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15754,7 +15930,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_lines
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15767,7 +15943,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_text
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15780,7 +15956,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_text
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15793,7 +15969,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_offset
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15805,7 +15981,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_get_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15818,7 +15995,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_changedtick
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15831,7 +16008,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15844,7 +16021,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15857,7 +16034,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_del_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15869,7 +16046,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_set_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15881,7 +16059,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_del_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15894,7 +16073,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15907,7 +16086,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15920,7 +16099,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_is_loaded
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15932,7 +16111,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_delete as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_delete
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15945,7 +16125,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_is_valid
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15958,7 +16138,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_del_mark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15971,7 +16151,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_mark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15984,7 +16164,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_mark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -15995,7 +16175,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_buf_call as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_buf_call
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16006,7 +16189,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim__buf_stats as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim__buf_stats
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16017,7 +16201,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_parse_cmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_parse_cmd
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16027,7 +16214,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_cmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_cmd as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16039,7 +16228,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_create_user_command
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16052,7 +16241,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_del_user_command
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16065,7 +16254,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_create_user_command
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16078,7 +16267,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_del_user_command
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16091,7 +16280,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_commands
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16104,7 +16293,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_commands
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16115,7 +16304,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_exec as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_exec as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16127,7 +16318,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_command_output
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16140,7 +16331,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_number
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16153,7 +16344,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_clear_highlight
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16166,7 +16357,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_add_highlight
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16179,7 +16370,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_virtual_text
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16192,7 +16383,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_hl_by_id
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16205,7 +16396,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_hl_by_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16218,7 +16409,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_option_info
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16230,7 +16421,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_set_option as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_set_option
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16242,7 +16434,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_option as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_option
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16255,7 +16448,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16268,7 +16461,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16281,7 +16474,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16294,7 +16487,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16305,7 +16498,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_out_write as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_out_write
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16315,7 +16511,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_err_write as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_err_write
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16326,7 +16525,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_err_writeln as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_err_writeln
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16337,7 +16537,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_notify as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_notify
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16349,7 +16552,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_create_namespace
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16362,7 +16565,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_namespaces
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16375,7 +16578,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_extmark_by_id
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16388,7 +16591,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_get_extmarks
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16401,7 +16604,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_set_extmark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16414,7 +16617,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_del_extmark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16427,7 +16630,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_buf_clear_namespace
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16440,7 +16643,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_decoration_provider
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16453,7 +16656,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__buf_debug_extmarks
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16464,7 +16667,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__ns_set as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__ns_set
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16474,7 +16680,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__ns_get as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__ns_get
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16486,7 +16695,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_option_value
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16499,7 +16708,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_option_value
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16512,7 +16721,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_all_options_info
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16525,7 +16734,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_option_info2
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16538,7 +16747,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_list_wins
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16551,7 +16760,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_get_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16564,7 +16773,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_set_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16577,7 +16786,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_del_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16590,7 +16799,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_get_win
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16603,7 +16812,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_set_win
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16616,7 +16825,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_get_number
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16629,7 +16838,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_tabpage_is_valid
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16642,7 +16851,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_open_tabpage
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16653,7 +16862,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_ui_send as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_ui_send
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16665,7 +16877,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_hl_id_by_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16676,7 +16888,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_hl as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_hl
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16686,7 +16901,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_set_hl as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_set_hl
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16696,7 +16914,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_hl_ns as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_hl_ns
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16706,7 +16927,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_set_hl_ns as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_set_hl_ns
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16718,7 +16942,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_hl_ns_fast
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16729,7 +16953,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_feedkeys as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_feedkeys
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16739,7 +16966,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_input as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_input
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16750,7 +16980,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_input_mouse as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_input_mouse
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16763,7 +16994,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_replace_termcodes
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16774,7 +17005,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_strwidth as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_strwidth
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16786,7 +17020,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_list_runtime_paths
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16799,7 +17033,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__runtime_inspect
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16812,7 +17046,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_runtime_file
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16825,7 +17059,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__get_lib_dir
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16838,7 +17072,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__get_runtime
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16851,7 +17085,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_current_dir
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16864,7 +17098,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_current_line
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16877,7 +17111,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_current_line
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16890,7 +17124,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_del_current_line
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16901,7 +17135,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16911,7 +17148,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_set_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16921,7 +17161,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_del_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16931,7 +17174,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_vvar as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_vvar
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16941,7 +17187,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_set_vvar as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_set_vvar
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16951,7 +17200,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_echo as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_echo as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16961,7 +17212,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_list_bufs as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_list_bufs
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -16973,7 +17227,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_current_buf
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16986,7 +17240,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_current_buf
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -16997,7 +17251,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_list_wins as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_list_wins
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17009,7 +17266,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_current_win
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17022,7 +17279,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_current_win
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17034,7 +17291,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_create_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_create_buf
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17045,7 +17303,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_open_term as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_open_term
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17055,7 +17316,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_chan_send as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_chan_send
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17067,7 +17331,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_list_tabpages
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17080,7 +17344,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_current_tabpage
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17093,7 +17357,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_set_current_tabpage
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17104,7 +17368,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_paste as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_paste
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17114,7 +17381,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_put as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_put as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17126,7 +17395,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_color_by_name
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17139,7 +17408,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_color_map
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17151,7 +17420,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_context as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_context
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17164,7 +17434,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_load_context
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17175,7 +17445,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_mode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_mode
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17186,7 +17459,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_keymap
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17198,7 +17472,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_set_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_set_keymap
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17210,7 +17485,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_del_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_del_keymap
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17223,7 +17499,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_chan_info
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17235,7 +17511,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_list_chans as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_list_chans
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17246,7 +17523,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__id as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__id as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17256,7 +17535,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__id_array as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__id_array
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17266,7 +17548,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__id_dict as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__id_dict
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17276,7 +17561,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__id_float as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__id_float
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17286,7 +17574,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__stats as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__stats
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17296,7 +17587,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_list_uis as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_list_uis
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17308,7 +17602,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_get_proc_children
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17319,7 +17613,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_proc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_proc
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17331,7 +17628,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_select_popupmenu_item
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17344,7 +17641,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__inspect_cell
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17356,7 +17653,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim__screenshot as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim__screenshot
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17369,7 +17667,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__invalidate_glyph_cache
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17380,7 +17678,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__unpack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__unpack
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17390,7 +17691,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_del_mark as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_del_mark
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17400,7 +17704,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_get_mark as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_get_mark
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17412,7 +17719,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_eval_statusline
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17425,7 +17732,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim__complete_set
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17436,7 +17743,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim__redraw as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim__redraw
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17446,7 +17756,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_exec2 as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_exec2
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17456,7 +17769,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_command as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_command
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17466,7 +17782,9 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_eval as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_eval as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17478,7 +17796,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_call_function
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17491,7 +17809,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_call_dict_function
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17504,7 +17822,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_parse_expression
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17515,7 +17833,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_open_win as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_open_win
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17527,7 +17848,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_config
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17540,7 +17861,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_config
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17552,7 +17873,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_get_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_get_buf
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17564,7 +17886,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_set_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_set_buf
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17577,7 +17900,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_cursor
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17590,7 +17913,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_cursor
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17603,7 +17926,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_height
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17616,7 +17939,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_height
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17629,7 +17952,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_width
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17642,7 +17965,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_width
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17654,7 +17977,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_get_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17666,7 +17990,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_set_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17678,7 +18003,8 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_del_var
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17691,7 +18017,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_position
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17704,7 +18030,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_tabpage
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17717,7 +18043,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_get_number
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17730,7 +18056,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_is_valid
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17741,7 +18067,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_win_hide as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_win_hide
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17751,7 +18080,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_win_close as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_win_close
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17761,7 +18093,10 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(nlua_api_nvim_win_call as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            nlua_api_nvim_win_call
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -17773,7 +18108,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_set_hl_ns
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -17786,7 +18121,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
         lstate,
         Some(
             nlua_api_nvim_win_text_height
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );

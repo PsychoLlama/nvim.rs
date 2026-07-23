@@ -6,7 +6,7 @@
 
 use crate::src::nvim::types::*;
 
-extern "C" {
+extern "C-unwind" {
     pub fn luaL_argerror(
         L: *mut lua_State,
         numarg: ::core::ffi::c_int,

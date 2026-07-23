@@ -173,7 +173,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+pub unsafe extern "C-unwind" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(lstate) < 1 as ::core::ffi::c_int {
         return luaL_error(
             lstate,
@@ -279,14 +279,16 @@ pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core:
 static spell_functions: GlobalCell<[luaL_Reg; 2]> = GlobalCell::new([
     luaL_Reg {
         name: b"check\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(nlua_spell_check as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            nlua_spell_check as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-pub unsafe extern "C" fn luaopen_spell(mut L: *mut lua_State) -> ::core::ffi::c_int {
+pub unsafe extern "C-unwind" fn luaopen_spell(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     luaL_register(
         L,

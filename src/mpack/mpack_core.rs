@@ -19,12 +19,12 @@ pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
 pub const MPACK_MAX_TOKEN_LEN: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-pub unsafe extern "C" fn mpack_tokbuf_init(mut tokbuf: *mut mpack_tokbuf_t) {
+pub unsafe extern "C-unwind" fn mpack_tokbuf_init(mut tokbuf: *mut mpack_tokbuf_t) {
     (*tokbuf).ppos = 0 as size_t;
     (*tokbuf).plen = 0 as size_t;
     (*tokbuf).passthrough = 0 as mpack_uint32_t;
 }
-pub unsafe extern "C" fn mpack_read(
+pub unsafe extern "C-unwind" fn mpack_read(
     mut tokbuf: *mut mpack_tokbuf_t,
     mut buf: *mut *const ::core::ffi::c_char,
     mut buflen: *mut size_t,
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn mpack_read(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn mpack_write(
+pub unsafe extern "C-unwind" fn mpack_write(
     mut tokbuf: *mut mpack_tokbuf_t,
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn mpack_write(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn mpack_rtoken(
+pub unsafe extern "C-unwind" fn mpack_rtoken(
     mut buf: *mut *const ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut tok: *mut mpack_token_t,
@@ -416,7 +416,7 @@ pub unsafe extern "C" fn mpack_rtoken(
         return mpack_value(MPACK_TOKEN_SINT, 1 as mpack_uint32_t, mpack_byte(t), tok);
     };
 }
-unsafe extern "C" fn mpack_rpending(
+unsafe extern "C-unwind" fn mpack_rpending(
     mut buf: *mut *const ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut state: *mut mpack_tokbuf_t,
@@ -453,7 +453,7 @@ unsafe extern "C" fn mpack_rpending(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_rvalue(
+unsafe extern "C-unwind" fn mpack_rvalue(
     mut type_0: mpack_token_type_t,
     mut remaining: mpack_uint32_t,
     mut buf: *mut *const ::core::ffi::c_char,
@@ -505,7 +505,7 @@ unsafe extern "C" fn mpack_rvalue(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_rblob(
+unsafe extern "C-unwind" fn mpack_rblob(
     mut type_0: mpack_token_type_t,
     mut tlen: mpack_uint32_t,
     mut buf: *mut *const ::core::ffi::c_char,
@@ -545,7 +545,7 @@ unsafe extern "C" fn mpack_rblob(
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_wtoken(
+unsafe extern "C-unwind" fn mpack_wtoken(
     mut tok: *const mpack_token_t,
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
@@ -574,7 +574,7 @@ unsafe extern "C" fn mpack_wtoken(
         _ => return MPACK_ERROR as ::core::ffi::c_int,
     };
 }
-unsafe extern "C" fn mpack_wpending(
+unsafe extern "C-unwind" fn mpack_wpending(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut state: *mut mpack_tokbuf_t,
@@ -612,7 +612,7 @@ unsafe extern "C" fn mpack_wpending(
     }
     return MPACK_EOF as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_wpint(
+unsafe extern "C-unwind" fn mpack_wpint(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut val: mpack_value_t,
@@ -636,7 +636,7 @@ unsafe extern "C" fn mpack_wpint(
         return mpack_w1(buf, buflen, lo);
     };
 }
-unsafe extern "C" fn mpack_wnint(
+unsafe extern "C-unwind" fn mpack_wnint(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut val: mpack_value_t,
@@ -660,7 +660,7 @@ unsafe extern "C" fn mpack_wnint(
         return mpack_w1(buf, buflen, (0x100 as mpack_uint32_t).wrapping_add(lo));
     };
 }
-unsafe extern "C" fn mpack_wfloat(
+unsafe extern "C-unwind" fn mpack_wfloat(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut tok: *const mpack_token_t,
@@ -678,7 +678,7 @@ unsafe extern "C" fn mpack_wfloat(
         return MPACK_ERROR as ::core::ffi::c_int;
     };
 }
-unsafe extern "C" fn mpack_wstr(
+unsafe extern "C-unwind" fn mpack_wstr(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut len: mpack_uint32_t,
@@ -696,7 +696,7 @@ unsafe extern "C" fn mpack_wstr(
             || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
-unsafe extern "C" fn mpack_wbin(
+unsafe extern "C-unwind" fn mpack_wbin(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut len: mpack_uint32_t,
@@ -712,7 +712,7 @@ unsafe extern "C" fn mpack_wbin(
             || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
-unsafe extern "C" fn mpack_wext(
+unsafe extern "C-unwind" fn mpack_wext(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut type_0: ::core::ffi::c_int,
@@ -770,7 +770,7 @@ unsafe extern "C" fn mpack_wext(
         }
     };
 }
-unsafe extern "C" fn mpack_warray(
+unsafe extern "C-unwind" fn mpack_warray(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut len: mpack_uint32_t,
@@ -785,7 +785,7 @@ unsafe extern "C" fn mpack_warray(
             || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
-unsafe extern "C" fn mpack_wmap(
+unsafe extern "C-unwind" fn mpack_wmap(
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
     mut len: mpack_uint32_t,
@@ -800,7 +800,7 @@ unsafe extern "C" fn mpack_wmap(
             || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
-unsafe extern "C" fn mpack_w1(
+unsafe extern "C-unwind" fn mpack_w1(
     mut b: *mut *mut ::core::ffi::c_char,
     mut bl: *mut size_t,
     mut v: mpack_uint32_t,
@@ -811,7 +811,7 @@ unsafe extern "C" fn mpack_w1(
     *c2rust_fresh8 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_w2(
+unsafe extern "C-unwind" fn mpack_w2(
     mut b: *mut *mut ::core::ffi::c_char,
     mut bl: *mut size_t,
     mut v: mpack_uint32_t,
@@ -825,7 +825,7 @@ unsafe extern "C" fn mpack_w2(
     *c2rust_fresh10 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_w4(
+unsafe extern "C-unwind" fn mpack_w4(
     mut b: *mut *mut ::core::ffi::c_char,
     mut bl: *mut size_t,
     mut v: mpack_uint32_t,
@@ -847,7 +847,7 @@ unsafe extern "C" fn mpack_w4(
     *c2rust_fresh7 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_value(
+unsafe extern "C-unwind" fn mpack_value(
     mut type_0: mpack_token_type_t,
     mut length: mpack_uint32_t,
     mut value: mpack_value_t,
@@ -858,7 +858,7 @@ unsafe extern "C" fn mpack_value(
     (*tok).data.value = value;
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_blob(
+unsafe extern "C-unwind" fn mpack_blob(
     mut type_0: mpack_token_type_t,
     mut length: mpack_uint32_t,
     mut ext_type: ::core::ffi::c_int,
@@ -869,7 +869,7 @@ unsafe extern "C" fn mpack_blob(
     (*tok).data.ext_type = ext_type;
     return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_byte(mut byte: ::core::ffi::c_uchar) -> mpack_value_t {
+unsafe extern "C-unwind" fn mpack_byte(mut byte: ::core::ffi::c_uchar) -> mpack_value_t {
     let mut rv: mpack_value_t = mpack_value_t { lo: 0, hi: 0 };
     rv.lo = byte as mpack_uint32_t;
     rv.hi = 0 as mpack_uint32_t;

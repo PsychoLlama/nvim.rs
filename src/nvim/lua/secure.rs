@@ -588,7 +588,7 @@ pub const ADDR_LINES: cmd_addr_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-unsafe extern "C" fn nlua_trust(
+unsafe extern "C-unwind" fn nlua_trust(
     mut action: *const ::core::ffi::c_char,
     mut path: *const ::core::ffi::c_char,
 ) -> bool {

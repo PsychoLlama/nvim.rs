@@ -7,24 +7,24 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const STRBUF_DEFAULT_SIZE: ::core::ffi::c_int = 1023 as ::core::ffi::c_int;
 #[inline]
-unsafe extern "C" fn strbuf_empty_length(mut s: *mut strbuf_t) -> size_t {
+unsafe extern "C-unwind" fn strbuf_empty_length(mut s: *mut strbuf_t) -> size_t {
     return (*s)
         .size
         .wrapping_sub((*s).length)
         .wrapping_sub(1 as size_t);
 }
 #[inline]
-unsafe extern "C" fn strbuf_ensure_null(mut s: *mut strbuf_t) {
+unsafe extern "C-unwind" fn strbuf_ensure_null(mut s: *mut strbuf_t) {
     *(*s).buf.offset((*s).length as isize) = 0 as ::core::ffi::c_char;
 }
-unsafe extern "C" fn die(mut fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
+unsafe extern "C-unwind" fn die(mut fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
     let mut arg: ::core::ffi::VaList;
     arg = c2rust_args.clone();
     vfprintf(stderr, fmt, arg);
     fprintf(stderr, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     abort();
 }
-pub unsafe extern "C" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
+pub unsafe extern "C-unwind" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
     let mut size: size_t = 0;
     if len == 0 {
         size = STRBUF_DEFAULT_SIZE as size_t;
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
     }
     strbuf_ensure_null(s);
 }
-pub unsafe extern "C" fn strbuf_new(mut len: size_t) -> *mut strbuf_t {
+pub unsafe extern "C-unwind" fn strbuf_new(mut len: size_t) -> *mut strbuf_t {
     let mut s: *mut strbuf_t = ::core::ptr::null_mut::<strbuf_t>();
     s = malloc(::core::mem::size_of::<strbuf_t>()) as *mut strbuf_t;
     if s.is_null() {
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn strbuf_new(mut len: size_t) -> *mut strbuf_t {
     return s;
 }
 #[inline]
-unsafe extern "C" fn debug_stats(mut s: *mut strbuf_t) {
+unsafe extern "C-unwind" fn debug_stats(mut s: *mut strbuf_t) {
     if (*s).debug != 0 {
         fprintf(
             stderr,
@@ -73,7 +73,7 @@ unsafe extern "C" fn debug_stats(mut s: *mut strbuf_t) {
         );
     }
 }
-pub unsafe extern "C" fn strbuf_free(mut s: *mut strbuf_t) {
+pub unsafe extern "C-unwind" fn strbuf_free(mut s: *mut strbuf_t) {
     debug_stats(s);
     if !(*s).buf.is_null() {
         free((*s).buf as *mut ::core::ffi::c_void);
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn strbuf_free(mut s: *mut strbuf_t) {
         free(s as *mut ::core::ffi::c_void);
     }
 }
-unsafe extern "C" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -> size_t {
+unsafe extern "C-unwind" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -> size_t {
     let mut reqsize: size_t = 0;
     let mut newsize: size_t = 0;
     if len <= 0 as size_t {
@@ -115,7 +115,7 @@ unsafe extern "C" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -
     }
     return newsize;
 }
-pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
+pub unsafe extern "C-unwind" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
     let mut newsize: size_t = 0;
     newsize = calculate_new_size(s, len);
     if (*s).debug > 1 as ::core::ffi::c_int {
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
     }
     (*s).reallocs += 1;
 }
-pub unsafe extern "C" fn strbuf_append_string(
+pub unsafe extern "C-unwind" fn strbuf_append_string(
     mut s: *mut strbuf_t,
     mut str: *const ::core::ffi::c_char,
 ) {

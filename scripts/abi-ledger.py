@@ -62,8 +62,10 @@ FIXTURE_SO = ROOT / "target" / "bin" / "unit-fixtures.so"
 # Order matters: "static mut" must precede "static" or the name group would
 # swallow "mut". Safe `pub extern "C" fn` and non-mut `pub static` appear as
 # phase-2b rewrites shed unneeded unsafety without changing the symbol.
+# "C-unwind" is the same symbol surface as "C"; it marks the Lua boundary
+# fns whose errors unwind through Rust frames (LuaJIT error dispatch).
 EXPORT_RE = re.compile(
-    r'^pub (unsafe extern "C" fn|extern "C" fn|static mut|static) ([A-Za-z0-9_]+)'
+    r'^pub (unsafe extern "C(?:-unwind)?" fn|extern "C(?:-unwind)?" fn|static mut|static) ([A-Za-z0-9_]+)'
 )
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

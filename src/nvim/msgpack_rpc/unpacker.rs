@@ -207,8 +207,14 @@ pub unsafe extern "C" fn unpack(
         &raw mut unpacker.parser,
         &raw mut data,
         &raw mut size,
-        Some(api_parse_enter as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
-        Some(api_parse_exit as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
+        Some(
+            api_parse_enter
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+        ),
+        Some(
+            api_parse_exit
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+        ),
     );
     *arena = unpacker.arena;
     if result == MPACK_NOMEM as ::core::ffi::c_int {
@@ -238,7 +244,10 @@ pub unsafe extern "C" fn unpack(
     }
     return unpacker.result;
 }
-unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {
+unsafe extern "C-unwind" fn api_parse_enter(
+    mut parser: *mut mpack_parser_t,
+    mut node: *mut mpack_node_t,
+) {
     let mut p: *mut Unpacker = (*parser).data.p as *mut Unpacker;
     let mut result: *mut Object = ::core::ptr::null_mut::<Object>();
     let mut key_location: *mut String_0 = ::core::ptr::null_mut::<String_0>();
@@ -484,7 +493,7 @@ unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: 
         _ => {}
     };
 }
-unsafe extern "C" fn api_parse_exit(
+unsafe extern "C-unwind" fn api_parse_exit(
     mut _parser: *mut mpack_parser_t,
     mut _node: *mut mpack_node_t,
 ) {
@@ -752,11 +761,17 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
                     &raw mut (*p).read_size,
                     Some(
                         api_parse_enter
-                            as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                            as unsafe extern "C-unwind" fn(
+                                *mut mpack_parser_t,
+                                *mut mpack_node_t,
+                            ) -> (),
                     ),
                     Some(
                         api_parse_exit
-                            as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                            as unsafe extern "C-unwind" fn(
+                                *mut mpack_parser_t,
+                                *mut mpack_node_t,
+                            ) -> (),
                     ),
                 );
                 if result == MPACK_EOF as ::core::ffi::c_int {
@@ -1244,7 +1259,11 @@ pub unsafe extern "C" fn unpack_uint_or_sint(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn parse_nop(mut _parser: *mut mpack_parser_t, mut _node: *mut mpack_node_t) {}
+unsafe extern "C-unwind" fn parse_nop(
+    mut _parser: *mut mpack_parser_t,
+    mut _node: *mut mpack_node_t,
+) {
+}
 pub unsafe extern "C" fn unpack_skip(
     mut data: *mut *const ::core::ffi::c_char,
     mut size: *mut size_t,
@@ -1290,8 +1309,12 @@ pub unsafe extern "C" fn unpack_skip(
         &raw mut parser,
         data,
         size,
-        Some(parse_nop as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
-        Some(parse_nop as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
+        Some(
+            parse_nop as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+        ),
+        Some(
+            parse_nop as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+        ),
     );
 }
 pub unsafe extern "C" fn push_additional_data(

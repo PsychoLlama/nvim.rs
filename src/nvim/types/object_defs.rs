@@ -19,4 +19,5 @@ pub struct mpack_node_s {
     pub data: [mpack_data_t; 2],
 }
 pub type mpack_node_t = mpack_node_s;
-pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
+pub type mpack_walk_cb =
+    Option<unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;

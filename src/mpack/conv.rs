@@ -45,7 +45,7 @@ pub union C2Rust_Unnamed_4 {
     pub f: ::core::ffi::c_float,
     pub m: mpack_uint32_t,
 }
-pub unsafe extern "C" fn mpack_pack_nil() -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_nil() -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -56,7 +56,7 @@ pub unsafe extern "C" fn mpack_pack_nil() -> mpack_token_t {
     rv.type_0 = MPACK_TOKEN_NIL;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_boolean(mut v: ::core::ffi::c_uint) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_boolean(mut v: ::core::ffi::c_uint) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -73,7 +73,9 @@ pub unsafe extern "C" fn mpack_pack_boolean(mut v: ::core::ffi::c_uint) -> mpack
     rv.data.value.hi = 0 as mpack_uint32_t;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_float_fast(mut v: ::core::ffi::c_double) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_float_fast(
+    mut v: ::core::ffi::c_double,
+) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -102,7 +104,7 @@ pub unsafe extern "C" fn mpack_pack_float_fast(mut v: ::core::ffi::c_double) -> 
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpack_token_t {
     let mut tok: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -171,7 +173,7 @@ pub unsafe extern "C" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpac
     }
     return tok;
 }
-pub unsafe extern "C" fn mpack_pack_chunk(
+pub unsafe extern "C-unwind" fn mpack_pack_chunk(
     mut p: *const ::core::ffi::c_char,
     mut l: mpack_uint32_t,
 ) -> mpack_token_t {
@@ -187,7 +189,7 @@ pub unsafe extern "C" fn mpack_pack_chunk(
     rv.length = l;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_str(mut l: mpack_uint32_t) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_str(mut l: mpack_uint32_t) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -199,7 +201,7 @@ pub unsafe extern "C" fn mpack_pack_str(mut l: mpack_uint32_t) -> mpack_token_t 
     rv.length = l;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_bin(mut l: mpack_uint32_t) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_bin(mut l: mpack_uint32_t) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -211,7 +213,7 @@ pub unsafe extern "C" fn mpack_pack_bin(mut l: mpack_uint32_t) -> mpack_token_t 
     rv.length = l;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_ext(
+pub unsafe extern "C-unwind" fn mpack_pack_ext(
     mut t: ::core::ffi::c_int,
     mut l: mpack_uint32_t,
 ) -> mpack_token_t {
@@ -227,7 +229,7 @@ pub unsafe extern "C" fn mpack_pack_ext(
     rv.data.ext_type = t;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_array(mut l: mpack_uint32_t) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_array(mut l: mpack_uint32_t) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -239,7 +241,7 @@ pub unsafe extern "C" fn mpack_pack_array(mut l: mpack_uint32_t) -> mpack_token_
     rv.length = l;
     return rv;
 }
-pub unsafe extern "C" fn mpack_pack_map(mut l: mpack_uint32_t) -> mpack_token_t {
+pub unsafe extern "C-unwind" fn mpack_pack_map(mut l: mpack_uint32_t) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -251,15 +253,15 @@ pub unsafe extern "C" fn mpack_pack_map(mut l: mpack_uint32_t) -> mpack_token_t 
     rv.length = l;
     return rv;
 }
-pub unsafe extern "C" fn mpack_unpack_boolean(mut t: mpack_token_t) -> bool {
+pub unsafe extern "C-unwind" fn mpack_unpack_boolean(mut t: mpack_token_t) -> bool {
     return t.data.value.lo != 0 || t.data.value.hi != 0;
 }
-pub unsafe extern "C" fn mpack_unpack_uint(mut t: mpack_token_t) -> mpack_uintmax_t {
+pub unsafe extern "C-unwind" fn mpack_unpack_uint(mut t: mpack_token_t) -> mpack_uintmax_t {
     return ((t.data.value.hi as mpack_uintmax_t) << 31 as ::core::ffi::c_int)
         << 1 as ::core::ffi::c_int
         | t.data.value.lo as mpack_uintmax_t;
 }
-pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintmax_t {
+pub unsafe extern "C-unwind" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintmax_t {
     let mut hi: mpack_uint32_t = t.data.value.hi;
     let mut lo: mpack_uint32_t = t.data.value.lo;
     let mut rv: mpack_uintmax_t = lo as mpack_uintmax_t;
@@ -287,7 +289,9 @@ pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintma
     .wrapping_add(1 as mpack_uintmax_t);
     return -(rv.wrapping_sub(1 as mpack_uintmax_t) as mpack_sintmax_t) - 1 as mpack_sintmax_t;
 }
-pub unsafe extern "C" fn mpack_unpack_float_fast(mut t: mpack_token_t) -> ::core::ffi::c_double {
+pub unsafe extern "C-unwind" fn mpack_unpack_float_fast(
+    mut t: mpack_token_t,
+) -> ::core::ffi::c_double {
     if t.length == 4 as mpack_uint32_t {
         let mut conv: C2Rust_Unnamed_4 = C2Rust_Unnamed_4 { f: 0. };
         conv.m = t.data.value.lo;
@@ -303,7 +307,7 @@ pub unsafe extern "C" fn mpack_unpack_float_fast(mut t: mpack_token_t) -> ::core
         return conv_0.d;
     };
 }
-pub unsafe extern "C" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ffi::c_double {
+pub unsafe extern "C-unwind" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ffi::c_double {
     let mut rv: ::core::ffi::c_double = 0.;
     let mut hi: mpack_uint32_t = 0;
     let mut lo: mpack_uint32_t = 0;
@@ -378,10 +382,10 @@ pub unsafe extern "C" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ff
         rv
     };
 }
-unsafe extern "C" fn mpack_fits_single(mut v: ::core::ffi::c_double) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn mpack_fits_single(mut v: ::core::ffi::c_double) -> ::core::ffi::c_int {
     return (v as ::core::ffi::c_float as ::core::ffi::c_double == v) as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_pack_ieee754(
+unsafe extern "C-unwind" fn mpack_pack_ieee754(
     mut v: ::core::ffi::c_double,
     mut mantbits: ::core::ffi::c_uint,
     mut expbits: ::core::ffi::c_uint,
@@ -460,13 +464,15 @@ unsafe extern "C" fn mpack_pack_ieee754(
     }
     return rv;
 }
-unsafe extern "C" fn mpack_is_be() -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn mpack_is_be() -> ::core::ffi::c_int {
     let mut test: C2Rust_Unnamed_0 = C2Rust_Unnamed_0 { i: 0 };
     test.i = 1 as mpack_uint32_t;
     return (test.c[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_fmod_pow2_32(mut a: ::core::ffi::c_double) -> ::core::ffi::c_double {
+unsafe extern "C-unwind" fn mpack_fmod_pow2_32(
+    mut a: ::core::ffi::c_double,
+) -> ::core::ffi::c_double {
     return a
         - (a / (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
             as ::core::ffi::c_double

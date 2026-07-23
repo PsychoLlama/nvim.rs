@@ -151,7 +151,7 @@ pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 #[inline(always)]
-unsafe extern "C" fn _memcpy_free(
+unsafe extern "C-unwind" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
     src: *mut ::core::ffi::c_void,
     size: size_t,
@@ -172,50 +172,50 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
+unsafe extern "C-unwind" fn tv_list_ref(l: *mut list_T) {
     if l.is_null() {
         return;
     }
     (*l).lv_refcount += 1;
 }
 #[inline]
-unsafe extern "C" fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
+unsafe extern "C-unwind" fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
     (*l).lv_copyID = copyid;
 }
 #[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     if l.is_null() {
         return 0 as ::core::ffi::c_int;
     }
     return (*l).lv_len;
 }
 #[inline]
-unsafe extern "C" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
     return (*l).lv_copyID;
 }
 #[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
+unsafe extern "C-unwind" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
         return ::core::ptr::null_mut::<listitem_T>();
     }
     return (*l).lv_first;
 }
 #[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
+unsafe extern "C-unwind" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
         return ::core::ptr::null_mut::<listitem_T>();
     }
     return (*l).lv_last;
 }
 #[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
     if b.is_null() {
         return 0 as ::core::ffi::c_int;
     }
     return (*b).bv_ga.ga_len;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
+unsafe extern "C-unwind" fn tv_strlen(tv: *const typval_T) -> size_t {
     '_c2rust_label: {
         if (*tv).v_type as ::core::ffi::c_uint
             == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -238,7 +238,7 @@ unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
 pub const TYPE_IDX_VALUE: ::core::ffi::c_int = true_0;
 pub const VAL_IDX_VALUE: ::core::ffi::c_int = false_0;
-unsafe extern "C" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProps {
+unsafe extern "C-unwind" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProps {
     let mut tsize: size_t = 0 as size_t;
     let mut val_type: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut has_val_key: bool = false_0 != 0;
@@ -390,7 +390,7 @@ unsafe extern "C" fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
     }
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_typval(
+pub unsafe extern "C-unwind" fn nlua_pop_typval(
     mut lstate: *mut lua_State,
     mut ret_tv: *mut typval_T,
 ) -> bool {
@@ -639,8 +639,11 @@ pub unsafe extern "C" fn nlua_pop_typval(
                             tv_list_append_list((*cur.tv).vval.v_list, kv_pair);
                             cur = TVPopStackItem {
                                 tv: &raw mut (*(tv_list_last
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
+                                    as unsafe extern "C-unwind" fn(
+                                        *const list_T,
+                                    )
+                                        -> *mut listitem_T)(
+                                    kv_pair
                                 ))
                                 .li_tv,
                                 list_len: 0,
@@ -860,7 +863,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         *stack.items.offset(c2rust_fresh3 as isize) = cur;
                         cur = TVPopStackItem {
                             tv: &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
+                                as unsafe extern "C-unwind" fn(*const list_T) -> *mut listitem_T)(
                                 (*cur.tv).vval.v_list,
                             ))
                             .li_tv,
@@ -1312,7 +1315,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
 }
 static typval_conv_special: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = true_0;
-pub unsafe extern "C" fn nlua_push_typval(
+pub unsafe extern "C-unwind" fn nlua_push_typval(
     mut lstate: *mut lua_State,
     tv: *mut typval_T,
     mut flags: ::core::ffi::c_int,
@@ -1351,19 +1354,19 @@ pub unsafe extern "C" fn nlua_push_typval(
     return true_0 != 0;
 }
 #[inline]
-unsafe extern "C" fn nlua_push_type_idx(mut lstate: *mut lua_State) {
+unsafe extern "C-unwind" fn nlua_push_type_idx(mut lstate: *mut lua_State) {
     lua_pushboolean(lstate, TYPE_IDX_VALUE);
 }
 #[inline]
-unsafe extern "C" fn nlua_push_val_idx(mut lstate: *mut lua_State) {
+unsafe extern "C-unwind" fn nlua_push_val_idx(mut lstate: *mut lua_State) {
     lua_pushboolean(lstate, VAL_IDX_VALUE);
 }
 #[inline]
-unsafe extern "C" fn nlua_push_type(mut lstate: *mut lua_State, mut type_0: ObjectType) {
+unsafe extern "C-unwind" fn nlua_push_type(mut lstate: *mut lua_State, mut type_0: ObjectType) {
     lua_pushnumber(lstate, type_0 as lua_Number);
 }
 #[inline]
-unsafe extern "C" fn nlua_create_typed_table(
+unsafe extern "C-unwind" fn nlua_create_typed_table(
     mut lstate: *mut lua_State,
     narr: size_t,
     nrec: size_t,
@@ -1378,7 +1381,7 @@ unsafe extern "C" fn nlua_create_typed_table(
     nlua_push_type(lstate, type_0);
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
 }
-pub unsafe extern "C" fn nlua_push_String(
+pub unsafe extern "C-unwind" fn nlua_push_String(
     mut lstate: *mut lua_State,
     s: String_0,
     mut _flags: ::core::ffi::c_int,
@@ -1393,14 +1396,14 @@ pub unsafe extern "C" fn nlua_push_String(
         s.size,
     );
 }
-pub unsafe extern "C" fn nlua_push_Integer(
+pub unsafe extern "C-unwind" fn nlua_push_Integer(
     mut lstate: *mut lua_State,
     n: Integer,
     mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushnumber(lstate, n as lua_Number);
 }
-pub unsafe extern "C" fn nlua_push_Float(
+pub unsafe extern "C-unwind" fn nlua_push_Float(
     mut lstate: *mut lua_State,
     f: Float,
     mut flags: ::core::ffi::c_int,
@@ -1414,14 +1417,14 @@ pub unsafe extern "C" fn nlua_push_Float(
         lua_pushnumber(lstate, f);
     };
 }
-pub unsafe extern "C" fn nlua_push_Boolean(
+pub unsafe extern "C-unwind" fn nlua_push_Boolean(
     mut lstate: *mut lua_State,
     b: Boolean,
     mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushboolean(lstate, b as ::core::ffi::c_int);
 }
-pub unsafe extern "C" fn nlua_push_Dict(
+pub unsafe extern "C-unwind" fn nlua_push_Dict(
     mut lstate: *mut lua_State,
     dict: Dict,
     mut flags: ::core::ffi::c_int,
@@ -1447,7 +1450,7 @@ pub unsafe extern "C" fn nlua_push_Dict(
         i = i.wrapping_add(1);
     }
 }
-pub unsafe extern "C" fn nlua_push_Array(
+pub unsafe extern "C-unwind" fn nlua_push_Array(
     mut lstate: *mut lua_State,
     array: Array,
     mut flags: ::core::ffi::c_int,
@@ -1468,14 +1471,14 @@ pub unsafe extern "C" fn nlua_push_Array(
         i = i.wrapping_add(1);
     }
 }
-pub unsafe extern "C" fn nlua_push_handle(
+pub unsafe extern "C-unwind" fn nlua_push_handle(
     mut lstate: *mut lua_State,
     item: handle_T,
     mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushnumber(lstate, item as lua_Number);
 }
-pub unsafe extern "C" fn nlua_push_Object(
+pub unsafe extern "C-unwind" fn nlua_push_Object(
     mut lstate: *mut lua_State,
     mut obj: *mut Object,
     mut flags: ::core::ffi::c_int,
@@ -1525,7 +1528,7 @@ pub unsafe extern "C" fn nlua_push_Object(
         _ => {}
     };
 }
-pub unsafe extern "C" fn nlua_pop_String(
+pub unsafe extern "C-unwind" fn nlua_pop_String(
     mut lstate: *mut lua_State,
     mut arena: *mut Arena,
     mut err: *mut Error,
@@ -1564,7 +1567,7 @@ pub unsafe extern "C" fn nlua_pop_String(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_Integer(
+pub unsafe extern "C-unwind" fn nlua_pop_Integer(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
     mut err: *mut Error,
@@ -1593,7 +1596,7 @@ pub unsafe extern "C" fn nlua_pop_Integer(
     }
     return n as Integer;
 }
-pub unsafe extern "C" fn nlua_pop_Boolean(
+pub unsafe extern "C-unwind" fn nlua_pop_Boolean(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
     mut _err: *mut Error,
@@ -1602,7 +1605,7 @@ pub unsafe extern "C" fn nlua_pop_Boolean(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_Boolean_strict(
+pub unsafe extern "C-unwind" fn nlua_pop_Boolean_strict(
     mut lstate: *mut lua_State,
     mut err: *mut Error,
 ) -> Boolean {
@@ -1630,7 +1633,7 @@ pub unsafe extern "C" fn nlua_pop_Boolean_strict(
     return ret;
 }
 #[inline]
-unsafe extern "C" fn nlua_check_type(
+unsafe extern "C-unwind" fn nlua_check_type(
     lstate: *mut lua_State,
     err: *mut Error,
     type_0: ObjectType,
@@ -1680,7 +1683,7 @@ unsafe extern "C" fn nlua_check_type(
     }
     return table_props;
 }
-pub unsafe extern "C" fn nlua_pop_Float(
+pub unsafe extern "C-unwind" fn nlua_pop_Float(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
     mut err: *mut Error,
@@ -1699,7 +1702,7 @@ pub unsafe extern "C" fn nlua_pop_Float(
     }
     return table_props.val;
 }
-unsafe extern "C" fn nlua_pop_Array_unchecked(
+unsafe extern "C-unwind" fn nlua_pop_Array_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     mut arena: *mut Arena,
@@ -1737,7 +1740,7 @@ unsafe extern "C" fn nlua_pop_Array_unchecked(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_Array(
+pub unsafe extern "C-unwind" fn nlua_pop_Array(
     mut lstate: *mut lua_State,
     mut arena: *mut Arena,
     mut err: *mut Error,
@@ -1754,7 +1757,7 @@ pub unsafe extern "C" fn nlua_pop_Array(
     }
     return nlua_pop_Array_unchecked(lstate, table_props, arena, err);
 }
-unsafe extern "C" fn nlua_pop_Dict_unchecked(
+unsafe extern "C-unwind" fn nlua_pop_Dict_unchecked(
     mut lstate: *mut lua_State,
     table_props: LuaTableProps,
     mut ref_0: bool,
@@ -1802,7 +1805,7 @@ unsafe extern "C" fn nlua_pop_Dict_unchecked(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_Dict(
+pub unsafe extern "C-unwind" fn nlua_pop_Dict(
     mut lstate: *mut lua_State,
     mut ref_0: bool,
     mut arena: *mut Arena,
@@ -1821,7 +1824,7 @@ pub unsafe extern "C" fn nlua_pop_Dict(
     }
     return nlua_pop_Dict_unchecked(lstate, table_props, ref_0, arena, err);
 }
-pub unsafe extern "C" fn nlua_pop_Object(
+pub unsafe extern "C-unwind" fn nlua_pop_Object(
     lstate: *mut lua_State,
     mut ref_0: bool,
     mut arena: *mut Arena,
@@ -2536,7 +2539,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
     };
     return ret;
 }
-pub unsafe extern "C" fn nlua_pop_LuaRef(
+pub unsafe extern "C-unwind" fn nlua_pop_LuaRef(
     lstate: *mut lua_State,
     mut _arena: *mut Arena,
     mut _err: *mut Error,
@@ -2545,7 +2548,7 @@ pub unsafe extern "C" fn nlua_pop_LuaRef(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return rv;
 }
-pub unsafe extern "C" fn nlua_pop_handle(
+pub unsafe extern "C-unwind" fn nlua_pop_handle(
     mut lstate: *mut lua_State,
     mut _arena: *mut Arena,
     mut err: *mut Error,
@@ -2564,7 +2567,7 @@ pub unsafe extern "C" fn nlua_pop_handle(
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return ret;
 }
-pub unsafe extern "C" fn nlua_init_types(lstate: *mut lua_State) {
+pub unsafe extern "C-unwind" fn nlua_init_types(lstate: *mut lua_State) {
     lua_pushlstring(
         lstate,
         b"type_idx\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2629,7 +2632,7 @@ pub unsafe extern "C" fn nlua_init_types(lstate: *mut lua_State) {
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
     lua_rawset(lstate, -3 as ::core::ffi::c_int);
 }
-pub unsafe extern "C" fn nlua_pop_keydict(
+pub unsafe extern "C-unwind" fn nlua_pop_keydict(
     mut L: *mut lua_State,
     mut retval: *mut ::core::ffi::c_void,
     mut hashy: FieldHashfn,
@@ -2717,7 +2720,7 @@ pub unsafe extern "C" fn nlua_pop_keydict(
     }
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 }
-pub unsafe extern "C" fn nlua_push_keydict(
+pub unsafe extern "C-unwind" fn nlua_push_keydict(
     mut L: *mut lua_State,
     mut value: *mut ::core::ffi::c_void,
     mut table: *mut KeySetLink,
@@ -2769,7 +2772,7 @@ pub unsafe extern "C" fn nlua_push_keydict(
 pub static _typval_encode_lua_nodict_var: GlobalCell<*const dict_T> =
     GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
-unsafe extern "C" fn _typval_encode_lua_check_self_reference(
+unsafe extern "C-unwind" fn _typval_encode_lua_check_self_reference(
     lstate: *mut lua_State,
     val: *mut ::core::ffi::c_void,
     val_copyID: *mut ::core::ffi::c_int,
@@ -2812,7 +2815,7 @@ unsafe extern "C" fn _typval_encode_lua_check_self_reference(
     *val_copyID = copyID;
     return NOTDONE;
 }
-unsafe extern "C" fn _typval_encode_lua_convert_one_value(
+unsafe extern "C-unwind" fn _typval_encode_lua_convert_one_value(
     lstate: *mut lua_State,
     mpstack: *mut MPConvStack,
     _cur_mpsv: *mut MPConvStackVal,
@@ -3910,7 +3913,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
     }
     return OK;
 }
-unsafe extern "C" fn encode_vim_to_lua(
+unsafe extern "C-unwind" fn encode_vim_to_lua(
     lstate: *mut lua_State,
     top_tv: *mut typval_T,
     objname: *const ::core::ffi::c_char,
@@ -4031,8 +4034,11 @@ unsafe extern "C" fn encode_vim_to_lua(
                                 &raw mut mpstack,
                                 cur_mpsv,
                                 &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
+                                    as unsafe extern "C-unwind" fn(
+                                        *const list_T,
+                                    )
+                                        -> *mut listitem_T)(
+                                    kv_pair
                                 ))
                                 .li_tv,
                                 copyID,
@@ -4042,7 +4048,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                 break '_encode_vim_to__error_ret;
                             }
                             tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
+                                as unsafe extern "C-unwind" fn(*const list_T) -> *mut listitem_T)(
                                 kv_pair,
                             ))
                             .li_tv;

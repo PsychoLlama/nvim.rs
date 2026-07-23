@@ -126,7 +126,7 @@ pub const NIL_NAME: [::core::ffi::c_char; 10] =
 pub const EMPTY_DICT_NAME: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"mpack.empty_dict\0")
 };
-unsafe extern "C" fn lmpack_ref(
+unsafe extern "C-unwind" fn lmpack_ref(
     mut L: *mut lua_State,
     mut reg: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -137,7 +137,7 @@ unsafe extern "C" fn lmpack_ref(
     lua_settop(L, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return rv;
 }
-unsafe extern "C" fn lmpack_unref(
+unsafe extern "C-unwind" fn lmpack_unref(
     mut L: *mut lua_State,
     mut reg: ::core::ffi::c_int,
     mut ref_0: ::core::ffi::c_int,
@@ -146,7 +146,7 @@ unsafe extern "C" fn lmpack_unref(
     luaL_unref(L, -1 as ::core::ffi::c_int, ref_0);
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn lmpack_geti(
+unsafe extern "C-unwind" fn lmpack_geti(
     mut L: *mut lua_State,
     mut reg: ::core::ffi::c_int,
     mut ref_0: ::core::ffi::c_int,
@@ -155,7 +155,7 @@ unsafe extern "C" fn lmpack_geti(
     lua_rawgeti(L, -1 as ::core::ffi::c_int, ref_0);
     lua_replace(L, -2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn lmpack_shallow_copy(mut L: *mut lua_State) {
+unsafe extern "C-unwind" fn lmpack_shallow_copy(mut L: *mut lua_State) {
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     lua_pushnil(L);
     while lua_next(L, -3 as ::core::ffi::c_int) != 0 {
@@ -165,7 +165,9 @@ unsafe extern "C" fn lmpack_shallow_copy(mut L: *mut lua_State) {
     }
     lua_remove(L, -2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn lmpack_grow_parser(mut parser: *mut mpack_parser_t) -> *mut mpack_parser_t {
+unsafe extern "C-unwind" fn lmpack_grow_parser(
+    mut parser: *mut mpack_parser_t,
+) -> *mut mpack_parser_t {
     let mut old: *mut mpack_parser_t = parser;
     let mut new_capacity: mpack_uint32_t = (*old).capacity.wrapping_mul(2 as mpack_uint32_t);
     parser = malloc(
@@ -180,7 +182,7 @@ unsafe extern "C" fn lmpack_grow_parser(mut parser: *mut mpack_parser_t) -> *mut
     }
     return parser;
 }
-unsafe extern "C" fn lmpack_grow_session(
+unsafe extern "C-unwind" fn lmpack_grow_session(
     mut session: *mut mpack_rpc_session_t,
 ) -> *mut mpack_rpc_session_t {
     let mut old: *mut mpack_rpc_session_t = session;
@@ -197,25 +199,25 @@ unsafe extern "C" fn lmpack_grow_session(
     }
     return session;
 }
-unsafe extern "C" fn lmpack_check_unpacker(
+unsafe extern "C-unwind" fn lmpack_check_unpacker(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut Unpacker {
     return luaL_checkudata(L, index, UNPACKER_META_NAME.as_ptr()) as *mut Unpacker;
 }
-unsafe extern "C" fn lmpack_check_packer(
+unsafe extern "C-unwind" fn lmpack_check_packer(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut Packer {
     return luaL_checkudata(L, index, PACKER_META_NAME.as_ptr()) as *mut Packer;
 }
-unsafe extern "C" fn lmpack_check_session(
+unsafe extern "C-unwind" fn lmpack_check_session(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut Session {
     return luaL_checkudata(L, index, SESSION_META_NAME.as_ptr()) as *mut Session;
 }
-unsafe extern "C" fn lmpack_isnil(
+unsafe extern "C-unwind" fn lmpack_isnil(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -228,7 +230,7 @@ unsafe extern "C" fn lmpack_isnil(
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return rv;
 }
-unsafe extern "C" fn lmpack_isunpacker(
+unsafe extern "C-unwind" fn lmpack_isunpacker(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -245,10 +247,10 @@ unsafe extern "C" fn lmpack_isunpacker(
     lua_settop(L, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     return rv;
 }
-unsafe extern "C" fn lmpack_pushnil(mut L: *mut lua_State) {
+unsafe extern "C-unwind" fn lmpack_pushnil(mut L: *mut lua_State) {
     lua_getfield(L, LUA_REGISTRYINDEX, NIL_NAME.as_ptr());
 }
-unsafe extern "C" fn lmpack_objlen(
+unsafe extern "C-unwind" fn lmpack_objlen(
     mut L: *mut lua_State,
     mut is_array: *mut ::core::ffi::c_int,
 ) -> mpack_uint32_t {
@@ -315,7 +317,7 @@ unsafe extern "C" fn lmpack_objlen(
     };
     return len as mpack_uint32_t;
 }
-unsafe extern "C" fn lmpack_unpacker_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_unpacker_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut rv: *mut Unpacker = ::core::ptr::null_mut::<Unpacker>();
     if lua_gettop(L) > 1 as ::core::ffi::c_int {
         return luaL_error(
@@ -366,7 +368,7 @@ unsafe extern "C" fn lmpack_unpacker_new(mut L: *mut lua_State) -> ::core::ffi::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_unpacker_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_unpacker_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut unpacker: *mut Unpacker = lmpack_check_unpacker(L, 1 as ::core::ffi::c_int);
     if (*unpacker).ext != LUA_NOREF {
         lmpack_unref(L, (*unpacker).reg, (*unpacker).ext);
@@ -375,7 +377,7 @@ unsafe extern "C" fn lmpack_unpacker_delete(mut L: *mut lua_State) -> ::core::ff
     free((*unpacker).parser as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_parse_enter(
+unsafe extern "C-unwind" fn lmpack_parse_enter(
     mut parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -437,7 +439,7 @@ unsafe extern "C" fn lmpack_parse_enter(
         _ => {}
     };
 }
-unsafe extern "C" fn lmpack_parse_exit(
+unsafe extern "C-unwind" fn lmpack_parse_exit(
     mut parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -546,7 +548,7 @@ unsafe extern "C" fn lmpack_parse_exit(
         lua_settop(L, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     }
 }
-unsafe extern "C" fn lmpack_unpacker_unpack_str(
+unsafe extern "C-unwind" fn lmpack_unpacker_unpack_str(
     mut L: *mut lua_State,
     mut unpacker: *mut Unpacker,
     mut str: *mut *const ::core::ffi::c_char,
@@ -568,11 +570,11 @@ unsafe extern "C" fn lmpack_unpacker_unpack_str(
             len,
             Some(
                 lmpack_parse_enter
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
             Some(
                 lmpack_parse_exit
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
         );
         (*unpacker).unpacking = 0 as ::core::ffi::c_int;
@@ -597,7 +599,7 @@ unsafe extern "C" fn lmpack_unpacker_unpack_str(
     }
     return rv;
 }
-unsafe extern "C" fn lmpack_unpacker_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_unpacker_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = 0;
     let mut argc: ::core::ffi::c_int = 0;
     let mut startpos: lua_Number = 0.;
@@ -662,7 +664,7 @@ unsafe extern "C" fn lmpack_unpacker_unpack(mut L: *mut lua_State) -> ::core::ff
     };
     return 2 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_packer_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_packer_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut rv: *mut Packer = ::core::ptr::null_mut::<Packer>();
     if lua_gettop(L) > 1 as ::core::ffi::c_int {
         return luaL_error(
@@ -738,7 +740,7 @@ unsafe extern "C" fn lmpack_packer_new(mut L: *mut lua_State) -> ::core::ffi::c_
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_packer_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_packer_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut packer: *mut Packer = lmpack_check_packer(L, 1 as ::core::ffi::c_int);
     if (*packer).ext != LUA_NOREF {
         lmpack_unref(L, (*packer).reg, (*packer).ext);
@@ -747,7 +749,7 @@ unsafe extern "C" fn lmpack_packer_delete(mut L: *mut lua_State) -> ::core::ffi:
     free((*packer).parser as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_unparse_enter(
+unsafe extern "C-unwind" fn lmpack_unparse_enter(
     mut parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -971,7 +973,7 @@ unsafe extern "C" fn lmpack_unparse_enter(
     (*node).data[0 as ::core::ffi::c_int as usize].i =
         lmpack_ref(L, (*packer).reg) as mpack_sintmax_t;
 }
-unsafe extern "C" fn lmpack_unparse_exit(
+unsafe extern "C-unwind" fn lmpack_unparse_exit(
     mut parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
@@ -996,7 +998,7 @@ unsafe extern "C" fn lmpack_unparse_exit(
         }
     }
 }
-unsafe extern "C" fn lmpack_packer_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_packer_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut b: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut bl: size_t = 0;
     let mut result: ::core::ffi::c_int = 0;
@@ -1037,11 +1039,11 @@ unsafe extern "C" fn lmpack_packer_pack(mut L: *mut lua_State) -> ::core::ffi::c
             &raw mut bl,
             Some(
                 lmpack_unparse_enter
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
             Some(
                 lmpack_unparse_exit
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
         );
         (*packer).packing = 0 as ::core::ffi::c_int;
@@ -1080,7 +1082,7 @@ unsafe extern "C" fn lmpack_packer_pack(mut L: *mut lua_State) -> ::core::ffi::c
     };
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_session_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_new(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut rv: *mut Session =
         lua_newuserdata(L, ::core::mem::size_of::<Session>()) as *mut Session;
     (*rv).session =
@@ -1122,14 +1124,14 @@ unsafe extern "C" fn lmpack_session_new(mut L: *mut lua_State) -> ::core::ffi::c
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_session_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_delete(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut session: *mut Session = lmpack_check_session(L, 1 as ::core::ffi::c_int);
     lmpack_unref(L, (*session).reg, (*session).unpacker);
     luaL_unref(L, LUA_REGISTRYINDEX, (*session).reg);
     free((*session).session as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_session_receive(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_receive(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut argc: ::core::ffi::c_int = 0;
     let mut done: ::core::ffi::c_int = 0;
     let mut rcount: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -1255,7 +1257,7 @@ unsafe extern "C" fn lmpack_session_receive(mut L: *mut lua_State) -> ::core::ff
     lua_pushinteger(L, str.offset_from(str_init) + 1 as lua_Integer);
     return rcount;
 }
-unsafe extern "C" fn lmpack_session_request(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_request(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = 0;
     let mut buf: [::core::ffi::c_char; 16] = [0; 16];
     let mut b: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
@@ -1309,7 +1311,7 @@ unsafe extern "C" fn lmpack_session_request(mut L: *mut lua_State) -> ::core::ff
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_session_reply(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_reply(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = 0;
     let mut buf: [::core::ffi::c_char; 16] = [0; 16];
     let mut b: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
@@ -1356,7 +1358,7 @@ unsafe extern "C" fn lmpack_session_reply(mut L: *mut lua_State) -> ::core::ffi:
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_session_notify(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_session_notify(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = 0;
     let mut buf: [::core::ffi::c_char; 16] = [0; 16];
     let mut b: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
@@ -1388,7 +1390,7 @@ unsafe extern "C" fn lmpack_session_notify(mut L: *mut lua_State) -> ::core::ffi
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_nil_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_nil_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushfstring(
         L,
         NIL_NAME.as_ptr(),
@@ -1396,7 +1398,7 @@ unsafe extern "C" fn lmpack_nil_tostring(mut L: *mut lua_State) -> ::core::ffi::
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = 0;
     let mut len: size_t = 0;
     let mut str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
@@ -1468,10 +1470,11 @@ unsafe extern "C" fn lmpack_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int 
         &raw mut len,
         Some(
             lmpack_parse_enter
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
         Some(
-            lmpack_parse_exit as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+            lmpack_parse_exit
+                as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
     );
     luaL_unref(L, LUA_REGISTRYINDEX, unpacker.reg);
@@ -1509,7 +1512,7 @@ unsafe extern "C" fn lmpack_unpack(mut L: *mut lua_State) -> ::core::ffi::c_int 
     };
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lmpack_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn lmpack_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut b: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut bl: size_t = 0;
     let mut result: ::core::ffi::c_int = 0;
@@ -1594,11 +1597,11 @@ unsafe extern "C" fn lmpack_pack(mut L: *mut lua_State) -> ::core::ffi::c_int {
             &raw mut bl,
             Some(
                 lmpack_unparse_enter
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
             Some(
                 lmpack_unparse_exit
-                    as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
             ),
         );
         if result == MPACK_NOMEM as ::core::ffi::c_int {
@@ -1627,13 +1630,15 @@ static unpacker_methods: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
     luaL_Reg {
         name: b"__call\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_unpacker_unpack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_unpacker_unpack
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_unpacker_delete as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_unpacker_delete
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
@@ -1645,13 +1650,14 @@ static packer_methods: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
     luaL_Reg {
         name: b"__call\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_packer_pack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_packer_pack as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_packer_delete as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_packer_delete
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
@@ -1663,31 +1669,36 @@ static session_methods: SharedCell<[luaL_Reg; 6]> = SharedCell::new([
     luaL_Reg {
         name: b"receive\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_receive as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_receive
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"request\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_request as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_request
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"reply\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_reply as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_reply
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"notify\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_notify as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_notify
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_delete as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_delete
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
@@ -1699,33 +1710,40 @@ static mpack_functions: SharedCell<[luaL_Reg; 6]> = SharedCell::new([
     luaL_Reg {
         name: b"Unpacker\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_unpacker_new as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_unpacker_new
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"Packer\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(lmpack_packer_new as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            lmpack_packer_new as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"Session\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            lmpack_session_new as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            lmpack_session_new as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: UNPACK_FN_NAME.as_ptr(),
-        func: Some(lmpack_unpack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            lmpack_unpack as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: PACK_FN_NAME.as_ptr(),
-        func: Some(lmpack_pack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            lmpack_pack as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
+pub unsafe extern "C-unwind" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_int {
     luaL_newmetatable(L, UNPACKER_META_NAME.as_ptr());
     lua_pushvalue(L, -1 as ::core::ffi::c_int);
     lua_setfield(
@@ -1772,7 +1790,10 @@ pub unsafe extern "C" fn luaopen_mpack(mut L: *mut lua_State) -> ::core::ffi::c_
         lua_pushstring(L, b"__tostring\0".as_ptr() as *const ::core::ffi::c_char);
         lua_pushcclosure(
             L,
-            Some(lmpack_nil_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+            Some(
+                lmpack_nil_tostring
+                    as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+            ),
             0 as ::core::ffi::c_int,
         );
         lua_settable(L, -3 as ::core::ffi::c_int);

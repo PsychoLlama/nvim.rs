@@ -339,7 +339,7 @@ unsafe extern "C" fn call_on_hunk_cb(
     lua_settop(lstate, fidx);
     return r;
 }
-unsafe extern "C" fn get_string_arg(
+unsafe extern "C-unwind" fn get_string_arg(
     mut lstate: *mut lua_State,
     mut idx: ::core::ffi::c_int,
 ) -> mmfile_t {
@@ -366,7 +366,7 @@ unsafe extern "C" fn get_string_arg(
     mf.size = size as ::core::ffi::c_int;
     return mf;
 }
-unsafe extern "C" fn process_xdl_diff_opts(
+unsafe extern "C-unwind" fn process_xdl_diff_opts(
     mut lstate: *mut lua_State,
     mut cfg: *mut xdemitconf_t,
     mut params: *mut xpparam_t,
@@ -535,7 +535,7 @@ unsafe extern "C" fn process_xdl_diff_opts(
     api_free_luaref(opts.on_hunk);
     return mode;
 }
-pub unsafe extern "C" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+pub unsafe extern "C-unwind" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut buf: luaL_Buffer = luaL_Buffer {
         p: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         lvl: 0,

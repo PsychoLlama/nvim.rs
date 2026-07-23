@@ -26,7 +26,7 @@ pub const MPACK_NOMEM: C2Rust_Unnamed_1 = 3;
 pub const MPACK_EXCEPTION: C2Rust_Unnamed_1 = -1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MPACK_MAX_OBJECT_DEPTH: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-pub unsafe extern "C" fn mpack_parser_init(
+pub unsafe extern "C-unwind" fn mpack_parser_init(
     mut parser: *mut mpack_parser_t,
     mut capacity: mpack_uint32_t,
 ) {
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn mpack_parser_init(
     (*parser).items[0 as ::core::ffi::c_int as usize].pos = -1 as ::core::ffi::c_int as size_t;
     (*parser).status = 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn mpack_parse_tok(
+pub unsafe extern "C-unwind" fn mpack_parse_tok(
     mut parser: *mut mpack_parser_t,
     mut tok: mpack_token_t,
     mut enter_cb: mpack_walk_cb,
@@ -88,7 +88,7 @@ pub unsafe extern "C" fn mpack_parse_tok(
         return MPACK_EOF as ::core::ffi::c_int;
     };
 }
-pub unsafe extern "C" fn mpack_unparse_tok(
+pub unsafe extern "C-unwind" fn mpack_unparse_tok(
     mut parser: *mut mpack_parser_t,
     mut tok: *mut mpack_token_t,
     mut enter_cb: mpack_walk_cb,
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn mpack_unparse_tok(
         return MPACK_EOF as ::core::ffi::c_int;
     };
 }
-pub unsafe extern "C" fn mpack_parse(
+pub unsafe extern "C-unwind" fn mpack_parse(
     mut parser: *mut mpack_parser_t,
     mut buf: *mut *const ::core::ffi::c_char,
     mut buflen: *mut size_t,
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn mpack_parse(
     }
     return status;
 }
-pub unsafe extern "C" fn mpack_unparse(
+pub unsafe extern "C-unwind" fn mpack_unparse(
     mut parser: *mut mpack_parser_t,
     mut buf: *mut *mut ::core::ffi::c_char,
     mut buflen: *mut size_t,
@@ -216,7 +216,10 @@ pub unsafe extern "C" fn mpack_unparse(
     }
     return status;
 }
-pub unsafe extern "C" fn mpack_parser_copy(mut d: *mut mpack_parser_t, mut s: *mut mpack_parser_t) {
+pub unsafe extern "C-unwind" fn mpack_parser_copy(
+    mut d: *mut mpack_parser_t,
+    mut s: *mut mpack_parser_t,
+) {
     let mut dst: *mut mpack_one_parser_t = d as *mut mpack_one_parser_t;
     let mut src: *mut mpack_one_parser_t = s as *mut mpack_one_parser_t;
     let mut i: mpack_uint32_t = 0;
@@ -247,10 +250,12 @@ pub unsafe extern "C" fn mpack_parser_copy(mut d: *mut mpack_parser_t, mut s: *m
         i = i.wrapping_add(1);
     }
 }
-unsafe extern "C" fn mpack_parser_full(mut parser: *mut mpack_parser_t) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn mpack_parser_full(
+    mut parser: *mut mpack_parser_t,
+) -> ::core::ffi::c_int {
     return ((*parser).size == (*parser).capacity) as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_parser_push(mut p: *mut mpack_parser_t) -> *mut mpack_node_t {
+unsafe extern "C-unwind" fn mpack_parser_push(mut p: *mut mpack_parser_t) -> *mut mpack_node_t {
     let mut parser: *mut mpack_one_parser_t = p as *mut mpack_one_parser_t;
     let mut top: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();
     '_c2rust_label: {
@@ -275,7 +280,7 @@ unsafe extern "C" fn mpack_parser_push(mut p: *mut mpack_parser_t) -> *mut mpack
     (*parser).size = (*parser).size.wrapping_add(1);
     return top;
 }
-unsafe extern "C" fn mpack_parser_pop(mut p: *mut mpack_parser_t) -> *mut mpack_node_t {
+unsafe extern "C-unwind" fn mpack_parser_pop(mut p: *mut mpack_parser_t) -> *mut mpack_node_t {
     let mut parser: *mut mpack_one_parser_t = p as *mut mpack_one_parser_t;
     let mut top: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();
     let mut parent: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();

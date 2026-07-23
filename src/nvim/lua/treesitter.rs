@@ -449,11 +449,11 @@ pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
+unsafe extern "C-unwind" fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
     return mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline]
-unsafe extern "C" fn map_get_int_ptr_t(
+unsafe extern "C-unwind" fn map_get_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
 ) -> ptr_t {
@@ -465,7 +465,7 @@ unsafe extern "C" fn map_get_int_ptr_t(
     };
 }
 #[inline]
-unsafe extern "C" fn map_put_cstr_t_ptr_t(
+unsafe extern "C-unwind" fn map_put_cstr_t_ptr_t(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: cstr_t,
     mut value: ptr_t,
@@ -479,7 +479,7 @@ unsafe extern "C" fn map_put_cstr_t_ptr_t(
     *val = value;
 }
 #[inline]
-unsafe extern "C" fn map_get_cstr_t_ptr_t(
+unsafe extern "C-unwind" fn map_get_cstr_t_ptr_t(
     mut map: *mut Map_cstr_t_ptr_t,
     mut key: cstr_t,
 ) -> ptr_t {
@@ -508,7 +508,7 @@ pub const TS_META_QUERYMATCH: [::core::ffi::c_char; 22] = unsafe {
     ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"treesitter_querymatch\0")
 };
 static langs: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
-unsafe extern "C" fn tslua_has_language(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_has_language(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut lang_name: *const ::core::ffi::c_char = luaL_checklstring(
         L,
         1 as ::core::ffi::c_int,
@@ -520,10 +520,12 @@ unsafe extern "C" fn tslua_has_language(mut L: *mut lua_State) -> ::core::ffi::c
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tslua_add_language_from_object(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_add_language_from_object(
+    mut L: *mut lua_State,
+) -> ::core::ffi::c_int {
     return add_language(L, false_0 != 0);
 }
-unsafe extern "C" fn load_language_from_object(
+unsafe extern "C-unwind" fn load_language_from_object(
     mut L: *mut lua_State,
     mut path: *const ::core::ffi::c_char,
     mut lang_name: *const ::core::ffi::c_char,
@@ -585,7 +587,7 @@ unsafe extern "C" fn load_language_from_object(
     }
     return lang;
 }
-unsafe extern "C" fn load_language_from_wasm(
+unsafe extern "C-unwind" fn load_language_from_wasm(
     mut L: *mut lua_State,
     mut _path: *const ::core::ffi::c_char,
     mut _lang_name: *const ::core::ffi::c_char,
@@ -593,7 +595,10 @@ unsafe extern "C" fn load_language_from_wasm(
     luaL_error(L, b"Not supported\0".as_ptr() as *const ::core::ffi::c_char);
     return ::core::ptr::null::<TSLanguage>();
 }
-unsafe extern "C" fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn add_language(
+    mut L: *mut lua_State,
+    mut is_wasm: bool,
+) -> ::core::ffi::c_int {
     let mut path: *const ::core::ffi::c_char = luaL_checklstring(
         L,
         1 as ::core::ffi::c_int,
@@ -646,7 +651,7 @@ unsafe extern "C" fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> :
     lua_pushboolean(L, true_0);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tslua_remove_lang(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_remove_lang(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut lang_name: *const ::core::ffi::c_char = luaL_checklstring(
         L,
         1 as ::core::ffi::c_int,
@@ -661,7 +666,7 @@ unsafe extern "C" fn tslua_remove_lang(mut L: *mut lua_State) -> ::core::ffi::c_
     lua_pushboolean(L, present as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn lang_check(
+unsafe extern "C-unwind" fn lang_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSLanguage {
@@ -678,7 +683,7 @@ unsafe extern "C" fn lang_check(
     }
     return lang;
 }
-unsafe extern "C" fn tslua_inspect_lang(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_inspect_lang(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
     lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
     let mut nsymbols: uint32_t = ts_language_symbol_count(lang);
@@ -830,42 +835,56 @@ unsafe extern "C" fn tslua_inspect_lang(mut L: *mut lua_State) -> ::core::ffi::c
 static parser_meta: GlobalCell<[luaL_Reg; 9]> = GlobalCell::new([
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(parser_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"parse\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_parse as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_parse as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"reset\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_reset as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_reset as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"set_included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_set_ranges as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_set_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_get_ranges as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_get_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"_set_logger\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_set_logger as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_set_logger as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"_logger\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_get_logger as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            parser_get_logger as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-unsafe extern "C" fn tslua_push_parser(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_push_parser(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
     let mut parser: *mut *mut TSParser =
         lua_newuserdata(L, ::core::mem::size_of::<*mut TSParser>()) as *mut *mut TSParser;
@@ -887,7 +906,7 @@ unsafe extern "C" fn tslua_push_parser(mut L: *mut lua_State) -> ::core::ffi::c_
     lua_setmetatable(L, -2 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn parser_check(
+unsafe extern "C-unwind" fn parser_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSParser {
@@ -901,7 +920,7 @@ unsafe extern "C" fn parser_check(
         ) != 0) as ::core::ffi::c_int;
     return *ud;
 }
-unsafe extern "C" fn logger_gc(mut logger: TSLogger) {
+unsafe extern "C-unwind" fn logger_gc(mut logger: TSLogger) {
     if logger.log.is_none() {
         return;
     }
@@ -913,7 +932,7 @@ unsafe extern "C" fn logger_gc(mut logger: TSLogger) {
     );
     xfree(opts as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn parser_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut ud: *mut *mut TSParser =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_PARSER.as_ptr()) as *mut *mut TSParser;
     if !(*ud).is_null() {
@@ -923,7 +942,7 @@ unsafe extern "C" fn parser_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn parser_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushstring(L, b"<parser>\0".as_ptr() as *const ::core::ffi::c_char);
     return 1 as ::core::ffi::c_int;
 }
@@ -975,7 +994,7 @@ unsafe extern "C" fn input_cb(
     return buf.ptr() as *mut ::core::ffi::c_char;
 }
 pub const BUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-unsafe extern "C" fn push_ranges(
+unsafe extern "C-unwind" fn push_ranges(
     mut L: *mut lua_State,
     mut ranges: *const TSRange,
     length: size_t,
@@ -1045,7 +1064,7 @@ unsafe extern "C" fn on_parser_progress(mut state: *mut TSParseState) -> bool {
     let mut parse_time: uint64_t = os_hrtime().wrapping_sub((*payload).parse_start_time);
     return parse_time >= (*payload).timeout_threshold_ns;
 }
-unsafe extern "C" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
     let mut old_tree: *const TSTree = ::core::ptr::null::<TSTree>();
     if !(lua_type(L, 2 as ::core::ffi::c_int) == LUA_TNIL) {
@@ -1413,19 +1432,19 @@ unsafe extern "C" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::c_int {
     return 2 as ::core::ffi::c_int;
 }
 pub const BUFSIZE_0: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-unsafe extern "C" fn parser_reset(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_reset(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
     ts_parser_reset(p);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn range_err(mut L: *mut lua_State) {
+unsafe extern "C-unwind" fn range_err(mut L: *mut lua_State) {
     luaL_error(
         L,
         b"Ranges can only be made from 6 element long tables or nodes.\0".as_ptr()
             as *const ::core::ffi::c_char,
     );
 }
-unsafe extern "C" fn lua_checkuint32(
+unsafe extern "C-unwind" fn lua_checkuint32(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> uint32_t {
@@ -1442,7 +1461,7 @@ unsafe extern "C" fn lua_checkuint32(
     }
     return converted;
 }
-unsafe extern "C" fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
+unsafe extern "C-unwind" fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
     let mut node: TSNode = TSNode {
         context: [0; 4],
         id: ::core::ptr::null::<::core::ffi::c_void>(),
@@ -1493,7 +1512,7 @@ unsafe extern "C" fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRan
         range_err(L);
     };
 }
-unsafe extern "C" fn parser_set_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_set_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(L) < 2 as ::core::ffi::c_int {
         return luaL_error(
             L,
@@ -1526,7 +1545,7 @@ unsafe extern "C" fn parser_set_ranges(mut L: *mut lua_State) -> ::core::ffi::c_
     xfree(ranges as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn parser_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
     let mut include_bytes: bool =
         lua_gettop(L) >= 2 as ::core::ffi::c_int && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
@@ -1576,7 +1595,7 @@ unsafe extern "C" fn logger_cb(
         );
     }
 }
-unsafe extern "C" fn parser_set_logger(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_set_logger(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
     (lua_type(L, 2 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int
         || luaL_argerror(
@@ -1620,7 +1639,7 @@ unsafe extern "C" fn parser_set_logger(mut L: *mut lua_State) -> ::core::ffi::c_
     ts_parser_set_logger(p, logger);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn parser_get_logger(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn parser_get_logger(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
     let mut logger: TSLogger = ts_parser_logger(p);
     if logger.log.is_some() {
@@ -1634,34 +1653,38 @@ unsafe extern "C" fn parser_get_logger(mut L: *mut lua_State) -> ::core::ffi::c_
 static tree_meta: GlobalCell<[luaL_Reg; 7]> = GlobalCell::new([
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(tree_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            tree_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"root\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_root as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(tree_root as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"edit\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_edit as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(tree_edit as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_get_ranges as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            tree_get_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"copy\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_copy as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(tree_copy as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-unsafe extern "C" fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
+unsafe extern "C-unwind" fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
     if tree.is_null() {
         lua_pushnil(L);
         return;
@@ -1672,14 +1695,14 @@ unsafe extern "C" fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
     lua_getfield(L, LUA_REGISTRYINDEX, TS_META_TREE.as_ptr());
     lua_setmetatable(L, -2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn tree_copy(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_copy(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut ud: *mut TSLuaTree =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
     let mut copy: *mut TSTree = ts_tree_copy((*ud).tree);
     push_tree(L, copy);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(L) < 10 as ::core::ffi::c_int {
         lua_pushstring(
             L,
@@ -1720,7 +1743,7 @@ unsafe extern "C" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_int {
     push_tree(L, new_tree);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tree_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut ud: *mut TSLuaTree =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
     let mut include_bytes: bool =
@@ -1731,18 +1754,18 @@ unsafe extern "C" fn tree_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_in
     xfree(ranges as *mut ::core::ffi::c_void);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tree_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut ud: *mut TSLuaTree =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
     let mut tree: *mut TSTree = (*ud).tree as *mut TSTree;
     ts_tree_delete(tree);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tree_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushstring(L, b"<tree>\0".as_ptr() as *const ::core::ffi::c_char);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tree_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut ud: *mut TSLuaTree =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
     let mut root: TSNode = ts_tree_root_node((*ud).tree);
@@ -1760,168 +1783,199 @@ unsafe extern "C" fn tree_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
 static node_meta: GlobalCell<[luaL_Reg; 36]> = GlobalCell::new([
     luaL_Reg {
         name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"__eq\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_eq as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_eq as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"__len\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_child_count as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_child_count as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"id\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_id as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_id as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"range\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_range as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_range as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"start\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_start as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_start as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"end_\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_end as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_end as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"type\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_type as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_type as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"symbol\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_symbol as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_symbol as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"field\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_field as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_field as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"named\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_named as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_named as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"missing\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_missing as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_missing as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"extra\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_extra as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_extra as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"has_changes\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_has_changes as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_has_changes as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"has_error\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_has_error as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_has_error as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"sexpr\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_sexpr as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_sexpr as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"child_count\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_child_count as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_child_count as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"named_child_count\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_named_child_count as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_named_child_count
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"child\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_child as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_child as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"named_child\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_named_child as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_named_child as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"descendant_for_range\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_descendant_for_range as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_descendant_for_range
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"named_descendant_for_range\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
             node_named_descendant_for_range
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"parent\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_parent as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_parent as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"__has_ancestor\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(__has_ancestor as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            __has_ancestor as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"child_with_descendant\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
             node_child_with_descendant
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"iter_children\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_iter_children as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_iter_children as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"next_sibling\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_next_sibling as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_next_sibling as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"prev_sibling\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_prev_sibling as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_prev_sibling as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"next_named_sibling\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_next_named_sibling as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_next_named_sibling
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"prev_named_sibling\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_prev_named_sibling as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_prev_named_sibling
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"named_children\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            node_named_children as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            node_named_children
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"root\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_root as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_root as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"tree\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_tree as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_tree as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"byte_length\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_byte_length as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            node_byte_length as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"equal\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(node_equal as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(node_equal as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-unsafe extern "C" fn push_node(
+unsafe extern "C-unwind" fn push_node(
     mut L: *mut lua_State,
     mut node: TSNode,
     mut uindex: ::core::ffi::c_int,
@@ -1949,7 +2003,7 @@ unsafe extern "C" fn push_node(
     lua_getfenv(L, uindex);
     lua_setfenv(L, -2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn node_check_opt(
+unsafe extern "C-unwind" fn node_check_opt(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
     mut res: *mut TSNode,
@@ -1961,11 +2015,14 @@ unsafe extern "C" fn node_check_opt(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn node_check(mut L: *mut lua_State, mut index: ::core::ffi::c_int) -> TSNode {
+unsafe extern "C-unwind" fn node_check(
+    mut L: *mut lua_State,
+    mut index: ::core::ffi::c_int,
+) -> TSNode {
     let mut ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
     return *ud;
 }
-unsafe extern "C" fn node_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushstring(L, b"<node \0".as_ptr() as *const ::core::ffi::c_char);
     lua_pushstring(L, ts_node_type(node));
@@ -1973,13 +2030,13 @@ unsafe extern "C" fn node_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int 
     lua_concat(L, 3 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_eq(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_eq(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_eq(node, node2) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_id(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_id(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushlstring(
         L,
@@ -1988,7 +2045,7 @@ unsafe extern "C" fn node_id(mut L: *mut lua_State) -> ::core::ffi::c_int {
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut include_bytes: bool =
         lua_gettop(L) >= 2 as ::core::ffi::c_int && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
@@ -2009,7 +2066,7 @@ unsafe extern "C" fn node_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushinteger(L, end.column as lua_Integer);
     return 4 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_start(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_start(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut start: TSPoint = ts_node_start_point(node);
     let mut start_byte: uint32_t = ts_node_start_byte(node);
@@ -2018,7 +2075,7 @@ unsafe extern "C" fn node_start(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushinteger(L, start_byte as lua_Integer);
     return 3 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_end(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_end(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut end: TSPoint = ts_node_end_point(node);
     let mut end_byte: uint32_t = ts_node_end_byte(node);
@@ -2027,30 +2084,30 @@ unsafe extern "C" fn node_end(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushinteger(L, end_byte as lua_Integer);
     return 3 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_child_count(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_child_count(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut count: uint32_t = ts_node_child_count(node);
     lua_pushinteger(L, count as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_named_child_count(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_named_child_count(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut count: uint32_t = ts_node_named_child_count(node);
     lua_pushinteger(L, count as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_type(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_type(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushstring(L, ts_node_type(node));
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_symbol(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_symbol(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut symbol: TSSymbol = ts_node_symbol(node);
     lua_pushinteger(L, symbol as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_field(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_field(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut count: uint32_t = ts_node_child_count(node);
     let mut curr_index: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2072,53 +2129,53 @@ unsafe extern "C" fn node_field(mut L: *mut lua_State) -> ::core::ffi::c_int {
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_named(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_named(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_is_named(node) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_sexpr(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_sexpr(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut allocated: *mut ::core::ffi::c_char = ts_node_string(node);
     lua_pushstring(L, allocated);
     xfree(allocated as *mut ::core::ffi::c_void);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_missing(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_missing(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_is_missing(node) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_extra(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_extra(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_is_extra(node) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_has_changes(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_has_changes(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_has_changes(node) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_has_error(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_has_error(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_has_error(node) as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
     let mut child: TSNode = ts_node_child(node, num);
     push_node(L, child, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_named_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_named_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
     let mut child: TSNode = ts_node_named_child(node, num);
     push_node(L, child, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_descendant_for_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_descendant_for_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut start: TSPoint = TSPoint {
         row: lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t,
@@ -2132,7 +2189,9 @@ unsafe extern "C" fn node_descendant_for_range(mut L: *mut lua_State) -> ::core:
     push_node(L, child, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_named_descendant_for_range(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_named_descendant_for_range(
+    mut L: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut start: TSPoint = TSPoint {
         row: lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t,
@@ -2146,7 +2205,7 @@ unsafe extern "C" fn node_named_descendant_for_range(mut L: *mut lua_State) -> :
     push_node(L, child, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_next_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_next_child(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut child_index: *mut uint32_t =
         lua_touserdata(L, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int) as *mut uint32_t;
     let mut source: TSNode = node_check(L, LUA_GLOBALSINDEX - 2 as ::core::ffi::c_int);
@@ -2164,7 +2223,7 @@ unsafe extern "C" fn node_next_child(mut L: *mut lua_State) -> ::core::ffi::c_in
     *child_index = (*child_index).wrapping_add(1);
     return 2 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_iter_children(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_iter_children(mut L: *mut lua_State) -> ::core::ffi::c_int {
     node_check(L, 1 as ::core::ffi::c_int);
     let mut child_index: *mut uint32_t =
         lua_newuserdata(L, ::core::mem::size_of::<uint32_t>()) as *mut uint32_t;
@@ -2172,18 +2231,18 @@ unsafe extern "C" fn node_iter_children(mut L: *mut lua_State) -> ::core::ffi::c
     lua_pushvalue(L, 1 as ::core::ffi::c_int);
     lua_pushcclosure(
         L,
-        Some(node_next_child as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(node_next_child as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
         2 as ::core::ffi::c_int,
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_parent(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_parent(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut parent: TSNode = ts_node_parent(node);
     push_node(L, parent, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut descendant: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     if lua_type(L, 2 as ::core::ffi::c_int) != LUA_TTABLE {
         lua_pushboolean(L, false_0);
@@ -2220,38 +2279,40 @@ unsafe extern "C" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi::c_int
     lua_pushboolean(L, false_0);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_child_with_descendant(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_child_with_descendant(
+    mut L: *mut lua_State,
+) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut descendant: TSNode = node_check(L, 2 as ::core::ffi::c_int);
     let mut child: TSNode = ts_node_child_with_descendant(node, descendant);
     push_node(L, child, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_next_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_next_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut sibling: TSNode = ts_node_next_sibling(node);
     push_node(L, sibling, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_prev_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_prev_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut sibling: TSNode = ts_node_prev_sibling(node);
     push_node(L, sibling, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_next_named_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_next_named_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut sibling: TSNode = ts_node_next_named_sibling(node);
     push_node(L, sibling, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_prev_named_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_prev_named_sibling(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut sibling: TSNode = ts_node_prev_named_sibling(node);
     push_node(L, sibling, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_named_children(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_named_children(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut source: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     let mut curr_index: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2268,26 +2329,26 @@ unsafe extern "C" fn node_named_children(mut L: *mut lua_State) -> ::core::ffi::
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut root: TSNode = ts_tree_root_node(node.tree);
     push_node(L, root, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_tree(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_tree(mut L: *mut lua_State) -> ::core::ffi::c_int {
     node_check(L, 1 as ::core::ffi::c_int);
     lua_getfenv(L, 1 as ::core::ffi::c_int);
     lua_rawgeti(L, 2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_byte_length(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_byte_length(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut start_byte: uint32_t = ts_node_start_byte(node);
     let mut end_byte: uint32_t = ts_node_end_byte(node);
     lua_pushinteger(L, end_byte.wrapping_sub(start_byte) as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn node_equal(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn node_equal(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node1: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
     lua_pushboolean(L, ts_node_eq(node1, node2) as ::core::ffi::c_int);
@@ -2297,31 +2358,36 @@ static querycursor_meta: GlobalCell<[luaL_Reg; 5]> = GlobalCell::new([
     luaL_Reg {
         name: b"remove_match\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            querycursor_remove_match as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            querycursor_remove_match
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"next_capture\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            querycursor_next_capture as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            querycursor_next_capture
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"next_match\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            querycursor_next_match as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            querycursor_next_match
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(querycursor_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            querycursor_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
         func: None,
     },
 ]);
-unsafe extern "C" fn tslua_push_querycursor(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_push_querycursor(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
     let mut query: *mut TSQuery = query_check(L, 2 as ::core::ffi::c_int);
     let mut cursor: *mut TSQueryCursor = ts_query_cursor_new();
@@ -2405,13 +2471,13 @@ unsafe extern "C" fn tslua_push_querycursor(mut L: *mut lua_State) -> ::core::ff
     lua_setfenv(L, -2 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn querycursor_remove_match(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querycursor_remove_match(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
     let mut match_id: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
     ts_query_cursor_remove_match(cursor, match_id);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn querycursor_next_capture(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querycursor_next_capture(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
     let mut match_0: TSQueryMatch = TSQueryMatch {
         id: 0,
@@ -2429,7 +2495,7 @@ unsafe extern "C" fn querycursor_next_capture(mut L: *mut lua_State) -> ::core::
     push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
     return 3 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn querycursor_next_match(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querycursor_next_match(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
     let mut match_0: TSQueryMatch = TSQueryMatch {
         id: 0,
@@ -2443,7 +2509,7 @@ unsafe extern "C" fn querycursor_next_match(mut L: *mut lua_State) -> ::core::ff
     push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn querycursor_check(
+unsafe extern "C-unwind" fn querycursor_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSQueryCursor {
@@ -2457,7 +2523,7 @@ unsafe extern "C" fn querycursor_check(
         ) != 0) as ::core::ffi::c_int;
     return *ud;
 }
-unsafe extern "C" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
     ts_query_cursor_delete(cursor);
     return 0 as ::core::ffi::c_int;
@@ -2465,12 +2531,15 @@ unsafe extern "C" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi::c_int
 static querymatch_meta: GlobalCell<[luaL_Reg; 3]> = GlobalCell::new([
     luaL_Reg {
         name: b"info\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(querymatch_info as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            querymatch_info as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"captures\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            querymatch_captures as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            querymatch_captures
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
@@ -2478,7 +2547,7 @@ static querymatch_meta: GlobalCell<[luaL_Reg; 3]> = GlobalCell::new([
         func: None,
     },
 ]);
-unsafe extern "C" fn push_querymatch(
+unsafe extern "C-unwind" fn push_querymatch(
     mut L: *mut lua_State,
     mut match_0: *mut TSQueryMatch,
     mut uindex: ::core::ffi::c_int,
@@ -2491,7 +2560,7 @@ unsafe extern "C" fn push_querymatch(
     lua_getfenv(L, uindex);
     lua_setfenv(L, -2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn querymatch_info(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querymatch_info(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut match_0: *mut TSQueryMatch =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_QUERYMATCH.as_ptr())
             as *mut TSQueryMatch;
@@ -2502,7 +2571,7 @@ unsafe extern "C" fn querymatch_info(mut L: *mut lua_State) -> ::core::ffi::c_in
     );
     return 2 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn querymatch_captures(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn querymatch_captures(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut match_0: *mut TSQueryMatch =
         luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_QUERYMATCH.as_ptr())
             as *mut TSQueryMatch;
@@ -2531,26 +2600,32 @@ unsafe extern "C" fn querymatch_captures(mut L: *mut lua_State) -> ::core::ffi::
 static query_meta: GlobalCell<[luaL_Reg; 6]> = GlobalCell::new([
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(query_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(query_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(query_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            query_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"inspect\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(query_inspect as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        func: Some(
+            query_inspect as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
     },
     luaL_Reg {
         name: b"disable_capture\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            query_disable_capture as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            query_disable_capture
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"disable_pattern\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            query_disable_pattern as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            query_disable_pattern
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
@@ -2558,7 +2633,7 @@ static query_meta: GlobalCell<[luaL_Reg; 6]> = GlobalCell::new([
         func: None,
     },
 ]);
-unsafe extern "C" fn tslua_parse_query(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_parse_query(mut L: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(L) < 2 as ::core::ffi::c_int
         || lua_isstring(L, 1 as ::core::ffi::c_int) == 0
         || lua_isstring(L, 2 as ::core::ffi::c_int) == 0
@@ -2604,7 +2679,7 @@ unsafe extern "C" fn tslua_parse_query(mut L: *mut lua_State) -> ::core::ffi::c_
     lua_setmetatable(L, -2 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn query_err_to_string(
+unsafe extern "C-unwind" fn query_err_to_string(
     mut error_type: TSQueryError,
 ) -> *const ::core::ffi::c_char {
     match error_type as ::core::ffi::c_uint {
@@ -2616,7 +2691,7 @@ unsafe extern "C" fn query_err_to_string(
         _ => return b"error\0".as_ptr() as *const ::core::ffi::c_char,
     };
 }
-unsafe extern "C" fn query_err_string(
+unsafe extern "C-unwind" fn query_err_string(
     mut src: *const ::core::ffi::c_char,
     mut error_offset: ::core::ffi::c_int,
     mut error_type: TSQueryError,
@@ -2730,7 +2805,7 @@ unsafe extern "C" fn query_err_string(
         b"\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
-unsafe extern "C" fn query_check(
+unsafe extern "C-unwind" fn query_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSQuery {
@@ -2744,16 +2819,16 @@ unsafe extern "C" fn query_check(
         ) != 0) as ::core::ffi::c_int;
     return *ud;
 }
-unsafe extern "C" fn query_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn query_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
     ts_query_delete(query);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn query_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn query_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     lua_pushstring(L, b"<query>\0".as_ptr() as *const ::core::ffi::c_char);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
     lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
     let mut n_pat: uint32_t = ts_query_pattern_count(query);
@@ -2850,7 +2925,7 @@ unsafe extern "C" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi::c_int 
     );
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn query_disable_capture(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn query_disable_capture(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
     let mut name_len: size_t = 0;
     let mut name: *const ::core::ffi::c_char =
@@ -2858,13 +2933,13 @@ unsafe extern "C" fn query_disable_capture(mut L: *mut lua_State) -> ::core::ffi
     ts_query_disable_capture(query, name, name_len as uint32_t);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn query_disable_pattern(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn query_disable_pattern(mut L: *mut lua_State) -> ::core::ffi::c_int {
     let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
     let pattern_index: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
     ts_query_disable_pattern(query, pattern_index.wrapping_sub(1 as uint32_t));
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn build_meta(
+unsafe extern "C-unwind" fn build_meta(
     mut L: *mut lua_State,
     mut tname: *const ::core::ffi::c_char,
     mut meta: *const luaL_Reg,
@@ -2880,7 +2955,7 @@ unsafe extern "C" fn build_meta(
     }
     lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn tslua_init(mut L: *mut lua_State) {
+unsafe extern "C-unwind" fn tslua_init(mut L: *mut lua_State) {
     build_meta(
         L,
         TS_META_PARSER.as_ptr(),
@@ -2912,22 +2987,26 @@ unsafe extern "C" fn tslua_init(mut L: *mut lua_State) {
         Some(xfree as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
     );
 }
-unsafe extern "C" fn tslua_get_language_version(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_get_language_version(
+    mut L: *mut lua_State,
+) -> ::core::ffi::c_int {
     lua_pushnumber(L, TREE_SITTER_LANGUAGE_VERSION as lua_Number);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tslua_get_minimum_language_version(
+unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
     mut L: *mut lua_State,
 ) -> ::core::ffi::c_int {
     lua_pushnumber(L, TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as lua_Number);
     return 1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn nlua_treesitter_free() {}
-pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
+pub unsafe extern "C-unwind" fn nlua_treesitter_free() {}
+pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
     tslua_init(lstate);
     lua_pushcclosure(
         lstate,
-        Some(tslua_push_parser as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_push_parser as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2937,7 +3016,10 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(tslua_push_querycursor as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_push_querycursor
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2949,7 +3031,7 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lstate,
         Some(
             tslua_add_language_from_object
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -2960,7 +3042,9 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(tslua_has_language as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_has_language as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2970,7 +3054,9 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(tslua_remove_lang as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_remove_lang as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2980,7 +3066,9 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(tslua_inspect_lang as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_inspect_lang as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2990,7 +3078,9 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(tslua_parse_query as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
+        Some(
+            tslua_parse_query as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
+        ),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -3002,7 +3092,7 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lstate,
         Some(
             tslua_get_language_version
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -3015,7 +3105,7 @@ pub unsafe extern "C" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lstate,
         Some(
             tslua_get_minimum_language_version
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
