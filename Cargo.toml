@@ -1,10 +1,6 @@
 [workspace]
 members = [
 ]
-# The phase-3a rewriter builds with a modern toolchain; its v4 lockfile is
-# unreadable by the crate's pinned cargo, so keep it out of workspace
-# discovery entirely.
-exclude = ["tools/globalize"]
 [package]
 name = "c2rust_neovim"
 authors = ["C2Rust"]

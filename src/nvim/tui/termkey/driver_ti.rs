@@ -2,11 +2,12 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::os::libc::{__assert_fail, abort, fprintf, sprintf, stderr, strlen, write};
 pub use crate::src::nvim::types::{
-    TermKey, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t,
+    __time_t, __uid_t, cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios, TermKey,
+    TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType,
-    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_0, TerminfoEntry, _IO_codecvt,
-    _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t, __time_t,
-    __uid_t, cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios, FILE, _IO_FILE,
+    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_0, TerminfoEntry, _IO_FILE,
+    FILE,
 };
 extern "C" {
     fn fstat(__fd: ::core::ffi::c_int, __buf: *mut stat) -> ::core::ffi::c_int;
@@ -538,7 +539,7 @@ unsafe extern "C" fn try_load_terminfo_key(
     }
     if value.is_null()
         || value
-            == ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(
+            == ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_char>(
                 -1 as ::core::ffi::c_int as usize,
             ) as *const ::core::ffi::c_char
         || *value.offset(0 as ::core::ffi::c_int as isize) == 0

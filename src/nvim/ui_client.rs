@@ -22,18 +22,9 @@ use crate::src::nvim::os::env::{os_env_exists, os_get_pid};
 use crate::src::nvim::os::libc::{__assert_fail, abort, close, dup, memcmp};
 use crate::src::nvim::profile::{time_finish, time_msg};
 pub use crate::src::nvim::types::{
-    Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader, CallbackType,
-    Callback_data as C2Rust_Unnamed_0, Channel, ChannelCallFrame, ChannelStdinMode,
-    ChannelStreamType, Channel_stream as C2Rust_Unnamed_20, ClientType, Dict, Error, ErrorType,
-    Event, FieldHashfn, Float, GridLineEvent, HLGroupID, HlAttrs, Integer, InternalState,
-    KeyDict_highlight, KeySetLink, KeyValuePair, LibuvProc, LineFlags, Loop, LuaRef, MultiQueue,
-    Object, ObjectType, OptionalKeys, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc,
-    RStream, RemoteUI, RgbValue, RpcState, RpcState_call_stack as C2Rust_Unnamed_19,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, StderrState, StdioPair, Stream, String_0,
-    TUIData, Terminal, UIClientHandler, Unpacker, VarLockStatus, VarType, _IO_codecvt, _IO_lock_t,
-    _IO_marker, _IO_wide_data, __gid_t, __off64_t, __off_t, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, argv_callback, blob_T,
-    blobvar_S, consumed_blk, dict_T, dictvar_S, float_T, funccall_S,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __off64_t, __off_t,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t,
+    argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T, hashitem_T,
     hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T, list_T,
     listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
@@ -57,7 +48,15 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_11, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_14, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    varnumber_T, winsize, FILE, QUEUE, _IO_FILE,
+    varnumber_T, winsize, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader,
+    CallbackType, Callback_data as C2Rust_Unnamed_0, Channel, ChannelCallFrame, ChannelStdinMode,
+    ChannelStreamType, Channel_stream as C2Rust_Unnamed_20, ClientType, Dict, Error, ErrorType,
+    Event, FieldHashfn, Float, GridLineEvent, HLGroupID, HlAttrs, Integer, InternalState,
+    KeyDict_highlight, KeySetLink, KeyValuePair, LibuvProc, LineFlags, Loop, LuaRef, MultiQueue,
+    Object, ObjectType, OptionalKeys, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc,
+    RStream, RemoteUI, RgbValue, RpcState, RpcState_call_stack as C2Rust_Unnamed_19,
+    ScopeDictDictItem, ScopeType, SpecialVarValue, StderrState, StdioPair, Stream, String_0,
+    TUIData, Terminal, UIClientHandler, Unpacker, VarLockStatus, VarType, _IO_FILE, FILE, QUEUE,
 };
 extern "C" {
     fn tui_start(

@@ -74,25 +74,14 @@ use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_11, ChangedtickDictItem, CheckItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_8, Directory, ExtmarkUndoObject, FileID, FileInfo,
-    FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos,
-    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t,
-    MarkTree, OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_18, String_0, Terminal, Timestamp, TriState,
-    UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_codecvt, _IO_lock_t,
-    _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, aco_save_T,
-    alist_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
-    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_22, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
-    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_9, file_buffer_b_wininfo as C2Rust_Unnamed_17,
-    file_buffer_update_callbacks as C2Rust_Unnamed_6,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    __time_t, __uid_t, aco_save_T, alist_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S,
+    blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T,
+    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_22, dict_T, dictvar_S, diff_T, diffblock_S,
+    disptick_T, eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_9,
+    file_buffer_b_wininfo as C2Rust_Unnamed_17, file_buffer_update_callbacks as C2Rust_Unnamed_6,
     file_buffer_update_channels as C2Rust_Unnamed_7, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_12, funccall_T, garray_T, gid_t, handle_T,
     hash_T, hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T,
@@ -114,7 +103,18 @@ pub use crate::src::nvim::types::{
     uv_loop_t, uv_mutex_t, uv_req_type, uv_rwlock_t, uv_signal_cb, uv_signal_s,
     uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
     uv_stat_t, uv_timespec_t, uv_uid_t, varnumber_T, vim_acl_T, virt_line, visualinfo_T, win_T,
-    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue,
+    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_11,
+    ChangedtickDictItem, CheckItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_8, Directory, ExtmarkUndoObject, FileID,
+    FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey,
+    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, OptIndex, OptInt, OptVal, OptValData, OptValType,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_18, String_0,
+    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
+    FILE, QUEUE,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
@@ -1975,7 +1975,7 @@ pub unsafe extern "C" fn readfile(
     let mut fenc_next: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut advance_fenc: bool = false_0 != 0;
     let mut real_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut iconv_fd: iconv_t = ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+    let mut iconv_fd: iconv_t = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
         -1 as ::core::ffi::c_int as usize,
     );
     let mut did_iconv: bool = false_0 != 0;
@@ -2491,12 +2491,12 @@ pub unsafe extern "C" fn readfile(
                         fileformat = EOL_UNKNOWN;
                     }
                     if iconv_fd
-                        != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                             -1 as ::core::ffi::c_int as usize,
                         )
                     {
                         iconv_close(iconv_fd);
-                        iconv_fd = ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        iconv_fd = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                             -1 as ::core::ffi::c_int as usize,
                         );
                     }
@@ -2553,7 +2553,7 @@ pub unsafe extern "C" fn readfile(
                             && *p_ccv.get() as ::core::ffi::c_int != NUL
                             && !read_fifo
                             && iconv_fd
-                                == ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                                == ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                                     -1 as ::core::ffi::c_int as usize,
                                 )
                         {
@@ -2575,7 +2575,7 @@ pub unsafe extern "C" fn readfile(
                             }
                         } else if fio_flags == 0 as ::core::ffi::c_int
                             && iconv_fd
-                                == ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                                == ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                                     -1 as ::core::ffi::c_int as usize,
                                 )
                         {
@@ -2658,8 +2658,10 @@ pub unsafe extern "C" fn readfile(
                                     line_start = buffer;
                                     real_size = size as ::core::ffi::c_int;
                                     if iconv_fd
-                                        != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                                            -1 as ::core::ffi::c_int as usize,
+                                        != ::core::ptr::with_exposed_provenance_mut::<
+                                            ::core::ffi::c_void,
+                                        >(
+                                            -1 as ::core::ffi::c_int as usize
                                         )
                                     {
                                         size = size / ICONV_MULT as ::core::ffi::c_int as ptrdiff_t;
@@ -2781,7 +2783,7 @@ pub unsafe extern "C" fn readfile(
                                         } else if conv_restlen > 0 as ::core::ffi::c_int {
                                             if fio_flags != 0 as ::core::ffi::c_int
                                                 || iconv_fd
-                                                    != ::core::ptr::from_exposed_addr_mut::<
+                                                    != ::core::ptr::with_exposed_provenance_mut::<
                                                         ::core::ffi::c_void,
                                                     >(
                                                         -1 as ::core::ffi::c_int as usize
@@ -2807,7 +2809,7 @@ pub unsafe extern "C" fn readfile(
                                                 if bad_char_behavior != BAD_KEEP
                                                     && (fio_flags != 0 as ::core::ffi::c_int
                                                         || iconv_fd
-                                                            != ::core::ptr::from_exposed_addr_mut::<
+                                                            != ::core::ptr::with_exposed_provenance_mut::<
                                                                 ::core::ffi::c_void,
                                                             >(
                                                                 -1 as ::core::ffi::c_int as usize
@@ -2822,18 +2824,19 @@ pub unsafe extern "C" fn readfile(
                                                 }
                                                 fio_flags = 0 as ::core::ffi::c_int;
                                                 if iconv_fd
-                                                    != ::core::ptr::from_exposed_addr_mut::<
+                                                    != ::core::ptr::with_exposed_provenance_mut::<
                                                         ::core::ffi::c_void,
                                                     >(
                                                         -1 as ::core::ffi::c_int as usize
                                                     )
                                                 {
                                                     iconv_close(iconv_fd);
-                                                    iconv_fd = ::core::ptr::from_exposed_addr_mut::<
-                                                        ::core::ffi::c_void,
-                                                    >(
-                                                        -1 as ::core::ffi::c_int as usize
-                                                    );
+                                                    iconv_fd =
+                                                        ::core::ptr::with_exposed_provenance_mut::<
+                                                            ::core::ffi::c_void,
+                                                        >(
+                                                            -1 as ::core::ffi::c_int as usize
+                                                        );
                                                 }
                                             }
                                         }
@@ -2900,7 +2903,7 @@ pub unsafe extern "C" fn readfile(
                                 break '_failed;
                             }
                             if iconv_fd
-                                != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                                != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                                     -1 as ::core::ffi::c_int as usize,
                                 )
                             {
@@ -3290,7 +3293,7 @@ pub unsafe extern "C" fn readfile(
                                             break;
                                         }
                                         if iconv_fd
-                                            != ::core::ptr::from_exposed_addr_mut::<
+                                            != ::core::ptr::with_exposed_provenance_mut::<
                                                 ::core::ffi::c_void,
                                             >(
                                                 -1 as ::core::ffi::c_int as usize
@@ -3564,7 +3567,7 @@ pub unsafe extern "C" fn readfile(
                         }
                         if *p_ccv.get() as ::core::ffi::c_int != NUL
                             && iconv_fd
-                                != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                                != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                                     -1 as ::core::ffi::c_int as usize,
                                 )
                         {
@@ -3628,7 +3631,7 @@ pub unsafe extern "C" fn readfile(
                     xfree(fenc as *mut ::core::ffi::c_void);
                 }
                 if iconv_fd
-                    != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         -1 as ::core::ffi::c_int as usize,
                     )
                 {

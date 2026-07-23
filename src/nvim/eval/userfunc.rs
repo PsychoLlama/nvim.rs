@@ -73,20 +73,8 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat, AutoPatCmd,
-    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict,
-    Direction, Error, ErrorType, EvalFuncData, EvalFuncDef, ExtmarkUndoObject, FileID, Float,
-    FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair, LineGetter, LuaRef,
-    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, Object, ObjectType, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
-    Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimLFunc, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, __time_t,
-    alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock, buffblock_T,
-    buffheader_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
+    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock,
+    buffblock_T, buffheader_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_20, dict_T, dictitem_T, dictvar_S, disptick_T, eslist_T,
     eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_26, etype_T, evalarg_T, event_T,
     exarg, exarg_T, except_T, except_type_T, exception_state_S, exception_state_T, expand_T,
@@ -107,7 +95,19 @@ pub use crate::src::nvim::types::{
     u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9, u_header_uh_alt_prev as C2Rust_Unnamed_8,
     u_header_uh_next as C2Rust_Unnamed_11, u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T,
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, QUEUE,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
+    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat, AutoPatCmd,
+    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict,
+    Direction, Error, ErrorType, EvalFuncData, EvalFuncDef, ExtmarkUndoObject, FileID, Float,
+    FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair, LineGetter, LuaRef,
+    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, Object, ObjectType, OptInt,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
+    Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimLFunc, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::ui::ui_has;
 extern "C" {

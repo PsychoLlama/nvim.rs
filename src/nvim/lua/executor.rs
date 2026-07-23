@@ -73,20 +73,6 @@ use crate::src::nvim::runtime::{
 };
 use crate::src::nvim::strings::{arena_printf, vim_snprintf};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, ArgvFunc, Array,
-    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_17, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_14, Dict,
-    Direction, Error, ErrorType, EvalFuncData, EvalFuncDef, Event, ExtmarkUndoObject,
-    FileDescriptor, FileID, Float, FloatAnchor, FloatRelative, GridView, HlMessage, HlMessageChunk,
-    Integer, Intersection, KeyValuePair, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode,
-    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MessageData, MsgpackRpcRequestHandler, MultiQueue, Object,
-    ObjectType, OptInt, Proc, ProcType, RStream, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream, StringBuilder, String_0, Terminal,
-    TimeWatcher, Timestamp, TryState, UIExtension, VarLockStatus, VarType, VimLFunc, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window,
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t,
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, alist_T, argv_callback, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
@@ -126,7 +112,21 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, varnumber_T,
     vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
-    xfmark_T, xp_prefix_T, FILE, QUEUE, _IO_FILE,
+    xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem,
+    ArgvFunc, Array, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_17, ChangedtickDictItem, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_14, Dict,
+    Direction, Error, ErrorType, EvalFuncData, EvalFuncDef, Event, ExtmarkUndoObject,
+    FileDescriptor, FileID, Float, FloatAnchor, FloatRelative, GridView, HlMessage, HlMessageChunk,
+    Integer, Intersection, KeyValuePair, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode,
+    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, MessageData, MsgpackRpcRequestHandler, MultiQueue, Object,
+    ObjectType, OptInt, Proc, ProcType, RStream, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream, StringBuilder, String_0, Terminal,
+    TimeWatcher, Timestamp, TryState, UIExtension, VarLockStatus, VarType, VimLFunc, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
+    FILE, QUEUE,
 };
 use crate::src::nvim::ui::{ui_add_cb, ui_flush, ui_has, ui_remove_cb};
 use crate::src::nvim::undo::u_save;
@@ -1075,8 +1075,8 @@ pub unsafe extern "C" fn nlua_pcall(
 unsafe extern "C" fn nlua_luv_error_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut error: *mut ::core::ffi::c_char =
         *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-    let mut type_0: luv_err_t =
-        (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as luv_err_t;
+    let mut type_0: luv_err_t = (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_provenance()
+        as intptr_t as luv_err_t;
     match type_0 as ::core::ffi::c_uint {
         0 => {
             semsg_multiline(
@@ -1225,7 +1225,7 @@ unsafe extern "C" fn nlua_luv_thread_common_cfpcall(
                     } else {
                         ::core::ptr::null_mut::<::core::ffi::c_char>()
                     }) as *mut ::core::ffi::c_void,
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         (if is_callback as ::core::ffi::c_int != 0 {
                             kThreadCallback as ::core::ffi::c_int
                         } else {
@@ -1326,9 +1326,9 @@ unsafe extern "C" fn nlua_init_argv(
 }
 unsafe extern "C" fn nlua_schedule_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut cb: LuaRef =
-        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as ptrdiff_t as LuaRef;
-    let mut ns_id: uint32_t =
-        (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as ptrdiff_t as uint32_t;
+        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_provenance() as ptrdiff_t as LuaRef;
+    let mut ns_id: uint32_t = (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_provenance()
+        as ptrdiff_t as uint32_t;
     let lstate: *mut lua_State = global_lstate.get();
     nlua_pushref(lstate, cb);
     nlua_unref_global(lstate, cb);
@@ -1384,10 +1384,12 @@ unsafe extern "C" fn nlua_schedule(lstate: *mut lua_State) -> ::core::ffi::c_int
                 nlua_schedule_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(cb as ptrdiff_t as usize),
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(ui_event_ns_id.get()
-                    as ptrdiff_t
-                    as usize),
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                    cb as ptrdiff_t as usize,
+                ),
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                    ui_event_ns_id.get() as ptrdiff_t as usize,
+                ),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2263,7 +2265,7 @@ unsafe extern "C" fn nlua_print_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut chunk: HlMessageChunk = HlMessageChunk {
         text: String_0 {
             data: *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
-            size: ((*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t
+            size: ((*argv.offset(1 as ::core::ffi::c_int as isize)).expose_provenance() as intptr_t
                 as size_t)
                 .wrapping_sub(1 as size_t),
         },
@@ -2372,7 +2374,7 @@ unsafe extern "C" fn nlua_print(lstate: *mut lua_State) -> ::core::ffi::c_int {
                     ),
                     argv: [
                         msg_ga.ga_data,
-                        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                             msg_ga.ga_len as intptr_t as usize,
                         ),
                         ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2396,7 +2398,7 @@ unsafe extern "C" fn nlua_print(lstate: *mut lua_State) -> ::core::ffi::c_int {
                     ),
                     argv: [
                         msg_ga.ga_data,
-                        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                             msg_ga.ga_len as intptr_t as usize,
                         ),
                         ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2413,7 +2415,7 @@ unsafe extern "C" fn nlua_print(lstate: *mut lua_State) -> ::core::ffi::c_int {
         } else {
             let mut c2rust_lvalue: [*mut ::core::ffi::c_void; 2] = [
                 msg_ga.ga_data,
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     msg_ga.ga_len as intptr_t as usize,
                 ),
             ];
@@ -2464,8 +2466,12 @@ unsafe extern "C" fn nlua_require(lstate: *mut lua_State) -> ::core::ffi::c_int 
             b"require\0".as_ptr() as *const ::core::ffi::c_char,
         );
         if lua_iscfunction(lstate, -1 as ::core::ffi::c_int) != 0
-            && lua_tocfunction(lstate, -1 as ::core::ffi::c_int)
-                == Some(nlua_require as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int)
+            && lua_tocfunction(lstate, -1 as ::core::ffi::c_int).is_some_and(|f| {
+                ::core::ptr::fn_addr_eq(
+                    f,
+                    nlua_require as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+                )
+            })
         {
             lua_pushvalue(lstate, 1 as ::core::ffi::c_int);
             lua_setfield(

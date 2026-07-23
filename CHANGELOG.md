@@ -7,6 +7,11 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the Rust toolchain from `nightly-2023-04-15` to `nightly-2026-07-15`,
+  shedding the now-stable `raw_ref_op` and `strict_provenance` feature gates.
+
 ## [2026.07.23-95cd63254c]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.

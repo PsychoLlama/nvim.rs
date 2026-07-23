@@ -31,20 +31,10 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
-    Directory, ExtmarkUndoObject, FileComparison, FileID, FileInfo, FloatAnchor, FloatRelative,
-    GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal,
-    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, __compar_fn_t, __gid_t, __mode_t, __off_t,
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, __uid_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
+    __compar_fn_t, __gid_t, __mode_t, __off_t, __pthread_internal_list, __pthread_list_t,
+    __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, alist_T, bhdr_T, blob_T,
+    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
     file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, file_comparison, float_T, fmark_T, fmarkv_T,
     frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T,
@@ -67,7 +57,17 @@ pub use crate::src::nvim::types::{
     uv_loop_t, uv_mutex_t, uv_req_type, uv_rwlock_t, uv_signal_cb, uv_signal_s,
     uv_signal_s_tree_entry as C2Rust_Unnamed_13, uv_signal_s_u as C2Rust_Unnamed_14, uv_signal_t,
     uv_stat_t, uv_timespec_t, uv_uid_t, varnumber_T, virt_line, visualinfo_T, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
+    wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue,
+    BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Directory, ExtmarkUndoObject,
+    FileComparison, FileID, FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef,
+    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
+    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, QUEUE,
 };
 extern "C" {
     fn vim_regcomp(

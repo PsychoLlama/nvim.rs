@@ -38,20 +38,8 @@ use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::tag::tagstack_clear_entry;
 use crate::src::nvim::textobject::{findpar, findsent};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, Array, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, Dict, Direction, ExtmarkMove, ExtmarkOp,
-    ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, Integer, Intersection, KeyValuePair, LineGetter, ListLenSpecials, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkAdjustMode, MarkGet, MarkMove, MarkMoveRes, MarkTree, MotionType,
-    Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, UndoObjectType,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, __time_t, alist_T, auto_event, bcount_t, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
+    __time_t, alist_T, auto_event, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
+    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
     eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_11,
@@ -70,7 +58,19 @@ pub use crate::src::nvim::types::{
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
     u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
     undo_object, undo_object_data as C2Rust_Unnamed_6, varnumber_T, virt_line, visualinfo_T, win_T,
-    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, Array,
+    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Dict,
+    Direction, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID,
+    Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair, LineGetter,
+    ListLenSpecials, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkAdjustMode, MarkGet, MarkMove, MarkMoveRes,
+    MarkTree, MotionType, Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, UndoObjectType,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, QUEUE,
 };
 extern "C" {
     fn qf_mark_adjust(

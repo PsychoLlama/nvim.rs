@@ -38,22 +38,11 @@ use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
 use crate::src::nvim::runtime::script_autoload;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Buffer, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharBoundsOff, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, Error, ErrorType, ExtmarkUndoObject, FileID,
-    FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Tabpage, Terminal, Timestamp,
-    TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, __builtin_va_list, __gnuc_va_list, __time_t,
-    __va_list_tag, aco_save_T, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
-    bufstate_T, chunksize_T, cmdmod_T, colnr_T, dict_T, dictitem_T, dictvar_S, diff_T, diffblock_S,
-    disptick_T, except_T, except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
+    __builtin_va_list, __gnuc_va_list, __time_t, __va_list_tag, aco_save_T, alist_T, bhdr_T,
+    blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmdmod_T, colnr_T,
+    dict_T, dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, except_T, except_type_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
+    file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, int8_t, intptr_t,
@@ -69,7 +58,18 @@ pub use crate::src::nvim::types::{
     u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
     u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
     undo_object, va_list, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T,
-    win_execute_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
+    win_execute_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos,
+    BoolVarValue, BufUpdateCallbacks, Buffer, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CharBoundsOff, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_1, Error, ErrorType, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Tabpage, Terminal, Timestamp,
+    TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
+    WinInfo, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::window::win_find_tabpage;
 extern "C" {
@@ -1280,10 +1280,10 @@ pub unsafe extern "C" fn nlua_push_errstr(
     mut fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) {
-    let mut argp: ::core::ffi::VaListImpl;
+    let mut argp: ::core::ffi::VaList;
     argp = c2rust_args.clone();
     luaL_where(L, 1 as ::core::ffi::c_int);
-    lua_pushvfstring(L, fmt, argp.as_va_list());
+    lua_pushvfstring(L, fmt, argp);
     lua_concat(L, 2 as ::core::ffi::c_int);
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

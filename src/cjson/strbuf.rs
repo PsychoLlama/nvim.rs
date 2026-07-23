@@ -1,7 +1,7 @@
 use crate::src::nvim::os::libc::{abort, fprintf, free, malloc, realloc, stderr, vfprintf};
 pub use crate::src::nvim::types::{
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
-    __off64_t, __off_t, __va_list_tag, size_t, strbuf_t, va_list, FILE, _IO_FILE,
+    __off64_t, __off_t, __va_list_tag, size_t, strbuf_t, va_list, _IO_FILE, FILE,
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
@@ -18,9 +18,9 @@ unsafe extern "C" fn strbuf_ensure_null(mut s: *mut strbuf_t) {
     *(*s).buf.offset((*s).length as isize) = 0 as ::core::ffi::c_char;
 }
 unsafe extern "C" fn die(mut fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
-    let mut arg: ::core::ffi::VaListImpl;
+    let mut arg: ::core::ffi::VaList;
     arg = c2rust_args.clone();
-    vfprintf(stderr, fmt, arg.as_va_list());
+    vfprintf(stderr, fmt, arg);
     fprintf(stderr, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     abort();
 }
@@ -66,7 +66,7 @@ unsafe extern "C" fn debug_stats(mut s: *mut strbuf_t) {
             stderr,
             b"strbuf(%lx) reallocs: %d, length: %zd, size: %zd\n\0".as_ptr()
                 as *const ::core::ffi::c_char,
-            s.expose_addr() as ::core::ffi::c_long,
+            s.expose_provenance() as ::core::ffi::c_long,
             (*s).reallocs,
             (*s).length,
             (*s).size,
@@ -122,7 +122,7 @@ pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
         fprintf(
             stderr,
             b"strbuf(%lx) resize: %zd => %zd\n\0".as_ptr() as *const ::core::ffi::c_char,
-            s.expose_addr() as ::core::ffi::c_long,
+            s.expose_provenance() as ::core::ffi::c_long,
             (*s).size,
             newsize,
         );

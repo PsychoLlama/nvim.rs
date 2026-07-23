@@ -41,18 +41,6 @@ use crate::src::nvim::search::linewhite;
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::src::nvim::syntax::syn_get_foldlevel;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, EvalFuncData,
-    ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float,
-    FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, Object, ObjectType, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
-    Terminal, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window,
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, __time_t, alist_T,
     bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
     dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, extmark_undo_vec_t, fcs_chars_T,
@@ -72,7 +60,19 @@ pub use crate::src::nvim::types::{
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
     u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
-    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos,
+    ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Callback,
+    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, EvalFuncData, ExtmarkMove,
+    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor,
+    FloatRelative, GridView, Integer, Intersection, KeyValuePair, LuaRef, MTKey, MTNode, MTPos,
+    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t,
+    MarkTree, MsgpackRpcRequestHandler, Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal, Timestamp, TriState,
+    UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE, FILE, QUEUE,
 };
 use crate::src::nvim::undo::u_save;
 pub const kErrorTypeValidation: ErrorType = 1;
@@ -2198,6 +2198,12 @@ unsafe extern "C" fn foldtext_cleanup(mut str: *mut ::core::ffi::c_char) {
         }
     }
 }
+// The fold-level strategy is dispatched by comparing function addresses, as
+// the C code did; the helper spells the address comparison out so the intent
+// survives the `unpredictable_function_pointer_comparisons` lint.
+fn getlevel_is(getlevel: LevelGetter, f: unsafe extern "C" fn(*mut fline_T)) -> bool {
+    getlevel.is_some_and(|g| ::core::ptr::fn_addr_eq(g, f))
+}
 unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
     if invalid_top.get() != 0 as linenr_T {
         return;
@@ -2290,7 +2296,7 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             fline.lnum -= 1;
         }
     }
-    if Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ()) == getlevel {
+    if getlevel_is(getlevel, foldlevelSyntax) {
         let mut gap: *mut garray_T = &raw mut (*wp).w_folds;
         let mut fpn: *mut fold_T = ::core::ptr::null_mut::<fold_T>();
         let mut current_fdl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2325,9 +2331,9 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             break;
         }
         if fline.lnum > end {
-            if getlevel != Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ())
-                && getlevel != Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ())
-                && getlevel != Some(foldlevelExpr as unsafe extern "C" fn(*mut fline_T) -> ())
+            if !getlevel_is(getlevel, foldlevelMarker)
+                && !getlevel_is(getlevel, foldlevelSyntax)
+                && !getlevel_is(getlevel, foldlevelExpr)
             {
                 break;
             }
@@ -2342,7 +2348,7 @@ unsafe extern "C" fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             {
                 end = (*fp).fd_top + (*fp).fd_len - 1 as linenr_T;
             } else {
-                if !(getlevel == Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ())
+                if !(getlevel_is(getlevel, foldlevelSyntax)
                     && foldLevelWin(wp, fline.lnum) != fline.lvl)
                 {
                     break;
@@ -2391,7 +2397,7 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
     topflags: ::core::ffi::c_char,
 ) -> linenr_T {
     let mut fp: *mut fold_T = ::core::ptr::null_mut::<fold_T>();
-    if getlevel == Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ())
+    if getlevel_is(getlevel, foldlevelMarker)
         && (*flp).start <= (*flp).lvl - level
         && (*flp).lvl > 0 as ::core::ffi::c_int
     {
@@ -2421,9 +2427,9 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
             lvl = 0 as ::core::ffi::c_int;
         }
         if (*flp).lnum > bot && !finish && !fp.is_null() {
-            if getlevel != Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ())
-                && getlevel != Some(foldlevelExpr as unsafe extern "C" fn(*mut fline_T) -> ())
-                && getlevel != Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ())
+            if !getlevel_is(getlevel, foldlevelMarker)
+                && !getlevel_is(getlevel, foldlevelExpr)
+                && !getlevel_is(getlevel, foldlevelSyntax)
             {
                 break;
             }
@@ -2535,20 +2541,9 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                                 fp = ((*gap).ga_data as *mut fold_T)
                                     .offset(i_0 as isize)
                                     .offset(1 as ::core::ffi::c_int as isize);
-                                if getlevel
-                                    == Some(
-                                        foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> (),
-                                    )
-                                    || getlevel
-                                        == Some(
-                                            foldlevelExpr
-                                                as unsafe extern "C" fn(*mut fline_T) -> (),
-                                        )
-                                    || getlevel
-                                        == Some(
-                                            foldlevelSyntax
-                                                as unsafe extern "C" fn(*mut fline_T) -> (),
-                                        )
+                                if getlevel_is(getlevel, foldlevelMarker)
+                                    || getlevel_is(getlevel, foldlevelExpr)
+                                    || getlevel_is(getlevel, foldlevelSyntax)
                                 {
                                     finish = true_0 != 0;
                                 }
@@ -2608,11 +2603,9 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
                         (*fp).fd_flags = (*fp.offset(-(1 as ::core::ffi::c_int as isize))).fd_flags;
                     }
                     (*fp).fd_small = kNone;
-                    if getlevel == Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ())
-                        || getlevel
-                            == Some(foldlevelExpr as unsafe extern "C" fn(*mut fline_T) -> ())
-                        || getlevel
-                            == Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ())
+                    if getlevel_is(getlevel, foldlevelMarker)
+                        || getlevel_is(getlevel, foldlevelExpr)
+                        || getlevel_is(getlevel, foldlevelSyntax)
                     {
                         finish = true_0 != 0;
                     }
@@ -2689,9 +2682,9 @@ unsafe extern "C" fn foldUpdateIEMSRecurse(
     if lvl < level {
         if (*fp).fd_len != (*flp).lnum - (*fp).fd_top {
             if (*fp).fd_top + (*fp).fd_len - 1 as linenr_T > bot {
-                if getlevel == Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ())
-                    || getlevel == Some(foldlevelExpr as unsafe extern "C" fn(*mut fline_T) -> ())
-                    || getlevel == Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ())
+                if getlevel_is(getlevel, foldlevelMarker)
+                    || getlevel_is(getlevel, foldlevelExpr)
+                    || getlevel_is(getlevel, foldlevelSyntax)
                 {
                     bot = (*fp).fd_top + (*fp).fd_len - 1 as linenr_T;
                     (*fp).fd_len = (*flp).lnum - (*fp).fd_top;

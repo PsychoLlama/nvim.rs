@@ -496,9 +496,9 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
     let mut h: *mut MapHash = &raw mut (*set).h;
     let mut step: uint32_t = 0 as uint32_t;
     let mut mask: uint32_t = (*h).n_buckets.wrapping_sub(1 as uint32_t);
-    let mut k: uint32_t = (key.expose_addr() as uint64_t >> 33 as ::core::ffi::c_int
-        ^ key.expose_addr() as uint64_t
-        ^ (key.expose_addr() as uint64_t) << 11 as ::core::ffi::c_int)
+    let mut k: uint32_t = (key.expose_provenance() as uint64_t >> 33 as ::core::ffi::c_int
+        ^ key.expose_provenance() as uint64_t
+        ^ (key.expose_provenance() as uint64_t) << 11 as ::core::ffi::c_int)
         as uint32_t;
     let mut i: uint32_t = k & mask;
     let mut last: uint32_t = i;
@@ -515,8 +515,8 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
         } else if (*(*set)
             .keys
             .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize))
-        .expose_addr() as uint64_t
-            == key.expose_addr() as uint64_t
+        .expose_provenance() as uint64_t
+            == key.expose_provenance() as uint64_t
         {
             return i;
         }
@@ -606,8 +606,8 @@ pub unsafe extern "C" fn mh_put_ptr_t(
     } else {
         *new = kMHExisting;
         let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
-        if !((*(*set).keys.offset(pos_0 as isize)).expose_addr() as uint64_t
-            == key.expose_addr() as uint64_t)
+        if !((*(*set).keys.offset(pos_0 as isize)).expose_provenance() as uint64_t
+            == key.expose_provenance() as uint64_t)
         {
             abort();
         }

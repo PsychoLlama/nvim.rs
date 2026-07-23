@@ -25,19 +25,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem, CharBoundsOff, CharInfo, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_5, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
-    FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode,
-    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_15, StrCharInfo, Terminal, Timestamp,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, expand_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_6,
+    __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, expand_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_6,
     file_buffer_b_wininfo as C2Rust_Unnamed_14, file_buffer_update_callbacks as C2Rust_Unnamed_3,
     file_buffer_update_channels as C2Rust_Unnamed_4, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_9, funccall_T, garray_T, handle_T, hash_T,
@@ -53,7 +43,17 @@ pub use crate::src::nvim::types::{
     u_header_uh_next as C2Rust_Unnamed_13, u_header_uh_prev as C2Rust_Unnamed_12, ufunc_S, ufunc_T,
     uint16_t, uint32_t, uint64_t, uint8_t, uintptr_t, undo_object, utf8proc_int32_t, varnumber_T,
     vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
-    xp_prefix_T, QUEUE,
+    xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    CallbackType, Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem, CharBoundsOff, CharInfo,
+    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_5, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode,
+    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_15, StrCharInfo, Terminal, Timestamp,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::utf8proc::{
     utf8proc_decompose_char, utf8proc_get_property, utf8proc_grapheme_break,
@@ -4271,13 +4271,13 @@ pub unsafe extern "C" fn my_iconv_open(
     if iconv_working.get() as ::core::ffi::c_uint
         == kBroken as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+        return ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
             -1 as ::core::ffi::c_int as usize,
         );
     }
     let mut fd: iconv_t = iconv_open(enc_skip(to), enc_skip(from));
     if fd
-        != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+        != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
             -1 as ::core::ffi::c_int as usize,
         )
         && iconv_working.get() as ::core::ffi::c_uint
@@ -4295,7 +4295,7 @@ pub unsafe extern "C" fn my_iconv_open(
         if p.is_null() {
             iconv_working.set(kBroken);
             iconv_close(fd);
-            fd = ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+            fd = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                 -1 as ::core::ffi::c_int as usize,
             );
         } else {
@@ -4451,7 +4451,7 @@ pub unsafe extern "C" fn convert_setup_ext(
     let mut to_is_utf8: ::core::ffi::c_int = 0;
     if (*vcp).vc_type == CONV_ICONV as ::core::ffi::c_int
         && (*vcp).vc_fd
-            != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+            != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                 -1 as ::core::ffi::c_int as usize,
             )
     {
@@ -4507,7 +4507,7 @@ pub unsafe extern "C" fn convert_setup_ext(
             }) as *mut ::core::ffi::c_char,
         );
         if (*vcp).vc_fd
-            != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+            != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                 -1 as ::core::ffi::c_int as usize,
             )
         {

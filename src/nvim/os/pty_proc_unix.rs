@@ -11,7 +11,6 @@ use crate::src::nvim::os::libc::{
     fcntl, forkpty, ioctl, kill, killpg, ptsname, setsid, strerror, waitpid,
 };
 pub use crate::src::nvim::types::{
-    Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream, ScopeType, Stream, VarLockStatus,
     __pid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     cc_t, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int64_t, internal_proc_cb, loop_0,
     loop_0_children as C2Rust_Unnamed_11, multiqueue, proc, proc_exit_cb, proc_state_cb,
@@ -29,6 +28,7 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, winsize,
+    Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream, ScopeType, Stream, VarLockStatus,
     QUEUE,
 };
 extern "C" {

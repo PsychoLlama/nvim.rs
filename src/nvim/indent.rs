@@ -44,26 +44,12 @@ use crate::src::nvim::search::{findmatch, linewhite};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::has_format_option;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, CMD_index, CSType, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg,
-    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Error, ErrorType, EvalFuncData, ExtmarkMove,
-    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor,
-    FloatRelative, GridView, IndentGetter, Indenter, Integer, Intersection, KeyValuePair,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, MsgpackRpcRequestHandler, Object, ObjectType,
-    OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_14, StrCharInfo, String_0, Terminal, Timestamp,
-    TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, __time_t, alist_T,
-    bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T,
-    cmdidx_T, cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T,
-    dictvar_S, disptick_T, eslist_T, eslist_elem, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
-    file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_1,
+    __time_t, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
+    exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_4, file_buffer_b_wininfo as C2Rust_Unnamed_13,
+    file_buffer_update_callbacks as C2Rust_Unnamed_1,
     file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, intmax_t, intptr_t,
@@ -78,7 +64,21 @@ pub use crate::src::nvim::types::{
     u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
     u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
     uintptr_t, undo_object, undo_object_data as C2Rust_Unnamed_8, varnumber_T, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, QUEUE,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData,
+    AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
+    CMD_index, CSType, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6,
+    ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict,
+    Error, ErrorType, EvalFuncData, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, IndentGetter, Indenter,
+    Integer, Intersection, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
+    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, MsgpackRpcRequestHandler,
+    Object, ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_14, StrCharInfo, String_0,
+    Terminal, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::undo::{u_clearline, u_save, u_savecommon, u_savesub};
 extern "C" {
@@ -2483,7 +2483,12 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
             }
             if i as linenr_T != (*oap).line_count - 1 as linenr_T
                 || (*oap).line_count == 1 as linenr_T
-                || how != Some(get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int)
+                || !how.is_some_and(|f| {
+                    ::core::ptr::fn_addr_eq(
+                        f,
+                        get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
+                    )
+                })
             {
                 let mut l: *mut ::core::ffi::c_char = skipwhite(get_cursor_line_ptr());
                 amount = if *l as ::core::ffi::c_int == NUL {
@@ -2988,8 +2993,9 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
     let mut num_spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_vcol: int64_t = 0 as int64_t;
-    let mut new_line: *mut ::core::ffi::c_char =
-        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(1 as ::core::ffi::c_int as usize);
+    let mut new_line: *mut ::core::ffi::c_char = ::core::ptr::with_exposed_provenance_mut::<
+        ::core::ffi::c_char,
+    >(1 as ::core::ffi::c_int as usize);
     let mut new_vts_array: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
     let mut new_ts_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut first_line: linenr_T = 0 as linenr_T;

@@ -19,8 +19,8 @@ use crate::src::nvim::os::libc::{
     strncmp, strtoll,
 };
 pub use crate::src::nvim::types::{
-    LuaRef, __compar_fn_t, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, ptrdiff_t,
-    size_t, strbuf_t, uintptr_t,
+    __compar_fn_t, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, ptrdiff_t, size_t,
+    strbuf_t, uintptr_t, LuaRef,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1080,8 +1080,8 @@ unsafe extern "C" fn json_append_data(
                         lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                         lua_pushlightuserdata(
                             l,
-                            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                                ((json_array.ptr()).expose_addr() as uintptr_t
+                            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                                ((json_array.ptr()).expose_provenance() as uintptr_t
                                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                                     as usize,
@@ -1130,8 +1130,8 @@ unsafe extern "C" fn json_append_data(
                             lua_getmetatable(l, -1 as ::core::ffi::c_int);
                             lua_pushlightuserdata(
                                 l,
-                                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                                    ((json_empty_array.ptr()).expose_addr() as uintptr_t
+                                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                                    ((json_empty_array.ptr()).expose_provenance() as uintptr_t
                                         & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                             .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                                         as usize,
@@ -2141,8 +2141,8 @@ unsafe extern "C" fn json_parse_array_context(mut l: *mut lua_State, mut json: *
     if (*(*json).cfg).decode_array_with_array_mt != 0 {
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((json_array.ptr()).expose_addr() as uintptr_t
+            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                ((json_array.ptr()).expose_provenance() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,
@@ -2408,8 +2408,8 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
     }
     lua_pushlightuserdata(
         l,
-        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-            ((json_empty_array.ptr()).expose_addr() as uintptr_t
+        ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+            ((json_empty_array.ptr()).expose_provenance() as uintptr_t
                 & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                     .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
         ),
@@ -2419,8 +2419,8 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
         lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((json_empty_array.ptr()).expose_addr() as uintptr_t
+            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                ((json_empty_array.ptr()).expose_provenance() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,
@@ -2430,8 +2430,8 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
         lua_rawset(l, LUA_REGISTRYINDEX);
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
-                ((json_array.ptr()).expose_addr() as uintptr_t
+            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                ((json_array.ptr()).expose_provenance() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
                     as usize,

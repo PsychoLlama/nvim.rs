@@ -59,8 +59,8 @@ pub unsafe extern "C" fn os_libcall(
             ifn.expect("non-null function pointer")(argi)
         };
         *str_out = if !res.is_null()
-            && res.expose_addr() as intptr_t != 1 as ::core::ffi::c_int as intptr_t
-            && res.expose_addr() as intptr_t != -1 as ::core::ffi::c_int as intptr_t
+            && res.expose_provenance() as intptr_t != 1 as ::core::ffi::c_int as intptr_t
+            && res.expose_provenance() as intptr_t != -1 as ::core::ffi::c_int as intptr_t
         {
             xstrdup(res)
         } else {

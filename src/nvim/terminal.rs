@@ -47,41 +47,23 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, 
 use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
 use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
-    CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_9, ChangedtickDictItem,
-    CursorShape, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, Event, ExtmarkOp,
-    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HlAttrs, Integer,
-    Intersection, KeyValuePair, LineGetter, Loop, LuaRef, MHPutStatus, MTKey, MTNode, MTPos,
-    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkAdjustMode, MarkTree, MotionType, MultiQueue, Object, ObjectType,
-    OptIndex, OptInt, OptVal, OptValData, OptValType, Proc, ProcType, PutCallback, RStream,
-    RgbValue, ScopeDictDictItem, ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int,
-    Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, StringBuilder, String_0,
-    TerminalOptions, TimeWatcher, Timestamp, TriState, VTerm, VTermAttr, VTermColor,
-    VTermColor_indexed as C2Rust_Unnamed_5, VTermColor_rgb as C2Rust_Unnamed_6, VTermDamageSize,
-    VTermKey, VTermModifier, VTermOutputCallback, VTermPos, VTermProp, VTermRect, VTermScreen,
-    VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks,
-    VTermSelectionMask, VTermState, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
-    VTermValue, VTermValueType, VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinSplit, WinStyle, Window, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, alist_T, argv_callback,
-    auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T, chunksize_T, cmd_addr_T,
-    cmdarg_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_34, cursorentry_T,
-    dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, dobuf_action_values, dobuf_start_values,
-    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, float_T,
-    fmark_T, fmarkv_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_10, funccall_T, garray_T,
-    handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
-    internal_proc_cb, intptr_t, key_extra, key_value_pair, lcs_chars_T, linenr_T, list_T,
-    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, loop_0,
-    loop_0_children as C2Rust_Unnamed_25, lpos_T, mapblock, mapblock_T, memfile_T, memline_T,
-    mfdirty_T, mtnode_inner_s, mtnode_s, multiqueue, object, object_data as C2Rust_Unnamed,
-    oparg_T, partial_S, partial_T, pos_T, pos_save_T, proc, proc_exit_cb, proc_state_cb,
-    proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue,
-    reg_extmatch_T, regmmatch_T, regprog, regprog_T, rstream, sattr_T, save_v_event_T, schar_T,
-    scid_T, sctx_T, size_t, ssize_t, state_check_callback, state_execute_callback, stream,
-    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_27, stream_write_cb, syn_state,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    __time_t, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T,
+    chunksize_T, cmd_addr_T, cmdarg_T, cmdidx_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_34, cursorentry_T, dict_T, dictvar_S, diff_T, diffblock_S,
+    disptick_T, dobuf_action_values, dobuf_start_values, eslist_T, eslist_elem, event_T, exarg,
+    exarg_T, extmark_undo_vec_t, fcs_chars_T, float_T, fmark_T, fmarkv_T, funccall_S,
+    funccall_S_fc_fixvar as C2Rust_Unnamed_10, funccall_T, garray_T, handle_T, hash_T, hashitem_T,
+    hashtab_T, infoptr_T, int16_t, int32_t, int64_t, internal_proc_cb, intptr_t, key_extra,
+    key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
+    listwatch_T, llpos_T, loop_0, loop_0_children as C2Rust_Unnamed_25, lpos_T, mapblock,
+    mapblock_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, multiqueue, object,
+    object_data as C2Rust_Unnamed, oparg_T, partial_S, partial_T, pos_T, pos_save_T, proc,
+    proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t,
+    qf_info_S, qf_info_T, queue, reg_extmatch_T, regmmatch_T, regprog, regprog_T, rstream, sattr_T,
+    save_v_event_T, schar_T, scid_T, sctx_T, size_t, ssize_t, state_check_callback,
+    state_execute_callback, stream, stream_close_cb, stream_read_cb,
+    stream_uv as C2Rust_Unnamed_27, stream_write_cb, syn_state,
     syn_state_sst_union as C2Rust_Unnamed_8, syn_time_T, synblock_T, synstate_T, taggy_T,
     terminal_close_cb, terminal_read_pause_cb, terminal_resize_cb, terminal_resume_cb,
     terminal_write_cb, time_cb, time_t, time_watcher, typval_T, typval_vval_union, u_entry,
@@ -100,7 +82,26 @@ pub use crate::src::nvim::types::{
     uv_signal_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_26, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_29, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_23, uv_timer_s_u as C2Rust_Unnamed_24, uv_timer_t,
-    varnumber_T, vim_state, virt_line, visualinfo_T, winopt_T, wline_T, xfmark_T, QUEUE,
+    varnumber_T, vim_state, virt_line, visualinfo_T, winopt_T, wline_T, xfmark_T, AdditionalData,
+    AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index,
+    Callback, CallbackType, Callback_data as C2Rust_Unnamed_9, ChangedtickDictItem, CursorShape,
+    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, Event, ExtmarkOp,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HlAttrs, Integer,
+    Intersection, KeyValuePair, LineGetter, Loop, LuaRef, MHPutStatus, MTKey, MTNode, MTPos,
+    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkAdjustMode, MarkTree, MotionType, MultiQueue, Object, ObjectType,
+    OptIndex, OptInt, OptVal, OptValData, OptValType, Proc, ProcType, PutCallback, RStream,
+    RgbValue, ScopeDictDictItem, ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int,
+    Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, StringBuilder, String_0,
+    TerminalOptions, TimeWatcher, Timestamp, TriState, VTerm, VTermAttr, VTermColor,
+    VTermColor_indexed as C2Rust_Unnamed_5, VTermColor_rgb as C2Rust_Unnamed_6, VTermDamageSize,
+    VTermKey, VTermModifier, VTermOutputCallback, VTermPos, VTermProp, VTermRect, VTermScreen,
+    VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks,
+    VTermSelectionMask, VTermState, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
+    VTermValue, VTermValueType, VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_mode_info_set, vim_beep,
@@ -2688,22 +2689,25 @@ static vterm_selection_callbacks: GlobalCell<VTermSelectionCallbacks> =
     });
 static invalidated_terminals: GlobalCell<Set_ptr_t> = GlobalCell::new(SET_INIT);
 unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut buf_handle: handle_T =
-        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
+        .expose_provenance() as intptr_t as handle_T;
     let mut sequence: *mut ::core::ffi::c_char =
         *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
     let mut sequence_length: size_t =
-        (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_addr() as size_t;
+        (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_provenance() as size_t;
     let mut pending_send: *mut StringBuilder =
         *argv.offset(3 as ::core::ffi::c_int as isize) as *mut StringBuilder;
-    let mut row: ::core::ffi::c_int = (*argv.offset(4 as ::core::ffi::c_int as isize)).expose_addr()
-        as intptr_t as ::core::ffi::c_int;
-    let mut col: ::core::ffi::c_int = (*argv.offset(5 as ::core::ffi::c_int as isize)).expose_addr()
-        as intptr_t as ::core::ffi::c_int;
+    let mut row: ::core::ffi::c_int = (*argv.offset(4 as ::core::ffi::c_int as isize))
+        .expose_provenance() as intptr_t
+        as ::core::ffi::c_int;
+    let mut col: ::core::ffi::c_int = (*argv.offset(5 as ::core::ffi::c_int as isize))
+        .expose_provenance() as intptr_t
+        as ::core::ffi::c_int;
     let mut sb_deleted: size_t =
-        (*argv.offset(6 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as size_t;
+        (*argv.offset(6 as ::core::ffi::c_int as isize)).expose_provenance() as intptr_t as size_t;
     let mut terminator: VTermTerminator = (*argv.offset(7 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as VTermTerminator;
+        .expose_provenance() as intptr_t
+        as VTermTerminator;
     let mut buf: *mut buf_T =
         map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
@@ -2888,27 +2892,27 @@ unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
                 emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).buf_handle as intptr_t as usize,
                 ),
                 xmemdup(
                     (*term).termrequest_buffer.items as *const ::core::ffi::c_void,
                     (*term).termrequest_buffer.size,
                 ),
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).termrequest_buffer.size as intptr_t as usize,
                 ),
                 (*term).pending.send as *mut ::core::ffi::c_void,
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     line as intptr_t as usize,
                 ),
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).cursor.col as intptr_t as usize,
                 ),
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).sb_deleted as intptr_t as usize,
                 ),
-                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).termrequest_terminator as intptr_t as usize,
                 ),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -3617,8 +3621,8 @@ pub unsafe extern "C" fn terminal_close(
     }
 }
 unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut buf_handle: handle_T =
-        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
+        .expose_provenance() as intptr_t as handle_T;
     let mut buf: *mut buf_T =
         map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if !buf.is_null() && !(*buf).terminal.is_null() {
@@ -3636,7 +3640,7 @@ pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspend
                         as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         (*term).buf_handle as intptr_t as usize,
                     ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -4420,8 +4424,8 @@ unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
     if exiting.get() {
         return;
     }
-    let mut buf_handle: handle_T =
-        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
+        .expose_provenance() as intptr_t as handle_T;
     let mut buf: *mut buf_T =
         map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
@@ -4514,7 +4518,7 @@ pub unsafe extern "C" fn terminal_receive(
                     on_sync_flush as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         (*term).buf_handle as intptr_t as usize,
                     ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -5096,7 +5100,7 @@ unsafe extern "C" fn term_sb_clear(mut data: *mut ::core::ffi::c_void) -> ::core
 }
 unsafe extern "C" fn term_clipboard_set(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut mask: VTermSelectionMask = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_addr() as ::core::ffi::c_long
+        .expose_provenance() as ::core::ffi::c_long
         as VTermSelectionMask;
     let mut data: *mut ::core::ffi::c_char =
         *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
@@ -5186,7 +5190,7 @@ unsafe extern "C" fn term_selection_set(
                     term_clipboard_set as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(mask as usize),
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(mask as usize),
                     data as *mut ::core::ffi::c_void,
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),

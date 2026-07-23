@@ -16,16 +16,16 @@ use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::os_localtime;
 use crate::src::nvim::path::path_tail;
 pub use crate::src::nvim::types::{
-    VimVarIndex, XDGVarType, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list,
-    __gnuc_va_list, __off64_t, __off_t, __pthread_internal_list, __pthread_list_t,
-    __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, int16_t, int32_t, int64_t,
-    nvim_stats_s, pthread_mutex_t, pthread_rwlock_t, size_t, tm, uint64_t, uv__io_cb, uv__io_s,
-    uv__io_t, uv__queue, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t,
-    uv_close_cb, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type,
-    uv_loop_s, uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2,
-    uv_loop_t, uv_mutex_t, uv_rwlock_t, uv_signal_cb, uv_signal_s,
-    uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
-    va_list, FILE, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
+    __off64_t, __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
+    __pthread_rwlock_arch_t, __va_list_tag, int16_t, int32_t, int64_t, nvim_stats_s,
+    pthread_mutex_t, pthread_rwlock_t, size_t, tm, uint64_t, uv__io_cb, uv__io_s, uv__io_t,
+    uv__queue, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_close_cb,
+    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_loop_s,
+    uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
+    uv_mutex_t, uv_rwlock_t, uv_signal_cb, uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed,
+    uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t, va_list, VimVarIndex, XDGVarType, _IO_FILE,
+    FILE,
 };
 extern "C" {
     fn uv_gettimeofday(tv: *mut uv_timeval64_t) -> ::core::ffi::c_int;
@@ -4447,17 +4447,10 @@ pub unsafe extern "C" fn logmsg(
     recursive.set(true_0 != 0);
     let mut ret: bool = false_0 != 0;
     let mut log_file: *mut FILE = open_log_file();
-    let mut args: ::core::ffi::VaListImpl;
+    let mut args: ::core::ffi::VaList;
     args = c2rust_args.clone();
     ret = v_do_log_to_file(
-        log_file,
-        log_level,
-        context,
-        func_name,
-        line_num,
-        eol,
-        fmt,
-        args.as_va_list(),
+        log_file, log_level, context, func_name, line_num, eol, fmt, args,
     );
     if log_file != stderr && log_file != stdout {
         fclose(log_file);
@@ -4510,17 +4503,10 @@ unsafe extern "C" fn do_log_to_file(
     mut fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> bool {
-    let mut args: ::core::ffi::VaListImpl;
+    let mut args: ::core::ffi::VaList;
     args = c2rust_args.clone();
     let mut ret: bool = v_do_log_to_file(
-        log_file,
-        log_level,
-        context,
-        func_name,
-        line_num,
-        eol,
-        fmt,
-        args.as_va_list(),
+        log_file, log_level, context, func_name, line_num, eol, fmt, args,
     );
     return ret;
 }
@@ -4708,7 +4694,7 @@ unsafe extern "C" fn v_do_log_to_file(
     if rv < 0 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    if vfprintf(log_file, fmt, args.as_va_list()) < 0 as ::core::ffi::c_int {
+    if vfprintf(log_file, fmt, args) < 0 as ::core::ffi::c_int {
         return false_0 != 0;
     }
     if eol {

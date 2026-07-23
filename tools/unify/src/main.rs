@@ -224,7 +224,9 @@ fn visit_bitfield_ty_lits(attr: &syn::Attribute, mut f: impl FnMut(&proc_macro2:
     if !attr.path().is_ident("bitfield") {
         return;
     }
-    let syn::Meta::List(ml) = &attr.meta else { return };
+    let syn::Meta::List(ml) = &attr.meta else {
+        return;
+    };
     let mut state = 0u8; // 1 = saw `ty`, 2 = saw `ty =`
     for tt in ml.tokens.clone() {
         state = match (&tt, state) {
@@ -305,7 +307,9 @@ fn discover_files(repo: &Path) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     let mut stack = vec![repo.join("src")];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             let rel = path
@@ -1342,7 +1346,9 @@ fn main() {
                                 && !unsized_def(m, &defs, &pristine_edges, 0)
                         })
                         .collect();
-                    let Some(&c) = measurable.first() else { continue };
+                    let Some(&c) = measurable.first() else {
+                        continue;
+                    };
                     let dc = &defs[c];
                     let _ = write!(out, "#[test]\nfn parity_{tname}() {{\n");
                     let canon_path =

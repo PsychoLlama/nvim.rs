@@ -8,21 +8,22 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::libc::{__assert_fail, memmove};
 pub use crate::src::nvim::types::{
-    Event, Loop, MultiQueue, RStream, Stream, __gid_t, __mode_t, __off_t, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, argv_callback, gid_t,
-    int64_t, loop_0, mode_t, multiqueue, off_t, pthread_mutex_t, pthread_rwlock_t, rstream, size_t,
-    ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_10,
-    stream_write_cb, uid_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work,
-    uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t,
-    uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_fs_cb,
-    uv_fs_s, uv_fs_t, uv_fs_type, uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0,
-    uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_9, uv_idle_t,
-    uv_loop_s, uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2,
-    uv_loop_t, uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_8, uv_pipe_t, uv_read_cb,
-    uv_req_type, uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t, uv_signal_cb,
-    uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1,
-    uv_signal_t, uv_stat_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_6, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timespec_t, uv_uid_t,
+    __gid_t, __mode_t, __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
+    __pthread_rwlock_arch_t, __uid_t, argv_callback, gid_t, int64_t, loop_0, mode_t, multiqueue,
+    off_t, pthread_mutex_t, pthread_rwlock_t, rstream, size_t, ssize_t, stream, stream_close_cb,
+    stream_read_cb, stream_uv as C2Rust_Unnamed_10, stream_write_cb, uid_t, uint64_t, uv__io_cb,
+    uv__io_s, uv__io_t, uv__queue, uv__work, uv_alloc_cb, uv_async_cb, uv_async_s,
+    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
+    uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_fs_cb, uv_fs_s, uv_fs_t, uv_fs_type,
+    uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type,
+    uv_idle_cb, uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_9, uv_idle_t, uv_loop_s,
+    uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
+    uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_8, uv_pipe_t, uv_read_cb, uv_req_type,
+    uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t, uv_signal_cb, uv_signal_s,
+    uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
+    uv_stat_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_6, uv_stream_t, uv_tcp_s,
+    uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timespec_t, uv_uid_t, Event, Loop, MultiQueue,
+    RStream, Stream,
 };
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

@@ -220,25 +220,6 @@ use crate::src::nvim::strings::{
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::{do_tag, do_tags};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, AutoPat, AutoPatCmd,
-    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackReader,
-    CallbackType, Callback_data as C2Rust_Unnamed_20, CdCause, CdScope, ChangedtickDictItem,
-    Channel, ChannelCallFrame, ChannelPart, ChannelStdinMode, ChannelStreamType,
-    Channel_stream as C2Rust_Unnamed_41, ClientType, CmdParseInfo,
-    CmdParseInfo_magic as C2Rust_Unnamed_39, CompleteListItemGetter, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_17, Dict, Direction, Error, ErrorType, EvalFuncData,
-    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, InternalState,
-    Intersection, KeyValuePair, LibuvProc, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode,
-    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkGet, MarkMove, MarkMoveRes, MarkTree, MotionType,
-    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
-    OptValType, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemapValues,
-    RemoteUI, RpcState, RpcState_call_stack as C2Rust_Unnamed_40, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StderrState, StdioPair,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_27, Stream, String_0, Terminal,
-    Timestamp, TriState, UIExtension, Unpacker, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window,
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __off64_t, __off_t,
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, __uid_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock,
@@ -284,7 +265,27 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_9, uv_timer_s_u as C2Rust_Unnamed_10, uv_timer_t, uv_uid_t,
     varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T, FILE, QUEUE, _IO_FILE,
+    winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T, AdditionalData, AlignTextPos,
+    ApiDispatchWrapper, Arena, ArenaMem, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
+    Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackReader, CallbackType,
+    Callback_data as C2Rust_Unnamed_20, CdCause, CdScope, ChangedtickDictItem, Channel,
+    ChannelCallFrame, ChannelPart, ChannelStdinMode, ChannelStreamType,
+    Channel_stream as C2Rust_Unnamed_41, ClientType, CmdParseInfo,
+    CmdParseInfo_magic as C2Rust_Unnamed_39, CompleteListItemGetter, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_17, Dict, Direction, Error, ErrorType, EvalFuncData,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, InternalState,
+    Intersection, KeyValuePair, LibuvProc, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode,
+    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkGet, MarkMove, MarkMoveRes, MarkTree, MotionType,
+    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
+    OptValType, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemapValues,
+    RemoteUI, RpcState, RpcState_call_stack as C2Rust_Unnamed_40, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StderrState, StdioPair,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_27, Stream, String_0, Terminal,
+    Timestamp, TriState, UIExtension, Unpacker, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
+    FILE, QUEUE,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_busy_start, ui_busy_stop, ui_call_error_exit, ui_call_restart, ui_call_suspend,
@@ -3761,6 +3762,23 @@ unsafe extern "C" fn store_loop_line(mut gap: *mut garray_T, mut line: *mut ::co
         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
     .es_lnum;
 }
+// Ex-command callbacks and line getters are identified by address, as the C
+// code did; the helpers spell the address comparison out so the intent
+// survives the `unpredictable_function_pointer_comparisons` lint.
+fn ex_func_is(
+    func: Option<unsafe extern "C" fn(*mut exarg_T)>,
+    f: unsafe extern "C" fn(*mut exarg_T),
+) -> bool {
+    func.is_some_and(|g| ::core::ptr::fn_addr_eq(g, f))
+}
+
+fn line_getter_eq(a: LineGetter, b: LineGetter) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => ::core::ptr::fn_addr_eq(a, b),
+        (None, None) => true,
+        _ => false,
+    }
+}
 pub unsafe extern "C" fn getline_equal(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,
@@ -3768,21 +3786,11 @@ pub unsafe extern "C" fn getline_equal(
 ) -> bool {
     let mut gp: LineGetter = fgetline;
     let mut cp: *mut loop_cookie = cookie as *mut loop_cookie;
-    while gp
-        == Some(
-            get_loop_line
-                as unsafe extern "C" fn(
-                    ::core::ffi::c_int,
-                    *mut ::core::ffi::c_void,
-                    ::core::ffi::c_int,
-                    bool,
-                ) -> *mut ::core::ffi::c_char,
-        )
-    {
+    while line_getter_eq(gp, Some(get_loop_line)) {
         gp = (*cp).lc_getline;
         cp = (*cp).cookie as *mut loop_cookie;
     }
-    return gp == func;
+    return line_getter_eq(gp, func);
 }
 pub unsafe extern "C" fn getline_cookie(
     mut fgetline: LineGetter,
@@ -3790,17 +3798,7 @@ pub unsafe extern "C" fn getline_cookie(
 ) -> *mut ::core::ffi::c_void {
     let mut gp: LineGetter = fgetline;
     let mut cp: *mut loop_cookie = cookie as *mut loop_cookie;
-    while gp
-        == Some(
-            get_loop_line
-                as unsafe extern "C" fn(
-                    ::core::ffi::c_int,
-                    *mut ::core::ffi::c_void,
-                    ::core::ffi::c_int,
-                    bool,
-                ) -> *mut ::core::ffi::c_char,
-        )
-    {
+    while line_getter_eq(gp, Some(get_loop_line)) {
         gp = (*cp).lc_getline;
         cp = (*cp).cookie as *mut loop_cookie;
     }
@@ -4149,10 +4147,8 @@ unsafe extern "C" fn parse_count(
 }
 pub unsafe extern "C" fn is_cmd_ni(mut cmdidx: cmdidx_T) -> bool {
     return !((cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
-        && ((*cmdnames.ptr())[cmdidx as usize].cmd_func
-            == Some(ex_ni as unsafe extern "C" fn(*mut exarg_T) -> ())
-            || (*cmdnames.ptr())[cmdidx as usize].cmd_func
-                == Some(ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> ()));
+        && (ex_func_is((*cmdnames.ptr())[cmdidx as usize].cmd_func, ex_ni)
+            || ex_func_is((*cmdnames.ptr())[cmdidx as usize].cmd_func, ex_script_ni));
 }
 unsafe extern "C" fn find_excmd_after_range(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
     let mut cmd: *mut ::core::ffi::c_char = (*eap).cmd;
@@ -14122,11 +14118,11 @@ pub unsafe extern "C" fn is_map_cmd(mut cmdidx: cmdidx_T) -> bool {
         return false_0 != 0;
     }
     let mut func: ex_func_T = (*cmdnames.ptr())[cmdidx as usize].cmd_func;
-    return func == Some(ex_map as unsafe extern "C" fn(*mut exarg_T) -> ())
-        || func == Some(ex_unmap as unsafe extern "C" fn(*mut exarg_T) -> ())
-        || func == Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())
-        || func == Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())
-        || func == Some(ex_abclear as unsafe extern "C" fn(*mut exarg_T) -> ());
+    return ex_func_is(func, ex_map)
+        || ex_func_is(func, ex_unmap)
+        || ex_func_is(func, ex_mapclear)
+        || ex_func_is(func, ex_abbreviate)
+        || ex_func_is(func, ex_abclear);
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;

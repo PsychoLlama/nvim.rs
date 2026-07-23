@@ -15,11 +15,11 @@ use crate::src::nvim::os::shell::get_cmd_output;
 use crate::src::nvim::path::{path_tail, path_tail_with_sep};
 use crate::src::nvim::profile::time_msg;
 pub use crate::src::nvim::types::{
-    CMD_index, Direction, LineGetter, LuaRef, VimVarIndex, _IO_codecvt, _IO_lock_t, _IO_marker,
-    _IO_wide_data, __off64_t, __off_t, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem, exarg, exarg_T, expand_T, garray_T,
-    int32_t, linenr_T, pos_T, proftime_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, uint64_t,
-    xp_prefix_T, FILE, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, cmd_addr_T, cmdidx_T,
+    colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem, exarg, exarg_T,
+    expand_T, garray_T, int32_t, linenr_T, pos_T, proftime_T, ptrdiff_t, scid_T, sctx_T, size_t,
+    uint32_t, uint64_t, xp_prefix_T, CMD_index, Direction, LineGetter, LuaRef, VimVarIndex,
+    _IO_FILE, FILE,
 };
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;

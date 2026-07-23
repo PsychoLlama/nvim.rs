@@ -95,22 +95,10 @@ use crate::src::nvim::syntax::{
 };
 use crate::src::nvim::tag::expand_tags;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, CmdRedraw, CmdlineColorChunk, CmdlineColors, CmdlineInfo, ColoredCmdline,
-    CompleteListItemGetter, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType,
-    EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
-    Intersection, KeyValuePair, LineGetter, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MsgpackRpcRequestHandler, Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, UIExtension,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdline_info, colnr_T,
-    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_15, dict_T, dictvar_S, disptick_T, eslist_T,
-    eslist_elem, exarg, exarg_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, cmd_addr_T, cmdidx_T, cmdline_info, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_15, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
+    exarg, exarg_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -127,7 +115,20 @@ pub use crate::src::nvim::types::{
     u_header_uh_alt_next as C2Rust_Unnamed_8, u_header_uh_alt_prev as C2Rust_Unnamed_7,
     u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
     uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, NS, QUEUE,
+    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, AdditionalData,
+    AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
+    CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem,
+    CmdRedraw, CmdlineColorChunk, CmdlineColors, CmdlineInfo, ColoredCmdline,
+    CompleteListItemGetter, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType,
+    EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
+    Intersection, KeyValuePair, LineGetter, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, MapHash,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
+    MsgpackRpcRequestHandler, Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, UIExtension,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, NS, QUEUE,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -5050,8 +5051,9 @@ pub unsafe extern "C" fn ExpandGeneric(
                     *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = str;
                     ga.ga_len += 1;
                 }
-                if func
-                    == Some(
+                if func.is_some_and(|f| {
+                    ::core::ptr::fn_addr_eq(
+                        f,
                         get_menu_names
                             as unsafe extern "C" fn(
                                 *mut expand_T,
@@ -5059,7 +5061,7 @@ pub unsafe extern "C" fn ExpandGeneric(
                             )
                                 -> *mut ::core::ffi::c_char,
                     )
-                {
+                }) {
                     str = str.offset(strlen(str).wrapping_sub(1 as size_t) as isize);
                     if *str as ::core::ffi::c_int == '\u{1}' as ::core::ffi::c_int {
                         *str = '.' as ::core::ffi::c_char;

@@ -16,8 +16,8 @@ pub use crate::src::nvim::types::{
     VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
     VTermValue, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
     VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12, FILE,
-    _IO_FILE,
+    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12, _IO_FILE,
+    FILE,
 };
 use crate::src::nvim::vterm::pen::vterm_state_convert_color_to_rgb;
 use crate::src::nvim::vterm::state::{

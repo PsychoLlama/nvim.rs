@@ -46,18 +46,8 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::tag::tag_freematch;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_18, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_15, Event,
-    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, Intersection, LibuvProc, Loop,
-    LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MultiQueue, OptInt, Proc, ProcType,
-    RStream, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_25, Stream,
-    StringBuilder, String_0, Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimVarIndex,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit,
-    WinStyle, Window, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __off64_t,
-    __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __off64_t, __off_t,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, __uid_t, alist_T, argv_callback, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
     bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t,
     fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_16,
@@ -93,7 +83,18 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     varnumber_T, virt_line, visualinfo_T, wbuffer, wbuffer_data_finalizer, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue,
+    BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_18,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_15, Event, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GridView, Intersection, LibuvProc, Loop, LuaRef, MTKey, MTNode,
+    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MarkTree, MultiQueue, OptInt, Proc, ProcType, RStream, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_25, Stream, StringBuilder,
+    String_0, Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window,
+    _IO_FILE, FILE, QUEUE,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush, ui_has};
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
@@ -1702,7 +1703,8 @@ pub const MAX_CHUNK_SIZE: ::core::ffi::c_uint =
 unsafe extern "C" fn out_data_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut need_clear: bool = true_0 != 0;
     let mut hl: ::core::ffi::c_int = if (*argv.offset(2 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as ::core::ffi::c_int
+        .expose_provenance() as intptr_t
+        as ::core::ffi::c_int
         == STDERR_FILENO
     {
         HLF_SE as ::core::ffi::c_int
@@ -1710,7 +1712,7 @@ unsafe extern "C" fn out_data_event(mut argv: *mut *mut ::core::ffi::c_void) {
         HLF_SO as ::core::ffi::c_int
     };
     msg_ext_set_kind(
-        if (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t
+        if (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_provenance() as intptr_t
             as ::core::ffi::c_int
             == STDERR_FILENO
         {
@@ -1723,7 +1725,7 @@ unsafe extern "C" fn out_data_event(mut argv: *mut *mut ::core::ffi::c_void) {
     msg_multiline(
         String_0 {
             data: *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
-            size: (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as size_t,
+            size: (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_provenance() as size_t,
         },
         hl,
         false_0 != 0,
@@ -1772,8 +1774,10 @@ unsafe extern "C" fn out_data_append_to_screen(
                 ),
                 argv: [
                     str as *mut ::core::ffi::c_void,
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(*count as usize),
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                        *count as usize,
+                    ),
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         fd as intptr_t as usize,
                     ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -1789,8 +1793,10 @@ unsafe extern "C" fn out_data_append_to_screen(
     } else {
         let mut c2rust_lvalue: [*mut ::core::ffi::c_void; 3] = [
             str as *mut ::core::ffi::c_void,
-            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(*count as usize),
-            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(fd as intptr_t as usize),
+            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(*count as usize),
+            ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
+                fd as intptr_t as usize,
+            ),
         ];
         out_data_event(&raw mut c2rust_lvalue as *mut *mut ::core::ffi::c_void);
     };

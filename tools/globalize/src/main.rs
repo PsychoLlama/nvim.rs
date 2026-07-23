@@ -305,7 +305,9 @@ impl<'a> Rewriter<'a> {
             );
             return;
         }
-        let syn::StaticMutability::Mut(m) = &s.mutability else { return };
+        let syn::StaticMutability::Mut(m) = &s.mutability else {
+            return;
+        };
         // `static mut N: T = init;` -> `static N: GlobalCell<T> = GlobalCell::new(init);`
         // Consume the following space too: rustfmt refuses to reformat items
         // whose giant literals exceed max_width, so residue would stick.

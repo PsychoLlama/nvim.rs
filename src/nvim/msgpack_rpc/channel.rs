@@ -36,20 +36,13 @@ use crate::src::nvim::os::input::input_blocking;
 use crate::src::nvim::os::libc::{__assert_fail, abort, snprintf};
 use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
-    ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback, CallbackReader,
-    CallbackType, Callback_data as C2Rust_Unnamed_0, ChannelCallFrame, ChannelPart,
-    ChannelStreamType, ClientType, Dict, Error, ErrorType, Event, Float, GridLineEvent, Integer,
-    InternalState, KeyValuePair, LibuvProc, Loop, LuaRef, MapHash, Map_uint64_t_ptr_t, MessageType,
-    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, PackerBuffer, PackerBufferFlush,
-    Proc, ProcType, PtyProc, RStream, RemoteUI, ScopeDictDictItem, ScopeType, Set_uint64_t,
-    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler,
-    VarLockStatus, VarType, WBuffer, __gid_t, __pthread_internal_list, __pthread_list_t,
-    __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, argv_callback, blob_T, blobvar_S,
-    consumed_blk, dict_T, dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1,
-    funccall_T, garray_T, gid_t, hash_T, hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb,
-    key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
-    loop_0, loop_0_children as C2Rust_Unnamed_10, mpack_data_t, mpack_node_s, mpack_node_t,
-    mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
+    __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    __uid_t, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T,
+    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T,
+    hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
+    loop_0_children as C2Rust_Unnamed_10, mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t,
+    mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
     mpack_token_s_data as C2Rust_Unnamed_20, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
     mpack_uintmax_t, mpack_value_s, mpack_value_t, multiqueue, object,
     object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb,
@@ -71,7 +64,15 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_11, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_14, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, QUEUE,
+    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, ApiDispatchWrapper, Arena, ArenaMem,
+    Array, BoolVarValue, Boolean, Callback, CallbackReader, CallbackType,
+    Callback_data as C2Rust_Unnamed_0, ChannelCallFrame, ChannelPart, ChannelStreamType,
+    ClientType, Dict, Error, ErrorType, Event, Float, GridLineEvent, Integer, InternalState,
+    KeyValuePair, LibuvProc, Loop, LuaRef, MapHash, Map_uint64_t_ptr_t, MessageType,
+    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, PackerBuffer, PackerBufferFlush,
+    Proc, ProcType, PtyProc, RStream, RemoteUI, ScopeDictDictItem, ScopeType, Set_uint64_t,
+    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler,
+    VarLockStatus, VarType, WBuffer, QUEUE,
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
 extern "C" {
@@ -966,11 +967,13 @@ unsafe extern "C" fn handle_request(
     (*evdata).request_id = (*p).request_id;
     channel_incref(channel);
     if (*p).handler.fast {
-        let mut is_get_mode: bool = (*p).handler.fn_0
-            == Some(
+        let mut is_get_mode: bool = (*p).handler.fn_0.is_some_and(|f| {
+            ::core::ptr::fn_addr_eq(
+                f,
                 handle_nvim_get_mode
                     as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
-            );
+            )
+        });
         if is_get_mode as ::core::ffi::c_int != 0 && !input_blocking() {
             multiqueue_put_event(
                 ch_before_blocking_events.get(),
@@ -996,11 +999,13 @@ unsafe extern "C" fn handle_request(
             request_event(&raw mut evdata as *mut *mut ::core::ffi::c_void);
         }
     } else {
-        let mut is_resize: bool = (*p).handler.fn_0
-            == Some(
+        let mut is_resize: bool = (*p).handler.fn_0.is_some_and(|f| {
+            ::core::ptr::fn_addr_eq(
+                f,
                 handle_nvim_ui_try_resize
                     as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
-            );
+            )
+        });
         if is_resize {
             let mut ev: Event = event_create_oneshot(
                 Event {
@@ -1440,12 +1445,13 @@ pub unsafe extern "C" fn serialize_response(
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
         && type_0 as ::core::ffi::c_int == kMessageTypeNotification as ::core::ffi::c_int
     {
-        if handler.fn_0
-            == Some(
+        if handler.fn_0.is_some_and(|f| {
+            ::core::ptr::fn_addr_eq(
+                f,
                 handle_nvim_paste
                     as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
             )
-        {
+        }) {
             semsg(
                 b"paste: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 (*err).msg,

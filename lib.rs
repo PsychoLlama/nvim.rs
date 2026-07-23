@@ -7,8 +7,6 @@
 #![allow(unused_mut)]
 #![feature(c_variadic)]
 #![feature(extern_types)]
-#![feature(raw_ref_op)]
-#![feature(strict_provenance)]
 #![feature(thread_local)]
 
 extern crate c2rust_bitfields;

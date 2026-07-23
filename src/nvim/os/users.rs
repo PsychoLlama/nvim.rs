@@ -4,8 +4,8 @@ use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{endpwent, getuid, setpwent, snprintf, strcmp, strlen, strncmp};
 pub use crate::src::nvim::types::{
-    Direction, LuaRef, __gid_t, __uid_t, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T,
-    scid_T, sctx_T, size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T,
+    __gid_t, __uid_t, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T, scid_T, sctx_T,
+    size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T, Direction, LuaRef,
 };
 extern "C" {
     fn getpwent() -> *mut passwd;

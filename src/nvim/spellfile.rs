@@ -52,22 +52,11 @@ use crate::src::nvim::spell::{
 };
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, ExtmarkUndoObject, FileComparison,
-    FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, Object, ObjectType, OptIndex, OptInt,
-    OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, SpellAddType, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, XDGVarType, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
-    __compar_fn_t, __off64_t, __off_t, __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_13, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
-    estack_T, estack_T_es_info as C2Rust_Unnamed_16, etype_T, event_T, exarg, exarg_T, except_T,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __compar_fn_t, __off64_t, __off_t,
+    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_13,
+    dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem, estack_T,
+    estack_T_es_info as C2Rust_Unnamed_16, etype_T, event_T, exarg, exarg_T, except_T,
     except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
@@ -86,7 +75,18 @@ pub use crate::src::nvim::types::{
     u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
     uint16_t, uint32_t, uint64_t, uint8_t, uintmax_t, uintptr_t, undo_object, varnumber_T,
     vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    wline_T, xfmark_T, AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
+    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
+    ExtmarkUndoObject, FileComparison, FileID, Float, FloatAnchor, FloatRelative, GridView,
+    Integer, Intersection, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
+    Object, ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, SpellAddType,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal,
+    Timestamp, TriState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, XDGVarType, _IO_FILE, FILE, QUEUE,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::bufIsChanged;
@@ -6492,7 +6492,7 @@ unsafe extern "C" fn node_compress(
                 as ::core::ffi::c_uint;
         } else {
             n = ((*np_0).wn_byte as uintptr_t).wrapping_add(
-                ((*np_0).wn_child.expose_addr() as uintptr_t) << 8 as ::core::ffi::c_int,
+                ((*np_0).wn_child.expose_provenance() as uintptr_t) << 8 as ::core::ffi::c_int,
             ) as ::core::ffi::c_uint;
         }
         nr = nr.wrapping_mul(101 as ::core::ffi::c_uint).wrapping_add(n);

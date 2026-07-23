@@ -14,18 +14,17 @@ use crate::src::nvim::os::libc::{snprintf, strcmp, strlen, strstr};
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::fix_fname;
 pub use crate::src::nvim::types::{
-    Loop, LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, SocketWatcher, Stream, TriState,
-    VarLockStatus, VimVarIndex, XDGVarType, __pthread_internal_list, __pthread_list_t,
-    __pthread_mutex_s, __pthread_rwlock_arch_t, __socklen_t, addrinfo, dict_T, dictvar_S, garray_T,
-    hash_T, hashitem_T, hashtab_T, int64_t, internal_proc_cb, loop_0,
-    loop_0_children as C2Rust_Unnamed_11, multiqueue, proc, proc_exit_cb, proc_state_cb,
-    pthread_mutex_t, pthread_rwlock_t, ptrdiff_t, queue, rstream, sa_family_t, size_t, sockaddr,
-    socket_cb, socket_close_cb, socket_watcher, socket_watcher_uv as C2Rust_Unnamed_13,
-    socket_watcher_uv_pipe as C2Rust_Unnamed_14, socket_watcher_uv_tcp as C2Rust_Unnamed_15,
-    socklen_t, ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12,
-    stream_write_cb, uint32_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
-    uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t,
-    uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    __socklen_t, addrinfo, dict_T, dictvar_S, garray_T, hash_T, hashitem_T, hashtab_T, int64_t,
+    internal_proc_cb, loop_0, loop_0_children as C2Rust_Unnamed_11, multiqueue, proc, proc_exit_cb,
+    proc_state_cb, pthread_mutex_t, pthread_rwlock_t, ptrdiff_t, queue, rstream, sa_family_t,
+    size_t, sockaddr, socket_cb, socket_close_cb, socket_watcher,
+    socket_watcher_uv as C2Rust_Unnamed_13, socket_watcher_uv_pipe as C2Rust_Unnamed_14,
+    socket_watcher_uv_tcp as C2Rust_Unnamed_15, socklen_t, ssize_t, stream, stream_close_cb,
+    stream_read_cb, stream_uv as C2Rust_Unnamed_12, stream_write_cb, uint32_t, uint64_t, uint8_t,
+    uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
+    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
+    uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
     uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
@@ -34,7 +33,9 @@ pub use crate::src::nvim::types::{
     uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, QUEUE,
+    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, Loop,
+    LuaRef, MultiQueue, Proc, ProcType, RStream, ScopeType, SocketWatcher, Stream, TriState,
+    VarLockStatus, VimVarIndex, XDGVarType, QUEUE,
 };
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

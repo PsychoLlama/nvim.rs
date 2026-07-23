@@ -51,27 +51,11 @@ use crate::src::nvim::os::pty_proc_unix::{
 };
 use crate::src::nvim::os::shell::shell_free_argv;
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, Buffer, Callback, CallbackReader, CallbackType,
-    Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, Channel, ChannelCallFrame, ChannelPart,
-    ChannelStdinMode, ChannelStreamType, Channel_stream as C2Rust_Unnamed_33, ClientType, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, Event, ExtmarkUndoObject,
-    FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, InternalState, Intersection,
-    KeyValuePair, LibuvProc, ListLenSpecials, Loop, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MultiQueue, Object, ObjectType, OptInt, PackerBuffer, PackerBufferFlush, Proc, ProcType,
-    PtyProc, RStream, RemoteUI, RpcState, RpcState_call_stack as C2Rust_Unnamed_32,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SocketWatcher, SpecialVarValue, StderrState, StdioPair, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream, String_0, Terminal, TerminalOptions,
-    Timestamp, Unpacker, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_codecvt, _IO_lock_t, _IO_marker,
-    _IO_wide_data, __compar_fn_t, __gid_t, __off64_t, __off_t, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __socklen_t, __time_t, __uid_t,
-    addrinfo, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
-    bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T, dictitem_T, dictvar_S, disptick_T,
-    event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __compar_fn_t, __gid_t, __off64_t, __off_t,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
+    __socklen_t, __time_t, __uid_t, addrinfo, alist_T, argv_callback, auto_event, bhdr_T, blob_T,
+    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T,
+    dictitem_T, dictvar_S, disptick_T, event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -109,7 +93,23 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_25, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_19, uv_timer_s_u as C2Rust_Unnamed_20, uv_timer_t, uv_uid_t,
     varnumber_T, virt_line, visualinfo_T, wbuffer, wbuffer_data_finalizer, win_T, window_S,
-    wininfo_S, winopt_T, winsize, wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    wininfo_S, winopt_T, winsize, wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, ArenaMem,
+    Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback, CallbackReader,
+    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, Channel,
+    ChannelCallFrame, ChannelPart, ChannelStdinMode, ChannelStreamType,
+    Channel_stream as C2Rust_Unnamed_33, ClientType, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
+    Error, ErrorType, Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
+    GridView, Integer, InternalState, Intersection, KeyValuePair, LibuvProc, ListLenSpecials, Loop,
+    LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MultiQueue, Object, ObjectType, OptInt,
+    PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemoteUI, RpcState,
+    RpcState_call_stack as C2Rust_Unnamed_32, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SocketWatcher, SpecialVarValue, StderrState,
+    StdioPair, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream,
+    String_0, Terminal, TerminalOptions, Timestamp, Unpacker, VarLockStatus, VarType, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window,
+    _IO_FILE, FILE, QUEUE,
 };
 use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
 extern "C" {
@@ -1614,7 +1614,7 @@ pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_ch
                 ),
                 argv: [
                     chan as *mut ::core::ffi::c_void,
-                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                         event as intptr_t as usize,
                     ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -1632,8 +1632,8 @@ pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_ch
 }
 unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
-    let mut event: event_T =
-        (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as ptrdiff_t as event_T;
+    let mut event: event_T = (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_provenance()
+        as ptrdiff_t as event_T;
     let mut save_v_event: save_v_event_T = save_v_event_T {
         sve_did_save: false,
         sve_hashtab: hashtab_T {

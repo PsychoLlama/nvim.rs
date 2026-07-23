@@ -3,7 +3,7 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::libc::{__assert_fail, fclose, fopen, fscanf, snprintf};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, size_t, FILE, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, size_t, _IO_FILE, FILE,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;

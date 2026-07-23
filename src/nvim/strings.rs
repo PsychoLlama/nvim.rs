@@ -27,15 +27,15 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::plines::linetabsize_col;
 pub use crate::src::nvim::types::{
-    Arena, BoolVarValue, CharInfo, EvalFuncData, ListLenSpecials, LuaRef, MsgpackRpcRequestHandler,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, StringBuilder, String_0, VarLockStatus, VarType,
     __builtin_va_list, __compar_fn_t, __gnuc_va_list, __va_list_tag, blob_T, blobvar_S, dict_T,
     dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T,
     hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, intmax_t, keyvalue_T, linenr_T,
     list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, partial_S, partial_T,
     proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union,
     ufunc_S, ufunc_T, uint16_t, uint64_t, uint8_t, uintmax_t, uintptr_t, uvarnumber_T, va_list,
-    varnumber_T, QUEUE,
+    varnumber_T, Arena, BoolVarValue, CharInfo, EvalFuncData, ListLenSpecials, LuaRef,
+    MsgpackRpcRequestHandler, ScopeDictDictItem, ScopeType, SpecialVarValue, StringBuilder,
+    String_0, VarLockStatus, VarType, QUEUE,
 };
 use core::ffi::{c_char, c_int, CStr};
 use core::ptr;
@@ -718,10 +718,9 @@ pub unsafe extern "C" fn vim_snprintf_add(
     } else {
         space = str_m.wrapping_sub(len);
     }
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
-    let str_l: ::core::ffi::c_int =
-        vim_vsnprintf(str.offset(len as isize), space, fmt, ap.as_va_list());
+    let str_l: ::core::ffi::c_int = vim_vsnprintf(str.offset(len as isize), space, fmt, ap);
     return str_l;
 }
 pub unsafe extern "C" fn vim_snprintf(
@@ -730,9 +729,9 @@ pub unsafe extern "C" fn vim_snprintf(
     mut fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> ::core::ffi::c_int {
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
-    let str_l: ::core::ffi::c_int = vim_vsnprintf(str, str_m, fmt, ap.as_va_list());
+    let str_l: ::core::ffi::c_int = vim_vsnprintf(str, str_m, fmt, ap);
     return str_l;
 }
 unsafe extern "C" fn infinity_str(
@@ -766,19 +765,13 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     mut fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> size_t {
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     let mut str_l: ::core::ffi::c_int = 0;
     if str_m == 0 as size_t {
         return 0 as size_t;
     }
     ap = c2rust_args.clone();
-    str_l = vim_vsnprintf_typval(
-        str,
-        str_m,
-        fmt,
-        ap.as_va_list(),
-        ::core::ptr::null_mut::<typval_T>(),
-    );
+    str_l = vim_vsnprintf_typval(str, str_m, fmt, ap, ::core::ptr::null_mut::<typval_T>());
     if str_l < 0 as ::core::ffi::c_int {
         *str = NUL as ::core::ffi::c_char;
         return 0 as size_t;
@@ -795,13 +788,7 @@ pub unsafe extern "C" fn vim_vsnprintf(
     mut fmt: *const ::core::ffi::c_char,
     mut ap: ::core::ffi::VaList,
 ) -> ::core::ffi::c_int {
-    return vim_vsnprintf_typval(
-        str,
-        str_m,
-        fmt,
-        ap.as_va_list(),
-        ::core::ptr::null_mut::<typval_T>(),
-    );
+    return vim_vsnprintf_typval(str, str_m, fmt, ap, ::core::ptr::null_mut::<typval_T>());
 }
 unsafe extern "C" fn format_typeof(mut type_0: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut length_modifier: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
@@ -1383,12 +1370,12 @@ unsafe extern "C" fn parse_fmt_types(
 // variadic support cannot translate) yet still emits the 17 call sites in
 // `vim_vsnprintf_typval` below. This faithful port keeps the positional
 // (`%N$`) printf path correct. The signature matches exactly what those call
-// sites pass: `ap_start` is the freshly re-borrowed `VaList` from
-// `ap_start.as_va_list()`, and `ap` is a pointer to the working `VaListImpl`.
-unsafe extern "C" fn skip_to_arg<'a, 'f: 'a>(
+// sites pass: `ap_start` is a fresh `va_copy` (`ap_start.clone()`) of the
+// argument list's start, and `ap` is a pointer to the working `VaList`.
+unsafe extern "C" fn skip_to_arg<'f>(
     ap_types: *mut *const ::core::ffi::c_char,
-    ap_start: ::core::ffi::VaList<'a, 'f>,
-    ap: *mut ::core::ffi::VaListImpl<'f>,
+    ap_start: ::core::ffi::VaList<'f>,
+    ap: *mut ::core::ffi::VaList<'f>,
     arg_idx: *mut ::core::ffi::c_int,
     arg_cur: *mut ::core::ffi::c_int,
     fmt: *const ::core::ffi::c_char,
@@ -1422,41 +1409,41 @@ unsafe extern "C" fn skip_to_arg<'a, 'f: 'a>(
         match fmt_type {
             TYPE_PERCENT | TYPE_UNKNOWN => {}
             TYPE_CHAR => {
-                (*ap).arg::<::core::ffi::c_int>();
+                (*ap).next_arg::<::core::ffi::c_int>();
             }
             TYPE_STRING => {
-                (*ap).arg::<*const ::core::ffi::c_char>();
+                (*ap).next_arg::<*const ::core::ffi::c_char>();
             }
             TYPE_POINTER => {
-                (*ap).arg::<*mut ::core::ffi::c_void>();
+                (*ap).next_arg::<*mut ::core::ffi::c_void>();
             }
             TYPE_INT => {
-                (*ap).arg::<::core::ffi::c_int>();
+                (*ap).next_arg::<::core::ffi::c_int>();
             }
             TYPE_LONGINT => {
-                (*ap).arg::<::core::ffi::c_long>();
+                (*ap).next_arg::<::core::ffi::c_long>();
             }
             TYPE_LONGLONGINT => {
-                (*ap).arg::<::core::ffi::c_longlong>();
+                (*ap).next_arg::<::core::ffi::c_longlong>();
             }
             TYPE_SIGNEDSIZET => {
                 // implementation-defined, usually ptrdiff_t
-                (*ap).arg::<isize>();
+                (*ap).next_arg::<isize>();
             }
             TYPE_UNSIGNEDINT => {
-                (*ap).arg::<::core::ffi::c_uint>();
+                (*ap).next_arg::<::core::ffi::c_uint>();
             }
             TYPE_UNSIGNEDLONGINT => {
-                (*ap).arg::<::core::ffi::c_ulong>();
+                (*ap).next_arg::<::core::ffi::c_ulong>();
             }
             TYPE_UNSIGNEDLONGLONGINT => {
-                (*ap).arg::<::core::ffi::c_ulonglong>();
+                (*ap).next_arg::<::core::ffi::c_ulonglong>();
             }
             TYPE_SIZET => {
-                (*ap).arg::<size_t>();
+                (*ap).next_arg::<size_t>();
             }
             TYPE_FLOAT => {
-                (*ap).arg::<::core::ffi::c_double>();
+                (*ap).next_arg::<::core::ffi::c_double>();
             }
             _ => {}
         }
@@ -1480,7 +1467,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
     let mut arg_cur: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut num_posarg: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut arg_idx: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     let mut ap_types: *mut *const ::core::ffi::c_char =
         ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
     if parse_fmt_types(&raw mut ap_types, &raw mut num_posarg, fmt, tvs) == FAIL {
@@ -1608,13 +1595,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                     } else {
                         skip_to_arg(
                             ap_types,
-                            ap_start.as_va_list(),
+                            ap_start.clone(),
                             &raw mut ap,
                             &raw mut arg_idx,
                             &raw mut arg_cur,
                             fmt,
                         );
-                        ap.arg::<::core::ffi::c_int>()
+                        ap.next_arg::<::core::ffi::c_int>()
                     };
                     if j > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int {
                         if !tvs.is_null() {
@@ -1674,13 +1661,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         } else {
                             skip_to_arg(
                                 ap_types,
-                                ap_start.as_va_list(),
+                                ap_start.clone(),
                                 &raw mut ap,
                                 &raw mut arg_idx,
                                 &raw mut arg_cur,
                                 fmt,
                             );
-                            ap.arg::<::core::ffi::c_int>()
+                            ap.next_arg::<::core::ffi::c_int>()
                         };
                         if j_0 > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int {
                             if !tvs.is_null() {
@@ -1754,13 +1741,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 } else {
                                     skip_to_arg(
                                         ap_types,
-                                        ap_start.as_va_list(),
+                                        ap_start.clone(),
                                         &raw mut ap,
                                         &raw mut arg_idx,
                                         &raw mut arg_cur,
                                         fmt,
                                     );
-                                    ap.arg::<::core::ffi::c_int>()
+                                    ap.next_arg::<::core::ffi::c_int>()
                                 };
                                 uchar_arg = j_1 as ::core::ffi::c_uchar;
                                 str_arg = &raw mut uchar_arg as *mut ::core::ffi::c_char;
@@ -1771,13 +1758,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 } else {
                                     skip_to_arg(
                                         ap_types,
-                                        ap_start.as_va_list(),
+                                        ap_start.clone(),
                                         &raw mut ap,
                                         &raw mut arg_idx,
                                         &raw mut arg_cur,
                                         fmt,
                                     );
-                                    ap.arg::<*const ::core::ffi::c_char>()
+                                    ap.next_arg::<*const ::core::ffi::c_char>()
                                 };
                                 if str_arg.is_null() {
                                     str_arg = b"[NULL]\0".as_ptr() as *const ::core::ffi::c_char;
@@ -1838,13 +1825,14 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             } else {
                                 skip_to_arg(
                                     ap_types,
-                                    ap_start.as_va_list(),
+                                    ap_start.clone(),
                                     &raw mut ap,
                                     &raw mut arg_idx,
                                     &raw mut arg_cur,
                                     fmt,
                                 );
-                                ap.arg::<*mut ::core::ffi::c_void>() as *const ::core::ffi::c_void
+                                ap.next_arg::<*mut ::core::ffi::c_void>()
+                                    as *const ::core::ffi::c_void
                             };
                             if !ptr_arg.is_null() {
                                 arg_sign = 1 as ::core::ffi::c_int;
@@ -1857,13 +1845,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             } else {
                                 skip_to_arg(
                                     ap_types,
-                                    ap_start.as_va_list(),
+                                    ap_start.clone(),
                                     &raw mut ap,
                                     &raw mut arg_idx,
                                     &raw mut arg_cur,
                                     fmt,
                                 );
-                                ap.arg::<::core::ffi::c_ulonglong>()
+                                ap.next_arg::<::core::ffi::c_ulonglong>()
                             }) as uintmax_t;
                             arg_sign = (uarg != 0 as uintmax_t) as ::core::ffi::c_int;
                         } else if fmt_spec as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
@@ -1874,13 +1862,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_int>()
+                                        ap.next_arg::<::core::ffi::c_int>()
                                     }) as intmax_t;
                                 }
                                 104 => {
@@ -1889,13 +1877,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_int>()
+                                        ap.next_arg::<::core::ffi::c_int>()
                                     }) as int16_t
                                         as intmax_t;
                                 }
@@ -1905,13 +1893,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_long>()
+                                        ap.next_arg::<::core::ffi::c_long>()
                                     }) as intmax_t;
                                 }
                                 76 => {
@@ -1920,13 +1908,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_longlong>()
+                                        ap.next_arg::<::core::ffi::c_longlong>()
                                     }) as intmax_t;
                                 }
                                 122 => {
@@ -1935,13 +1923,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<ptrdiff_t>()
+                                        ap.next_arg::<ptrdiff_t>()
                                     }) as intmax_t;
                                 }
                                 _ => {}
@@ -1959,13 +1947,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_uint>()
+                                        ap.next_arg::<::core::ffi::c_uint>()
                                     }) as uintmax_t;
                                 }
                                 104 => {
@@ -1974,13 +1962,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_uint>()
+                                        ap.next_arg::<::core::ffi::c_uint>()
                                     }) as uint16_t
                                         as uintmax_t;
                                 }
@@ -1990,13 +1978,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_ulong>()
+                                        ap.next_arg::<::core::ffi::c_ulong>()
                                     }) as uintmax_t;
                                 }
                                 76 => {
@@ -2005,13 +1993,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<::core::ffi::c_ulonglong>()
+                                        ap.next_arg::<::core::ffi::c_ulonglong>()
                                     }) as uintmax_t;
                                 }
                                 122 => {
@@ -2020,13 +2008,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     } else {
                                         skip_to_arg(
                                             ap_types,
-                                            ap_start.as_va_list(),
+                                            ap_start.clone(),
                                             &raw mut ap,
                                             &raw mut arg_idx,
                                             &raw mut arg_cur,
                                             fmt,
                                         );
-                                        ap.arg::<size_t>()
+                                        ap.next_arg::<size_t>()
                                     }) as uintmax_t;
                                 }
                                 _ => {}
@@ -2246,13 +2234,13 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         } else {
                             skip_to_arg(
                                 ap_types,
-                                ap_start.as_va_list(),
+                                ap_start.clone(),
                                 &raw mut ap,
                                 &raw mut arg_idx,
                                 &raw mut arg_cur,
                                 fmt,
                             );
-                            ap.arg::<::core::ffi::c_double>()
+                            ap.next_arg::<::core::ffi::c_double>()
                         };
                         let mut abs_f: ::core::ffi::c_double =
                             if f_0 < 0 as ::core::ffi::c_int as ::core::ffi::c_double {
@@ -2764,7 +2752,7 @@ pub unsafe extern "C" fn kv_do_printf(
     mut c2rust_args: ...
 ) -> ::core::ffi::c_int {
     let mut remaining: size_t = (*str).capacity.wrapping_sub((*str).size);
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
     let mut printed: ::core::ffi::c_int = vsnprintf(
         if !(*str).items.is_null() {
@@ -2774,7 +2762,7 @@ pub unsafe extern "C" fn kv_do_printf(
         },
         remaining,
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     if printed < 0 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
@@ -2820,7 +2808,7 @@ pub unsafe extern "C" fn kv_do_printf(
             (*str).items.offset((*str).size as isize),
             (*str).capacity.wrapping_sub((*str).size),
             fmt,
-            ap.as_va_list(),
+            ap,
         );
         if printed < 0 as ::core::ffi::c_int {
             return -1 as ::core::ffi::c_int;
@@ -2843,9 +2831,9 @@ pub unsafe extern "C" fn arena_printf(
         remaining = (*arena).size.wrapping_sub((*arena).pos);
         buf = (*arena).cur_blk.offset((*arena).pos as isize);
     }
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
-    let mut printed: ::core::ffi::c_int = vsnprintf(buf, remaining, fmt, ap.as_va_list());
+    let mut printed: ::core::ffi::c_int = vsnprintf(buf, remaining, fmt, ap);
     if printed < 0 as ::core::ffi::c_int {
         return String_0 {
             data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -2859,12 +2847,7 @@ pub unsafe extern "C" fn arena_printf(
             false_0 != 0,
         ) as *mut ::core::ffi::c_char;
         ap = c2rust_args.clone();
-        printed = vsnprintf(
-            buf,
-            (printed as size_t).wrapping_add(1 as size_t),
-            fmt,
-            ap.as_va_list(),
-        );
+        printed = vsnprintf(buf, (printed as size_t).wrapping_add(1 as size_t), fmt, ap);
         if printed < 0 as ::core::ffi::c_int {
             return String_0 {
                 data: ::core::ptr::null_mut::<::core::ffi::c_char>(),

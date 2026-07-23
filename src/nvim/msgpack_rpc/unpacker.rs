@@ -692,11 +692,13 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
             return false_0 != 0;
         }
         if (*p).type_0 as ::core::ffi::c_int == kMessageTypeNotification as ::core::ffi::c_int
-            && (*p).handler.fn_0
-                == Some(
+            && (*p).handler.fn_0.is_some_and(|f| {
+                ::core::ptr::fn_addr_eq(
+                    f,
                     handle_ui_client_redraw
                         as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
                 )
+            })
         {
             (*p).type_0 = kMessageTypeRedrawEvent;
             (*p).state = 10 as ::core::ffi::c_int;
@@ -913,14 +915,12 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 (*p).nevents -= 1;
                 (*p).read_ptr = data;
                 (*p).read_size = size;
-                if (*p).ui_handler.fn_0
-                    != ::core::mem::transmute::<
-                        Option<unsafe extern "C" fn(Array) -> !>,
-                        Option<unsafe extern "C" fn(Array) -> ()>,
-                    >(Some(
+                if !(*p).ui_handler.fn_0.is_some_and(|f| {
+                    ::core::ptr::fn_addr_eq(
+                        f,
                         ui_client_event_grid_line as unsafe extern "C" fn(Array) -> !,
-                    ))
-                {
+                    )
+                }) {
                     (*p).state = 12 as ::core::ffi::c_int;
                     return true_0 != 0;
                 } else {

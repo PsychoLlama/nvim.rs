@@ -74,19 +74,6 @@ use crate::src::nvim::register::write_reg_contents;
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
 pub use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
-    Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_17, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_14, Dict,
-    Error, ErrorType, Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, HlMessage, HlMessageChunk, Integer, Intersection, KeyDict_echo_opts, KeyValuePair,
-    LineGetter, Loop, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MessageData,
-    MultiQueue, Object, ObjectType, OptInt, OptionalKeys, Proc, ProcType, RStream,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream,
-    String_0, Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window,
     _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
     __off64_t, __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __time_t, __va_list_tag, alist_T, argv_callback, auto_event, bhdr_T,
@@ -125,7 +112,20 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, va_list,
     varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, FILE, QUEUE, _IO_FILE,
+    wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd,
+    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
+    Callback_data as C2Rust_Unnamed_17, ChangedtickDictItem, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_14, Dict,
+    Error, ErrorType, Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
+    GridView, HlMessage, HlMessageChunk, Integer, Intersection, KeyDict_echo_opts, KeyValuePair,
+    LineGetter, Loop, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MessageData,
+    MultiQueue, Object, ObjectType, OptInt, OptionalKeys, Proc, ProcType, RStream,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream,
+    String_0, Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
+    FILE, QUEUE,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -2112,13 +2112,13 @@ pub unsafe extern "C" fn smsg(
     mut s: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> ::core::ffi::c_int {
-    let mut arglist: ::core::ffi::VaListImpl;
+    let mut arglist: ::core::ffi::VaList;
     arglist = c2rust_args.clone();
     vim_vsnprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         s,
-        arglist.as_va_list(),
+        arglist,
     );
     return msg(IObuff.ptr() as *mut ::core::ffi::c_char, hl_id) as ::core::ffi::c_int;
 }
@@ -2127,13 +2127,13 @@ pub unsafe extern "C" fn smsg_keep(
     mut s: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) -> ::core::ffi::c_int {
-    let mut arglist: ::core::ffi::VaListImpl;
+    let mut arglist: ::core::ffi::VaList;
     arglist = c2rust_args.clone();
     vim_vsnprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         s,
-        arglist.as_va_list(),
+        arglist,
     );
     return msg_keep(
         IObuff.ptr() as *mut ::core::ffi::c_char,
@@ -2482,9 +2482,9 @@ pub unsafe extern "C" fn emsg_invreg(mut name: ::core::ffi::c_int) {
 }
 pub unsafe extern "C" fn semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) -> bool {
     let mut ret: bool = false;
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
-    ret = semsgv(fmt, ap.as_va_list());
+    ret = semsgv(fmt, ap);
     return ret;
 }
 pub unsafe extern "C" fn semsg_multiline(
@@ -2493,7 +2493,7 @@ pub unsafe extern "C" fn semsg_multiline(
     mut c2rust_args: ...
 ) -> bool {
     let mut ret: bool = false;
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     static errbuf: GlobalCell<[::core::ffi::c_char; 8192]> = GlobalCell::new([0; 8192]);
     if emsg_not_now() != 0 {
         return true_0 != 0;
@@ -2503,7 +2503,7 @@ pub unsafe extern "C" fn semsg_multiline(
         errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8192]>(),
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     ret = emsg_multiline(
         errbuf.ptr() as *mut ::core::ffi::c_char,
@@ -2525,7 +2525,7 @@ unsafe extern "C" fn semsgv(
         errbuf.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     return emsg(errbuf.ptr() as *mut ::core::ffi::c_char);
 }
@@ -2539,9 +2539,9 @@ pub unsafe extern "C" fn siemsg(mut s: *const ::core::ffi::c_char, mut c2rust_ar
     if emsg_not_now() != 0 {
         return;
     }
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
-    semsgv(s, ap.as_va_list());
+    semsgv(s, ap);
 }
 pub unsafe extern "C" fn internal_error(mut where_0: *const ::core::ffi::c_char) {
     siemsg(
@@ -2556,13 +2556,13 @@ unsafe extern "C" fn msg_semsg_event(mut argv: *mut *mut ::core::ffi::c_void) {
     xfree(s as *mut ::core::ffi::c_void);
 }
 pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
     vim_vsnprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     loop_schedule_deferred(
@@ -2601,13 +2601,13 @@ pub unsafe extern "C" fn msg_schedule_semsg_multiline(
     fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) {
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
     vim_vsnprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     loop_schedule_deferred(
@@ -6083,13 +6083,13 @@ pub unsafe extern "C" fn swmsg(
     fmt: *const ::core::ffi::c_char,
     mut c2rust_args: ...
 ) {
-    let mut args: ::core::ffi::VaListImpl;
+    let mut args: ::core::ffi::VaList;
     args = c2rust_args.clone();
     vim_vsnprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
         fmt,
-        args.as_va_list(),
+        args,
     );
     give_warning(IObuff.ptr() as *mut ::core::ffi::c_char, hl, true_0 != 0);
 }

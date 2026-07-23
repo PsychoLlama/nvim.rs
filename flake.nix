@@ -39,8 +39,8 @@
         pkgs:
         (pkgs.fenix.toolchainOf {
           channel = "nightly";
-          date = "2023-04-15";
-          sha256 = "sha256-MbIq5CSCT5DjO4iLNNERhJ5YPth50hzBE9tUtC/UR3o=";
+          date = "2026-07-15";
+          sha256 = "sha256-uMGAU3RltaEJI8vknPteVnrwuc/Zma1wl9kbdHxk1yA=";
         }).withComponents
           [
             "cargo"

@@ -40,22 +40,18 @@ use crate::src::nvim::tui::ugrid::{
     ugrid_clear, ugrid_clear_chunk, ugrid_goto, ugrid_init, ugrid_resize, ugrid_scroll,
 };
 pub use crate::src::nvim::types::{
-    Arena, ArenaMem, Array, Boolean, CursorShape, Dict, Float, HlAttrs, Integer, KeyEncoding,
-    KeyValuePair, LineFlags, Loop, LuaRef, MHPutStatus, MapHash, MultiQueue, Object, ObjectType,
-    OptInt, Proc, ProcType, RStream, RgbValue, ScopeType, Set_cstr_t, SignalWatcher, Stream,
-    StringBuilder, String_0, TermKey, TermKey_Terminfo_Getstr_Hook, TermMode, TermModeState,
-    TerminfoEntry, UCell, UGrid, VarLockStatus, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
-    __builtin_va_list, __gnuc_va_list, __off64_t, __off_t, __pid_t, __pthread_internal_list,
-    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, cc_t,
-    consumed_blk, cstr_t, cursorentry_T, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int16_t,
-    int32_t, int64_t, int8_t, internal_proc_cb, key_value_pair, loop_0,
-    loop_0_children as C2Rust_Unnamed_14, multiqueue, object, object_data as C2Rust_Unnamed_13,
-    proc, proc_exit_cb, proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue, rstream, sattr_T,
-    schar_T, signal_cb, signal_close_cb, signal_watcher, size_t, speed_t, ssize_t, stream,
-    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_15, stream_write_cb, tcflag_t,
-    termios, uint32_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb,
-    uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb,
-    uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
+    __off64_t, __off_t, __pid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
+    __pthread_rwlock_arch_t, __va_list_tag, cc_t, consumed_blk, cstr_t, cursorentry_T, dict_T,
+    dictvar_S, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, int8_t, internal_proc_cb,
+    key_value_pair, loop_0, loop_0_children as C2Rust_Unnamed_14, multiqueue, object,
+    object_data as C2Rust_Unnamed_13, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t,
+    pthread_rwlock_t, queue, rstream, sattr_T, schar_T, signal_cb, signal_close_cb, signal_watcher,
+    size_t, speed_t, ssize_t, stream, stream_close_cb, stream_read_cb,
+    stream_uv as C2Rust_Unnamed_15, stream_write_cb, tcflag_t, termios, uint32_t, uint64_t,
+    uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
+    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
+    uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
     uv_idle_s_u as C2Rust_Unnamed_12, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
@@ -65,7 +61,12 @@ pub use crate::src::nvim::types::{
     uv_signal_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_6, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_10, uv_timer_s_u as C2Rust_Unnamed_11, uv_timer_t,
-    uv_write_cb, uv_write_s, uv_write_t, va_list, FILE, QUEUE, TPVAR, _IO_FILE,
+    uv_write_cb, uv_write_s, uv_write_t, va_list, Arena, ArenaMem, Array, Boolean, CursorShape,
+    Dict, Float, HlAttrs, Integer, KeyEncoding, KeyValuePair, LineFlags, Loop, LuaRef, MHPutStatus,
+    MapHash, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, RStream, RgbValue, ScopeType,
+    Set_cstr_t, SignalWatcher, Stream, StringBuilder, String_0, TermKey,
+    TermKey_Terminfo_Getstr_Hook, TermMode, TermModeState, TerminfoEntry, UCell, UGrid,
+    VarLockStatus, _IO_FILE, FILE, QUEUE, TPVAR,
 };
 use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::c2rust_bitfields;
@@ -3293,13 +3294,13 @@ pub unsafe extern "C" fn out_printf(
     if available < limit {
         flush_buf(tui);
     }
-    let mut ap: ::core::ffi::VaListImpl;
+    let mut ap: ::core::ffi::VaList;
     ap = c2rust_args.clone();
     let mut printed: ::core::ffi::c_int = vsnprintf(
         (&raw mut (*tui).buf as *mut ::core::ffi::c_char).offset((*tui).bufpos as isize),
         limit,
         fmt,
-        ap.as_va_list(),
+        ap,
     );
     if printed > 0 as ::core::ffi::c_int {
         (*tui).bufpos = (*tui).bufpos.wrapping_add(printed as size_t);
@@ -4382,7 +4383,7 @@ unsafe extern "C" fn tui_tk_ti_getstr(
         );
         if !value.is_null()
             && value
-                != ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(
+                != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_char>(
                     -1 as ::core::ffi::c_int as usize,
                 ) as *const ::core::ffi::c_char
             && strequal(stty_erase.get(), value) as ::core::ffi::c_int != 0

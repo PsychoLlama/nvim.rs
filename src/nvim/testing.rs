@@ -27,18 +27,18 @@ use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 pub use crate::src::nvim::types::{
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, auto_event, blob_T,
+    blobvar_S, dict_T, dictitem_T, dictvar_S, estack_T, estack_T_es_info as C2Rust_Unnamed_2,
+    estack_arg_T, etype_T, event_T, except_T, except_type_T, float_T, funccall_S,
+    funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
+    int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
+    listwatch_S, listwatch_T, msglist, msglist_T, object, object_data as C2Rust_Unnamed, partial_S,
+    partial_T, proftime_T, ptrdiff_t, queue, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T,
+    typval_vval_union, ufunc_S, ufunc_T, uint64_t, uint8_t, varnumber_T, vim_exception,
     ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
     Dict, Error, ErrorType, EvalFuncData, Float, Integer, KeyValuePair, LuaRef,
     MsgpackRpcRequestHandler, Object, ObjectType, ScopeDictDictItem, ScopeType, SpecialVarValue,
-    String_0, VarLockStatus, VarType, VimVarIndex, _IO_codecvt, _IO_lock_t, _IO_marker,
-    _IO_wide_data, __off64_t, __off_t, auto_event, blob_T, blobvar_S, dict_T, dictitem_T,
-    dictvar_S, estack_T, estack_T_es_info as C2Rust_Unnamed_2, estack_arg_T, etype_T, event_T,
-    except_T, except_type_T, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_0,
-    funccall_T, garray_T, hash_T, hashitem_T, hashtab_T, int32_t, int64_t, key_value_pair,
-    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, msglist,
-    msglist_T, object, object_data as C2Rust_Unnamed, partial_S, partial_T, proftime_T, ptrdiff_t,
-    queue, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
-    ufunc_T, uint64_t, uint8_t, varnumber_T, vim_exception, FILE, QUEUE, _IO_FILE,
+    String_0, VarLockStatus, VarType, VimVarIndex, _IO_FILE, FILE, QUEUE,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
