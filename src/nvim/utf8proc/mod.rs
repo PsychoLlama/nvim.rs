@@ -573,7 +573,7 @@ mod tests {
         assert_eq!(utf8proc_tolower(0x0130), 0x0069); // İ -> i
         assert_eq!(utf8proc_toupper(0x00DF), 0x1E9E); // ß -> ẞ
         assert_eq!(utf8proc_tolower(0x4E2D), 0x4E2D); // no case
-                                                      // Deseret is the classic astral-plane (surrogate-encoded) case pair.
+        // Deseret is the classic astral-plane (surrogate-encoded) case pair.
         assert_eq!(utf8proc_tolower(0x10400), 0x10428);
         assert_eq!(utf8proc_toupper(0x10428), 0x10400);
     }

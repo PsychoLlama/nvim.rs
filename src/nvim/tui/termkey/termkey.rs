@@ -13,10 +13,10 @@ use crate::src::nvim::tui::termkey::driver_ti::{
     free_driver_ti, new_driver_ti, peekkey_ti, start_driver_ti, stop_driver_ti,
 };
 pub use crate::src::nvim::types::{
-    cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, TermKey, TermKeyCsi, TermKeyDriver,
-    TermKeyDriverNode, TermKeyEvent, TermKeyFormat, TermKeyKey,
+    TermKey, TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_1, TermKeyCsi,
+    TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_2, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
-    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_1, TerminfoEntry,
+    TerminfoEntry, cc_t, keyinfo, size_t, speed_t, tcflag_t, termios,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
@@ -461,7 +461,7 @@ static evnames: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"Drag\0".as_ptr() as *const ::core::ffi::c_char,
     b"Release\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_interpret_string(
     mut tk: *mut TermKey,
     mut key: *const TermKeyKey,
@@ -735,7 +735,7 @@ unsafe extern "C" fn termkey_init(
     xfree((*tk).buffer as *mut ::core::ffi::c_void);
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_new_abstract(
     mut term: *mut TerminfoEntry,
     mut flags: ::core::ffi::c_int,
@@ -777,7 +777,7 @@ pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     }
     xfree(tk as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_destroy(mut tk: *mut TermKey) {
     if (*tk).is_started != 0 {
         termkey_stop(tk);
@@ -792,7 +792,7 @@ pub unsafe extern "C" fn termkey_hook_terminfo_getstr(
     (*tk).ti_getstr_hook = hookfn;
     (*tk).ti_getstr_hook_data = data;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_int {
     if (*tk).is_started != 0 {
         return 1 as ::core::ffi::c_int;
@@ -846,7 +846,7 @@ pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_i
     (*tk).is_started = 1 as ::core::ffi::c_char;
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_int {
     if (*tk).is_started == 0 {
         return 1 as ::core::ffi::c_int;
@@ -870,7 +870,7 @@ pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_in
     (*tk).is_started = 0 as ::core::ffi::c_char;
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_set_flags(mut tk: *mut TermKey, mut newflags: ::core::ffi::c_int) {
     (*tk).flags = newflags;
     if (*tk).flags & TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int != 0 {
@@ -879,11 +879,11 @@ pub unsafe extern "C" fn termkey_set_flags(mut tk: *mut TermKey, mut newflags: :
         (*tk).canonflags &= !(TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int);
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_get_canonflags(mut tk: *mut TermKey) -> ::core::ffi::c_int {
     return (*tk).canonflags;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_set_canonflags(
     mut tk: *mut TermKey,
     mut flags: ::core::ffi::c_int,
@@ -895,11 +895,11 @@ pub unsafe extern "C" fn termkey_set_canonflags(
         (*tk).flags &= !(TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int);
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_get_buffer_size(mut tk: *mut TermKey) -> size_t {
     return (*tk).buffsize;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_set_buffer_size(
     mut tk: *mut TermKey,
     mut size: size_t,
@@ -910,7 +910,7 @@ pub unsafe extern "C" fn termkey_set_buffer_size(
     (*tk).buffsize = size;
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_get_buffer_remaining(mut tk: *mut TermKey) -> size_t {
     return (*tk).buffsize.wrapping_sub((*tk).buffcount);
 }
@@ -1059,7 +1059,7 @@ unsafe extern "C" fn emit_codepoint(
         );
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_canonicalise(mut tk: *mut TermKey, mut key: *mut TermKeyKey) {
     let mut flags: ::core::ffi::c_int = (*tk).canonflags;
     if flags & TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int != 0 {
@@ -1277,7 +1277,7 @@ unsafe extern "C" fn peekkey_mouse(
     *nbytep = 3 as size_t;
     return TERMKEY_RES_KEY;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_getkey(
     mut tk: *mut TermKey,
     mut key: *mut TermKeyKey,
@@ -1293,7 +1293,7 @@ pub unsafe extern "C" fn termkey_getkey(
     }
     return ret;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_getkey_force(
     mut tk: *mut TermKey,
     mut key: *mut TermKeyKey,
@@ -1305,7 +1305,7 @@ pub unsafe extern "C" fn termkey_getkey_force(
     }
     return ret;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_push_bytes(
     mut tk: *mut TermKey,
     mut bytes: *const ::core::ffi::c_char,
@@ -1360,7 +1360,7 @@ pub unsafe extern "C" fn termkey_register_keyname(
     *(*tk).keynames.offset(sym as isize) = name;
     return sym;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_get_keyname(
     mut tk: *mut TermKey,
     mut sym: TermKeySym,
@@ -1402,7 +1402,7 @@ unsafe extern "C" fn termkey_lookup_keyname_format(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_lookup_keyname(
     mut tk: *mut TermKey,
     mut str: *const ::core::ffi::c_char,
@@ -1487,7 +1487,7 @@ static modnames: GlobalCell<[modnames; 8]> = GlobalCell::new([
         ctrl: b"ctrl\0".as_ptr() as *const ::core::ffi::c_char,
     },
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_strfkey(
     mut tk: *mut TermKey,
     mut buffer: *mut ::core::ffi::c_char,

@@ -2,13 +2,13 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{strequal, xcalloc, xfree, xrealloc};
 use crate::src::nvim::os::libc::{abort, memcmp, memset};
 pub use crate::src::nvim::types::{
-    cstr_t, int16_t, int32_t, int64_t, mtnode_s, ptr_t, size_t, ssize_t, uint32_t, uint64_t,
-    uint8_t, ColorItem, ColorKey, HlAttrs, HlEntry, HlKind, MHPutStatus, MTDamage, MTDamagePair,
-    MTNode, MapHash, Map_ColorKey_ColorItem, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_String, Map_int_ptr_t, Map_ptr_t_ptr_t,
-    Map_uint32_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int,
-    Map_uint64_t_ptr_t, RgbValue, Set_ColorKey, Set_HlEntry, Set_String, Set_cstr_t, Set_int,
-    Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, String_0,
+    ColorItem, ColorKey, HlAttrs, HlEntry, HlKind, MHPutStatus, MTDamage, MTDamagePair, MTNode,
+    Map_ColorKey_ColorItem, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t, Map_int_String,
+    Map_int_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_ptr_t_ptr_t, Map_uint32_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int, Map_uint64_t_ptr_t,
+    MapHash, RgbValue, Set_ColorKey, Set_HlEntry, Set_String, Set_cstr_t, Set_int, Set_int64_t,
+    Set_ptr_t, Set_uint32_t, Set_uint64_t, String_0, cstr_t, int16_t, int32_t, int64_t, mtnode_s,
+    ptr_t, size_t, ssize_t, uint8_t, uint32_t, uint64_t,
 };
 pub const kHlInvalid: HlKind = 7;
 pub const kHlBlendThrough: HlKind = 6;

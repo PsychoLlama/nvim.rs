@@ -19,15 +19,16 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    ai_col, can_si, can_si_back, cmdmod, curbuf, curbuf_splice_pending, current_sctx, curwin,
-    did_ai, did_si, did_throw, dy_flags, e_interr, e_invarg2, e_modifiable, e_positive,
-    e_resulting_text_too_long, empty_string_option, got_int, old_indent, p_debug, p_lispwords,
-    p_paste, p_report, sandbox, saved_cursor, textlock, trylevel, IObuff, Insstart, State,
+    IObuff, Insstart, State, ai_col, can_si, can_si_back, cmdmod, curbuf, curbuf_splice_pending,
+    current_sctx, curwin, did_ai, did_si, did_throw, dy_flags, e_interr, e_invarg2, e_modifiable,
+    e_positive, e_resulting_text_too_long, empty_string_option, got_int, old_indent, p_debug,
+    p_lispwords, p_paste, p_report, sandbox, saved_cursor, textlock, trylevel,
 };
-use crate::src::nvim::mbyte::{utf8len_tab, utf_ptr2CharInfo_impl, utfc_next_impl, utfc_ptr2len};
+use crate::src::nvim::mbyte::{utf_ptr2CharInfo_impl, utf8len_tab, utfc_next_impl, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_len, ml_get_pos, ml_replace};
 use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::src::nvim::message::{emsg, msg_progress, semsg};
+use crate::src::nvim::r#move::{changed_cline_bef_curs, win_col_off, win_col_off2};
 use crate::src::nvim::ops::shift_line;
 use crate::src::nvim::option::{
     copy_option_part, get_flp_value, get_showbreak_value, set_option_direct, was_set_insecurely,
@@ -39,17 +40,30 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::plines::{
     charsize_fast, charsize_regular, getvcol, getvcol_nolist, init_charsize_arg, win_chartabsize,
 };
-use crate::src::nvim::r#move::{changed_cline_bef_curs, win_col_off, win_col_off2};
 use crate::src::nvim::search::{findmatch, linewhite};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::has_format_option;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
-    exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_4, file_buffer_b_wininfo as C2Rust_Unnamed_13,
-    file_buffer_update_callbacks as C2Rust_Unnamed_1,
+    __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue,
+    Boolean, BufUpdateCallbacks, CMD_index, CSType, Callback, Callback_data as C2Rust_Unnamed_6,
+    CallbackType, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Error, ErrorType, EvalFuncData, ExtmarkMove,
+    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor,
+    FloatRelative, GridView, IndentGetter, Indenter, Integer, Intersection, KeyValuePair,
+    LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, MsgpackRpcRequestHandler, Object, ObjectType,
+    OptIndex, OptInt, OptVal, OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_14, StrCharInfo, String_0, Terminal, Timestamp,
+    TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bcount_t,
+    bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T,
+    cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S,
+    disptick_T, eslist_T, eslist_elem, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
+    file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_1,
     file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, intmax_t, intptr_t,
@@ -62,26 +76,12 @@ pub use crate::src::nvim::types::{
     syn_time_T, synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
     u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
-    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     uintptr_t, undo_object, undo_object_data as C2Rust_Unnamed_8, varnumber_T, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData,
-    AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
-    CMD_index, CSType, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6,
-    ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict,
-    Error, ErrorType, EvalFuncData, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice,
-    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, IndentGetter, Indenter,
-    Integer, Intersection, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, MsgpackRpcRequestHandler,
-    Object, ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_14, StrCharInfo, String_0,
-    Terminal, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::undo::{u_clearline, u_save, u_savecommon, u_savesub};
-extern "C" {
+unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -1754,7 +1754,7 @@ pub unsafe extern "C" fn get_sw_value_col(
         tabstop_at(col, (*buf).b_p_ts, (*buf).b_p_vts_array, left)
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_sts_value() -> ::core::ffi::c_int {
     let mut result: ::core::ffi::c_int = if (*curbuf.get()).b_p_sts < 0 as OptInt {
         get_sw_value(curbuf.get())
@@ -1801,7 +1801,7 @@ pub unsafe extern "C" fn indent_size_no_ts(
         }
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn indent_size_ts(
     mut ptr: *const ::core::ffi::c_char,
     mut ts: OptInt,

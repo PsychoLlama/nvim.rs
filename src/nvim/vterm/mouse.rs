@@ -1,21 +1,21 @@
 use crate::src::nvim::tui::termkey::termkey::fill_utf8;
 pub use crate::src::nvim::types::{
-    int32_t, schar_T, size_t, uint16_t, uint32_t, uint64_t, uint8_t, utf8proc_int32_t,
-    GraphemeState, ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
+    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
+    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
+    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
+    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
     VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
     VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKeyEncodingFlags,
     VTermKeyEncodingStack, VTermLineInfo, VTermModifier, VTermOutputCallback, VTermParserCallbacks,
     VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
     VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermStateCallbacks, VTermStateFallbacks, VTermStateFields,
     VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
     VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
     VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
     VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
-    VTermValue, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
-    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
+    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
+    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
+    uint8_t, uint16_t, uint32_t, uint64_t, utf8proc_int32_t,
 };
 use crate::src::nvim::vterm::vterm::vterm_push_output_sprintf_ctrl;
 
@@ -181,7 +181,7 @@ unsafe extern "C" fn output_mouse(
         _ => {}
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_mouse_move(
     mut vt: *mut VTerm,
     mut row: ::core::ffi::c_int,
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn vterm_mouse_move(
         }
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_mouse_button(
     mut vt: *mut VTerm,
     mut button: ::core::ffi::c_int,

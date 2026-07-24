@@ -7,22 +7,23 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, gettext, memchr, memcmp, memcpy, snprintf, strchr,
 };
 pub use crate::src::nvim::types::{
-    expr_ast_node, expr_ast_node_data as C2Rust_Unnamed_21,
-    expr_ast_node_data_ass as C2Rust_Unnamed_22, expr_ast_node_data_cmp as C2Rust_Unnamed_28,
-    expr_ast_node_data_env as C2Rust_Unnamed_23, expr_ast_node_data_fig as C2Rust_Unnamed_31,
+    ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
+    ParserHighlight, ParserHighlightChunk, ParserInputReader,
+    ParserInputReader_lines as C2Rust_Unnamed_5, ParserLine, ParserLineGetter, ParserPosition,
+    ParserState, ParserState_stack as C2Rust_Unnamed_6, ParserStateItem,
+    ParserStateItem_data as C2Rust_Unnamed_1, ParserStateItem_data_expr as C2Rust_Unnamed_2,
+    ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
+    ParserStateItem_type_0 as C2Rust_Unnamed_4, expr_ast_node,
+    expr_ast_node_data as C2Rust_Unnamed_21, expr_ast_node_data_ass as C2Rust_Unnamed_22,
+    expr_ast_node_data_cmp as C2Rust_Unnamed_28, expr_ast_node_data_env as C2Rust_Unnamed_23,
+    expr_ast_node_data_fig as C2Rust_Unnamed_31,
     expr_ast_node_data_fig_type_guesses as C2Rust_Unnamed_32,
     expr_ast_node_data_flt as C2Rust_Unnamed_26, expr_ast_node_data_num as C2Rust_Unnamed_27,
     expr_ast_node_data_opt as C2Rust_Unnamed_24, expr_ast_node_data_reg as C2Rust_Unnamed_33,
     expr_ast_node_data_str as C2Rust_Unnamed_25, expr_ast_node_data_ter as C2Rust_Unnamed_29,
-    expr_ast_node_data_var as C2Rust_Unnamed_30, float_T, iconv_t, int64_t, size_t, uint64_t,
-    uint8_t, uvarnumber_T, varnumber_T, vimconv_T, ExprAST, ExprASTError, ExprASTNode,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, ExprVarScope, ParserHighlight, ParserHighlightChunk, ParserInputReader,
-    ParserInputReader_lines as C2Rust_Unnamed_5, ParserLine, ParserLineGetter, ParserPosition,
-    ParserState, ParserStateItem, ParserStateItem_data as C2Rust_Unnamed_1,
-    ParserStateItem_data_expr as C2Rust_Unnamed_2,
-    ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
-    ParserStateItem_type_0 as C2Rust_Unnamed_4, ParserState_stack as C2Rust_Unnamed_6,
+    expr_ast_node_data_var as C2Rust_Unnamed_30, float_T, iconv_t, int64_t, size_t, uint8_t,
+    uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
 };
 use crate::src::nvim::viml::parser::parser::viml_parser_get_remaining_line;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
@@ -406,7 +407,7 @@ unsafe extern "C" fn scale_number(
     }
     return ret;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn viml_pexpr_next_token(
     pstate: *mut ParserState,
     flags: ::core::ffi::c_int,
@@ -1232,7 +1233,7 @@ static eltkn_type_tab: GlobalCell<[*const ::core::ffi::c_char; 27]> = GlobalCell
     b"Arrow\0".as_ptr() as *const ::core::ffi::c_char,
     b"Assignment\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static eltkn_cmp_type_tab: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"Equal\0".as_ptr() as *const ::core::ffi::c_char,
     b"Matches\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1240,14 +1241,14 @@ pub static eltkn_cmp_type_tab: GlobalCell<[*const ::core::ffi::c_char; 5]> = Glo
     b"GreaterOrEqual\0".as_ptr() as *const ::core::ffi::c_char,
     b"Identical\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static expr_asgn_type_tab: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     b"Plain\0".as_ptr() as *const ::core::ffi::c_char,
     b"Add\0".as_ptr() as *const ::core::ffi::c_char,
     b"Subtract\0".as_ptr() as *const ::core::ffi::c_char,
     b"Concat\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static ccs_tab: GlobalCell<[*const ::core::ffi::c_char; 64]> = GlobalCell::new([
     b"UseOption\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1430,7 +1431,7 @@ static eltkn_opt_scope_tab: GlobalCell<[*const ::core::ffi::c_char; 109]> = Glob
     ::core::ptr::null::<::core::ffi::c_char>(),
     b"Local\0".as_ptr() as *const ::core::ffi::c_char,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static east_node_type_tab: GlobalCell<[*const ::core::ffi::c_char; 39]> = GlobalCell::new([
     b"Missing\0".as_ptr() as *const ::core::ffi::c_char,
     b"OpMissing\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1535,7 +1536,7 @@ pub static node_maxchildren: GlobalCell<[uint8_t; 39]> = GlobalCell::new([
     0 as uint8_t,
     2 as uint8_t,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
     let mut ast_stack: ExprASTStack = ExprASTStack {
         size: 0,
@@ -3318,7 +3319,7 @@ static base_to_prefix_length: GlobalCell<[uint8_t; 17]> = GlobalCell::new([
     0,
     2 as uint8_t,
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn viml_pexpr_parse(
     pstate: *mut ParserState,
     flags: ::core::ffi::c_int,

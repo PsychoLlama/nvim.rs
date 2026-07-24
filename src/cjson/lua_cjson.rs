@@ -5,22 +5,22 @@ use crate::src::cjson::strbuf::{
 use crate::src::nvim::global_cell::SharedCell;
 use crate::src::nvim::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
 use crate::src::nvim::lua::ffi::{
+    lua_call, lua_checkstack, lua_createtable, lua_getfield, lua_getmetatable, lua_gettable,
+    lua_gettop, lua_insert, lua_newuserdata, lua_next, lua_objlen, lua_pcall, lua_pushboolean,
+    lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata, lua_pushlstring, lua_pushnil,
+    lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawget, lua_rawgeti,
+    lua_rawset, lua_rawseti, lua_setfield, lua_setmetatable, lua_settop, lua_toboolean,
+    lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type, lua_typename,
     luaL_argerror, luaL_checklstring, luaL_checkstack, luaL_checktype, luaL_error,
-    luaL_getmetafield, lua_call, lua_checkstack, lua_createtable, lua_getfield, lua_getmetatable,
-    lua_gettable, lua_gettop, lua_insert, lua_newuserdata, lua_next, lua_objlen, lua_pcall,
-    lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata, lua_pushlstring,
-    lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawget,
-    lua_rawgeti, lua_rawset, lua_rawseti, lua_setfield, lua_setmetatable, lua_settop,
-    lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type,
-    lua_typename,
+    luaL_getmetafield,
 };
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, floor, free, malloc, memcmp, memcpy, memset, qsort, realloc, strncasecmp,
     strncmp, strtoll,
 };
 pub use crate::src::nvim::types::{
-    __compar_fn_t, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, ptrdiff_t, size_t,
-    strbuf_t, uintptr_t, LuaRef,
+    __compar_fn_t, LuaRef, lua_CFunction, lua_Integer, lua_Number, lua_State, luaL_Reg, ptrdiff_t,
+    size_t, strbuf_t, uintptr_t,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -757,11 +757,7 @@ unsafe extern "C-unwind" fn json_append_number(
     }
     if (*cfg).encode_invalid_numbers == 0 as ::core::ffi::c_int {
         if if num.is_infinite() {
-            if num.is_sign_positive() {
-                1
-            } else {
-                -1
-            }
+            if num.is_sign_positive() { 1 } else { -1 }
         } else {
             0
         } != 0
@@ -784,11 +780,7 @@ unsafe extern "C-unwind" fn json_append_number(
             return;
         }
         if if num.is_infinite() {
-            if num.is_sign_positive() {
-                1
-            } else {
-                -1
-            }
+            if num.is_sign_positive() { 1 } else { -1 }
         } else {
             0
         } != 0
@@ -809,11 +801,7 @@ unsafe extern "C-unwind" fn json_append_number(
             return;
         }
     } else if if num.is_infinite() {
-        if num.is_sign_positive() {
-            1
-        } else {
-            -1
-        }
+        if num.is_sign_positive() { 1 } else { -1 }
     } else {
         0
     } != 0

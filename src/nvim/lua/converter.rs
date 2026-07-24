@@ -26,19 +26,19 @@ use crate::src::nvim::memory::{arena_memdupz, xfree, xmalloc, xrealloc, xstrdup}
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset, strlen};
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, handle_T, hash_T, hashitem_T,
-    hashtab_T, int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T,
-    listvar_S, listwatch_S, listwatch_T, lua_Integer, lua_Number, lua_State, nlua_ref_state_t,
-    object, object_data as C2Rust_Unnamed, partial_S, partial_T, proftime_T, ptrdiff_t, queue,
-    scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint64_t, uint8_t,
-    varnumber_T, Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, ErrorType, FieldHashfn,
-    Float, Integer, KeySetLink, KeyValuePair, LuaRef, MPConvPartialStage, MPConvStack,
-    MPConvStackVal, MPConvStackValType, MPConvStackVal_data as C2Rust_Unnamed_1,
-    MPConvStackVal_data_a as C2Rust_Unnamed_2, MPConvStackVal_data_d as C2Rust_Unnamed_5,
-    MPConvStackVal_data_l as C2Rust_Unnamed_4, MPConvStackVal_data_p as C2Rust_Unnamed_3,
-    MessagePackType, Object, ObjectType, OptKeySet, OptionalKeys, ScopeDictDictItem, ScopeType,
-    SpecialVarValue, String_0, Tabpage, VarLockStatus, VarType, Window, QUEUE,
+    Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, ErrorType, FieldHashfn, Float,
+    Integer, KeySetLink, KeyValuePair, LuaRef, MPConvPartialStage, MPConvStack, MPConvStackVal,
+    MPConvStackVal_data as C2Rust_Unnamed_1, MPConvStackVal_data_a as C2Rust_Unnamed_2,
+    MPConvStackVal_data_d as C2Rust_Unnamed_5, MPConvStackVal_data_l as C2Rust_Unnamed_4,
+    MPConvStackVal_data_p as C2Rust_Unnamed_3, MPConvStackValType, MessagePackType, Object,
+    ObjectType, OptKeySet, OptionalKeys, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue,
+    String_0, Tabpage, VarLockStatus, VarType, Window, blob_T, blobvar_S, dict_T, dictitem_T,
+    dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T,
+    handle_T, hash_T, hashitem_T, hashtab_T, int32_t, int64_t, key_value_pair, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, lua_Integer, lua_Number,
+    lua_State, nlua_ref_state_t, object, object_data as C2Rust_Unnamed, partial_S, partial_T,
+    proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
+    ufunc_T, uint8_t, uint64_t, varnumber_T,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

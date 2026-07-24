@@ -4,10 +4,10 @@ use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{endpwent, getuid, setpwent, snprintf, strcmp, strlen, strncmp};
 pub use crate::src::nvim::types::{
-    __gid_t, __uid_t, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T, scid_T, sctx_T,
-    size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T, Direction, LuaRef,
+    __gid_t, __uid_t, Direction, LuaRef, colnr_T, expand_T, garray_T, int32_t, linenr_T, pos_T,
+    scid_T, sctx_T, size_t, uid_t, uint64_t, uv_uid_t, xp_prefix_T,
 };
-extern "C" {
+unsafe extern "C" {
     fn getpwent() -> *mut passwd;
     fn getpwuid(__uid: __uid_t) -> *mut passwd;
     fn getpwnam(__name: *const ::core::ffi::c_char) -> *mut passwd;
@@ -65,7 +65,7 @@ unsafe extern "C" fn add_user(
         user_copy;
     (*users).ga_len += 1;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_usernames(mut users: *mut garray_T) -> ::core::ffi::c_int {
     if users.is_null() {
         return FAIL;
@@ -107,14 +107,14 @@ pub unsafe extern "C" fn os_get_usernames(mut users: *mut garray_T) -> ::core::f
     }
     return OK;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_username(
     mut s: *mut ::core::ffi::c_char,
     mut len: size_t,
 ) -> ::core::ffi::c_int {
     return os_get_uname(getuid(), s, len);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_uname(
     mut uid: uv_uid_t,
     mut s: *mut ::core::ffi::c_char,
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn os_get_uname(
     );
     return FAIL;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_userdir(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {

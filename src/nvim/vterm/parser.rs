@@ -1,21 +1,21 @@
 use crate::src::nvim::os::libc::{__assert_fail, strncpy};
 pub use crate::src::nvim::types::{
-    int32_t, schar_T, size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState,
-    ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
+    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
+    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
+    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
+    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
     VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
     VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKeyEncodingFlags,
     VTermKeyEncodingStack, VTermLineInfo, VTermOutputCallback, VTermParserCallbacks,
     VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
     VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermStateCallbacks, VTermStateFallbacks, VTermStateFields,
     VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
     VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
     VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
     VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
-    VTermValue, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
-    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
+    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
+    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
+    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
 };
 
 pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
@@ -247,7 +247,7 @@ unsafe extern "C" fn string_fragment(
     }
     (*vt).parser.string_initial = false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_input_write(
     mut vt: *mut VTerm,
     mut bytes: *const ::core::ffi::c_char,
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn vterm_input_write(
     }
     return len;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_parser_set_callbacks(
     mut vt: *mut VTerm,
     mut callbacks: *const VTermParserCallbacks,

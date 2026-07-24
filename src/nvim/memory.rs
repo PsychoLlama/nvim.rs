@@ -14,8 +14,8 @@
 //! allocation may end there.
 
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
-pub use crate::src::nvim::types::{consumed_blk, Arena, ArenaMem};
-use core::ffi::{c_char, c_int, c_long, c_void, CStr};
+pub use crate::src::nvim::types::{Arena, ArenaMem, consumed_blk};
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 use core::slice;
 
@@ -31,13 +31,13 @@ pub type MemFree = Option<unsafe extern "C" fn(*mut c_void)>;
 pub type MemCalloc = Option<unsafe extern "C" fn(usize, usize) -> *mut c_void>;
 pub type MemRealloc = Option<unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static mem_malloc: SharedCell<MemMalloc> = SharedCell::new(Some(malloc));
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static mem_free: SharedCell<MemFree> = SharedCell::new(Some(free));
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static mem_calloc: SharedCell<MemCalloc> = SharedCell::new(Some(calloc));
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static mem_realloc: SharedCell<MemRealloc> = SharedCell::new(Some(realloc));
 
 unsafe fn try_to_free_memory() {
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn verbose_try_malloc(size: usize) -> *mut c_void {
     ret
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
     let ret = try_malloc(size);
     if ret.is_null() {
@@ -92,12 +92,12 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
     ret
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xfree(ptr: *mut c_void) {
     (*mem_free.ptr()).expect("non-null function pointer")(ptr);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     let (allocated_count, allocated_size) = if count != 0 && size != 0 {
         (count, size)
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn xmallocz(size: usize) -> *mut c_void {
     ret
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void {
     let ret = xmallocz(len);
     if len != 0 {
@@ -287,7 +287,7 @@ pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: u
     slen + dlen
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xstrdup(str: *const c_char) -> *mut c_char {
     xmemdupz(str as *const c_void, CStr::from_ptr(str).to_bytes().len()) as *mut c_char
 }
@@ -312,7 +312,7 @@ pub unsafe extern "C" fn xstrndup(str: *const c_char, len: usize) -> *mut c_char
     xmemdupz(str as *const c_void, strnlen(str, len)) as *mut c_char
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xmemdup(data: *const c_void, len: usize) -> *mut c_void {
     let ret = xmalloc(len);
     if len != 0 {
@@ -360,7 +360,7 @@ pub type MergeSortCompareFunc = Option<unsafe extern "C" fn(*const c_void, *cons
 /// Bottom-up mergesort over an intrusive doubly-linked list, generic via
 /// accessor callbacks. All list knowledge lives behind the callbacks, so
 /// this stays a pointer-shuffling shim.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mergesort_list(
     mut head: *mut c_void,
     get_next: MergeSortGetFunc,

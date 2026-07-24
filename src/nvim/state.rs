@@ -12,9 +12,9 @@ use crate::src::nvim::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active}
 use crate::src::nvim::keycodes::get_special_key_name;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, main_loop,
-    mod_mask, motion_force, must_redraw, need_wait_return, restart_VIsual_select, restart_edit,
-    typebuf, virtual_op, State, VIsual_active, VIsual_mode, VIsual_select,
+    State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
+    global_busy, got_int, last_mode, main_loop, mod_mask, motion_force, must_redraw,
+    need_wait_return, restart_VIsual_select, restart_edit, typebuf, virtual_op,
 };
 use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
@@ -22,9 +22,20 @@ use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
-    bufstate_T, chunksize_T, cmdline_info, colnr_T, dict_T, dictvar_S, disptick_T, event_T,
-    expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, CmdRedraw,
+    CmdlineColorChunk, CmdlineColors, CmdlineInfo, ColoredCmdline, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
+    Direction, Event, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView,
+    Intersection, Loop, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MultiQueue, OptInt, Proc,
+    ProcType, QUEUE, RStream, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Stream, Terminal, Timestamp, TriState,
+    VarLockStatus, VarType, VimState, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
+    WinInfo, WinSplit, WinStyle, Window, alist_T, argv_callback, auto_event, bhdr_T, blob_T,
+    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmdline_info, colnr_T, dict_T, dictvar_S,
+    disptick_T, event_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
     file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -42,7 +53,7 @@ pub use crate::src::nvim::types::{
     time_t, typebuf_T, typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_7, u_header_uh_alt_prev as C2Rust_Unnamed_6,
     u_header_uh_next as C2Rust_Unnamed_9, u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
     uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_17, uv_async_t, uv_buf_t,
     uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_12, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
@@ -55,18 +66,7 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_24, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_18, uv_timer_s_u as C2Rust_Unnamed_19, uv_timer_t,
     varnumber_T, vim_state, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
-    xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, CmdRedraw,
-    CmdlineColorChunk, CmdlineColors, CmdlineInfo, ColoredCmdline, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
-    Direction, Event, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView,
-    Intersection, Loop, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MultiQueue, OptInt,
-    Proc, ProcType, RStream, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Stream, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VimState, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_flush;
 pub const kTrue: TriState = 1;

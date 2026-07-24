@@ -41,33 +41,34 @@ use crate::src::nvim::fold::{
     newFoldLevel, openFold, openFoldRecurse,
 };
 use crate::src::nvim::getchar::{
-    beep_flush, char_avail, getcmdkeycmd, gotchars_ignore, ins_char_typebuf, map_execute_lua,
-    paste_repeat, plain_vgetc, readbuf1_empty, safe_vgetc, start_redo, stuffReadbuff, stuff_empty,
+    AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff, beep_flush,
+    char_avail, getcmdkeycmd, gotchars_ignore, ins_char_typebuf, map_execute_lua, paste_repeat,
+    plain_vgetc, readbuf1_empty, safe_vgetc, start_redo, stuff_empty, stuffReadbuff,
     stuffcharReadbuff, stuffnumReadbuff, typebuf_maplen, typebuf_typed, ungetchars, vgetc, vpeekc,
-    vungetc, AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff,
+    vungetc,
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::src::nvim::help::ex_help;
 use crate::src::nvim::keycodes::simplify_key;
 use crate::src::nvim::main::{
-    allow_keys, arrow_used, cb_flags, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curtab,
-    curwin, did_check_timestamps, did_cursorhold, did_emsg, did_syncbind, did_throw,
-    did_wait_return, diff_need_scrollbind, do_redraw, e_modifiable, e_noident, empty_string_option,
-    emsg_off, emsg_on_display, emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op,
-    firstwin, g_tag_at_cursor, global_busy, got_int, hl_attr_active, in_assert_fails, ins_at_eol,
-    jop_flags, keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, langmap_mapchar,
-    last_cursormoved, last_cursormoved_win, may_garbage_collect, mod_mask, mode_displayed,
-    motion_force, mouse_dragging, msg_col, msg_didany, msg_didout, msg_grid_adj, msg_hist_off,
-    msg_nowait, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo,
-    need_wait_return, no_hlsearch, no_mapping, no_smartcase, no_u_sync, no_zero_mapping,
-    ns_hl_fast, opcount, p_ch, p_cpo, p_hls, p_kp, p_langmap, p_lrm, p_sbo, p_sbr, p_sc, p_scs,
-    p_sel, p_slm, p_sloc, p_smd, p_sta, p_tm, p_to, p_ttm, p_ws, p_ww, quit_more, redraw_cmdline,
-    redraw_mode, redraw_tabline, reg_executing, reg_recorded, reg_recording,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_VIsual_select,
-    restart_edit, sc_col, showcmd_buf, skip_redraw, time_fd, typebuf_was_empty, vgetc_busy,
-    vgetc_char, vgetc_mod_mask, KeyStuffed, KeyTyped, Rows, State, VIsual, VIsual_active,
-    VIsual_mode, VIsual_reselect, VIsual_select, VIsual_select_exclu_adj, VIsual_select_reg,
+    KeyStuffed, KeyTyped, Rows, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
+    VIsual_select, VIsual_select_exclu_adj, VIsual_select_reg, allow_keys, arrow_used, cb_flags,
+    clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curtab, curwin, did_check_timestamps,
+    did_cursorhold, did_emsg, did_syncbind, did_throw, did_wait_return, diff_need_scrollbind,
+    do_redraw, e_modifiable, e_noident, empty_string_option, emsg_off, emsg_on_display,
+    emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, firstwin, g_tag_at_cursor,
+    global_busy, got_int, hl_attr_active, in_assert_fails, ins_at_eol, jop_flags, keep_msg,
+    keep_msg_hl_id, km_startsel, km_stopsel, langmap_mapchar, last_cursormoved,
+    last_cursormoved_win, may_garbage_collect, mod_mask, mode_displayed, motion_force,
+    mouse_dragging, msg_col, msg_didany, msg_didout, msg_grid_adj, msg_hist_off, msg_nowait,
+    msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo, need_wait_return,
+    no_hlsearch, no_mapping, no_smartcase, no_u_sync, no_zero_mapping, ns_hl_fast, opcount, p_ch,
+    p_cpo, p_hls, p_kp, p_langmap, p_lrm, p_sbo, p_sbr, p_sc, p_scs, p_sel, p_slm, p_sloc, p_smd,
+    p_sta, p_tm, p_to, p_ttm, p_ws, p_ww, quit_more, redraw_cmdline, redraw_mode, redraw_tabline,
+    reg_executing, reg_recorded, reg_recording, resel_VIsual_line_count, resel_VIsual_mode,
+    resel_VIsual_vcol, restart_VIsual_select, restart_edit, sc_col, showcmd_buf, skip_redraw,
+    time_fd, typebuf_was_empty, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::src::nvim::mapping::{add_map, langmap_adjust_mb};
 use crate::src::nvim::mark::{
@@ -76,8 +77,8 @@ use crate::src::nvim::mark::{
 };
 use crate::src::nvim::mbyte::{
     mb_adjust_cursor, mb_charlen, mb_check_adjust_col, mb_get_class, mb_prevptr, show_utf8,
-    utf8len_tab, utf_char2bytes, utf_char2len, utf_find_illegal, utf_head_off, utf_iscomposing,
-    utf_ptr2cells, utf_ptr2char, utfc_ptr2len,
+    utf_char2bytes, utf_char2len, utf_find_illegal, utf_head_off, utf_iscomposing, utf_ptr2cells,
+    utf_ptr2char, utf8len_tab, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{
     goto_byte, inc, ml_delete_flags, ml_get, ml_get_buf, ml_get_len, ml_get_pos,
@@ -88,6 +89,13 @@ use crate::src::nvim::message::{
     show_sb_text, wait_return,
 };
 use crate::src::nvim::mouse::{do_mouse, nv_mouse, nv_mousescroll, setmouse};
+use crate::src::nvim::r#move::{
+    adjust_skipcol, changed_window_setting, cursor_correct, do_check_cursorbind, pagescroll,
+    scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top, scroll_redraw, scrolldown,
+    scrollup, sms_marker_overlap, update_curswant, update_curswant_force, update_topline,
+    validate_botline_win, validate_cheight, validate_cursor, validate_virtcol, win_col_off,
+    win_col_off2,
+};
 use crate::src::nvim::ops::{
     adjust_cursor_eol, clear_oparg, cursor_pos_info, do_join, do_pending_operator,
     get_extra_op_char, get_op_char, get_op_type, op_addsub, op_is_change, swapchar,
@@ -105,13 +113,6 @@ use crate::src::nvim::plines::{
 };
 use crate::src::nvim::profile::{time_finish, time_msg};
 use crate::src::nvim::quickfix::qf_view_result;
-use crate::src::nvim::r#move::{
-    adjust_skipcol, changed_window_setting, cursor_correct, do_check_cursorbind, pagescroll,
-    scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top, scroll_redraw, scrolldown,
-    scrollup, sms_marker_overlap, update_curswant, update_curswant_force, update_topline,
-    validate_botline_win, validate_cheight, validate_cursor, validate_virtcol, win_col_off,
-    win_col_off2,
-};
 use crate::src::nvim::register::{
     copy_register, do_execreg, do_put, do_record, free_register, get_default_register_name,
     get_expr_register, valid_yank_reg,
@@ -138,9 +139,20 @@ use crate::src::nvim::textobject::{
     current_tagblock, current_word, end_word, findpar, findsent, fwd_word,
 };
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __compar_fn_t, __off64_t, __off_t,
-    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, cmd_addr_T, cmdarg_T, cmdidx_T, colnr_T, cstack_T,
+    __compar_fn_t, __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
+    _IO_wide_data, AdditionalData, AlignTextPos, Array, BoolVarValue, Boolean, BufUpdateCallbacks,
+    CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, CallbackType, ChangedtickDictItem,
+    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Direction, ExtmarkUndoObject, FILE, FileID,
+    Float, FloatAnchor, FloatRelative, GraphemeState, GridView, Integer, Intersection,
+    KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkGet, MarkMove, MarkMoveRes, MarkTree,
+    MotionType, NS, Object, ObjectType, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, SpellAddType, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal, Timestamp, UIExtension,
+    VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T, blob_T, blobvar_S,
+    blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdarg_T, cmdidx_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_16, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
     eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_4, file_buffer_b_wininfo as C2Rust_Unnamed_12,
@@ -159,20 +171,8 @@ pub use crate::src::nvim::types::{
     typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_9, u_header_uh_alt_prev as C2Rust_Unnamed_8,
     u_header_uh_next as C2Rust_Unnamed_11, u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, utf8proc_int32_t, varnumber_T, vim_state,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, utf8proc_int32_t, varnumber_T, vim_state,
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, yankreg_T,
-    AdditionalData, AlignTextPos, Array, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Direction, ExtmarkUndoObject, FileID, Float,
-    FloatAnchor, FloatRelative, GraphemeState, GridView, Integer, Intersection, KeyValuePair,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkGet, MarkMove, MarkMoveRes, MarkTree,
-    MotionType, Object, ObjectType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, SpellAddType, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal, Timestamp, UIExtension,
-    VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE, FILE, NS, QUEUE,
 };
 use crate::src::nvim::ui::{
     ui_call_msg_showcmd, ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush, ui_has,

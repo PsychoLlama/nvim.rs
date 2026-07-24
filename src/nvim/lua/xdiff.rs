@@ -4,20 +4,20 @@ use crate::src::nvim::linematch::{fastforward_buf_to_lnum, linematch_nbuffers};
 use crate::src::nvim::lua::converter::nlua_pop_keydict;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref};
 use crate::src::nvim::lua::ffi::{
-    luaL_argerror, luaL_buffinit, luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
     lua_concat, lua_createtable, lua_error, lua_gettop, lua_isnumber, lua_objlen, lua_pcall,
     lua_pushinteger, lua_pushstring, lua_pushvalue, lua_rawseti, lua_settop, lua_tolstring,
-    lua_tonumber, lua_type,
+    lua_tonumber, lua_type, luaL_argerror, luaL_buffinit, luaL_error, luaL_prepbuffer,
+    luaL_pushresult, luaL_where,
 };
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{memcpy, memset};
 pub use crate::src::nvim::types::{
-    find_func_t, int32_t, int64_t, key_value_pair, linenr_T, luaL_Buffer, lua_Integer, lua_Number,
-    lua_State, mmbuffer_t, mmfile_t, object, object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer,
-    s_mmfile, s_xdemitcb, s_xdemitconf, s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t,
-    xdl_emit_hunk_consume_func_t, xpparam_t, Arena, Array, Boolean, Dict, Error, ErrorType,
-    FieldHashfn, Float, Integer, KeySetLink, KeyValuePair, LuaRef, Object, ObjectType,
-    OptionalKeys, String_0,
+    Arena, Array, Boolean, Dict, Error, ErrorType, FieldHashfn, Float, Integer, KeySetLink,
+    KeyValuePair, LuaRef, Object, ObjectType, OptionalKeys, String_0, find_func_t, int32_t,
+    int64_t, key_value_pair, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Buffer, mmbuffer_t,
+    mmfile_t, object, object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer, s_mmfile, s_xdemitcb,
+    s_xdemitconf, s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t,
+    xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub const kErrorTypeValidation: ErrorType = 1;

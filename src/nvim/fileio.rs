@@ -22,13 +22,13 @@ use crate::src::nvim::getchar::{stuff_empty, typebuf_typed};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin, did_check_timestamps, e_interr,
-    e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage, firstbuf,
-    firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite,
-    msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
-    need_wait_return, no_check_timestamps, no_wait_return, p_ar, p_ccv, p_cpo, p_enc, p_fencs,
-    p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode, redraw_cmdline, redraw_tabline,
-    restart_edit, stdin_fd, swap_exists_action, vim_ignored, IObuff, NameBuff, State,
+    IObuff, NameBuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin,
+    did_check_timestamps, e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active,
+    first_tabpage, firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
+    msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
+    need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
+    p_ar, p_ccv, p_cpo, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
+    redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::src::nvim::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
@@ -47,6 +47,7 @@ use crate::src::nvim::message::{
     msg_outtrans, msg_progress, msg_putchar, msg_puts, msg_puts_hl, msg_schedule_semsg, msg_start,
     msg_trunc, semsg, set_keep_msg, smsg,
 };
+use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::option::{
     copy_option_part, default_fileformat, get_fileformat, get_fileformat_force, set_fileformat,
     set_option_direct, set_options_bin, shortmess,
@@ -69,19 +70,29 @@ use crate::src::nvim::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_FullName, vim_ispathsep,
 };
-use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t,
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, __uid_t, aco_save_T, alist_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T,
-    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_22, dict_T, dictvar_S, diff_T, diffblock_S,
-    disptick_T, eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_9,
-    file_buffer_b_wininfo as C2Rust_Unnamed_17, file_buffer_update_callbacks as C2Rust_Unnamed_6,
+    __gid_t, __mode_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
+    __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt,
+    _IO_lock_t, _IO_marker, _IO_wide_data, AdditionalData, AlignTextPos, BoolVarValue,
+    BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_11, CallbackType,
+    ChangedtickDictItem, CheckItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_8, Directory, ExtmarkUndoObject, FILE,
+    FileID, FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, LuaRef,
+    MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, OptIndex, OptInt, OptVal, OptValData, OptValType, QUEUE,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_18, String_0,
+    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window,
+    aco_save_T, alist_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T,
+    bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_22, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
+    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_9, file_buffer_b_wininfo as C2Rust_Unnamed_17,
+    file_buffer_update_callbacks as C2Rust_Unnamed_6,
     file_buffer_update_channels as C2Rust_Unnamed_7, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_12, funccall_T, garray_T, gid_t, handle_T,
     hash_T, hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T,
@@ -94,8 +105,8 @@ pub use crate::src::nvim::types::{
     synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_14,
     u_header_uh_alt_prev as C2Rust_Unnamed_13, u_header_uh_next as C2Rust_Unnamed_16,
-    u_header_uh_prev as C2Rust_Unnamed_15, ufunc_S, ufunc_T, uid_t, uint16_t, uint32_t, uint64_t,
-    uint8_t, uintmax_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work,
+    u_header_uh_prev as C2Rust_Unnamed_15, ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t,
+    uint64_t, uintmax_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work,
     uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb,
     uv_dirent_s, uv_dirent_t, uv_dirent_type_t, uv_file, uv_fs_cb, uv_fs_s, uv_fs_t, uv_fs_type,
     uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type,
@@ -103,25 +114,14 @@ pub use crate::src::nvim::types::{
     uv_loop_t, uv_mutex_t, uv_req_type, uv_rwlock_t, uv_signal_cb, uv_signal_s,
     uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
     uv_stat_t, uv_timespec_t, uv_uid_t, varnumber_T, vim_acl_T, virt_line, visualinfo_T, win_T,
-    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_11,
-    ChangedtickDictItem, CheckItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_8, Directory, ExtmarkUndoObject, FileID,
-    FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, OptIndex, OptInt, OptVal, OptValData, OptValType,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_18, String_0,
-    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
-    FILE, QUEUE,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
     bufIsChanged, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
-extern "C" {
+unsafe extern "C" {
     pub type __dirstream;
     fn closedir(__dirp: *mut DIR) -> ::core::ffi::c_int;
     fn opendir(__name: *const ::core::ffi::c_char) -> *mut DIR;
@@ -4399,7 +4399,7 @@ unsafe extern "C" fn check_for_bom(
     *lenp = len;
     return name;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn shorten_buf_fname(
     mut buf: *mut buf_T,
     mut dirname: *mut ::core::ffi::c_char,
@@ -6004,7 +6004,7 @@ unsafe extern "C" fn vim_closetempdir() {
     closedir(vim_tempdir_dp.get());
     vim_tempdir_dp.set(::core::ptr::null_mut::<DIR>());
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_deltempdir() {
     if (*vim_tempdir.ptr()).is_null() {
         return;
@@ -6019,7 +6019,7 @@ pub unsafe extern "C" fn vim_deltempdir() {
     *ptr_ = NULL;
     let _ = *ptr_;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_gettempdir() -> *mut ::core::ffi::c_char {
     static notfound: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
     if (*vim_tempdir.ptr()).is_null() || !os_isdir(vim_tempdir.get()) {
@@ -6076,7 +6076,7 @@ unsafe extern "C" fn vim_settempdir(mut tempdir: *mut ::core::ffi::c_char) -> bo
     xfree(buf as *mut ::core::ffi::c_void);
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_tempname() -> *mut ::core::ffi::c_char {
     static temp_count: GlobalCell<uint64_t> = GlobalCell::new(0);
     let mut tempdir: *mut ::core::ffi::c_char = vim_gettempdir();
@@ -6184,7 +6184,7 @@ pub unsafe extern "C" fn match_file_list(
     }
     return false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_pat_to_reg_pat(
     mut pat: *const ::core::ffi::c_char,
     mut pat_end: *const ::core::ffi::c_char,

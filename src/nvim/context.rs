@@ -18,15 +18,15 @@ use crate::src::nvim::shada::{
     shada_read_string,
 };
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
+    Arena, Array, BoolVarValue, Boolean, Context, Dict, Error, ErrorType, Float, Integer,
+    KeyDict_exec_opts, KeyValuePair, LuaRef, Object, ObjectType, OptIndex, OptInt, OptVal,
+    OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0,
+    TriState, VarLockStatus, VarType, blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
     int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
     listwatch_S, listwatch_T, object, object_data as C2Rust_Unnamed_0, partial_S, partial_T,
     proftime_T, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T,
-    uint64_t, uint8_t, varnumber_T, Arena, Array, BoolVarValue, Boolean, Context, Dict, Error,
-    ErrorType, Float, Integer, KeyDict_exec_opts, KeyValuePair, LuaRef, Object, ObjectType,
-    OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType,
-    SpecialVarValue, String_0, TriState, VarLockStatus, VarType, QUEUE,
+    uint8_t, uint64_t, varnumber_T,
 };
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

@@ -3,9 +3,9 @@ use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, dy_flags, p_isf, p_isi, p_isp};
 use crate::src::nvim::mbyte::{
-    mb_islower, mb_isupper, mb_ptr2char_adv, mb_tolower, utf8len_tab, utf_char2bytes,
-    utf_char2cells, utf_char2len, utf_class_tab, utf_printable, utf_ptr2cells, utf_ptr2char,
-    utf_ptr2len, utfc_ptr2len,
+    mb_islower, mb_isupper, mb_ptr2char_adv, mb_tolower, utf_char2bytes, utf_char2cells,
+    utf_char2len, utf_class_tab, utf_printable, utf_ptr2cells, utf_ptr2char, utf_ptr2len,
+    utf8len_tab, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{xmalloc, xrealloc, xstrchrnul};
 use crate::src::nvim::option::{get_fileformat, skip_to_option_part};
@@ -14,10 +14,19 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::path_has_wildcard;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
-    file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative,
+    GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, OptInt, QUEUE, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, StringBuilder, Terminal,
+    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
+    WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
+    bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t,
+    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, intmax_t, intptr_t, lcs_chars_T,
@@ -29,18 +38,9 @@ pub use crate::src::nvim::types::{
     syn_time_T, synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, uvarnumber_T, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative,
-    GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12,
-    StringBuilder, Terminal, Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    winopt_T, wline_T, xfmark_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
@@ -946,7 +946,7 @@ pub unsafe extern "C" fn vim_isIDc(mut c: ::core::ffi::c_int) -> bool {
         && c < 0x100 as ::core::ffi::c_int
         && (*g_chartab.ptr())[c as usize] as ::core::ffi::c_int & CT_ID_CHAR != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_iswordc(c: ::core::ffi::c_int) -> bool {
     return vim_iswordc_buf(c, curbuf.get());
 }
@@ -961,15 +961,15 @@ pub unsafe extern "C" fn vim_iswordc_tab(c: ::core::ffi::c_int, chartab: *const 
                 != 0 as ::core::ffi::c_ulonglong) as ::core::ffi::c_int
     } != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool {
     return vim_iswordc_tab(c, &raw mut (*buf).b_chartab as *mut uint64_t);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool {
     return vim_iswordp_buf(p, curbuf.get());
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool {
     let mut c: ::core::ffi::c_int = *p as uint8_t as ::core::ffi::c_int;
     if (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int > 1 as ::core::ffi::c_int {

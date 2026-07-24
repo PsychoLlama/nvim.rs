@@ -15,8 +15,8 @@ use crate::src::nvim::eval::vars::{
     skip_var_list, vars_clear, vars_clear_ext,
 };
 use crate::src::nvim::eval_1::{
-    callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval0, eval1, eval_isnamec,
-    eval_isnamec1, eval_lavars_used, fill_evalarg_from_eap, find_name_end, garbage_collect,
+    callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec, eval_isnamec1,
+    eval_lavars_used, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect,
     get_id_len, get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
     set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
 };
@@ -37,13 +37,13 @@ use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::src::nvim::main::{
-    cmdline_row, curbuf, current_sctx, curwin, debug_backtrace_level, debug_tick, did_emsg,
-    did_throw, do_profiling, e_dictkey, e_invarg2, e_invexpr2, e_invrange, e_missingparen,
-    e_not_callable_type_str, e_str_not_inside_function, e_toofewarg, e_toomanyarg, e_trailing_arg,
-    e_unknown_function_str, e_usingsid, emsg_off, emsg_severe, emsg_skip, ex_nesting_level,
-    got_int, lines_left, msg_row, msg_scroll, need_wait_return, no_wait_return, p_ic, p_mfd,
-    p_verbose, sandbox, trylevel, want_garbage_collect, IObuff, KeyTyped, RedrawingDisabled, Rows,
-    EVALARG_EVALUATE,
+    EVALARG_EVALUATE, IObuff, KeyTyped, RedrawingDisabled, Rows, cmdline_row, curbuf, current_sctx,
+    curwin, debug_backtrace_level, debug_tick, did_emsg, did_throw, do_profiling, e_dictkey,
+    e_invarg2, e_invexpr2, e_invrange, e_missingparen, e_not_callable_type_str,
+    e_str_not_inside_function, e_toofewarg, e_toomanyarg, e_trailing_arg, e_unknown_function_str,
+    e_usingsid, emsg_off, emsg_severe, emsg_skip, ex_nesting_level, got_int, lines_left, msg_row,
+    msg_scroll, need_wait_return, no_wait_return, p_ic, p_mfd, p_verbose, sandbox, trylevel,
+    want_garbage_collect,
 };
 use crate::src::nvim::mbyte::mb_strnicmp;
 use crate::src::nvim::memory::{
@@ -73,13 +73,26 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock,
-    buffblock_T, buffheader_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_20, dict_T, dictitem_T, dictvar_S, disptick_T, eslist_T,
-    eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_26, etype_T, evalarg_T, event_T,
-    exarg, exarg_T, except_T, except_type_T, exception_state_S, exception_state_T, expand_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
-    file_buffer_b_wininfo as C2Rust_Unnamed_12, file_buffer_update_callbacks as C2Rust_Unnamed_1,
+    __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat,
+    AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_6, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Direction, Error, ErrorType, EvalFuncData,
+    EvalFuncDef, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
+    Intersection, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree,
+    MsgpackRpcRequestHandler, Object, ObjectType, OptInt, QUEUE, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal, Timestamp, UIExtension,
+    VarLockStatus, VarType, VimLFunc, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T, blob_T, blobvar_S,
+    blocknr_T, buf_T, buffblock, buffblock_T, buffheader_T, bufstate_T, chunksize_T, cmd_addr_T,
+    cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_20, dict_T, dictitem_T,
+    dictvar_S, disptick_T, eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_26,
+    etype_T, evalarg_T, event_T, exarg, exarg_T, except_T, except_type_T, exception_state_S,
+    exception_state_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_4, file_buffer_b_wininfo as C2Rust_Unnamed_12,
+    file_buffer_update_callbacks as C2Rust_Unnamed_1,
     file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccal_entry, funccal_entry_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_7,
     funccall_T, funcdict_T, funcexe_T, garray_T, handle_T, hash_T, hashitem_T, hashtab_T,
@@ -94,23 +107,11 @@ pub use crate::src::nvim::types::{
     taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header,
     u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9, u_header_uh_alt_prev as C2Rust_Unnamed_8,
     u_header_uh_next as C2Rust_Unnamed_11, u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat, AutoPatCmd,
-    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict,
-    Direction, Error, ErrorType, EvalFuncData, EvalFuncDef, ExtmarkUndoObject, FileID, Float,
-    FloatAnchor, FloatRelative, GridView, Integer, Intersection, KeyValuePair, LineGetter, LuaRef,
-    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, Object, ObjectType, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
-    Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimLFunc, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::ui::ui_has;
-extern "C" {
+unsafe extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_find_len(

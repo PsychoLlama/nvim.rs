@@ -8,12 +8,12 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{abort, memmove};
 use crate::src::nvim::strings::{concat_str, vim_strchr};
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
+    BoolVarValue, LuaRef, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus,
+    VarType, blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
     int32_t, int64_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
     listwatch_T, partial_S, partial_T, proftime_T, queue, scid_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_S, ufunc_T, uint64_t, uint8_t, varnumber_T, BoolVarValue, LuaRef,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
+    typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T,
 };
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;

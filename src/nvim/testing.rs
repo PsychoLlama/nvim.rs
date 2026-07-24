@@ -14,10 +14,10 @@ use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{
-    called_emsg, called_vim_beep, did_emsg, e_cant_read_file_str, emsg_assert_fails_context,
-    emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_on_display, emsg_silent, got_int,
-    in_assert_fails, lines_left, msg_col, need_wait_return, no_wait_return, suppress_errthrow,
-    trylevel, IObuff, Rows,
+    IObuff, Rows, called_emsg, called_vim_beep, did_emsg, e_cant_read_file_str,
+    emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_on_display,
+    emsg_silent, got_int, in_assert_fails, lines_left, msg_col, need_wait_return, no_wait_return,
+    suppress_errthrow, trylevel,
 };
 use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
@@ -27,18 +27,18 @@ use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, auto_event, blob_T,
-    blobvar_S, dict_T, dictitem_T, dictvar_S, estack_T, estack_T_es_info as C2Rust_Unnamed_2,
-    estack_arg_T, etype_T, event_T, except_T, except_type_T, float_T, funccall_S,
+    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
+    ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
+    Dict, Error, ErrorType, EvalFuncData, FILE, Float, Integer, KeyValuePair, LuaRef,
+    MsgpackRpcRequestHandler, Object, ObjectType, QUEUE, ScopeDictDictItem, ScopeType,
+    SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, auto_event, blob_T, blobvar_S,
+    dict_T, dictitem_T, dictvar_S, estack_T, estack_T_es_info as C2Rust_Unnamed_2, estack_arg_T,
+    etype_T, event_T, except_T, except_type_T, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
     int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
     listwatch_S, listwatch_T, msglist, msglist_T, object, object_data as C2Rust_Unnamed, partial_S,
     partial_T, proftime_T, ptrdiff_t, queue, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_S, ufunc_T, uint64_t, uint8_t, varnumber_T, vim_exception,
-    ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    Dict, Error, ErrorType, EvalFuncData, Float, Integer, KeyValuePair, LuaRef,
-    MsgpackRpcRequestHandler, Object, ObjectType, ScopeDictDictItem, ScopeType, SpecialVarValue,
-    String_0, VarLockStatus, VarType, VimVarIndex, _IO_FILE, FILE, QUEUE,
+    typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T, vim_exception,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

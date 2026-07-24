@@ -10,13 +10,27 @@ use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::message::msg_schedule_semsg_multiline;
-use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::r#move::validate_botline_win;
+use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
+    __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
+    BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorPriorityInternal, DecorProvider, DecorProvider_state as C2Rust_Unnamed_13, DecorRange,
+    DecorRange_data as C2Rust_Unnamed_15, DecorRange_data_ui as C2Rust_Unnamed_16, DecorRangeKind,
+    DecorRangeSlot, DecorSignHighlight, DecorState, DecorState_ranges_i as C2Rust_Unnamed_17,
+    DecorState_slots as C2Rust_Unnamed_18, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
+    Dict, Error, ErrorType, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView,
+    Integer, Intersection, KeyValuePair, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, NS, Object, ObjectType, OptInt,
+    QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0,
+    Terminal, Timestamp, TriState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T,
+    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
+    file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair, lcs_chars_T,
@@ -29,23 +43,8 @@ pub use crate::src::nvim::types::{
     time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_7, u_header_uh_alt_prev as C2Rust_Unnamed_6,
     u_header_uh_next as C2Rust_Unnamed_9, u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena,
-    Array, BoolVarValue, Boolean, BufUpdateCallbacks, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorPriorityInternal, DecorProvider,
-    DecorProvider_state as C2Rust_Unnamed_13, DecorRange, DecorRangeKind, DecorRangeSlot,
-    DecorRange_data as C2Rust_Unnamed_15, DecorRange_data_ui as C2Rust_Unnamed_16,
-    DecorSignHighlight, DecorState, DecorState_ranges_i as C2Rust_Unnamed_17,
-    DecorState_slots as C2Rust_Unnamed_18, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
-    Dict, Error, ErrorType, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView,
-    Integer, Intersection, KeyValuePair, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, Object, ObjectType, OptInt,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0,
-    Terminal, Timestamp, TriState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, NS, QUEUE,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, virt_line, visualinfo_T,
+    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

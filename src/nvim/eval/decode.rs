@@ -19,16 +19,16 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, strlen, strncmp};
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t, mpack_sintmax_t,
-    mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_0,
-    mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s,
-    mpack_value_t, mpack_walk_cb, partial_S, partial_T, proftime_T, ptrdiff_t, queue, scid_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint32_t, uint64_t, uint8_t,
-    uvarnumber_T, varnumber_T, BoolVarValue, ListLenSpecials, LuaRef, MessagePackType,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus, VarType, QUEUE,
+    BoolVarValue, ListLenSpecials, LuaRef, MessagePackType, QUEUE, ScopeDictDictItem, ScopeType,
+    SpecialVarValue, VarLockStatus, VarType, blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S,
+    float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, hash_T,
+    hashitem_T, hashtab_T, int32_t, int64_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
+    listwatch_S, listwatch_T, mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t,
+    mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
+    mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
+    mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, partial_S, partial_T, proftime_T,
+    ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T,
+    uint8_t, uint32_t, uint64_t, uvarnumber_T, varnumber_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed = 2;
@@ -1033,7 +1033,7 @@ unsafe extern "C" fn parse_json_number(
     *pp = p;
     return ret;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn json_decode_string(
     buf: *const ::core::ffi::c_char,
     buf_len: size_t,

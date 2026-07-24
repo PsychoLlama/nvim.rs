@@ -25,12 +25,12 @@ use crate::src::nvim::help::help_heuristic;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::src::nvim::main::{
-    cmdmod, curbuf, curtab, curwin, e_invarg, e_listreq, emsg_off, fdo_flags, g_do_tagpreview,
-    g_tag_at_cursor, got_int, jop_flags, keep_help_flag, magic_overruled, msg_col, msg_didout,
-    msg_scroll, msg_scrolled, msg_silent, no_hlsearch, p_cpo, p_enc, p_hf, p_hlg, p_ic, p_scs,
-    p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr, p_verbose, p_ws, postponed_split,
-    postponed_split_flags, sandbox, secure, swb_flags, tc_flags, vim_ignored, Columns, IObuff,
-    KeyTyped, RedrawingDisabled, State,
+    Columns, IObuff, KeyTyped, RedrawingDisabled, State, cmdmod, curbuf, curtab, curwin, e_invarg,
+    e_listreq, emsg_off, fdo_flags, g_do_tagpreview, g_tag_at_cursor, got_int, jop_flags,
+    keep_help_flag, magic_overruled, msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent,
+    no_hlsearch, p_cpo, p_enc, p_hf, p_hlg, p_ic, p_scs, p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr,
+    p_verbose, p_ws, postponed_split, postponed_split_flags, sandbox, secure, swb_flags, tc_flags,
+    vim_ignored,
 };
 use crate::src::nvim::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::src::nvim::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
@@ -42,6 +42,7 @@ use crate::src::nvim::message::{
     msg_outtrans_len, msg_outtrans_one, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
     msg_start, semsg, smsg, verbose_enter, verbose_leave, wait_return,
 };
+use crate::src::nvim::r#move::{set_topline, validate_cursor};
 use crate::src::nvim::option::{copy_option_part, magic_isset, option_set_callback_func};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::fs::{os_fopen, os_path_exists};
@@ -51,16 +52,26 @@ use crate::src::nvim::os::libc::{
     memset, snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
 };
 use crate::src::nvim::path::{
-    path_full_compare, path_has_wildcard, path_tail, simplify_filename, vim_isAbsName, FreeWild,
-    FullName_save,
+    FreeWild, FullName_save, path_full_compare, path_has_wildcard, path_tail, simplify_filename,
+    vim_isAbsName,
 };
-use crate::src::nvim::r#move::{set_topline, validate_cursor};
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, __time_t, alist_T,
+    __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
+    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Direction, DoInRuntimepathCB, ExtmarkUndoObject, FILE,
+    FileComparison, FileID, FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, LuaRef,
+    MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MotionType, OptIndex, OptInt, OptValData, QUEUE,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0,
+    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T,
     auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T,
     cmdidx_T, cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T,
     dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, eslist_T, eslist_elem, event_T, exarg,
@@ -80,27 +91,16 @@ pub use crate::src::nvim::types::{
     tabpage_S, tabpage_T, taggy_T, tagname_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, wline_T, xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Direction, DoInRuntimepathCB,
-    ExtmarkUndoObject, FileComparison, FileID, FloatAnchor, FloatRelative, GridView, Intersection,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MotionType, OptIndex, OptInt, OptValData,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0,
-    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
-    FILE, QUEUE,
+    winopt_T, wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, tabpage_index, win_close, win_enter,
     win_split, win_valid,
 };
-extern "C" {
+unsafe extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_lookup(

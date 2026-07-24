@@ -29,10 +29,10 @@ use crate::src::nvim::grid::schar_get_adv;
 use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr, hl_get_term_attr};
 use crate::src::nvim::highlight_group::name_to_color;
 use crate::src::nvim::main::{
-    buffer_handles, clear_cmdline, exiting, got_int, main_loop, mapped_ctrl_c, mod_mask, mouse_col,
-    mouse_grid, mouse_row, must_redraw, p_bg, redraw_cmdline, redraw_mode, restart_edit,
-    stop_insert_mode, tpf_flags, vgetc_char, vgetc_mod_mask, window_handles, KeyTyped,
-    RedrawingDisabled, State,
+    KeyTyped, RedrawingDisabled, State, buffer_handles, clear_cmdline, exiting, got_int, main_loop,
+    mapped_ctrl_c, mod_mask, mouse_col, mouse_grid, mouse_row, must_redraw, p_bg, redraw_cmdline,
+    redraw_mode, restart_edit, stop_insert_mode, tpf_flags, vgetc_char, vgetc_mod_mask,
+    window_handles,
 };
 use crate::src::nvim::map::{mh_delete_ptr_t, mh_get_int, mh_get_ptr_t, mh_put_ptr_t};
 use crate::src::nvim::mbyte::{mb_check_adjust_col, utf_ptr2char, utf_ptr2len};
@@ -48,28 +48,47 @@ use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle
 use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T,
-    chunksize_T, cmd_addr_T, cmdarg_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_34, cursorentry_T, dict_T, dictvar_S, diff_T, diffblock_S,
-    disptick_T, dobuf_action_values, dobuf_start_values, eslist_T, eslist_elem, event_T, exarg,
-    exarg_T, extmark_undo_vec_t, fcs_chars_T, float_T, fmark_T, fmarkv_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_10, funccall_T, garray_T, handle_T, hash_T, hashitem_T,
-    hashtab_T, infoptr_T, int16_t, int32_t, int64_t, internal_proc_cb, intptr_t, key_extra,
-    key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, llpos_T, loop_0, loop_0_children as C2Rust_Unnamed_25, lpos_T, mapblock,
-    mapblock_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, multiqueue, object,
-    object_data as C2Rust_Unnamed, oparg_T, partial_S, partial_T, pos_T, pos_save_T, proc,
-    proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t,
-    qf_info_S, qf_info_T, queue, reg_extmatch_T, regmmatch_T, regprog, regprog_T, rstream, sattr_T,
-    save_v_event_T, schar_T, scid_T, sctx_T, size_t, ssize_t, state_check_callback,
-    state_execute_callback, stream, stream_close_cb, stream_read_cb,
-    stream_uv as C2Rust_Unnamed_27, stream_write_cb, syn_state,
+    __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
+    BufUpdateCallbacks, Buffer, CMD_index, Callback, Callback_data as C2Rust_Unnamed_9,
+    CallbackType, ChangedtickDictItem, CursorShape, DecorExt, DecorHighlightInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
+    Error, ErrorType, Event, ExtmarkOp, ExtmarkUndoObject, FileID, Float, FloatAnchor,
+    FloatRelative, GridView, HlAttrs, Integer, Intersection, KeyValuePair, LineGetter, Loop,
+    LuaRef, MHPutStatus, MTKey, MTNode, MTPos, Map_int_ptr_t, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkAdjustMode,
+    MarkTree, MotionType, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
+    OptValType, Proc, ProcType, PutCallback, QUEUE, RStream, RgbValue, ScopeDictDictItem,
+    ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int, Set_int64_t, Set_ptr_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, String_0, StringBuilder,
+    TerminalOptions, TimeWatcher, Timestamp, TriState, VTerm, VTermAttr, VTermColor,
+    VTermColor_indexed as C2Rust_Unnamed_5, VTermColor_rgb as C2Rust_Unnamed_6, VTermDamageSize,
+    VTermKey, VTermModifier, VTermOutputCallback, VTermPos, VTermProp, VTermRect, VTermScreen,
+    VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks,
+    VTermSelectionMask, VTermState, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
+    VTermValue, VTermValueType, VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinSplit, WinStyle, Window, alist_T, argv_callback,
+    auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T, chunksize_T, cmd_addr_T,
+    cmdarg_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_34, cursorentry_T,
+    dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, dobuf_action_values, dobuf_start_values,
+    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, float_T,
+    fmark_T, fmarkv_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_10, funccall_T, garray_T,
+    handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
+    internal_proc_cb, intptr_t, key_extra, key_value_pair, lcs_chars_T, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, loop_0,
+    loop_0_children as C2Rust_Unnamed_25, lpos_T, mapblock, mapblock_T, memfile_T, memline_T,
+    mfdirty_T, mtnode_inner_s, mtnode_s, multiqueue, object, object_data as C2Rust_Unnamed,
+    oparg_T, partial_S, partial_T, pos_T, pos_save_T, proc, proc_exit_cb, proc_state_cb,
+    proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue,
+    reg_extmatch_T, regmmatch_T, regprog, regprog_T, rstream, sattr_T, save_v_event_T, schar_T,
+    scid_T, sctx_T, size_t, ssize_t, state_check_callback, state_execute_callback, stream,
+    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_27, stream_write_cb, syn_state,
     syn_state_sst_union as C2Rust_Unnamed_8, syn_time_T, synblock_T, synstate_T, taggy_T,
     terminal_close_cb, terminal_read_pause_cb, terminal_resize_cb, terminal_resume_cb,
     terminal_write_cb, time_cb, time_t, time_watcher, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_12,
     u_header_uh_alt_prev as C2Rust_Unnamed_11, u_header_uh_next as C2Rust_Unnamed_14,
-    u_header_uh_prev as C2Rust_Unnamed_13, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_13, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
     uv_async_s_u as C2Rust_Unnamed_22, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
     uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
@@ -82,26 +101,7 @@ pub use crate::src::nvim::types::{
     uv_signal_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_26, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_29, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_23, uv_timer_s_u as C2Rust_Unnamed_24, uv_timer_t,
-    varnumber_T, vim_state, virt_line, visualinfo_T, winopt_T, wline_T, xfmark_T, AdditionalData,
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_9, ChangedtickDictItem, CursorShape,
-    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, Event, ExtmarkOp,
-    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HlAttrs, Integer,
-    Intersection, KeyValuePair, LineGetter, Loop, LuaRef, MHPutStatus, MTKey, MTNode, MTPos,
-    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkAdjustMode, MarkTree, MotionType, MultiQueue, Object, ObjectType,
-    OptIndex, OptInt, OptVal, OptValData, OptValType, Proc, ProcType, PutCallback, RStream,
-    RgbValue, ScopeDictDictItem, ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int,
-    Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, StringBuilder, String_0,
-    TerminalOptions, TimeWatcher, Timestamp, TriState, VTerm, VTermAttr, VTermColor,
-    VTermColor_indexed as C2Rust_Unnamed_5, VTermColor_rgb as C2Rust_Unnamed_6, VTermDamageSize,
-    VTermKey, VTermModifier, VTermOutputCallback, VTermPos, VTermProp, VTermRect, VTermScreen,
-    VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks,
-    VTermSelectionMask, VTermState, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
-    VTermValue, VTermValueType, VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinSplit, WinStyle, Window, QUEUE,
+    varnumber_T, vim_state, virt_line, visualinfo_T, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_mode_info_set, vim_beep,
@@ -137,7 +137,7 @@ use crate::src::nvim::window::may_trigger_win_scrolled_resized;
 // The copies are layout-identical to the canonical definitions (proven by
 // the 5a parity suite); the nominal decl/decl mismatch is expected.
 #[allow(clashing_extern_declarations)]
-extern "C" {
+unsafe extern "C" {
     fn is_aucmd_win(win: *mut win_T) -> bool;
     fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
     fn aucmd_restbuf(aco: *mut aco_save_T);
@@ -3278,7 +3278,7 @@ unsafe extern "C" fn term_may_alloc_scrollback(
             as *mut *mut ScrollbackLine;
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_alloc(
     mut buf: *mut buf_T,
     mut opts: TerminalOptions,
@@ -3372,7 +3372,7 @@ pub unsafe extern "C" fn terminal_alloc(
     (*term).old_height = 1 as ::core::ffi::c_int;
     return term;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T) {
     let mut term: *mut Terminal = *termpp;
     '_c2rust_label: {
@@ -3491,7 +3491,7 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
         i += 1;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_close(
     mut termpp: *mut *mut Terminal,
     mut status: ::core::ffi::c_int,
@@ -3628,7 +3628,7 @@ unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi
         redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
     if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
         multiqueue_put_event(
@@ -3657,7 +3657,7 @@ pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspend
     }
     (*term).suspended = suspended;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
     if (*term).closed {
         return;
@@ -4212,7 +4212,7 @@ unsafe extern "C" fn terminal_execute(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
     let mut term: *mut Terminal = *termpp;
     let mut buf: *mut buf_T = map_get_int_ptr_t(
@@ -4337,7 +4337,7 @@ unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     }
     return tpf_flags.get() & flag != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
     if (*term).streamed_paste as ::core::ffi::c_int != streamed as ::core::ffi::c_int {
         if streamed {
@@ -4433,7 +4433,7 @@ unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
     refresh_terminal((*buf).terminal);
     unblock_autocmds();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_receive(
     mut term: *mut Terminal,
     mut data: *const ::core::ffi::c_char,
@@ -4551,7 +4551,7 @@ unsafe extern "C" fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> :
         _ => return HL_UNDERLINE as ::core::ffi::c_int,
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_get_line_attributes(
     mut term: *mut Terminal,
     mut _wp: *mut win_T,
@@ -4708,19 +4708,19 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
         col += 1;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_buf(mut term: *const Terminal) -> Buffer {
     return (*term).buf_handle as Buffer;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_running(mut term: *const Terminal) -> bool {
     return !(*term).closed;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_suspended(mut term: *const Terminal) -> bool {
     return (*term).suspended;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark: bool) {
     if !(*term).theme_updates {
         return;
@@ -5992,7 +5992,7 @@ unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T)
     );
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn on_scrollback_option_changed(mut term: *mut Terminal) {
     if !(*term).sb_buffer.is_null() {
         refresh_terminal(term);

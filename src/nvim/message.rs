@@ -11,8 +11,8 @@ use crate::src::nvim::drawscreen::{redraw_all_later, redraw_later, set_must_redr
 use crate::src::nvim::eval::typval::tv_clear;
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
 use crate::src::nvim::eval_1::callback_call;
-use crate::src::nvim::event::multiqueue::multiqueue_process_events;
 use crate::src::nvim::event::r#loop::loop_schedule_deferred;
+use crate::src::nvim::event::multiqueue::multiqueue_process_events;
 use crate::src::nvim::ex_docmd::do_sleep;
 use crate::src::nvim::ex_eval::cause_errthrow;
 use crate::src::nvim::fileio::check_timestamps;
@@ -34,12 +34,12 @@ use crate::src::nvim::input::{get_keystroke, prompt_for_input};
 use crate::src::nvim::keycodes::get_special_key_name;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    allow_keys, called_emsg, capture_ga, clear_cmdline, cmd_silent, cmdline_row,
-    cmdline_was_last_drawn, cmdmod, cmdmsg_rl, curbuf, curwin, default_grid, did_emsg,
-    did_wait_return, do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode,
-    emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
-    emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting,
-    exmode_active, full_screen, global_busy, got_int, headless_mode, hl_attr_active,
+    Columns, IObuff, KeyTyped, Rows, State, allow_keys, called_emsg, capture_ga, clear_cmdline,
+    cmd_silent, cmdline_row, cmdline_was_last_drawn, cmdmod, cmdmsg_rl, curbuf, curwin,
+    default_grid, did_emsg, did_wait_return, do_redraw, e_intern2, e_invarg, e_notopen,
+    embedded_mode, emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg,
+    emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval,
+    exiting, exmode_active, full_screen, global_busy, got_int, headless_mode, hl_attr_active,
     in_assert_fails, info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, mode_displayed,
     msg_buf, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite,
     msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid, msg_grid_adj, msg_grid_pos,
@@ -49,11 +49,11 @@ use crate::src::nvim::main::{
     no_wait_return, nvim_testing, on_print, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report,
     p_verbose, quit_more, rdb_flags, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
     redrawing_cmdline, reg_recording, resize_events, sc_col, scriptout, silent_mode, skip_redraw,
-    vgetc_busy, vgetc_char, vgetc_mod_mask, Columns, IObuff, KeyTyped, Rows, State,
+    vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::src::nvim::mbyte::{
-    mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf8len_tab, utf_char2bytes,
-    utf_char2cells, utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,
+    utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_ptr2len,
     utfc_ptr2len_len,
 };
 use crate::src::nvim::memory::{
@@ -74,15 +74,28 @@ use crate::src::nvim::register::write_reg_contents;
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
-    __off64_t, __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
-    __pthread_rwlock_arch_t, __time_t, __va_list_tag, alist_T, argv_callback, auto_event, bhdr_T,
-    blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T,
-    colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_29, dict_T, dictvar_S, disptick_T,
-    eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_38, estack_arg_T, etype_T,
-    event_T, exarg, exarg_T, except_T, except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_15, file_buffer_b_wininfo as C2Rust_Unnamed_23,
-    file_buffer_update_callbacks as C2Rust_Unnamed_12,
+    __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
+    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __va_list_tag,
+    _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, AdditionalData, AlignTextPos,
+    Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks,
+    CMD_index, Callback, Callback_data as C2Rust_Unnamed_17, CallbackType, ChangedtickDictItem,
+    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_14, Dict, Error, ErrorType, Event, ExtmarkUndoObject,
+    FILE, FileID, Float, FloatAnchor, FloatRelative, GridView, HlMessage, HlMessageChunk, Integer,
+    Intersection, KeyDict_echo_opts, KeyValuePair, LineGetter, Loop, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, MessageData, MultiQueue, Object, ObjectType, OptInt, OptionalKeys, Proc, ProcType,
+    QUEUE, RStream, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream, String_0, Terminal, Timestamp,
+    UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, argv_callback,
+    auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T,
+    cmdidx_T, cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_29, dict_T,
+    dictvar_S, disptick_T, eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_38,
+    estack_arg_T, etype_T, event_T, exarg, exarg_T, except_T, except_type_T, extmark_undo_vec_t,
+    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_15,
+    file_buffer_b_wininfo as C2Rust_Unnamed_23, file_buffer_update_callbacks as C2Rust_Unnamed_12,
     file_buffer_update_channels as C2Rust_Unnamed_13, float_T, flush_buffers_T, fmark_T, fmarkv_T,
     frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_18, funccall_T, garray_T,
     handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
@@ -99,7 +112,7 @@ pub use crate::src::nvim::types::{
     terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_20, u_header_uh_alt_prev as C2Rust_Unnamed_19,
     u_header_uh_next as C2Rust_Unnamed_22, u_header_uh_prev as C2Rust_Unnamed_21, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
     uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t,
     uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
@@ -112,20 +125,7 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, va_list,
     varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd,
-    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_17, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_14, Dict,
-    Error, ErrorType, Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, HlMessage, HlMessageChunk, Integer, Intersection, KeyDict_echo_opts, KeyValuePair,
-    LineGetter, Loop, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MessageData,
-    MultiQueue, Object, ObjectType, OptInt, OptionalKeys, Proc, ProcType, RStream,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_24, Stream,
-    String_0, Terminal, Timestamp, UIExtension, VarLockStatus, VarType, VimVarIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE,
-    FILE, QUEUE,
+    wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -133,7 +133,7 @@ use crate::src::nvim::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::src::nvim::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-extern "C" {
+unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
@@ -1430,7 +1430,7 @@ static confirm_msg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static confirm_buttons: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> =
     GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
 static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> =
@@ -1602,7 +1602,7 @@ pub unsafe extern "C" fn verb_msg(mut s: *const ::core::ffi::c_char) -> ::core::
     verbose_leave();
     return n;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn msg(mut s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool {
     return msg_keep(s, hl_id, false_0 != 0, false_0 != 0);
 }
@@ -2004,7 +2004,7 @@ pub unsafe extern "C" fn msg_strtrunc(
     }
     return buf;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn trunc_string(
     mut s: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,
@@ -2465,7 +2465,7 @@ pub unsafe extern "C" fn emsg_multiline(
     msg_ext_skip_flush.set(save_msg_skip_flush);
     return rv != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn emsg(mut s: *const ::core::ffi::c_char) -> bool {
     return emsg_multiline(
         s,

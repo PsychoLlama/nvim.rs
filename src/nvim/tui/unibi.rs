@@ -96,7 +96,7 @@ impl Term {
         self.ext_bools
             .iter()
             .zip(&self.ext_bool_names)
-            .filter(|(&set, _)| set)
+            .filter(|&(&set, _)| set)
             .map(|(_, name)| name.as_c_str())
     }
 
@@ -119,21 +119,13 @@ fn ru16(p: &[u8], off: usize) -> usize {
 /// 0x7fff and read as -1.
 fn short16(p: &[u8], off: usize) -> i32 {
     let n = ru16(p, off);
-    if n <= 0x7fff {
-        n as i32
-    } else {
-        -1
-    }
+    if n <= 0x7fff { n as i32 } else { -1 }
 }
 
 /// `get_int32`: same top-bit rule for the 32-bit number format.
 fn int32(p: &[u8], off: usize) -> i32 {
     let n = u32::from_le_bytes([p[off], p[off + 1], p[off + 2], p[off + 3]]);
-    if n <= 0x7fff_ffff {
-        n as i32
-    } else {
-        -1
-    }
+    if n <= 0x7fff_ffff { n as i32 } else { -1 }
 }
 
 /// A NUL-terminated string starting at `off` in `table`, whose final byte
@@ -342,7 +334,7 @@ fn try_file(path: &Path) -> Lookup {
                 std::io::ErrorKind::NotFound => Lookup::NotFound,
                 std::io::ErrorKind::PermissionDenied => Lookup::Denied,
                 _ => Lookup::Abort,
-            }
+            };
         }
     };
     let mut buf = [0u8; MAX_BUF];

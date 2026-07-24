@@ -1,15 +1,15 @@
 use crate::src::nvim::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::lua::ffi::{
-    luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_checknumber, luaL_checkudata,
-    luaL_error, luaL_newmetatable, luaL_ref, luaL_register, luaL_unref, lua_concat,
-    lua_createtable, lua_error, lua_getfenv, lua_getfield, lua_gettop, lua_isstring,
+    lua_concat, lua_createtable, lua_error, lua_getfenv, lua_getfield, lua_gettop, lua_isstring,
     lua_newuserdata, lua_objlen, lua_pcall, lua_pushboolean, lua_pushcclosure, lua_pushinteger,
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawgeti,
     lua_rawseti, lua_setfenv, lua_setfield, lua_setmetatable, lua_settop, lua_toboolean,
-    lua_tointeger, lua_tolstring, lua_touserdata, lua_type,
+    lua_tointeger, lua_tolstring, lua_touserdata, lua_type, luaL_argerror, luaL_checkinteger,
+    luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error, luaL_newmetatable, luaL_ref,
+    luaL_register, luaL_unref,
 };
-use crate::src::nvim::main::{buffer_handles, tslua_query_parse_count, IObuff};
+use crate::src::nvim::main::{IObuff, buffer_handles, tslua_query_parse_count};
 use crate::src::nvim::map::{
     map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_cstr_t, mh_get_int,
 };
@@ -23,15 +23,25 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::vim_snprintf;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, cstr_t, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative,
+    GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, Map_cstr_t_ptr_t, Map_int_ptr_t,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_cstr_t, Set_int,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    cstr_t, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T, linenr_T, list_T,
-    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T, luaL_Reg,
-    lua_CFunction, lua_Integer, lua_Number, lua_State, mapblock, mapblock_T, match_T, matchitem,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T, lua_CFunction,
+    lua_Integer, lua_Number, lua_State, luaL_Reg, mapblock, mapblock_T, match_T, matchitem,
     matchitem_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, partial_S, partial_T,
     pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
     regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, syn_state,
@@ -39,20 +49,10 @@ pub use crate::src::nvim::types::{
     time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_8, u_header_uh_alt_prev as C2Rust_Unnamed_7,
     u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, uv_lib_t, varnumber_T, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData,
-    AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2,
-    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_cstr_t_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_int_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, OptInt, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_cstr_t, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal,
-    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv_lib_t, varnumber_T, virt_line,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-extern "C" {
+unsafe extern "C" {
     pub type TSLanguage;
     pub type TSParser;
     pub type TSTree;

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Classify every `#[no_mangle]` export by who actually needs the symbol.
+"""Classify every `#[unsafe(no_mangle)]` export by who actually needs the symbol.
 
 The transpiled code exports ~6k symbols with C ABI, but only a fraction have
-consumers that resolve them *by name*. The rest keep `#[no_mangle]
+consumers that resolve them *by name*. The rest keep `#[unsafe(no_mangle)]
 extern "C"` purely by inertia and are candidates for real Rust signatures in
 later migration phases. This script writes the ledger that tells the two
 apart (metrics/abi-ledger.jsonl, one record per export, sorted by symbol —
@@ -71,19 +71,19 @@ TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def collect_exports():
-    """name -> (kind, repo-relative file) for every #[no_mangle] item."""
+    """name -> (kind, repo-relative file) for every #[unsafe(no_mangle)] item."""
     exports = {}
     for path in sorted(ROOT.glob("src/**/*.rs")):
         lines = path.read_text().splitlines()
         for i, line in enumerate(lines):
-            if line.strip() != "#[no_mangle]":
+            if line.strip() != "#[unsafe(no_mangle)]":
                 continue
             decl = lines[i + 1] if i + 1 < len(lines) else ""
             m = EXPORT_RE.match(decl)
             if not m:
                 sys.exit(
                     f"abi-ledger: {path}:{i + 2}: unrecognized declaration "
-                    f"after #[no_mangle]: {decl!r}\n"
+                    f"after #[unsafe(no_mangle)]: {decl!r}\n"
                     "(teach abi-ledger.py the new shape)"
                 )
             name = m.group(2)

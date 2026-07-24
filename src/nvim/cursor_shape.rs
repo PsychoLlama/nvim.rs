@@ -4,13 +4,13 @@ use crate::src::nvim::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
 
-use crate::src::nvim::main::{finish_op, p_guicursor, p_sel, State, VIsual_active};
+use crate::src::nvim::main::{State, VIsual_active, finish_op, p_guicursor, p_sel};
 use crate::src::nvim::os::libc::{strlen, strncasecmp};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    cursorentry_T, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
     Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0,
+    ObjectType, String_0, cursorentry_T, int64_t, key_value_pair, object,
+    object_data as C2Rust_Unnamed, size_t, uint8_t,
 };
 use crate::src::nvim::ui::ui_mode_info_set;
 pub const kObjectTypeTabpage: ObjectType = 10;

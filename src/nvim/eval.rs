@@ -10,7 +10,7 @@ use crate::src::nvim::eval::encode::{encode_list_write, encode_tv2echo, encode_t
 use crate::src::nvim::eval::executor::eexe_mod_op;
 use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::typval::{
-    callback_free, callback_put, tv2bool, tv_blob_alloc, tv_blob_alloc_ret, tv_blob_check_index,
+    callback_free, callback_put, tv_blob_alloc, tv_blob_alloc_ret, tv_blob_check_index,
     tv_blob_check_range, tv_blob_copy, tv_blob_equal, tv_blob_set_append, tv_blob_set_range,
     tv_blob_slice_or_index, tv_blob_unref, tv_check_lock, tv_check_num, tv_check_str, tv_clear,
     tv_copy, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_equal, tv_dict_find,
@@ -23,7 +23,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_check_range_index_one, tv_list_check_range_index_two, tv_list_concat, tv_list_copy,
     tv_list_equal, tv_list_find, tv_list_find_nr, tv_list_free, tv_list_free_contents,
     tv_list_free_list, tv_list_join, tv_list_slice_or_index, tv_list_unref, tv_list_watch_add,
-    tv_list_watch_remove, value_check_lock,
+    tv_list_watch_remove, tv2bool, value_check_lock,
 };
 use crate::src::nvim::eval::userfunc::{
     call_func, call_simple_func, call_simple_luafunc, deref_func_name, eval_fname_script,
@@ -59,17 +59,16 @@ use crate::src::nvim::lua::executor::{
     nlua_call_ref, nlua_is_deferred_safe, nlua_is_table_from_lua, nlua_register_table_as_callable,
 };
 use crate::src::nvim::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, called_emsg, channels, curbuf,
-    current_sctx, curtab, curwin, did_emsg, did_throw, do_profiling, e_cannot_mod,
-    e_command_too_recursive, e_dictkey, e_dictkey_len, e_fast_api_disabled, e_illvar, e_invalblob,
-    e_invalid_value_for_blob_nr, e_invarg, e_invarg2, e_invargNval, e_invchan, e_invchanjob,
-    e_invexpr2, e_letwrong, e_missingparen, e_nobufnr, e_not_callable_type_str,
-    e_stray_closing_curly_str, e_trailing_arg, e_using_float_as_string, empty_string_option,
-    emsg_off, emsg_severe, emsg_skip, first_tabpage, firstbuf, firstwin, force_abort,
-    garbage_collect_at_exit, got_int, line_msg, main_loop, may_garbage_collect, msg_didout,
-    msg_ext_skip_verbose, need_clr_eos, p_cpo, p_ic, p_lpl, p_mfd, p_verbose,
-    provider_call_nesting, provider_caller_scope, sandbox, textlock, want_garbage_collect, VIsual,
-    VIsual_active, EVALARG_EVALUATE,
+    EVALARG_EVALUATE, VIsual, VIsual_active, autocmd_bufnr, autocmd_fname, autocmd_fname_full,
+    autocmd_match, called_emsg, channels, curbuf, current_sctx, curtab, curwin, did_emsg,
+    did_throw, do_profiling, e_cannot_mod, e_command_too_recursive, e_dictkey, e_dictkey_len,
+    e_fast_api_disabled, e_illvar, e_invalblob, e_invalid_value_for_blob_nr, e_invarg, e_invarg2,
+    e_invargNval, e_invchan, e_invchanjob, e_invexpr2, e_letwrong, e_missingparen, e_nobufnr,
+    e_not_callable_type_str, e_stray_closing_curly_str, e_trailing_arg, e_using_float_as_string,
+    empty_string_option, emsg_off, emsg_severe, emsg_skip, first_tabpage, firstbuf, firstwin,
+    force_abort, garbage_collect_at_exit, got_int, line_msg, main_loop, may_garbage_collect,
+    msg_didout, msg_ext_skip_verbose, need_clr_eos, p_cpo, p_ic, p_lpl, p_mfd, p_verbose,
+    provider_call_nesting, provider_caller_scope, sandbox, textlock, want_garbage_collect,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mark::{mark_get, mark_global_iter};
@@ -87,6 +86,7 @@ use crate::src::nvim::message::{
     msg_start, semsg, smsg, verb_msg, verbose_enter, verbose_enter_scroll, verbose_leave,
     verbose_leave_scroll,
 };
+use crate::src::nvim::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::src::nvim::ops::set_ref_in_opfunc;
 use crate::src::nvim::option::{
     find_option_end, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
@@ -104,7 +104,6 @@ use crate::src::nvim::os::shell::{
 };
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::quickfix::set_ref_in_quickfix;
-use crate::src::nvim::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::src::nvim::register::{get_reg_contents, op_global_reg_iter};
 use crate::src::nvim::runtime::{
     exestack, get_scriptname, script_autoload, script_is_lua, sourcing_a_script,
@@ -113,10 +112,27 @@ use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave}
 use crate::src::nvim::tag::set_ref_in_tagfunc;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, __uid_t, alist_T, aucmdwin_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T,
-    buf_T, bufstate_T, caller_scope, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, consumed_blk,
-    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_34, dict_T, dictitem_T, dictvar_S, diff_T,
-    diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
+    __time_t, __uid_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, ArgvFunc,
+    Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index,
+    Callback, Callback_data as C2Rust_Unnamed_20, CallbackReader, CallbackType,
+    ChangedtickDictItem, Channel, Channel_stream as C2Rust_Unnamed_37, ChannelCallFrame,
+    ChannelStreamType, ClientType, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_17, Dict, DictWatcher, Direction, Error,
+    ErrorType, EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
+    GRegFlags, GridView, Integer, InternalState, Intersection, KeyValuePair, LibuvProc, LineGetter,
+    ListLenSpecials, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkGet, MarkTree,
+    MotionType, MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal,
+    OptValData, OptValType, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE,
+    RStream, RemoteUI, RpcState, RpcState_call_stack as C2Rust_Unnamed_36, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StderrState,
+    StdioPair, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_27, Stream,
+    String_0, Terminal, TimeWatcher, Timestamp, TriState, UIExtension, Unpacker, VarLockStatus,
+    VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, alist_T, aucmdwin_T, auto_event, bhdr_T, blob_T, blobvar_S,
+    blocknr_T, buf_T, bufstate_T, caller_scope, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T,
+    consumed_blk, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_34, dict_T, dictitem_T, dictvar_S,
+    diff_T, diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
     estack_T_es_info as C2Rust_Unnamed_42, etype_T, evalarg_T, event_T, exarg, exarg_T, except_T,
     except_type_T, expand_T, exprtype_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_18, file_buffer_b_wininfo as C2Rust_Unnamed_26,
@@ -139,7 +155,7 @@ pub use crate::src::nvim::types::{
     typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_23, u_header_uh_alt_prev as C2Rust_Unnamed_22,
     u_header_uh_next as C2Rust_Unnamed_25, u_header_uh_prev as C2Rust_Unnamed_24, ufunc_S, ufunc_T,
-    uid_t, uint16_t, uint32_t, uint64_t, uint8_t, undo_object, uv__io_cb, uv__io_s, uv__io_t,
+    uid_t, uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t,
     uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_4, uv_async_t,
     uv_buf_t, uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb,
     uv_file, uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_1, uv_handle_t, uv_handle_type,
@@ -156,28 +172,10 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_9, uv_timer_s_u as C2Rust_Unnamed_10, uv_timer_t, uv_uid_t,
     uvarnumber_T, var_flavour_T, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T,
     win_T, window_S, wininfo_S, winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T,
-    AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, ArgvFunc, Array, AutoPat,
-    AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
-    CallbackReader, CallbackType, Callback_data as C2Rust_Unnamed_20, ChangedtickDictItem, Channel,
-    ChannelCallFrame, ChannelStreamType, Channel_stream as C2Rust_Unnamed_37, ClientType, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_17, Dict, DictWatcher, Direction, Error, ErrorType,
-    EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GRegFlags,
-    GridView, Integer, InternalState, Intersection, KeyValuePair, LibuvProc, LineGetter,
-    ListLenSpecials, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkGet, MarkTree, MotionType,
-    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
-    OptValType, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemoteUI,
-    RpcState, RpcState_call_stack as C2Rust_Unnamed_36, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StderrState, StdioPair,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_27, Stream, String_0, Terminal,
-    TimeWatcher, Timestamp, TriState, UIExtension, Unpacker, VarLockStatus, VarType, VimVarIndex,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, QUEUE,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::u_clearallandblockfree;
-extern "C" {
+unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_35>;
     fn hash_init(ht: *mut hashtab_T);
     fn vim_regsub(
@@ -194,7 +192,7 @@ extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
-        -> bool;
+    -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
@@ -4071,7 +4069,7 @@ pub unsafe extern "C" fn clear_evalarg(mut evalarg: *mut evalarg_T, mut eap: *mu
         (*evalarg).eval_tofree = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn eval0(
     mut arg: *mut ::core::ffi::c_char,
     mut rettv: *mut typval_T,

@@ -2,10 +2,10 @@ use crate::src::nvim::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
 use crate::src::nvim::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
+use crate::src::nvim::event::r#loop::loop_poll_events;
 use crate::src::nvim::event::multiqueue::{
     multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
 };
-use crate::src::nvim::event::r#loop::loop_poll_events;
 use crate::src::nvim::event::rstream::rstream_may_close;
 use crate::src::nvim::event::stream::{stream_init, stream_may_close};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -24,15 +24,17 @@ use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, argv_callback, dict_T, dictvar_S, gid_t, hash_T, hashitem_T, hashtab_T, int64_t,
-    internal_proc_cb, intptr_t, loop_0, loop_0_children as C2Rust_Unnamed_13, multiqueue, proc,
-    proc_exit_cb, proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue, rstream, size_t,
-    ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_14,
-    stream_write_cb, uid_t, uint16_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
-    uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t,
-    uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file,
-    uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type,
-    uv_idle_cb, uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
+    __uid_t, Event, LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, QUEUE, RStream,
+    ScopeType, Stream, VarLockStatus, argv_callback, dict_T, dictvar_S, gid_t, hash_T, hashitem_T,
+    hashtab_T, int64_t, internal_proc_cb, intptr_t, loop_0, loop_0_children as C2Rust_Unnamed_13,
+    multiqueue, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue,
+    rstream, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
+    stream_uv as C2Rust_Unnamed_14, stream_write_cb, uid_t, uint8_t, uint16_t, uint64_t, uv__io_cb,
+    uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
+    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
+    uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t, uv_handle_s,
+    uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
+    uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
     uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_process_options_s,
     uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_11, uv_process_t,
@@ -43,8 +45,7 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    winsize, Event, LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream,
-    ScopeType, Stream, VarLockStatus, QUEUE,
+    winsize,
 };
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

@@ -7,12 +7,12 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
 use crate::src::nvim::channel::channel_close;
 use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::r#loop::loop_poll_events;
 use crate::src::nvim::event::multiqueue::{
     event_create_oneshot, multiqueue_empty, multiqueue_new_child, multiqueue_process_events,
     multiqueue_put_event,
 };
 use crate::src::nvim::event::proc::exit_on_closed_chan;
-use crate::src::nvim::event::r#loop::loop_poll_events;
 use crate::src::nvim::event::rstream::rstream_start;
 use crate::src::nvim::event::wstream::{
     wstream_new_buffer, wstream_release_wbuffer, wstream_write,
@@ -25,8 +25,8 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::memory::{
-    alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree, xmalloc,
-    xrealloc, ARENA_EMPTY,
+    ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree,
+    xmalloc, xrealloc,
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{
@@ -37,10 +37,17 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, snprintf};
 use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T,
-    hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T, list_T,
-    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
+    __uid_t, ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
+    Callback_data as C2Rust_Unnamed_0, CallbackReader, CallbackType, ChannelCallFrame, ChannelPart,
+    ChannelStreamType, ClientType, Dict, Error, ErrorType, Event, Float, GridLineEvent, Integer,
+    InternalState, KeyValuePair, LibuvProc, Loop, LuaRef, Map_uint64_t_ptr_t, MapHash, MessageType,
+    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, PackerBuffer, PackerBufferFlush,
+    Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, ScopeDictDictItem, ScopeType, Set_uint64_t,
+    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler,
+    VarLockStatus, VarType, WBuffer, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T,
+    dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T,
+    gid_t, hash_T, hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb, key_value_pair,
+    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
     loop_0_children as C2Rust_Unnamed_10, mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t,
     mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
     mpack_token_s_data as C2Rust_Unnamed_20, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
@@ -49,7 +56,7 @@ pub use crate::src::nvim::types::{
     proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, scid_T,
     sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
     stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T, typval_vval_union,
-    ufunc_S, ufunc_T, uid_t, uint16_t, uint32_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t,
+    ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t,
     uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t,
     uv_buf_t, uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb,
     uv_file, uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type,
@@ -64,18 +71,10 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_11, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_14, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, ApiDispatchWrapper, Arena, ArenaMem,
-    Array, BoolVarValue, Boolean, Callback, CallbackReader, CallbackType,
-    Callback_data as C2Rust_Unnamed_0, ChannelCallFrame, ChannelPart, ChannelStreamType,
-    ClientType, Dict, Error, ErrorType, Event, Float, GridLineEvent, Integer, InternalState,
-    KeyValuePair, LibuvProc, Loop, LuaRef, MapHash, Map_uint64_t_ptr_t, MessageType,
-    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, PackerBuffer, PackerBufferFlush,
-    Proc, ProcType, PtyProc, RStream, RemoteUI, ScopeDictDictItem, ScopeType, Set_uint64_t,
-    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler,
-    VarLockStatus, VarType, WBuffer, QUEUE,
+    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize,
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
-extern "C" {
+unsafe extern "C" {
     fn channel_incref(chan: *mut Channel);
     fn channel_decref(chan: *mut Channel);
     fn channel_info_changed(chan: *mut Channel, new_chan: bool);
@@ -494,7 +493,7 @@ unsafe extern "C" fn log_notify(
 pub unsafe extern "C" fn rpc_init() {
     ch_before_blocking_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
     channel_incref(channel);
     (*channel).is_rpc = true_0 != 0;
@@ -1282,7 +1281,7 @@ unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut a
         let _ = *ptr_;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rpc_close(mut channel: *mut Channel) {
     if (*channel).rpc.closed {
         return;
@@ -1349,7 +1348,7 @@ unsafe extern "C" fn rpc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
         exit_on_closed_chan(0 as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rpc_free(mut channel: *mut Channel) {
     unpacker_teardown((*channel).rpc.unpacker);
     xfree((*channel).rpc.unpacker as *mut ::core::ffi::c_void);
@@ -1620,7 +1619,7 @@ pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
     }
     channel_info_changed(chan, false_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_client_info(
     mut chan: *mut Channel,
     mut key: *const ::core::ffi::c_char,

@@ -9,12 +9,13 @@ use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::schar_from_buf;
 use crate::src::nvim::main::{
-    cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc, IObuff,
+    IObuff, cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc,
 };
 use crate::src::nvim::mark::mark_mb_adjustpos;
 use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{emsg, msg, semsg};
+use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{
@@ -22,16 +23,25 @@ use crate::src::nvim::os::libc::{
     memcmp, memcpy, memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen,
     strncasecmp, strncmp, tolower, toupper,
 };
-use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
+    Callback, Callback_data as C2Rust_Unnamed_8, CallbackType, ChangedtickDictItem, CharBoundsOff,
+    CharInfo, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_5, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode,
+    MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t,
+    MapHash, MarkTree, MsgpackRpcRequestHandler, OptInt, QUEUE, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_15, StrCharInfo, Terminal, Timestamp,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
     chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, expand_T, extmark_undo_vec_t, fcs_chars_T,
     file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_6,
     file_buffer_b_wininfo as C2Rust_Unnamed_14, file_buffer_update_callbacks as C2Rust_Unnamed_3,
     file_buffer_update_channels as C2Rust_Unnamed_4, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_9, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, int8_t, lcs_chars_T,
+    hashitem_T, hashtab_T, iconv_t, infoptr_T, int8_t, int16_t, int32_t, int64_t, lcs_chars_T,
     linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T,
     mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T,
     mtnode_inner_s, mtnode_s, partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t,
@@ -41,28 +51,18 @@ pub use crate::src::nvim::types::{
     time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_11, u_header_uh_alt_prev as C2Rust_Unnamed_10,
     u_header_uh_next as C2Rust_Unnamed_13, u_header_uh_prev as C2Rust_Unnamed_12, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, uintptr_t, undo_object, utf8proc_int32_t, varnumber_T,
+    uint8_t, uint16_t, uint32_t, uint64_t, uintptr_t, undo_object, utf8proc_int32_t, varnumber_T,
     vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
-    xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem, CharBoundsOff, CharInfo,
-    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_5, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
-    FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode,
-    MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_15, StrCharInfo, Terminal, Timestamp,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, QUEUE,
+    xp_prefix_T,
 };
 use crate::src::nvim::utf8proc::{
-    utf8proc_decompose_char, utf8proc_get_property, utf8proc_grapheme_break,
-    utf8proc_grapheme_break_stateful, utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
     UTF8PROC_BOUNDCLASS_OTHER, UTF8PROC_BOUNDCLASS_PREPEND, UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR,
-    UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN,
+    UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,
+    utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
+    utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
-extern "C" {
+unsafe extern "C" {
     fn towlower(__wc: wint_t) -> wint_t;
     fn towupper(__wc: wint_t) -> wint_t;
     fn nl_langinfo(__item: nl_item) -> *mut ::core::ffi::c_char;
@@ -679,7 +679,7 @@ static e_only_values_of_0x80_and_higher_supported: GlobalCell<[::core::ffi::c_ch
             *b"E1114: Only values of 0x80 and higher supported\0",
         )
     });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static utf8len_tab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([
     1 as uint8_t,
     1 as uint8_t,
@@ -1991,7 +1991,7 @@ pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> 
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2CharInfo_impl(mut p: *const uint8_t, len: uintptr_t) -> int32_t {
     let corr: uint32_t = (*corrections.ptr())[len as usize];
     let mut cur: uint8_t = 0;
@@ -2120,7 +2120,7 @@ pub unsafe extern "C" fn mb_string2cells_len(
     }
     return clen;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = p_in as *mut uint8_t;
     let v0: uint32_t = *p.offset(0 as ::core::ffi::c_int as isize) as uint32_t;
@@ -2322,7 +2322,7 @@ pub unsafe extern "C" fn utf_iscomposing(
         state.as_mut(),
     ) || crate::src::nvim::arabic::arabic_combine(c1, c2) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utfc_ptr2schar(
     mut p: *const ::core::ffi::c_char,
     mut firstc: *mut ::core::ffi::c_int,
@@ -2382,7 +2382,7 @@ unsafe extern "C" fn schar_from_buf_first(
         return schar_from_buf(buf, len);
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = p_in as *mut uint8_t;
     if *p as ::core::ffi::c_int == NUL {
@@ -2429,7 +2429,7 @@ pub unsafe extern "C" fn utf_ptr2len_len(
     }
     return len;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut b0: uint8_t = *p as uint8_t;
     if b0 as ::core::ffi::c_int == NUL {
@@ -2522,7 +2522,7 @@ pub unsafe extern "C" fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_i
         return 6 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_char2bytes(
     c: ::core::ffi::c_int,
     buf: *mut ::core::ffi::c_char,
@@ -3129,7 +3129,7 @@ pub unsafe extern "C" fn utf_ambiguous_width(mut p: *const ::core::ffi::c_char) 
         3 as size_t,
     ) == 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_fold(mut a: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if a < 0x80 as ::core::ffi::c_int {
         return if a >= 0x41 as ::core::ffi::c_int && a <= 0x5a as ::core::ffi::c_int {
@@ -3413,7 +3413,7 @@ unsafe extern "C" fn always_break_two(
             && (bc1 == UTF8PROC_BOUNDCLASS_OTHER as ::core::ffi::c_int
                 || bc1 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC as ::core::ffi::c_int);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_head_off(
     mut base_in: *const ::core::ffi::c_char,
     mut p_in: *const ::core::ffi::c_char,
@@ -3702,7 +3702,7 @@ pub unsafe extern "C" fn mb_off_next(
     }
     return utfc_ptr2len(p.offset(-(head_off as isize))) - head_off;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_cp_bounds_len(
     mut base: *const ::core::ffi::c_char,
     mut p_in: *const ::core::ffi::c_char,
@@ -4432,7 +4432,7 @@ pub unsafe extern "C" fn f_iconv(
     xfree(from as *mut ::core::ffi::c_void);
     xfree(to as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn convert_setup(
     mut vcp: *mut vimconv_T,
     mut from: *mut ::core::ffi::c_char,
@@ -5061,7 +5061,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     ]);
 }
 #[used]
-#[cfg_attr(target_os = "linux", link_section = ".init_array")]
-#[cfg_attr(target_os = "windows", link_section = ".CRT$XIB")]
-#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
+#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
 static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

@@ -31,13 +31,13 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::api_free_luaref;
 use crate::src::nvim::main::{
-    channels, curbuf, e_invarg2, e_invchan, e_invstream, e_invstreamrpc, e_jobspawn, e_streamkey,
-    embedded_mode, exiting, headless_mode, main_loop, ui_client_channel_id, IObuff,
+    IObuff, channels, curbuf, e_invarg2, e_invchan, e_invstream, e_invstreamrpc, e_jobspawn,
+    e_streamkey, embedded_mode, exiting, headless_mode, main_loop, ui_client_channel_id,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::memory::{
-    arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemdup, xrealloc, xstrdup,
-    ARENA_EMPTY,
+    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemdup, xrealloc,
+    xstrdup,
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::channel::rpc_init;
@@ -51,11 +51,27 @@ use crate::src::nvim::os::pty_proc_unix::{
 };
 use crate::src::nvim::os::shell::shell_free_argv;
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __compar_fn_t, __gid_t, __off64_t, __off_t,
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __socklen_t, __time_t, __uid_t, addrinfo, alist_T, argv_callback, auto_event, bhdr_T, blob_T,
-    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T,
-    dictitem_T, dictvar_S, disptick_T, event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __compar_fn_t, __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
+    __pthread_mutex_s, __pthread_rwlock_arch_t, __socklen_t, __time_t, __uid_t, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, AdditionalData, AlignTextPos, Arena,
+    ArenaMem, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackReader, CallbackType, ChangedtickDictItem, Channel,
+    Channel_stream as C2Rust_Unnamed_33, ChannelCallFrame, ChannelPart, ChannelStdinMode,
+    ChannelStreamType, ClientType, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, Event,
+    ExtmarkUndoObject, FILE, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
+    InternalState, Intersection, KeyValuePair, LibuvProc, ListLenSpecials, Loop, LuaRef, MTKey,
+    MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MultiQueue, Object, ObjectType, OptInt, PackerBuffer,
+    PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, RpcState,
+    RpcState_call_stack as C2Rust_Unnamed_32, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SocketWatcher, SpecialVarValue, StderrState,
+    StdioPair, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream,
+    String_0, Terminal, TerminalOptions, Timestamp, Unpacker, VarLockStatus, VarType, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window,
+    addrinfo, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
+    bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T, dictitem_T, dictvar_S, disptick_T,
+    event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -77,7 +93,7 @@ pub use crate::src::nvim::types::{
     terminal_write_cb, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header,
     u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8, u_header_uh_alt_prev as C2Rust_Unnamed_7,
     u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
-    uid_t, uint16_t, uint32_t, uint64_t, uint8_t, undo_object, uv__io_cb, uv__io_s, uv__io_t,
+    uid_t, uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t,
     uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_18, uv_async_t,
     uv_buf_t, uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb,
     uv_file, uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_13, uv_handle_t,
@@ -93,26 +109,10 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_25, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_19, uv_timer_s_u as C2Rust_Unnamed_20, uv_timer_t, uv_uid_t,
     varnumber_T, virt_line, visualinfo_T, wbuffer, wbuffer_data_finalizer, win_T, window_S,
-    wininfo_S, winopt_T, winsize, wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, ArenaMem,
-    Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback, CallbackReader,
-    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, Channel,
-    ChannelCallFrame, ChannelPart, ChannelStdinMode, ChannelStreamType,
-    Channel_stream as C2Rust_Unnamed_33, ClientType, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    Error, ErrorType, Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, Integer, InternalState, Intersection, KeyValuePair, LibuvProc, ListLenSpecials, Loop,
-    LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MultiQueue, Object, ObjectType, OptInt,
-    PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemoteUI, RpcState,
-    RpcState_call_stack as C2Rust_Unnamed_32, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SocketWatcher, SpecialVarValue, StderrState,
-    StdioPair, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream,
-    String_0, Terminal, TerminalOptions, Timestamp, Unpacker, VarLockStatus, VarType, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window,
-    _IO_FILE, FILE, QUEUE,
+    wininfo_S, winopt_T, winsize, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
-extern "C" {
+unsafe extern "C" {
     fn rpc_start(channel: *mut Channel);
     fn rpc_close(channel: *mut Channel);
     fn rpc_free(channel: *mut Channel);
@@ -627,7 +627,7 @@ pub unsafe extern "C" fn channel_init() {
     channel_alloc(kChannelStreamStderr);
     rpc_init();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Channel {
     let mut chan: *mut Channel =
         xcalloc(1 as size_t, ::core::mem::size_of::<Channel>()) as *mut Channel;
@@ -735,11 +735,11 @@ pub unsafe extern "C" fn channel_create_event(
     arena_mem_free(arena_finish(&raw mut arena));
     channel_info_changed(chan, true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn channel_incref(mut chan: *mut Channel) {
     (*chan).refcount = (*chan).refcount.wrapping_add(1);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn channel_decref(mut chan: *mut Channel) {
     (*chan).refcount = (*chan).refcount.wrapping_sub(1);
     if (*chan).refcount == 0 {
@@ -1597,7 +1597,7 @@ unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
         },
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_chan: bool) {
     let mut event: event_T = (if new_chan as ::core::ffi::c_int != 0 {
         EVENT_CHANOPEN as ::core::ffi::c_int

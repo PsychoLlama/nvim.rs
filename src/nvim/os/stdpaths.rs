@@ -8,7 +8,7 @@ use crate::src::nvim::os::env::{expand_env_save, os_env_exists, os_getenv, os_ge
 use crate::src::nvim::os::libc::{__assert_fail, memmove, memset, strlen, strstr, strtok_r};
 use crate::src::nvim::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
 use crate::src::nvim::strings::kv_do_printf;
-pub use crate::src::nvim::types::{size_t, StringBuilder, XDGVarType};
+pub use crate::src::nvim::types::{StringBuilder, XDGVarType, size_t};
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

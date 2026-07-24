@@ -1,6 +1,6 @@
 //! Port of `test/unit/garray_spec.lua`.
 
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{CStr, c_char, c_int};
 use std::mem::size_of;
 use std::ptr;
 

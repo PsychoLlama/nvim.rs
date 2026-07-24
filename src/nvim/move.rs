@@ -3,7 +3,7 @@ use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum, coladvance};
 use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
 use crate::src::nvim::diff::diff_get_corresponding_line;
 use crate::src::nvim::drawscreen::{
-    conceal_cursor_line, number_width, redrawWinline, redraw_buf_later, redraw_later, redrawing,
+    conceal_cursor_line, number_width, redraw_buf_later, redraw_later, redrawWinline, redrawing,
     win_cursorline_standout, win_scroll_lines,
 };
 use crate::src::nvim::edit::{
@@ -17,9 +17,9 @@ use crate::src::nvim::fold::{foldAdjustCursor, hasFolding};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    cmdwin_win, curbuf, curtab, curwin, default_grid, dollar_vcol, e_invalid_line_number_nr,
-    first_tabpage, firstwin, lastwin, mouse_dragging, p_cpo, p_sj, p_so, p_sol, p_ss, p_window,
-    restart_edit, skip_update_topline, Rows, VIsual_active, VIsual_select,
+    Rows, VIsual_active, VIsual_select, cmdwin_win, curbuf, curtab, curwin, default_grid,
+    dollar_vcol, e_invalid_line_number_nr, first_tabpage, firstwin, lastwin, mouse_dragging, p_cpo,
+    p_sj, p_so, p_sol, p_ss, p_window, restart_edit, skip_update_topline,
 };
 use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_head_off};
 use crate::src::nvim::memline::ml_get_buf;
@@ -34,7 +34,17 @@ use crate::src::nvim::plines::{
 };
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_6, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_3, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, MotionType, MsgpackRpcRequestHandler, OptInt, QUEUE, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
     cmdarg_T, colnr_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, extmark_undo_vec_t,
     fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
     file_buffer_b_wininfo as C2Rust_Unnamed_12, file_buffer_update_callbacks as C2Rust_Unnamed_1,
@@ -49,19 +59,9 @@ pub use crate::src::nvim::types::{
     synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_3, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
-    FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MotionType, MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, Terminal, Timestamp, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, QUEUE,
+    wline_T, xfmark_T,
 };
 use crate::src::nvim::window::win_fdccol_count;
 use crate::src::nvim::winfloat::win_check_anchored_floats;
@@ -309,7 +309,7 @@ unsafe extern "C" fn reset_skipcol(mut wp: *mut win_T) {
     (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
     redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
     let mut check_botline: bool = false_0 != 0;
     let mut so_ptr: *mut OptInt = if (*wp).w_onebuf_opt.wo_so >= 0 as OptInt {
@@ -650,7 +650,7 @@ pub unsafe extern "C" fn changed_window_setting_all() {
         tp = (*tp).tp_next as *mut tabpage_T;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn set_topline(mut wp: *mut win_T, mut lnum: linenr_T) {
     let mut prev_topline: linenr_T = (*wp).w_topline;
     hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut::<linenr_T>());
@@ -694,7 +694,7 @@ pub unsafe extern "C" fn cursor_valid(mut wp: *mut win_T) -> ::core::ffi::c_int 
     return ((*wp).w_valid & (VALID_WROW | VALID_WCOL) == VALID_WROW | VALID_WCOL)
         as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn validate_cursor(mut wp: *mut win_T) {
     check_cursor_lnum(wp);
     check_cursor_moved(wp);
@@ -848,7 +848,7 @@ pub unsafe extern "C" fn validate_cursor_col(mut wp: *mut win_T) {
     (*wp).w_wcol = col as ::core::ffi::c_int;
     (*wp).w_valid |= VALID_WCOL;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_col_off(mut wp: *mut win_T) -> ::core::ffi::c_int {
     return (if (*wp).w_onebuf_opt.wo_nu != 0
         || (*wp).w_onebuf_opt.wo_rnu != 0
@@ -876,7 +876,7 @@ pub unsafe extern "C" fn win_col_off2(mut wp: *mut win_T) -> ::core::ffi::c_int 
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core::ffi::c_int) {
     let mut startcol: colnr_T = 0;
     let mut endcol: colnr_T = 0;

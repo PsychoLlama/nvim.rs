@@ -24,14 +24,19 @@ use crate::src::nvim::tui::termkey::termkey::{
     termkey_start, termkey_strfkey,
 };
 pub use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    argv_callback, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int64_t, int8_t,
-    internal_proc_cb, key_value_pair, loop_0, loop_0_children as C2Rust_Unnamed_8, multiqueue,
-    object, object_data as C2Rust_Unnamed, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t,
-    pthread_rwlock_t, ptr_t, queue, rstream, size_t, ssize_t, stream, stream_close_cb,
-    stream_read_cb, stream_uv as C2Rust_Unnamed_10, stream_write_cb, uint32_t, uint64_t, uint8_t,
-    uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
-    uv_async_s_u as C2Rust_Unnamed_5, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, Array,
+    Boolean, Dict, Event, Float, Integer, KeyEncoding, KeyValuePair, Loop, LuaRef, Map_int_ptr_t,
+    MapHash, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, QUEUE, RStream, ScopeType,
+    Set_int, Stream, String_0, StringBuilder, TUIData, TermKey, TermKey_Terminfo_Getstr_Hook,
+    TermKeyCsiParam, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyKey_code as C2Rust_Unnamed_18,
+    TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TermMode, TermModeState,
+    TerminfoEntry, VarLockStatus, argv_callback, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T,
+    int8_t, int64_t, internal_proc_cb, key_value_pair, loop_0, loop_0_children as C2Rust_Unnamed_8,
+    multiqueue, object, object_data as C2Rust_Unnamed, proc, proc_exit_cb, proc_state_cb,
+    pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, size_t, ssize_t, stream,
+    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_10, stream_write_cb, uint8_t,
+    uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb,
+    uv_async_s, uv_async_s_u as C2Rust_Unnamed_5, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
     uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
     uv_idle_s_u as C2Rust_Unnamed_11, uv_idle_t, uv_loop_s,
@@ -41,15 +46,9 @@ pub use crate::src::nvim::types::{
     uv_signal_s_tree_entry as C2Rust_Unnamed_1, uv_signal_s_u as C2Rust_Unnamed_2, uv_signal_t,
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_9, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_12, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_6, uv_timer_s_u as C2Rust_Unnamed_7, uv_timer_t, Array,
-    Boolean, Dict, Event, Float, Integer, KeyEncoding, KeyValuePair, Loop, LuaRef, MapHash,
-    Map_int_ptr_t, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, RStream, ScopeType,
-    Set_int, Stream, StringBuilder, String_0, TUIData, TermKey, TermKeyCsiParam, TermKeyEvent,
-    TermKeyFormat, TermKeyKey, TermKeyKey_code as C2Rust_Unnamed_18, TermKeyMouseEvent,
-    TermKeyResult, TermKeySym, TermKeyType, TermKey_Terminfo_Getstr_Hook, TermMode, TermModeState,
-    TerminfoEntry, VarLockStatus, QUEUE,
+    uv_timer_s_node as C2Rust_Unnamed_6, uv_timer_s_u as C2Rust_Unnamed_7, uv_timer_t,
 };
-extern "C" {
+unsafe extern "C" {
     fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState);
     fn tui_enable_extended_underline(tui: *mut TUIData);
     fn tui_query_bg_color(tui: *mut TUIData);
@@ -749,7 +748,7 @@ static kitty_key_map_entry: GlobalCell<[kitty_key_map_entry; 77]> = GlobalCell::
     },
 ]);
 static kitty_key_map: GlobalCell<Map_int_ptr_t> = GlobalCell::new(MAP_INIT);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tinput_init(
     mut input: *mut TermInput,
     mut loop_0: *mut Loop,
@@ -812,7 +811,7 @@ pub unsafe extern "C" fn tinput_init(
     uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).bg_query_timer);
     (*input).bg_query_timer.data = input as *mut ::core::ffi::c_void;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
     xfree((*kitty_key_map.ptr()).set.keys as *mut ::core::ffi::c_void);
     xfree((*kitty_key_map.ptr()).set.h.hash as *mut ::core::ffi::c_void);
@@ -828,7 +827,7 @@ pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
     termkey_destroy((*input).tk);
     (*input).loop_0 = ::core::ptr::null_mut::<Loop>();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tinput_start(mut input: *mut TermInput) {
     rstream_start(
         &raw mut (*input).read_stream,
@@ -845,7 +844,7 @@ pub unsafe extern "C" fn tinput_start(mut input: *mut TermInput) {
         input as *mut ::core::ffi::c_void,
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tinput_stop(mut input: *mut TermInput) {
     rstream_stop(&raw mut (*input).read_stream);
     uv_timer_stop(&raw mut (*input).timer_handle);

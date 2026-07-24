@@ -3,22 +3,22 @@ use crate::src::nvim::grid::schar_from_buf;
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_iscomposing, utf_ptr2cells_len};
 use crate::src::nvim::os::libc::{__assert_fail, abs, memmove, memset, snprintf, strncmp};
 pub use crate::src::nvim::types::{
-    int32_t, schar_T, size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState,
-    ScreenCell, ScreenPen, VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor,
+    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
+    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
+    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
+    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
     VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
     VTermEncoding, VTermEncodingInstance, VTermEncodingType, VTermGlyphInfo, VTermKeyEncodingFlags,
     VTermKeyEncodingStack, VTermLineInfo, VTermOutputCallback, VTermParserCallbacks,
     VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
     VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermStateCallbacks, VTermStateFallbacks, VTermStateFields,
     VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
     VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
     VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
     VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
-    VTermValue, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
-    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
+    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
+    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
+    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
 };
 use crate::src::nvim::vterm::encoding::vterm_lookup_encoding;
 use crate::src::nvim::vterm::parser::vterm_parser_set_callbacks;
@@ -130,7 +130,7 @@ pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
 pub const CSI_ARG_MASK: ::core::ffi::c_uint =
     !((1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int);
 pub const CSI_ARG_MISSING: ::core::ffi::c_long = 2147483647 as ::core::ffi::c_long;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static vterm_primary_device_attr: GlobalCell<[::core::ffi::c_char; 9]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0")
@@ -3738,7 +3738,7 @@ static parser_callbacks: GlobalCell<VTermParserCallbacks> = GlobalCell::new(VTer
             ) -> ::core::ffi::c_int,
     ),
 });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_obtain_state(mut vt: *mut VTerm) -> *mut VTermState {
     if !(*vt).state.is_null() {
         return (*vt).state;
@@ -3752,7 +3752,7 @@ pub unsafe extern "C" fn vterm_obtain_state(mut vt: *mut VTerm) -> *mut VTermSta
     );
     return state;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_reset(
     mut state: *mut VTermState,
     mut hard: ::core::ffi::c_int,
@@ -3862,7 +3862,7 @@ pub unsafe extern "C" fn vterm_state_reset(
         erase(state, rect, 0 as ::core::ffi::c_int);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_callbacks(
     mut state: *mut VTermState,
     mut callbacks: *const VTermStateCallbacks,
@@ -3884,7 +3884,7 @@ pub unsafe extern "C" fn vterm_state_set_callbacks(
         (*state).cbdata = NULL;
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_unrecognised_fallbacks(
     mut state: *mut VTermState,
     mut fallbacks: *const VTermStateFallbacks,
@@ -3998,7 +3998,7 @@ pub unsafe extern "C" fn vterm_state_set_termprop(
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_focus_in(mut state: *mut VTermState) {
     if (*state).mode.report_focus() != 0 {
         vterm_push_output_sprintf_ctrl(
@@ -4008,7 +4008,7 @@ pub unsafe extern "C" fn vterm_state_focus_in(mut state: *mut VTermState) {
         );
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_focus_out(mut state: *mut VTermState) {
     if (*state).mode.report_focus() != 0 {
         vterm_push_output_sprintf_ctrl(
@@ -4018,14 +4018,14 @@ pub unsafe extern "C" fn vterm_state_focus_out(mut state: *mut VTermState) {
         );
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_get_lineinfo(
     mut state: *const VTermState,
     mut row: ::core::ffi::c_int,
 ) -> *const VTermLineInfo {
     return (*state).lineinfo.offset(row as isize);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_selection_callbacks(
     mut state: *mut VTermState,
     mut callbacks: *const VTermSelectionCallbacks,

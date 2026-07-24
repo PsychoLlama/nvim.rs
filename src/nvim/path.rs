@@ -8,7 +8,7 @@ use crate::src::nvim::garray::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    curbuf, emsg_off, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig, NameBuff,
+    NameBuff, curbuf, emsg_off, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig,
 };
 use crate::src::nvim::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
@@ -32,10 +32,20 @@ use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __gid_t, __mode_t, __off_t, __pthread_internal_list, __pthread_list_t,
-    __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, alist_T, bhdr_T, blob_T,
-    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
-    file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
+    __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, AdditionalData, AlignTextPos,
+    BoolVarValue, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Directory, ExtmarkUndoObject,
+    FileComparison, FileID, FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef,
+    MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
+    file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, file_comparison, float_T, fmark_T, fmarkv_T,
     frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T,
     gid_t, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
@@ -48,8 +58,8 @@ pub use crate::src::nvim::types::{
     synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
     u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7,
     u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
-    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uid_t, uint16_t, uint32_t, uint64_t,
-    uint8_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work, uv_async_cb,
+    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t,
+    uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work, uv_async_cb,
     uv_async_s, uv_async_s_u as C2Rust_Unnamed_17, uv_async_t, uv_buf_t, uv_close_cb, uv_dirent_s,
     uv_dirent_t, uv_dirent_type_t, uv_file, uv_fs_cb, uv_fs_s, uv_fs_t, uv_fs_type, uv_gid_t,
     uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_12, uv_handle_t, uv_handle_type, uv_loop_s,
@@ -57,19 +67,9 @@ pub use crate::src::nvim::types::{
     uv_loop_t, uv_mutex_t, uv_req_type, uv_rwlock_t, uv_signal_cb, uv_signal_s,
     uv_signal_s_tree_entry as C2Rust_Unnamed_13, uv_signal_s_u as C2Rust_Unnamed_14, uv_signal_t,
     uv_stat_t, uv_timespec_t, uv_uid_t, varnumber_T, virt_line, visualinfo_T, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue,
-    BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Directory, ExtmarkUndoObject,
-    FileComparison, FileID, FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef,
-    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal, Timestamp, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, QUEUE,
+    wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-extern "C" {
+unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -273,7 +273,7 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_full_compare(
     s1: *mut ::core::ffi::c_char,
     s2: *mut ::core::ffi::c_char,
@@ -337,7 +337,7 @@ pub unsafe extern "C" fn path_full_compare(
     }
     return kDifferentFiles;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_tail(
     mut fname: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn path_tail(
     }
     return tail as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_tail_with_sep(
     mut fname: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -365,7 +365,7 @@ pub unsafe extern "C" fn path_tail_with_sep(
     }
     return tail;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn invocation_path_tail(
     mut invocation: *const ::core::ffi::c_char,
     mut len: *mut size_t,
@@ -384,7 +384,7 @@ pub unsafe extern "C" fn invocation_path_tail(
     }
     return tail;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_next_component(
     mut fname: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -2146,7 +2146,7 @@ pub unsafe extern "C" fn path_is_url(mut p: *const ::core::ffi::c_char) -> ::cor
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_with_url(
     mut fname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -2184,7 +2184,7 @@ pub unsafe extern "C" fn path_with_url(
     }
     return path_is_url(p);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_with_extension(
     mut path: *const ::core::ffi::c_char,
     mut extension: *const ::core::ffi::c_char,
@@ -2203,7 +2203,7 @@ pub unsafe extern "C" fn vim_isAbsName(mut name: *const ::core::ffi::c_char) -> 
     return path_with_url(name) != 0 as ::core::ffi::c_int
         || path_is_absolute(name) as ::core::ffi::c_int != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_FullName(
     mut fname: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,
@@ -2233,7 +2233,7 @@ pub unsafe extern "C" fn fix_fname(
 ) -> *mut ::core::ffi::c_char {
     return FullName_save(fname, true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_fix_case(mut name: *mut ::core::ffi::c_char) {
     let mut file_info: FileInfo = FileInfo {
         stat: uv_stat_t {
@@ -2529,7 +2529,7 @@ pub unsafe extern "C" fn pathcmp(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_try_shorten_fname(
     mut full_path: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -2545,7 +2545,7 @@ pub unsafe extern "C" fn path_try_shorten_fname(
     xfree(dirname as *mut ::core::ffi::c_void);
     return p;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_shorten_fname(
     mut full_path: *mut ::core::ffi::c_char,
     mut dir_name: *mut ::core::ffi::c_char,
@@ -2792,7 +2792,7 @@ pub unsafe extern "C" fn match_suffix(mut fname: *mut ::core::ffi::c_char) -> bo
     return setsuflen != 0 as size_t;
 }
 pub const MAXSUFLEN: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_full_dir_name(
     mut directory: *mut ::core::ffi::c_char,
     mut buffer: *mut ::core::ffi::c_char,
@@ -2821,7 +2821,7 @@ pub unsafe extern "C" fn path_full_dir_name(
     }
     return OK;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn append_path(
     mut path: *mut ::core::ffi::c_char,
     mut to_append: *const ::core::ffi::c_char,
@@ -2936,12 +2936,12 @@ unsafe extern "C" fn path_to_absolute(
     xfree(relative_directory as *mut ::core::ffi::c_void);
     return append_path(buf, end_of_path, len);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_is_absolute(mut fname: *const ::core::ffi::c_char) -> bool {
     return *fname as ::core::ffi::c_int == '/' as ::core::ffi::c_int
         || *fname as ::core::ffi::c_int == '~' as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_guess_exepath(
     mut argv0: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,

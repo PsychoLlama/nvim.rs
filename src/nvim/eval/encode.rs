@@ -16,17 +16,17 @@ use crate::src::nvim::msgpack_rpc::packer::{
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, int8_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, packer_buffer_t, partial_S, partial_T, proftime_T, ptrdiff_t, queue, scid_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint32_t, uint64_t, uint8_t,
-    varnumber_T, BoolVarValue, Integer, ListReaderState, LuaRef, MPConvPartialStage, MPConvStack,
-    MPConvStackVal, MPConvStackValType, MPConvStackVal_data as C2Rust_Unnamed_0,
+    BoolVarValue, Integer, ListReaderState, LuaRef, MPConvPartialStage, MPConvStack,
+    MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_0,
     MPConvStackVal_data_a as C2Rust_Unnamed_1, MPConvStackVal_data_d as C2Rust_Unnamed_4,
     MPConvStackVal_data_l as C2Rust_Unnamed_3, MPConvStackVal_data_p as C2Rust_Unnamed_2,
-    MessagePackType, PackerBuffer, PackerBufferFlush, ScopeDictDictItem, ScopeType,
-    SpecialVarValue, String_0, VarLockStatus, VarType, QUEUE,
+    MPConvStackValType, MessagePackType, PackerBuffer, PackerBufferFlush, QUEUE, ScopeDictDictItem,
+    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, blob_T, blobvar_S, dict_T,
+    dictitem_T, dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T,
+    garray_T, hash_T, hashitem_T, hashtab_T, int8_t, int32_t, int64_t, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, packer_buffer_t, partial_S,
+    partial_T, proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union,
+    ufunc_S, ufunc_T, uint8_t, uint32_t, uint64_t, varnumber_T,
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
@@ -7746,7 +7746,7 @@ pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> = 
 ]);
 pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
     GlobalCell::new([b"v:null\0".as_ptr() as *const ::core::ffi::c_char]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn encode_list_write(
     data: *mut ::core::ffi::c_void,
     buf: *const ::core::ffi::c_char,

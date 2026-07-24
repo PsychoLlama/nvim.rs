@@ -1,7 +1,7 @@
 use crate::src::nvim::os::libc::{abort, fprintf, free, malloc, realloc, stderr, vfprintf};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
-    __off64_t, __off_t, __va_list_tag, size_t, strbuf_t, va_list, _IO_FILE, FILE,
+    __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __va_list_tag, _IO_FILE, _IO_codecvt,
+    _IO_lock_t, _IO_marker, _IO_wide_data, FILE, size_t, strbuf_t, va_list,
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;

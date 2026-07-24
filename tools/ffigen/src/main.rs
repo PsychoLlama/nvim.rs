@@ -288,7 +288,14 @@ fn named_fields(fields: &syn::FieldsNamed) -> Vec<Field> {
 }
 
 fn has_no_mangle(attrs: &[syn::Attribute]) -> bool {
-    attrs.iter().any(|a| a.path().is_ident("no_mangle"))
+    // Edition 2024 spells it #[unsafe(no_mangle)]; syn parses that as a
+    // Meta::List whose path is `unsafe` with the real attribute in the args.
+    attrs.iter().any(|a| {
+        a.path().is_ident("no_mangle")
+            || (a.path().is_ident("unsafe")
+                && a.parse_args::<syn::Path>()
+                    .is_ok_and(|p| p.is_ident("no_mangle")))
+    })
 }
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {

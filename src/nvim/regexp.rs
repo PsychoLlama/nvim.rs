@@ -7,10 +7,10 @@ use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    called_emsg, e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
-    e_resulting_text_too_long, e_toomsbra, e_trailing, got_int, p_cpo, p_mmp, p_re, p_sel,
-    p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch, VIsual,
-    VIsual_active, VIsual_mode,
+    VIsual, VIsual_active, VIsual_mode, called_emsg, e_internal_error_in_regexp, e_nopresub,
+    e_null, e_re_corr, e_re_damg, e_resulting_text_too_long, e_toomsbra, e_trailing, got_int,
+    p_cpo, p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out,
+    reg_do_extmatch,
 };
 use crate::src::nvim::mbyte::{
     mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
@@ -29,7 +29,17 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
-    __compar_fn_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T,
+    __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,
+    BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_8, CallbackType,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, ExtmarkUndoObject, FileID, FloatAnchor,
+    FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkGet, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, OptInt, QUEUE,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_5, Terminal,
+    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
+    WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T,
     chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, float_T,
     fmark_T, fmarkv_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, funcexe_T,
     garray_T, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
@@ -41,19 +51,9 @@ pub use crate::src::nvim::types::{
     syn_time_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
     u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
-    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     uintmax_t, undo_object, utf8proc_int32_t, varnumber_T, virt_line, visualinfo_T, winopt_T,
-    wline_T, xfmark_T, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue, BufUpdateCallbacks,
-    CSType, Callback, CallbackType, Callback_data as C2Rust_Unnamed_8, ChangedtickDictItem,
-    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_3, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative,
-    GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkGet,
-    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, OptInt, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_5, Terminal, Timestamp,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinSplit,
-    WinStyle, Window, QUEUE,
+    wline_T, xfmark_T,
 };
 // Phase-5a blacklist residue: this module keeps concrete local copies of
 // types whose canonical form is opaque (file_buffer, window_S, ...), so
@@ -61,7 +61,7 @@ pub use crate::src::nvim::types::{
 // The copies are layout-identical to the canonical definitions (proven by
 // the 5a parity suite); the nominal decl/decl mismatch is expected.
 #[allow(clashing_extern_declarations)]
-extern "C" {
+unsafe extern "C" {
     fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool;
     fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool;
     static curwin: GlobalCell<*mut win_T>;
@@ -1735,7 +1735,7 @@ pub const REG_NOPAREN: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const REG_PAREN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REG_ZPAREN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const REG_NPAREN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn re_multiline(mut prog: *const regprog_T) -> ::core::ffi::c_int {
     return ((*prog).regflags & RF_HASNL as ::core::ffi::c_uint) as ::core::ffi::c_int;
 }
@@ -3296,7 +3296,7 @@ unsafe extern "C" fn clear_submatch_list(mut sl: *mut staticList10_T) {
         }
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regsub(
     mut rmp: *mut regmatch_T,
     mut source: *mut ::core::ffi::c_char,
@@ -3350,7 +3350,7 @@ pub unsafe extern "C" fn vim_regsub(
     }
     return result;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regsub_multi(
     mut rmp: *mut regmmatch_T,
     mut lnum: linenr_T,
@@ -24464,7 +24464,7 @@ static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
     ),
 });
 static regexp_engine: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regcomp(
     mut expr_arg: *const ::core::ffi::c_char,
     mut re_flags: ::core::ffi::c_int,
@@ -24538,7 +24538,7 @@ pub unsafe extern "C" fn vim_regcomp(
     }
     return prog;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regfree(mut prog: *mut regprog_T) {
     if !prog.is_null() {
         (*(*prog).engine)
@@ -24641,7 +24641,7 @@ unsafe extern "C" fn vim_regexec_string(
     }
     return result > 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_prog(
     mut prog: *mut *mut regprog_T,
     mut ignore_case: bool,
@@ -24659,7 +24659,7 @@ pub unsafe extern "C" fn vim_regexec_prog(
     *prog = regmatch_0.regprog;
     return r;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec(
     mut rmp: *mut regmatch_T,
     mut line: *const ::core::ffi::c_char,
@@ -24667,7 +24667,7 @@ pub unsafe extern "C" fn vim_regexec(
 ) -> bool {
     return vim_regexec_string(rmp, line, col, false_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_nl(
     mut rmp: *mut regmatch_T,
     mut line: *const ::core::ffi::c_char,
@@ -24675,7 +24675,7 @@ pub unsafe extern "C" fn vim_regexec_nl(
 ) -> bool {
     return vim_regexec_string(rmp, line, col, true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_multi(
     mut rmp: *mut regmmatch_T,
     mut win: *mut win_T,
@@ -24964,7 +24964,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     ]);
 }
 #[used]
-#[cfg_attr(target_os = "linux", link_section = ".init_array")]
-#[cfg_attr(target_os = "windows", link_section = ".CRT$XIB")]
-#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
+#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
 static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

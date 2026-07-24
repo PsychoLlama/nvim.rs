@@ -21,7 +21,7 @@ use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    cmdmod, e_trailing_arg, e_val_too_large, got_int, maptick, p_hi, Columns, IObuff,
+    Columns, IObuff, cmdmod, e_trailing_arg, e_val_too_large, got_int, maptick, p_hi,
 };
 use crate::src::nvim::memory::{xfree, xstrlcpy};
 use crate::src::nvim::message::{
@@ -33,10 +33,10 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::regexp::{regmatch_T, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
-    exarg_T, expand_T, size_t, typval_T, varnumber_T, AdditionalData, EvalFuncData, HistoryType,
-    OptInt, Timestamp, VarType,
+    AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VarType, exarg_T, expand_T,
+    size_t, typval_T, varnumber_T,
 };
-use core::ffi::{c_char, c_int, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
 pub const HIST_DEFAULT: HistoryType = -2;

@@ -10,18 +10,18 @@ use crate::src::mpack::rpc::{
 };
 use crate::src::nvim::global_cell::SharedCell;
 use crate::src::nvim::lua::ffi::{
-    luaL_argerror, luaL_buffinit, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
-    luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register, luaL_unref,
     lua_call, lua_createtable, lua_getfield, lua_getmetatable, lua_gettable, lua_gettop,
     lua_insert, lua_isnumber, lua_isstring, lua_isuserdata, lua_newuserdata, lua_next, lua_objlen,
     lua_pushboolean, lua_pushcclosure, lua_pushfstring, lua_pushinteger, lua_pushlstring,
     lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawgeti,
     lua_remove, lua_replace, lua_setfield, lua_setmetatable, lua_settable, lua_settop,
-    lua_toboolean, lua_tolstring, lua_tonumber, lua_topointer, lua_type,
+    lua_toboolean, lua_tolstring, lua_tonumber, lua_topointer, lua_type, luaL_argerror,
+    luaL_buffinit, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
+    luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register, luaL_unref,
 };
 use crate::src::nvim::os::libc::{__assert_fail, free, malloc, memcpy, snprintf};
 pub use crate::src::nvim::types::{
-    luaL_Buffer, luaL_Reg, lua_CFunction, lua_Integer, lua_Number, lua_State, mpack_data_t,
+    lua_CFunction, lua_Integer, lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t,
     mpack_node_s, mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_rpc_header_s,
     mpack_rpc_header_t, mpack_rpc_message_s, mpack_rpc_message_t, mpack_rpc_one_session_t,
     mpack_rpc_session_t, mpack_rpc_slot_s, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t,

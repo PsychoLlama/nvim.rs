@@ -9,7 +9,7 @@ use crate::src::nvim::event::libuv::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    didset_vim, didset_vimruntime, nvim_testing, os_buf, p_hf, IObuff, NameBuff,
+    IObuff, NameBuff, didset_vim, didset_vimruntime, nvim_testing, os_buf, p_hf,
 };
 use crate::src::nvim::memory::{
     xfree, xmalloc, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcat, xstrlcpy,
@@ -27,7 +27,17 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{striequal, vim_strchr, vim_strsave_escaped};
 pub use crate::src::nvim::types::{
-    __pid_t, __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    __pid_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkUndoObject, FileID, FloatAnchor,
+    FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, VarLockStatus, VarType,
+    VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit,
+    WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
     chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, evalarg_T, expand_T, extmark_undo_vec_t,
     fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
     file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
@@ -42,20 +52,11 @@ pub use crate::src::nvim::types::{
     synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
     u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
-    Callback, CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkUndoObject, FileID, FloatAnchor,
-    FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal,
-    Timestamp, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    wline_T, xfmark_T, xp_prefix_T,
 };
-extern "C" {
+unsafe extern "C" {
     fn uname(__name: *mut utsname) -> ::core::ffi::c_int;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
@@ -447,7 +448,7 @@ pub unsafe extern "C" fn env_init() {
         false_0 != 0,
     ));
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getenv(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -506,7 +507,7 @@ pub unsafe extern "C" fn os_getenv(
     return e;
 }
 pub const INIT_SIZE: ::core::ffi::c_int = 64 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getenv_buf(
     name: *const ::core::ffi::c_char,
     buf: *mut ::core::ffi::c_char,
@@ -556,7 +557,7 @@ pub unsafe extern "C" fn os_getenv_buf(
     }
     return buf;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getenv_noalloc(
     mut name: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -566,7 +567,7 @@ pub unsafe extern "C" fn os_getenv_noalloc(
         ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_env_exists(
     mut name: *const ::core::ffi::c_char,
     mut nonempty: bool,
@@ -612,7 +613,7 @@ pub unsafe extern "C" fn os_env_exists(
     return r == 0 as ::core::ffi::c_int && (!nonempty || size > 0 as size_t)
         || r == UV_ENOBUFS as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_setenv(
     mut name: *const ::core::ffi::c_char,
     mut value: *const ::core::ffi::c_char,
@@ -657,7 +658,7 @@ pub unsafe extern "C" fn os_setenv(
         -1 as ::core::ffi::c_int
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_unsetenv(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
         return -1 as ::core::ffi::c_int;
@@ -684,7 +685,7 @@ pub unsafe extern "C" fn os_unsetenv(mut name: *const ::core::ffi::c_char) -> ::
 }
 pub unsafe extern "C" fn os_get_fullenv_size() -> size_t {
     let mut len: size_t = 0 as size_t;
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "environ"]
         static mut environ_0: *mut *mut ::core::ffi::c_char;
     }
@@ -711,7 +712,7 @@ pub unsafe extern "C" fn os_copy_fullenv(
     mut env: *mut *mut ::core::ffi::c_char,
     mut env_size: size_t,
 ) {
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "environ"]
         static mut environ_0: *mut *mut ::core::ffi::c_char;
     }
@@ -721,9 +722,9 @@ pub unsafe extern "C" fn os_copy_fullenv(
         i = i.wrapping_add(1);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::core::ffi::c_char {
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "environ"]
         static mut environ_0: *mut *mut ::core::ffi::c_char;
     }
@@ -772,12 +773,12 @@ pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::cor
     };
     return xmemdupz(str as *const ::core::ffi::c_void, len as size_t) as *mut ::core::ffi::c_char;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_pid() -> int64_t {
     return getpid() as int64_t;
 }
 pub unsafe extern "C" fn os_hint_priority() {}
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char, mut size: size_t) {
     let mut vutsname: utsname = utsname {
         sysname: [0; 65],
@@ -889,7 +890,7 @@ pub unsafe extern "C" fn expand_env(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn expand_env_esc(
     mut srcp: *const ::core::ffi::c_char,
     mut dst: *mut ::core::ffi::c_char,
@@ -1579,7 +1580,7 @@ pub unsafe extern "C" fn get_env_name(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_char) -> bool {
     if !path_is_absolute(fname) {
         internal_error(b"os_setenv_append_path()\0".as_ptr() as *const ::core::ffi::c_char);
@@ -1643,7 +1644,7 @@ pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_
     return retval;
 }
 pub const MAX_ENVPATHLEN: ::core::ffi::c_int = INT_MAX;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_shell_is_cmdexe(mut sh: *const ::core::ffi::c_char) -> bool {
     if *sh as ::core::ffi::c_int == NUL {
         return false_0 != 0;

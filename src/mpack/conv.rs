@@ -103,7 +103,7 @@ pub unsafe extern "C-unwind" fn mpack_pack_float_fast(
     rv.type_0 = MPACK_TOKEN_FLOAT;
     return rv;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpack_token_t {
     let mut tok: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,

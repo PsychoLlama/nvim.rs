@@ -7,7 +7,7 @@
 //! the table compares them and frees them only on the caller's behalf
 //! (`hash_clear_all`). Allocation stays on the `xmalloc` family.
 
-use core::ffi::{c_char, c_int, c_uint, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
 
@@ -202,7 +202,7 @@ fn rehash_into(old: &[hashitem_T], new: &mut [hashitem_T], used: usize) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_init(ht: *mut hashtab_T) {
     *ht = hashtab_T {
         ht_mask: (HT_INIT_SIZE - 1) as hash_T,
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn hash_init(ht: *mut hashtab_T) {
     (*ht).ht_array = (&raw mut (*ht).ht_smallarray) as *mut hashitem_T;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_clear(ht: *mut hashtab_T) {
     if (*ht).ht_array != (&raw mut (*ht).ht_smallarray) as *mut hashitem_T {
         xfree((*ht).ht_array as *mut c_void);
@@ -225,7 +225,7 @@ pub unsafe extern "C" fn hash_clear(ht: *mut hashtab_T) {
 
 /// Free the table *and* every key, where each key pointer was offset by
 /// `off` bytes into its allocation (keys living inside larger structs).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
     let mut todo = (*ht).ht_used;
     // Error paths free zeroed, never-initialized tables whose ht_array is
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
     hash_clear(ht);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashitem_T {
     hash_lookup(
         ht,
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn hash_find(ht: *const hashtab_T, key: *const c_char) -> 
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_find_len(
     ht: *const hashtab_T,
     key: *const c_char,
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn hash_find_len(
 /// Find `key` (of `key_len` bytes, hashing to `hash`): returns the item
 /// holding it, or — for an absent key — the slot where it belongs (a
 /// tombstone if the walk crossed one, else the empty slot that ended it).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_lookup(
     ht: *const hashtab_T,
     key: *const c_char,
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn hash_lookup(
 
 pub extern "C" fn hash_debug_results() {}
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
     let hash = hash_hash(key);
     let hi = hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash);
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int
 
 /// Add `key` at `hi`, which the caller obtained from `hash_lookup` on a
 /// missing key (so it is empty or a tombstone).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_add_item(
     ht: *mut hashtab_T,
     hi: *mut hashitem_T,
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn hash_add_item(
 
 /// Remove the item at `hi` (leaving a tombstone). The key itself belongs to
 /// the caller.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
     (*ht).ht_used = (*ht).ht_used.wrapping_sub(1);
     (*ht).ht_changed += 1;
@@ -344,12 +344,12 @@ pub unsafe extern "C" fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
 
 /// Lock out resizing while a caller iterates `ht_array` or holds item
 /// pointers across mutations.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_lock(ht: *mut hashtab_T) {
     (*ht).ht_locked += 1;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_unlock(ht: *mut hashtab_T) {
     (*ht).ht_locked -= 1;
     hash_may_resize(ht, 0);
@@ -405,7 +405,7 @@ unsafe fn hash_may_resize(ht: *mut hashtab_T, minitems: usize) {
     (*ht).ht_changed += 1;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn hash_hash(key: *const c_char) -> hash_T {
     hash_bytes(CStr::from_ptr(key).to_bytes())
 }
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn hash_hash_len(key: *const c_char, len: usize) -> hash_T
 }
 
 /// The unit suite reads the sentinel address through this accessor.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _hash_key_removed() -> *const c_char {
     removed_sentinel()
 }

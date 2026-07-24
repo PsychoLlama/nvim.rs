@@ -1,23 +1,23 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::os::libc::{abort, fprintf, memmove, stderr};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, int32_t, schar_T,
-    size_t, uint16_t, uint32_t, uint8_t, utf8proc_int32_t, GraphemeState, ScreenCell, ScreenPen,
-    VTerm, VTermAllocatorFunctions, VTermAttr, VTermColor, VTermColor_indexed as C2Rust_Unnamed,
-    VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize, VTermEncoding, VTermEncodingInstance,
-    VTermGlyphInfo, VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermLineInfo,
-    VTermOutputCallback, VTermParserCallbacks, VTermParserState, VTermPen, VTermPos, VTermProp,
-    VTermRect, VTermScreen, VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermStateCallbacks,
-    VTermStateFallbacks, VTermStateFields, VTermState_mode as C2Rust_Unnamed_7,
-    VTermState_mouse_protocol as C2Rust_Unnamed_8, VTermState_saved as C2Rust_Unnamed_5,
-    VTermState_saved_mode as C2Rust_Unnamed_6, VTermState_selection as C2Rust_Unnamed_1,
-    VTermState_tmp as C2Rust_Unnamed_2, VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
-    VTermValue, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
-    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12, _IO_FILE,
-    FILE,
+    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE,
+    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
+    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
+    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
+    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
+    VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
+    VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKeyEncodingFlags,
+    VTermKeyEncodingStack, VTermLineInfo, VTermOutputCallback, VTermParserCallbacks,
+    VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
+    VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
+    VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
+    VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
+    VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
+    VTermState_tmp_selection as C2Rust_Unnamed_3,
+    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
+    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
+    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
 };
 use crate::src::nvim::vterm::pen::vterm_state_convert_color_to_rgb;
 use crate::src::nvim::vterm::state::{
@@ -108,7 +108,7 @@ unsafe extern "C" fn clearcell(mut screen: *const VTermScreen, mut cell: *mut Sc
     (*cell).schar = 0 as schar_T;
     (*cell).pen = (*screen).pen;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn getcell(
     mut screen: *const VTermScreen,
     mut row: ::core::ffi::c_int,
@@ -1340,7 +1340,7 @@ pub unsafe extern "C" fn vterm_screen_free(mut screen: *mut VTermScreen) {
     );
     vterm_allocator_free((*screen).vt, screen as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_reset(
     mut screen: *mut VTermScreen,
     mut hard: ::core::ffi::c_int,
@@ -1350,7 +1350,7 @@ pub unsafe extern "C" fn vterm_screen_reset(
     vterm_state_reset((*screen).state, hard);
     vterm_screen_flush_damage(screen);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_get_cell(
     mut screen: *const VTermScreen,
     mut pos: VTermPos,
@@ -1422,7 +1422,7 @@ pub unsafe extern "C" fn vterm_screen_get_cell(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_obtain_screen(mut vt: *mut VTerm) -> *mut VTermScreen {
     if !(*vt).screen.is_null() {
         return (*vt).screen;
@@ -1431,14 +1431,14 @@ pub unsafe extern "C" fn vterm_obtain_screen(mut vt: *mut VTerm) -> *mut VTermSc
     (*vt).screen = screen;
     return screen;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_enable_reflow(
     mut screen: *mut VTermScreen,
     mut reflow: bool,
 ) {
     (*screen).set_reflow(reflow as ::core::ffi::c_uint as ::core::ffi::c_uint);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_enable_altscreen(
     mut screen: *mut VTermScreen,
     mut altscreen: ::core::ffi::c_int,
@@ -1450,7 +1450,7 @@ pub unsafe extern "C" fn vterm_screen_enable_altscreen(
         (*screen).buffers[BUFIDX_ALTSCREEN as usize] = alloc_buffer(screen, rows, cols);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_set_callbacks(
     mut screen: *mut VTermScreen,
     mut callbacks: *const VTermScreenCallbacks,
@@ -1511,7 +1511,7 @@ pub unsafe extern "C" fn vterm_screen_set_damage_merge(
     vterm_screen_flush_damage(screen);
     (*screen).damage_merge = size;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_convert_color_to_rgb(
     mut screen: *const VTermScreen,
     mut col: *mut VTermColor,

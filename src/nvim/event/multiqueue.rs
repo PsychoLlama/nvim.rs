@@ -2,7 +2,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::__assert_fail;
 pub use crate::src::nvim::types::{
-    argv_callback, multiqueue, queue, size_t, Event, MultiQueue, PutCallback, QUEUE,
+    Event, MultiQueue, PutCallback, QUEUE, argv_callback, multiqueue, queue, size_t,
 };
 pub type MultiQueueItem = multiqueue_item;
 #[derive(Copy, Clone)]
@@ -68,14 +68,14 @@ static NILEVENT: GlobalCell<Event> = GlobalCell::new(Event {
         ::core::ptr::null_mut::<::core::ffi::c_void>(),
     ],
 });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_new(
     mut on_put: PutCallback,
     mut data: *mut ::core::ffi::c_void,
 ) -> *mut MultiQueue {
     return _multiqueue_new(::core::ptr::null_mut::<MultiQueue>(), on_put, data);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_new_child(mut parent: *mut MultiQueue) -> *mut MultiQueue {
     '_c2rust_label: {
         if (*parent).parent.is_null() {
@@ -105,7 +105,7 @@ unsafe extern "C" fn _multiqueue_new(
     (*rv).data = data;
     return rv;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_free(mut self_0: *mut MultiQueue) {
     '_c2rust_label: {
         if !self_0.is_null() {
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn multiqueue_free(mut self_0: *mut MultiQueue) {
     }
     xfree(self_0 as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_get(mut self_0: *mut MultiQueue) -> Event {
     return if multiqueue_empty(self_0) as ::core::ffi::c_int != 0 {
         NILEVENT.get()
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn multiqueue_get(mut self_0: *mut MultiQueue) -> Event {
         multiqueue_remove(self_0)
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_put_event(mut self_0: *mut MultiQueue, mut event: Event) {
     '_c2rust_label: {
         if !self_0.is_null() {
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn multiqueue_replace_parent(
     };
     (*self_0).parent = new_parent;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_size(mut self_0: *mut MultiQueue) -> size_t {
     return (*self_0).size;
 }

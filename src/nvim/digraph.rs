@@ -22,8 +22,8 @@ use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
-    no_mapping, p_cpo, p_dg, p_enc, Columns,
+    Columns, allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
+    no_mapping, p_cpo, p_dg, p_enc,
 };
 use crate::src::nvim::mapping::do_map;
 use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
@@ -36,10 +36,10 @@ use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::{getsourceline, source_runtime};
 use crate::src::nvim::types::{
-    exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T, BoolVarValue, EvalFuncData,
-    OptInt, VarType,
+    BoolVarValue, EvalFuncData, OptInt, VarType, exarg_T, garray_T, int16_t, list_T, typval_T,
+    varnumber_T, win_T,
 };
-use core::ffi::{c_char, c_int, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
 const NUL: c_int = 0;

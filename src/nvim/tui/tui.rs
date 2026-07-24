@@ -4,8 +4,8 @@ use crate::src::nvim::event::libuv::{
     uv_chdir, uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open,
     uv_run, uv_sleep, uv_strerror, uv_timer_init, uv_timer_start, uv_tty_reset_mode, uv_write,
 };
-use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
 use crate::src::nvim::event::r#loop::{loop_poll_events, loop_purge, loop_size};
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
 use crate::src::nvim::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
@@ -20,8 +20,8 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::mh_put_cstr_t;
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::src::nvim::memory::{
-    arena_finish, arena_mem_free, arena_memdupz, arena_strdup, strequal, xcalloc, xfree, xrealloc,
-    xstrdup, xstrlcpy, ARENA_EMPTY,
+    ARENA_EMPTY, arena_finish, arena_mem_free, arena_memdupz, arena_strdup, strequal, xcalloc,
+    xfree, xrealloc, xstrdup, xstrlcpy,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::env::{os_env_exists, os_getenv, os_getenv_noalloc};
@@ -40,16 +40,21 @@ use crate::src::nvim::tui::ugrid::{
     ugrid_clear, ugrid_clear_chunk, ugrid_goto, ugrid_init, ugrid_resize, ugrid_scroll,
 };
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
-    __off64_t, __off_t, __pid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
-    __pthread_rwlock_arch_t, __va_list_tag, cc_t, consumed_blk, cstr_t, cursorentry_T, dict_T,
-    dictvar_S, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, int8_t, internal_proc_cb,
-    key_value_pair, loop_0, loop_0_children as C2Rust_Unnamed_14, multiqueue, object,
+    __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pid_t, __pthread_internal_list,
+    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, Arena, ArenaMem, Array, Boolean,
+    CursorShape, Dict, FILE, Float, HlAttrs, Integer, KeyEncoding, KeyValuePair, LineFlags, Loop,
+    LuaRef, MHPutStatus, MapHash, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, QUEUE,
+    RStream, RgbValue, ScopeType, Set_cstr_t, SignalWatcher, Stream, String_0, StringBuilder,
+    TPVAR, TermKey, TermKey_Terminfo_Getstr_Hook, TermMode, TermModeState, TerminfoEntry, UCell,
+    UGrid, VarLockStatus, cc_t, consumed_blk, cstr_t, cursorentry_T, dict_T, dictvar_S, hash_T,
+    hashitem_T, hashtab_T, int8_t, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair,
+    loop_0, loop_0_children as C2Rust_Unnamed_14, multiqueue, object,
     object_data as C2Rust_Unnamed_13, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t,
     pthread_rwlock_t, queue, rstream, sattr_T, schar_T, signal_cb, signal_close_cb, signal_watcher,
     size_t, speed_t, ssize_t, stream, stream_close_cb, stream_read_cb,
-    stream_uv as C2Rust_Unnamed_15, stream_write_cb, tcflag_t, termios, uint32_t, uint64_t,
-    uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
+    stream_uv as C2Rust_Unnamed_15, stream_write_cb, tcflag_t, termios, uint8_t, uint32_t,
+    uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
     uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
     uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
@@ -61,16 +66,11 @@ pub use crate::src::nvim::types::{
     uv_signal_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_6, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_7, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_10, uv_timer_s_u as C2Rust_Unnamed_11, uv_timer_t,
-    uv_write_cb, uv_write_s, uv_write_t, va_list, Arena, ArenaMem, Array, Boolean, CursorShape,
-    Dict, Float, HlAttrs, Integer, KeyEncoding, KeyValuePair, LineFlags, Loop, LuaRef, MHPutStatus,
-    MapHash, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, RStream, RgbValue, ScopeType,
-    Set_cstr_t, SignalWatcher, Stream, StringBuilder, String_0, TermKey,
-    TermKey_Terminfo_Getstr_Hook, TermMode, TermModeState, TerminfoEntry, UCell, UGrid,
-    VarLockStatus, _IO_FILE, FILE, QUEUE, TPVAR,
+    uv_write_cb, uv_write_s, uv_write_t, va_list,
 };
 use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::c2rust_bitfields;
-extern "C" {
+unsafe extern "C" {
     fn uv_tty_init(
         _: *mut uv_loop_t,
         _: *mut uv_tty_t,
@@ -558,7 +558,7 @@ pub const LINUXSET1C: [::core::ffi::c_char; 6] =
 static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TERMINFO_SEQ_LIMIT: ::core::ffi::c_int = 128 as ::core::ffi::c_int;
 static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(SET_INIT);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_start(
     mut tui_p: *mut *mut TUIData,
     mut width: *mut ::core::ffi::c_int,
@@ -702,7 +702,7 @@ unsafe extern "C" fn tui_set_term_mode(mut tui: *mut TUIData, mut mode: TermMode
     };
     out(tui, &raw mut buf as *mut ::core::ffi::c_char, len as size_t);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_handle_term_mode(
     mut tui: *mut TUIData,
     mut mode: TermMode,
@@ -786,7 +786,7 @@ unsafe extern "C" fn tui_query_extended_underline(mut tui: *mut TUIData) {
     );
     (*tui).print_attr_id = -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_enable_extended_underline(mut tui: *mut TUIData) {
     terminfo_set_if_empty(
         tui,
@@ -850,7 +850,7 @@ unsafe extern "C" fn tui_query_bg_color_noflush(mut tui: *mut TUIData) {
         ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_query_bg_color(mut tui: *mut TUIData) {
     tui_query_bg_color_noflush(tui);
     flush_buf(tui);
@@ -1193,7 +1193,7 @@ unsafe extern "C" fn tui_terminal_after_startup(mut tui: *mut TUIData) {
     out_len(tui, (*tui).terminfo_ext.enable_focus_reporting);
     flush_buf(tui);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_stop(mut tui: *mut TUIData) {
     if uv_is_closing(&raw mut (*tui).output_handle as *mut uv_handle_t) != 0 {
         logmsg(
@@ -1268,7 +1268,7 @@ unsafe extern "C" fn tui_terminal_stop(mut tui: *mut TUIData) {
     tinput_stop(&raw mut (*tui).input);
     terminfo_stop(tui);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_is_stopped(mut tui: *mut TUIData) -> bool {
     return (*tui).stopped;
 }
@@ -1989,7 +1989,7 @@ unsafe extern "C" fn reset_scroll_region(mut tui: *mut TUIData, mut fullwidth: b
     }
     (*grid).row = -1 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_grid_resize(
     mut tui: *mut TUIData,
     mut _g: Integer,
@@ -2034,7 +2034,7 @@ pub unsafe extern "C" fn tui_grid_resize(
         (*grid).row = -1 as ::core::ffi::c_int;
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut _g: Integer) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
     ugrid_clear(grid);
@@ -2049,7 +2049,7 @@ pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut _g: Integer) 
         0 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_grid_cursor_goto(
     mut tui: *mut TUIData,
     mut _grid: Integer,
@@ -2115,7 +2115,7 @@ unsafe extern "C" fn decode_cursor_entry(mut args: Dict) -> cursorentry_T {
     }
     return r;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_mode_info_set(
     mut tui: *mut TUIData,
     mut guicursor_enabled: bool,
@@ -2161,17 +2161,17 @@ pub unsafe extern "C" fn tui_mode_info_set(
     }
     tui_set_mode(tui, (*tui).showing_mode);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_update_menu(mut _tui: *mut TUIData) {}
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_busy_start(mut tui: *mut TUIData) {
     (*tui).busy = true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_busy_stop(mut tui: *mut TUIData) {
     (*tui).busy = false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_mouse_on(mut tui: *mut TUIData) {
     if !(*tui).mouse_enabled {
         tui_set_term_mode(tui, kTermModeMouseButtonEvent, true_0 != 0);
@@ -2182,7 +2182,7 @@ pub unsafe extern "C" fn tui_mouse_on(mut tui: *mut TUIData) {
         (*tui).mouse_enabled = true_0 != 0;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_mouse_off(mut tui: *mut TUIData) {
     if (*tui).mouse_enabled {
         if (*tui).mouse_move_enabled {
@@ -2296,7 +2296,7 @@ unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
         0 as ::core::ffi::c_int,
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_mode_change(
     mut tui: *mut TUIData,
     mut _mode: String_0,
@@ -2341,7 +2341,7 @@ pub unsafe extern "C" fn tui_mode_change(
     (*tui).is_starting = false_0 != 0;
     (*tui).showing_mode = mode_idx as ModeShape;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_grid_scroll(
     mut tui: *mut TUIData,
     mut _g: Integer,
@@ -2418,7 +2418,7 @@ pub unsafe extern "C" fn tui_grid_scroll(
         );
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_add_url(
     mut _tui: *mut TUIData,
     mut url: *const ::core::ffi::c_char,
@@ -2433,7 +2433,7 @@ pub unsafe extern "C" fn tui_add_url(
     }
     return k as int32_t;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_hl_attr_define(
     mut tui: *mut TUIData,
     mut id: Integer,
@@ -2466,7 +2466,7 @@ pub unsafe extern "C" fn tui_hl_attr_define(
     };
     *(*tui).attrs.items.offset(id as size_t as isize) = attrs;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_bell(mut tui: *mut TUIData) {
     out(
         tui,
@@ -2474,7 +2474,7 @@ pub unsafe extern "C" fn tui_bell(mut tui: *mut TUIData) {
         ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_visual_bell(mut tui: *mut TUIData) {
     if (*tui).screen_or_tmux {
         out(
@@ -2498,7 +2498,7 @@ pub unsafe extern "C" fn tui_visual_bell(mut tui: *mut TUIData) {
     }
     flush_buf(tui);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_default_colors_set(
     mut tui: *mut TUIData,
     mut rgb_fg: Integer,
@@ -2522,7 +2522,7 @@ pub unsafe extern "C" fn tui_default_colors_set(
         (*tui).grid.width,
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_ui_send(mut tui: *mut TUIData, mut content: String_0) {
     let mut req: uv_write_t = uv_write_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2568,7 +2568,7 @@ pub unsafe extern "C" fn tui_ui_send(mut tui: *mut TUIData, mut content: String_
     }
     uv_run(&raw mut (*tui).write_loop, UV_RUN_DEFAULT);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_flush(mut tui: *mut TUIData) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
     let mut nrevents: size_t = loop_size((*tui).loop_0);
@@ -2819,7 +2819,7 @@ unsafe extern "C" fn show_verbose_terminfo(mut tui: *mut TUIData) {
     );
     xfree(str.data as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_suspend(mut tui: *mut TUIData) {
     ui_client_detach();
     (*tui).mouse_enabled_save = (*tui).mouse_enabled;
@@ -2840,7 +2840,7 @@ unsafe extern "C" fn tui_suspend_cb(mut tui: *mut TUIData) {
     stream_set_blocking((*tui).input.in_fd, false_0 != 0);
     ui_client_attach((*tui).width, (*tui).height, (*tui).term, (*tui).rgb);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_set_title(mut tui: *mut TUIData, mut title: String_0) {
     if !(*tui).can_set_title {
         return;
@@ -2885,9 +2885,9 @@ pub unsafe extern "C" fn tui_set_title(mut tui: *mut TUIData, mut title: String_
         (*tui).title_enabled = false_0 != 0;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_set_icon(mut _tui: *mut TUIData, mut _icon: String_0) {}
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_screenshot(mut tui: *mut TUIData, mut path: String_0) {
     let mut f: *mut FILE =
         fopen(path.data, b"w\0".as_ptr() as *const ::core::ffi::c_char) as *mut FILE;
@@ -2923,7 +2923,7 @@ pub unsafe extern "C" fn tui_screenshot(mut tui: *mut TUIData, mut path: String_
     (*tui).screenshot = ::core::ptr::null_mut::<FILE>();
     fclose(f);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_option_set(
     mut tui: *mut TUIData,
     mut name: String_0,
@@ -3013,7 +3013,7 @@ pub unsafe extern "C" fn tui_option_set(
         (*tui).sync_output = value.data.boolean as bool;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_chdir(mut _tui: *mut TUIData, mut path: String_0) {
     let mut err: ::core::ffi::c_int = uv_chdir(path.data);
     if err != 0 as ::core::ffi::c_int {
@@ -3029,7 +3029,7 @@ pub unsafe extern "C" fn tui_chdir(mut _tui: *mut TUIData, mut path: String_0) {
         );
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_raw_line(
     mut tui: *mut TUIData,
     mut _g: Integer,
@@ -3183,7 +3183,7 @@ unsafe extern "C" fn invalidate(
         };
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_set_size(
     mut tui: *mut TUIData,
     mut width: ::core::ffi::c_int,

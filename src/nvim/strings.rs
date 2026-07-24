@@ -12,8 +12,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
 use crate::src::nvim::mbyte::{
     mb_copy_char, mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, mb_tolower, mb_toupper,
-    utf8len_tab, utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2cells,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2cells, utf_ptr2char,
+    utf_ptr2len, utf8len_tab, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
     arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan,
@@ -27,17 +27,17 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::plines::linetabsize_col;
 pub use crate::src::nvim::types::{
-    __builtin_va_list, __compar_fn_t, __gnuc_va_list, __va_list_tag, blob_T, blobvar_S, dict_T,
-    dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T,
-    hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, intmax_t, keyvalue_T, linenr_T,
-    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, partial_S, partial_T,
-    proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union,
-    ufunc_S, ufunc_T, uint16_t, uint64_t, uint8_t, uintmax_t, uintptr_t, uvarnumber_T, va_list,
-    varnumber_T, Arena, BoolVarValue, CharInfo, EvalFuncData, ListLenSpecials, LuaRef,
-    MsgpackRpcRequestHandler, ScopeDictDictItem, ScopeType, SpecialVarValue, StringBuilder,
-    String_0, VarLockStatus, VarType, QUEUE,
+    __builtin_va_list, __compar_fn_t, __gnuc_va_list, __va_list_tag, Arena, BoolVarValue, CharInfo,
+    EvalFuncData, ListLenSpecials, LuaRef, MsgpackRpcRequestHandler, QUEUE, ScopeDictDictItem,
+    ScopeType, SpecialVarValue, String_0, StringBuilder, VarLockStatus, VarType, blob_T, blobvar_S,
+    dict_T, dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T,
+    garray_T, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, intmax_t, keyvalue_T,
+    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, partial_S,
+    partial_T, proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, ssize_t, typval_T,
+    typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint16_t, uint64_t, uintmax_t, uintptr_t,
+    uvarnumber_T, va_list, varnumber_T,
 };
-use core::ffi::{c_char, c_int, CStr};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use core::slice;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
@@ -2863,7 +2863,7 @@ pub unsafe extern "C" fn arena_printf(
         size: printed as size_t,
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn reverse_text(mut s: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut len: size_t = strlen(s);
     let mut rev: *mut ::core::ffi::c_char =

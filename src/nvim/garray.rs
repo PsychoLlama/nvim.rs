@@ -7,7 +7,7 @@
 //! `extern "C"` shims keep the raw-pointer plumbing; the growth policy and
 //! joining logic live in safe code below them.
 
-use core::ffi::{c_char, c_int, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
@@ -66,7 +66,7 @@ fn join_into(dst: &mut [u8], parts: &[&[u8]], sep: &[u8]) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ga_clear(gap: *mut garray_T) {
     xfree((*gap).ga_data);
     (*gap).ga_data = ptr::null_mut();
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn ga_clear_strings(gap: *mut garray_T) {
     ga_clear(gap);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
     (*gap).ga_data = ptr::null_mut();
     (*gap).ga_maxlen = 0;

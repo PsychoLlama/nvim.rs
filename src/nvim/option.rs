@@ -51,49 +51,49 @@ use crate::src::nvim::keycodes::{
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    bkc_flags, bo_flags, buf_opt_idx, cb_flags, clear_cmdline, cmdline_row, cmdmod, cmp_flags,
-    cot_flags, curbuf, current_sctx, curtab, curwin, dy_flags, e_invarg, e_positive, e_sandbox,
-    e_scroll, e_secure, e_trailing, e_unknown_option2, e_unsupportedoption, e_winheight,
-    e_winwidth, empty_string_option, escape_chars, fdo_flags, fenc_default, first_tabpage,
-    firstbuf, firstwin, full_screen, got_int, info_message, jop_flags, lastwin, magic_overruled,
-    need_maketitle, no_wait_return, opt_ambw_values, opt_bg_values, opt_bh_values, opt_bkc_values,
-    opt_bo_values, opt_briopt_values, opt_bs_values, opt_bt_values, opt_cb_values, opt_cmp_values,
-    opt_cot_values, opt_cpt_values, opt_csl_values, opt_culopt_values, opt_debug_values,
-    opt_dip_values, opt_dy_values, opt_ead_values, opt_fcl_values, opt_fdc_values, opt_fdm_values,
-    opt_fdo_values, opt_ff_values, opt_icm_values, opt_jop_values, opt_km_values, opt_lop_values,
-    opt_mopt_values, opt_mousem_values, opt_mousescroll_values, opt_nf_values,
-    opt_pumborder_values, opt_rdb_values, opt_rlc_values, opt_sbo_values, opt_scl_values,
-    opt_sel_values, opt_slm_values, opt_sloc_values, opt_spk_values, opt_spo_values,
-    opt_sps_values, opt_ssop_values, opt_swb_values, opt_tc_values, opt_tcl_values, opt_tpf_values,
-    opt_ve_values, opt_wak_values, opt_wim_values, opt_winborder_values, opt_wop_values, p_ac,
-    p_acd, p_acl, p_act, p_ai, p_ambw, p_ar, p_ari, p_arshape, p_aw, p_awa, p_bdir, p_bex, p_bg,
-    p_bh, p_bin, p_bk, p_bkc, p_bl, p_bo, p_bomb, p_breakat, p_bs, p_bsk, p_bt, p_busy, p_cb,
-    p_ccv, p_cdh, p_cdpath, p_cedit, p_cfu, p_ch, p_channel, p_chi, p_ci, p_cia, p_cin, p_cink,
-    p_cino, p_cinsd, p_cinw, p_cmp, p_cms, p_columns, p_com, p_confirm, p_cot, p_cpo, p_cpt, p_cto,
-    p_cwh, p_debug, p_deco, p_def, p_dex, p_dg, p_dia, p_dict, p_dip, p_dir, p_dy, p_ea, p_ead,
-    p_eb, p_ef, p_efm, p_ei, p_emoji, p_enc, p_eof, p_eol, p_ep, p_et, p_exrc, p_fcl, p_fcs,
-    p_fdls, p_fdo, p_fenc, p_fencs, p_fex, p_ff, p_ffs, p_ffu, p_fic, p_fixeol, p_flp, p_fo, p_fp,
-    p_fs, p_ft, p_gd, p_gefm, p_gp, p_guicursor, p_guifont, p_guifontwide, p_hf, p_hh, p_hi, p_hid,
-    p_hl, p_hlg, p_hls, p_ic, p_icm, p_icon, p_iconstring, p_iminsert, p_imsearch, p_inc, p_inde,
-    p_indk, p_inex, p_inf, p_is, p_isf, p_isi, p_isk, p_isp, p_jop, p_js, p_keymap, p_km, p_kp,
-    p_langmap, p_lcs, p_lines, p_linespace, p_lisp, p_lispwords, p_lm, p_lnr, p_lop, p_lpl, p_lrm,
-    p_ls, p_lz, p_ma, p_magic, p_mat, p_mco, p_mef, p_menc, p_mfd, p_mh, p_mis, p_ml, p_mle, p_mls,
-    p_mmd, p_mmp, p_mod, p_mopt, p_more, p_mouse, p_mousef, p_mousem, p_mousemev, p_mousescroll,
-    p_mouset, p_mp, p_mps, p_msc, p_msm, p_nf, p_ofu, p_opfunc, p_para, p_paste, p_path, p_pb,
-    p_pex, p_ph, p_pi, p_pm, p_pmw, p_pp, p_pumborder, p_pvh, p_pw, p_pyx, p_qe, p_qftf, p_rdb,
-    p_rdt, p_re, p_report, p_ri, p_ro, p_rtp, p_ru, p_ruf, p_sb, p_sbo, p_sbr, p_sc, p_scbk, p_scs,
-    p_sections, p_secure, p_sel, p_sft, p_sh, p_shada, p_shadafile, p_shcf, p_shm, p_shq, p_si,
-    p_siso, p_sj, p_slm, p_sloc, p_sm, p_smc, p_smd, p_so, p_sol, p_sp, p_spc, p_spf, p_spk, p_spl,
-    p_spo, p_spr, p_sps, p_sr, p_srr, p_ss, p_ssop, p_sta, p_stal, p_stl, p_stmp, p_sts, p_su,
-    p_sua, p_sw, p_swb, p_swf, p_sxe, p_sxq, p_syn, p_tags, p_tal, p_tbidi, p_tbs, p_tc, p_tcl,
-    p_termsync, p_tf, p_tfu, p_tgc, p_tgst, p_timeout, p_title, p_titlelen, p_titleold,
-    p_titlestring, p_tl, p_tm, p_to, p_tpf, p_tpm, p_tr, p_ts, p_tsr, p_tsrfu, p_ttimeout, p_ttm,
-    p_tw, p_uc, p_udf, p_udir, p_ul, p_ur, p_ut, p_vb, p_vdir, p_ve, p_verbose, p_vop, p_vsts,
-    p_vts, p_wa, p_wak, p_warn, p_wb, p_wbr, p_wc, p_wcm, p_wd, p_wh, p_wic, p_wig, p_wim,
-    p_winborder, p_window, p_wiw, p_wm, p_wmh, p_wmnu, p_wmw, p_wop, p_write, p_ws, p_ww,
-    rdb_flags, readonlymode, redraw_tabline, sandbox, secure, silent_mode, spo_flags, ssop_flags,
-    starting, swb_flags, t_colors, tc_flags, tcl_flags, topframe, tpf_flags, updating_screen,
-    ve_flags, vop_flags, wop_flags, Columns, IObuff, NameBuff, Rows, State,
+    Columns, IObuff, NameBuff, Rows, State, bkc_flags, bo_flags, buf_opt_idx, cb_flags,
+    clear_cmdline, cmdline_row, cmdmod, cmp_flags, cot_flags, curbuf, current_sctx, curtab, curwin,
+    dy_flags, e_invarg, e_positive, e_sandbox, e_scroll, e_secure, e_trailing, e_unknown_option2,
+    e_unsupportedoption, e_winheight, e_winwidth, empty_string_option, escape_chars, fdo_flags,
+    fenc_default, first_tabpage, firstbuf, firstwin, full_screen, got_int, info_message, jop_flags,
+    lastwin, magic_overruled, need_maketitle, no_wait_return, opt_ambw_values, opt_bg_values,
+    opt_bh_values, opt_bkc_values, opt_bo_values, opt_briopt_values, opt_bs_values, opt_bt_values,
+    opt_cb_values, opt_cmp_values, opt_cot_values, opt_cpt_values, opt_csl_values,
+    opt_culopt_values, opt_debug_values, opt_dip_values, opt_dy_values, opt_ead_values,
+    opt_fcl_values, opt_fdc_values, opt_fdm_values, opt_fdo_values, opt_ff_values, opt_icm_values,
+    opt_jop_values, opt_km_values, opt_lop_values, opt_mopt_values, opt_mousem_values,
+    opt_mousescroll_values, opt_nf_values, opt_pumborder_values, opt_rdb_values, opt_rlc_values,
+    opt_sbo_values, opt_scl_values, opt_sel_values, opt_slm_values, opt_sloc_values,
+    opt_spk_values, opt_spo_values, opt_sps_values, opt_ssop_values, opt_swb_values, opt_tc_values,
+    opt_tcl_values, opt_tpf_values, opt_ve_values, opt_wak_values, opt_wim_values,
+    opt_winborder_values, opt_wop_values, p_ac, p_acd, p_acl, p_act, p_ai, p_ambw, p_ar, p_ari,
+    p_arshape, p_aw, p_awa, p_bdir, p_bex, p_bg, p_bh, p_bin, p_bk, p_bkc, p_bl, p_bo, p_bomb,
+    p_breakat, p_bs, p_bsk, p_bt, p_busy, p_cb, p_ccv, p_cdh, p_cdpath, p_cedit, p_cfu, p_ch,
+    p_channel, p_chi, p_ci, p_cia, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cmp, p_cms, p_columns,
+    p_com, p_confirm, p_cot, p_cpo, p_cpt, p_cto, p_cwh, p_debug, p_deco, p_def, p_dex, p_dg,
+    p_dia, p_dict, p_dip, p_dir, p_dy, p_ea, p_ead, p_eb, p_ef, p_efm, p_ei, p_emoji, p_enc, p_eof,
+    p_eol, p_ep, p_et, p_exrc, p_fcl, p_fcs, p_fdls, p_fdo, p_fenc, p_fencs, p_fex, p_ff, p_ffs,
+    p_ffu, p_fic, p_fixeol, p_flp, p_fo, p_fp, p_fs, p_ft, p_gd, p_gefm, p_gp, p_guicursor,
+    p_guifont, p_guifontwide, p_hf, p_hh, p_hi, p_hid, p_hl, p_hlg, p_hls, p_ic, p_icm, p_icon,
+    p_iconstring, p_iminsert, p_imsearch, p_inc, p_inde, p_indk, p_inex, p_inf, p_is, p_isf, p_isi,
+    p_isk, p_isp, p_jop, p_js, p_keymap, p_km, p_kp, p_langmap, p_lcs, p_lines, p_linespace,
+    p_lisp, p_lispwords, p_lm, p_lnr, p_lop, p_lpl, p_lrm, p_ls, p_lz, p_ma, p_magic, p_mat, p_mco,
+    p_mef, p_menc, p_mfd, p_mh, p_mis, p_ml, p_mle, p_mls, p_mmd, p_mmp, p_mod, p_mopt, p_more,
+    p_mouse, p_mousef, p_mousem, p_mousemev, p_mousescroll, p_mouset, p_mp, p_mps, p_msc, p_msm,
+    p_nf, p_ofu, p_opfunc, p_para, p_paste, p_path, p_pb, p_pex, p_ph, p_pi, p_pm, p_pmw, p_pp,
+    p_pumborder, p_pvh, p_pw, p_pyx, p_qe, p_qftf, p_rdb, p_rdt, p_re, p_report, p_ri, p_ro, p_rtp,
+    p_ru, p_ruf, p_sb, p_sbo, p_sbr, p_sc, p_scbk, p_scs, p_sections, p_secure, p_sel, p_sft, p_sh,
+    p_shada, p_shadafile, p_shcf, p_shm, p_shq, p_si, p_siso, p_sj, p_slm, p_sloc, p_sm, p_smc,
+    p_smd, p_so, p_sol, p_sp, p_spc, p_spf, p_spk, p_spl, p_spo, p_spr, p_sps, p_sr, p_srr, p_ss,
+    p_ssop, p_sta, p_stal, p_stl, p_stmp, p_sts, p_su, p_sua, p_sw, p_swb, p_swf, p_sxe, p_sxq,
+    p_syn, p_tags, p_tal, p_tbidi, p_tbs, p_tc, p_tcl, p_termsync, p_tf, p_tfu, p_tgc, p_tgst,
+    p_timeout, p_title, p_titlelen, p_titleold, p_titlestring, p_tl, p_tm, p_to, p_tpf, p_tpm,
+    p_tr, p_ts, p_tsr, p_tsrfu, p_ttimeout, p_ttm, p_tw, p_uc, p_udf, p_udir, p_ul, p_ur, p_ut,
+    p_vb, p_vdir, p_ve, p_verbose, p_vop, p_vsts, p_vts, p_wa, p_wak, p_warn, p_wb, p_wbr, p_wc,
+    p_wcm, p_wd, p_wh, p_wic, p_wig, p_wim, p_winborder, p_window, p_wiw, p_wm, p_wmh, p_wmnu,
+    p_wmw, p_wop, p_write, p_ws, p_ww, rdb_flags, readonlymode, redraw_tabline, sandbox, secure,
+    silent_mode, spo_flags, ssop_flags, starting, swb_flags, t_colors, tc_flags, tcl_flags,
+    topframe, tpf_flags, updating_screen, ve_flags, vop_flags, wop_flags,
 };
 use crate::src::nvim::mapping::{did_set_langmap, langmap_init, put_escstr};
 use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
@@ -107,6 +107,7 @@ use crate::src::nvim::message::{
     msg_puts, msg_puts_title, msg_source,
 };
 use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::normal::{do_check_scrollbind, get_vtopline};
 use crate::src::nvim::ops::did_set_operatorfunc;
 use crate::src::nvim::optionstr::{
@@ -146,11 +147,10 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::path::{
-    after_pathsep, invocation_path_tail, path_fnamecmp, path_tail, vim_ispathlistsep, FullName_save,
+    FullName_save, after_pathsep, invocation_path_tail, path_fnamecmp, path_tail, vim_ispathlistsep,
 };
 use crate::src::nvim::popupmenu::{pum_drawn, pum_redraw};
 use crate::src::nvim::quickfix::{did_set_quickfixtextfunc, qf_resize_stack};
-use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::runtime::{
     did_set_runtimepackpath, exestack, runtimepath_default, source_runtime_vim_lua,
 };
@@ -164,14 +164,29 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::tag::{did_set_tagfunc, set_buflocal_tfu_callback};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t, __time_t, __uid_t,
-    aco_save_T, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
-    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_24, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
-    eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_32, etype_T, event_T,
-    exarg, exarg_T, except_T, except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    __off_t, __off64_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
+    _IO_wide_data, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
+    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CharsOption, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorProvider,
+    DecorProvider_state as C2Rust_Unnamed_14, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, ExtmarkUndoObject,
+    FILE, FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs, Integer,
+    Intersection, KeyDict_highlight, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, NS, Object, ObjectType, OptIndex, OptInt, OptScope, OptScopeFlags, OptVal,
+    OptValData, OptValType, OptionalKeys, QUEUE, RgbValue, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, TriState,
+    VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, aco_save_T, alist_T, auto_event, bhdr_T,
+    blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T,
+    cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_24, dict_T, dictvar_S, diff_T,
+    diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
+    estack_T_es_info as C2Rust_Unnamed_32, etype_T, event_T, exarg, exarg_T, except_T,
+    except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
+    file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, fuzmatch_str_T, garray_T,
     handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair,
@@ -185,23 +200,9 @@ pub use crate::src::nvim::types::{
     synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, uvarnumber_T, varnumber_T, vim_exception, vimoption_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, AdditionalData,
-    AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, CharsOption, DecorExt, DecorHighlightInline, DecorInlineData,
-    DecorPriority, DecorProvider, DecorProvider_state as C2Rust_Unnamed_14, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, ExtmarkUndoObject,
-    FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs, Integer, Intersection,
-    KeyDict_highlight, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    Object, ObjectType, OptIndex, OptInt, OptScope, OptScopeFlags, OptVal, OptValData, OptValType,
-    OptionalKeys, RgbValue, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, _IO_FILE, FILE, NS, QUEUE,
+    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
@@ -212,7 +213,7 @@ use crate::src::nvim::window::{
     win_find_tabpage, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
-extern "C" {
+unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn on_scrollback_option_changed(term: *mut Terminal);
     fn ll_resize_stack(wp: *mut win_T, n: ::core::ffi::c_int);
@@ -8174,7 +8175,7 @@ pub unsafe extern "C" fn didset_window_options(mut wp: *mut win_T, mut valid_cur
     check_signcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
     (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) {
     let mut should_copy: bool = true_0 != 0;
     let mut save_p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -29032,7 +29033,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     ]);
 }
 #[used]
-#[cfg_attr(target_os = "linux", link_section = ".init_array")]
-#[cfg_attr(target_os = "windows", link_section = ".CRT$XIB")]
-#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
+#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
 static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

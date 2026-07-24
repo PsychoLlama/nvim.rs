@@ -25,17 +25,17 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
+    ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, Dict, Error, ErrorType, EvalFuncData,
+    Float, Integer, KeyValuePair, ListLenSpecials, LuaRef, MsgpackRpcRequestHandler, Object,
+    ObjectType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus,
+    VarType, VimVarIndex, blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
     iconv_t, int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
     listwatch_S, listwatch_T, object, object_data as C2Rust_Unnamed, partial_S, partial_T,
     proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
-    ufunc_T, uint64_t, uint8_t, varnumber_T, vimconv_T, ApiDispatchWrapper, Arena, Array,
-    BoolVarValue, Boolean, Dict, Error, ErrorType, EvalFuncData, Float, Integer, KeyValuePair,
-    ListLenSpecials, LuaRef, MsgpackRpcRequestHandler, Object, ObjectType, ScopeDictDictItem,
-    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, QUEUE,
+    ufunc_T, uint8_t, uint64_t, varnumber_T, vimconv_T,
 };
-extern "C" {
+unsafe extern "C" {
     fn hash_lock(ht: *mut hashtab_T);
     fn hash_unlock(ht: *mut hashtab_T);
 }

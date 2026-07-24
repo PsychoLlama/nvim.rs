@@ -2,22 +2,22 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::{abs, memcpy, memset, snprintf, vsnprintf};
 pub use crate::src::nvim::types::{
-    __builtin_va_list, __gnuc_va_list, __va_list_tag, int32_t, schar_T, size_t, uint16_t, uint32_t,
-    uint8_t, utf8proc_int32_t, va_list, GraphemeState, ScreenCell, ScreenPen, VTerm,
+    __builtin_va_list, __gnuc_va_list, __va_list_tag, GraphemeState, ScreenCell, ScreenPen, VTerm,
+    VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
+    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
+    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
     VTermAllocatorFunctions, VTermAttr, VTermColor, VTermColor_indexed as C2Rust_Unnamed,
     VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize, VTermEncoding, VTermEncodingInstance,
     VTermGlyphInfo, VTermKeyEncodingFlags, VTermKeyEncodingStack, VTermLineInfo,
     VTermOutputCallback, VTermParserCallbacks, VTermParserState, VTermPen, VTermPos, VTermProp,
     VTermRect, VTermScreen, VTermScreenCallbacks, VTermScreenCell, VTermScreenCellAttrs,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermStateCallbacks,
-    VTermStateFallbacks, VTermStateFields, VTermState_mode as C2Rust_Unnamed_7,
+    VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermState_mode as C2Rust_Unnamed_7,
     VTermState_mouse_protocol as C2Rust_Unnamed_8, VTermState_saved as C2Rust_Unnamed_5,
     VTermState_saved_mode as C2Rust_Unnamed_6, VTermState_selection as C2Rust_Unnamed_1,
     VTermState_tmp as C2Rust_Unnamed_2, VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStringFragment, VTermTerminator,
-    VTermValue, VTermValueType, VTerm_mode as C2Rust_Unnamed_14, VTerm_parser as C2Rust_Unnamed_9,
-    VTerm_parser_v as C2Rust_Unnamed_10, VTerm_parser_v_csi as C2Rust_Unnamed_13,
-    VTerm_parser_v_dcs as C2Rust_Unnamed_11, VTerm_parser_v_osc as C2Rust_Unnamed_12,
+    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
+    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, VTermValueType, int32_t,
+    schar_T, size_t, uint8_t, uint16_t, uint32_t, utf8proc_int32_t, va_list,
 };
 use crate::src::nvim::vterm::screen::vterm_screen_free;
 use crate::src::nvim::vterm::state::vterm_state_free;
@@ -131,7 +131,7 @@ static default_allocator: GlobalCell<VTermAllocatorFunctions> =
                 as unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
         ),
     });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_new(
     mut rows: ::core::ffi::c_int,
     mut cols: ::core::ffi::c_int,
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn vterm_get_size(
         *colsp = (*vt).cols;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_size(
     mut vt: *mut VTerm,
     mut rows: ::core::ffi::c_int,
@@ -243,13 +243,13 @@ pub unsafe extern "C" fn vterm_set_size(
         .expect("non-null function pointer")(rows, cols, (*vt).parser.cbdata);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_utf8(mut vt: *mut VTerm, mut is_utf8: ::core::ffi::c_int) {
     (*vt)
         .mode
         .set_utf8(is_utf8 as ::core::ffi::c_uint as ::core::ffi::c_uint);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_output_set_callback(
     mut vt: *mut VTerm,
     mut func: Option<VTermOutputCallback>,

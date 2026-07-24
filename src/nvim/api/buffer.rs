@@ -15,8 +15,8 @@ use crate::src::nvim::extmark::extmark_splice;
 use crate::src::nvim::lua::executor::nlua_call_ref;
 use crate::src::nvim::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
 use crate::src::nvim::main::{
-    curbuf, curtab, curwin, first_tabpage, firstwin, p_acd, RedrawingDisabled, State, VIsual,
-    VIsual_active, VIsual_mode,
+    RedrawingDisabled, State, VIsual, VIsual_active, VIsual_mode, curbuf, curtab, curwin,
+    first_tabpage, firstwin, p_acd,
 };
 use crate::src::nvim::mapping::{keymap_array, modify_keymap};
 use crate::src::nvim::mark::{mark_adjust_buf, mark_get};
@@ -27,15 +27,28 @@ use crate::src::nvim::memline::{
 use crate::src::nvim::memory::{
     arena_alloc, arena_allocz, arena_memdupz, memchrsub, strchrsub, xfree, xmemdupz,
 };
+use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
-use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 pub use crate::src::nvim::types::{
-    __time_t, aco_save_T, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
-    bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
-    dobuf_action_values, dobuf_start_values, except_T, except_type_T, extmark_undo_vec_t,
-    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_12, file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
+    BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkMove,
+    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor,
+    FloatRelative, GridView, Integer, Intersection, KeyDict_buf_attach, KeyDict_buf_delete,
+    KeyDict_empty, KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkAdjustMode, MarkGet, MarkTree, MetaIndex, Object, ObjectType, OptInt, OptionalKeys, QUEUE,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
+    Terminal, Timestamp, TryState, UndoObjectType, VarLockStatus, VarType, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, aco_save_T,
+    alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T,
+    chunksize_T, colnr_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, dobuf_action_values,
+    dobuf_start_values, except_T, except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_12,
+    file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair, lcs_chars_T,
@@ -48,22 +61,9 @@ pub use crate::src::nvim::types::{
     tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, vim_exception, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData,
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkMove, ExtmarkOp,
-    ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, Integer, Intersection, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty,
-    KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t,
-    MarkAdjustMode, MarkGet, MarkTree, MetaIndex, Object, ObjectType, OptInt, OptionalKeys,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0,
-    Terminal, Timestamp, TryState, UndoObjectType, VarLockStatus, VarType, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::undo::u_save_buf;
 pub const kErrorTypeValidation: ErrorType = 1;

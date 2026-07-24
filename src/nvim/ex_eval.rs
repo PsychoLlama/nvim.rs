@@ -4,18 +4,18 @@ use crate::src::nvim::eval::typval::{tv_clear, tv_free, tv_list_unref};
 use crate::src::nvim::eval::userfunc::{do_return, get_return_cmd};
 use crate::src::nvim::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::src::nvim::eval_1::{
-    clear_evalarg, eval0, eval_for_line, eval_to_bool, eval_to_string_skip, fill_evalarg_from_eap,
+    clear_evalarg, eval_for_line, eval_to_bool, eval_to_string_skip, eval0, fill_evalarg_from_eap,
     free_for_info, next_for_item,
 };
 use crate::src::nvim::ex_docmd::{ends_excmd, find_nextcmd, handle_did_throw, modifier_len};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_endif,
+    IObuff, caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_endif,
     did_throw, e_argreq, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_interr, e_invarg2,
     e_invexpr2, e_outofmem, e_str_not_inside_function, e_trailing_arg, e_while,
     empty_string_option, emsg_off, emsg_silent, force_abort, got_int, msg_list, msg_row,
     msg_scroll, msg_silent, need_rethrow, no_wait_return, p_cpo, p_verbose, suppress_errthrow,
-    trylevel, IObuff,
+    trylevel,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
@@ -29,6 +29,9 @@ use crate::src::nvim::regexp::skip_regexp_err;
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 pub use crate::src::nvim::types::{
+    Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, CMD_index, Dict, Float,
+    Integer, KeyValuePair, LineGetter, LuaRef, Object, ObjectType, OptInt, QUEUE,
+    ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex,
     auto_event, blob_T, blobvar_S, cleanup_T, cleanup_stuff, cmd_addr_T, cmdidx_T, colnr_T,
     cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_2, dict_T, dictvar_S, eslist_T, eslist_elem,
     estack_T, estack_T_es_info as C2Rust_Unnamed_6, estack_arg_T, etype_T, evalarg_T, event_T,
@@ -37,20 +40,17 @@ pub use crate::src::nvim::types::{
     hashtab_T, int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T,
     listvar_S, listwatch_S, listwatch_T, msglist, msglist_T, object, object_data as C2Rust_Unnamed,
     partial_S, partial_T, proftime_T, ptrdiff_t, queue, regmatch_T, regprog, regprog_T, scid_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint32_t, uint64_t, uint8_t,
-    varnumber_T, vim_exception, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    CMD_index, Dict, Float, Integer, KeyValuePair, LineGetter, LuaRef, Object, ObjectType, OptInt,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex,
-    QUEUE,
+    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint32_t, uint64_t,
+    varnumber_T, vim_exception,
 };
-extern "C" {
+unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
-        -> bool;
+    -> bool;
 }
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;

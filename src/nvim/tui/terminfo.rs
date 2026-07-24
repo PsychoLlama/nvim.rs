@@ -5,7 +5,7 @@ use crate::src::nvim::os::libc::{__ctype_b_loc, memcmp, memset, snprintf, strlen
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::unibi;
 pub use crate::src::nvim::types::{
-    size_t, ssize_t, Arena, StringBuilder, String_0, TerminfoEntry, TPVAR,
+    Arena, String_0, StringBuilder, TPVAR, TerminfoEntry, size_t, ssize_t,
 };
 pub type unibi_boolean = ::core::ffi::c_uint;
 pub const unibi_back_color_erase: unibi_boolean = 29;
@@ -952,7 +952,7 @@ unsafe extern "C" fn onum(
     *buf = (*buf).offset(l as isize);
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminfo_fmt(
     mut buf_start: *mut ::core::ffi::c_char,
     mut buf_end: *mut ::core::ffi::c_char,

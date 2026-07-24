@@ -1,6 +1,6 @@
 //! Shared helpers for calling the C-ABI surface from Rust tests.
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 
 use c2rust_neovim::src::nvim::memory::xfree;
 

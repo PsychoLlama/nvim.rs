@@ -6,7 +6,7 @@ name = "c2rust_neovim"
 authors = ["C2Rust"]
 version = "0.0.0"
 publish = false
-edition = "2021"
+edition = "2024"
 autobins = false
 # Enumerate package files explicitly so cargo lists them by walking the
 # directory instead of reading neovim's git index — cargo's bundled libgit2
@@ -31,6 +31,15 @@ test = false
 [dependencies]
 c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
 libc = "0.2"
+
+# Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
+# an explicit `unsafe {}` block. The transpiled tree has thousands of such
+# fns; blanket-wrapping their bodies would double the textual `unsafe` count
+# the ratchet tracks while making nothing safer. So the lint is allowed
+# crate-wide, and modules deny it as they are rewritten — rewrites eliminate
+# unsafe instead of annotating it.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "allow"
 
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf warn and burn down through the ratchet (metrics/clippy.json).

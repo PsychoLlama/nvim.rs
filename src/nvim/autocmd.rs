@@ -27,13 +27,13 @@ use crate::src::nvim::grid::grid_free;
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_set_sctx};
 use crate::src::nvim::main::{
-    au_pending_free_buf, au_pending_free_win, autocmd_bufnr, autocmd_busy, autocmd_fname,
-    autocmd_fname_full, autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx,
-    curtab, curwin, deferred_events, did_cursorhold, did_emsg, do_profiling, e_argreq,
-    e_cannot_define_autocommands_for_all_events, e_duparg2, first_tabpage, firstbuf, firstwin,
-    globaldir, got_int, last_cursormoved, last_cursormoved_win, last_mode, lastwin, main_loop,
-    msg_col, need_maketitle, p_acd, p_ei, p_verbose, prevwin, reg_recording, secure, starting,
-    typebuf, window_handles, KeyTyped, RedrawingDisabled, VIsual, VIsual_active,
+    KeyTyped, RedrawingDisabled, VIsual, VIsual_active, au_pending_free_buf, au_pending_free_win,
+    autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
+    autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin, deferred_events,
+    did_cursorhold, did_emsg, do_profiling, e_argreq, e_cannot_define_autocommands_for_all_events,
+    e_duparg2, first_tabpage, firstbuf, firstwin, globaldir, got_int, last_cursormoved,
+    last_cursormoved_win, last_mode, lastwin, main_loop, msg_col, need_maketitle, p_acd, p_ei,
+    p_verbose, prevwin, reg_recording, secure, starting, typebuf, window_handles,
 };
 use crate::src::nvim::map::{
     map_del_String_int, map_del_int_String, map_del_int_ptr_t, map_put_ref_String_int,
@@ -53,7 +53,7 @@ use crate::src::nvim::os::libc::{
     strncasecmp, strncmp,
 };
 use crate::src::nvim::os::time::os_now;
-use crate::src::nvim::path::{path_fnamecmp, path_tail, FullName_save};
+use crate::src::nvim::path::{FullName_save, path_fnamecmp, path_tail};
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
@@ -61,14 +61,27 @@ use crate::src::nvim::state::{get_mode, get_real_state};
 use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc, xstrnsave};
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, aco_save_T, alist_T, argv_callback, aucmdwin_T, auto_event, bhdr_T, blob_T,
-    blobvar_S, blocknr_T, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, bufstate_T,
-    chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_29,
-    dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
-    estack_T_es_info as C2Rust_Unnamed_33, etype_T, event_T, exarg, exarg_T, except_T,
-    except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
-    file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    __time_t, AdditionalData, AlignTextPos, Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd,
+    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, Event,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
+    KeyValuePair, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, Map_String_int,
+    Map_int_String, Map_int_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MultiQueue, Object, ObjectType, OptIndex, OptInt,
+    OptVal, OptValData, OptValType, Proc, ProcType, QUEUE, RStream, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_String, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream, String_0, Terminal,
+    Timestamp, TriState, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, aco_save_T, alist_T,
+    argv_callback, aucmdwin_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock,
+    buffblock_T, buffheader_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T,
+    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_29, dict_T, dictvar_S, diff_T, diffblock_S,
+    disptick_T, eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_33, etype_T,
+    event_T, exarg, exarg_T, except_T, except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccal_entry, funccal_entry_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6,
     funccall_T, garray_T, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t,
@@ -85,7 +98,7 @@ pub use crate::src::nvim::types::{
     tabpage_S, tabpage_T, taggy_T, terminal, time_t, typebuf_T, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
     uv_async_s_u as C2Rust_Unnamed_18, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
     uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
@@ -99,20 +112,7 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_25, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_19, uv_timer_s_u as C2Rust_Unnamed_20, uv_timer_t,
     varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, Arena, Array, AutoCmd,
-    AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks,
-    Buffer, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType,
-    Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
-    Intersection, KeyValuePair, LineGetter, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
-    MapHash, Map_String_int, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_String, Map_int_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MultiQueue, Object, ObjectType, OptIndex,
-    OptInt, OptVal, OptValData, OptValType, Proc, ProcType, RStream, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_String, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream, String_0, Terminal,
-    Timestamp, TriState, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_win_hide;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -123,7 +123,7 @@ use crate::src::nvim::window::{
     win_init_empty, win_remove,
 };
 use crate::src::nvim::winfloat::win_config_float;
-extern "C" {
+unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_30>;
     fn hash_init(ht: *mut hashtab_T);
     fn vim_regcomp(
@@ -2305,7 +2305,7 @@ pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_g
         msg_end();
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn is_aucmd_win(mut win: *mut win_T) -> bool {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
@@ -3123,7 +3123,7 @@ pub unsafe extern "C" fn check_nomodeline(mut argp: *mut *mut ::core::ffi::c_cha
     }
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut buf_T) {
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut need_append: bool = true_0 != 0;
@@ -3241,7 +3241,7 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         VIsual_active.set(false_0 != 0);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
     if (*aco).use_aucmd_win_idx >= 0 as ::core::ffi::c_int {
         let mut awp: *mut win_T = (*(*aucmd_win_vec.ptr())
@@ -3486,7 +3486,7 @@ unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
     }
     xfree(e as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn apply_autocmds(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -3578,7 +3578,7 @@ pub unsafe extern "C" fn trigger_cursorhold() -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn apply_autocmds_group(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -4169,14 +4169,14 @@ pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
     );
     termresponse_changed.set(true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn block_autocmds() {
     if !is_autocmd_blocked() {
         termresponse_changed.set(false_0 != 0);
     }
     (*autocmd_blocked.ptr()) += 1;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unblock_autocmds() {
     (*autocmd_blocked.ptr()) -= 1;
     if !is_autocmd_blocked()

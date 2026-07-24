@@ -6,7 +6,7 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{
-    int32_t, iovec, ptrdiff_t, size_t, uint64_t, FileDescriptor, TriState,
+    FileDescriptor, TriState, int32_t, iovec, ptrdiff_t, size_t, uint64_t,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
@@ -118,7 +118,7 @@ unsafe extern "C" fn file_space(mut fp: *mut FileDescriptor) -> size_t {
         .offset(ARENA_BLOCK_SIZE as isize)
         .offset_from((*fp).write_pos) as size_t;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_open(
     ret_fp: *mut FileDescriptor,
     fname: *const ::core::ffi::c_char,
@@ -258,7 +258,7 @@ pub unsafe extern "C" fn file_open(
     }
     return file_open_fd(ret_fp, fd, flags);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_open_fd(
     ret_fp: *mut FileDescriptor,
     fd: ::core::ffi::c_int,
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn file_open_buffer(
     (*ret_fp).write_pos = data.offset(len as isize);
     (*ret_fp).bytes_read = 0 as uint64_t;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> ::core::ffi::c_int {
     if (*fp).fd < 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> 
     }
     return flush_error;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_fsync(fp: *mut FileDescriptor) -> ::core::ffi::c_int {
     if !(*fp).wr {
         return 0 as ::core::ffi::c_int;
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn file_fsync(fp: *mut FileDescriptor) -> ::core::ffi::c_i
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_flush(mut fp: *mut FileDescriptor) -> ::core::ffi::c_int {
     if !(*fp).wr {
         return 0 as ::core::ffi::c_int;
@@ -386,7 +386,7 @@ pub unsafe extern "C" fn file_flush(mut fp: *mut FileDescriptor) -> ::core::ffi:
     }
     return 0 as ::core::ffi::c_int;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_read(
     fp: *mut FileDescriptor,
     ret_buf: *mut ::core::ffi::c_char,
@@ -490,7 +490,7 @@ pub unsafe extern "C" fn file_try_read_buffered(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_write(
     fp: *mut FileDescriptor,
     buf: *const ::core::ffi::c_char,
@@ -537,7 +537,7 @@ pub unsafe extern "C" fn file_write(
         wres
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
     '_c2rust_label: {
         if !(*fp).wr {

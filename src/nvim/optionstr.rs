@@ -11,7 +11,7 @@ use crate::src::nvim::cursor_shape::parse_shape_opt;
 use crate::src::nvim::diff::{diffanchors_changed, diffopt_changed};
 use crate::src::nvim::digraph::keymap_init;
 use crate::src::nvim::drawscreen::{
-    comp_col, redrawWinline, redraw_all_later, redraw_buf_later, redraw_curbuf_later, redraw_later,
+    comp_col, redraw_all_later, redraw_buf_later, redraw_curbuf_later, redraw_later, redrawWinline,
     status_redraw_buf,
 };
 use crate::src::nvim::eval::userfunc::get_scriptlocal_funcname;
@@ -28,15 +28,15 @@ use crate::src::nvim::indent::{briopt_check, tabstop_set};
 use crate::src::nvim::indent_c::parse_cino;
 use crate::src::nvim::insexpand::set_cpt_callbacks;
 use crate::src::nvim::main::{
-    bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab, curwin, didset_vim,
-    didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg, e_leadtab_requires_tab,
-    e_modifiable, e_unsupportedoption, empty_string_option, first_tabpage, firstbuf, firstwin,
-    km_startsel, km_stopsel, opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values,
-    opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values,
-    opt_ssop_values, opt_tc_values, opt_ve_values, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia,
-    p_cot, p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor,
-    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
-    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags, IObuff, VIsual_active,
+    IObuff, VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab,
+    curwin, didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
+    e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, empty_string_option, first_tabpage,
+    firstbuf, firstwin, km_startsel, km_stopsel, opt_bh_values, opt_bkc_values, opt_bt_values,
+    opt_cot_values, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values, opt_scl_values,
+    opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values, p_bex, p_bg, p_bkc, p_breakat,
+    p_bs, p_cia, p_cot, p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll,
+    p_mousescroll_hor, p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve,
+    p_winborder, ru_wid, secure, spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
 };
 use crate::src::nvim::mark::free_fmark;
 use crate::src::nvim::mbyte::{
@@ -47,6 +47,7 @@ use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::src::nvim::message::{
     messagesopt_changed, msg_grid_validate, verbose_open, verbose_stop,
 };
+use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::option::{
     copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option,
     get_option_default, get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles,
@@ -57,7 +58,6 @@ use crate::src::nvim::os::libc::{
     __assert_fail, gettext, memcmp, memset, snprintf, strcmp, strlen, strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::shada::get_shada_parameter;
 use crate::src::nvim::spell::{
     compile_cap_prog, did_set_spell_option, spell_reload, valid_spellfile, valid_spelllang,
@@ -66,9 +66,20 @@ use crate::src::nvim::spellfile::spell_check_msm;
 use crate::src::nvim::spellsuggest::spell_check_sps;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, expand_T, extmark_undo_vec_t,
-    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, CharsOption,
+    CompleteListItemGetter, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Direction, Error, ErrorType,
+    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey,
+    MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, OptIndex, OptInt, OptScopeFlags, OptVal, OptValData,
+    OptValType, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal, Timestamp, TriState,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, colnr_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, expand_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
     file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T, handle_T, hash_T,
@@ -82,24 +93,13 @@ pub use crate::src::nvim::types::{
     tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
     u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7,
     u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
-    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, vimoption_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, wline_T, xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos, BoolVarValue,
-    BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4,
-    ChangedtickDictItem, CharsOption, CompleteListItemGetter, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
-    Direction, Error, ErrorType, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView,
-    Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, OptIndex, OptInt, OptScopeFlags, OptVal,
-    OptValData, OptValType, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, QUEUE,
+    winopt_T, wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
 use crate::src::nvim::winfloat::win_config_float;
-extern "C" {
+unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn terminal_notify_theme(term: *mut Terminal, dark: bool);
 }
@@ -3499,7 +3499,7 @@ unsafe extern "C" fn opt_strings_flags(
     }
     return OK;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn check_ff_value(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     return opt_strings_flags(
         p,
@@ -4431,7 +4431,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     ]);
 }
 #[used]
-#[cfg_attr(target_os = "linux", link_section = ".init_array")]
-#[cfg_attr(target_os = "windows", link_section = ".CRT$XIB")]
-#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
+#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
 static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

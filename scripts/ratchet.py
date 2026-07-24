@@ -7,7 +7,7 @@ Rust source file (src/**/*.rs plus the crate roots):
 
   unsafe      occurrences of "unsafe "
   static_mut  occurrences of "static mut "
-  no_mangle   occurrences of "#[no_mangle]"
+  no_mangle   occurrences of "#[unsafe(no_mangle)]"
   lines       line count. No file may exceed 1,000 lines; files already over
               the cap are grandfathered at their committed size and may
               shrink or hold, never grow. New files start at the cap.
@@ -25,6 +25,18 @@ plus two whole-tree metrics:
                     "safe module" a compiler-enforced status instead of a
                     grep result — and the count of files still lacking it
                     may only fall. New files are expected to be born safe.
+
+  files_without_deny_unsafe_op  the number of source files carrying neither
+                    #![forbid(unsafe_code)] nor
+                    #![deny(unsafe_op_in_unsafe_fn)]. Same trick for edition
+                    2024's honest-unsafe lint: the crate allows it (see
+                    Cargo.toml — blanket body-wrapping would double the
+                    textual unsafe count), each module denies it once its
+                    unsafe fns use explicit unsafe blocks, and the count of
+                    files doing neither may only fall. The crate root
+                    (lib.rs) can't deny per-module — its inner attributes
+                    are crate-level — so it holds the floor at 1 until the
+                    allow itself retires.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -67,23 +79,27 @@ LINE_CAP = 1000
 COUNTED = {
     "unsafe": "unsafe ",
     "static_mut": "static mut ",
-    "no_mangle": "#[no_mangle]",
+    "no_mangle": "#[unsafe(no_mangle)]",
 }
 FORBID = "#![forbid(unsafe_code)]"
+DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 
 
 def measure():
     """(repo-relative file -> {metric: count} with zeros included,
-    number of files not carrying the forbid attribute)."""
+    number of files not carrying the forbid attribute,
+    number of files carrying neither forbid nor the unsafe-op deny)."""
     stats = {}
     without_forbid = 0
+    without_deny = 0
     for path in sorted([*ROOT.glob("src/**/*.rs"), *ROOT.glob("*.rs")]):
         text = path.read_text()
         counts = {name: text.count(needle) for name, needle in COUNTED.items()}
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
         without_forbid += FORBID not in text
-    return stats, without_forbid
+        without_deny += FORBID not in text and DENY_UNSAFE_OP not in text
+    return stats, without_forbid, without_deny
 
 
 def internal_exports():
@@ -95,7 +111,7 @@ def internal_exports():
     )
 
 
-def render(stats, internal, without_forbid):
+def render(stats, internal, without_forbid, without_deny):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -115,12 +131,13 @@ def render(stats, internal, without_forbid):
         "{\n"
         f'  "internal_exports": {internal},\n'
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
+        f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files": {{\n{body}\n  }}\n'
         "}\n"
     )
 
 
-def violations(stats, internal, without_forbid, baseline):
+def violations(stats, internal, without_forbid, without_deny, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
     base_internal = baseline["internal_exports"]
@@ -130,6 +147,11 @@ def violations(stats, internal, without_forbid, baseline):
     base_forbid = baseline.get("files_without_forbid_unsafe", without_forbid)
     if without_forbid > base_forbid:
         found.append(f"files without {FORBID}: {base_forbid} -> {without_forbid}")
+    base_deny = baseline.get("files_without_deny_unsafe_op", without_deny)
+    if without_deny > base_deny:
+        found.append(
+            f"files without {FORBID} or {DENY_UNSAFE_OP}: {base_deny} -> {without_deny}"
+        )
     base_files = baseline["files"]
     for file in sorted(stats.keys() | base_files.keys()):
         cur = stats.get(file, {**dict.fromkeys(COUNTED, 0), "lines": 0})
@@ -144,7 +166,7 @@ def violations(stats, internal, without_forbid, baseline):
     return found
 
 
-def summary(stats, internal, without_forbid):
+def summary(stats, internal, without_forbid, without_deny):
     totals = {name: sum(c[name] for c in stats.values()) for name in COUNTED}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
@@ -152,6 +174,7 @@ def summary(stats, internal, without_forbid):
         f"{over} files over {LINE_CAP} lines",
         f"{internal} internal exports",
         f"{without_forbid} files without forbid(unsafe_code)",
+        f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
     ]
     return ", ".join(parts)
 
@@ -161,9 +184,9 @@ def main():
     if unknown := args - {"--check", "--allow-growth"}:
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
-    stats, without_forbid = measure()
+    stats, without_forbid, without_deny = measure()
     internal = internal_exports()
-    content = render(stats, internal, without_forbid)
+    content = render(stats, internal, without_forbid, without_deny)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -171,7 +194,9 @@ def main():
             sys.exit(
                 f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just refresh`"
             )
-        if grew := violations(stats, internal, without_forbid, json.loads(committed)):
+        if grew := violations(
+            stats, internal, without_forbid, without_deny, json.loads(committed)
+        ):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: counts may only shrink. Reduce them, or if the "
@@ -186,7 +211,9 @@ def main():
         return
 
     if committed is not None and "--allow-growth" not in args:
-        if grew := violations(stats, internal, without_forbid, json.loads(committed)):
+        if grew := violations(
+            stats, internal, without_forbid, without_deny, json.loads(committed)
+        ):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: refusing to raise the baseline. If the growth is "
@@ -194,7 +221,8 @@ def main():
             )
     BASELINE.write_text(content)
     print(
-        f"wrote {BASELINE.relative_to(ROOT)}: {summary(stats, internal, without_forbid)}"
+        f"wrote {BASELINE.relative_to(ROOT)}: "
+        f"{summary(stats, internal, without_forbid, without_deny)}"
     )
 
 

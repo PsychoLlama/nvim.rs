@@ -1,9 +1,9 @@
 use crate::src::nvim::global_cell::SharedCell;
 use crate::src::nvim::lua::ffi::{
-    luaL_argerror, luaL_error, luaL_register, lua_createtable, lua_gettop, lua_pushlstring,
-    lua_tolstring, lua_type,
+    lua_createtable, lua_gettop, lua_pushlstring, lua_tolstring, lua_type, luaL_argerror,
+    luaL_error, luaL_register,
 };
-pub use crate::src::nvim::types::{luaL_Reg, lua_CFunction, lua_State, size_t};
+pub use crate::src::nvim::types::{lua_CFunction, lua_State, luaL_Reg, size_t};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 unsafe extern "C-unwind" fn nlua_base64_encode(mut L: *mut lua_State) -> ::core::ffi::c_int {

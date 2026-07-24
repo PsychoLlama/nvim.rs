@@ -16,18 +16,18 @@ use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::os_localtime;
 use crate::src::nvim::path::path_tail;
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __builtin_va_list, __gnuc_va_list,
-    __off64_t, __off_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
-    __pthread_rwlock_arch_t, __va_list_tag, int16_t, int32_t, int64_t, nvim_stats_s,
-    pthread_mutex_t, pthread_rwlock_t, size_t, tm, uint64_t, uv__io_cb, uv__io_s, uv__io_t,
-    uv__queue, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_close_cb,
-    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_loop_s,
+    __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
+    __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, _IO_FILE,
+    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE, VimVarIndex, XDGVarType, int16_t,
+    int32_t, int64_t, nvim_stats_s, pthread_mutex_t, pthread_rwlock_t, size_t, tm, uint64_t,
+    uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_async_cb, uv_async_s,
+    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_close_cb, uv_handle_s,
+    uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
     uv_mutex_t, uv_rwlock_t, uv_signal_cb, uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed,
-    uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t, va_list, VimVarIndex, XDGVarType, _IO_FILE,
-    FILE,
+    uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t, va_list,
 };
-extern "C" {
+unsafe extern "C" {
     fn uv_gettimeofday(tv: *mut uv_timeval64_t) -> ::core::ffi::c_int;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;

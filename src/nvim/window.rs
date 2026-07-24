@@ -15,7 +15,7 @@ use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum};
 use crate::src::nvim::decoration::{clear_virttext, decor_conceal_line};
 use crate::src::nvim::diff::{diff_clear, diffopt_closeoff};
 use crate::src::nvim::drawscreen::{
-    comp_col, redrawWinline, redraw_all_later, redraw_later, showmode, status_redraw_all,
+    comp_col, redraw_all_later, redraw_later, redrawWinline, showmode, status_redraw_all,
 };
 use crate::src::nvim::edit::{beginline, cursor_down_inner, cursor_up_inner};
 use crate::src::nvim::eval::typval::{
@@ -44,7 +44,8 @@ use crate::src::nvim::grid::{
     grid_adjust, grid_assign_handle, grid_clear, grid_free, win_grid_alloc,
 };
 use crate::src::nvim::main::{
-    allow_keys, au_pending_free_win, autocmd_busy, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
+    Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
+    au_pending_free_win, autocmd_busy, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
     default_grid, default_gridview, diff_need_scrollbind, e_autocmd_close, e_buffer_nr_not_found,
     e_cmdwin, e_floatexchange, e_floatonly, e_invarg, e_noalt, e_noroom,
@@ -57,18 +58,23 @@ use crate::src::nvim::main::{
     postponed_split, postponed_split_tab, prevwin, redraw_cmdline, redraw_tabline, restart_edit,
     sc_col, skip_update_topline, skip_win_fix_cursor, skip_win_fix_scroll, starting,
     stop_insert_mode, swb_flags, tabpage_handles, tabpage_move_disallowed, tcl_flags, topframe,
-    vgetc_busy, window_handles, Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State,
-    VIsual_active,
+    vgetc_busy, window_handles,
 };
 use crate::src::nvim::map::{map_del_int_ptr_t, map_put_ref_int_ptr_t};
 use crate::src::nvim::mapping::langmap_adjust_mb;
 use crate::src::nvim::mark::{copy_jumplist, free_jumplist, setmark, setpcmark};
+use crate::src::nvim::r#match::clear_matches;
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, iemsg, internal_error, msg, msg_clr_eos_force, msg_grid_validate, msg_ui_flush, semsg,
     set_keep_msg,
 };
 use crate::src::nvim::mouse::{reset_dragwin, setmouse};
+use crate::src::nvim::r#move::{
+    changed_line_abv_curs, changed_line_abv_curs_win, curs_columns, invalidate_botline_win,
+    set_topline, textpos2screenpos, update_topline, validate_botline_win, validate_cursor,
+    win_col_off, win_col_off2,
+};
 use crate::src::nvim::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
     reset_VIsual_and_resel,
@@ -85,12 +91,6 @@ use crate::src::nvim::path::pathcmp;
 use crate::src::nvim::plines::{plines_win, plines_win_col, plines_win_nofill, win_text_height};
 use crate::src::nvim::popupmenu::pum_ui_flush;
 use crate::src::nvim::quickfix::qf_view_result;
-use crate::src::nvim::r#match::clear_matches;
-use crate::src::nvim::r#move::{
-    changed_line_abv_curs, changed_line_abv_curs_win, curs_columns, invalidate_botline_win,
-    set_topline, textpos2screenpos, update_topline, validate_botline_win, validate_cursor,
-    win_col_off, win_col_off2,
-};
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::state::{get_real_state, virtual_active};
 use crate::src::nvim::statusline::stl_clear_click_defs;
@@ -98,11 +98,23 @@ use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::reset_synblock;
 use crate::src::nvim::tag::tagstack_clear_entry;
 pub use crate::src::nvim::types::{
-    __compar_fn_t, __time_t, alist_T, aucmdwin_T, auto_event, bhdr_T, bln_values, blob_T,
-    blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T,
-    colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_18, dict_T, dictvar_S, diff_T,
-    diffblock_S, disptick_T, dobuf_action_values, dobuf_start_values, eslist_T, eslist_elem,
-    event_T, exarg, exarg_T, except_T, except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, Boolean,
+    BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
+    CdCause, CdScope, ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Direction, Error,
+    ErrorType, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
+    Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int_ptr_t, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MotionType,
+    OptIndex, OptInt, OptVal, OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal,
+    Timestamp, TriState, TryState, UIExtension, VarLockStatus, VarType, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T,
+    aucmdwin_T, auto_event, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T,
+    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_18, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
+    dobuf_action_values, dobuf_start_values, eslist_T, eslist_elem, event_T, exarg, exarg_T,
+    except_T, except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
     file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -118,20 +130,8 @@ pub use crate::src::nvim::types::{
     typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_7, u_header_uh_alt_prev as C2Rust_Unnamed_6,
     u_header_uh_next as C2Rust_Unnamed_9, u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData,
-    AlignTextPos, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_4, CdCause, CdScope, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, Direction, Error, ErrorType, ExtmarkUndoObject, FileID,
-    Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection, LineGetter, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MotionType, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal, Timestamp, TriState,
-    TryState, UIExtension, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, vim_exception, virt_line,
+    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_win_close, ui_call_win_external_pos, ui_call_win_float_pos,
@@ -146,7 +146,7 @@ use crate::src::nvim::winfloat::{
     win_border_height, win_border_width, win_config_float, win_float_anchor_laststatus,
     win_float_find_altwin, win_float_update_statusline, win_new_float, win_reconfig_floats,
 };
-extern "C" {
+unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_20>;
     fn hash_init(ht: *mut hashtab_T);
     fn qf_free_all(wp: *mut win_T);
@@ -3762,7 +3762,7 @@ unsafe extern "C" fn win_init_some(mut newp: *mut win_T, mut oldp: *mut win_T) {
     (*newp).w_arg_idx = (*oldp).w_arg_idx;
     win_copy_options(oldp, newp);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_valid(mut win: *const win_T) -> bool {
     return tabpage_win_valid(curtab.get(), win);
 }
@@ -4857,7 +4857,7 @@ unsafe extern "C" fn win_unclose_buffer(
         (*(*win).w_buffer).b_nwindows += 1;
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_close(
     mut win: *mut win_T,
     mut free_buf: bool,
@@ -7126,7 +7126,7 @@ pub unsafe extern "C" fn goto_tabpage_lastused() -> bool {
     goto_tabpage_tp(lastused_tabpage.get(), true_0 != 0, true_0 != 0);
     return true_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn goto_tabpage_win(mut tp: *mut tabpage_T, mut wp: *mut win_T) {
     goto_tabpage_tp(tp, true_0 != 0, true_0 != 0);
     if curtab.get() == tp && win_valid(wp) as ::core::ffi::c_int != 0 {
@@ -7191,7 +7191,7 @@ pub unsafe extern "C" fn tabpage_move(mut nr: ::core::ffi::c_int) {
     }
     redraw_tabline.set(true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_goto(mut wp: *mut win_T) {
     let mut owp: *mut win_T = curwin.get();
     if text_or_buf_locked() {
@@ -7384,7 +7384,7 @@ unsafe extern "C" fn win_goto_hor(mut left: bool, mut count: ::core::ffi::c_int)
         win_goto(win);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_enter(mut wp: *mut win_T, mut undo_sync: bool) {
     win_enter_ext(
         wp,

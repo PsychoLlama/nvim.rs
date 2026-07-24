@@ -19,18 +19,30 @@ use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{
-    arena_alloc, arena_finish, arena_memdupz, memchrsub, xfree, xmalloc, xmemdupz, xrealloc,
-    xstrdup, xstrndup, ARENA_EMPTY,
+    ARENA_EMPTY, arena_alloc, arena_finish, arena_memdupz, memchrsub, xfree, xmalloc, xmemdupz,
+    xrealloc, xstrdup, xstrndup,
 };
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen, strnlen, vsnprintf};
 use crate::src::nvim::runtime::script_is_lua;
 pub use crate::src::nvim::types::{
-    __builtin_va_list, __gnuc_va_list, __time_t, __va_list_tag, alist_T, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T, dictitem_T,
-    dictvar_S, diff_T, diffblock_S, disptick_T, except_T, except_type_T, extmark_undo_vec_t,
-    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    __builtin_va_list, __gnuc_va_list, __time_t, __va_list_tag, AdditionalData, AlignTextPos,
+    Arena, ArenaMem, Array, ArrayBuilder, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
+    Callback, Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkUndoObject, FieldHashfn,
+    FileID, Float, FloatAnchor, FloatRelative, GridView, HlMessage, HlMessageChunk, Integer,
+    Intersection, KeySetLink, KeyValuePair, LuaRef, MTKey, MTNode, MTPos, Map_int_ptr_t,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, Object, ObjectType, OptInt, OptKeySet, OptionalKeys, QUEUE, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Tabpage,
+    Terminal, Timestamp, TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T,
+    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T,
+    dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, except_T, except_type_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
     file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
@@ -44,21 +56,9 @@ pub use crate::src::nvim::types::{
     tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, va_list, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, ArenaMem, Array,
-    ArrayBuilder, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    Error, ErrorType, ExtmarkUndoObject, FieldHashfn, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, HlMessage, HlMessageChunk, Integer, Intersection, KeySetLink, KeyValuePair, LuaRef,
-    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_int_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, Object, ObjectType, OptInt, OptKeySet,
-    OptionalKeys, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Tabpage, Terminal, Timestamp,
-    TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, QUEUE,
+    wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
@@ -553,7 +553,7 @@ pub unsafe extern "C" fn find_buffer_by_handle(
     }
     return rv;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn find_window_by_handle(
     mut window: Window,
     mut err: *mut Error,
@@ -1008,7 +1008,7 @@ pub unsafe extern "C" fn arena_take_arraybuilder(
     }
     return ret;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn api_free_object(mut value: Object) {
     match value.type_0 as ::core::ffi::c_uint {
         4 => {

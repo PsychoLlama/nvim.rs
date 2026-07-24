@@ -2,10 +2,10 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::{__assert_fail, abort, strncpy};
 pub use crate::src::nvim::types::{
-    cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, uint8_t, TermKey, TermKeyCsi,
+    TermKey, TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed, TermKeyCsi,
     TermKeyCsiParam, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_0, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
-    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed, TerminfoEntry,
+    TerminfoEntry, cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, uint8_t,
 };
 pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
 pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
@@ -569,7 +569,7 @@ unsafe extern "C" fn handle_csi_m(
     }
     return TERMKEY_RES_NONE;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_interpret_mouse(
     mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
@@ -681,7 +681,7 @@ unsafe extern "C" fn handle_csi_R(
         _ => return handle_csi_ss3_full(tk, key, cmd, params, nparams),
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_interpret_position(
     mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
@@ -744,7 +744,7 @@ unsafe extern "C" fn handle_csi_y(
         _ => return TERMKEY_RES_NONE,
     };
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_interpret_modereport(
     mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
@@ -879,7 +879,7 @@ unsafe extern "C" fn parse_csi(
     *csi_len = csi_end.wrapping_add(1 as size_t);
     return TERMKEY_RES_KEY;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_interpret_csi(
     mut tk: *mut TermKey,
     mut key: *const TermKeyKey,

@@ -4,11 +4,13 @@
 //! the per-module copies c2rust emitted. Everything here resolves
 //! against the static libuv at link time.
 
-#![forbid(unsafe_code)]
+// No forbid(unsafe_code): edition 2024 trips the unsafe_code lint on the
+// extern block below, and declaring the foreign surface is this file's
+// entire job.
 
 use crate::src::nvim::types::*;
 
-extern "C" {
+unsafe extern "C" {
     pub fn uv_accept(server: *mut uv_stream_t, client: *mut uv_stream_t) -> ::core::ffi::c_int;
     pub fn uv_async_init(
         _: *mut uv_loop_t,
@@ -210,7 +212,7 @@ extern "C" {
         size: *mut size_t,
     ) -> ::core::ffi::c_int;
     pub fn uv_os_homedir(buffer: *mut ::core::ffi::c_char, size: *mut size_t)
-        -> ::core::ffi::c_int;
+    -> ::core::ffi::c_int;
     pub fn uv_os_setenv(
         name: *const ::core::ffi::c_char,
         value: *const ::core::ffi::c_char,

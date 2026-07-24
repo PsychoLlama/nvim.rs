@@ -210,11 +210,7 @@ pub fn arabic_shape(
             curr_a.isolated as c_int
         };
     }
-    if curr_c == 0 {
-        c
-    } else {
-        curr_c
-    }
+    if curr_c == 0 { c } else { curr_c }
 }
 
 #[cfg(test)]

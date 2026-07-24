@@ -14,16 +14,16 @@ use crate::src::nvim::highlight::{
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, current_sctx, curwin,
-    e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2, got_int,
-    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
+    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, current_sctx,
+    curwin, e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2,
+    got_int, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
     include_default, include_link, include_none, msg_col, msg_grid, msg_silent,
     need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors,
-    updating_screen, Columns,
+    updating_screen,
 };
 use crate::src::nvim::map::{map_put_ref_cstr_t_int, mh_get_cstr_t};
 use crate::src::nvim::memory::{
-    arena_memdupz, xfree, xmalloc, xmemrchr, xstrdup, xstrlcat, ARENA_EMPTY,
+    ARENA_EMPTY, arena_memdupz, xfree, xmalloc, xmemrchr, xstrdup, xstrlcat,
 };
 use crate::src::nvim::message::{
     emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
@@ -38,10 +38,23 @@ use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
 use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, colnr_T, color_name_table_T, cstr_t, dict_T, dictvar_S, disptick_T, estack_T,
-    estack_T_es_info as C2Rust_Unnamed_19, etype_T, event_T, except_T, except_type_T, expand_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
+    __time_t, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
+    BoolVarValue, Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_6,
+    CallbackType, ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict, Direction, Error,
+    ErrorType, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID,
+    HlAttrs, Integer, Intersection, KeyDict_get_highlight, KeyDict_highlight, KeyValuePair, LuaRef,
+    MTKey, MTNode, MTPos, Map_cstr_t_int, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, NS, Object, ObjectType, OptIndex,
+    OptInt, OptVal, OptValData, OptValType, OptionalKeys, QUEUE, RgbValue, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_cstr_t, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal,
+    Timestamp, TriState, UIExtension, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T,
+    blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, color_name_table_T,
+    cstr_t, dict_T, dictvar_S, disptick_T, estack_T, estack_T_es_info as C2Rust_Unnamed_19,
+    etype_T, event_T, except_T, except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
     file_buffer_b_wininfo as C2Rust_Unnamed_12, file_buffer_update_callbacks as C2Rust_Unnamed_1,
     file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, garray_T, handle_T, hash_T,
@@ -55,21 +68,8 @@ pub use crate::src::nvim::types::{
     taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header,
     u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9, u_header_uh_alt_prev as C2Rust_Unnamed_8,
     u_header_uh_next as C2Rust_Unnamed_11, u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vim_exception, virt_line,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, vim_exception, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
-    AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
-    Boolean, BufUpdateCallbacks, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, Dict, Direction, Error, ErrorType,
-    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs,
-    Integer, Intersection, KeyDict_get_highlight, KeyDict_highlight, KeyValuePair, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_cstr_t_int, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, Object, ObjectType, OptIndex, OptInt,
-    OptVal, OptValData, OptValType, OptionalKeys, RgbValue, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_cstr_t, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, Terminal,
-    Timestamp, TriState, UIExtension, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, NS, QUEUE,
 };
 use crate::src::nvim::ui::{
     ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,
@@ -1646,7 +1646,7 @@ static highlight_init_dark: GlobalCell<[*const ::core::ffi::c_char; 71]> = Globa
     b"@variable guifg=NvimLightGrey2\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static highlight_init_cmdline: GlobalCell<[*const ::core::ffi::c_char; 141]> =
     GlobalCell::new([
         b"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red\0".as_ptr()

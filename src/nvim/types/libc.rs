@@ -1,7 +1,7 @@
 // Canonical type definitions extracted by tools/unify (phase 5a).
 // One definition per logical type; every module re-exports from here.
 
-extern "C" {
+unsafe extern "C" {
     pub type _IO_codecvt;
     pub type _IO_marker;
     pub type _IO_wide_data;

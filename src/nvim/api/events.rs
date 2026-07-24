@@ -5,9 +5,9 @@ use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::memory::strequal;
 pub use crate::src::nvim::types::{
-    int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
     Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, VimVarIndex,
+    ObjectType, String_0, VimVarIndex, int64_t, key_value_pair, object,
+    object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

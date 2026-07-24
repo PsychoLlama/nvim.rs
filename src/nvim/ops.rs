@@ -16,8 +16,8 @@ use crate::src::nvim::eval_1::{callback_call, set_ref_in_callback};
 use crate::src::nvim::extmark::{extmark_splice, extmark_splice_cols};
 use crate::src::nvim::fold::{deleteFold, foldCreate, foldOpenCursor, hasFolding, opFoldRange};
 use crate::src::nvim::getchar::{
-    beep_flush, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff, AppendNumberToRedobuff,
-    AppendToRedobuff, AppendToRedobuffLit, AppendToRedobuffSpec, CancelRedo, ResetRedobuff,
+    AppendNumberToRedobuff, AppendToRedobuff, AppendToRedobuffLit, AppendToRedobuffSpec,
+    CancelRedo, ResetRedobuff, beep_flush, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::{
@@ -28,19 +28,19 @@ use crate::src::nvim::indent::{
 use crate::src::nvim::indent_c::get_c_indent;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
-    ai_col, bangredo, can_si, cmdmod, curbuf, curbuf_splice_pending, curwin, did_ai,
-    disable_fold_update, e_invarg, e_modifiable, empty_string_option, finish_op, got_int,
-    motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_cpo, p_fp, p_js, p_opfunc,
-    p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline,
-    repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
-    virtual_op, IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode,
-    VIsual_reselect, VIsual_select, VIsual_select_reg,
+    IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
+    VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, cmdmod, curbuf,
+    curbuf_splice_pending, curwin, did_ai, disable_fold_update, e_invarg, e_modifiable,
+    empty_string_option, finish_op, got_int, motion_force, mouse_dragging, msg_scroll,
+    no_lines_msg, p_ch, p_cpo, p_fp, p_js, p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol,
+    p_sr, redo_VIsual_busy, repeat_cmdline, repeat_luaref, resel_VIsual_line_count,
+    resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
 };
 use crate::src::nvim::mark::{mark_col_adjust, mark_mb_adjustpos};
 use crate::src::nvim::mbyte::{
-    bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf8len_tab, utf_char2bytes,
-    utf_char2cells, utf_char2len, utf_eat_space, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2char,
-    utf_ptr2len, utfc_next_impl, utfc_ptr2len,
+    bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
+    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2char, utf_ptr2len,
+    utf8len_tab, utfc_next_impl, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{
     dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_len, ml_get_buf_mut, ml_get_len,
@@ -49,6 +49,7 @@ use crate::src::nvim::memline::{
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
 use crate::src::nvim::message::{emsg, internal_error, msg, msg_keep, msg_start, msgmore, smsg};
 use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::normal::{
     clearop, clearopbeep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
     unadjust_for_sel,
@@ -64,7 +65,6 @@ use crate::src::nvim::plines::{
     charsize_fast, charsize_regular, getvcol, getvcols, getvvcol, init_charsize_arg,
     linetabsize_col,
 };
-use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
     shift_delete_registers, valid_yank_reg,
@@ -73,10 +73,22 @@ use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, block_def, blocknr_T, buf_T,
-    bufstate_T, chunksize_T, cmdarg_T, cmdmod_T, colnr_T, dict_T, dictvar_S, disptick_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_12, file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CharInfo, CharSize,
+    CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice,
+    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, Indenter, Intersection,
+    LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_15,
+    MotionType, OptIndex, OptInt, OptValData, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, StrCharInfo, String_0, Terminal, Timestamp,
+    TriState, UndoObjectType, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bcount_t, bhdr_T, blob_T,
+    blobvar_S, block_def, blocknr_T, buf_T, bufstate_T, chunksize_T, cmdarg_T, cmdmod_T, colnr_T,
+    dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_12,
+    file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, ht_stack_S, ht_stack_T, infoptr_T, int16_t, int32_t, int64_t, intptr_t,
@@ -89,22 +101,9 @@ pub use crate::src::nvim::types::{
     synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     uintptr_t, undo_object, undo_object_data as C2Rust_Unnamed_7, uvarnumber_T, varnumber_T,
     virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, yankreg_T,
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback, CallbackType,
-    Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg,
-    DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice,
-    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, Indenter, Intersection,
-    LuaRef, MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, OptIndex, OptInt, OptValData,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13,
-    StrCharInfo, String_0, Terminal, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, QUEUE,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
@@ -5715,7 +5714,7 @@ pub unsafe extern "C" fn do_pending_operator(
     }
     restore_lbr(lbr_saved != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_region_bytecount(
     mut buf: *mut buf_T,
     mut start_lnum: linenr_T,

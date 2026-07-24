@@ -12,13 +12,14 @@ use crate::src::nvim::os::libc::{
 };
 pub use crate::src::nvim::types::{
     __pid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    cc_t, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int64_t, internal_proc_cb, loop_0,
-    loop_0_children as C2Rust_Unnamed_11, multiqueue, proc, proc_exit_cb, proc_state_cb,
-    pthread_mutex_t, pthread_rwlock_t, queue, rstream, size_t, speed_t, ssize_t, stream,
-    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12, stream_write_cb, tcflag_t,
-    termios, uint16_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb,
-    uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb,
-    uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
+    Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, QUEUE, RStream, ScopeType, Stream,
+    VarLockStatus, cc_t, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int64_t,
+    internal_proc_cb, loop_0, loop_0_children as C2Rust_Unnamed_11, multiqueue, proc, proc_exit_cb,
+    proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue, rstream, size_t, speed_t, ssize_t,
+    stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12, stream_write_cb,
+    tcflag_t, termios, uint8_t, uint16_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
+    uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t,
+    uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
     uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
     uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
@@ -28,10 +29,8 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, winsize,
-    Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, RStream, ScopeType, Stream, VarLockStatus,
-    QUEUE,
 };
-extern "C" {
+unsafe extern "C" {
     fn signal(__sig: ::core::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
     fn poll(
         __fds: *mut pollfd,
@@ -535,7 +534,7 @@ pub unsafe extern "C" fn pty_proc_teardown(mut loop_0: *mut Loop) {
     uv_signal_stop(&raw mut (*loop_0).children_watcher);
 }
 unsafe extern "C" fn init_child(mut ptyproc: *mut PtyProc) -> ! {
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "environ"]
         static mut environ_0: *mut *mut ::core::ffi::c_char;
     }

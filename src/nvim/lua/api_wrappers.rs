@@ -30,16 +30,9 @@ use crate::src::nvim::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
 use crate::src::nvim::api::private::dispatch::{
-    buf_attach_table, buf_delete_table, clear_autocmds_table, cmd_opts_table, cmd_table,
-    complete_set_table, context_table, create_augroup_table, create_autocmd_table, echo_opts_table,
-    empty_table, eval_statusline_table, exec_autocmds_table, exec_opts_table, get_autocmds_table,
-    get_commands_table, get_extmark_table, get_extmarks_table, get_highlight_table, get_ns_table,
-    highlight_table, keymap_table, ns_opts_table, open_term_table, option_table, redraw_table,
-    runtime_table, set_decoration_provider_table, set_extmark_table, tabpage_config_table,
-    user_command_table, win_config_table, win_text_height_table, KeyDict_buf_attach_get_field,
-    KeyDict_buf_delete_get_field, KeyDict_clear_autocmds_get_field, KeyDict_cmd_get_field,
-    KeyDict_cmd_opts_get_field, KeyDict_complete_set_get_field, KeyDict_context_get_field,
-    KeyDict_create_augroup_get_field, KeyDict_create_autocmd_get_field,
+    KeyDict_buf_attach_get_field, KeyDict_buf_delete_get_field, KeyDict_clear_autocmds_get_field,
+    KeyDict_cmd_get_field, KeyDict_cmd_opts_get_field, KeyDict_complete_set_get_field,
+    KeyDict_context_get_field, KeyDict_create_augroup_get_field, KeyDict_create_autocmd_get_field,
     KeyDict_echo_opts_get_field, KeyDict_empty_get_field, KeyDict_eval_statusline_get_field,
     KeyDict_exec_autocmds_get_field, KeyDict_exec_opts_get_field, KeyDict_get_autocmds_get_field,
     KeyDict_get_commands_get_field, KeyDict_get_extmark_get_field, KeyDict_get_extmarks_get_field,
@@ -48,7 +41,14 @@ use crate::src::nvim::api::private::dispatch::{
     KeyDict_option_get_field, KeyDict_redraw_get_field, KeyDict_runtime_get_field,
     KeyDict_set_decoration_provider_get_field, KeyDict_set_extmark_get_field,
     KeyDict_tabpage_config_get_field, KeyDict_user_command_get_field, KeyDict_win_config_get_field,
-    KeyDict_win_text_height_get_field,
+    KeyDict_win_text_height_get_field, buf_attach_table, buf_delete_table, clear_autocmds_table,
+    cmd_opts_table, cmd_table, complete_set_table, context_table, create_augroup_table,
+    create_autocmd_table, echo_opts_table, empty_table, eval_statusline_table, exec_autocmds_table,
+    exec_opts_table, get_autocmds_table, get_commands_table, get_extmark_table, get_extmarks_table,
+    get_highlight_table, get_ns_table, highlight_table, keymap_table, ns_opts_table,
+    open_term_table, option_table, redraw_table, runtime_table, set_decoration_provider_table,
+    set_extmark_table, tabpage_config_table, user_command_table, win_config_table,
+    win_text_height_table,
 };
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
@@ -100,24 +100,24 @@ use crate::src::nvim::lua::converter::{
 };
 use crate::src::nvim::lua::executor::{active_lstate, api_free_luaref, nlua_is_deferred_safe};
 use crate::src::nvim::lua::ffi::{
-    luaL_error, luaL_where, lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure,
-    lua_pushstring, lua_setfield,
+    lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure, lua_pushstring,
+    lua_setfield, luaL_error, luaL_where,
 };
 use crate::src::nvim::main::{e_fast_api_disabled, e_textlock, textlock};
-use crate::src::nvim::memory::{arena_finish, arena_mem_free, ARENA_EMPTY};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 pub use crate::src::nvim::types::{
+    Arena, ArenaMem, Array, Boolean, Buffer, Dict, Error, ErrorType, FieldHashfn, Float, HLGroupID,
+    Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
+    KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
+    KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
+    KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
+    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
+    KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
+    KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
+    KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
+    KeySetLink, KeyValuePair, LuaRef, Object, ObjectType, OptionalKeys, String_0, Tabpage, Window,
     consumed_blk, handle_T, int64_t, key_value_pair, lua_CFunction, lua_State, object,
-    object_data as C2Rust_Unnamed, size_t, uint64_t, Arena, ArenaMem, Array, Boolean, Buffer, Dict,
-    Error, ErrorType, FieldHashfn, Float, HLGroupID, Integer, KeyDict_buf_attach,
-    KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
-    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
-    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
-    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
-    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
-    KeyDict_set_decoration_provider, KeyDict_set_extmark, KeyDict_tabpage_config,
-    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeySetLink, KeyValuePair,
-    LuaRef, Object, ObjectType, OptionalKeys, String_0, Tabpage, Window,
+    object_data as C2Rust_Unnamed, size_t, uint64_t,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

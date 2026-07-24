@@ -33,10 +33,10 @@ use crate::src::nvim::lua::executor::{
     nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe,
 };
 use crate::src::nvim::main::{
-    cmdmod, curbuf, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
-    e_argreq, e_dirnotf, e_interr, e_invarg, e_invargNval, e_norange, e_notopen, ex_nesting_level,
-    global_busy, got_int, listcmd_busy, msg_col, p_cpo, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose,
-    time_fd, IObuff, NameBuff,
+    IObuff, NameBuff, cmdmod, curbuf, current_sctx, debug_break_level, debug_tick,
+    did_source_packages, do_profiling, e_argreq, e_dirnotf, e_interr, e_invarg, e_invargNval,
+    e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy, msg_col, p_cpo,
+    p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
 use crate::src::nvim::map::{
     map_put_ref_String_int, map_ref_String_int, mh_get_String, mh_put_String,
@@ -66,9 +66,9 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::{
-    add_pathsep, after_pathsep, append_path, concat_fnames, fix_fname, gen_expand_wildcards,
-    get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
-    vim_ispathsep_nocolon, FreeWild,
+    FreeWild, add_pathsep, after_pathsep, append_path, concat_fnames, fix_fname,
+    gen_expand_wildcards, get_past_head, path_fnamecmp, path_fnamencmp, path_tail,
+    path_with_extension, vim_ispathsep, vim_ispathsep_nocolon,
 };
 use crate::src::nvim::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,
@@ -77,11 +77,24 @@ use crate::src::nvim::profile::{
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t,
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __time_t, alist_T, auto_event,
-    bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T,
-    cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_14, dict_T, dictitem_T,
-    dictvar_S, disptick_T, eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_19,
+    __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __time_t,
+    _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, AdditionalData, AlignTextPos,
+    ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
+    BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
+    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, DoInRuntimepathCB,
+    Error, ErrorType, EvalFuncData, ExtmarkUndoObject, FILE, FileID, Float, FloatAnchor,
+    FloatRelative, GridView, Integer, Intersection, KeyValuePair, LineGetter, LuaRef, LuaRetMode,
+    MHPutStatus, MTKey, MTNode, MTPos, Map_String_int, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MsgpackRpcRequestHandler, Object,
+    ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, QUEUE, ScopeDictDictItem,
+    ScopeType, ScreenGrid, Set_String, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
+    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal,
+    Timestamp, TriState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, XDGVarType, alist_T, auto_event, bhdr_T,
+    blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, cmdmod_T,
+    colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_14, dict_T, dictitem_T, dictvar_S,
+    disptick_T, eslist_T, eslist_elem, estack_T, estack_T_es_info as C2Rust_Unnamed_19,
     estack_arg_T, etype_T, event_T, exarg, exarg_T, except_T, except_type_T, expand_T,
     extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
     file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
@@ -98,25 +111,12 @@ pub use crate::src::nvim::types::{
     syn_time_T, synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, uv_mutex_t, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T,
-    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T, AdditionalData, AlignTextPos,
-    ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    BufUpdateCallbacks, CMD_index, Callback, CallbackType, Callback_data as C2Rust_Unnamed_5,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, DoInRuntimepathCB,
-    Error, ErrorType, EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, Integer, Intersection, KeyValuePair, LineGetter, LuaRef, LuaRetMode, MHPutStatus,
-    MTKey, MTNode, MTPos, MapHash, Map_String_int, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, Object,
-    ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_String, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal,
-    Timestamp, TriState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, XDGVarType, _IO_FILE, FILE, QUEUE,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
-extern "C" {
+unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

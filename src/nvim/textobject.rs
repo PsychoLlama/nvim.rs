@@ -8,21 +8,31 @@ use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::inindent;
 use crate::src::nvim::main::{
-    curbuf, curwin, p_cpo, p_para, p_sections, p_sel, p_ws, redraw_cmdline, VIsual, VIsual_active,
-    VIsual_mode, VIsual_select_exclu_adj,
+    VIsual, VIsual_active, VIsual_mode, VIsual_select_exclu_adj, curbuf, curwin, p_cpo, p_para,
+    p_sections, p_sel, p_ws, redraw_cmdline,
 };
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{utf_class, utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memline::{dec, decl, gchar_pos, inc, incl, ml_get, ml_get_len, ml_get_pos};
 use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::r#move::adjust_skipcol;
 use crate::src::nvim::normal::unadjust_for_sel;
 use crate::src::nvim::os::libc::snprintf;
-use crate::src::nvim::r#move::adjust_skipcol;
 use crate::src::nvim::search::{findmatch, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkUndoObject, FileID, FloatAnchor,
+    FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MotionType,
+    OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
@@ -36,19 +46,9 @@ pub use crate::src::nvim::types::{
     synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
     u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
     u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkUndoObject, FileID, FloatAnchor,
-    FloatRelative, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MotionType, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, QUEUE,
+    wline_T, xfmark_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;

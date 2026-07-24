@@ -2,14 +2,13 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::os::libc::{__assert_fail, abort, fprintf, sprintf, stderr, strlen, write};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __mode_t, __off64_t, __off_t,
-    __time_t, __uid_t, cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios, TermKey,
-    TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
-    TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType,
-    TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_0, TerminfoEntry, _IO_FILE,
-    FILE,
+    __gid_t, __mode_t, __off_t, __off64_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t,
+    _IO_marker, _IO_wide_data, FILE, TermKey, TermKey_Terminfo_Getstr_Hook,
+    TermKey_method as C2Rust_Unnamed_0, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
+    TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
+    cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios,
 };
-extern "C" {
+unsafe extern "C" {
     fn fstat(__fd: ::core::ffi::c_int, __buf: *mut stat) -> ::core::ffi::c_int;
 }
 pub type __dev_t = ::core::ffi::c_ulong;

@@ -3,7 +3,7 @@ use crate::src::nvim::map::mh_realloc;
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, strlen};
 pub use crate::src::nvim::types::{
-    size_t, uint32_t, uint8_t, MHPutStatus, MapHash, Set_glyph, String_0,
+    MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint8_t, uint32_t,
 };
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;

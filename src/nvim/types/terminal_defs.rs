@@ -2,7 +2,7 @@
 // One definition per logical type; every module re-exports from here.
 use super::*;
 
-extern "C" {
+unsafe extern "C" {
     pub type terminal;
 }
 

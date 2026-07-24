@@ -15,18 +15,18 @@ use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::internal_error;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, strlen};
 pub use crate::src::nvim::types::{
-    blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
+    Arena, Array, BoolVarValue, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair,
+    LuaRef, MPConvPartialStage, MPConvStack, MPConvStackVal,
+    MPConvStackVal_data as C2Rust_Unnamed_2, MPConvStackVal_data_a as C2Rust_Unnamed_3,
+    MPConvStackVal_data_d as C2Rust_Unnamed_6, MPConvStackVal_data_l as C2Rust_Unnamed_5,
+    MPConvStackVal_data_p as C2Rust_Unnamed_4, MPConvStackValType, MessagePackType, Object,
+    ObjectType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus,
+    VarType, blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
     int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
     listwatch_S, listwatch_T, object, object_data as C2Rust_Unnamed, partial_S, partial_T,
     proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
-    ufunc_T, uint32_t, uint64_t, uint8_t, varnumber_T, Arena, Array, BoolVarValue, Boolean, Dict,
-    Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, MPConvPartialStage, MPConvStack,
-    MPConvStackVal, MPConvStackValType, MPConvStackVal_data as C2Rust_Unnamed_2,
-    MPConvStackVal_data_a as C2Rust_Unnamed_3, MPConvStackVal_data_d as C2Rust_Unnamed_6,
-    MPConvStackVal_data_l as C2Rust_Unnamed_5, MPConvStackVal_data_p as C2Rust_Unnamed_4,
-    MessagePackType, Object, ObjectType, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0,
-    VarLockStatus, VarType, QUEUE,
+    ufunc_T, uint8_t, uint32_t, uint64_t, varnumber_T,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
@@ -4297,7 +4297,7 @@ unsafe extern "C" fn encode_vim_to_object(
     return FAIL;
 }
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_to_object(
     mut obj: *mut typval_T,
     mut arena: *mut Arena,

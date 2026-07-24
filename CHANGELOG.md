@@ -12,6 +12,7 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rust toolchain bumped forward by 3 years.
 - Clippy turned on from zero: correctness findings fixed and kept at deny, the
   warning count ratcheted (`just lint`).
+- Crate migrated to edition 2024.
 
 ## [2026.07.23-95cd63254c]
 

@@ -3,8 +3,8 @@ use crate::src::nvim::api::private::helpers::{api_set_error, api_typename};
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::os::libc::{memchr, snprintf, strchr};
 pub use crate::src::nvim::types::{
-    int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, Array, Boolean, Dict,
-    Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0,
+    Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
+    ObjectType, String_0, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

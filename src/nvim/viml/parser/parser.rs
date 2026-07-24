@@ -2,12 +2,12 @@ use crate::src::nvim::mbyte::string_convert;
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, memcpy};
 pub use crate::src::nvim::types::{
-    iconv_t, size_t, vimconv_T, ParserHighlight, ParserHighlightChunk, ParserInputReader,
+    ParserHighlight, ParserHighlightChunk, ParserInputReader,
     ParserInputReader_lines as C2Rust_Unnamed_4, ParserLine, ParserLineGetter, ParserPosition,
-    ParserState, ParserStateItem, ParserStateItem_data as C2Rust_Unnamed_0,
-    ParserStateItem_data_expr as C2Rust_Unnamed_1,
+    ParserState, ParserState_stack as C2Rust_Unnamed_5, ParserStateItem,
+    ParserStateItem_data as C2Rust_Unnamed_0, ParserStateItem_data_expr as C2Rust_Unnamed_1,
     ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_2,
-    ParserStateItem_type_0 as C2Rust_Unnamed_3, ParserState_stack as C2Rust_Unnamed_5,
+    ParserStateItem_type_0 as C2Rust_Unnamed_3, iconv_t, size_t, vimconv_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const CONV_ICONV: C2Rust_Unnamed = 5;

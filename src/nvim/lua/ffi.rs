@@ -4,11 +4,13 @@
 //! the per-module copies c2rust emitted. Everything here resolves
 //! against the static LuaJIT/luv/lpeg libraries at link time.
 
-#![forbid(unsafe_code)]
+// No forbid(unsafe_code): edition 2024 trips the unsafe_code lint on the
+// extern block below, and declaring the foreign surface is this file's
+// entire job.
 
 use crate::src::nvim::types::*;
 
-extern "C-unwind" {
+unsafe extern "C-unwind" {
     pub fn luaL_argerror(
         L: *mut lua_State,
         numarg: ::core::ffi::c_int,

@@ -22,8 +22,8 @@ if [[ -f $out ]]; then
   fi
 fi
 
-# The tool builds with the dev-shell toolchain (its Cargo.lock is v3 for that
-# reason). RUSTFLAGS from the dev shell (-D warnings) is fine here.
+# The tool builds with the dev-shell toolchain. RUSTFLAGS from the dev shell
+# (-D warnings) is fine here.
 cargo build --release --quiet --manifest-path "$root/tools/ffigen/Cargo.toml"
 
 echo "generating unit-test cdefs from the crate" >&2

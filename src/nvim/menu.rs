@@ -15,10 +15,10 @@ use crate::src::nvim::getchar::ins_typebuf;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::replace_termcodes;
 use crate::src::nvim::main::{
-    curbuf, current_sctx, curwin, e_cannot_change_menus_while_listing, e_invarg, e_invarg2,
+    State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, curbuf,
+    current_sctx, curwin, e_cannot_change_menus_while_listing, e_invarg, e_invarg2,
     e_menu_only_exists_in_another_mode, e_trailing_arg, ex_normal_busy, finish_op, got_int, p_cpo,
-    p_sel, restart_edit, root_menu, sys_menu, State, VIsual, VIsual_active, VIsual_mode,
-    VIsual_reselect, VIsual_select,
+    p_sel, restart_edit, root_menu, sys_menu,
 };
 use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
@@ -34,8 +34,19 @@ use crate::src::nvim::popupmenu::pum_show_popupmenu;
 use crate::src::nvim::state::get_real_state;
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock,
-    buffblock_T, buffheader_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_1, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
+    FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, ListLenSpecials, LuaRef, MTKey,
+    MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MsgpackRpcRequestHandler, OptInt, QUEUE, RemapValues,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0,
+    Terminal, Timestamp, TriState, VarLockStatus, VarType, VimMenu, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T,
+    auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, buffblock, buffblock_T, buffheader_T,
+    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
     cstack_T_cs_pend as C2Rust_Unnamed_15, dict_T, dictvar_S, disptick_T, eslist_T, eslist_elem,
     event_T, exarg, exarg_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
@@ -52,19 +63,8 @@ pub use crate::src::nvim::types::{
     typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_7, u_header_uh_alt_prev as C2Rust_Unnamed_6,
     u_header_uh_next as C2Rust_Unnamed_9, u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T,
-    uint16_t, uint32_t, uint64_t, uint8_t, undo_object, varnumber_T, vimmenu_T, virt_line,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, vimmenu_T, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, Direction, EvalFuncData, ExtmarkUndoObject, FileID,
-    FloatAnchor, FloatRelative, GridView, Intersection, LineGetter, ListLenSpecials, LuaRef, MTKey,
-    MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MsgpackRpcRequestHandler, OptInt, RemapValues, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal,
-    Timestamp, TriState, VarLockStatus, VarType, VimMenu, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, QUEUE,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
 pub const kTrue: TriState = 1;

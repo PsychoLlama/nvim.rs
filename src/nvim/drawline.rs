@@ -33,27 +33,27 @@ use crate::src::nvim::insexpand::{
     ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active,
 };
 use crate::src::nvim::main::{
-    breakat_flags, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, decor_state, did_emsg,
-    dollar_vcol, dy_flags, highlight_attr, highlight_match, hl_attr_active, linebuf_attr,
-    linebuf_char, linebuf_vcol, normal_bg, ns_hl_fast, p_cpo, p_sel, screen_search_hl,
-    search_match_endcol, search_match_lines, spell_redraw_lnum, State, VIsual, VIsual_active,
-    VIsual_mode,
+    State, VIsual, VIsual_active, VIsual_mode, breakat_flags, cmdwin_type, cmdwin_win,
+    cterm_normal_bg_color, curwin, decor_state, did_emsg, dollar_vcol, dy_flags, highlight_attr,
+    highlight_match, hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg,
+    ns_hl_fast, p_cpo, p_sel, screen_search_hl, search_match_endcol, search_match_lines,
+    spell_redraw_lnum,
+};
+use crate::src::nvim::r#match::{
+    get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
 use crate::src::nvim::mbyte::{
-    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf8len_tab, utf_head_off,
-    utf_ptr2CharInfo_impl, utf_ptr2cells, utfc_next_impl, utfc_ptr2len, utfc_ptr2schar,
+    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2CharInfo_impl,
+    utf_ptr2cells, utf8len_tab, utfc_next_impl, utfc_ptr2len, utfc_ptr2schar,
 };
 use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
 use crate::src::nvim::plines::{
     charsize_fast, charsize_regular, getvcol, getvvcol, init_charsize_arg,
 };
-use crate::src::nvim::r#match::{
-    get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
-};
-use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
@@ -64,9 +64,23 @@ use crate::src::nvim::syntax::{
     get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T,
-    colnr_T, dict_T, dictvar_S, diffline_S, diffline_T, diffline_change_S, diffline_change_T,
-    disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
+    Callback_data as C2Rust_Unnamed_6, CallbackType, ChangedtickDictItem, CharInfo, CharSize,
+    CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorPriorityInternal, DecorRange, DecorRange_data as C2Rust_Unnamed_25,
+    DecorRange_data_ui as C2Rust_Unnamed_26, DecorRangeKind, DecorRangeSlot, DecorSignHighlight,
+    DecorState, DecorState_ranges_i as C2Rust_Unnamed_27, DecorState_slots as C2Rust_Unnamed_28,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, ExtmarkUndoObject, FileID, FloatAnchor,
+    FloatRelative, GridView, HlAttrs, Intersection, LuaRef, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_16, MetaIndex, NS, OptInt, QUEUE,
+    RgbValue, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SignTextAttrs, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlFlag, StrCharInfo, Terminal, Timestamp,
+    TriState, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinConfig, WinExtmark, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S,
+    blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, dict_T, dictvar_S, diffline_S, diffline_T,
+    diffline_change_S, diffline_change_T, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
     file_buffer_b_signcols as C2Rust_Unnamed_4, file_buffer_b_wininfo as C2Rust_Unnamed_12,
     file_buffer_update_callbacks as C2Rust_Unnamed_1,
     file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, foldinfo_T,
@@ -81,26 +95,12 @@ pub use crate::src::nvim::types::{
     synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
     u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     uintptr_t, undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
-    CSType, Callback, CallbackType, Callback_data as C2Rust_Unnamed_6, ChangedtickDictItem,
-    CharInfo, CharSize, CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData,
-    DecorPriority, DecorPriorityInternal, DecorRange, DecorRangeKind, DecorRangeSlot,
-    DecorRange_data as C2Rust_Unnamed_25, DecorRange_data_ui as C2Rust_Unnamed_26,
-    DecorSignHighlight, DecorState, DecorState_ranges_i as C2Rust_Unnamed_27,
-    DecorState_slots as C2Rust_Unnamed_28, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3,
-    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GridView, HlAttrs, Intersection, LuaRef,
-    MTKey, MTNode, MTPos, MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_16, MetaIndex,
-    OptInt, RgbValue, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SignTextAttrs, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlFlag, StrCharInfo, Terminal, Timestamp,
-    TriState, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinExtmark, WinInfo, WinSplit, WinStyle, Window, NS, QUEUE,
+    winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
-extern "C" {
+unsafe extern "C" {
     static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
     fn qf_current_entry(wp: *mut win_T) -> linenr_T;
     fn terminal_get_line_attributes(

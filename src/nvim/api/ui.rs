@@ -3,20 +3,20 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
-use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
 use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
 use crate::src::nvim::event::wstream::wstream_new_buffer;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_get, schar_get_adv};
 use crate::src::nvim::highlight::{hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::src::nvim::main::{
-    channels, current_ui, main_loop, noargs, p_bg, starting, stdin_fd, stdin_isatty, stdout_isatty,
-    t_colors, ui_ext_names, Columns,
+    Columns, channels, current_ui, main_loop, noargs, p_bg, starting, stdin_fd, stdin_isatty,
+    stdout_isatty, t_colors, ui_ext_names,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mbyte::utf_ambiguous_width;
 use crate::src::nvim::memory::{
-    alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree, ARENA_EMPTY,
+    ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
 use crate::src::nvim::msgpack_rpc::packer::mpack_object_array;
@@ -25,20 +25,28 @@ use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strlen};
 use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, handle_T, hash_T,
-    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T,
-    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
-    loop_0_children as C2Rust_Unnamed_10, multiqueue, object, object_data as C2Rust_Unnamed,
-    packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb, proc_state_cb, proftime_T,
-    pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, sattr_T, schar_T, scid_T, sctx_T,
-    size_t, ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12,
-    stream_write_cb, terminal, typval_T, typval_vval_union, ufunc_S, ufunc_T, uid_t, uint16_t,
-    uint32_t, uint64_t, uint8_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb,
-    uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t, uv_buf_t, uv_close_cb,
-    uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t,
-    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type, uv_idle_cb,
-    uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_13, uv_idle_t, uv_loop_s,
+    __uid_t, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
+    Callback_data as C2Rust_Unnamed_0, CallbackReader, CallbackType, Channel,
+    Channel_stream as C2Rust_Unnamed_21, ChannelCallFrame, ChannelStreamType, ClientType, Dict,
+    Error, ErrorType, Float, HlAttrs, Integer, InternalState, KeyValuePair, LibuvProc, LineFlags,
+    Loop, LuaRef, Map_uint64_t_ptr_t, MapHash, MultiQueue, Object, ObjectType, PackerBuffer,
+    PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, RgbValue, RpcState,
+    RpcState_call_stack as C2Rust_Unnamed_20, ScopeDictDictItem, ScopeType, Set_uint64_t,
+    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIExtension, Unpacker,
+    VarLockStatus, VarType, WBuffer, Window, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S,
+    float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t,
+    handle_T, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb,
+    key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
+    loop_0, loop_0_children as C2Rust_Unnamed_10, multiqueue, object,
+    object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb,
+    proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, sattr_T,
+    schar_T, scid_T, sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
+    stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T, typval_vval_union,
+    ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t,
+    uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t,
+    uv_buf_t, uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb,
+    uv_file, uv_gid_t, uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type,
+    uv_idle_cb, uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_13, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_6, uv_loop_s_timer_heap as C2Rust_Unnamed_5, uv_loop_t,
     uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_15, uv_pipe_t, uv_process_options_s,
     uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_17, uv_process_t,
@@ -49,15 +57,7 @@ pub use crate::src::nvim::types::{
     uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_11, uv_stream_t, uv_tcp_s,
     uv_tcp_s_u as C2Rust_Unnamed_14, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize, Arena, ArenaMem, Array, BoolVarValue,
-    Boolean, Callback, CallbackReader, CallbackType, Callback_data as C2Rust_Unnamed_0, Channel,
-    ChannelCallFrame, ChannelStreamType, Channel_stream as C2Rust_Unnamed_21, ClientType, Dict,
-    Error, ErrorType, Float, HlAttrs, Integer, InternalState, KeyValuePair, LibuvProc, LineFlags,
-    Loop, LuaRef, MapHash, Map_uint64_t_ptr_t, MultiQueue, Object, ObjectType, PackerBuffer,
-    PackerBufferFlush, Proc, ProcType, PtyProc, RStream, RemoteUI, RgbValue, RpcState,
-    RpcState_call_stack as C2Rust_Unnamed_20, ScopeDictDictItem, ScopeType, Set_uint64_t,
-    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIExtension, Unpacker,
-    VarLockStatus, VarType, WBuffer, Window, QUEUE,
+    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,

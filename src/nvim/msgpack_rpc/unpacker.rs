@@ -9,20 +9,20 @@ use crate::src::nvim::api::private::helpers::api_set_error;
 use crate::src::nvim::grid::schar_from_buf;
 use crate::src::nvim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
 use crate::src::nvim::memory::{
-    arena_alloc, arena_finish, arena_mem_free, xrealloc, xstrdup, ARENA_EMPTY,
+    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xrealloc, xstrdup,
 };
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy};
 use crate::src::nvim::strings::arena_printf;
 pub use crate::src::nvim::types::{
-    consumed_blk, int32_t, int64_t, key_value_pair, mpack_data_t, mpack_node_s, mpack_node_t,
-    mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
-    mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
-    mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, object,
-    object_data as C2Rust_Unnamed_1, sattr_T, schar_T, size_t, ssize_t, uint32_t, uint64_t,
     AdditionalData, AdditionalDataBuilder, ApiDispatchWrapper, Arena, ArenaMem, Array, Boolean,
     Dict, Error, ErrorType, FieldHashfn, Float, GridLineEvent, Integer, KeySetLink, KeyValuePair,
     LuaRef, MessageType, MsgpackRpcRequestHandler, Object, ObjectType, OptKeySet, OptionalKeys,
-    StringArray, String_0, UIClientHandler,
+    String_0, StringArray, UIClientHandler, consumed_blk, int32_t, int64_t, key_value_pair,
+    mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s,
+    mpack_tokbuf_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t,
+    mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t,
+    mpack_walk_cb, object, object_data as C2Rust_Unnamed_1, sattr_T, schar_T, size_t, ssize_t,
+    uint32_t, uint64_t,
 };
 use crate::src::nvim::ui_client::{
     handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,
@@ -96,7 +96,7 @@ pub const STRING_INIT: String_0 = String_0 {
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const MAX_EXT_LEN: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpack(
     mut data: *const ::core::ffi::c_char,
     mut size: size_t,
@@ -498,7 +498,7 @@ unsafe extern "C-unwind" fn api_parse_exit(
     mut _node: *mut mpack_node_t,
 ) {
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
     mpack_parser_init(&raw mut (*p).parser, 0 as mpack_uint32_t);
     (*p).parser.data.p = p as *mut ::core::ffi::c_void;
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
     (*p).arena = ARENA_EMPTY;
     (*p).has_grid_line_event = false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpacker_teardown(mut p: *mut Unpacker) {
     arena_mem_free(arena_finish(&raw mut (*p).arena));
 }
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
     }
     return false_0 != 0;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
     let mut result: ::core::ffi::c_int = 0;
     let mut c2rust_current_block: u64;

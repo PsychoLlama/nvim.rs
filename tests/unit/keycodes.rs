@@ -3,7 +3,7 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::src::nvim::keycodes::{find_special_key, FSK_IN_STRING};
+use c2rust_neovim::src::nvim::keycodes::{FSK_IN_STRING, find_special_key};
 
 use crate::support::cstr;
 

@@ -9,9 +9,9 @@ use crate::src::nvim::memory::{xfree, xmemdupz};
 use crate::src::nvim::message::{semsg, smsg};
 use crate::src::nvim::os::libc::{gettext, strcmp};
 pub use crate::src::nvim::types::{
-    cmd_addr_T, cmdidx_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem,
-    exarg, exarg_T, int32_t, linenr_T, lua_Number, lua_State, size_t, uint32_t, CMD_index,
-    LineGetter,
+    CMD_index, LineGetter, cmd_addr_T, cmdidx_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed,
+    eslist_T, eslist_elem, exarg, exarg_T, int32_t, linenr_T, lua_Number, lua_State, size_t,
+    uint32_t,
 };
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;

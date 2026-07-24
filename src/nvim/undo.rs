@@ -7,7 +7,7 @@ use crate::src::nvim::change::{
 use crate::src::nvim::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, getviscol,
 };
-use crate::src::nvim::drawscreen::{redrawWinline, redraw_later};
+use crate::src::nvim::drawscreen::{redraw_later, redrawWinline};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::funcs::get_buf_arg;
 use crate::src::nvim::eval::typval::{
@@ -24,9 +24,9 @@ use crate::src::nvim::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    curbuf, curtab, curwin, e_modifiable, e_sandbox, e_textlock, fdo_flags, firstbuf, firstwin,
-    global_busy, got_int, no_u_sync, p_cpo, p_fs, p_udir, p_ul, p_verbose, sandbox, textlock,
-    IObuff, KeyTyped, VIsual, VIsual_active,
+    IObuff, KeyTyped, VIsual, VIsual_active, curbuf, curtab, curwin, e_modifiable, e_sandbox,
+    e_textlock, fdo_flags, firstbuf, firstwin, global_busy, got_int, no_u_sync, p_cpo, p_fs,
+    p_udir, p_ul, p_verbose, sandbox, textlock,
 };
 use crate::src::nvim::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::src::nvim::mbyte::utfc_ptr2len;
@@ -52,18 +52,30 @@ use crate::src::nvim::os::libc::{
     memcmp, memmove, memset, ngettext, strcmp, strftime, strlen, time,
 };
 use crate::src::nvim::os::time::{os_localtime_r, os_time};
-use crate::src::nvim::path::{concat_fnames, path_tail, vim_ispathsep, FullName_save};
-use crate::src::nvim::sha256::{Sha256, SHA256_SUM_SIZE};
+use crate::src::nvim::path::{FullName_save, concat_fnames, path_tail, vim_ispathsep};
+use crate::src::nvim::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_snprintf_add, vim_strchr};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __gid_t, __off64_t, __off_t, __time_t,
-    __uid_t, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_17,
-    dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, eslist_T, eslist_elem, exarg, exarg_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
-    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed,
+    __gid_t, __off_t, __off64_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
+    _IO_wide_data, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index,
+    Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_1, EvalFuncData, ExtmarkMove, ExtmarkOp, ExtmarkSavePos,
+    ExtmarkSplice, ExtmarkUndoObject, FILE, FileID, FileInfo, FloatAnchor, FloatRelative, GridView,
+    Intersection, LineGetter, ListLenSpecials, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
+    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree,
+    MsgpackRpcRequestHandler, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
+    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, UndoObjectType,
+    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
+    WinSplit, WinStyle, Window, alist_T, bcount_t, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
+    bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
+    cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
+    eslist_T, eslist_elem, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_11,
+    file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T, gid_t, handle_T,
     hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T, linenr_T,
@@ -76,21 +88,10 @@ pub use crate::src::nvim::types::{
     typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
     u_header_uh_alt_next as C2Rust_Unnamed_8, u_header_uh_alt_prev as C2Rust_Unnamed_7,
     u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
-    uid_t, uint16_t, uint32_t, uint64_t, uint8_t, uintmax_t, undo_object,
+    uid_t, uint8_t, uint16_t, uint32_t, uint64_t, uintmax_t, undo_object,
     undo_object_data as C2Rust_Unnamed_6, uv_gid_t, uv_stat_t, uv_timespec_t, uv_uid_t,
     varnumber_T, vim_acl_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
-    xfmark_T, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
-    CallbackType, Callback_data as C2Rust_Unnamed_4, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, EvalFuncData, ExtmarkMove, ExtmarkOp, ExtmarkSavePos,
-    ExtmarkSplice, ExtmarkUndoObject, FileID, FileInfo, FloatAnchor, FloatRelative, GridView,
-    Intersection, LineGetter, ListLenSpecials, LuaRef, MTKey, MTNode, MTPos, MapHash,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MsgpackRpcRequestHandler, OptInt, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Terminal, Timestamp, UndoObjectType,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, _IO_FILE, FILE, QUEUE,
+    xfmark_T,
 };
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
@@ -1209,7 +1210,7 @@ static e_not_open: GlobalCell<[::core::ffi::c_char; 44]> = GlobalCell::new(unsaf
         *b"E828: Cannot open undo file for writing: %s\0",
     )
 });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
     let mut lnum: linenr_T = 1 as linenr_T;
@@ -1221,7 +1222,7 @@ pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint
     }
     ::core::slice::from_raw_parts_mut(hash, SHA256_SUM_SIZE).copy_from_slice(&ctx.finish());
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_get_undo_file_name(
     buf_ffname: *const ::core::ffi::c_char,
     reading: bool,
@@ -1786,7 +1787,7 @@ unsafe extern "C" fn unserialize_visualinfo(mut bi: *mut bufinfo_T, mut info: *m
     (*info).vi_mode = undo_read_4c(bi);
     (*info).vi_curswant = undo_read_4c(bi) as colnr_T;
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_write_undo(
     name: *const ::core::ffi::c_char,
     forceit: bool,
@@ -4030,7 +4031,7 @@ pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
     }
     xfree((*buf).b_u_line_ptr as *mut ::core::ffi::c_void);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_clearallandblockfree(mut buf: *mut buf_T) {
     u_blockfree(buf);
     u_clearall(buf);

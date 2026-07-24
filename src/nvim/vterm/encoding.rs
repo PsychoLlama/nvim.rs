@@ -1,5 +1,5 @@
 use crate::src::nvim::global_cell::GlobalCell;
-pub use crate::src::nvim::types::{size_t, uint32_t, uint8_t, VTermEncoding, VTermEncodingType};
+pub use crate::src::nvim::types::{VTermEncoding, VTermEncodingType, size_t, uint8_t, uint32_t};
 pub const ENC_SINGLE_94: VTermEncodingType = 1;
 pub const ENC_UTF8: VTermEncodingType = 0;
 #[derive(Copy, Clone)]
@@ -441,7 +441,7 @@ static encodings: GlobalCell<[C2Rust_Unnamed; 4]> = GlobalCell::new([
         enc: ::core::ptr::null_mut::<VTermEncoding>(),
     },
 ]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_lookup_encoding(
     mut type_0: VTermEncodingType,
     mut designation: ::core::ffi::c_char,

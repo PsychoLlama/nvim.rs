@@ -25,9 +25,9 @@ use crate::src::nvim::eval_1::{
     eval_has_provider, eval_init, garbage_collect, set_argv_var, timer_teardown,
 };
 use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
 use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_process_events};
 use crate::src::nvim::event::proc::proc_teardown;
-use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
 use crate::src::nvim::event::socket::socket_address_tcp_host_end;
 use crate::src::nvim::event::stream::stream_set_blocking;
 use crate::src::nvim::ex_cmds::do_ecmd;
@@ -53,6 +53,7 @@ use crate::src::nvim::memline::{
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::{msg_putchar, semsg, wait_return};
 use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::msgpack_rpc::server::{server_init, server_teardown};
 use crate::src::nvim::normal::{check_scrollbind, init_normal_cmds, normal_enter};
 use crate::src::nvim::option::{
@@ -81,7 +82,6 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::profile::{profile_dump, time_finish, time_init, time_msg, time_start};
 use crate::src::nvim::quickfix::qf_init_stack;
-use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::register::get_default_register_name;
 use crate::src::nvim::runtime::{
     do_source, estack_init, estack_pop, estack_push, load_plugins, runtime_init,
@@ -91,9 +91,27 @@ use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::syn_maybe_enable;
 use crate::src::nvim::terminal::{terminal_init, terminal_teardown};
 pub use crate::src::nvim::types::{
-    _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, __off64_t, __off_t,
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, aentry_T, alist_T, aucmdwin_T, auto_event, bcount_t, bhdr_T, bln_values, blob_T,
+    __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
+    __pthread_rwlock_arch_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
+    _IO_wide_data, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
+    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
+    Callback_data as C2Rust_Unnamed_5, CallbackReader, CallbackType, ChangedtickDictItem, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorPriorityInternal, DecorRange,
+    DecorRange_data as C2Rust_Unnamed_32, DecorRange_data_ui as C2Rust_Unnamed_33, DecorRangeKind,
+    DecorRangeSlot, DecorSignHighlight, DecorState, DecorState_ranges_i as C2Rust_Unnamed_34,
+    DecorState_slots as C2Rust_Unnamed_35, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2,
+    Dict, Error, ErrorType, ExtmarkMove, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FILE,
+    FileComparison, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
+    KeyValuePair, LineGetter, ListLenSpecials, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
+    Map_String_int, Map_int_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_29,
+    MultiQueue, NS, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType, Proc,
+    ProcType, QUEUE, RStream, RgbValue, ScopeDictDictItem, ScopeType, ScreenGrid, Set_String,
+    Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, Stream, String_0, Terminal, Timestamp,
+    TriState, UndoObjectType, VarLockStatus, VarType, VimMenu, VimVarIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinExtmark, WinInfo, WinSplit, WinStyle, Window,
+    XDGVarType, aentry_T, alist_T, aucmdwin_T, auto_event, bcount_t, bhdr_T, bln_values, blob_T,
     blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, caller_scope, chunksize_T, cmd_addr_T,
     cmdidx_T, cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_30, dict_T,
     dictvar_S, diff_T, diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
@@ -118,7 +136,7 @@ pub use crate::src::nvim::types::{
     tabpage_T, taggy_T, terminal, time_t, typebuf_T, typval_T, typval_vval_union, u_entry,
     u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
     u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, undo_object_data as C2Rust_Unnamed_7, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
     uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_19, uv_async_t, uv_buf_t,
     uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
@@ -132,25 +150,7 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_26, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_20, uv_timer_s_u as C2Rust_Unnamed_21, uv_timer_t,
     varnumber_T, vim_exception, vimmenu_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
-    winopt_T, wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd,
-    AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback, CallbackReader,
-    CallbackType, Callback_data as C2Rust_Unnamed_5, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorPriorityInternal, DecorRange,
-    DecorRangeKind, DecorRangeSlot, DecorRange_data as C2Rust_Unnamed_32,
-    DecorRange_data_ui as C2Rust_Unnamed_33, DecorSignHighlight, DecorState,
-    DecorState_ranges_i as C2Rust_Unnamed_34, DecorState_slots as C2Rust_Unnamed_35, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkMove, ExtmarkSavePos,
-    ExtmarkSplice, ExtmarkUndoObject, FileComparison, FileID, Float, FloatAnchor, FloatRelative,
-    GridView, Integer, Intersection, KeyValuePair, LineGetter, ListLenSpecials, Loop, LuaRef,
-    LuaRetMode, MTKey, MTNode, MTPos, MapHash, Map_String_int, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_int_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MarkTree,
-    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_29, MultiQueue, Object, ObjectType, OptIndex,
-    OptInt, OptVal, OptValData, OptValType, Proc, ProcType, RStream, RgbValue, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_String, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, Stream,
-    String_0, Terminal, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, VimMenu,
-    VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinExtmark, WinInfo,
-    WinSplit, WinStyle, Window, XDGVarType, _IO_FILE, FILE, NS, QUEUE,
+    winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::{
     do_autocmd_uienter_all, ui_call_error_exit, ui_call_set_title, ui_call_stop, ui_flush, ui_init,
@@ -162,7 +162,7 @@ use crate::src::nvim::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_alloc_first, win_close,
     win_count, win_enter, win_equal, win_init_size, win_new_screensize,
 };
-extern "C" {
+unsafe extern "C" {
     fn qf_init(
         wp: *mut win_T,
         efile: *const ::core::ffi::c_char,
@@ -2076,7 +2076,7 @@ pub static autocmd_bufnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as 
 pub static autocmd_match: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_31> = GlobalCell::new(C2Rust_Unnamed_31 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -2170,7 +2170,7 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     running_decor_provider: false,
     itr_valid: false,
 });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static decor_items: GlobalCell<C2Rust_Unnamed_36> = GlobalCell::new(C2Rust_Unnamed_36 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -2181,7 +2181,7 @@ pub static diff_foldcolumn: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(2 as ::core::ffi::c_int);
 pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static win_extmark_arr: GlobalCell<C2Rust_Unnamed_37> = GlobalCell::new(C2Rust_Unnamed_37 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -3144,11 +3144,11 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
 // TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
 // left 0, which is a valid pointer-sentinel value and would corrupt any
 // caller comparing against it (the unit tests do, via FFI).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 pub static disable_fold_update: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
@@ -3204,7 +3204,7 @@ pub static emsg_off: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::cor
 pub static info_message: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_hist_off: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_clr_eos: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static emsg_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static emsg_severe: GlobalCell<bool> = GlobalCell::new(false);
 pub static emsg_assert_fails_msg: GlobalCell<*mut ::core::ffi::c_char> =
@@ -3316,19 +3316,19 @@ pub static mouse_dragging: GlobalCell<::core::ffi::c_int> =
 pub static root_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static firstwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static lastwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static first_tabpage: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static curtab: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
@@ -3336,7 +3336,7 @@ pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub static firstbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: garray_T {
@@ -3354,9 +3354,9 @@ pub static arg_had_last: GlobalCell<bool> = GlobalCell::new(false);
 pub static ru_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static ru_wid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static sc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static starting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(2 as ::core::ffi::c_int);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
 pub static v_dying: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
@@ -3367,7 +3367,7 @@ pub static full_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static secure: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static textlock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static allbuf_lock: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static sandbox: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static VIsual: GlobalCell<pos_T> = GlobalCell::new(pos_T {
@@ -3452,7 +3452,7 @@ pub static ins_at_eol: GlobalCell<bool> = GlobalCell::new(false);
 pub static no_abbr: GlobalCell<bool> = GlobalCell::new(true);
 pub static mapped_ctrl_c: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_flags: 0,
     cmod_split: 0,
@@ -3475,7 +3475,7 @@ pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_did_esilent: 0,
 });
 pub static msg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static emsg_silent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static emsg_noredir: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmd_silent: GlobalCell<bool> = GlobalCell::new(false);
@@ -3487,7 +3487,7 @@ pub static swap_exists_action: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static IObuff: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static NameBuff: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
 pub static msg_buf: GlobalCell<[::core::ffi::c_char; 480]> = GlobalCell::new([0; 480]);
 pub static os_buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
@@ -3594,7 +3594,7 @@ pub static stl_syntax: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::c
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 pub static virtual_op: GlobalCell<TriState> = GlobalCell::new(kNone);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
 pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
@@ -4285,7 +4285,7 @@ pub static p_ff: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_ffs: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_fic: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_ft: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
@@ -4326,7 +4326,7 @@ pub static p_hl: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_hls: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_hi: GlobalCell<OptInt> = GlobalCell::new(0);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_arshape: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_icon: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_iconstring: GlobalCell<*mut ::core::ffi::c_char> =
@@ -4473,20 +4473,20 @@ pub static p_slm: GlobalCell<*mut ::core::ffi::c_char> =
 pub static p_ssop: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static ssop_flags: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_sh: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_shcf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_sp: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_shq: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_sxq: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_sxe: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_srr: GlobalCell<*mut ::core::ffi::c_char> =
@@ -4579,7 +4579,7 @@ pub static p_tgc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_ttimeout: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub static p_ttm: GlobalCell<OptInt> = GlobalCell::new(0);
 pub static p_tf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static p_udir: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub static p_udf: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -5058,7 +5058,7 @@ static err_extra_cmd: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments\0".as_ptr()
         as *const ::core::ffi::c_char,
 );
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn event_init() {
     loop_init(main_loop.ptr(), NULL_0);
     env_init();
@@ -5091,7 +5091,7 @@ unsafe extern "C" fn event_teardown() -> bool {
     terminal_teardown();
     return loop_close(main_loop.ptr(), true_0 != 0);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
     os_hint_priority();
     estack_init();
@@ -13007,7 +13007,7 @@ pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     comp_disabled: false,
     pending_comp_index_update: true,
 });
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static pum_want: GlobalCell<C2Rust_Unnamed_46> = GlobalCell::new(C2Rust_Unnamed_46 {
     active: false,
     item: 0,
@@ -13076,7 +13076,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     kTVCstring.set((18446744073709551615 as size_t).wrapping_sub(1 as size_t));
 }
 #[used]
-#[cfg_attr(target_os = "linux", link_section = ".init_array")]
-#[cfg_attr(target_os = "windows", link_section = ".CRT$XIB")]
-#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
+#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
 static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

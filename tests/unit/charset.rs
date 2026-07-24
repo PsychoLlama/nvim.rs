@@ -4,8 +4,8 @@ use std::ffi::c_int;
 use std::ptr;
 
 use c2rust_neovim::src::nvim::charset::{
-    vim_str2nr, STR2NR_ALL, STR2NR_BIN, STR2NR_DEC, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT,
-    STR2NR_OOCT, STR2NR_QUOTE,
+    STR2NR_ALL, STR2NR_BIN, STR2NR_DEC, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT,
+    STR2NR_QUOTE, vim_str2nr,
 };
 use c2rust_neovim::src::nvim::types::typval::{uvarnumber_T, varnumber_T};
 

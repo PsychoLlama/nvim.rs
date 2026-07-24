@@ -27,15 +27,15 @@ use crate::src::nvim::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::src::nvim::main::{
-    bo_flags, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, curwin,
-    default_grid, emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails,
-    msg_grid_adj, noargs, normal_bg, normal_fg, normal_sp, p_debug, p_guicursor, p_lz, p_mouse,
-    p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting, textlock, ui_client_channel_id,
-    ui_event_ns_id, ui_ext_names, ui_refresh_cmdheight, updating_screen, State, VIsual_active,
+    State, VIsual_active, bo_flags, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color,
+    curbuf, curwin, default_grid, emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen,
+    in_assert_fails, msg_grid_adj, noargs, normal_bg, normal_fg, normal_sp, p_debug, p_guicursor,
+    p_lz, p_mouse, p_tgc, p_vb, p_wd, rdb_flags, resize_events, starting, textlock,
+    ui_client_channel_id, ui_event_ns_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
 use crate::src::nvim::map::{map_del_uint32_t_ptr_t, map_put_ref_uint32_t_ptr_t, mh_get_uint32_t};
 use crate::src::nvim::memory::{
-    arena_finish, arena_mem_free, strequal, xcalloc, xfree, ARENA_EMPTY,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree,
 };
 use crate::src::nvim::message::{
     msg, msg_ext_ui_flush, msg_schedule_semsg, msg_schedule_semsg_multiline, msg_scroll_flush,
@@ -46,11 +46,23 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, llabs, memcpy, m
 use crate::src::nvim::os::time::{os_hrtime, os_sleep};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
-    __time_t, alist_T, argv_callback, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, colnr_T, consumed_blk, cursorentry_T, dict_T, dictvar_S, diff_T, diffblock_S,
-    disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
+    __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
+    BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
+    ChangedtickDictItem, CursorShape, DecorExt, DecorHighlightInline, DecorInlineData,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Dict, Error, ErrorType,
+    Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HlAttrs,
+    Integer, Intersection, KeyValuePair, LineFlags, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, MultiQueue, NS, Object, ObjectType, OptIndex, OptInt,
+    OptVal, OptValData, OptValType, PackerBuffer, PackerBufferFlush, QUEUE, RemoteUI, RgbValue,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0,
+    Tabpage, Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T,
+    argv_callback, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    consumed_blk, cursorentry_T, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
+    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_2,
+    file_buffer_b_wininfo as C2Rust_Unnamed_10, file_buffer_update_callbacks as C2Rust_Unnamed,
     file_buffer_update_channels as C2Rust_Unnamed_0, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T, handle_T, hash_T,
     hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair, lcs_chars_T,
@@ -63,21 +75,9 @@ pub use crate::src::nvim::types::{
     synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
     u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7,
     u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
-    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint16_t, uint32_t, uint64_t, uint8_t,
+    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
     undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, xfmark_T, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, Buffer, Callback, CallbackType, Callback_data as C2Rust_Unnamed_4,
-    ChangedtickDictItem, CursorShape, DecorExt, DecorHighlightInline, DecorInlineData,
-    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Dict, Error, ErrorType,
-    Event, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, HlAttrs,
-    Integer, Intersection, KeyValuePair, LineFlags, LuaRef, LuaRetMode, MTKey, MTNode, MTPos,
-    MapHash, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MarkTree, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, PackerBuffer, PackerBufferFlush, RemoteUI, RgbValue, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Tabpage,
-    Terminal, Timestamp, TriState, UIExtension, VarLockStatus, VarType, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, NS, QUEUE,
+    wline_T, xfmark_T,
 };
 use crate::src::nvim::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_grid_cursor_goto,
@@ -2057,7 +2057,7 @@ pub unsafe extern "C" fn ui_call_suspend() {
         ui_log(b"suspend\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ui_call_set_title(mut title: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -2110,7 +2110,7 @@ pub unsafe extern "C" fn ui_call_option_set(mut name: String_0, mut value: Objec
         ui_log(b"option_set\0".as_ptr() as *const ::core::ffi::c_char);
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ui_call_chdir(mut path: String_0) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
