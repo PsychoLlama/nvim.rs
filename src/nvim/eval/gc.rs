@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::global_cell::GlobalCell;
 pub use crate::src::nvim::types::{
     BoolVarValue, LuaRef, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus,

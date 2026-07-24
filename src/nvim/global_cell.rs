@@ -35,6 +35,8 @@
 //! functional suite several-fold, and even a `pthread_self()` call per
 //! access blew the search-stat timing test in the old suite.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 

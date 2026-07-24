@@ -1,7 +1,7 @@
 {
   "internal_exports": 154,
   "files_without_forbid_unsafe": 233,
-  "files_without_deny_unsafe_op": 233,
+  "files_without_deny_unsafe_op": 196,
   "files": {
     "src/cjson/fpconv.rs": {"unsafe": 8},
     "src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
