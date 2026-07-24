@@ -98,6 +98,13 @@ if os.getenv('VALGRIND') then
   default_timeout_factor = default_timeout_factor * 3
 end
 
+-- ASan runs (just asan functionaltest) only get scaled timeouts upstream via
+-- the CI factor below; locally the redraw-heavy specs miss the bare 3.5s
+-- window.
+if os.getenv('NVIM_TEST_ASAN') == '1' then
+  default_timeout_factor = default_timeout_factor * 3
+end
+
 if os.getenv('CI') then
   default_timeout_factor = default_timeout_factor * 3
 end

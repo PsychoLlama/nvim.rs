@@ -31,6 +31,12 @@ M.nvim_set = (
   .. " belloff= wildoptions-=pum joinspaces noshowcmd noruler nomore redrawdebug=invalid shada=!,'100,<50,s10,h"
   .. [[ statusline=%<%f\ %{%nvim_eval_statusline('%h%w%m%r',\ {'maxwidth':\ 30}).width\ >\ 0\ ?\ '%h%w%m%r\ '\ :\ ''%}%=%{%\ &showcmdloc\ ==\ 'statusline'\ ?\ '%-10.S\ '\ :\ ''\ %}%{%\ exists('b:keymap_name')\ ?\ '<'..b:keymap_name..'>\ '\ :\ ''\ %}%{%\ &ruler\ ?\ (\ &rulerformat\ ==\ ''\ ?\ '%-14.(%l,%c%V%)\ %P'\ :\ &rulerformat\ )\ :\ ''\ %}]]
 )
+-- Under ASan the regex syntax engine can blow the 2s 'redrawtime' default in
+-- a single redraw (e.g. syntax/tutor.vim), which permanently disables syntax
+-- for the buffer and fails screen expectations no matter how long they wait.
+if t.is_asan() then
+  M.nvim_set = M.nvim_set .. ' redrawtime=10000'
+end
 M.nvim_argv = {
   M.nvim_prog,
   '-u',

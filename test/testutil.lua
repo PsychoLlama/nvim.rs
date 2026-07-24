@@ -153,7 +153,7 @@ end
 ---
 --- Matches are not restricted to a single line.
 ---
---- Retries for 1 second in case of filesystem delay.
+--- Retries for 1 second (3 under ASan) in case of filesystem delay.
 ---
 ---@param pat (string) Lua pattern to match text in the log file
 ---@param logfile? (string) Full path to log file (default=$NVIM_LOG_FILE)
@@ -164,7 +164,7 @@ function M.assert_log(pat, logfile, nrlines, inverse)
   assert(logfile ~= nil, 'no logfile')
   nrlines = nrlines or 10
 
-  M.retry(nil, 1000, function()
+  M.retry(nil, M.is_asan() and 3000 or 1000, function()
     local lines = M.read_file_list(logfile, -nrlines) or {}
     local text = table.concat(lines, '\n')
     local ismatch = not not text:match(pat)
