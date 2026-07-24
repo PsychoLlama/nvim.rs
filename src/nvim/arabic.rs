@@ -4,6 +4,8 @@
 //! Unicode codepoints. Active when 'arabicshape' is set and 'termbidi'
 //! is not.
 
+#![forbid(unsafe_code)]
+
 use core::ffi::c_int;
 
 use crate::src::nvim::main::{p_arshape, p_tbidi};

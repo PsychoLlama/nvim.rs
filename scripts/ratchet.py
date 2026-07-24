@@ -12,12 +12,19 @@ Rust source file (src/**/*.rs plus the crate roots):
               the cap are grandfathered at their committed size and may
               shrink or hold, never grow. New files start at the cap.
 
-plus one whole-tree metric:
+plus two whole-tree metrics:
 
   internal_exports  the number of internal-only exports in the committed ABI
                     ledger (metrics/abi-ledger.jsonl — `just abi-ledger
                     --check` separately guarantees that file matches the
                     tree).
+
+  files_without_forbid_unsafe  the number of source files not carrying
+                    #![forbid(unsafe_code)]. The shrink-only trick inverted:
+                    fully safe modules take the attribute — which makes
+                    "safe module" a compiler-enforced status instead of a
+                    grep result — and the count of files still lacking it
+                    may only fall. New files are expected to be born safe.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -62,17 +69,21 @@ COUNTED = {
     "static_mut": "static mut ",
     "no_mangle": "#[no_mangle]",
 }
+FORBID = "#![forbid(unsafe_code)]"
 
 
 def measure():
-    """repo-relative file -> {metric: count}, zeros included."""
+    """(repo-relative file -> {metric: count} with zeros included,
+    number of files not carrying the forbid attribute)."""
     stats = {}
+    without_forbid = 0
     for path in sorted([*ROOT.glob("src/**/*.rs"), *ROOT.glob("*.rs")]):
         text = path.read_text()
         counts = {name: text.count(needle) for name, needle in COUNTED.items()}
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
-    return stats
+        without_forbid += FORBID not in text
+    return stats, without_forbid
 
 
 def internal_exports():
@@ -84,7 +95,7 @@ def internal_exports():
     )
 
 
-def render(stats, internal):
+def render(stats, internal, without_forbid):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -100,15 +111,25 @@ def render(stats, internal):
                 f"    {json.dumps(file)}: {json.dumps(kept, sort_keys=True)}"
             )
     body = ",\n".join(entries)
-    return f'{{\n  "internal_exports": {internal},\n  "files": {{\n{body}\n  }}\n}}\n'
+    return (
+        "{\n"
+        f'  "internal_exports": {internal},\n'
+        f'  "files_without_forbid_unsafe": {without_forbid},\n'
+        f'  "files": {{\n{body}\n  }}\n'
+        "}\n"
+    )
 
 
-def violations(stats, internal, baseline):
+def violations(stats, internal, without_forbid, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
     base_internal = baseline["internal_exports"]
     if internal > base_internal:
         found.append(f"abi-ledger internal exports: {base_internal} -> {internal}")
+    # .get: absent from baselines committed before the metric existed.
+    base_forbid = baseline.get("files_without_forbid_unsafe", without_forbid)
+    if without_forbid > base_forbid:
+        found.append(f"files without {FORBID}: {base_forbid} -> {without_forbid}")
     base_files = baseline["files"]
     for file in sorted(stats.keys() | base_files.keys()):
         cur = stats.get(file, {**dict.fromkeys(COUNTED, 0), "lines": 0})
@@ -123,13 +144,14 @@ def violations(stats, internal, baseline):
     return found
 
 
-def summary(stats, internal):
+def summary(stats, internal, without_forbid):
     totals = {name: sum(c[name] for c in stats.values()) for name in COUNTED}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
     parts += [
         f"{over} files over {LINE_CAP} lines",
         f"{internal} internal exports",
+        f"{without_forbid} files without forbid(unsafe_code)",
     ]
     return ", ".join(parts)
 
@@ -139,9 +161,9 @@ def main():
     if unknown := args - {"--check", "--allow-growth"}:
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
-    stats = measure()
+    stats, without_forbid = measure()
     internal = internal_exports()
-    content = render(stats, internal)
+    content = render(stats, internal, without_forbid)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -149,7 +171,7 @@ def main():
             sys.exit(
                 f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just refresh`"
             )
-        if grew := violations(stats, internal, json.loads(committed)):
+        if grew := violations(stats, internal, without_forbid, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: counts may only shrink. Reduce them, or if the "
@@ -164,14 +186,16 @@ def main():
         return
 
     if committed is not None and "--allow-growth" not in args:
-        if grew := violations(stats, internal, json.loads(committed)):
+        if grew := violations(stats, internal, without_forbid, json.loads(committed)):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
                 "ratchet: refusing to raise the baseline. If the growth is "
                 "justified, rerun with --allow-growth."
             )
     BASELINE.write_text(content)
-    print(f"wrote {BASELINE.relative_to(ROOT)}: {summary(stats, internal)}")
+    print(
+        f"wrote {BASELINE.relative_to(ROOT)}: {summary(stats, internal, without_forbid)}"
+    )
 
 
 if __name__ == "__main__":

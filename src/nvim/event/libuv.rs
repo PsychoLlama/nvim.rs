@@ -4,6 +4,8 @@
 //! the per-module copies c2rust emitted. Everything here resolves
 //! against the static libuv at link time.
 
+#![forbid(unsafe_code)]
+
 use crate::src::nvim::types::*;
 
 extern "C" {

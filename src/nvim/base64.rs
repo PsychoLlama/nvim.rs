@@ -3,6 +3,8 @@
 //! Pure functions over byte slices: no globals, callable from any thread
 //! (`vim.base64` is exposed to `vim.uv.new_thread` threads).
 
+#![forbid(unsafe_code)]
+
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Index+1 of each alphabet byte; 0 marks bytes outside the alphabet.

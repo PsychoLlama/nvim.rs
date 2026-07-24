@@ -10,6 +10,8 @@
 //! the same `--export-dynamic` so dlopened Lua C modules can resolve back into
 //! the binary.
 
+#![forbid(unsafe_code)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

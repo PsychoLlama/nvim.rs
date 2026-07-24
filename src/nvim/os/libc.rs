@@ -4,6 +4,8 @@
 //! the per-module copies c2rust emitted. Everything here resolves
 //! against the platform C library at link time.
 
+#![forbid(unsafe_code)]
+
 use crate::src::nvim::types::*;
 
 extern "C" {

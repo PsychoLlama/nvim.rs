@@ -19,6 +19,8 @@
 //! Unicode, Inc. license. This port stays under those terms; both notices
 //! are reproduced in full in licenses/utf8proc-LICENSE.md.
 
+#![forbid(unsafe_code)]
+
 mod tables;
 
 use tables::{PROPERTIES, SEQUENCES, STAGE1, STAGE2};

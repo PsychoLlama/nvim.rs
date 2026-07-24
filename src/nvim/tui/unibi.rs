@@ -21,6 +21,8 @@
 //!   `1..=44`, numerics `46..=84`, strings `86..=499`), which terminfo.rs
 //!   still uses; absent numerics read as -1 and absent strings as `None`.
 
+#![forbid(unsafe_code)]
+
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};

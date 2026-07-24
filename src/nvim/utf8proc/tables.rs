@@ -7,6 +7,8 @@
 //! processing of them is MIT-licensed. Both notices are reproduced in
 //! licenses/utf8proc-LICENSE.md.
 
+#![forbid(unsafe_code)]
+
 use super::utf8proc_property_t;
 
 /// Compact constructor keeping the generated entries to one line each; the

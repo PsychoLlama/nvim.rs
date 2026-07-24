@@ -4,6 +4,8 @@
 //! `xctz`/`xpopcount`, which only existed because C99 spells these as
 //! macros; callers now use the std `f64`/`u64` methods directly.
 
+#![forbid(unsafe_code)]
+
 use core::ffi::c_int;
 
 /// Append a decimal digit to `value`; returns false (leaving `value`

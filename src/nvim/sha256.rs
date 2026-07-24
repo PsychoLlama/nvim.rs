@@ -2,6 +2,8 @@
 //! `sha256()` function. The undo-file format stores these digests on disk,
 //! so the output must stay bit-identical.
 
+#![forbid(unsafe_code)]
+
 /// Size of a SHA-256 digest in bytes.
 pub const SHA256_SUM_SIZE: usize = 32;
 

@@ -6,6 +6,8 @@
 //! the C original entry for entry; `tests/unit/digraph.rs` locks it with a
 //! checksum.
 
+#![forbid(unsafe_code)]
+
 use super::Digraph;
 use core::ffi::c_int;
 

@@ -5,6 +5,8 @@
 //! `main` expects and calls it. All this shim does is invoke it, turning
 //! the library crate into a runnable `nvim` executable without touching
 //! the generated sources.
+
+#![forbid(unsafe_code)]
 fn main() {
     // Arm the GlobalCell debug main-thread assertion before any editor code
     // touches a global.
