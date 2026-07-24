@@ -10,6 +10,8 @@ and this project adheres to [CalVer](https://calver.org/).
 ### Changed
 
 - Rust toolchain bumped forward by 3 years.
+- Clippy turned on from zero: correctness findings fixed and kept at deny, the
+  warning count ratcheted (`just lint`).
 
 ## [2026.07.23-95cd63254c]
 

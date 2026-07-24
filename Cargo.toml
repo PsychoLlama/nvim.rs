@@ -32,6 +32,13 @@ test = false
 c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
 libc = "0.2"
 
+# `just lint` runs clippy with correctness at its deny default; suspicious/
+# complexity/perf warn and burn down through the ratchet (metrics/clippy.json).
+# style stays off for transpiled code — it becomes meaningful per-module as
+# rewrites land (pedantic and the other opt-in groups are already allow).
+[lints.clippy]
+style = "allow"
+
 
 [profile.release]
 strip = "debuginfo"

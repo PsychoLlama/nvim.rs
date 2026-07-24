@@ -86,6 +86,16 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Run clippy over every target and ratchet the warning count
+# (metrics/clippy.json): per-file counts may only shrink, and deny-level
+# findings (the `correctness` group) fail the run outright. Lint levels live
+# in Cargo.toml's [lints.clippy]; the script clears RUSTFLAGS so the dev
+# shell's `-D warnings` can't promote the counted groups to errors first.
+# `--check` compares against the committed baseline instead of writing;
+# `--allow-growth` mirrors the ratchet's override.
+lint *args:
+  @scripts/lint.py {{ args }}
+
 # Run the crate's Rust tests: the #[cfg(test)] modules (safe cores' pure
 # logic below the C-ABI shims) plus the integration tests under tests/
 # (ports of former test/unit specs; they call the same exported surface the
@@ -115,12 +125,15 @@ ratchet *args:
 # ratchet measures — and `fmt-check` (the pre-commit hook) rewrites the tree, so
 # a baseline taken before it silently stops matching mid-commit. The ledger
 # precedes the ratchet because the ratchet snapshots its internal-export count.
+# The lint baseline comes last: it runs cargo clippy, by far the slowest step
+# (a full check-mode compile when the tree changed), and depends on nothing
+# the earlier steps write.
 # The closing pass is uncached on purpose: cached, it would skip the files `fmt`
 # just rewrote and prove nothing, where uncached it asserts formatting reached a
 # fixed point that the pre-commit hook can't move.
 #
-# Args are forwarded to the ratchet, e.g. `just refresh --allow-growth`.
-refresh *args: fmt abi-ledger (ratchet args)
+# Args are forwarded to the ratchet and lint, e.g. `just refresh --allow-growth`.
+refresh *args: fmt abi-ledger (ratchet args) (lint args)
   @treefmt --no-cache --fail-on-change --quiet
 
 # This is the gate CI runs on every push. It deliberately skips the slow
