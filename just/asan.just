@@ -19,16 +19,12 @@ bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 # triaged. Callers may override by exporting ASAN_OPTIONS.
 options := "detect_leaks=0:log_path=" + justfile_directory() / "target/asan/asan.log"
 
-# Stack-redzone checking is off (-asan-stack=0): this nightly's C-ABI lowering
-# over-reads by-value aggregates whose size is not a multiple of 8 (e.g. the
-# 12-byte pos_T is read with a 16-byte load), tripping stack-buffer-overflow
-# on ~every by-value struct call in the transpiled code. The over-read never
-# leaves the caller's frame, so it is benign outside ASan. Revisit when the
-# pinned toolchain moves past the cast-ABI fixes.
-#
-# Compile the nvim binary with AddressSanitizer.
+# Compile the nvim binary with AddressSanitizer. Stack-redzone checking is
+# on again: the 2023 nightly's C-ABI lowering over-read by-value aggregates
+# (12-byte pos_T read with a 16-byte load), which forced -asan-stack=0; the
+# current toolchain's cast-ABI fixes lower those loads exactly.
 build:
-  RUSTFLAGS="-Zsanitizer=address -Cllvm-args=-asan-stack=0" cargo build -Zbuild-std --target {{ triple }} --target-dir target/asan
+  RUSTFLAGS="-Zsanitizer=address" cargo build -Zbuild-std --target {{ triple }} --target-dir target/asan
 
 # setarch -R disables ASLR (inherited by every spawned nvim): this toolchain's
 # ASan runtime predates LLVM's fix for kernels with 32-bit mmap entropy, so
