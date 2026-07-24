@@ -169,6 +169,8 @@ endfunc
 func Test_pattern_compile_speed()
   CheckOption spellcapcheck
   CheckFunction reltimefloat
+  " Timing assertion; ASan pushes it past the 10s ceiling.
+  CheckNotAsan
 
   let start = reltime()
   " this used to be very slow, not it should be about a second
