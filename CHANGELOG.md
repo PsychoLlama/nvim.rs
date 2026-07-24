@@ -9,8 +9,7 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Bumped the Rust toolchain from `nightly-2023-04-15` to `nightly-2026-07-15`,
-  shedding the now-stable `raw_ref_op` and `strict_provenance` feature gates.
+- Rust toolchain bumped forward by 3 years.
 
 ## [2026.07.23-95cd63254c]
 
