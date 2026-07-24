@@ -7,7 +7,9 @@
 #![allow(unused_mut)]
 #![feature(c_variadic)]
 #![feature(extern_types)]
-#![feature(thread_local)]
+// Only the debug-assertions GlobalCell checks use `#[thread_local]`; an
+// unconditional gate trips `-D unused-features` in release builds.
+#![cfg_attr(debug_assertions, feature(thread_local))]
 
 extern crate c2rust_bitfields;
 extern crate libc;
