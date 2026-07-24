@@ -2785,7 +2785,6 @@ pub unsafe extern "C" fn kv_do_printf(
             (*str).capacity |= (*str).capacity >> 8 as ::core::ffi::c_int;
             (*str).capacity |= (*str).capacity >> 16 as ::core::ffi::c_int;
             (*str).capacity = (*str).capacity.wrapping_add(1);
-            (*str).capacity = (*str).capacity;
             (*str).items = xrealloc(
                 (*str).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*str).capacity),

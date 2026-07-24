@@ -3165,6 +3165,8 @@ unsafe extern "C" fn qf_get_next_file_line(mut state: *mut qfstate_T) -> ::core:
                         }
                     }
                 }
+                // Upstream's `if (discard) while (true)` merged by the transpile; exits via break.
+                #[allow(clippy::while_immutable_condition)]
                 while discard {
                     *__errno_location() = 0 as ::core::ffi::c_int;
                     if fgets(
@@ -8966,6 +8968,8 @@ unsafe extern "C" fn wipe_dummy_buffer(
     mut dirname_start: *mut ::core::ffi::c_char,
 ) {
     '_fail: {
+        // Not immutable: win_close() drops (*buf).b_nwindows behind the raw pointer.
+        #[allow(clippy::while_immutable_condition)]
         while (*buf).b_nwindows > 0 as ::core::ffi::c_int {
             let mut did_one: bool = false_0 != 0;
             if !(*firstwin.get()).w_next.is_null() {

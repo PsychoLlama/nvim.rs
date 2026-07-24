@@ -3597,7 +3597,6 @@ pub unsafe extern "C-unwind" fn nlua_exec_file(mut path: *const ::core::ffi::c_c
                         sb.capacity |= sb.capacity >> 8 as ::core::ffi::c_int;
                         sb.capacity |= sb.capacity >> 16 as ::core::ffi::c_int;
                         sb.capacity = sb.capacity.wrapping_add(1);
-                        sb.capacity = sb.capacity;
                         sb.items = xrealloc(
                             sb.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(sb.capacity),

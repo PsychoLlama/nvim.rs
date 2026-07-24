@@ -4,7 +4,7 @@ use crate::src::nvim::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, 
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::ui_client_forward_stdin;
 use crate::src::nvim::os::env::os_free_fullenv;
-use crate::src::nvim::os::libc::{__assert_fail, close};
+use crate::src::nvim::os::libc::close;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __uid_t, dict_T, dictvar_S, gid_t, hash_T, hashitem_T, hashtab_T, int64_t, internal_proc_cb,
@@ -85,11 +85,6 @@ pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"int libuv_proc_spawn(LibuvProc *)\0",
-    )
-};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -148,17 +143,6 @@ pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core:
     (*uvproc).uvstdio[1 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
     (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
     if ui_client_forward_stdin.get() {
-        '_c2rust_label: {
-            if 3 as ::core::ffi::c_int == 3 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"UI_CLIENT_STDIN_FD == 3\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/event/libuv_proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    106 as ::core::ffi::c_uint,
-                    __ASSERT_FUNCTION.as_ptr(),
-                );
-            }
-        };
         (*uvproc).uvopts.stdio_count = 4 as ::core::ffi::c_int;
         (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].data.fd = 0 as ::core::ffi::c_int;
         (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].flags = UV_INHERIT_FD;

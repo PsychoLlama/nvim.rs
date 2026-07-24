@@ -584,7 +584,6 @@ pub unsafe extern "C" fn kv_transstr(
         (*str).capacity |= (*str).capacity >> 8 as ::core::ffi::c_int;
         (*str).capacity |= (*str).capacity >> 16 as ::core::ffi::c_int;
         (*str).capacity = (*str).capacity.wrapping_add(1);
-        (*str).capacity = (*str).capacity;
         (*str).items = xrealloc(
             (*str).items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*str).capacity),
@@ -1443,10 +1442,9 @@ pub unsafe extern "C" fn vim_str2nr(
                         if un < (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(10 as uvarnumber_T)
                             || un
                                 == (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(10 as uvarnumber_T)
-                                && (10 as ::core::ffi::c_int != 10 as ::core::ffi::c_int
-                                    || digit_1
-                                        <= (UVARNUMBER_MAX as uvarnumber_T)
-                                            .wrapping_rem(10 as uvarnumber_T))
+                                && digit_1
+                                    <= (UVARNUMBER_MAX as uvarnumber_T)
+                                        .wrapping_rem(10 as uvarnumber_T)
                         {
                             un = (10 as uvarnumber_T).wrapping_mul(un).wrapping_add(digit_1);
                         } else {

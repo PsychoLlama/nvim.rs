@@ -2983,7 +2983,6 @@ unsafe extern "C" fn on_osc(
                 (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
             (*term).termrequest_buffer.capacity =
                 (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3096,7 +3095,6 @@ unsafe extern "C" fn on_dcs(
                 (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
             (*term).termrequest_buffer.capacity =
                 (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3170,7 +3168,6 @@ unsafe extern "C" fn on_apc(
                 (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
             (*term).termrequest_buffer.capacity =
                 (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3365,6 +3362,8 @@ pub unsafe extern "C" fn terminal_alloc(
     (*term).pending.events = multiqueue_new(None, NULL_0);
     if (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
         let mut line_count: linenr_T = (*buf).b_ml.ml_line_count;
+        // Not immutable: ml_delete_buf() mutates (*buf).b_ml behind the raw pointer.
+        #[allow(clippy::while_immutable_condition)]
         while (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
             ml_delete_buf(buf, 1 as linenr_T, false_0 != 0);
         }
@@ -4277,7 +4276,6 @@ unsafe extern "C" fn terminal_send(
                 (*(*term).pending.send).capacity |=
                     (*(*term).pending.send).capacity >> 16 as ::core::ffi::c_int;
                 (*(*term).pending.send).capacity = (*(*term).pending.send).capacity.wrapping_add(1);
-                (*(*term).pending.send).capacity = (*(*term).pending.send).capacity;
                 (*(*term).pending.send).items = xrealloc(
                     (*(*term).pending.send).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -5149,7 +5147,6 @@ unsafe extern "C" fn term_selection_set(
             (*term).selection.capacity |= (*term).selection.capacity >> 8 as ::core::ffi::c_int;
             (*term).selection.capacity |= (*term).selection.capacity >> 16 as ::core::ffi::c_int;
             (*term).selection.capacity = (*term).selection.capacity.wrapping_add(1);
-            (*term).selection.capacity = (*term).selection.capacity;
             (*term).selection.items = xrealloc(
                 (*term).selection.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
@@ -6102,6 +6099,8 @@ unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut b
         (*term).sb_pending -= 1;
     }
     let mut max_line_count: ::core::ffi::c_int = (*term).sb_current as ::core::ffi::c_int + height;
+    // Not immutable: ml_delete_buf() mutates (*buf).b_ml behind the raw pointer.
+    #[allow(clippy::while_immutable_condition)]
     while (*buf).b_ml.ml_line_count > max_line_count as linenr_T {
         ml_delete_buf(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
         deleted_lines_buf(buf, (*buf).b_ml.ml_line_count, 1 as linenr_T);

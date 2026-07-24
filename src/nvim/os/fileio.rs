@@ -224,9 +224,6 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileNoSymlink as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o400000 as ::core::ffi::c_int;
         '_c2rust_label_5: {};
-        if kNone as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
-            wr = kNone;
-        }
     }
     if flags & kFileMkDir as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o100 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;

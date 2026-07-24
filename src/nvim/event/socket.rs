@@ -509,6 +509,8 @@ unsafe extern "C" fn socket_alive(
     } else {
         0 as uint64_t
     };
+    // Not immutable: the close callback flips `closed` through stream.s.internal_data.
+    #[allow(clippy::while_immutable_condition)]
     while !closed {
         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
@@ -641,6 +643,8 @@ pub unsafe extern "C" fn socket_watcher_start(
                     } else {
                         0 as uint64_t
                     };
+                    // Not immutable: the close callback flips `closed` through stream.s.internal_data.
+                    #[allow(clippy::while_immutable_condition)]
                     while !closed {
                         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
                             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
@@ -973,6 +977,8 @@ pub unsafe extern "C" fn socket_connect(
                 } else {
                     0 as uint64_t
                 };
+                // Not immutable: the connect callback writes `status` behind a raw pointer.
+                #[allow(clippy::while_immutable_condition)]
                 while status == 1 as ::core::ffi::c_int {
                     if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
                         && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
@@ -1006,6 +1012,8 @@ pub unsafe extern "C" fn socket_connect(
                     } else {
                         0 as uint64_t
                     };
+                    // Not immutable: the close callback flips `closed` through stream.s.internal_data.
+                    #[allow(clippy::while_immutable_condition)]
                     while !closed {
                         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
                             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())

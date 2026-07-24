@@ -5883,7 +5883,7 @@ unsafe extern "C" fn do_sub(
             ));
             xfree(sub as *mut ::core::ffi::c_void);
             return 0 as ::core::ffi::c_int;
-        } else if i >= INT_MAX {
+        } else if i == INT_MAX {
             semsg(
                 gettext(&raw const e_val_too_large_len as *const ::core::ffi::c_char),
                 cmd.offset_from(count_arg) as ::core::ffi::c_int,

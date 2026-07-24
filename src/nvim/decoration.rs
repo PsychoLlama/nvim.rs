@@ -2042,7 +2042,6 @@ pub unsafe extern "C" fn decor_virt_lines(
                                     (*lines).capacity |=
                                         (*lines).capacity >> 16 as ::core::ffi::c_int;
                                     (*lines).capacity = (*lines).capacity.wrapping_add(1);
-                                    (*lines).capacity = (*lines).capacity;
                                     (*lines).items = xrealloc(
                                         (*lines).items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<virt_line>()

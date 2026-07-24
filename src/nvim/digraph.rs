@@ -804,32 +804,33 @@ fn keymap_unload() {
 /// The keymap name to show in the status line ('statusline' `%k`/`%K` and
 /// the mode message): `b:keymap_name`, the 'keymap' value, or "lang".
 /// `None` unless language mappings are active for `wp`'s buffer.
-pub fn keymap_str(wp: *mut win_T) -> Option<CString> {
-    // SAFETY: wp and its buffer are valid; curwin/curbuf are restored
-    // before returning.
-    unsafe {
-        if (*(*wp).w_buffer).b_p_iminsert != B_IMODE_LMAP {
-            return None;
-        }
-        let old_curbuf = curbuf.get();
-        let old_curwin = curwin.get();
-        // Evaluate b:keymap_name in wp's buffer.
-        curbuf.set((*wp).w_buffer);
-        curwin.set(wp);
-        emsg_skip.set(emsg_skip.get() + 1);
-        let mut expr = *b"b:keymap_name\0";
-        let s = eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false);
-        emsg_skip.set(emsg_skip.get() - 1);
-        curbuf.set(old_curbuf);
-        curwin.set(old_curwin);
-        let name = if !s.is_null() && *s as c_int != NUL {
-            CStr::from_ptr(s).to_owned()
-        } else if (*(*wp).w_buffer).b_kmap_state as c_int & KEYMAP_LOADED != 0 {
-            CStr::from_ptr((*(*wp).w_buffer).b_p_keymap).to_owned()
-        } else {
-            CString::new("lang").expect("no interior NUL")
-        };
-        xfree(s as *mut c_void);
-        Some(name)
+///
+/// # Safety
+///
+/// `wp` and its buffer must be valid; curwin/curbuf are restored before
+/// returning.
+pub unsafe fn keymap_str(wp: *mut win_T) -> Option<CString> {
+    if (*(*wp).w_buffer).b_p_iminsert != B_IMODE_LMAP {
+        return None;
     }
+    let old_curbuf = curbuf.get();
+    let old_curwin = curwin.get();
+    // Evaluate b:keymap_name in wp's buffer.
+    curbuf.set((*wp).w_buffer);
+    curwin.set(wp);
+    emsg_skip.set(emsg_skip.get() + 1);
+    let mut expr = *b"b:keymap_name\0";
+    let s = eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false);
+    emsg_skip.set(emsg_skip.get() - 1);
+    curbuf.set(old_curbuf);
+    curwin.set(old_curwin);
+    let name = if !s.is_null() && *s as c_int != NUL {
+        CStr::from_ptr(s).to_owned()
+    } else if (*(*wp).w_buffer).b_kmap_state as c_int & KEYMAP_LOADED != 0 {
+        CStr::from_ptr((*(*wp).w_buffer).b_p_keymap).to_owned()
+    } else {
+        CString::new("lang").expect("no interior NUL")
+    };
+    xfree(s as *mut c_void);
+    Some(name)
 }

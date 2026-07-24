@@ -1925,14 +1925,6 @@ unsafe extern "C" fn _typval_encode_echo_convert_one_value(
                         strlen(prefix_),
                     );
                 }
-                if 0 as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
-                    ga_concat_len(
-                        gap,
-                        b", \0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                            .wrapping_sub(1 as size_t),
-                    );
-                }
                 if -1 as ::core::ffi::c_int as ptrdiff_t != -1 as ptrdiff_t {
                     ga_concat_len(
                         gap,
@@ -4067,14 +4059,6 @@ unsafe extern "C" fn _typval_encode_string_convert_one_value(
                             as *mut ::core::ffi::c_void,
                         prefix_ as *const ::core::ffi::c_void,
                         strlen(prefix_),
-                    );
-                }
-                if 0 as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
-                    ga_concat_len(
-                        gap,
-                        b", \0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                            .wrapping_sub(1 as size_t),
                     );
                 }
                 if -1 as ::core::ffi::c_int as ptrdiff_t != -1 as ptrdiff_t {

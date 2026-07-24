@@ -1127,6 +1127,8 @@ pub unsafe extern "C" fn current_block(
         return FAIL;
     }
     (*curwin.get()).w_cursor = *end_pos;
+    // Upstream's `if (!include)` retry loop; exits via break or return.
+    #[allow(clippy::while_immutable_condition)]
     while !include {
         incl(&raw mut start_pos);
         sol = (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int;

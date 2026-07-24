@@ -2850,7 +2850,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -2894,7 +2893,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -2939,7 +2937,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -2990,7 +2987,6 @@ unsafe extern "C" fn build_cmdline_str(
                     cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                     cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.capacity = cmdline.capacity;
                     cmdline.items = xrealloc(
                         cmdline.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3038,7 +3034,6 @@ unsafe extern "C" fn build_cmdline_str(
                     cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                     cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.capacity = cmdline.capacity;
                     cmdline.items = xrealloc(
                         cmdline.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3086,7 +3081,6 @@ unsafe extern "C" fn build_cmdline_str(
                     cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                     cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.capacity = cmdline.capacity;
                     cmdline.items = xrealloc(
                         cmdline.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3133,7 +3127,6 @@ unsafe extern "C" fn build_cmdline_str(
                     cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                     cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.capacity = cmdline.capacity;
                     cmdline.items = xrealloc(
                         cmdline.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3183,7 +3176,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3228,7 +3220,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3275,7 +3266,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3320,7 +3310,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3367,7 +3356,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3412,7 +3400,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3457,7 +3444,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3502,7 +3488,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3547,7 +3532,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3594,7 +3578,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3641,7 +3624,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3688,7 +3670,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3735,7 +3716,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3793,7 +3773,6 @@ unsafe extern "C" fn build_cmdline_str(
             cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
             cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
             cmdline.capacity = cmdline.capacity.wrapping_add(1);
-            cmdline.capacity = cmdline.capacity;
             cmdline.items = xrealloc(
                 cmdline.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3834,7 +3813,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3896,7 +3874,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
@@ -3933,7 +3910,6 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
                 cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),

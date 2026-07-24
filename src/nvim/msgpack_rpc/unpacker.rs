@@ -905,14 +905,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && !(MPACK_TOKEN_STR as ::core::ffi::c_int
-                            == MPACK_TOKEN_STR as ::core::ffi::c_int
-                            && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
-                        && !(MPACK_TOKEN_STR as ::core::ffi::c_int
-                            == MPACK_TOKEN_SINT as ::core::ffi::c_int
-                            && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
+                        && tok.type_0 as ::core::ffi::c_uint
+                            != MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1058,14 +1052,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             } else if result != 0
                 || tok.type_0 as ::core::ffi::c_uint
                     != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && !(MPACK_TOKEN_STR as ::core::ffi::c_int
-                        == MPACK_TOKEN_STR as ::core::ffi::c_int
-                        && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
-                    && !(MPACK_TOKEN_STR as ::core::ffi::c_int
-                        == MPACK_TOKEN_SINT as ::core::ffi::c_int
-                        && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
+                    && tok.type_0 as ::core::ffi::c_uint
+                        != MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
@@ -1084,14 +1072,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_SINT as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && !(MPACK_TOKEN_SINT as ::core::ffi::c_int
-                            == MPACK_TOKEN_STR as ::core::ffi::c_int
-                            && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
-                        && !(MPACK_TOKEN_SINT as ::core::ffi::c_int
-                            == MPACK_TOKEN_SINT as ::core::ffi::c_int
-                            && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
+                        && tok.type_0 as ::core::ffi::c_uint
+                            != MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1344,7 +1326,6 @@ pub unsafe extern "C" fn push_additional_data(
                 (*ad).capacity |= (*ad).capacity >> 8 as ::core::ffi::c_int;
                 (*ad).capacity |= (*ad).capacity >> 16 as ::core::ffi::c_int;
                 (*ad).capacity = (*ad).capacity.wrapping_add(1);
-                (*ad).capacity = (*ad).capacity;
                 (*ad).items = xrealloc(
                     (*ad).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*ad).capacity),
@@ -1387,7 +1368,6 @@ pub unsafe extern "C" fn push_additional_data(
             (*ad).capacity |= (*ad).capacity >> 8 as ::core::ffi::c_int;
             (*ad).capacity |= (*ad).capacity >> 16 as ::core::ffi::c_int;
             (*ad).capacity = (*ad).capacity.wrapping_add(1);
-            (*ad).capacity = (*ad).capacity;
             (*ad).items = xrealloc(
                 (*ad).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*ad).capacity),
@@ -1563,7 +1543,6 @@ pub unsafe extern "C" fn unpack_keydict(
                         (*a).capacity |= (*a).capacity >> 8 as ::core::ffi::c_int;
                         (*a).capacity |= (*a).capacity >> 16 as ::core::ffi::c_int;
                         (*a).capacity = (*a).capacity.wrapping_add(1);
-                        (*a).capacity = (*a).capacity;
                         (*a).items = xrealloc(
                             (*a).items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<String_0>().wrapping_mul((*a).capacity),

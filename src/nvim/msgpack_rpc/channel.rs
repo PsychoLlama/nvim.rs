@@ -644,6 +644,8 @@ pub unsafe extern "C" fn rpc_send_call(
     } else {
         0 as uint64_t
     };
+    // Not immutable: RPC callbacks set frame.returned via the call_stack pointer.
+    #[allow(clippy::while_immutable_condition)]
     while !(frame.returned as ::core::ffi::c_int != 0 || (*rpc).closed as ::core::ffi::c_int != 0) {
         if !(*channel).events.is_null() && !multiqueue_empty((*channel).events) {
             multiqueue_process_events((*channel).events);

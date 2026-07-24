@@ -526,7 +526,7 @@ unsafe extern "C" fn histogram_diff(
         if count1 <= 0 as ::core::ffi::c_int && count2 <= 0 as ::core::ffi::c_int {
             return 0 as ::core::ffi::c_int;
         }
-        if line1 + count1 - 1 as ::core::ffi::c_int >= MAX_PTR {
+        if line1 + count1 - 1 as ::core::ffi::c_int == MAX_PTR {
             return -1 as ::core::ffi::c_int;
         }
         if count1 == 0 {

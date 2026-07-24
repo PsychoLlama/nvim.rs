@@ -2821,6 +2821,8 @@ unsafe extern "C" fn foldRemove(
         return;
     }
     let mut fp: *mut fold_T = ::core::ptr::null_mut::<fold_T>();
+    // Not immutable: foldFind/foldRemove shrink *gap behind the raw pointer.
+    #[allow(clippy::while_immutable_condition)]
     while (*gap).ga_len > 0 as ::core::ffi::c_int {
         if foldFind(gap, top, &raw mut fp) as ::core::ffi::c_int != 0 && (*fp).fd_top < top {
             foldRemove(

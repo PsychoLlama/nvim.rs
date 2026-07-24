@@ -1738,7 +1738,6 @@ unsafe extern "C" fn handle_primary_device_attr(
             response.capacity |= response.capacity >> 8 as ::core::ffi::c_int;
             response.capacity |= response.capacity >> 16 as ::core::ffi::c_int;
             response.capacity = response.capacity.wrapping_add(1);
-            response.capacity = response.capacity;
             response.items = xrealloc(
                 response.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(response.capacity),

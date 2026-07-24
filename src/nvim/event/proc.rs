@@ -388,6 +388,8 @@ pub unsafe extern "C" fn proc_wait(
             } else {
                 0 as uint64_t
             };
+            // Not immutable: event callbacks run inside the loop body flip it behind a raw pointer.
+            #[allow(clippy::while_immutable_condition)]
             while (*proc).refcount != 1 as ::core::ffi::c_int {
                 if !events.is_null() && !multiqueue_empty(events) {
                     multiqueue_process_events(events);
@@ -623,6 +625,8 @@ unsafe extern "C" fn flush_stream(mut proc: *mut Proc, mut stream: *mut RStream)
             .num_bytes
             .wrapping_add(system_buffer_size as size_t);
     }
+    // Not immutable: stream callbacks run inside the loop body flip it behind a raw pointer.
+    #[allow(clippy::while_immutable_condition)]
     while !(*stream).s.closed && (*stream).num_bytes < max_bytes {
         let mut num_bytes: size_t = (*stream).num_bytes;
         if (*proc).type_0 as ::core::ffi::c_uint

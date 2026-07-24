@@ -1538,7 +1538,6 @@ unsafe extern "C" fn system_data_cb(
             (*dbuf).capacity |= (*dbuf).capacity >> 8 as ::core::ffi::c_int;
             (*dbuf).capacity |= (*dbuf).capacity >> 16 as ::core::ffi::c_int;
             (*dbuf).capacity = (*dbuf).capacity.wrapping_add(1);
-            (*dbuf).capacity = (*dbuf).capacity;
             (*dbuf).items = xrealloc(
                 (*dbuf).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*dbuf).capacity),

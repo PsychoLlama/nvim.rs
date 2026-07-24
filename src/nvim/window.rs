@@ -5322,6 +5322,8 @@ pub unsafe extern "C" fn win_close_othertab(
             if force as ::core::ffi::c_int != 0
                 || can_close_floating_windows(tp) as ::core::ffi::c_int != 0
             {
+                // Not immutable: win_close_othertab() updates tp_lastwin behind the raw pointer.
+                #[allow(clippy::while_immutable_condition)]
                 while (*(*tp).tp_lastwin).w_floating {
                     if !win_close_othertab(
                         (*tp).tp_lastwin,

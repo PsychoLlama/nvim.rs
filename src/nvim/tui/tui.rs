@@ -1217,6 +1217,8 @@ pub unsafe extern "C" fn tui_stop(mut tui: *mut TUIData) {
     } else {
         0 as uint64_t
     };
+    // Not immutable: input/signal callbacks run inside the loop body flip it behind a raw pointer.
+    #[allow(clippy::while_immutable_condition)]
     while !((*tui).stopped as ::core::ffi::c_int != 0
         || (*tui).input.read_stream.did_eof as ::core::ffi::c_int != 0)
     {
@@ -2452,7 +2454,6 @@ pub unsafe extern "C" fn tui_hl_attr_define(
         (*tui).attrs.capacity |= (*tui).attrs.capacity >> 8 as ::core::ffi::c_int;
         (*tui).attrs.capacity |= (*tui).attrs.capacity >> 16 as ::core::ffi::c_int;
         (*tui).attrs.capacity = (*tui).attrs.capacity.wrapping_add(1);
-        (*tui).attrs.capacity = (*tui).attrs.capacity;
         (*tui).attrs.items = xrealloc(
             (*tui).attrs.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<HlAttrs>().wrapping_mul((*tui).attrs.capacity),
