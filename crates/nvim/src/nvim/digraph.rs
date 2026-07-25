@@ -28,9 +28,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mapping::do_map;
 use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::src::nvim::memory::{xfree, xmemdupz};
-use crate::src::nvim::message::{
-    emsg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, semsg,
-};
+use crate::src::nvim::message::{emsg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
 use crate::src::nvim::normal::add_to_showcmd;
 use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::gettext;
@@ -60,8 +58,6 @@ const VAR_BOOL: VarType = 7;
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;
 
-const E_DIGRAPH_TWO_CHARS: &[u8] = b"E1214: Digraph must be just two characters: %s\0";
-const E_DIGRAPH_ONE_CHAR: &[u8] = b"E1215: Digraph must be one character: %s\0";
 const E_DIGRAPH_SETLIST: &[u8] =
     b"E1216: digraph_setlist() argument must be a list of lists with two items\0";
 
@@ -228,15 +224,10 @@ fn register_digraph(char1: c_int, char2: c_int, n: c_int) {
 fn check_digraph_chars_valid(char1: c_int, char2: c_int) -> bool {
     if char2 == 0 {
         let mut msg = [0u8; 7];
-        // SAFETY: utf_char2bytes writes at most 6 bytes; msg stays
-        // NUL-terminated.
-        unsafe {
-            utf_char2bytes(char1, msg.as_mut_ptr() as *mut c_char);
-            semsg(
-                gettext(E_DIGRAPH_TWO_CHARS.as_ptr() as *const c_char),
-                msg.as_ptr(),
-            );
-        }
+        // SAFETY: utf_char2bytes writes at most 6 bytes.
+        let len = unsafe { utf_char2bytes(char1, msg.as_mut_ptr() as *mut c_char) };
+        let msg = String::from_utf8_lossy(&msg[..len as usize]);
+        crate::semsg!("E1214: Digraph must be just two characters: {msg}");
         return false;
     }
     if char1 == ESC || char2 == ESC {
@@ -478,10 +469,14 @@ unsafe fn get_digraph_chars(arg: *const typval_T, char1: &mut c_int, char2: &mut
             }
         }
     }
-    semsg(
-        gettext(E_DIGRAPH_TWO_CHARS.as_ptr() as *const c_char),
-        chars,
-    );
+    // `chars` is NULL when the typval wasn't a string; the C format path
+    // printed NULL `%s` arguments as "[NULL]".
+    let chars = if chars.is_null() {
+        "[NULL]".into()
+    } else {
+        CStr::from_ptr(chars).to_string_lossy()
+    };
+    crate::semsg!("E1214: Digraph must be just two characters: {chars}");
     FAIL
 }
 
@@ -504,10 +499,8 @@ unsafe fn digraph_set_common(argchars: *const typval_T, argdigraph: *const typva
     let mut p = digraph;
     let n = mb_cptr2char_adv(&mut p);
     if *p as c_int != NUL {
-        semsg(
-            gettext(E_DIGRAPH_ONE_CHAR.as_ptr() as *const c_char),
-            digraph,
-        );
+        let digraph = CStr::from_ptr(digraph).to_string_lossy();
+        crate::semsg!("E1215: Digraph must be one character: {digraph}");
         return false;
     }
     register_digraph(char1, char2, n);
@@ -532,9 +525,9 @@ pub unsafe extern "C" fn f_digraph_get(
     }
     let bytes = CStr::from_ptr(digraphs).to_bytes();
     if bytes.len() != 2 {
-        semsg(
-            gettext(E_DIGRAPH_TWO_CHARS.as_ptr() as *const c_char),
-            digraphs,
+        crate::semsg!(
+            "E1214: Digraph must be just two characters: {}",
+            String::from_utf8_lossy(bytes)
         );
         return;
     }

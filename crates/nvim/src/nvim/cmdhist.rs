@@ -20,12 +20,10 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{
-    Columns, IObuff, cmdmod, e_trailing_arg, e_val_too_large, got_int, maptick, p_hi,
-};
+use crate::src::nvim::main::{Columns, IObuff, cmdmod, got_int, maptick, p_hi};
 use crate::src::nvim::memory::{xfree, xstrlcpy};
 use crate::src::nvim::message::{
-    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title, semsg,
+    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
     trunc_string,
 };
 use crate::src::nvim::os::libc::{gettext, snprintf};
@@ -783,7 +781,8 @@ pub unsafe extern "C" fn ex_history(eap: *mut exarg_T) {
                 histype1 = 0;
                 histype2 = HIST_COUNT as c_int - 1;
             } else {
-                semsg(gettext(&raw const e_trailing_arg as *const c_char), arg);
+                let arg = CStr::from_ptr(arg).to_string_lossy();
+                crate::semsg!("E488: Trailing characters: {arg}");
                 return;
             }
         } else {
@@ -794,9 +793,11 @@ pub unsafe extern "C" fn ex_history(eap: *mut exarg_T) {
     }
     if get_list_range(&raw mut end, &raw mut hisidx1, &raw mut hisidx2) == FAIL || *end != 0 {
         if *end != 0 {
-            semsg(gettext(&raw const e_trailing_arg as *const c_char), end);
+            let end = CStr::from_ptr(end).to_string_lossy();
+            crate::semsg!("E488: Trailing characters: {end}");
         } else {
-            semsg(gettext(&raw const e_val_too_large as *const c_char), arg);
+            let arg = CStr::from_ptr(arg).to_string_lossy();
+            crate::semsg!("E1510: Value too large: {arg}");
         }
         return;
     }

@@ -25,7 +25,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{current_sctx, do_profiling, e_notopen, time_fd};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::env::expand_env_save_opt;
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::libc::{fclose, fopen, fprintf, gettext, setvbuf, stderr};
@@ -634,10 +634,7 @@ pub fn profile_dump() {
                 let _ = unsafe { func_dump_profile(&mut fd) };
             }
             Err(_) => {
-                // SAFETY: e_notopen is a NUL-terminated format with one %s.
-                unsafe {
-                    semsg(gettext(e_notopen.ptr() as *const c_char), fname.as_ptr());
-                }
+                crate::semsg!("E484: Can't open file {}", fname.to_string_lossy());
             }
         }
     });
