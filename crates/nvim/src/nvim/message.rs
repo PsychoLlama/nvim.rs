@@ -2285,7 +2285,7 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
     (*no_wait_return.ptr()) -= 1;
     recursive.set(false_0 != 0);
 }
-unsafe extern "C" fn emsg_not_now() -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C" fn emsg_not_now() -> ::core::ffi::c_int {
     if emsg_off.get() > 0 as ::core::ffi::c_int
         && vim_strchr(p_debug.get(), 'm' as ::core::ffi::c_int).is_null()
         && vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null()

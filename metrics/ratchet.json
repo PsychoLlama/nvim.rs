@@ -1,6 +1,6 @@
 {
   "internal_exports": 154,
-  "files_without_forbid_unsafe": 226,
+  "files_without_forbid_unsafe": 227,
   "files_without_deny_unsafe_op": 196,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -125,6 +125,7 @@
     "crates/nvim/src/nvim/memory.rs": {"no_mangle": 11, "unsafe": 45},
     "crates/nvim/src/nvim/menu.rs": {"lines": 3464, "unsafe": 48},
     "crates/nvim/src/nvim/message.rs": {"lines": 6535, "no_mangle": 4, "unsafe": 140},
+    "crates/nvim/src/nvim/message_fmt.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mouse.rs": {"lines": 2596, "no_mangle": 1, "unsafe": 38},
     "crates/nvim/src/nvim/move.rs": {"lines": 2933, "no_mangle": 5, "unsafe": 58},
     "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"lines": 1711, "no_mangle": 4, "unsafe": 55},

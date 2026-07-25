@@ -151,6 +151,7 @@ pub mod src {
         pub mod memory;
         pub mod menu;
         pub mod message;
+        pub mod message_fmt;
         pub mod mouse;
         pub mod msgpack_rpc {
             pub mod channel;
