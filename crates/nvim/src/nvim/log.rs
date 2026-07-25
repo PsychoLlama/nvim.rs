@@ -9,8 +9,8 @@ use crate::src::nvim::message::msg_schedule_semsg;
 use crate::src::nvim::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv};
 use crate::src::nvim::os::fs::{os_isdir, os_mkdir_recurse};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, fclose, fflush, fopen, fprintf, fputc, snprintf, stderr,
-    stdout, strerror, strftime, vfprintf,
+    __assert_fail, __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf,
+    stderr, stdout, strerror, strftime, vfprintf,
 };
 use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::os_localtime;
@@ -4480,35 +4480,25 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
             return f;
         }
     }
-    do_log_to_file(
+    // strerror before the prefix writer can clobber fopen's errno; the
+    // trailing newline stands in for the old eol=true.
+    let msg = format!(
+        "failed to open $NVIM_LOG_FILE ({}): {}\n\0",
+        ::core::ffi::CStr::from_ptr(strerror(*__errno_location())).to_string_lossy(),
+        ::core::ffi::CStr::from_ptr(log_file_path.ptr() as *const ::core::ffi::c_char)
+            .to_string_lossy(),
+    );
+    if log_write_prefix(
         stderr,
         LOGLVL_ERR,
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"open_log_file\0".as_ptr() as *const ::core::ffi::c_char,
         234 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"failed to open $NVIM_LOG_FILE (%s): %s\0".as_ptr() as *const ::core::ffi::c_char,
-        strerror(*__errno_location()),
-        log_file_path.ptr() as *mut ::core::ffi::c_char,
-    );
+    ) {
+        fputs(msg.as_ptr() as *const ::core::ffi::c_char, stderr);
+        fflush(stderr);
+    }
     return stderr;
-}
-unsafe extern "C" fn do_log_to_file(
-    mut log_file: *mut FILE,
-    mut log_level: ::core::ffi::c_int,
-    mut context: *const ::core::ffi::c_char,
-    mut func_name: *const ::core::ffi::c_char,
-    mut line_num: ::core::ffi::c_int,
-    mut eol: bool,
-    mut fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) -> bool {
-    let mut args: ::core::ffi::VaList;
-    args = c2rust_args.clone();
-    let mut ret: bool = v_do_log_to_file(
-        log_file, log_level, context, func_name, line_num, eol, fmt, args,
-    );
-    return ret;
 }
 unsafe extern "C" fn v_do_log_to_file(
     mut log_file: *mut FILE,
@@ -4520,40 +4510,31 @@ unsafe extern "C" fn v_do_log_to_file(
     mut fmt: *const ::core::ffi::c_char,
     mut args: ::core::ffi::VaList,
 ) -> bool {
-    static name: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new([
-        0 as ::core::ffi::c_char,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ]);
+    if !log_write_prefix(log_file, log_level, context, func_name, line_num) {
+        return false_0 != 0;
+    }
+    if vfprintf(log_file, fmt, args) < 0 as ::core::ffi::c_int {
+        return false_0 != 0;
+    }
+    if eol {
+        fputc('\n' as ::core::ffi::c_int, log_file);
+    }
+    if fflush(log_file) == EOF {
+        return false_0 != 0;
+    }
+    return true_0 != 0;
+}
+/// The date/level/name/source-location head of a log line, up to where the
+/// payload starts. Split out of `v_do_log_to_file` so a preformatted message
+/// (`open_log_file`'s fallback) can log without a variadic hop.
+unsafe extern "C" fn log_write_prefix(
+    mut log_file: *mut FILE,
+    mut log_level: ::core::ffi::c_int,
+    mut context: *const ::core::ffi::c_char,
+    mut func_name: *const ::core::ffi::c_char,
+    mut line_num: ::core::ffi::c_int,
+) -> bool {
+    static name: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new([0; 32]);
     static log_levels: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"DBG\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4567,11 +4548,10 @@ unsafe extern "C" fn v_do_log_to_file(
             __assert_fail(
                 b"log_level >= LOGLVL_DBG && log_level <= LOGLVL_ERR\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"src/nvim/log.rs\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src/nvim/log.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 313 as ::core::ffi::c_uint,
-                b"_Bool v_do_log_to_file(FILE *, int, const char *, const char *, int, _Bool, const char *, struct __va_list_tag *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"_Bool log_write_prefix(FILE *, int, const char *, const char *, int)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -4692,15 +4672,6 @@ unsafe extern "C" fn v_do_log_to_file(
         )
     };
     if rv < 0 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    if vfprintf(log_file, fmt, args) < 0 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    if eol {
-        fputc('\n' as ::core::ffi::c_int, log_file);
-    }
-    if fflush(log_file) == EOF {
         return false_0 != 0;
     }
     return true_0 != 0;

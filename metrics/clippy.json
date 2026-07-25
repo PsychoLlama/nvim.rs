@@ -93,7 +93,7 @@
     "crates/nvim/src/nvim/insexpand.rs": 204,
     "crates/nvim/src/nvim/keycodes.rs": 418,
     "crates/nvim/src/nvim/linematch.rs": 62,
-    "crates/nvim/src/nvim/log.rs": 32,
+    "crates/nvim/src/nvim/log.rs": 31,
     "crates/nvim/src/nvim/lua/api_wrappers.rs": 1199,
     "crates/nvim/src/nvim/lua/base64.rs": 7,
     "crates/nvim/src/nvim/lua/converter.rs": 145,
