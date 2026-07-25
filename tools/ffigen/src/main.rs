@@ -298,6 +298,29 @@ fn has_no_mangle(attrs: &[syn::Attribute]) -> bool {
     })
 }
 
+// The stable replacement for `extern type` declarations: a #[repr(C)] struct
+// whose only fields are zero-sized markers ([u8; 0], PhantomData). Such a
+// type has no C-visible layout and must emit as `typedef struct X X;`, not as
+// a struct definition — and, like the extern form, must lose to a concrete
+// same-named definition elsewhere in resolve().
+fn is_opaque_struct(fields: &syn::FieldsNamed) -> bool {
+    !fields.named.is_empty()
+        && fields.named.iter().all(|f| match &f.ty {
+            syn::Type::Array(a) => match &a.len {
+                syn::Expr::Lit(l) => {
+                    matches!(&l.lit, syn::Lit::Int(i) if matches!(i.base10_parse::<u64>(), Ok(0)))
+                }
+                _ => false,
+            },
+            syn::Type::Path(tp) => tp
+                .path
+                .segments
+                .last()
+                .map_or(false, |s| s.ident == "PhantomData"),
+            _ => false,
+        })
+}
+
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let is_types = rel.starts_with("src/nvim/types/");
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
@@ -318,12 +341,12 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                 let (is_c, align) = repr_of(&s.attrs);
                 if is_c {
                     if let syn::Fields::Named(named) = &s.fields {
-                        add(
-                            world,
-                            s.ident.to_string(),
-                            Kind::Struct(named_fields(named)),
-                            align,
-                        );
+                        let kind = if is_opaque_struct(named) {
+                            Kind::Opaque
+                        } else {
+                            Kind::Struct(named_fields(named))
+                        };
+                        add(world, s.ident.to_string(), kind, align);
                     }
                 }
             }
