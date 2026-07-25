@@ -6,7 +6,6 @@
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
 
-extern crate c2rust_bitfields;
 extern crate libc;
 
 pub mod src {
@@ -51,6 +50,7 @@ pub mod src {
         pub mod arglist;
         pub mod autocmd;
         pub mod base64;
+        pub mod bitfield;
         pub mod buffer;
         pub mod buffer_updates;
         pub mod bufwrite;

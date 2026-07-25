@@ -26,7 +26,6 @@ path = "src/bin/nvim.rs"
 test = false
 
 [dependencies]
-c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
 libc = "0.2"
 nvim-mainthread = { path = "../mainthread" }
 

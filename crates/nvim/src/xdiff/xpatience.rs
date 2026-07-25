@@ -21,8 +21,7 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::xdiff::xprepare::xdl_prepare_env;
 use crate::src::xdiff::xutils::xdl_fall_back_diff;
-use ::c2rust_bitfields;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct entry {
     pub hash: ::core::ffi::c_ulong,
@@ -30,10 +29,13 @@ pub struct entry {
     pub line2: ::core::ffi::c_ulong,
     pub next: *mut entry,
     pub previous: *mut entry,
-    #[bitfield(name = "anchor", ty = "::core::ffi::c_uint", bits = "0..=0")]
     pub anchor: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 7],
+}
+crate::bitfield_accessors! {
+    impl entry.anchor {
+        0..=0 => anchor, set_anchor: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

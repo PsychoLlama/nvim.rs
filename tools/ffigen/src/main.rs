@@ -230,55 +230,101 @@ fn repr_of(attrs: &[syn::Attribute]) -> (bool, Option<u64>) {
     (is_c, align)
 }
 
-fn bitfields_of(attrs: &[syn::Attribute]) -> (Vec<BitSpec>, bool) {
-    let mut specs = Vec::new();
-    let mut padding = false;
-    for attr in attrs {
-        if !attr.path().is_ident("bitfield") {
-            continue;
-        }
-        let mut name = None;
-        let mut ty = None;
-        let mut bits = None;
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("padding") {
-                padding = true;
-                return Ok(());
-            }
-            let value: syn::LitStr = meta.value()?.parse()?;
-            if meta.path.is_ident("name") {
-                name = Some(value.value());
-            } else if meta.path.is_ident("ty") {
-                ty = Some(value.value());
-            } else if meta.path.is_ident("bits") {
-                bits = Some(value.value());
-            }
-            Ok(())
-        })
-        .expect("parse #[bitfield] attribute");
-        if let (Some(name), Some(ty), Some(bits)) = (name, ty, bits) {
-            // bits = "lo..=hi"
-            let (lo, hi) = bits.split_once("..=").expect("bitfield bits form");
-            let lo: u64 = lo.parse().unwrap();
-            let hi: u64 = hi.parse().unwrap();
-            specs.push(BitSpec {
-                name,
-                ty,
-                width: hi - lo + 1,
-            });
-        }
-    }
-    (specs, padding)
+/// One parsed `crate::bitfield_accessors!` invocation: the crate stores C
+/// bitfields as `[u8; N]` arrays and generates `name()`/`set_name()` methods
+/// over them with this macro (src/nvim/bitfield.rs). The invocation is the
+/// single source of truth for the C-side member layout, so parse it and emit
+/// the storage field as real C bitfield members.
+///
+/// Grammar (one invocation per struct, directly after its definition):
+///   impl <Struct>.<storage_field> { <lo>..=<hi> => <getter>, <setter>: <ty>; ... }
+struct BitfieldAccessors {
+    strukt: String,
+    storage: String,
+    specs: Vec<BitSpec>,
 }
 
-fn named_fields(fields: &syn::FieldsNamed) -> Vec<Field> {
+impl syn::parse::Parse for BitfieldAccessors {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<syn::Token![impl]>()?;
+        let strukt: syn::Ident = input.parse()?;
+        input.parse::<syn::Token![.]>()?;
+        let storage: syn::Ident = input.parse()?;
+        let content;
+        syn::braced!(content in input);
+        let mut specs = Vec::new();
+        while !content.is_empty() {
+            let lo: syn::LitInt = content.parse()?;
+            content.parse::<syn::Token![..=]>()?;
+            let hi: syn::LitInt = content.parse()?;
+            content.parse::<syn::Token![=>]>()?;
+            let getter: syn::Ident = content.parse()?;
+            content.parse::<syn::Token![,]>()?;
+            let _setter: syn::Ident = content.parse()?;
+            content.parse::<syn::Token![:]>()?;
+            let ty: syn::Type = content.parse()?;
+            content.parse::<syn::Token![;]>()?;
+            let ty = match &ty {
+                syn::Type::Path(tp) => tp
+                    .path
+                    .segments
+                    .last()
+                    .map(|s| s.ident.to_string())
+                    .unwrap_or_default(),
+                _ => return Err(content.error("bitfield value type must be a path")),
+            };
+            specs.push(BitSpec {
+                name: getter.to_string(),
+                ty,
+                width: hi.base10_parse::<u64>()? - lo.base10_parse::<u64>()? + 1,
+            });
+        }
+        Ok(BitfieldAccessors {
+            strukt: strukt.to_string(),
+            storage: storage.to_string(),
+            specs,
+        })
+    }
+}
+
+fn bitfield_invocations(ast: &syn::File) -> HashMap<String, BitfieldAccessors> {
+    let mut out = HashMap::new();
+    for item in &ast.items {
+        if let syn::Item::Macro(m) = item {
+            let is_ours = m
+                .mac
+                .path
+                .segments
+                .last()
+                .is_some_and(|s| s.ident == "bitfield_accessors");
+            if is_ours {
+                let acc: BitfieldAccessors = syn::parse2(m.mac.tokens.clone())
+                    .expect("parse bitfield_accessors! invocation");
+                out.insert(acc.strukt.clone(), acc);
+            }
+        }
+    }
+    out
+}
+
+fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> Vec<Field> {
     fields
         .named
         .iter()
         .map(|f| {
-            let (bits, padding) = bitfields_of(&f.attrs);
+            let name = f.ident.as_ref().unwrap().to_string();
+            // In a bitfield struct the storage array expands to C bitfield
+            // members, and the `c2rust_padding` arrays c2rust added after
+            // them disappear: C's own storage-unit rounding provides those
+            // bytes (this mirrors the retired #[bitfield(padding)] marker,
+            // which c2rust only ever put on fields with exactly that name).
+            let (bits, padding) = match bits {
+                Some(acc) if name == acc.storage => (acc.specs.clone(), false),
+                Some(_) if name == "c2rust_padding" => (Vec::new(), true),
+                _ => (Vec::new(), false),
+            };
             Field {
-                name: f.ident.as_ref().unwrap().to_string(),
+                name,
                 ty: f.ty.clone(),
                 bits,
                 padding,
@@ -323,6 +369,7 @@ fn is_opaque_struct(fields: &syn::FieldsNamed) -> bool {
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let is_types = rel.starts_with("src/nvim/types/");
+    let bitfields = bitfield_invocations(&ast);
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
         let def = Def {
             file: rel.to_string(),
@@ -344,7 +391,8 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                         let kind = if is_opaque_struct(named) {
                             Kind::Opaque
                         } else {
-                            Kind::Struct(named_fields(named))
+                            let name = s.ident.to_string();
+                            Kind::Struct(named_fields(named, bitfields.get(&name)))
                         };
                         add(world, s.ident.to_string(), kind, align);
                     }
@@ -356,7 +404,7 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                     add(
                         world,
                         u.ident.to_string(),
-                        Kind::Union(named_fields(&u.fields)),
+                        Kind::Union(named_fields(&u.fields, None)),
                         align,
                     );
                 }

@@ -28,15 +28,19 @@ pub struct VTermEncodingInstance {
     pub data: [::core::ffi::c_char; 16],
 }
 pub type VTermEncodingType = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermKeyEncodingFlags {
-    #[bitfield(name = "disambiguate", ty = "bool", bits = "0..=0")]
-    #[bitfield(name = "report_events", ty = "bool", bits = "1..=1")]
-    #[bitfield(name = "report_alternate", ty = "bool", bits = "2..=2")]
-    #[bitfield(name = "report_all_keys", ty = "bool", bits = "3..=3")]
-    #[bitfield(name = "report_associated", ty = "bool", bits = "4..=4")]
     pub disambiguate_report_events_report_alternate_report_all_keys_report_associated: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl VTermKeyEncodingFlags.disambiguate_report_events_report_alternate_report_all_keys_report_associated {
+        0..=0 => disambiguate, set_disambiguate: bool;
+        1..=1 => report_events, set_report_events: bool;
+        2..=2 => report_alternate, set_report_alternate: bool;
+        3..=3 => report_all_keys, set_report_all_keys: bool;
+        4..=4 => report_associated, set_report_associated: bool;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -45,26 +49,29 @@ pub struct VTermKeyEncodingStack {
     pub size: uint8_t,
 }
 pub type VTermParserState = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermPen {
     pub fg: VTermColor,
     pub bg: VTermColor,
     pub uri: ::core::ffi::c_int,
-    #[bitfield(name = "bold", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "underline", ty = "::core::ffi::c_uint", bits = "1..=2")]
-    #[bitfield(name = "italic", ty = "::core::ffi::c_uint", bits = "3..=3")]
-    #[bitfield(name = "blink", ty = "::core::ffi::c_uint", bits = "4..=4")]
-    #[bitfield(name = "reverse", ty = "::core::ffi::c_uint", bits = "5..=5")]
-    #[bitfield(name = "conceal", ty = "::core::ffi::c_uint", bits = "6..=6")]
-    #[bitfield(name = "strike", ty = "::core::ffi::c_uint", bits = "7..=7")]
-    #[bitfield(name = "font", ty = "::core::ffi::c_uint", bits = "8..=11")]
-    #[bitfield(name = "small", ty = "::core::ffi::c_uint", bits = "12..=12")]
-    #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
-    #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
-    #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
     pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
         [u8; 3],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl VTermPen.bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline {
+        0..=0 => bold, set_bold: ::core::ffi::c_uint;
+        1..=2 => underline, set_underline: ::core::ffi::c_uint;
+        3..=3 => italic, set_italic: ::core::ffi::c_uint;
+        4..=4 => blink, set_blink: ::core::ffi::c_uint;
+        5..=5 => reverse, set_reverse: ::core::ffi::c_uint;
+        6..=6 => conceal, set_conceal: ::core::ffi::c_uint;
+        7..=7 => strike, set_strike: ::core::ffi::c_uint;
+        8..=11 => font, set_font: ::core::ffi::c_uint;
+        12..=12 => small, set_small: ::core::ffi::c_uint;
+        13..=14 => baseline, set_baseline: ::core::ffi::c_uint;
+        15..=15 => dim, set_dim: ::core::ffi::c_uint;
+        16..=16 => overline, set_overline: ::core::ffi::c_uint;
+    }
 }

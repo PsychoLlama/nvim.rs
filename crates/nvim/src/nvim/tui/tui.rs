@@ -69,7 +69,6 @@ pub use crate::src::nvim::types::{
     uv_write_cb, uv_write_s, uv_write_t, va_list,
 };
 use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
-use ::c2rust_bitfields;
 unsafe extern "C" {
     fn uv_tty_init(
         _: *mut uv_loop_t,
@@ -449,13 +448,17 @@ pub struct C2Rust_Unnamed_19 {
     pub capacity: size_t,
     pub items: *mut HlAttrs,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_20 {
-    #[bitfield(name = "grapheme_clusters", ty = "bool", bits = "0..=0")]
-    #[bitfield(name = "theme_updates", ty = "bool", bits = "1..=1")]
-    #[bitfield(name = "resize_events", ty = "bool", bits = "2..=2")]
     pub grapheme_clusters_theme_updates_resize_events: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl C2Rust_Unnamed_20.grapheme_clusters_theme_updates_resize_events {
+        0..=0 => grapheme_clusters, set_grapheme_clusters: bool;
+        1..=1 => theme_updates, set_theme_updates: bool;
+        2..=2 => resize_events, set_resize_events: bool;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

@@ -10,31 +10,34 @@ pub struct ScreenCell {
     pub schar: schar_T,
     pub pen: ScreenPen,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ScreenPen {
     pub fg: VTermColor,
     pub bg: VTermColor,
     pub uri: ::core::ffi::c_int,
-    #[bitfield(name = "bold", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "underline", ty = "::core::ffi::c_uint", bits = "1..=2")]
-    #[bitfield(name = "italic", ty = "::core::ffi::c_uint", bits = "3..=3")]
-    #[bitfield(name = "blink", ty = "::core::ffi::c_uint", bits = "4..=4")]
-    #[bitfield(name = "reverse", ty = "::core::ffi::c_uint", bits = "5..=5")]
-    #[bitfield(name = "conceal", ty = "::core::ffi::c_uint", bits = "6..=6")]
-    #[bitfield(name = "strike", ty = "::core::ffi::c_uint", bits = "7..=7")]
-    #[bitfield(name = "font", ty = "::core::ffi::c_uint", bits = "8..=11")]
-    #[bitfield(name = "small", ty = "::core::ffi::c_uint", bits = "12..=12")]
-    #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
-    #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
-    #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
-    #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
-    #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
     pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
         [u8; 3],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl ScreenPen.bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl {
+        0..=0 => bold, set_bold: ::core::ffi::c_uint;
+        1..=2 => underline, set_underline: ::core::ffi::c_uint;
+        3..=3 => italic, set_italic: ::core::ffi::c_uint;
+        4..=4 => blink, set_blink: ::core::ffi::c_uint;
+        5..=5 => reverse, set_reverse: ::core::ffi::c_uint;
+        6..=6 => conceal, set_conceal: ::core::ffi::c_uint;
+        7..=7 => strike, set_strike: ::core::ffi::c_uint;
+        8..=11 => font, set_font: ::core::ffi::c_uint;
+        12..=12 => small, set_small: ::core::ffi::c_uint;
+        13..=14 => baseline, set_baseline: ::core::ffi::c_uint;
+        15..=15 => dim, set_dim: ::core::ffi::c_uint;
+        16..=16 => overline, set_overline: ::core::ffi::c_uint;
+        17..=17 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
+        18..=18 => dwl, set_dwl: ::core::ffi::c_uint;
+        19..=20 => dhl, set_dhl: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -86,27 +89,33 @@ pub struct VTermColor_rgb {
     pub blue: uint8_t,
 }
 pub type VTermDamageSize = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermGlyphInfo {
     pub schar: schar_T,
     pub width: ::core::ffi::c_int,
-    #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "1..=1")]
-    #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "2..=3")]
     pub protected_cell_dwl_dhl: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+crate::bitfield_accessors! {
+    impl VTermGlyphInfo.protected_cell_dwl_dhl {
+        0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
+        1..=1 => dwl, set_dwl: ::core::ffi::c_uint;
+        2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
+    }
+}
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermLineInfo {
-    #[bitfield(name = "doublewidth", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "doubleheight", ty = "::core::ffi::c_uint", bits = "1..=2")]
-    #[bitfield(name = "continuation", ty = "::core::ffi::c_uint", bits = "3..=3")]
     pub doublewidth_doubleheight_continuation: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
+}
+crate::bitfield_accessors! {
+    impl VTermLineInfo.doublewidth_doubleheight_continuation {
+        0..=0 => doublewidth, set_doublewidth: ::core::ffi::c_uint;
+        1..=2 => doubleheight, set_doubleheight: ::core::ffi::c_uint;
+        3..=3 => continuation, set_continuation: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -184,7 +193,7 @@ pub struct VTermRect {
     pub start_col: ::core::ffi::c_int,
     pub end_col: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreen {
     pub vt: *mut VTerm,
@@ -198,15 +207,18 @@ pub struct VTermScreen {
     pub pending_scroll_rightward: ::core::ffi::c_int,
     pub rows: ::core::ffi::c_int,
     pub cols: ::core::ffi::c_int,
-    #[bitfield(name = "global_reverse", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "reflow", ty = "::core::ffi::c_uint", bits = "1..=1")]
     pub global_reverse_reflow: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
     pub buffers: [*mut ScreenCell; 2],
     pub buffer: *mut ScreenCell,
     pub sb_buffer: *mut VTermScreenCell,
     pub pen: ScreenPen,
+}
+crate::bitfield_accessors! {
+    impl VTermScreen.global_reverse_reflow {
+        0..=0 => global_reverse, set_global_reverse: ::core::ffi::c_uint;
+        1..=1 => reflow, set_reflow: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -267,27 +279,30 @@ pub struct VTermScreenCell {
     pub bg: VTermColor,
     pub uri: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C, align(4))] // align(4): C declares these as `unsigned` bitfields (4-byte-aligned storage unit); c2rust emitted an align-1 byte array, shifting fg/bg/uri offsets in VTermScreenCell vs the C ABI.
 pub struct VTermScreenCellAttrs {
-    #[bitfield(name = "bold", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "underline", ty = "::core::ffi::c_uint", bits = "1..=2")]
-    #[bitfield(name = "italic", ty = "::core::ffi::c_uint", bits = "3..=3")]
-    #[bitfield(name = "blink", ty = "::core::ffi::c_uint", bits = "4..=4")]
-    #[bitfield(name = "reverse", ty = "::core::ffi::c_uint", bits = "5..=5")]
-    #[bitfield(name = "conceal", ty = "::core::ffi::c_uint", bits = "6..=6")]
-    #[bitfield(name = "strike", ty = "::core::ffi::c_uint", bits = "7..=7")]
-    #[bitfield(name = "font", ty = "::core::ffi::c_uint", bits = "8..=11")]
-    #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "12..=12")]
-    #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "13..=14")]
-    #[bitfield(name = "small", ty = "::core::ffi::c_uint", bits = "15..=15")]
-    #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
-    #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
-    #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
     pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
         [u8; 3],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl VTermScreenCellAttrs.bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline {
+        0..=0 => bold, set_bold: ::core::ffi::c_uint;
+        1..=2 => underline, set_underline: ::core::ffi::c_uint;
+        3..=3 => italic, set_italic: ::core::ffi::c_uint;
+        4..=4 => blink, set_blink: ::core::ffi::c_uint;
+        5..=5 => reverse, set_reverse: ::core::ffi::c_uint;
+        6..=6 => conceal, set_conceal: ::core::ffi::c_uint;
+        7..=7 => strike, set_strike: ::core::ffi::c_uint;
+        8..=11 => font, set_font: ::core::ffi::c_uint;
+        12..=12 => dwl, set_dwl: ::core::ffi::c_uint;
+        13..=14 => dhl, set_dhl: ::core::ffi::c_uint;
+        15..=15 => small, set_small: ::core::ffi::c_uint;
+        16..=17 => baseline, set_baseline: ::core::ffi::c_uint;
+        18..=18 => dim, set_dim: ::core::ffi::c_uint;
+        19..=19 => overline, set_overline: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -304,7 +319,7 @@ pub struct VTermSelectionCallbacks {
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState {
     pub vt: *mut VTerm,
@@ -345,14 +360,17 @@ pub struct VTermState {
     pub default_bg: VTermColor,
     pub colors: [VTermColor; 16],
     pub bold_is_highbright: ::core::ffi::c_int,
-    #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "0..=0")]
     pub protected_cell: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
     pub saved: VTermState_saved,
     pub tmp: VTermState_tmp,
     pub selection: VTermState_selection,
     pub key_encoding_stacks: [VTermKeyEncodingStack; 2],
+}
+crate::bitfield_accessors! {
+    impl VTermState.protected_cell {
+        0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -472,33 +490,32 @@ pub struct VTermStateFields {
     pub pos: VTermPos,
     pub lineinfos: [*mut VTermLineInfo; 2],
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState_mode {
-    #[bitfield(name = "keypad", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "cursor", ty = "::core::ffi::c_uint", bits = "1..=1")]
-    #[bitfield(name = "autowrap", ty = "::core::ffi::c_uint", bits = "2..=2")]
-    #[bitfield(name = "insert", ty = "::core::ffi::c_uint", bits = "3..=3")]
-    #[bitfield(name = "newline", ty = "::core::ffi::c_uint", bits = "4..=4")]
-    #[bitfield(name = "cursor_visible", ty = "::core::ffi::c_uint", bits = "5..=5")]
-    #[bitfield(name = "cursor_blink", ty = "::core::ffi::c_uint", bits = "6..=6")]
-    #[bitfield(name = "cursor_shape", ty = "::core::ffi::c_uint", bits = "7..=8")]
-    #[bitfield(name = "alt_screen", ty = "::core::ffi::c_uint", bits = "9..=9")]
-    #[bitfield(name = "origin", ty = "::core::ffi::c_uint", bits = "10..=10")]
-    #[bitfield(name = "screen", ty = "::core::ffi::c_uint", bits = "11..=11")]
-    #[bitfield(name = "leftrightmargin", ty = "::core::ffi::c_uint", bits = "12..=12")]
-    #[bitfield(name = "bracketpaste", ty = "::core::ffi::c_uint", bits = "13..=13")]
-    #[bitfield(name = "report_focus", ty = "::core::ffi::c_uint", bits = "14..=14")]
-    #[bitfield(name = "theme_updates", ty = "::core::ffi::c_uint", bits = "15..=15")]
-    #[bitfield(
-        name = "synchronized_output",
-        ty = "::core::ffi::c_uint",
-        bits = "16..=16"
-    )]
     pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
         [u8; 3],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
+}
+crate::bitfield_accessors! {
+    impl VTermState_mode.keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output {
+        0..=0 => keypad, set_keypad: ::core::ffi::c_uint;
+        1..=1 => cursor, set_cursor: ::core::ffi::c_uint;
+        2..=2 => autowrap, set_autowrap: ::core::ffi::c_uint;
+        3..=3 => insert, set_insert: ::core::ffi::c_uint;
+        4..=4 => newline, set_newline: ::core::ffi::c_uint;
+        5..=5 => cursor_visible, set_cursor_visible: ::core::ffi::c_uint;
+        6..=6 => cursor_blink, set_cursor_blink: ::core::ffi::c_uint;
+        7..=8 => cursor_shape, set_cursor_shape: ::core::ffi::c_uint;
+        9..=9 => alt_screen, set_alt_screen: ::core::ffi::c_uint;
+        10..=10 => origin, set_origin: ::core::ffi::c_uint;
+        11..=11 => screen, set_screen: ::core::ffi::c_uint;
+        12..=12 => leftrightmargin, set_leftrightmargin: ::core::ffi::c_uint;
+        13..=13 => bracketpaste, set_bracketpaste: ::core::ffi::c_uint;
+        14..=14 => report_focus, set_report_focus: ::core::ffi::c_uint;
+        15..=15 => theme_updates, set_theme_updates: ::core::ffi::c_uint;
+        16..=16 => synchronized_output, set_synchronized_output: ::core::ffi::c_uint;
+    }
 }
 pub type VTermState_mouse_protocol = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
@@ -508,15 +525,18 @@ pub struct VTermState_saved {
     pub pen: VTermPen,
     pub mode: VTermState_saved_mode,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState_saved_mode {
-    #[bitfield(name = "cursor_visible", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "cursor_blink", ty = "::core::ffi::c_uint", bits = "1..=1")]
-    #[bitfield(name = "cursor_shape", ty = "::core::ffi::c_uint", bits = "2..=3")]
     pub cursor_visible_cursor_blink_cursor_shape: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
+}
+crate::bitfield_accessors! {
+    impl VTermState_saved_mode.cursor_visible_cursor_blink_cursor_shape {
+        0..=0 => cursor_visible, set_cursor_visible: ::core::ffi::c_uint;
+        1..=1 => cursor_blink, set_cursor_blink: ::core::ffi::c_uint;
+        2..=3 => cursor_shape, set_cursor_shape: ::core::ffi::c_uint;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -532,27 +552,34 @@ pub union VTermState_tmp {
     pub decrqss: [::core::ffi::c_char; 4],
     pub selection: VTermState_tmp_selection,
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState_tmp_selection {
     pub mask: uint16_t,
-    #[bitfield(name = "state", ty = "VTermState_tmp_selection_state", bits = "0..=7")]
     pub state: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
     pub recvpartial: uint32_t,
     pub sendpartial: uint32_t,
 }
+crate::bitfield_accessors! {
+    impl VTermState_tmp_selection.state {
+        0..=7 => state, set_state: VTermState_tmp_selection_state;
+    }
+}
 pub type VTermState_tmp_selection_state = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStringFragment {
     pub str: *const ::core::ffi::c_char,
-    #[bitfield(name = "len", ty = "size_t", bits = "0..=29")]
-    #[bitfield(name = "initial", ty = "bool", bits = "30..=30")]
-    #[bitfield(name = "final_0", ty = "bool", bits = "31..=31")]
     pub len_initial_final_0: [u8; 4],
     pub terminator: VTermTerminator,
+}
+crate::bitfield_accessors! {
+    impl VTermStringFragment.len_initial_final_0 {
+        0..=29 => len, set_len: size_t;
+        30..=30 => initial, set_initial: bool;
+        31..=31 => final_0, set_final_0: bool;
+    }
 }
 pub type VTermTerminator = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
@@ -564,22 +591,23 @@ pub union VTermValue {
     pub color: VTermColor,
 }
 pub type VTermValueType = ::core::ffi::c_uint;
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTerm_mode {
-    #[bitfield(name = "utf8", ty = "::core::ffi::c_uint", bits = "0..=0")]
-    #[bitfield(name = "ctrl8bit", ty = "::core::ffi::c_uint", bits = "1..=1")]
     pub utf8_ctrl8bit: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-#[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
+crate::bitfield_accessors! {
+    impl VTerm_mode.utf8_ctrl8bit {
+        0..=0 => utf8, set_utf8: ::core::ffi::c_uint;
+        1..=1 => ctrl8bit, set_ctrl8bit: ::core::ffi::c_uint;
+    }
+}
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTerm_parser {
     pub state: VTermParserState,
-    #[bitfield(name = "in_esc", ty = "bool", bits = "0..=0")]
     pub in_esc: [u8; 1],
-    #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
     pub intermedlen: ::core::ffi::c_int,
     pub intermed: [::core::ffi::c_char; 16],
@@ -588,6 +616,11 @@ pub struct VTerm_parser {
     pub cbdata: *mut ::core::ffi::c_void,
     pub string_initial: bool,
     pub emit_nul: bool,
+}
+crate::bitfield_accessors! {
+    impl VTerm_parser.in_esc {
+        0..=0 => in_esc, set_in_esc: bool;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
