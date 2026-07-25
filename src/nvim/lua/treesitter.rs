@@ -52,12 +52,33 @@ pub use crate::src::nvim::types::{
     uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv_lib_t, varnumber_T, virt_line,
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
+// Opaque C types: layout unknown here, only ever used behind a pointer.
+#[repr(C)]
+pub struct TSLanguage {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
+#[repr(C)]
+pub struct TSParser {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
+#[repr(C)]
+pub struct TSTree {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
+#[repr(C)]
+pub struct TSQuery {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
+#[repr(C)]
+pub struct TSQueryCursor {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
 unsafe extern "C" {
-    pub type TSLanguage;
-    pub type TSParser;
-    pub type TSTree;
-    pub type TSQuery;
-    pub type TSQueryCursor;
     fn ts_parser_new() -> *mut TSParser;
     fn ts_parser_delete(self_0: *mut TSParser);
     fn ts_parser_language(self_0: *const TSParser) -> *const TSLanguage;

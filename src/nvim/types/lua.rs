@@ -1,11 +1,14 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 // Canonical type definitions extracted by tools/unify (phase 5a).
 // One definition per logical type; every module re-exports from here.
 use super::*;
 
-unsafe extern "C" {
-    pub type lua_State;
+// Opaque C type: layout unknown here, only ever used behind a pointer.
+#[repr(C)]
+pub struct lua_State {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 
 #[derive(Copy, Clone)]

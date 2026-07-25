@@ -121,8 +121,13 @@ use crate::src::nvim::undo::{
     bufIsChanged, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
+// Opaque C type: layout unknown here, only ever used behind a pointer.
+#[repr(C)]
+pub struct __dirstream {
+    _data: [u8; 0],
+    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+}
 unsafe extern "C" {
-    pub type __dirstream;
     fn closedir(__dirp: *mut DIR) -> ::core::ffi::c_int;
     fn opendir(__name: *const ::core::ffi::c_char) -> *mut DIR;
     fn dirfd(__dirp: *mut DIR) -> ::core::ffi::c_int;
