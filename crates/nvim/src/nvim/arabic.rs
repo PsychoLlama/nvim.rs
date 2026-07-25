@@ -224,7 +224,19 @@ mod tests {
 
     #[test]
     fn find_achar_matches_linear_scan() {
-        for c in 0..0x10000 {
+        // The full sweep takes tens of minutes under Miri (interpreted, and
+        // slower still since the 2026-07 toolchains); probing every table
+        // entry and its neighbors covers the same hit/miss branches there.
+        let probes: Vec<c_int> = if cfg!(miri) {
+            ACHARS
+                .iter()
+                .flat_map(|a| [a.c as c_int - 1, a.c as c_int, a.c as c_int + 1])
+                .chain([0, 0xFFFF])
+                .collect()
+        } else {
+            (0..0x10000).collect()
+        };
+        for c in probes {
             let expect = ACHARS.iter().find(|a| a.c == c as u32).map(|a| a.c);
             assert_eq!(find_achar(c).map(|a| a.c), expect);
         }

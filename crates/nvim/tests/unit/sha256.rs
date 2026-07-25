@@ -19,6 +19,11 @@ fn fips_180_2_vector_2() {
     );
 }
 
+// ~15k compression rounds take tens of minutes interpreted under Miri (and
+// the 2026-07 toolchains made it slower still); this vector only adds scale.
+// unaligned_streaming_matches_one_shot keeps the multi-update paths in the
+// Miri lane.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn fips_180_2_vector_3_streamed() {
     // One million 'a's, fed in 1000-byte chunks like the old self-test.
