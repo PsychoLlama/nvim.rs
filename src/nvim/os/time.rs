@@ -1,4 +1,6 @@
-use crate::src::nvim::event::libuv::{uv_err_name, uv_hrtime, uv_now, uv_sleep};
+#[cfg(not(miri))]
+use crate::src::nvim::event::libuv::uv_hrtime;
+use crate::src::nvim::event::libuv::{uv_err_name, uv_now, uv_sleep};
 use crate::src::nvim::event::r#loop::loop_poll_events;
 use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -88,6 +90,17 @@ pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_add(1 as ::core::ffi::c_uint);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn os_hrtime() -> uint64_t {
+    // Miri cannot call into libuv. uv_hrtime on Linux is just
+    // clock_gettime(CLOCK_MONOTONIC); a process-relative Instant reading
+    // preserves the properties callers rely on (monotonic, ns resolution).
+    #[cfg(miri)]
+    {
+        use std::sync::OnceLock;
+        use std::time::Instant;
+        static EPOCH: OnceLock<Instant> = OnceLock::new();
+        return EPOCH.get_or_init(Instant::now).elapsed().as_nanos() as uint64_t;
+    }
+    #[cfg(not(miri))]
     return uv_hrtime();
 }
 pub unsafe extern "C" fn os_realtime() -> int64_t {

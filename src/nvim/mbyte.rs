@@ -63,9 +63,23 @@ use crate::src::nvim::utf8proc::{
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
 unsafe extern "C" {
+    #[cfg(not(miri))]
     fn towlower(__wc: wint_t) -> wint_t;
+    #[cfg(not(miri))]
     fn towupper(__wc: wint_t) -> wint_t;
     fn nl_langinfo(__item: nl_item) -> *mut ::core::ffi::c_char;
+}
+
+// Miri cannot call libc. The tests never call setlocale, so glibc would run
+// these in the C locale, where they fold ASCII only — which is exactly what
+// these definitions do.
+#[cfg(miri)]
+fn towlower(__wc: wint_t) -> wint_t {
+    u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_lowercase() as wint_t)
+}
+#[cfg(miri)]
+fn towupper(__wc: wint_t) -> wint_t {
+    u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_uppercase() as wint_t)
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

@@ -196,6 +196,7 @@ unsafe extern "C" {
         __src: *const ::core::ffi::c_void,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
+    #[cfg(not(miri))]
     pub fn memmove(
         __dest: *mut ::core::ffi::c_void,
         __src: *const ::core::ffi::c_void,
@@ -268,6 +269,7 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn sin(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn sinh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
+    #[cfg(not(miri))]
     pub fn snprintf(
         __s: *mut ::core::ffi::c_char,
         __maxlen: size_t,
@@ -295,6 +297,7 @@ unsafe extern "C" {
         __dest: *mut ::core::ffi::c_char,
         __src: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
+    #[cfg(not(miri))]
     pub fn strchr(
         __s: *const ::core::ffi::c_char,
         __c: ::core::ffi::c_int,
@@ -319,6 +322,7 @@ unsafe extern "C" {
         __tp: *const tm,
     ) -> size_t;
     pub fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
+    #[cfg(not(miri))]
     pub fn strncasecmp(
         __s1: *const ::core::ffi::c_char,
         __s2: *const ::core::ffi::c_char,
@@ -348,6 +352,7 @@ unsafe extern "C" {
         __s: *const ::core::ffi::c_char,
         __c: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
+    #[cfg(not(miri))]
     pub fn strstr(
         __haystack: *const ::core::ffi::c_char,
         __needle: *const ::core::ffi::c_char,
@@ -423,4 +428,156 @@ unsafe extern "C" {
         __buf: *const ::core::ffi::c_void,
         __n: size_t,
     ) -> ssize_t;
+}
+
+// Miri interprets MIR and cannot call the platform C library, so the pure
+// string functions the `just miri` test lane reaches get Rust definitions
+// with C-locale semantics here. Same import path, link-time symbol otherwise.
+/// The exact format strings `vim_vsnprintf` constructs for the conversions it
+/// delegates to libc — nothing more. `%g` never reaches here (vim rewrites it
+/// to `%e`/`%f` first), and neither do inf/nan (vim formats those itself).
+/// Anything unrecognized is a loud panic rather than a silent wrong answer.
+#[cfg(miri)]
+pub unsafe extern "C" fn snprintf(
+    __s: *mut ::core::ffi::c_char,
+    __maxlen: size_t,
+    __format: *const ::core::ffi::c_char,
+    mut __args: ...
+) -> ::core::ffi::c_int {
+    fn exp_notation(v: f64, prec: usize, upper: bool) -> String {
+        let s = format!("{v:.prec$e}");
+        let (mantissa, exp) = s.split_once('e').expect("exponent in {:e} output");
+        let exp: i32 = exp.parse().expect("numeric exponent");
+        let e = if upper { 'E' } else { 'e' };
+        let sign = if exp < 0 { '-' } else { '+' };
+        format!("{mantissa}{e}{sign}{:02}", exp.abs())
+    }
+
+    let mut ap: ::core::ffi::VaList;
+    ap = __args.clone();
+    let fmt = unsafe { ::core::ffi::CStr::from_ptr(__format) }
+        .to_str()
+        .expect("snprintf shim: non-UTF-8 format");
+    let out = match fmt {
+        "%p" => {
+            let p = unsafe { ap.next_arg::<*mut ::core::ffi::c_void>() };
+            if p.is_null() {
+                "(nil)".to_string()
+            } else {
+                format!("{:#x}", p.addr())
+            }
+        }
+        "%ld" => unsafe { ap.next_arg::<::core::ffi::c_long>() }.to_string(),
+        "%lu" => unsafe { ap.next_arg::<::core::ffi::c_ulong>() }.to_string(),
+        "%lo" => format!("{:o}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+        "%lx" => format!("{:x}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+        "%lX" => format!("{:X}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+        ".%d" => format!(".{}", unsafe { ap.next_arg::<::core::ffi::c_int>() }),
+        _ => {
+            // The float formats: %[+ ]?(\.\d+)?[fFeE], default precision 6.
+            let rest = fmt
+                .strip_prefix('%')
+                .unwrap_or_else(|| panic!("snprintf shim: unsupported format {fmt:?}"));
+            let (sign_flag, rest) = match rest.as_bytes().first() {
+                Some(b'+') => (Some('+'), &rest[1..]),
+                Some(b' ') => (Some(' '), &rest[1..]),
+                _ => (None, rest),
+            };
+            let (prec, spec) = match rest.strip_prefix('.') {
+                Some(r) => {
+                    let (digits, spec) = r.split_at(r.len() - 1);
+                    (
+                        digits
+                            .parse()
+                            .unwrap_or_else(|_| panic!("snprintf shim: bad format {fmt:?}")),
+                        spec,
+                    )
+                }
+                None => (6, rest),
+            };
+            let v = unsafe { ap.next_arg::<::core::ffi::c_double>() };
+            let mut s = match spec {
+                "f" | "F" => format!("{v:.prec$}"),
+                "e" => exp_notation(v, prec, false),
+                "E" => exp_notation(v, prec, true),
+                _ => panic!("snprintf shim: unsupported format {fmt:?}"),
+            };
+            if let Some(sign) = sign_flag {
+                if !s.starts_with('-') {
+                    s.insert(0, sign);
+                }
+            }
+            s
+        }
+    };
+    let bytes = out.as_bytes();
+    if __maxlen > 0 {
+        let n = bytes.len().min(__maxlen - 1);
+        unsafe {
+            ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), __s as *mut u8, n);
+            *__s.add(n) = 0;
+        }
+    }
+    bytes.len() as ::core::ffi::c_int
+}
+
+#[cfg(miri)]
+pub unsafe extern "C" fn memmove(
+    __dest: *mut ::core::ffi::c_void,
+    __src: *const ::core::ffi::c_void,
+    __n: size_t,
+) -> *mut ::core::ffi::c_void {
+    unsafe { ::core::ptr::copy(__src as *const u8, __dest as *mut u8, __n) };
+    __dest
+}
+
+#[cfg(miri)]
+pub unsafe extern "C" fn strchr(
+    __s: *const ::core::ffi::c_char,
+    __c: ::core::ffi::c_int,
+) -> *mut ::core::ffi::c_char {
+    let c = __c as u8 as ::core::ffi::c_char;
+    let mut p = __s;
+    loop {
+        let b = unsafe { *p };
+        if b == c {
+            return p as *mut ::core::ffi::c_char;
+        }
+        if b == 0 {
+            return ::core::ptr::null_mut();
+        }
+        p = unsafe { p.add(1) };
+    }
+}
+
+#[cfg(miri)]
+pub unsafe extern "C" fn strstr(
+    __haystack: *const ::core::ffi::c_char,
+    __needle: *const ::core::ffi::c_char,
+) -> *mut ::core::ffi::c_char {
+    let hay = unsafe { ::core::ffi::CStr::from_ptr(__haystack) }.to_bytes();
+    let needle = unsafe { ::core::ffi::CStr::from_ptr(__needle) }.to_bytes();
+    if needle.is_empty() {
+        return __haystack as *mut ::core::ffi::c_char;
+    }
+    match hay.windows(needle.len()).position(|w| w == needle) {
+        Some(i) => unsafe { __haystack.add(i) as *mut ::core::ffi::c_char },
+        None => ::core::ptr::null_mut(),
+    }
+}
+
+#[cfg(miri)]
+pub unsafe extern "C" fn strncasecmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    for i in 0..__n {
+        let a = (unsafe { *__s1.add(i) } as u8).to_ascii_lowercase();
+        let b = (unsafe { *__s2.add(i) } as u8).to_ascii_lowercase();
+        if a != b || a == 0 {
+            return a as ::core::ffi::c_int - b as ::core::ffi::c_int;
+        }
+    }
+    0
 }

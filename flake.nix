@@ -45,6 +45,7 @@
           [
             "cargo"
             "clippy"
+            "miri"
             "rust-analyzer"
             "rust-src"
             "rustc"

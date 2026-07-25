@@ -210,6 +210,9 @@ fn ga_concat_strings_can_concatenate_a_non_empty_array() {
     }
 }
 
+// ga_remove_duplicate_strings sorts through libc qsort, a foreign function
+// Miri cannot interpret. The ignore lifts when the sort moves to Rust.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn ga_remove_duplicate_strings_sorts_and_removes_duplicate_strings() {
     unsafe {

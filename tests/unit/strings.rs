@@ -214,15 +214,11 @@ fn vim_snprintf_truncation() {
         snp!("漢", buf, bsize, "%.3s", hanyu.as_ptr());
         snp!("  foo", buf, bsize, "%5S", foo.as_ptr());
         snp!("%%%", buf, bsize, "%%%%%%");
-        snp!(
-            "0x87654321",
-            buf,
-            bsize,
-            "%p",
-            0x87654321usize as *mut c_char
-        );
-        #[rustfmt::skip]
-        snp!("0x0087654321", buf, bsize, "%012p", 0x87654321usize as *mut c_char);
+        // without_provenance: %p only reads the address, and Miri would
+        // flag a plain integer-to-pointer cast.
+        let p: *mut c_char = std::ptr::without_provenance_mut(0x87654321);
+        snp!("0x87654321", buf, bsize, "%p", p);
+        snp!("0x0087654321", buf, bsize, "%012p", p);
     }
 }
 

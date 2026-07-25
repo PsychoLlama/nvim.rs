@@ -13,6 +13,8 @@ and this project adheres to [CalVer](https://calver.org/).
 - Clippy turned on from zero: correctness findings fixed and kept at deny, the
   warning count ratcheted (`just lint`).
 - Crate migrated to edition 2024.
+- Miri runs the Rust-native tests (`just miri`): UB detection over the safe
+  cores and the ported unit specs.
 
 ## [2026.07.23-95cd63254c]
 

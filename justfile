@@ -103,6 +103,16 @@ lint *args:
 cargo-test *args:
   cargo test --lib --tests {{ args }}
 
+# Run the cargo-test lane under Miri: UB detection (aliasing, provenance,
+# uninitialized memory) on the pure-logic tests — the class of bug ASan
+# structurally cannot see. Slow (it interprets MIR), so it is not part of
+# minimal-ci or the pre-commit hooks; run it before merging any rewrite.
+# Uses its own target dir (target/miri), so it doesn't clobber normal builds.
+# Isolation is off because the unibi terminfo tests build real directory trees
+# in a tempdir; UB detection is unaffected.
+miri *args:
+  MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
+
 # Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.

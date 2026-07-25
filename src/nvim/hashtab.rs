@@ -501,7 +501,9 @@ mod tests {
     #[test]
     fn rehash_moves_every_kept_item() {
         let sentinel = removed_sentinel();
-        let key = 0x1000 as *mut c_char; // dangling but never dereferenced
+        // Dangling but never dereferenced; without_provenance keeps Miri
+        // from treating it as an exposed integer-to-pointer cast.
+        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
         let mut old = [EMPTY_ITEM; 16];
         old[2] = hashitem_T {
             hi_hash: 2,
