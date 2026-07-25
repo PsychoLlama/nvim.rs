@@ -2,7 +2,7 @@
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": 5,
     "crates/nvim/src/cjson/lua_cjson.rs": 141,
-    "crates/nvim/src/cjson/strbuf.rs": 12,
+    "crates/nvim/src/cjson/strbuf.rs": 4,
     "crates/nvim/src/mpack/conv.rs": 32,
     "crates/nvim/src/mpack/lmpack.rs": 116,
     "crates/nvim/src/mpack/mpack_core.rs": 50,

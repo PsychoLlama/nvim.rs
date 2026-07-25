@@ -5,7 +5,7 @@
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
-    "crates/nvim/src/cjson/strbuf.rs": {"unsafe": 10},
+    "crates/nvim/src/cjson/strbuf.rs": {"unsafe": 9},
     "crates/nvim/src/mpack/conv.rs": {"no_mangle": 1, "unsafe": 19},
     "crates/nvim/src/mpack/lmpack.rs": {"lines": 1817, "unsafe": 64},
     "crates/nvim/src/mpack/mpack_core.rs": {"unsafe": 23},

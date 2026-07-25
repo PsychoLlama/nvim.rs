@@ -1,4 +1,4 @@
-use crate::src::nvim::os::libc::{abort, fprintf, free, malloc, realloc, stderr, vfprintf};
+use crate::src::nvim::os::libc::{fprintf, free, malloc, realloc, stderr};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __va_list_tag, _IO_FILE, _IO_codecvt,
     _IO_lock_t, _IO_marker, _IO_wide_data, FILE, size_t, strbuf_t, va_list,
@@ -17,12 +17,12 @@ unsafe extern "C-unwind" fn strbuf_empty_length(mut s: *mut strbuf_t) -> size_t 
 unsafe extern "C-unwind" fn strbuf_ensure_null(mut s: *mut strbuf_t) {
     *(*s).buf.offset((*s).length as isize) = 0 as ::core::ffi::c_char;
 }
-unsafe extern "C-unwind" fn die(mut fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
-    let mut arg: ::core::ffi::VaList;
-    arg = c2rust_args.clone();
-    vfprintf(stderr, fmt, arg);
-    fprintf(stderr, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-    abort();
+fn die(msg: ::core::fmt::Arguments<'_>) -> ! {
+    eprintln!("{msg}");
+    ::std::process::abort();
+}
+macro_rules! die {
+    ($($arg:tt)*) => { die(::core::format_args!($($arg)*)) };
 }
 pub unsafe extern "C-unwind" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
     let mut size: size_t = 0;
@@ -32,10 +32,7 @@ pub unsafe extern "C-unwind" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_
         size = len.wrapping_add(1 as size_t);
     }
     if size < len {
-        die(
-            b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
-            len,
-        );
+        die!("Overflow, len: {len}");
     }
     (*s).buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*s).size = size;
@@ -45,7 +42,7 @@ pub unsafe extern "C-unwind" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_
     (*s).debug = 0 as ::core::ffi::c_int;
     (*s).buf = malloc(size) as *mut ::core::ffi::c_char;
     if (*s).buf.is_null() {
-        die(b"Out of memory\0".as_ptr() as *const ::core::ffi::c_char);
+        die!("Out of memory");
     }
     strbuf_ensure_null(s);
 }
@@ -53,7 +50,7 @@ pub unsafe extern "C-unwind" fn strbuf_new(mut len: size_t) -> *mut strbuf_t {
     let mut s: *mut strbuf_t = ::core::ptr::null_mut::<strbuf_t>();
     s = malloc(::core::mem::size_of::<strbuf_t>()) as *mut strbuf_t;
     if s.is_null() {
-        die(b"Out of memory\0".as_ptr() as *const ::core::ffi::c_char);
+        die!("Out of memory");
     }
     strbuf_init(s, len);
     (*s).dynamic = 1 as ::core::ffi::c_int;
@@ -87,14 +84,11 @@ unsafe extern "C-unwind" fn calculate_new_size(mut s: *mut strbuf_t, mut len: si
     let mut reqsize: size_t = 0;
     let mut newsize: size_t = 0;
     if len <= 0 as size_t {
-        die(b"BUG: Invalid strbuf length requested\0".as_ptr() as *const ::core::ffi::c_char);
+        die!("BUG: Invalid strbuf length requested");
     }
     reqsize = len.wrapping_add(1 as size_t);
     if reqsize < len {
-        die(
-            b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
-            len,
-        );
+        die!("Overflow, len: {len}");
     }
     if (*s).size > reqsize {
         return reqsize;
@@ -108,10 +102,7 @@ unsafe extern "C-unwind" fn calculate_new_size(mut s: *mut strbuf_t, mut len: si
         }
     }
     if newsize < reqsize {
-        die(
-            b"BUG: strbuf length would overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
-            len,
-        );
+        die!("BUG: strbuf length would overflow, len: {len}");
     }
     return newsize;
 }
@@ -130,10 +121,7 @@ pub unsafe extern "C-unwind" fn strbuf_resize(mut s: *mut strbuf_t, mut len: siz
     (*s).size = newsize;
     (*s).buf = realloc((*s).buf as *mut ::core::ffi::c_void, (*s).size) as *mut ::core::ffi::c_char;
     if (*s).buf.is_null() {
-        die(
-            b"Out of memory, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
-            len,
-        );
+        die!("Out of memory, len: {len}");
     }
     (*s).reallocs += 1;
 }
