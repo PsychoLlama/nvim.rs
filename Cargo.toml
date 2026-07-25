@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/mainthread",
 ]
 [package]
 name = "c2rust_neovim"
@@ -31,6 +32,13 @@ test = false
 [dependencies]
 c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
 libc = "0.2"
+nvim-mainthread = { path = "crates/mainthread" }
+
+# The GlobalCell debug assertion calls into nvim-mainthread on every global
+# access; unoptimized it costs enough to blow the timing-sensitive oldtests
+# (see crates/mainthread/lib.rs). Optimize it in every profile.
+[profile.dev.package.nvim-mainthread]
+opt-level = 3
 
 # Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
 # an explicit `unsafe {}` block. The transpiled tree has thousands of such

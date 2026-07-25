@@ -27,13 +27,16 @@
 //! the mutable static it replaces — the C deps and the LuaJIT-FFI unit
 //! suite keep resolving and poking the same bytes.
 //!
-//! The debug checks are deliberately austere — a bare `#[thread_local]`
-//! flag load on the main-thread fast path plus one relaxed atomic for the
+//! The debug checks are deliberately austere — one direct call to the
+//! always-optimized `nvim-mainthread` crate (a bare TLS flag load there)
+//! on the main-thread fast path, plus one relaxed atomic for the
 //! borrow-table shortcut — because the transpiled code hits globals on
 //! practically every line and unoptimized builds inline very little; the
 //! std `thread_local!`/`RefCell` machinery was measured to slow the
-//! functional suite several-fold, and even a `pthread_self()` call per
-//! access blew the search-stat timing test in the old suite.
+//! functional suite several-fold, a `pthread_self()` call per access blew
+//! the search-stat timing test in the old suite, and an in-crate
+//! const-initialized `thread_local!` at opt-level 0 measured ~3× the cost
+//! per check and roughly doubled search time in that same test.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -175,27 +178,19 @@ impl<T> SharedCell<T> {
 /// `cargo test`), which keeps the check inert there.
 static ARMED: AtomicBool = AtomicBool::new(false);
 
-/// True only on the thread that called [`init_main_thread`]. A bare
-/// `#[thread_local]` (not the std macro) so the debug fast path is a single
-/// TLS load — this check sits on every global access in a build that
-/// doesn't optimize.
-#[cfg(debug_assertions)]
-#[thread_local]
-static IS_MAIN_THREAD: core::cell::Cell<bool> = core::cell::Cell::new(false);
-
 /// Record the calling thread as the main thread and arm the debug
 /// main-thread assertion. Called from the binary entry point before any
 /// editor code runs.
 pub fn init_main_thread() {
     #[cfg(debug_assertions)]
-    IS_MAIN_THREAD.set(true);
+    nvim_mainthread::mark_main_thread();
     ARMED.store(true, Ordering::Relaxed);
 }
 
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_main_thread() {
-    if !IS_MAIN_THREAD.get() {
+    if !nvim_mainthread::is_main_thread() {
         check_main_thread_cold();
     }
 }
