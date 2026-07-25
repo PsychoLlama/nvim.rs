@@ -5,7 +5,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
-#![feature(c_variadic)]
 
 extern crate c2rust_bitfields;
 extern crate libc;
