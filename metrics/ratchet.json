@@ -165,7 +165,7 @@
     "src/nvim/spellsuggest.rs": {"lines": 5738, "unsafe": 41},
     "src/nvim/state.rs": {"unsafe": 10},
     "src/nvim/statusline.rs": {"lines": 3846, "no_mangle": 1, "unsafe": 17},
-    "src/nvim/strings.rs": {"lines": 4030, "no_mangle": 1, "unsafe": 114},
+    "src/nvim/strings.rs": {"lines": 4036, "no_mangle": 1, "unsafe": 114},
     "src/nvim/syntax.rs": {"lines": 7828, "unsafe": 151},
     "src/nvim/tag.rs": {"lines": 6311, "unsafe": 66},
     "src/nvim/terminal.rs": {"lines": 6448, "no_mangle": 14, "unsafe": 102},

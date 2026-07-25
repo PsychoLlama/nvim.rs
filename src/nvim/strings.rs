@@ -2168,6 +2168,12 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     );
                                 }
                             };
+                            // The direct `tmp[i] = ...` stores above created
+                            // fresh borrows of `tmp` that invalidate the raw
+                            // pointer taken before the match (Stacked Borrows);
+                            // re-take it after the last store, as the float
+                            // branch does. Everything below only reads `tmp`.
+                            str_arg = &raw mut tmp as *mut ::core::ffi::c_char;
                             if zero_padding_insertion_ind < str_arg_l
                                 && tmp[zero_padding_insertion_ind as usize] as ::core::ffi::c_int
                                     == '-' as ::core::ffi::c_int
