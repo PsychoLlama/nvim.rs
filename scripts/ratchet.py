@@ -10,6 +10,12 @@ unmeasured, as they were when they lived at the repo root):
   unsafe      occurrences of "unsafe "
   static_mut  occurrences of "static mut "
   no_mangle   occurrences of "#[unsafe(no_mangle)]"
+  variadic    occurrences of ": ..." — C-variadic parameters, whose calls
+              are format-string-unchecked. They retire as their callers
+              migrate to the format_args!-based macros (semsg! and friends)
+              or their modules are rewritten; vim_snprintf/vim_vsnprintf
+              (vim's own user-visible format language) are expected to be
+              the long-lived remainder.
   lines       line count. No file may exceed 1,000 lines; files already over
               the cap are grandfathered at their committed size and may
               shrink or hold, never grow. New files start at the cap.
@@ -82,6 +88,7 @@ COUNTED = {
     "unsafe": "unsafe ",
     "static_mut": "static mut ",
     "no_mangle": "#[unsafe(no_mangle)]",
+    "variadic": ": ...",
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
