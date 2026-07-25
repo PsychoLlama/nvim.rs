@@ -47,7 +47,7 @@ const EMBEDDED_LUA_MODULES: &[&str] = &[
 /// executor.rs `include_bytes!`s it. This replaces the upstream CMake +
 /// `gen_char_blob.lua` step whose output c2rust transpiled as array
 /// literals: `runtime/lua` is the single source of truth again.
-fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
+fn compile_lua_modules(manifest: &Path, repo_root: &Path, deps_prefix: &Path) {
     let script = manifest.join("src/gen/compile_lua_modules.lua");
     let outdir = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua_modules");
     std::fs::create_dir_all(&outdir).unwrap();
@@ -55,7 +55,7 @@ fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
     // A `_core` module upstream would have globbed but our pinned list (and
     // executor.rs's builtin_modules table) doesn't know about is a build
     // error, not a silent omission.
-    let core_dir = manifest.join("runtime/lua/vim/_core");
+    let core_dir = repo_root.join("runtime/lua/vim/_core");
     for entry in std::fs::read_dir(&core_dir).unwrap() {
         let path = entry.unwrap().path();
         if path.extension().map_or(true, |ext| ext != "lua") {
@@ -74,7 +74,7 @@ fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
     let mut cmd = Command::new(deps_prefix.join("bin/luajit"));
     cmd.arg(&script).arg(&outdir);
     for modname in EMBEDDED_LUA_MODULES {
-        let source = manifest
+        let source = repo_root
             .join("runtime/lua")
             .join(modname.replace('.', "/"))
             .with_extension("lua");
@@ -89,6 +89,12 @@ fn compile_lua_modules(manifest: &Path, deps_prefix: &Path) {
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    // runtime/ lives at the repo root, two levels above crates/nvim/.
+    let repo_root = manifest
+        .ancestors()
+        .nth(2)
+        .expect("crates/nvim has a repo root two levels up")
+        .to_path_buf();
 
     // The prebuilt bundled C deps. Nix owns them (`nix/deps.nix`); there is
     // deliberately no in-tree fallback build. Both the package and the dev
@@ -101,7 +107,7 @@ fn main() {
 
     println!("cargo:rerun-if-env-changed=NVIM_DEPS_PREFIX");
 
-    compile_lua_modules(&manifest, &prefix);
+    compile_lua_modules(&manifest, &repo_root, &prefix);
 
     for libdir in ["lib", "lib64"] {
         println!(
@@ -134,7 +140,7 @@ fn main() {
     // binary falls through to the exe-relative layout unless the baked dir
     // exists. Override each var for a prod build to point at the install prefix.
     for (var, default) in [
-        ("NVIM_DEFAULT_VIMRUNTIME_DIR", manifest.join("runtime")),
+        ("NVIM_DEFAULT_VIMRUNTIME_DIR", repo_root.join("runtime")),
         ("NVIM_DEFAULT_LIB_DIR", prefix.join("lib/nvim")),
     ] {
         let val = std::env::var(var).unwrap_or_else(|_| default.display().to_string());

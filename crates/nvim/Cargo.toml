@@ -1,0 +1,47 @@
+[package]
+name = "c2rust_neovim"
+authors = ["C2Rust"]
+version = "0.0.0"
+publish = false
+edition = "2024"
+autobins = false
+# Enumerate package files explicitly so cargo lists them by walking the
+# directory instead of reading neovim's git index — cargo's bundled libgit2
+# rejects that index's checksum ("invalid data in index").
+include = ["**/*.rs", "Cargo.toml", "build.rs"]
+
+[lib]
+name = "c2rust_neovim"
+path = "lib.rs"
+crate-type = ["staticlib", "rlib"]
+
+# Runnable `nvim` executable. `autobins = false` above disables bin
+# auto-discovery, so the entry point is declared explicitly here; it just
+# calls the `main()` c2rust generated in src/nvim/main.rs.
+[[bin]]
+name = "nvim"
+path = "src/bin/nvim.rs"
+# No #[test]s live in the bin; keep `cargo test --tests` from linking a
+# second full nvim just to run zero tests.
+test = false
+
+[dependencies]
+c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
+libc = "0.2"
+nvim-mainthread = { path = "../mainthread" }
+
+# Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
+# an explicit `unsafe {}` block. The transpiled tree has thousands of such
+# fns; blanket-wrapping their bodies would double the textual `unsafe` count
+# the ratchet tracks while making nothing safer. So the lint is allowed
+# crate-wide, and modules deny it as they are rewritten — rewrites eliminate
+# unsafe instead of annotating it.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "allow"
+
+# `just lint` runs clippy with correctness at its deny default; suspicious/
+# complexity/perf warn and burn down through the ratchet (metrics/clippy.json).
+# style stays off for transpiled code — it becomes meaningful per-module as
+# rewrites land (pedantic and the other opt-in groups are already allow).
+[lints.clippy]
+style = "allow"

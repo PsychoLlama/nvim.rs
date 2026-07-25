@@ -73,7 +73,7 @@ TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 def collect_exports():
     """name -> (kind, repo-relative file) for every #[unsafe(no_mangle)] item."""
     exports = {}
-    for path in sorted(ROOT.glob("src/**/*.rs")):
+    for path in sorted(ROOT.glob("crates/*/src/**/*.rs")):
         lines = path.read_text().splitlines()
         for i, line in enumerate(lines):
             if line.strip() != "#[unsafe(no_mangle)]":

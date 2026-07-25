@@ -3,7 +3,9 @@
 
 The migration's promise is monotonic progress — every change leaves the tree
 no less safe than it found it. This script is the mechanism. It measures, per
-Rust source file (src/**/*.rs plus the crate roots):
+Rust source file (crates/*/src/**/*.rs plus the crate-root .rs files;
+integration tests under crates/*/tests are not migration surface and stay
+unmeasured, as they were when they lived at the repo root):
 
   unsafe      occurrences of "unsafe "
   static_mut  occurrences of "static mut "
@@ -92,7 +94,9 @@ def measure():
     stats = {}
     without_forbid = 0
     without_deny = 0
-    for path in sorted([*ROOT.glob("src/**/*.rs"), *ROOT.glob("*.rs")]):
+    for path in sorted(
+        [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("crates/*/*.rs")]
+    ):
         text = path.read_text()
         counts = {name: text.count(needle) for name, needle in COUNTED.items()}
         counts["lines"] = len(text.splitlines())

@@ -60,7 +60,7 @@ fi
 # src/gen/<script>, unless it is already newer than every input (and the
 # binary, and the generator itself).
 run() {
-  local script=$root/src/gen/$1 out=$2
+  local script=$root/crates/nvim/src/gen/$1 out=$2
   shift 2
   if [[ -f $out ]]; then
     local stale=0
@@ -80,4 +80,4 @@ run() {
 # The vimscript syntax keyword tables: options/commands/events/vvars from the
 # vendored metadata, builtin functions from the binary itself.
 run gen_vimvim.lua "$runtime/syntax/vim/generated.vim" \
-  "$root/src/nvim"/{options,auevents,ex_cmds,vvars}.lua
+  "$root/crates/nvim/src/nvim"/{options,auevents,ex_cmds,vvars}.lua

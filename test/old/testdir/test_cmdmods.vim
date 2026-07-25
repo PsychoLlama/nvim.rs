@@ -1,7 +1,7 @@
 " Test for all command modifiers in
 
 let s:luaeval_cmdmods =<< trim END
-  vim.iter(loadfile('../../../src/nvim/ex_cmds.lua')()):map(function(cmd)
+  vim.iter(loadfile('../../../crates/nvim/src/nvim/ex_cmds.lua')()):map(function(cmd)
     if cmd.func == 'ex_wrongmodifier' or cmd.command == 'hide' then
       return cmd.command
     else

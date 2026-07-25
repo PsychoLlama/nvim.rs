@@ -87,9 +87,7 @@
               fileset = lib.fileset.unions [
                 ./Cargo.toml
                 ./Cargo.lock
-                ./build.rs
-                ./lib.rs
-                ./src
+                ./crates
                 ./runtime
                 # postInstall installs the license texts next to the binary.
                 ./LICENSE.txt

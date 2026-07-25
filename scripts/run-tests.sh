@@ -84,7 +84,7 @@ mkdir -p "$xdg" "$tmpdir"
 # The harness runs from inside the XDG sandbox; these links make repo-relative
 # spec paths (test/…) and runtime lookups resolve from there.
 ln -sfn "$root/runtime" "$xdg/runtime"
-ln -sfn "$root/src" "$xdg/src"
+ln -sfn "$root/crates/nvim/src" "$xdg/src"
 ln -sfn "$root/test" "$xdg/test"
 ln -sfn "$root/README.md" "$xdg/README.md"
 
@@ -122,7 +122,7 @@ fi
 cd "$xdg"
 exec "$NVIM_PRG" -ll "$root/test/runner.lua" -v \
   --helper="$root/test/$test_type/preload.lua" \
-  --lpath="$root/src/?.lua" \
+  --lpath="$root/crates/nvim/src/?.lua" \
   --lpath="$root/runtime/lua/?.lua" \
   --lpath='?.lua' \
   "${args[@]}" \

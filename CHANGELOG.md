@@ -10,11 +10,10 @@ and this project adheres to [CalVer](https://calver.org/).
 ### Changed
 
 - Rust toolchain bumped forward by 3 years.
-- Clippy turned on from zero: correctness findings fixed and kept at deny, the
-  warning count ratcheted (`just lint`).
-- Crate migrated to edition 2024.
-- Miri runs the Rust-native tests (`just miri`): UB detection over the safe
-  cores and the ported unit specs.
+
+### Fixed
+
+- Patched several UB gaps identified by new aggressive analysis tools.
 
 ## [2026.07.23-95cd63254c]
 

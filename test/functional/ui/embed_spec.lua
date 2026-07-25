@@ -247,11 +247,11 @@ describe('--embed UI', function()
     }
 
     -- Change global cwd
-    n.command(string.format('cd %s/src/nvim', t.paths.test_source_path))
+    n.command(string.format('cd %s/crates/nvim', t.paths.test_source_path))
 
     screen:expect {
       condition = function()
-        eq(string.format('%s/src/nvim', t.paths.test_source_path), screen.pwd)
+        eq(string.format('%s/crates/nvim', t.paths.test_source_path), screen.pwd)
       end,
     }
 
@@ -270,7 +270,7 @@ describe('--embed UI', function()
 
     screen:expect {
       condition = function()
-        eq(string.format('%s/src/nvim', t.paths.test_source_path), screen.pwd)
+        eq(string.format('%s/crates/nvim', t.paths.test_source_path), screen.pwd)
       end,
     }
 
