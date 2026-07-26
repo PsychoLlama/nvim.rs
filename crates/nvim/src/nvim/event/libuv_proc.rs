@@ -1,309 +1,217 @@
+//! Children started through libuv's process API.
+//!
+//! [`LibuvProc`] is a [`Proc`] with a `uv_process_t` and the options libuv
+//! needs to spawn it bolted on. `Proc` is the first field, so `event/proc.rs`
+//! casts freely between the two; libuv is handed the address of the `Proc`
+//! (not of the `LibuvProc`) in the handle's `data` field, and the callbacks
+//! here cast it back.
+
 use crate::src::nvim::eval::typval::tv_dict_to_env;
 use crate::src::nvim::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
-use crate::src::nvim::event::proc::{proc_get_exepath, proc_init};
-
+use crate::src::nvim::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::ui_client_forward_stdin;
 use crate::src::nvim::os::env::os_free_fullenv;
 use crate::src::nvim::os::libc::close;
-pub use crate::src::nvim::types::{
-    __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, QUEUE, RStream, ScopeType,
-    Stream, VarLockStatus, dict_T, dictvar_S, gid_t, hash_T, hashitem_T, hashtab_T, int64_t,
-    internal_proc_cb, loop_0, loop_0_children as C2Rust_Unnamed_13, multiqueue, proc, proc_exit_cb,
-    proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue, rstream, size_t, ssize_t, stream,
-    stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_14, stream_write_cb, uid_t,
-    uint8_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb,
-    uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
-    uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t, uv_handle_s,
-    uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
-    uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
-    uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_process_options_s,
-    uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_11, uv_process_t,
-    uv_read_cb, uv_req_type, uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t,
-    uv_signal_cb, uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed,
-    uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t, uv_stdio_container_s,
-    uv_stdio_container_s_data as C2Rust_Unnamed_12, uv_stdio_container_t, uv_stdio_flags,
-    uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
+use crate::src::nvim::types::{
+    LibuvProc, Loop, Proc, uv_file, uv_handle_t, uv_pipe_t, uv_process_t, uv_stdio_container_t,
+    uv_stdio_flags,
 };
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const UV_OVERLAPPED_PIPE: uv_stdio_flags = 64;
-pub const UV_NONBLOCK_PIPE: uv_stdio_flags = 64;
-pub const UV_WRITABLE_PIPE: uv_stdio_flags = 32;
-pub const UV_READABLE_PIPE: uv_stdio_flags = 16;
-pub const UV_INHERIT_STREAM: uv_stdio_flags = 4;
-pub const UV_INHERIT_FD: uv_stdio_flags = 2;
-pub const UV_CREATE_PIPE: uv_stdio_flags = 1;
-pub const UV_IGNORE: uv_stdio_flags = 0;
-pub type uv_process_flags = ::core::ffi::c_uint;
-pub const UV_PROCESS_WINDOWS_FILE_PATH_EXACT_NAME: uv_process_flags = 128;
-pub const UV_PROCESS_WINDOWS_HIDE_GUI: uv_process_flags = 64;
-pub const UV_PROCESS_WINDOWS_HIDE_CONSOLE: uv_process_flags = 32;
-pub const UV_PROCESS_WINDOWS_HIDE: uv_process_flags = 16;
-pub const UV_PROCESS_DETACHED: uv_process_flags = 8;
-pub const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS: uv_process_flags = 4;
-pub const UV_PROCESS_SETGID: uv_process_flags = 2;
-pub const UV_PROCESS_SETUID: uv_process_flags = 1;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kProcTypePty: ProcType = 1;
-pub const kProcTypeUv: ProcType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-unsafe extern "C" fn libuv_proc_stdio(
-    mut uvproc: *mut LibuvProc,
-    mut idx: ::core::ffi::c_int,
-    mut parent_pipe: *mut uv_pipe_t,
-    mut child_readable: bool,
-    mut _overlapped: bool,
-    mut _win_create_pipe: bool,
-    mut to_close: *mut ::core::ffi::c_int,
-) {
-    let mut child_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut pipe_pair: [uv_file; 2] = [0; 2];
-    uv_pipe(
-        &raw mut pipe_pair as *mut uv_file,
-        if child_readable as ::core::ffi::c_int != 0 {
-            child_flags
-        } else {
-            UV_NONBLOCK_PIPE as ::core::ffi::c_int
-        },
-        if child_readable as ::core::ffi::c_int != 0 {
-            UV_NONBLOCK_PIPE as ::core::ffi::c_int
-        } else {
-            child_flags
-        },
-    );
-    let mut child_fd: ::core::ffi::c_int = if child_readable as ::core::ffi::c_int != 0 {
-        pipe_pair[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-    } else {
-        pipe_pair[1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-    };
-    let mut parent_fd: ::core::ffi::c_int = if child_readable as ::core::ffi::c_int != 0 {
-        pipe_pair[1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-    } else {
-        pipe_pair[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-    };
-    (*uvproc).uvstdio[idx as usize].flags = UV_INHERIT_FD;
-    (*uvproc).uvstdio[idx as usize].data.fd = child_fd;
-    *to_close.offset(idx as isize) = child_fd;
-    uv_pipe_open(parent_pipe, parent_fd as uv_file);
+use core::ffi::{c_int, c_void};
+use core::ptr;
+
+/// The slot is unused; the child inherits nothing there.
+const UV_IGNORE: uv_stdio_flags = 0;
+/// The slot names a descriptor for the child to inherit.
+const UV_INHERIT_FD: uv_stdio_flags = 2;
+/// Open this end of the pipe non-blocking.
+const UV_NONBLOCK_PIPE: c_int = 64;
+
+/// No console window for the child. Windows-only in libuv, harmless here.
+const UV_PROCESS_WINDOWS_HIDE: u32 = 16;
+/// `setsid()` the child, which on unix-likes we always want. #8107
+const UV_PROCESS_DETACHED: u32 = 8;
+
+const STDERR_FILENO: c_int = 2;
+const LOGLVL_INF: c_int = 2;
+
+/// A fresh, unspawned libuv child.
+pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {
+    // SAFETY: every field is a pointer, an integer or an `Option<fn>`, for
+    // all of which the all-zero pattern is the "unset" value; the spawn path
+    // below fills in the ones it needs.
+    let mut rv: LibuvProc = unsafe { core::mem::zeroed() };
+    rv.proc = proc_init(uv_loop, kProcTypeUv, data);
+    rv
 }
-pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core::ffi::c_int {
-    let mut proc: *mut Proc = uvproc as *mut Proc;
-    (*uvproc).uvopts.file = proc_get_exepath(proc);
-    (*uvproc).uvopts.args = (*proc).argv;
-    (*uvproc).uvopts.flags = UV_PROCESS_WINDOWS_HIDE as ::core::ffi::c_int as ::core::ffi::c_uint;
-    (*uvproc).uvopts.flags |= UV_PROCESS_DETACHED as ::core::ffi::c_int as ::core::ffi::c_uint;
-    (*uvproc).uvopts.exit_cb =
-        Some(exit_cb as unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ())
-            as uv_exit_cb;
-    (*uvproc).uvopts.cwd = (*proc).cwd;
-    (*uvproc).uvopts.stdio = &raw mut (*uvproc).uvstdio as *mut uv_stdio_container_t;
-    (*uvproc).uvopts.stdio_count = 3 as ::core::ffi::c_int;
-    (*uvproc).uvstdio[0 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
-    (*uvproc).uvstdio[1 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
-    (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
-    if ui_client_forward_stdin.get() {
-        (*uvproc).uvopts.stdio_count = 4 as ::core::ffi::c_int;
-        (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].data.fd = 0 as ::core::ffi::c_int;
-        (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].flags = UV_INHERIT_FD;
-    }
-    (*uvproc).uv.data = proc as *mut ::core::ffi::c_void;
-    if !(*proc).env.is_null() {
-        (*uvproc).uvopts.env = tv_dict_to_env((*proc).env);
+
+/// Wire stdio slot `idx` to a fresh pipe, and return the descriptor the
+/// parent must close once the child has been spawned.
+///
+/// `child_readable` is true for the child's stdin — the child reads the read
+/// end and the parent keeps the write end — and false for its output
+/// streams. The parent's end is always non-blocking; the child's is not.
+///
+/// A `uv_pipe` pair is used rather than libuv's own `UV_CREATE_PIPE`, which
+/// as of libuv 1.51 is a `socketpair` and so breaks `/proc/<pid>/fd/0`.
+unsafe fn open_stdio_pipe(
+    uvproc: *mut LibuvProc,
+    idx: usize,
+    parent_pipe: *mut uv_pipe_t,
+    child_readable: bool,
+) -> c_int {
+    let (read_flags, write_flags) = if child_readable {
+        (0, UV_NONBLOCK_PIPE)
     } else {
-        (*uvproc).uvopts.env = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
+        (UV_NONBLOCK_PIPE, 0)
+    };
+    let mut pipe_pair: [uv_file; 2] = [0; 2];
+    uv_pipe(pipe_pair.as_mut_ptr(), read_flags, write_flags);
+
+    let [read_end, write_end] = pipe_pair;
+    let (child_fd, parent_fd) = if child_readable {
+        (read_end, write_end)
+    } else {
+        (write_end, read_end)
+    };
+    (*uvproc).uvstdio[idx].flags = UV_INHERIT_FD;
+    (*uvproc).uvstdio[idx].data.fd = child_fd;
+    uv_pipe_open(parent_pipe, parent_fd);
+    child_fd
+}
+
+/// Start the child. Returns zero, or a negative error code.
+pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
+    let proc = uvproc as *mut Proc;
+    let opts = &raw mut (*uvproc).uvopts;
+    (*opts).file = proc_get_exepath(proc);
+    (*opts).args = (*proc).argv;
+    (*opts).flags = UV_PROCESS_WINDOWS_HIDE | UV_PROCESS_DETACHED;
+    (*opts).exit_cb = Some(exit_cb);
+    (*opts).cwd = (*proc).cwd;
+    (*opts).stdio = (&raw mut (*uvproc).uvstdio) as *mut uv_stdio_container_t;
+    (*opts).stdio_count = 3;
+    for slot in &mut (&mut (*uvproc).uvstdio)[..3] {
+        slot.flags = UV_IGNORE;
     }
-    let mut to_close: [::core::ffi::c_int; 3] = [
-        -1 as ::core::ffi::c_int,
-        -1 as ::core::ffi::c_int,
-        -1 as ::core::ffi::c_int,
-    ];
+
+    if ui_client_forward_stdin.get() {
+        // A UI client reads the editor's own stdin, on the descriptor the
+        // remote side knows as UI_CLIENT_STDIN_FD.
+        (*opts).stdio_count = 4;
+        (*uvproc).uvstdio[3].data.fd = 0;
+        (*uvproc).uvstdio[3].flags = UV_INHERIT_FD;
+    }
+    (*uvproc).uv.data = proc as *mut c_void;
+
+    (*opts).env = if (*proc).env.is_null() {
+        ptr::null_mut()
+    } else {
+        tv_dict_to_env((*proc).env)
+    };
+
+    // The parent's copies of the descriptors the child inherits. They are
+    // dropped after the spawn, whether or not it succeeded.
+    let mut to_close = [-1; 3];
     if !(*proc).in_0.closed {
-        libuv_proc_stdio(
-            uvproc,
-            0 as ::core::ffi::c_int,
-            &raw mut (*proc).in_0.uv.pipe,
-            true_0 != 0,
-            (*proc).overlapped,
-            (*proc).stdio_noinherit,
-            &raw mut to_close as *mut ::core::ffi::c_int,
-        );
+        to_close[0] = open_stdio_pipe(uvproc, 0, &raw mut (*proc).in_0.uv.pipe, true);
     }
     if !(*proc).out.s.closed {
-        libuv_proc_stdio(
-            uvproc,
-            1 as ::core::ffi::c_int,
-            &raw mut (*proc).out.s.uv.pipe,
-            false_0 != 0,
-            (*proc).overlapped,
-            true_0 != 0,
-            &raw mut to_close as *mut ::core::ffi::c_int,
-        );
+        to_close[1] = open_stdio_pipe(uvproc, 1, &raw mut (*proc).out.s.uv.pipe, false);
     }
     if !(*proc).err.s.closed {
-        libuv_proc_stdio(
-            uvproc,
-            2 as ::core::ffi::c_int,
-            &raw mut (*proc).err.s.uv.pipe,
-            false_0 != 0,
-            (*proc).overlapped,
-            (*proc).stdio_noinherit,
-            &raw mut to_close as *mut ::core::ffi::c_int,
-        );
+        to_close[2] = open_stdio_pipe(uvproc, 2, &raw mut (*proc).err.s.uv.pipe, false);
     } else if (*proc).fwd_err {
-        (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].flags = UV_INHERIT_FD;
-        (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].data.fd = STDERR_FILENO;
+        // Not read by us, so let the child write straight to our stderr.
+        (*uvproc).uvstdio[2].flags = UV_INHERIT_FD;
+        (*uvproc).uvstdio[2].data.fd = STDERR_FILENO;
     }
-    let mut status: ::core::ffi::c_int = 0;
-    status = uv_spawn(
-        &raw mut (*(*proc).loop_0).uv,
-        &raw mut (*uvproc).uv,
-        &raw mut (*uvproc).uvopts,
-    );
+
+    let status = uv_spawn(&raw mut (*(*proc).loop_0).uv, &raw mut (*uvproc).uv, opts);
     if status != 0 {
         logmsg(
             LOGLVL_INF,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            b"libuv_proc_spawn\0".as_ptr() as *const ::core::ffi::c_char,
-            141 as ::core::ffi::c_int,
-            true_0 != 0,
-            b"uv_spawn(%s) failed: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            (*uvproc).uvopts.file,
+            ptr::null(),
+            c"libuv_proc_spawn".as_ptr(),
+            141,
+            true,
+            c"uv_spawn(%s) failed: %s".as_ptr(),
+            (*opts).file,
             uv_strerror(status),
         );
-        if !(*uvproc).uvopts.env.is_null() {
-            os_free_fullenv((*uvproc).uvopts.env);
+        // Nothing will reach `close_cb` to free it.
+        if !(*opts).env.is_null() {
+            os_free_fullenv((*opts).env);
         }
     } else {
         (*proc).pid = (*uvproc).uv.pid;
     }
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 3 as ::core::ffi::c_int {
-        if to_close[i as usize] > -1 as ::core::ffi::c_int {
-            close(to_close[i as usize]);
+
+    for fd in to_close {
+        if fd > -1 {
+            close(fd);
         }
-        i += 1;
     }
-    return status;
+    status
 }
-pub unsafe extern "C" fn libuv_proc_close(mut uvproc: *mut LibuvProc) {
-    uv_close(
-        &raw mut (*uvproc).uv as *mut uv_handle_t,
-        Some(close_cb as unsafe extern "C" fn(*mut uv_handle_t) -> ()),
-    );
+
+pub unsafe fn libuv_proc_close(uvproc: *mut LibuvProc) {
+    uv_close(&raw mut (*uvproc).uv as *mut uv_handle_t, Some(close_cb));
 }
-unsafe extern "C" fn close_cb(mut handle: *mut uv_handle_t) {
-    let mut proc: *mut Proc = (*handle).data as *mut Proc;
-    if (*proc).internal_close_cb.is_some() {
-        (*proc)
-            .internal_close_cb
-            .expect("non-null function pointer")(proc);
+
+/// The process handle finished closing: report it, then release the
+/// environment libuv held a pointer into.
+unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
+    let proc = (*handle).data as *mut Proc;
+    if let Some(notify) = (*proc).internal_close_cb {
+        notify(proc);
     }
-    let mut uvproc: *mut LibuvProc = proc as *mut LibuvProc;
+    let uvproc = proc as *mut LibuvProc;
     if !(*uvproc).uvopts.env.is_null() {
         os_free_fullenv((*uvproc).uvopts.env);
     }
 }
-unsafe extern "C" fn exit_cb(
-    mut handle: *mut uv_process_t,
-    mut status: int64_t,
-    mut term_signal: ::core::ffi::c_int,
-) {
-    let mut proc: *mut Proc = (*handle).data as *mut Proc;
-    (*proc).status = if term_signal != 0 {
-        128 as ::core::ffi::c_int + term_signal
+
+/// The child exited. A signalled death is reported the way a shell does,
+/// as 128 plus the signal number.
+unsafe extern "C" fn exit_cb(handle: *mut uv_process_t, status: i64, term_signal: c_int) {
+    let proc = (*handle).data as *mut Proc;
+    (*proc).status = exit_status(status, term_signal);
+    (*proc)
+        .internal_exit_cb
+        .expect("a spawned child has an exit callback")(proc);
+}
+
+/// How libuv's `(status, term_signal)` pair becomes the status the editor
+/// reports to `jobwait()` and friends.
+fn exit_status(status: i64, term_signal: c_int) -> c_int {
+    if term_signal != 0 {
+        128 + term_signal
     } else {
-        status as ::core::ffi::c_int
-    };
-    (*proc).internal_exit_cb.expect("non-null function pointer")(proc);
+        status as c_int
+    }
 }
-pub unsafe extern "C" fn libuv_proc_init(
-    mut loop_0: *mut Loop,
-    mut data: *mut ::core::ffi::c_void,
-) -> LibuvProc {
-    let mut rv: LibuvProc = LibuvProc {
-        proc: proc_init(loop_0, kProcTypeUv, data),
-        uv: uv_process_t {
-            data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-            type_0: UV_UNKNOWN_HANDLE,
-            close_cb: None,
-            handle_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            u: C2Rust_Unnamed_11 { fd: 0 },
-            next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-            flags: 0,
-            exit_cb: None,
-            pid: 0,
-            queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            status: 0,
-        },
-        uvopts: uv_process_options_t {
-            exit_cb: None,
-            file: ::core::ptr::null::<::core::ffi::c_char>(),
-            args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            env: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            cwd: ::core::ptr::null::<::core::ffi::c_char>(),
-            flags: 0,
-            stdio_count: 0,
-            stdio: ::core::ptr::null_mut::<uv_stdio_container_t>(),
-            uid: 0,
-            gid: 0,
-        },
-        uvstdio: [uv_stdio_container_t {
-            flags: UV_IGNORE,
-            data: C2Rust_Unnamed_12 {
-                stream: ::core::ptr::null_mut::<uv_stream_t>(),
-            },
-        }; 4],
-    };
-    return rv;
+
+#[cfg(test)]
+mod tests {
+    use super::exit_status;
+
+    #[test]
+    fn a_normal_exit_reports_its_own_code() {
+        assert_eq!(exit_status(0, 0), 0);
+        assert_eq!(exit_status(42, 0), 42);
+        // libuv widens the code to 64 bits; the editor's status is an int.
+        assert_eq!(exit_status(255, 0), 255);
+    }
+
+    #[test]
+    fn a_signalled_exit_reports_128_plus_the_signal() {
+        assert_eq!(exit_status(0, 9), 137);
+        assert_eq!(exit_status(0, 15), 143);
+    }
+
+    #[test]
+    fn a_signal_wins_over_the_exit_code() {
+        assert_eq!(exit_status(3, 9), 137);
+    }
 }
-pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
